@@ -14,11 +14,11 @@ NCURSES_LIBS := $(shell $(PKG_CONFIG) --libs ncursesw 2>/dev/null)
 PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb $(NCURSES_CFLAGS)
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c
+SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
-.PHONY: all test test-mi mi-demo test-tmux sanitize analyze clean check-deps
+.PHONY: all test test-mi test-controller test-gdb-startup controller-demo mi-demo test-tmux sanitize analyze clean check-deps
 
 all: $(BINARY)
 
@@ -69,10 +69,35 @@ test-mi: $(BUILD_DIR)/test-mi $(BUILD_DIR)/test-mi-alloc $(BUILD_DIR)/mi-dump
 mi-demo: $(BUILD_DIR)/mi-dump
 	$(BUILD_DIR)/mi-dump --chunk 1 tests/fixtures/mi/valid.mi
 
+$(BUILD_DIR)/fake-mi: $(BUILD_DIR)/tests/support/fake_mi.o $(BUILD_DIR)/src/gdb/mi.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+$(BUILD_DIR)/test-controller: $(BUILD_DIR)/tests/integration/test_controller.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+test-controller: $(BUILD_DIR)/test-controller $(BUILD_DIR)/fake-mi $(BUILD_DIR)/controller-demo $(BUILD_DIR)/test-controller-demo
+	$(BUILD_DIR)/test-controller $(abspath $(BUILD_DIR)/fake-mi)
+	$(BUILD_DIR)/test-controller-demo $(abspath $(BUILD_DIR)/controller-demo) $(abspath $(BUILD_DIR)/fake-mi)
+
+$(BUILD_DIR)/controller-demo: $(BUILD_DIR)/tests/support/controller_demo.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+$(BUILD_DIR)/test-controller-demo: $(BUILD_DIR)/tests/integration/test_controller_demo.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+controller-demo: $(BUILD_DIR)/controller-demo $(BUILD_DIR)/fake-mi
+	$(BUILD_DIR)/controller-demo $(abspath $(BUILD_DIR)/fake-mi)
+
+$(BUILD_DIR)/test-gdb-startup: $(BUILD_DIR)/tests/integration/test_gdb_startup.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+test-gdb-startup: $(BUILD_DIR)/test-gdb-startup
+	$(BUILD_DIR)/test-gdb-startup gdb
+
 test-tmux: all $(BUILD_DIR)/test-tmux
 	$(BUILD_DIR)/test-tmux $(abspath $(BINARY))
 
-test: all test-mi $(BUILD_DIR)/test-unit $(BUILD_DIR)/test-layout $(BUILD_DIR)/test-render $(BUILD_DIR)/test-cli $(BUILD_DIR)/test-tui $(BUILD_DIR)/test-workspace
+test: all test-mi test-controller $(BUILD_DIR)/test-unit $(BUILD_DIR)/test-layout $(BUILD_DIR)/test-render $(BUILD_DIR)/test-cli $(BUILD_DIR)/test-tui $(BUILD_DIR)/test-workspace
 	$(BUILD_DIR)/test-unit
 	$(BUILD_DIR)/test-layout
 	$(BUILD_DIR)/test-render
@@ -100,4 +125,8 @@ clean:
 	$(BUILD_DIR)/tests/support/terminal.d $(BUILD_DIR)/tests/unit/test_render.d \
 	$(BUILD_DIR)/tests/unit/test_layout.d $(BUILD_DIR)/tests/integration/test_workspace.d \
 	$(BUILD_DIR)/tests/integration/test_tmux.d $(BUILD_DIR)/tests/unit/test_mi.d \
-	$(BUILD_DIR)/tests/unit/test_mi_alloc.d $(BUILD_DIR)/tests/support/mi_dump.d
+	$(BUILD_DIR)/tests/unit/test_mi_alloc.d $(BUILD_DIR)/tests/support/mi_dump.d \
+	$(BUILD_DIR)/tests/integration/test_controller.d $(BUILD_DIR)/tests/support/fake_mi.d
+
+-include $(BUILD_DIR)/tests/support/controller_demo.d $(BUILD_DIR)/tests/integration/test_controller_demo.d \
+	$(BUILD_DIR)/tests/integration/test_gdb_startup.d

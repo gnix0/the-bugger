@@ -4,6 +4,13 @@ Run `make test` from the repository root. All tests and support code are C,
 built with the same strict compiler flags as the application. No Python or
 external test framework is required.
 
+- `test-controller`: nonblocking fake-peer command/reply correlation, reordered/
+  late responses, argument byte round-trip, async state, session/stop/context
+  epochs, bounded queues, timeouts/backpressure, floods, EOF/protocol errors,
+  startup/negotiation/fallback, TERM/KILL/reaping, descriptor exhaustion and
+  isolation, literal executable paths, closed stdio and unrelated child survival.
+- `test-controller-demo`: actual interactive diagnostic harness in a PTY,
+  commands, stale/timeout/flood behavior and signal/terminal cleanup.
 - `test-mi`: owned MI tree semantics, all record kinds, token/escape handling,
   duplicate names, embedded bytes, malformed input, CR/LF framing, EOF/recovery,
   bounds, deterministic byte mutations and exhaustive corpus fragmentation.
@@ -46,10 +53,34 @@ sources. See `docs/testing.md` for commands and the manual/tmux checklist.
 These tests establish UI/layout evidence, not live debugging or complete
 FR-06/07/08/09/10/11/12/13/14/15/16/17 acceptance. M03's synthetic GDB/MI corpus
 is in `fixtures/mi/` with a provenance README; it establishes NFR-04 parser
-evidence. Fake transport fixtures arrive in M04, real native C/C++ fixtures from M05, native
+evidence. M04's C fake peer tests controller behavior without launching a target;
+real native C/C++ fixtures arrive from M05, native
 acceptance in M14 and real board evidence in M17. Every release retests native
 x86-64 and the owner's STM32/ARM, ESP32/Xtensa and ESP32/RISC-V hardware;
 QEMU ARM/RISC-V adds coverage where available and never replaces board evidence.
+
+## M04 fake peer and startup probe
+
+`make test-controller` runs both controller suites. `make controller-demo` starts
+an interactive line-command harness using `tests/support/fake_mi.c`; it is not
+the product TUI and never launches a debug target. This C peer authors synthetic
+records, not captured hardware data. It supports held/reordered replies, fake
+run/stop/exit events, malformed/truncated output, unknown tokens, delayed reads
+and simultaneous 2 MiB stdout/stderr floods.
+
+The test-only `TB_FAKE_MODE` environment setting selects normal/fragmented
+startup, missing-MI3 fallback, failed fallback, post-prompt failure, setup
+rejection, no prompt, TERM resistance, early exit/signal and inherited-descriptor
+checks. Production controller code neither reads this setting nor recognizes
+fake commands. Test deadlines and a separate host child verify bounded cleanup
+and ownership. See `docs/testing.md` for reproducible manual steps.
+
+`make test-gdb-startup` is optional and requires native GDB. The resulting
+`./build/test-gdb-startup arm-none-eabi-gdb` also works with an installed ARM GDB.
+It tests actual prompt/setup negotiation, feature enumeration and MI exit only:
+no executable, inferior, remote server or hardware connection. It is separate
+from the default deterministic suite. Use a directly quoted executable path
+when testing paths with spaces.
 
 `unit/test_render.c` checks direct-color palette pairs, semantic source/register
 colors, full-width selected rows and the monochrome active-tab indicator using

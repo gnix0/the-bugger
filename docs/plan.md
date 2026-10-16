@@ -1,8 +1,8 @@
 # Development roadmap — v0.1.0 through v1.0.0
 
 Approved roadmap. Version targets are expected sequencing, not deadlines.
-P00 is accepted and committed/pushed as 36d5ad6. **M03 only** is authorized;
-M04 and later gates require the usual acceptance, owner commit/push and explicit
+M03 is accepted and committed/pushed as ee1cfc5. **M04 only** is authorized;
+M05 and later gates require the usual acceptance, owner commit/push and explicit
 continuation.
 
 ## Product and preserved work
@@ -17,8 +17,9 @@ runtime, new macro language, IDE/build integration, or public plugin SDK is adde
 M00, M01, M02 and the post-M02 navigation corrections are accepted and preserved.
 Their commits are respectively 0f5d05b, 60df655, 094fa71 and a832eef. The former
 unimplemented M03–M07 grouping is replaced by M03–M18 below; Git history is not
-rewritten. Existing demo data proves visual behavior only: no live debugger
-transport, tool launch, inspection, or profile persistence is implemented yet.
+rewritten. Existing demo data proves visual behavior only. The MI parser and
+controller have independent diagnostic tools; live target sessions/inspection
+and profile persistence are not integrated into the workspace yet.
 
 AGENTS.md governs requirements and workflow. The approved visual/interaction
 reference is [the HTML prototype](design/prototype.html), not a backend. Preserve
@@ -276,6 +277,7 @@ IAR/C-SPY defects. These findings directly informed accepted requirements:
 
 ## Current authorization
 
-The owner completed P00, committed/pushed 36d5ad6 and explicitly authorized M03.
-Implement only the incremental parser, C tests/corpus and diagnostic demonstration.
-Stop for M03 manual acceptance with the proposed commit message. Do not start M04.
+The owner completed M03, committed/pushed ee1cfc5 and explicitly authorized M04.
+Deliver only the nonblocking controller/transport and owned lifecycle, focused C
+tests/fake peer, documentation and diagnostic demonstration. Stop for M04 manual
+acceptance with the proposed commit message. Do not start M05.

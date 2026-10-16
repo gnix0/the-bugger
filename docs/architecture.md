@@ -1,6 +1,6 @@
 # Architecture
 
-## Current implementation (M03)
+## Current implementation (M04)
 
 `src/main.c` handles help/version and starts the terminal application.
 `src/tui/app.c` owns startup/configuration/review/workspace pages, keyboard
@@ -13,9 +13,10 @@ debugger-domain state and must be replaced by live data in real sessions.
 The build and tests are C17 with strict warnings; Make is the only build driver.
 C tests use POSIX pipes, processes and PTYs. Python tests were replaced at the
 owner's request. The only current application library dependency is ncursesw.
-There is no debugger transport, tool subprocess launch or persistence yet.
-The independent MI parser described below is implemented; the TUI does not yet
-consume it and continues to display explicitly simulated data.
+The independent MI parser and controller described below are implemented and
+can start a debugger process. The TUI does not yet consume them and continues
+to display explicitly simulated data. Native target sessions, inspection,
+OpenOCD management and persistence are not implemented yet.
 
 The UI waits for input with a 100 ms ncurses timeout and redraws after events
 rather than on every timeout. Raw input preserves function keys and Ctrl+Q;
@@ -77,13 +78,85 @@ implicit newline. Quoted streams have no added newline.
 The grammar follows the official GDB manual's
 [MI output syntax](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Output-Syntax.html)
 and [stream records](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Stream-Records.html).
-It is shared by MI2/MI3; selecting an interpreter, correlating requests and
-interpreting target state belong to M04. No command encoder, transport,
-subprocess lifecycle or live debugger state is introduced in M03.
+It is shared by MI2/MI3. The controller supplies interpreter selection,
+request correlation and execution-state foundations; the parser itself has no
+command encoder, transport, subprocess lifecycle or debugger-domain state.
 
 `make mi-demo` runs the C-only diagnostic decoder with one-byte reads.
 It escapes control/non-ASCII bytes before printing and launches no debugger.
 Synthetic fixture provenance and expectations are in `tests/fixtures/mi/README.md`.
+
+## M04 nonblocking controller and owned process
+
+`src/gdb/controller.{h,c}` is an internal, single-threaded C interface independent
+of curses. It owns one spawned GDB child, three close-on-exec pipes, the parser
+and up to 64 requests. `posix_spawnp` passes a literal executable and fixed argv:
+`--quiet --nx --interpreter=mi3`. No shell, target arguments or connection command
+is used. The child has a separate process group, reset signal mask and default
+signal dispositions; cleanup signals only its owned PID, never the group.
+All pipe endpoints stay above stdio, even when the host closed descriptors 0–2.
+Parent endpoints are nonblocking; child endpoints remain blocking.
+
+Startup waits for the MI prompt and successful `-gdb-set mi-async on` and
+`-gdb-set non-stop off` replies before reporting READY (no target). One MI2 retry
+is allowed only after the first child is reaped, both output pipes are drained,
+and its bounded startup stderr contains GDB's explicit English unrecognized-MI3
+interpreter diagnostic, before any prompt or command. Missing tools, timeouts,
+generic failures, localized/unrecognized diagnostics and post-prompt failures
+never trigger speculative retries. Setup errors fail visibly. Stderr remains
+separate from parsed MI and is passed as length-delimited bytes.
+
+Requests receive monotonically increasing tokens within a session, independent
+caller cookies, deadlines from enqueue, and session/stop/context stamps. Commands
+are assembled from a restricted operation name and separately quoted C-string
+arguments (fixed-width octal for control/non-ASCII bytes); encoded commands are
+bounded to 16 KiB. Raw command fragments are not accepted. This is MI encoding,
+not shell quoting. Partial writes retain their offsets and ordering.
+
+Replies match only fully written requests with exact tokens. STOP/CONTEXT queries
+require a stopped target. A resume/new stop invalidates stop-dependent replies;
+explicit context changes invalidate context-dependent replies. Obsolete queued
+queries are dropped before writing; already-sent stale results are not published
+as successful replies. Unknown/late tokens are diagnostic stale events.
+Repeated `*running` does not create extra epochs, and a late `^running` cannot
+overwrite a newer `*stopped`. New sessions reset the parser/pipes and advance
+session identity. The future thread/frame model will call the context hook.
+
+Each accepted public request receives one reply, stale, timeout or cancellation
+completion. Fully sent timeouts do not imply backend cancellation: late replies
+are ignored and no command is retried. An incomplete write timeout closes the
+session because the wire may contain an unfinished command. Protocol/limit/
+allocation errors also fail the controller instead of exposing partial state.
+Callbacks borrow events/records until return and must not mutate/reenter the
+controller; consumers must copy data they retain.
+
+`tb_gdb_pollfds` and `tb_gdb_timeout` allow a future terminal event loop to poll
+all sources together, then call `tb_gdb_pump(..., 0)`. The standalone pump waits
+at most 25 ms or the next deadline, handles EINTR by returning to its caller,
+and reads/writes at most 16 KiB per pipe per turn. It checks deadlines around
+poll and handles closed command input even when no write is queued. Idle waits
+use poll. Callback work must also remain bounded; the transport does not render.
+SIGPIPE masking/consumption is local to each write, preserving the caller's
+handler/mask and previously pending signal.
+
+Close cancels requests and closes command input for cooperative EOF exit.
+After 300 ms it sends TERM, then KILL after another 200 ms if needed. Reaping uses
+`waitpid(owned_pid, ..., WNOHANG)`, clearing ownership before exit callbacks.
+The host must not reap the controller's child; unexpected ECHILD is diagnosed
+and clears the PID without signalling it again. A reaped child's pipes get
+200 ms to drain before being closed if another process retained an endpoint.
+Destroy refuses a live controller: close and pump until DISCONNECTED first.
+The host must service the pump during shutdown. M05 must implement native
+detach/target policy before using this process-close primitive for live sessions.
+
+The C fake peer and interactive diagnostic harness are in `tests/support/`,
+with failure/pressure/PTY coverage in `tests/integration/`. They are explicitly
+fake; the application remains DEMO. An optional actual-GDB startup test performs
+only negotiation, feature enumeration and MI exit, without any inferior/target.
+The protocol state follows the official GDB manual's
+[input syntax](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Input-Syntax.html),
+[async records](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Async-Records.html)
+and [interpreter options](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Mode-Options.html).
 
 ## Approved direction
 

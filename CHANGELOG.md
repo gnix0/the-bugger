@@ -4,6 +4,12 @@
 
 ### Added
 
+- M04 nonblocking GDB/MI controller with literal argv spawning, bounded command/
+  I/O queues, token matching, deadlines, stale-generation rejection and owned
+  process cleanup. MI3 startup negotiates asynchronous/all-stop operation with
+  a restricted startup-only MI2 fallback.
+- C fake-peer lifecycle/pressure and interactive PTY tests, a separate fake
+  controller demonstration, and optional actual-GDB startup checks without targets.
 - M03 incremental GDB/MI parser with owned records, nested values, byte-string
   decoding, bounded buffering and line-boundary error recovery.
 - C protocol/fragmentation/resource-limit and allocation-failure tests, synthetic

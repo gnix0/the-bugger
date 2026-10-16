@@ -15,8 +15,8 @@ git diff --check
 ```
 
 `all` compiles C17 with strict warnings including `-Wall -Wextra -Wpedantic`
-and `-Werror`. `test` builds and runs eight C test executables: two MI suites,
-demo, layout, renderer, CLI and two PTY integration suites, described in
+and `-Werror`. `test` builds and runs ten C test executables: two MI suites,
+two controller suites, demo, layout, renderer, CLI and two workspace PTY suites, described in
 `tests/README.md`. `sanitize` builds separately
 with ASan/UBSan; a runtime
 diagnostic is a failure, not a skip. `analyze` uses clang-tidy and fails on
@@ -34,6 +34,55 @@ Do not disable leak detection or label that environment failure a passing test.
 retained as `build/m01-*`; these are local evidence, not tracked artifacts.
 Durable command summaries and limitations belong in `docs/progress.md`.
 Changing compiler or flags requires a fresh build directory or cleaning.
+
+## M04 manual acceptance
+
+This gate exercises transport/controller foundations, not live native debugging.
+The standalone harness does not change the TUI and labels its peer/state FAKE.
+
+1. Run `make test-controller`. Expect protocol/lifecycle/pressure checks and
+   the interactive PTY harness suite to print PASS. No GDB or board is needed.
+2. Run `./build/controller-demo ./build/fake-mi`. Wait for
+   `state: ready (no target)`. Type `stop` and Enter, then `run` and Enter.
+   Expect FAKE stopped/running states and correlated replies. Type `error`:
+   expect a valid `class=error` reply while the session stays usable.
+3. Type `hold` and wait two seconds: expect a timeout. Type `release`:
+   expect its normal reply and an unmatched/stale late reply for the old token,
+   rather than completing the timed-out request again.
+4. Type `stop`, then `hold-context`, `context` and `release`, each followed by
+   Enter, within ten seconds. Expect a stale completion for the held context.
+   `hold-stop` followed by `run` and `release` similarly invalidates stop-scoped
+   work. The ordinary release request still succeeds.
+5. Type `flood` and then `error`. Expect input to remain usable and the error
+   reply to arrive. Only the first four stderr chunks are printed, to keep the
+   harness readable; this is not the future application log-retention policy.
+   Type `quit`. Expect closing, owned-child reaping and
+   `cleanup: disconnected, no owned child`, then normal terminal behavior.
+6. Run `./build/controller-demo ./build/fake-mi fallback`. Expect one MI2 retry
+   before READY; quit. Run `./build/controller-demo ./build/fake-mi stubborn`:
+   expect startup timeout and bounded TERM/KILL cleanup, or press Ctrl+C to
+   request cleanup immediately (signal exit status 130). Repeat with a missing
+   executable path: expect an actionable spawn error and exit 1.
+7. Optionally run `make test-gdb-startup` with installed native GDB, then
+   `./build/test-gdb-startup arm-none-eabi-gdb` with ARM GDB. Expect actual
+   startup/async/all-stop/features/MI-exit PASS; no inferior, server, board or
+   hardware connection is made. This optional tool is outside `make test` so
+   the deterministic gate does not require external debugger installations.
+
+Coverage: FR-16 lifecycle foundations; NFR-02/03/04/06/08/09/12. Tests exercise
+token reordering, escaped arguments, unknown/late replies, queued and in-flight
+generation changes, bounded queues, timeouts during backpressure, stderr/stdout
+floods, EOF/malformed MI, startup/setup/fallback failures, EINTR, externally
+reaped children, missing executables, literal paths with spaces/metacharacters,
+closed stdio, partial descriptor exhaustion, repeated cleanup and unrelated
+child survival. PTY tests cover harness commands and SIGINT/SIGTERM/SIGHUP
+cleanup with unchanged terminal attributes.
+
+The pressure test reports measured maximum pump wall time and checks per-turn
+byte bounds and actual idle waiting. These are fake-peer transport observations,
+not proof of whole-TUI latency or release performance. Final native performance
+and terminal/tmux acceptance remain M14/M18. No new mouse/visual behavior is
+introduced in M04; the existing workspace PTY regressions still run.
 
 ## M03 manual acceptance
 

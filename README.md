@@ -15,9 +15,10 @@ these acceptance targets do not limit the product architecture.
 **Development preview:** bare invocation
 opens the clickable launcher and a Monokai six-pane workspace. Configuration,
 source, instructions, registers, memory, variables, logs and execution actions
-are explicitly simulated. No GDB/OpenOCD connection, tool validation, profile
-persistence or hardware access is implemented yet. The workspace supports
-pane resizing and dynamic tiled splits.
+are explicitly simulated. The workspace does not connect to GDB/OpenOCD,
+validate tools, persist profiles or access hardware yet. Independent backend
+development tools exercise the MI parser and controller without a debug target.
+The workspace supports pane resizing and dynamic tiled splits.
 `0.1.0` is the target version; it is not a declaration of release readiness.
 
 ## Build and run
@@ -115,11 +116,11 @@ See [testing](docs/testing.md) for suite coverage and terminal checks.
 `test-tmux` additionally requires tmux and uses an isolated temporary server to
 check tab styling/focus, mouse forwarding, dragging, splitting and terminal resizing.
 
-## MI parser development tools
+## Backend development tools
 
-An independent C parser handles structured GDB/MI records, incremental input,
-nested values, escaped byte strings and malformed-record recovery. It is not
-yet connected to the workspace; all debugger views remain simulated.
+An independent C parser and controller handle structured GDB/MI records,
+nonblocking subprocess I/O, command queues, deadlines and owned-process cleanup.
+They are not yet connected to the workspace; all debugger views remain simulated.
 
 ```sh
 make test-mi
@@ -133,6 +134,22 @@ two records, and exits 1. The decoder also accepts a file or standard input;
 control bytes are printed as escapes. See the
 [fixture notes](tests/fixtures/mi/README.md) and
 [manual checks](docs/testing.md#m03-manual-acceptance).
+
+```sh
+make test-controller
+./build/controller-demo ./build/fake-mi
+```
+
+The controller harness uses an explicitly fake C peer. Wait for READY, then type
+`stop`, `run`, `error`, `hold`, `release`, `flood` or `quit` followed by Enter.
+It demonstrates correlated replies, timeouts, stale responses and clean shutdown.
+See [controller checks](docs/testing.md#m04-manual-acceptance) for context
+invalidation, fallback and failure scenarios. No target or board is launched.
+
+With GDB installed, `make test-gdb-startup` optionally checks real debugger
+startup, asynchronous/all-stop setup, feature enumeration and MI exit.
+`./build/test-gdb-startup arm-none-eabi-gdb` checks an installed ARM GDB the same
+way. These probes do not launch an inferior or connect to hardware.
 
 ## Project direction
 

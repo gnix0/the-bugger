@@ -12,8 +12,8 @@ States: `planned` → `implemented` → `automated-verified` → `awaiting-user`
 | M02 | Tiled layout engine | accepted | `094fa71` |
 | Post-M02 | Navigation/highlight/scrollbar correction | accepted | `a832eef` |
 | P00 | Expanded roadmap/specification and tab-focus correction | accepted | `36d5ad6` |
-| M03 | Incremental MI parser | awaiting-user | — |
-| M04 | Nonblocking transport/controller and owned lifecycle | planned | — |
+| M03 | Incremental MI parser | accepted | `ee1cfc5` |
+| M04 | Nonblocking transport/controller and owned lifecycle | awaiting-user | — |
 | M05 | Native sessions, console/output and Save Log | planned | — |
 | M06 | Selected context, Call Stack and Threads | planned | — |
 | M07 | Live code, stepping modes, navigation/source recovery | planned | — |
@@ -33,8 +33,8 @@ States: `planned` → `implemented` → `automated-verified` → `awaiting-user`
 The approved expanded roadmap replaces only the old unimplemented M03–M07
 grouping. Older references to future milestone numbers in historical entries
 below describe their original scopes; [the current roadmap](plan.md) governs
-new work. Historical failures and acceptance evidence are retained. P00 is the
-only currently authorized gate; no backend or release is accepted.
+new work. Historical failures and acceptance evidence are retained. M04 is the
+only currently authorized gate; no live target workflow or release is accepted.
 
 ## M00 — foundation
 
@@ -483,3 +483,102 @@ usage exit codes. No visible TUI change is expected.
 **Status: AWAITING USER ACCEPTANCE.** Include the proposed commit message at
 delivery. Stop before M04; wait for owner review, acceptance, commit/push and
 explicit continuation.
+
+### M03 acceptance and M04 authorization
+
+The owner's explicit instruction to proceed to the next milestone accepts M03
+and authorizes M04. Commit `ee1cfc5` is reliably observed at HEAD and origin/main,
+with a clean working tree before M04. The earlier M03 awaiting-user status is
+historical. No commit, push, tag or other Git write was made by the agent.
+
+## M04 — nonblocking MI controller and owned lifecycle
+
+State: `planned` → `implemented` → `automated-verified` → `awaiting-user`.
+M04 only was authorized. No acceptance or resulting commit SHA is claimed.
+
+Implemented:
+
+- Internal C controller with owned argv-based GDB spawning, isolated process
+  group, close-on-exec/nonblocking parent pipes and separate stderr. No shell,
+  global signal handler, new library dependency or target command on startup.
+- MI3 prompt and asynchronous/all-stop setup negotiation; one restricted MI2
+  retry for the explicit unsupported-interpreter startup diagnostic, after the
+  first child is reaped. No fallback after a prompt, generic failure or timeout.
+- Bounded queued writes and per-pipe processing, exact-token correlation,
+  independent caller cookies, deadlines from enqueue and one completion per
+  accepted public request. Safe MI argument encoding and ordered partial writes.
+- Session/stop/context generations, queued/in-flight stale rejection, async
+  execution-state foundations and protection against late/repeated running
+  responses. STOP/CONTEXT scopes require a stopped target.
+- Poll integration hooks, EINTR returns and idle waiting; explicit handling of
+  closed command input, EOF/protocol errors, backpressure and output floods.
+- Nonblocking close, cooperative EOF, bounded TERM/KILL escalation, owned-PID
+  reaping and cancellation. Destroy refuses a live controller. External reaping
+  is diagnosed and clears ownership; unrelated children remain untouched.
+- C fake peer, lifecycle/pressure tests, interactive diagnostic harness and PTY
+  regression. Optional actual-GDB startup/features/MI-exit probe without targets.
+- Architecture, testing, progress, roadmap, changelog and README updates.
+  AGENTS.md is updated locally and remains ignored by existing policy; the
+  tracked contract is in docs/plan.md.
+
+Excluded: native target launch/attach, inferior TTY/output/session model, live
+workspace wiring or inspection, source/execution controls in the product, saved
+profiles, OpenOCD management and hardware access. The application remains DEMO.
+The context-generation hook is infrastructure for M06, not implemented frames.
+
+Automated verification (all final commands exited 0):
+
+| Exact command | Result | Local evidence |
+|---|---|---|
+| `make test` | PASS; strict GCC, ten C suites including existing TUI regressions | `build/m04-test-final.log` |
+| `make CC=clang BUILD_DIR=build/m04-clang test` | PASS; separate Clang build and all suites | `build/m04-clang-final.log` |
+| `make sanitize` | PASS; ASan/UBSan/LeakSanitizer outside ptrace sandbox | `build/m04-sanitize-final.log` |
+| `make analyze` | PASS; no unsuppressed project diagnostics; existing system-header/NOLINT suppressions reported | `build/m04-analyze-final.log` |
+| `make test-controller` | PASS after the final harness-only stderr preview cap | `build/m04-controller-delivery.log` |
+| `make CC=clang BUILD_DIR=build/m04-clang test-controller` | PASS after that cap | `build/m04-clang-controller-delivery.log` |
+| `make BUILD_DIR=build/sanitize CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-controller` | PASS after that cap, leak detection outside ptrace sandbox | `build/m04-sanitize-controller-delivery.log` |
+| `make test-gdb-startup` | PASS; actual native GDB 18.1 startup/setup/features/MI exit, no target | `build/m04-gdb-startup-final.log` |
+| `./build/test-gdb-startup arm-none-eabi-gdb` | PASS; actual ARM GDB 18.1, same target-free probe | `build/m04-arm-gdb-startup-final.log` |
+| `git diff --check` | PASS; repeated at final handoff | No whitespace diagnostics |
+
+The deterministic tests exercise reordered/late replies, escaped byte arguments,
+queued/context/stop invalidation, queue limits, timeouts, partial-write shutdown,
+stdout/stderr floods, idle poll, malformed/truncated input, setup/startup/fallback
+failures, signals, ECHILD, partial descriptor exhaustion, closed stdio, literal
+paths with spaces/metacharacters, repeated cleanup and unrelated child survival.
+PTY tests exercise commands, timeout/stale reporting, responsiveness through
+floods and SIGINT/SIGTERM/SIGHUP cleanup with unchanged terminal attributes.
+
+Measured method/environment: test_controller times every pump in its delayed-read
+and 2 MiB stdout + 2 MiB stderr scenarios using CLOCK_MONOTONIC millisecond wall
+time, while also asserting per-turn byte bounds and actual idle waiting.
+Final GCC/Clang/sanitizer full suites each observed a maximum pump of **11 ms**.
+Host: Linux 7.2.9-arch1-1 x86-64, Intel Core i5-8265U, 8 logical CPUs;
+GCC 16.2.1 and Clang 23.1.1. These are fake-peer transport measurements,
+not whole-application latency, hardware performance or release acceptance.
+
+Intermediate failures were inspected and corrected: sandbox socket sends were
+denied, so command input uses a POSIX pipe with local SIGPIPE protection; an
+idle timing assertion initially measured the immediate queued-write turn;
+closed-input handling initially prevented legitimate pre-prompt fallback; and
+clang-tidy required an explicit POSIX bitmask cast and a narrowly documented
+Linux feature-macro annotation. Regression tests now cover the affected behavior.
+Earlier logs remain under `build/m04-*`; final full suites passed after the
+production fixes. Only the harness stderr display cap changed afterward, and
+the focused GCC/Clang/sanitizer controller suites were repeated.
+
+Requirement evidence: FR-16 lifecycle foundations and NFR-02/03/04/06/08/09/12
+within this controller gate. No external server was contacted or managed.
+The optional GDB tests establish actual transport startup, not native debugging,
+ARM firmware debugging or hardware support. Hardware/release readiness remains
+UNVERIFIED. No mouse/visual behavior changed; tmux was not newly tested in this
+backend-only gate, and existing workspace PTY regressions passed.
+
+Manual test now: follow **M04 manual acceptance** in docs/testing.md. Use the
+explicit fake harness for run/stop, stale/timeout/error behavior, flood input
+and clean shutdown; inspect fallback/stubborn startup errors. The product TUI
+still displays DEMO and is not expected to connect to a live target yet.
+
+**Status: AWAITING USER ACCEPTANCE.** Deliver the proposed Conventional Commit
+message now and stop. M05 requires owner acceptance, commit/push and explicit
+authorization.
