@@ -50,7 +50,6 @@ void tb_demo_init(TbDemo *demo)
         demo->panes[i].tabs[1] = defaults[i][1];
         demo->panes[i].count = 2;
     }
-    demo->breakpoints[19] = true;
     demo->panes[0].scroll[TB_SOURCE] = 8;
     demo->panes[0].row[TB_SOURCE] = 17;
     tb_demo_log(demo, "Visual reference only; no GDB or OpenOCD connected.");
@@ -118,4 +117,36 @@ bool tb_demo_close_tab(TbDemo *demo)
     --pane->count;
     if (pane->active >= pane->count) { pane->active = pane->count - 1; }
     return true;
+}
+
+int tb_demo_row_count(const TbDemo *demo, TbView view)
+{
+    switch (view) {
+    case TB_SOURCE: case TB_BREAKPOINTS: return TB_SOURCE_LINES;
+    case TB_DISASSEMBLY: return 9;
+    case TB_REGISTERS: return 17;
+    case TB_MEMORY: return 32;
+    case TB_LOCALS: case TB_WATCHES: return 4;
+    case TB_CONSOLE: return demo->log_count;
+    case TB_CALL_STACK: return 2;
+    case TB_THREADS: return 1;
+    case TB_SYMBOLS: case TB_PERIPHERALS: case TB_STACK: return 2;
+    default: return 0;
+    }
+}
+
+TbScroll tb_demo_scrollbar(const TbDemo *demo, const TbDemoPane *pane, int visible)
+{
+    TbScroll scroll = {.total = tb_demo_row_count(demo, pane->tabs[pane->active]),
+                       .visible = visible};
+    if (visible <= 0) { return scroll; }
+    scroll.maximum = scroll.total > visible ? scroll.total - visible : 0;
+    scroll.offset = pane->scroll[pane->tabs[pane->active]];
+    if (scroll.offset < 0) { scroll.offset = 0; }
+    if (scroll.offset > scroll.maximum) { scroll.offset = scroll.maximum; }
+    scroll.thumb_size = scroll.maximum == 0 ? visible : visible * visible / scroll.total;
+    if (scroll.thumb_size < 1) { scroll.thumb_size = 1; }
+    scroll.thumb_start = scroll.maximum == 0 ? 0 :
+                        scroll.offset * (visible - scroll.thumb_size) / scroll.maximum;
+    return scroll;
 }

@@ -29,7 +29,7 @@ int main(void)
     TbDemo demo;
     tb_demo_init(&demo);
     demo.panes[0].scroll[TB_SOURCE] = 16;
-    TbRect rect = {1, 4, 49, 20};
+    TbRect rect = {1, 4, 49, 10};
     tb_fill(rect, TB_PANEL);
     tb_render_demo(&demo, 0, rect);
     /* Initial source row is main: line number, type and function are distinct. */
@@ -38,7 +38,18 @@ int main(void)
     CHECK(pair_at(6, 12) == TB_GREEN);
     CHECK(pair_at(7, 3) == (int)tb_selected_style(TB_YELLOW));
     CHECK(pair_at(7, 48) == TB_SELECTED); /* selection fills the row */
-    CHECK(pair_at(23, 2) == TB_FOOTER);
+    CHECK(pair_at(13, 2) == TB_FOOTER);
+    CHECK(pair_at(6, 49) == TB_BORDER); /* scrollbar track */
+    CHECK(pair_at(11, 49) == TB_CYAN); /* thumb near the end of the source */
+    tb_demo_action(&demo, TB_NEXT);
+    tb_fill(rect, TB_PANEL);
+    tb_render_demo(&demo, 0, rect);
+    CHECK(pair_at(7, 48) == TB_PANEL); /* previous PC is not a navigation highlight */
+    CHECK(pair_at(8, 48) == TB_SELECTED);
+    tb_demo_action(&demo, TB_RESET);
+    demo.pane = 2;
+    demo.panes[2].row[TB_REGISTERS] = 0;
+    tb_fill(rect, TB_PANEL);
     tb_render_demo(&demo, 2, rect);
     CHECK(pair_at(6, 2) == TB_CYAN);
     CHECK(pair_at(6, 11) == TB_GREEN);
@@ -55,6 +66,6 @@ int main(void)
     (void)endwin();
     delscreen(screen);
     CHECK(fclose(input) == 0 && fclose(output) == 0);
-    puts("PASS render palette, semantic colors, full-row selection and monochrome tab marker");
+    puts("PASS render palette, execution-only highlight, scrollbar and monochrome tab marker");
     return EXIT_SUCCESS;
 }

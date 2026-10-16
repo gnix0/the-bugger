@@ -5,6 +5,13 @@ int main(void)
 {
     TbDemo demo;
     tb_demo_init(&demo);
+    for (int i = 0; i < TB_SOURCE_LINES; ++i) { CHECK(!demo.breakpoints[i]); }
+    for (int height = 1; height <= 30; ++height) {
+        TbScroll scroll = tb_demo_scrollbar(&demo, &demo.panes[0], height);
+        CHECK(scroll.offset >= 0 && scroll.offset <= scroll.maximum);
+        CHECK(scroll.thumb_size >= 1 && scroll.thumb_size <= height);
+        CHECK(scroll.thumb_start >= 0 && scroll.thumb_start + scroll.thumb_size <= height);
+    }
     CHECK(demo.panes[0].tabs[0] == TB_SOURCE);
     CHECK(demo.panes[5].tabs[0] == TB_CONSOLE);
     tb_demo_action(&demo, TB_CONTINUE);

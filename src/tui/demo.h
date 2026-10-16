@@ -33,6 +33,10 @@ typedef struct {
     int log_count;
 } TbDemo;
 
+typedef struct {
+    int total, visible, offset, maximum, thumb_start, thumb_size;
+} TbScroll;
+
 extern const char *const tb_view_names[TB_VIEW_COUNT];
 extern const char *const tb_demo_source[TB_SOURCE_LINES];
 
@@ -41,5 +45,7 @@ void tb_demo_action(TbDemo *demo, TbDemoAction action);
 void tb_demo_log(TbDemo *demo, const char *message);
 void tb_demo_view(TbDemo *demo, TbView view);
 bool tb_demo_close_tab(TbDemo *demo);
+int tb_demo_row_count(const TbDemo *demo, TbView view);
+TbScroll tb_demo_scrollbar(const TbDemo *demo, const TbDemoPane *pane, int visible);
 
 #endif

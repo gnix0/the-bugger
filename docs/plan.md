@@ -89,3 +89,9 @@ component comparison in `docs/design/tui-mapping.md` and inspect the actual
 rendered interface against the HTML before acceptance. Renderer/color tests
 supplement that review; panel count and interaction tests cannot replace it.
 Milestone boundaries and the no-presets requirement remain unchanged.
+
+Approved post-M02 interaction correction: pane navigation scrolls the viewport
+directly. Source/disassembly reserve row highlighting for execution position;
+overflowing pane bodies provide a vertical scrollbar with paging and thumb
+dragging. Initial demo breakpoints are empty. This remains TUI correction work;
+M03 is not authorized by it.

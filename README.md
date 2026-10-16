@@ -54,6 +54,10 @@ Left/Right, Home/End, Backspace/Delete and Ctrl+U to clear. The toolbar provides
 simulated F5/F9/F10/F11/Shift+F11 actions and clickable alternatives; Reset asks
 for confirmation. Tab into a pane body for arrow/PageUp/PageDown scrolling, or
 use the wheel. Click `...` for the view chooser; arrows/Enter or clicks select.
+Scrolling moves the viewport directly. Source and Disassembly highlight their
+current simulated execution positions; stepping moves these highlights.
+Overflowing panes have a vertical scrollbar: click the track to page or drag
+the thumb. Demo sessions start with no breakpoints.
 Keys `1`–`9` focus retained pane IDs; `[`/`]` cycles all panes. Future-view tabs
 explicitly say **NOT IMPLEMENTED**.
 

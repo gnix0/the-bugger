@@ -9,7 +9,7 @@ States: `planned` → `implemented` → `automated-verified` → `awaiting-user`
 |---|---|---|---|
 | M00 | Repository foundation | accepted | `0f5d05b` |
 | M01 | Launcher and DEMO workspace | accepted | `60df655` |
-| M02 | Tiled layout engine | accepted | Commit/push pending |
+| M02 | Tiled layout engine | accepted | `094fa71` |
 | M03 | MI and owned-process lifecycle | planned | — |
 | M04 | Native Linux debugging | planned | — |
 | M05 | Live inspection | planned | — |
@@ -261,8 +261,41 @@ resize, shrink/restore and tmux. Compare the default presentation with the
 accepted M01 styling and HTML; all debugger values remain visibly simulated.
 
 State: `implemented` → `automated-verified` → `awaiting-user` → `accepted`.
-The owner explicitly approved M02 after manual validation. Commit/push are
-pending owner action; no resulting SHA is recorded yet. The owner requested a
+The owner explicitly approved M02 after manual validation. Its commit
+`094fa714da9400ae7a40c0357a1552ba38a1ffd7` was subsequently observed at both HEAD
+and origin/main. The owner requested a
 break afterward. M03 remains planned until the owner returns and authorizes it.
 The newly added image is outside this milestone and was left untouched.
 No commit, push or tag was made by the agent.
+
+## Post-M02 navigation corrections
+
+Authorized by the owner's reports of the four-line disassembly limit and
+secondary source navigation highlight, followed by a request for scrollbars.
+M03 remains planned. The user's image remains untouched.
+
+The disassembly renderer had nine rows while input handling fell back to a
+four-row bound. Rendering/input now share per-view counts, including shorter
+Call Stack/Threads and empty Console states. The initial regression test failed
+against the pre-fix input code and passed against the corrected implementation
+(`build/disassembly-selection-before.log`). The VT test reader was extended
+for ncurses cursor save/restore around scrolling regions.
+
+The initial line-30 highlight represents the simulated execution position.
+Removed the additional navigation-row highlight and the preloaded breakpoint.
+Wheel/arrows/Page keys now move the viewport directly; only source/disassembly
+execution rows receive a full-row background. Overflowing panes show a
+clickable track and draggable thumb. Rendering and input share scrollbar
+geometry; resizing ends a scrollbar drag safely.
+
+Manual validation: follow the post-M02 checklist in `docs/testing.md`.
+Status: **AWAITING USER ACCEPTANCE** for these corrections. M02 acceptance and
+its existing commit are retained; no new commit/push/tag was made by the agent.
+
+Final correction verification: `make test`, `make sanitize`, `make analyze`,
+`make test-tmux` and `git diff --check` all passed. Sanitizer/tmux runs used the
+required execution permission; leak detection stayed enabled. Logs are
+`build/navigation-fixes-{test,sanitize,analyze,tmux}.log`. C regressions cover
+ninth-instruction access, scrollbar paging/drag, execution-only highlighting
+and empty initial breakpoints. No running the-bugger process remained after
+checks. Manual visual acceptance is pending.

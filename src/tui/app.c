@@ -19,7 +19,7 @@ typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM } Page;
 typedef enum {
     CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
     TOOL, TAB, MENU, BODY, SHOW_VIEW, FOCUS_PANE, CANCEL_RESET, CONFIRM_RESET,
-    MENU_SECTION, PANE_ACTION, DIVIDER, NEXT_PANE, PREVIOUS_PANE
+    MENU_SECTION, PANE_ACTION, DIVIDER, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR
 } ControlKind;
 
 typedef struct {
@@ -48,6 +48,7 @@ typedef struct {
     size_t cursor;
     bool quit, previewed, menu_focus, menu_actions, resizing;
     int drag, resize_divider;
+    int scroll_drag_pane, scroll_drag_grab;
     Control controls[MAX_CONTROLS];
     TbRect panes[TB_MAX_PANES];
     const char *colors;
@@ -79,6 +80,7 @@ static void page(App *app, Page next)
     app->form_scroll = 0;
     app->menu = -1;
     app->drag = -1;
+    app->scroll_drag_pane = -1;
     app->resizing = false;
 }
 
@@ -374,6 +376,11 @@ static void draw_pane(App *app, int pane_index, TbRect rect)
         (void)add_control(app, (TbRect){rect.x + 1, rect.y + 2, rect.w - 2, rect.h - 3},
                           BODY, 0, pane_index);
         tb_render_demo(&app->demo, pane_index, rect);
+        TbScroll scroll = tb_demo_scrollbar(&app->demo, pane, rect.h - 3);
+        if (scroll.maximum > 0) {
+            (void)add_control(app, (TbRect){rect.x + rect.w - 1, rect.y + 2, 1, rect.h - 3},
+                              SCROLLBAR, 0, pane_index);
+        }
     }
 }
 
@@ -608,7 +615,7 @@ static void activate(App *app, Control control)
         app->menu_focus = app->menu >= 0;
         app->menu_actions = false;
         break;
-    case BODY: app->demo.pane = control.pane; break;
+    case BODY: case SCROLLBAR: app->demo.pane = control.pane; break;
     case SHOW_VIEW:
         app->demo.pane = control.pane;
         tb_demo_view(&app->demo, (TbView)control.value);
@@ -695,25 +702,27 @@ static void scroll_body(App *app, Control control, int amount)
     app->demo.pane = control.pane;
     TbDemoPane *pane = &app->demo.panes[control.pane];
     TbView view = pane->tabs[pane->active];
-    int limit = view == TB_SOURCE || view == TB_BREAKPOINTS ? TB_SOURCE_LINES :
-                view == TB_MEMORY ? 32 : view == TB_REGISTERS ? 17 :
-                view == TB_CONSOLE ? app->demo.log_count : 4;
-    int row = pane->row[view] + amount;
-    if (row < 0) { row = 0; }
-    if (row >= limit) { row = limit - 1; }
-    pane->row[view] = row;
-    int height = app->panes[control.pane].h - 3;
-    if (row < pane->scroll[view]) {
-        pane->scroll[view] = row;
-    } else if (height > 0 && row >= pane->scroll[view] + height) {
-        pane->scroll[view] = row - height + 1;
-    }
+    TbScroll scroll = tb_demo_scrollbar(&app->demo, pane, app->panes[control.pane].h - 3);
+    int offset = scroll.offset + amount;
+    pane->scroll[view] = offset < 0 ? 0 : offset > scroll.maximum ? scroll.maximum : offset;
 }
 
 static void mouse_event(App *app)
 {
     MEVENT event;
     if (getmouse(&event) != OK) {
+        return;
+    }
+    if (app->page == WORKSPACE && app->scroll_drag_pane >= 0) {
+        int pane_index = app->scroll_drag_pane;
+        TbDemoPane *pane = &app->demo.panes[pane_index];
+        TbScroll scroll = tb_demo_scrollbar(&app->demo, pane, app->panes[pane_index].h - 3);
+        int travel = scroll.visible - scroll.thumb_size;
+        int position = event.y - app->panes[pane_index].y - 2 - app->scroll_drag_grab;
+        if (position < 0) { position = 0; }
+        if (position > travel) { position = travel; }
+        if (travel > 0) { pane->scroll[pane->tabs[pane->active]] = position * scroll.maximum / travel; }
+        if (event.bstate & BUTTON1_RELEASED) { app->scroll_drag_pane = -1; }
         return;
     }
     if (app->page == WORKSPACE && app->drag >= 0) {
@@ -766,7 +775,8 @@ static void mouse_event(App *app)
         if (!tb_rect_contains(control.rect, event.x, event.y)) {
             continue;
         }
-        if (control.kind == BODY && (event.bstate & (BUTTON4_PRESSED | BUTTON5_PRESSED))) {
+        if ((control.kind == BODY || control.kind == SCROLLBAR) &&
+            (event.bstate & (BUTTON4_PRESSED | BUTTON5_PRESSED))) {
             scroll_body(app, control, event.bstate & BUTTON4_PRESSED ? -3 : 3);
             return;
         }
@@ -783,14 +793,25 @@ static void mouse_event(App *app)
         } else {
             activate(app, control);
         }
-        if (control.kind == BODY) {
+        if (control.kind == SCROLLBAR) {
+            TbDemoPane *pane = &app->demo.panes[control.pane];
+            TbScroll scroll = tb_demo_scrollbar(&app->demo, pane, control.rect.h);
+            int row = event.y - control.rect.y;
+            if (row >= scroll.thumb_start && row < scroll.thumb_start + scroll.thumb_size) {
+                app->scroll_drag_pane = control.pane;
+                app->scroll_drag_grab = row - scroll.thumb_start;
+            } else {
+                scroll_body(app, control, row < scroll.thumb_start ? -scroll.visible : scroll.visible);
+            }
+        } else if (control.kind == BODY) {
             TbDemoPane *pane = &app->demo.panes[control.pane];
             TbView view = pane->tabs[pane->active];
             int row = event.y - app->panes[control.pane].y - 2;
             if (row >= 0) {
-                int target = pane->scroll[view] + row;
-                scroll_body(app, control, target - pane->row[view]);
-                if (view == TB_SOURCE && event.x < control.rect.x + 2) {
+                TbScroll scroll = tb_demo_scrollbar(&app->demo, pane, app->panes[control.pane].h - 3);
+                int target = scroll.offset + row;
+                if (target < scroll.total) { pane->row[view] = target; }
+                if (target < scroll.total && view == TB_SOURCE && event.x < control.rect.x + 2) {
                     tb_demo_action(&app->demo, TB_BREAKPOINT);
                     status(app, "DEMO gutter breakpoint toggled.");
                 }
@@ -812,6 +833,7 @@ static void key_event(App *app, wint_t key, bool special)
     }
     if (special && key == KEY_RESIZE) {
         app->drag = -1;
+        app->scroll_drag_pane = -1;
         app->resizing = false;
         app->focus = 0;
         (void)clearok(stdscr, TRUE);
@@ -896,7 +918,7 @@ static void key_event(App *app, wint_t key, bool special)
                 return;
             }
         }
-        if (control.kind == BODY &&
+        if ((control.kind == BODY || control.kind == SCROLLBAR) &&
             (key == KEY_UP || key == KEY_DOWN || key == KEY_PPAGE || key == KEY_NPAGE)) {
             scroll_body(app, control, key == KEY_UP ? -1 : key == KEY_DOWN ? 1 :
                         key == KEY_PPAGE ? -5 : 5);
@@ -923,6 +945,7 @@ static void initialize(App *app)
     memset(app, 0, sizeof *app);
     app->menu = -1;
     app->drag = -1;
+    app->scroll_drag_pane = -1;
     tb_demo_init(&app->demo);
     tb_layout_init(&app->layout);
     const wchar_t *const samples[3][FORM_FIELDS] = {

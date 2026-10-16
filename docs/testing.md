@@ -168,3 +168,21 @@ checks alone do not satisfy the visual gate.
 
 `tests/unit/test_render.c` inspects ncurses cells and exact direct-color pairs.
 It does not substitute for inspecting the rendered interface.
+
+## Post-M02 navigation correction
+
+1. Open the default workspace. No breakpoint marker should appear until F9 or
+   a gutter click. The current demo execution line is initially line 30
+   (`gpio_init();`). F10 moves its highlight and execution marker to line 31;
+   line 30 must lose the background highlight.
+2. Scroll Source using wheel, body arrows or PageUp/PageDown. The viewport moves
+   directly without another highlighted row. Try Memory, Registers and Console.
+3. On overflowing panes, click the scrollbar track to page and drag its thumb
+   between endpoints. Shrink/restore the terminal while browsing; keep clipping
+   and scrollbar bounds valid. Repeat inside tmux and with `NO_COLOR=1`.
+4. At 80x18, choose Disassembly and scroll to `0800043A` (the ninth sample
+   instruction), then back to the first. Wheel and keyboard must reach both.
+
+The C tests cover empty initial breakpoints, execution-highlight movement,
+scrollbar geometry, track/drag interaction and disassembly endpoints. The test
+screen reader handles cursor save/restore around ncurses scrolling regions.

@@ -13,6 +13,7 @@ typedef struct {
     pid_t child;
     int master, slave, rows, cols, x, y, escape;
     int scroll_top, scroll_bottom;
+    int saved_x, saved_y;
     struct termios original;
     char cells[TEST_ROWS][TEST_COLS + 1];
     char sequence[128];

@@ -127,6 +127,8 @@ static void consume(TestTerminal *term, unsigned char character)
         } else if (character == '(' || character == ')') {
             term->escape = 3;
         } else {
+            if (character == '7') { term->saved_x = term->x; term->saved_y = term->y; }
+            if (character == '8') { term->x = term->saved_x; term->y = term->saved_y; }
             if (character == 'M') {
                 if (term->y == term->scroll_top) { scroll_lines(term, term->scroll_top, term->scroll_bottom, -1); }
                 else if (term->y > 0) { --term->y; }

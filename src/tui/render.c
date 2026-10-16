@@ -71,10 +71,11 @@ static void source_line(int index, char *text, size_t capacity,
 static bool view_line(const TbDemo *demo, TbView view, int index,
                       char *text, size_t capacity, TbStyle *style)
 {
+    if (index < 0 || index >= tb_demo_row_count(demo, view)) { return false; }
     *style = TB_PANEL;
-    if (view == TB_SOURCE && index < TB_SOURCE_LINES) {
+    if (view == TB_SOURCE) {
         source_line(index, text, capacity, style, demo);
-    } else if (view == TB_DISASSEMBLY && index < 9) {
+    } else if (view == TB_DISASSEMBLY) {
         static const char *const instructions[] = {
             "push {r4, lr}", "ldr r3, [pc, #20]", "ldr r2, [r3]",
             "eor r2, r2, #32", "str r2, [r3]", "ldr r0, [pc, #12]",
@@ -87,7 +88,7 @@ static bool view_line(const TbDemo *demo, TbView view, int index,
                        index == demo->step ? '>' : ' ',
                        0x0800042aU + (unsigned)index * 2U, bytes[index], instructions[index]);
         *style = index == demo->step ? TB_YELLOW : TB_GREEN;
-    } else if (view == TB_REGISTERS && index < 17) {
+    } else if (view == TB_REGISTERS) {
         char name[16];
         if (index < 13) {
             (void)snprintf(name, sizeof name, "r%d", index);
@@ -101,34 +102,34 @@ static bool view_line(const TbDemo *demo, TbView view, int index,
         (void)snprintf(text, capacity, "%-7s  0x%08X  %s", name, value,
                        demo->step != 0 ? "+ changed" : "");
         *style = demo->step != 0 ? TB_YELLOW : TB_CYAN;
-    } else if (view == TB_MEMORY && index < 32) {
+    } else if (view == TB_MEMORY) {
         (void)snprintf(text, capacity, "%08X  %02X 42 55 47 47 45 52 21  .BUGGER!",
                        0x20000000U + (unsigned)index * 8U,
                        (unsigned)demo->step + 0x20U);
         *style = TB_PURPLE;
-    } else if ((view == TB_LOCALS || view == TB_WATCHES) && index < 4) {
+    } else if (view == TB_LOCALS || view == TB_WATCHES) {
         const char *const names[] = {"counter", "gpio_state", "LED_PIN", "i"};
         (void)snprintf(text, capacity, "%-12s %-9s %d%s", names[index],
                        view == TB_LOCALS ? "uint32_t" : "", demo->step + index,
                        demo->step != 0 ? " +" : "");
         *style = demo->step != 0 ? TB_YELLOW : TB_GREEN;
-    } else if (view == TB_CONSOLE && index < demo->log_count) {
+    } else if (view == TB_CONSOLE) {
         (void)snprintf(text, capacity, "%s", demo->logs[index]);
         *style = TB_GREEN;
-    } else if (view == TB_CALL_STACK && index < 2) {
+    } else if (view == TB_CALL_STACK) {
         (void)snprintf(text, capacity, "%d %-14s %s", index,
                        index == 0 ? "main" : "Reset_Handler",
                        index == 0 ? "main.c:30" : "startup.s:63");
         *style = TB_CYAN;
-    } else if (view == TB_BREAKPOINTS && index < TB_SOURCE_LINES) {
+    } else if (view == TB_BREAKPOINTS) {
         (void)snprintf(text, capacity, "%c %-8s main.c:%d",
                        demo->breakpoints[index] ? '*' : '-',
                        demo->breakpoints[index] ? "enabled" : "none", index + 13);
         *style = demo->breakpoints[index] ? TB_PINK : TB_MUTED;
-    } else if (view == TB_THREADS && index == 0) {
+    } else if (view == TB_THREADS) {
         (void)snprintf(text, capacity, "1  %-10s main.c:30", demo->running ? "running" : "stopped");
         *style = TB_GREEN;
-    } else if (view >= TB_SYMBOLS && index < 2) {
+    } else if (view >= TB_SYMBOLS) {
         (void)snprintf(text, capacity, "%s", index == 0 ?
                        "Future view; not implemented." : "No target data is available.");
         *style = TB_ORANGE;
@@ -224,21 +225,28 @@ void tb_render_demo(const TbDemo *demo, int pane_index, TbRect rect)
     }
     const TbDemoPane *pane = &demo->panes[pane_index];
     TbView view = pane->tabs[pane->active];
+    TbScroll scroll = tb_demo_scrollbar(demo, pane, rect.h - 3);
     int x = rect.x + 1, width = rect.w - 2;
     tb_fill((TbRect){rect.x, rect.y + 1, rect.w, 1}, TB_FOOTER);
     tb_text(rect.y + 1, x, width, TB_FOOTER, 0, heading(view));
     for (int row = 0; row < rect.h - 3; ++row) {
         char text[256];
         TbStyle style;
-        int index = row + pane->scroll[view];
+        int index = row + scroll.offset;
         if (!view_line(demo, view, index, text, sizeof text, &style)) {
             break;
         }
-        bool selected = (pane_index == demo->pane && pane->row[view] == index) ||
-                        (view == TB_SOURCE && index == 17 + demo->step) ||
+        bool selected = (view == TB_SOURCE && index == 17 + demo->step) ||
                         (view == TB_DISASSEMBLY && index == demo->step);
         if (selected) { tb_fill((TbRect){rect.x, rect.y + 2 + row, rect.w, 1}, TB_SELECTED); }
         styled_line(view, rect.y + 2 + row, x, width, text, style, selected);
+    }
+    if (scroll.maximum > 0) {
+        for (int row = 0; row < scroll.visible; ++row) {
+            bool thumb = row >= scroll.thumb_start && row < scroll.thumb_start + scroll.thumb_size;
+            tb_text(rect.y + 2 + row, rect.x + rect.w - 1, 1,
+                    thumb ? TB_CYAN : TB_BORDER, 0, thumb ? "#" : "|");
+        }
     }
     static const char *const footers[] = {
         "main.c | UTF-8 | C", "Thumb-2 | simulated", "Cortex-M4F | core",

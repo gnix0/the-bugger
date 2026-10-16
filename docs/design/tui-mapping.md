@@ -45,6 +45,10 @@ interaction tests does not establish fidelity to the reference.
   keyboard-selected divider gains a visible line and selected background.
 - Samples remain Cortex-M demo data in all session previews. Future x86-64
   disassembly uses AT&T syntax, as recorded in the development plan.
+- Pane scrolling moves the viewport rather than a highlighted navigation row.
+  Source/disassembly reserve row highlighting for the simulated execution
+  position. Overflowing bodies have a one-cell vertical scrollbar; click its
+  track to page or drag its thumb. Initial demo sessions have no breakpoints.
 
 ## Inspection
 

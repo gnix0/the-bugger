@@ -176,6 +176,49 @@ int main(int argc, char *argv[])
     CHECK(strstr(term.output, "\033[?1002l") != NULL);
     puts("PASS M02 mouse drag, nested splits, seventh/eighth view, compact access, close and keyboard resize");
 
+    /* A ninth-row click must survive resize and drive scrolling past row four. */
+    start(&term, argv[1], "xterm-256color", false);
+    test_terminal_click(&term, "0800043A");
+    test_terminal_resize(&term, 18, 80);
+    test_terminal_expect(&term, "2 Asm");
+    test_terminal_click(&term, "Disassembly");
+    test_terminal_send(&term, "\t\t\t\033OB"); /* focus body, move down */
+    test_terminal_expect(&term, "0800043A");
+    CHECK(!test_terminal_find(&term, "0800042A  B5 10", NULL, NULL));
+    test_terminal_stop(&term, 0);
+
+    start(&term, argv[1], "xterm-256color", false);
+    test_terminal_resize(&term, 18, 80);
+    test_terminal_send(&term, "2");
+    test_terminal_expect(&term, "0800042A  B5 10");
+    test_terminal_click(&term, "0800042A  B5 10");
+    for (int i = 0; i < 12; ++i) { test_terminal_send(&term, "\033OB"); }
+    test_terminal_expect(&term, "0800043A");
+    CHECK(!test_terminal_find(&term, "0800042A  B5 10", NULL, NULL));
+    test_terminal_send(&term, "\033[5~\033[5~"); /* PageUp back to first row */
+    test_terminal_expect(&term, "0800042A  B5 10");
+    CHECK(test_terminal_find(&term, "0800042A  B5 10", &x, &y));
+    for (int i = 0; i < 3; ++i) { mouse(&term, 65, x, y, false); }
+    test_terminal_expect(&term, "0800043A");
+    CHECK(!test_terminal_find(&term, "0800042A  B5 10", NULL, NULL));
+    test_terminal_stop(&term, 0);
+    puts("PASS disassembly selection: ninth-row click, keyboard and wheel reach all instructions");
+
+    start(&term, argv[1], "xterm-256color", false);
+    test_terminal_resize(&term, 18, 80);
+    test_terminal_expect(&term, "main.c | Cortex-M4F sample");
+    CHECK(test_terminal_find(&term, "...", &x, &y));
+    int scrollbar_x = x + 4;
+    click_at(&term, scrollbar_x, y + 2); /* page above the thumb */
+    test_terminal_expect(&term, "#include <stdint.h>");
+    mouse(&term, 0, scrollbar_x, y + 2, false);
+    mouse(&term, 32, scrollbar_x, y + 9, false);
+    mouse(&term, 0, scrollbar_x, y + 9, true);
+    test_terminal_expect(&term, "counter++;");
+    CHECK(!test_terminal_find(&term, "#include <stdint.h>", NULL, NULL));
+    test_terminal_stop(&term, 0);
+    puts("PASS pane scrollbar track paging and thumb drag reach source endpoints");
+
     start(&term, argv[1], "vt100", true);
     /* Tab into Source menu, choose actions, then keyboard split below. */
     for (int i = 0; i < 11; ++i) { test_terminal_send(&term, "\t"); }

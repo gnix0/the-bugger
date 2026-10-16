@@ -19,4 +19,13 @@
 - C geometry stress tests, PTY workspace interactions and an optional isolated
   tmux mouse-forwarding integration test.
 
+### Fixed
+
+- Disassembly navigation can reach every instruction; view row counts are
+  shared by rendering and input handling.
+- Scrolling moves pane viewports directly, without a secondary row highlight.
+  Source/disassembly highlight their current simulated execution positions.
+- Remove the preloaded demo breakpoint; add clickable/draggable vertical
+  scrollbars when pane content exceeds the viewport.
+
 No live debugger functionality or release is claimed by this entry.
