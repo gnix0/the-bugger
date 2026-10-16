@@ -1,9 +1,10 @@
-# Prototype-to-terminal mapping (M01)
+# Prototype-to-terminal mapping
 
 The HTML in `prototype.html` is the approved visual reference. The first M01
-rendering was rejected by the owner for visual differences. These corrections
-remain **awaiting manual visual acceptance**; passing interaction tests does
-not establish fidelity to the reference.
+rendering was rejected by the owner for visual differences. The corrected M01
+presentation was subsequently accepted. M02 retains that styling and adds
+layout interactions, which await their own manual acceptance. Passing
+interaction tests does not establish fidelity to the reference.
 
 | Component | Previous discrepancy | Terminal implementation |
 |---|---|---|
@@ -37,9 +38,11 @@ not establish fidelity to the reference.
   markers remain meaningful without color.
 - The browser's overlay menus are represented by full-page session configuration
   and pane-local view selection, preserving the strictly tiled workspace.
-- Source and log text still clip to pane width. This correction does not add
-  horizontal scrolling, a live console, dynamic splits or dragging. Those
-  remain within their existing milestone boundaries.
+- Source and log text still clip to pane width. Horizontal scrolling and a live
+  console remain future work. M02 adds dynamic splits, nested pane closing,
+  selected-tab closing and divider dragging through the existing pane menus.
+  Idle gutters retain the workspace background; only an actively dragged or
+  keyboard-selected divider gains a visible line and selected background.
 - Samples remain Cortex-M demo data in all session previews. Future x86-64
   disassembly uses AT&T syntax, as recorded in the development plan.
 

@@ -14,7 +14,7 @@ static void print_help(void)
          "  --help       Show this help and exit\n"
          "  --version    Show the target version and exit\n"
          "\n"
-         "Without arguments, open the M01 demo launcher in a terminal.\n"
+         "Without arguments, open the demo launcher in a terminal.\n"
          "All workspace data is simulated; debugging is not implemented yet.");
 }
 

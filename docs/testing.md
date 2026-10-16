@@ -15,8 +15,8 @@ git diff --check
 ```
 
 `all` compiles C17 with strict warnings including `-Wall -Wextra -Wpedantic`
-and `-Werror`. `test` builds and runs three C executables: unit, CLI and PTY
-integration suites, described in `tests/README.md`. `sanitize` builds separately
+and `-Werror`. `test` builds and runs six C executables: demo, layout, renderer,
+CLI and two PTY integration suites, described in `tests/README.md`. `sanitize` builds separately
 with ASan/UBSan; a runtime
 diagnostic is a failure, not a skip. `analyze` uses clang-tidy and fails on
 warnings; an unavailable tool is a reported limitation, never a pass. Checks are
@@ -38,7 +38,7 @@ Changing compiler or flags requires a fresh build directory or cleaning.
 
 1. Run `make clean && make && make test`. Expect strict compilation and passing
    C unit, CLI and PTY suites. `--help` and `--version` also work without a TTY.
-2. In a terminal at least 110x28 (140x44 recommended), run
+2. In a terminal at least 112x28 (140x44 recommended), run
    `./build/the-bugger`. Expect the three clickable startup choices and a DEMO
    notice. Use arrows/Tab/Enter and clicks to select each session type.
 3. Edit paths with spaces and UTF-8 text. Exercise Left/Right, Home/End,
@@ -60,9 +60,9 @@ Changing compiler or flags requires a fresh build directory or cleaning.
    Peripherals and Stack say NOT IMPLEMENTED rather than inventing values.
    Select source rows or click the gutter to toggle sample breakpoints. Wheel
    scrolls the pane under the pointer; a focused body supports arrows/Page keys.
-8. Resize below six-pane dimensions. Expect six pane navigation buttons and a
+8. For the initial workspace, resize below six-pane dimensions. Expect six pane navigation buttons and a
    single focused view. Keys 1-6 switch panes. Below 48x18 expect a resize notice;
-   expanding restores tab/view state. Dragging/splitting is intentionally M02.
+   expanding restores tab/view state. Dragging/splitting was added in M02.
 9. Quit using the visible button or Ctrl+Q. Repeat with Ctrl+C. Expect normal
    shell echo/cursor/mouse behavior afterward. Run `NO_COLOR=1 ./build/the-bugger`
    and verify that text labels, selection and markers remain understandable.
@@ -70,10 +70,55 @@ Changing compiler or flags requires a fresh build directory or cleaning.
     the user's opt-in `set -g mouse on`. Do not change existing key bindings.
     Record terminal type, tmux version and any intercepted keys for the ledger.
 
-Current evidence covers FR-01's UI and portions of FR-13/17, plus foundations
+M01 evidence covered FR-01's UI and portions of FR-13/17, plus foundations
 for NFR-01/03/05/08/09/10/11/12. Live debugging, full layout behavior and hardware
 requirements remain incomplete. Physical mouse/UTF-8/visual fidelity still need
 owner acceptance; PTY simulation alone does not establish those experiences.
+
+## M02 manual test now
+
+1. Run `make test`, then `./build/the-bugger` in a 140x44 or larger terminal.
+   Choose Linux application, Review preview, Preview workspace. Compare the
+   initial six-pane presentation with the accepted M01 interface and HTML.
+2. Drag each vertical column gutter and the horizontal row gutter with the
+   left button held. Expect continuous constrained resizing; release ends it.
+   Move beyond a pane's minimum size and verify neighboring panes remain usable.
+3. In Source, click `...`, then **Pane actions >**, then **Split right**.
+   Expect a seventh visible pane with Disassembly, focused independently.
+   Open its menu and choose another view. The original Source tabs/state remain.
+4. Split a sufficiently tall pane **below**. Drag that internal horizontal
+   divider, then an internal vertical divider. The rest of the grid stays tiled.
+   If a split cannot fit, expect a visible diagnostic and unchanged workspace.
+5. Add/switch tabs through Show views. Use **Close selected tab** in Pane actions.
+   Other tabs retain their per-view scroll/selection. Closing the final tab is
+   refused with a diagnostic. **Close split pane** expands its sibling; an
+   unsplit root cannot close, preserving six root tiles. A nested original pane
+   may close too, matching the HTML behavior.
+6. Choose **Resize dividers** from Pane actions. Tab/Shift+Tab selects a gutter;
+   Left/Right moves a vertical gutter, Up/Down moves a horizontal one.
+   Enter/Escape finishes with the resulting sizes. Repeat without a mouse.
+7. With seven or more panes, shrink to 80x24. Expect one focused pane, its ID
+   and total pane count, and clickable **Prev/Next** controls. Use `[`/`]` to
+   reach every pane; `1`–`9` selects a retained pane ID directly. Below 48x18,
+   expect a resize message. Restore the larger terminal: splits, ratios, tabs
+   and selection remain. Resize during a drag: it cancels safely.
+8. Repeat inside tmux with the owner's opt-in `set -g mouse on`, and repeat in
+   monochrome. Check wheel/menu navigation and F5/F9/F10/F11 after splitting.
+   Quit and verify normal shell echo, cursor and mouse selection afterward.
+
+The tree has a documented 32-pane capacity; each tiled leaf needs 20x7 cells.
+Requested ratios survive terminal shrinking, while actual sizes are constrained
+to fit all subtree minimums. Profiles and persisted layout are still M06 work.
+No layout selector or presets may appear. All debugger values remain DEMO.
+
+`make test-tmux` is an additional C integration test requiring installed tmux.
+It owns a uniquely named local server and temporary config, enables mouse only
+there, sends real outer-terminal input through tmux, and cleans up that server.
+It verifies clicks, held-button motion, splitting, F10, compact resizing and
+terminal restoration. It does not modify an existing server or user config.
+Agent sandboxes may require execution permission for its local socket.
+Output goes to `build/m02-tmux-workspace.txt`; final M02 commands/results are
+recorded in `docs/progress.md`. Physical visual/input acceptance remains manual.
 
 ## Later verification gates
 

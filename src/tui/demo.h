@@ -2,9 +2,10 @@
 #define THE_BUGGER_DEMO_H
 
 #include <stdbool.h>
+#include "layout.h"
 
 /* Explicitly simulated presentation state. Never use this as target data. */
-enum { TB_PANES = 6, TB_LOGS = 16, TB_SOURCE_LINES = 24 };
+enum { TB_LOGS = 16, TB_SOURCE_LINES = 24 };
 
 typedef enum {
     TB_SOURCE, TB_DISASSEMBLY, TB_REGISTERS, TB_MEMORY, TB_LOCALS, TB_CONSOLE,
@@ -16,8 +17,6 @@ typedef enum {
     TB_CONTINUE, TB_PAUSE, TB_NEXT, TB_STEP, TB_FINISH, TB_BREAKPOINT, TB_RESET
 } TbDemoAction;
 
-typedef struct { int x, y, w, h; } TbRect;
-
 typedef struct {
     TbView tabs[TB_VIEW_COUNT];
     int count, active;
@@ -26,7 +25,7 @@ typedef struct {
 } TbDemoPane;
 
 typedef struct {
-    TbDemoPane panes[TB_PANES];
+    TbDemoPane panes[TB_MAX_PANES];
     int pane, step;
     bool running;
     bool breakpoints[TB_SOURCE_LINES];
@@ -41,8 +40,6 @@ void tb_demo_init(TbDemo *demo);
 void tb_demo_action(TbDemo *demo, TbDemoAction action);
 void tb_demo_log(TbDemo *demo, const char *message);
 void tb_demo_view(TbDemo *demo, TbView view);
-bool tb_rect_contains(TbRect rect, int x, int y);
-/* Fixed M01 scaffold only; interactive split-tree geometry belongs to M02. */
-bool tb_demo_geometry(TbRect area, int focused, TbRect panes[TB_PANES]);
+bool tb_demo_close_tab(TbDemo *demo);
 
 #endif

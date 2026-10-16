@@ -15,8 +15,8 @@ will require their own validation before compatibility is claimed.
 opens the clickable launcher and a Monokai six-pane workspace. Configuration,
 source, instructions, registers, memory, variables, logs and execution actions
 are explicitly simulated. No GDB/OpenOCD connection, tool validation, profile
-persistence or hardware access is implemented yet. Pane dragging and dynamic
-splits are planned.
+persistence or hardware access is implemented yet. The workspace supports
+pane resizing and dynamic tiled splits.
 `0.1.0` is the target version; it is not a declaration of release readiness.
 
 ## Build and run
@@ -54,11 +54,26 @@ Left/Right, Home/End, Backspace/Delete and Ctrl+U to clear. The toolbar provides
 simulated F5/F9/F10/F11/Shift+F11 actions and clickable alternatives; Reset asks
 for confirmation. Tab into a pane body for arrow/PageUp/PageDown scrolling, or
 use the wheel. Click `...` for the view chooser; arrows/Enter or clicks select.
-Keys `1`–`6` focus panes. Future-view tabs explicitly say **NOT IMPLEMENTED**.
+Keys `1`–`9` focus retained pane IDs; `[`/`]` cycles all panes. Future-view tabs
+explicitly say **NOT IMPLEMENTED**.
+
+Drag the one-cell gutters to resize columns, rows or nested splits. In `...`,
+choose **Pane actions >** to split right/below, close the selected tab, close a
+nested pane or enter keyboard resizing. In resize mode, Tab/Shift+Tab selects a
+divider, arrows move it, and Enter/Escape finishes. Pane menus support wheel and
+arrow navigation when their choices exceed the available height.
+
+Splitting keeps the original pane and opens a Disassembly pane beside/below it;
+use its view chooser to change the view. Closing a nested pane expands its
+sibling. Each pane keeps at least one tab, and each of the six root tiles keeps
+at least one pane. The workspace supports up to 32 panes, with a minimum tiled
+size of 20 columns by 7 rows per pane. Splits that cannot fit report a diagnostic.
 
 At least **112 columns by 28 rows** displays all six panes. Smaller terminals
-show one focused pane with six accessible pane buttons; below 48x18 a controlled
-resize message preserves state.
+show one focused pane. The initial workspace has six accessible pane buttons;
+with additional panes, Prev/Next controls and `[`/`]` reach every pane. Splits,
+tabs and proportions survive terminal shrinking and return when space permits.
+Below 48x18 a controlled resize message preserves state.
 
 The Monokai Pro workspace uses distinct panel, tab, toolbar and footer surfaces,
 with semantic source and value colors. Direct-color terminfo enables the exact
@@ -81,6 +96,7 @@ make test
 make sanitize
 make analyze
 make CC=clang BUILD_DIR=build/clang test
+make test-tmux
 ```
 
 Artifacts are kept in ignored `build/`. `make clean` removes that directory.
@@ -88,14 +104,16 @@ The compiler defaults to `cc`; `CC`, `CPPFLAGS`, `CFLAGS`, `LDFLAGS`, `LDLIBS`,
 `PKG_CONFIG`, and `BUILD_DIR` can be set on the Make command line. Use a fresh
 build directory or `make clean` when changing compiler or build flags.
 See [testing](docs/testing.md) for suite coverage and terminal checks.
+`test-tmux` additionally requires tmux and uses an isolated temporary server to
+check mouse forwarding, dragging, splitting and terminal resizing.
 
 ## Project direction
 
 The debugger is being developed around live source/disassembly, execution
 control, breakpoints, architecture-neutral register inspection, memory, local
-variables, watches, frames and threads. The configurable workspace will support
+variables, watches, frames and threads. The configurable workspace provides
 mouse-resizable panes and dynamic tiled splits. Saved session profiles and
-key remapping are also planned.
+key remapping are planned.
 
 Native sessions will use a local GDB executable. Firmware sessions will use a
 target-compatible GDB and an appropriate GDB server, optionally OpenOCD.

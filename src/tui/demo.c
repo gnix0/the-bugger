@@ -39,13 +39,13 @@ void tb_demo_log(TbDemo *demo, const char *message)
 
 void tb_demo_init(TbDemo *demo)
 {
-    const TbView defaults[TB_PANES][2] = {
+    const TbView defaults[TB_DEFAULT_PANES][2] = {
         {TB_SOURCE, TB_SYMBOLS}, {TB_DISASSEMBLY, TB_CALL_STACK},
         {TB_REGISTERS, TB_PERIPHERALS}, {TB_MEMORY, TB_STACK},
         {TB_LOCALS, TB_WATCHES}, {TB_CONSOLE, TB_BREAKPOINTS}
     };
     memset(demo, 0, sizeof *demo);
-    for (int i = 0; i < TB_PANES; ++i) {
+    for (int i = 0; i < TB_DEFAULT_PANES; ++i) {
         demo->panes[i].tabs[0] = defaults[i][0];
         demo->panes[i].tabs[1] = defaults[i][1];
         demo->panes[i].count = 2;
@@ -108,35 +108,14 @@ void tb_demo_view(TbDemo *demo, TbView view)
     pane->active = pane->count++;
 }
 
-bool tb_rect_contains(TbRect rect, int x, int y)
+bool tb_demo_close_tab(TbDemo *demo)
 {
-    return rect.w > 0 && rect.h > 0 && x >= rect.x && y >= rect.y &&
-           x - rect.x < rect.w && y - rect.y < rect.h;
-}
-
-bool tb_demo_geometry(TbRect area, int focused, TbRect panes[TB_PANES])
-{
-    memset(panes, 0, TB_PANES * sizeof panes[0]);
-    if (area.w <= 0 || area.h <= 0 || focused < 0 || focused >= TB_PANES) {
-        return false;
+    TbDemoPane *pane = &demo->panes[demo->pane];
+    if (pane->count <= 1) { return false; }
+    for (int i = pane->active; i + 1 < pane->count; ++i) {
+        pane->tabs[i] = pane->tabs[i + 1];
     }
-    if (area.w < 110 || area.h < 20) {
-        panes[focused] = area;
-        return false;
-    }
-    int available = area.w - 2;
-    int widths[3] = {available * 36 / 100, available * 34 / 100, 0};
-    widths[2] = available - widths[0] - widths[1];
-    int top = (area.h - 1) * 56 / 100;
-    for (int row = 0; row < 2; ++row) {
-        int x = area.x;
-        for (int col = 0; col < 3; ++col) {
-            panes[row * 3 + col] = (TbRect){
-                x, area.y + (row == 0 ? 0 : top + 1), widths[col],
-                row == 0 ? top : area.h - top - 1
-            };
-            x += widths[col] + 1;
-        }
-    }
+    --pane->count;
+    if (pane->active >= pane->count) { pane->active = pane->count - 1; }
     return true;
 }

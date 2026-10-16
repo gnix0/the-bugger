@@ -13,5 +13,10 @@
 - C unit/CLI/PTY tests replacing the Python CLI harness.
 - Prototype-aligned Monokai surfaces, compact toolbar, styled tabs, semantic
   source/table colors and renderer palette/selection checks.
+- M02 split-tree workspace with mouse-resizable shared/nested dividers,
+  keyboard resizing, splits right/below, tab and nested pane closing, and
+  compact access to all retained panes.
+- C geometry stress tests, PTY workspace interactions and an optional isolated
+  tmux mouse-forwarding integration test.
 
 No live debugger functionality or release is claimed by this entry.

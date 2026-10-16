@@ -14,11 +14,12 @@
 #include <wchar.h>
 #include <wctype.h>
 
-enum { MAX_CONTROLS = 128, FIELD_SIZE = 256, FORM_FIELDS = 9 };
+enum { MAX_CONTROLS = 1024, FIELD_SIZE = 256, FORM_FIELDS = 9 };
 typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM } Page;
 typedef enum {
     CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
-    TOOL, TAB, MENU, BODY, SHOW_VIEW, FOCUS_PANE, CANCEL_RESET, CONFIRM_RESET
+    TOOL, TAB, MENU, BODY, SHOW_VIEW, FOCUS_PANE, CANCEL_RESET, CONFIRM_RESET,
+    MENU_SECTION, PANE_ACTION, DIVIDER, NEXT_PANE, PREVIOUS_PANE
 } ControlKind;
 
 typedef struct {
@@ -41,12 +42,14 @@ typedef struct {
 typedef struct {
     Page page;
     TbDemo demo;
+    TbLayout layout;
     Form forms[3];
     int session, focus, count, menu, form_scroll;
     size_t cursor;
-    bool quit, previewed, menu_focus;
+    bool quit, previewed, menu_focus, menu_actions, resizing;
+    int drag, resize_divider;
     Control controls[MAX_CONTROLS];
-    TbRect panes[TB_PANES];
+    TbRect panes[TB_MAX_PANES];
     const char *colors;
     char status[160];
 } App;
@@ -75,6 +78,8 @@ static void page(App *app, Page next)
     app->cursor = 0;
     app->form_scroll = 0;
     app->menu = -1;
+    app->drag = -1;
+    app->resizing = false;
 }
 
 static int add_control(App *app, TbRect rect, ControlKind kind, int value, int pane)
@@ -293,31 +298,40 @@ static void draw_form(App *app, bool review)
 
 static void draw_menu(App *app, int pane, TbRect rect)
 {
-    tb_text(rect.y + 3, rect.x + 1, rect.w - 2, TB_YELLOW, A_BOLD, "SHOW VIEW (DEMO)");
+    tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_YELLOW, A_BOLD,
+            app->menu_actions ? "PANE ACTIONS" : "SHOW VIEW (DEMO)");
     int start_control = app->count;
     if (app->menu_focus) {
         app->focus = start_control;
         app->menu_focus = false;
     }
-    int height = rect.h - 6;
+    int height = rect.h - 4;
     if (height < 1) {
         return;
     }
+    const char *const actions[] = {
+        "Split right", "Split below", "Close selected tab", "Close split pane", "Resize dividers"
+    };
+    int count = app->menu_actions ? 5 : TB_VIEW_COUNT;
     int selected = app->focus - start_control;
-    int scroll = selected >= 0 && selected < TB_VIEW_COUNT ? selected / height * height : 0;
-    for (int i = 0; i < TB_VIEW_COUNT; ++i) {
-        int y = rect.y + 4 + i - scroll;
+    int scroll = selected >= 0 && selected < count ? selected / height * height : 0;
+    for (int i = 0; i < count; ++i) {
+        int y = rect.y + 2 + i - scroll;
         bool visible = i >= scroll && i < scroll + height;
         char text[96];
-        (void)snprintf(text, sizeof text, "%s%s", tb_view_names[i],
-                       i >= TB_SYMBOLS ? " [not implemented]" : "");
+        (void)snprintf(text, sizeof text, "%s%s",
+                       app->menu_actions ? actions[i] : tb_view_names[i],
+                       !app->menu_actions && i >= TB_SYMBOLS ? " [not implemented]" : "");
+        ControlKind kind = app->menu_actions ? PANE_ACTION : SHOW_VIEW;
         if (visible) {
-            button(app, y, rect.x + 1, rect.w - 2, text, SHOW_VIEW, i, pane);
+            button(app, y, rect.x + 1, rect.w - 2, text, kind, i, pane);
         } else {
-            (void)add_control(app, (TbRect){0}, SHOW_VIEW, i, pane);
+            (void)add_control(app, (TbRect){0}, kind, i, pane);
         }
     }
-    tb_text(rect.y + rect.h - 2, rect.x + 1, rect.w - 2, TB_MUTED, 0, "Esc closes view selector");
+    tb_text(rect.y + rect.h - 2, rect.x + 1, rect.w - 2, TB_MUTED, 0, "Wheel/Up/Down | Esc close");
+    button(app, rect.y + rect.h - 1, rect.x + 1, rect.w - 2,
+            app->menu_actions ? "< Show views" : "Pane actions >", MENU_SECTION, 0, pane);
 }
 
 static void draw_pane(App *app, int pane_index, TbRect rect)
@@ -399,17 +413,51 @@ static void draw_workspace(App *app)
             app->demo.running ? "Running / stale" : "Paused (demo)");
     ++y;
     TbRect area = {1, y + 1, COLS - 2, LINES - y - 3};
-    bool tiled = tb_demo_geometry(area, app->demo.pane, app->panes);
+    bool tiled = tb_layout_arrange(&app->layout, area, app->demo.pane);
+    memcpy(app->panes, app->layout.panes, sizeof app->panes);
     if (!tiled) {
         const char *const labels[] = {"1 Source", "2 Asm", "3 Regs", "4 Mem", "5 Locals", "6 Log"};
-        int offset = 0;
-        for (int i = 0; i < TB_PANES; ++i) {
-            button(app, y, offset, 8, labels[i], FOCUS_PANE, i, 0);
-            offset += 8;
+        if (app->layout.count == TB_DEFAULT_PANES) {
+            for (int i = 0; i < TB_DEFAULT_PANES; ++i) {
+                int pane = app->layout.order[i];
+                if (pane == i) {
+                    button(app, y, i * 8, 8, labels[i], FOCUS_PANE, pane, 0);
+                } else {
+                    char label[32];
+                    (void)snprintf(label, sizeof label, "%d %.5s", pane + 1,
+                                   tb_view_names[app->demo.panes[pane].tabs[app->demo.panes[pane].active]]);
+                    button(app, y, i * 8, 8, label, FOCUS_PANE, pane, 0);
+                }
+            }
+        } else {
+            button(app, y, 1, 8, "< Prev", PREVIOUS_PANE, 0, 0);
+            char label[96];
+            (void)snprintf(label, sizeof label, "Pane %d | %.30s | %d total",
+                           app->demo.pane + 1,
+                           tb_view_names[app->demo.panes[app->demo.pane].tabs[app->demo.panes[app->demo.pane].active]],
+                           app->layout.count);
+            tb_text(y, 10, COLS - 20, TB_MUTED, 0, label);
+            button(app, y, COLS - 9, 8, "Next >", NEXT_PANE, 0, 0);
         }
     }
-    for (int i = 0; i < TB_PANES; ++i) {
-        draw_pane(app, i, app->panes[i]);
+    for (int i = 0; i < app->layout.count; ++i) {
+        int pane = app->layout.order[i];
+        draw_pane(app, pane, app->panes[pane]);
+    }
+    for (int i = 0; i < app->layout.divider_count; ++i) {
+        TbDivider divider = app->layout.dividers[i];
+        int control = add_control(app, divider.rect, DIVIDER, i, 0);
+        if (app->resizing && app->resize_divider == i) { app->focus = control; }
+        bool active = app->drag == i || (app->resizing && app->focus == control);
+        if (active) {
+            tb_fill(divider.rect, TB_SELECTED);
+            tb_style(TB_ACTIVE_TAB, A_BOLD);
+            if (divider.direction == TB_SPLIT_RIGHT) {
+                (void)mvvline(divider.rect.y, divider.rect.x, '|', divider.rect.h);
+            } else {
+                (void)mvhline(divider.rect.y, divider.rect.x, '-', divider.rect.w);
+            }
+        }
     }
     char footer[256];
     (void)snprintf(footer, sizeof footer, "DEMO | %s | PC 0x%08X | %.16s | %.159s",
@@ -419,7 +467,8 @@ static void draw_workspace(App *app)
     tb_fill((TbRect){0, LINES - 2, COLS, 2}, TB_CHROME);
     tb_text(LINES - 2, 1, COLS - 2, TB_CHROME, 0, footer);
     tb_text(LINES - 1, 1, COLS - 2, TB_CHROME, 0,
-            "Not connected | Cortex-M4F sample | Tab / arrows / Enter | * breakpoint / > PC / + changed | Ctrl+Q quit");
+            app->resizing ? "Resize: Tab selects divider | arrows move | Enter / Esc finish" :
+            "Not connected | Cortex-M4F sample | ... pane actions | drag dividers | Ctrl+Q quit");
 }
 
 static void draw(App *app)
@@ -449,6 +498,60 @@ static void draw(App *app)
         app->focus = app->count > 0 ? app->count - 1 : 0;
     }
     (void)refresh();
+}
+
+static void cycle_pane(App *app, int direction)
+{
+    for (int i = 0; i < app->layout.count; ++i) {
+        if (app->layout.order[i] == app->demo.pane) {
+            int next = (i + direction + app->layout.count) % app->layout.count;
+            app->demo.pane = app->layout.order[next];
+            app->menu = -1;
+            app->focus = 0;
+            return;
+        }
+    }
+}
+
+static void pane_action(App *app, int action, int pane)
+{
+    app->menu = -1;
+    app->focus = 0;
+    if (action < 2) {
+        int added = tb_layout_split(&app->layout, pane,
+                                    action == 0 ? TB_SPLIT_RIGHT : TB_SPLIT_BELOW);
+        if (added < 0) {
+            status(app, app->layout.count == TB_MAX_PANES ?
+                    "Pane limit reached (32). Close a split before adding another." :
+                    "Not enough space to split. Enlarge the terminal or resize dividers.");
+            return;
+        }
+        memset(&app->demo.panes[added], 0, sizeof app->demo.panes[added]);
+        app->demo.pane = added;
+        tb_demo_view(&app->demo, TB_DISASSEMBLY);
+        status(app, action == 0 ? "Pane split right." : "Pane split below.");
+    } else if (action == 2) {
+        status(app, tb_demo_close_tab(&app->demo) ? "Selected tab closed." :
+                "Keep at least one tab per pane. Choose a different view in ...");
+    } else if (action == 3) {
+        int survivor = tb_layout_close(&app->layout, pane);
+        if (survivor < 0) {
+            status(app, "Only nested split panes can close. Keep the six workspace tiles.");
+        } else {
+            memset(&app->demo.panes[pane], 0, sizeof app->demo.panes[pane]);
+            app->demo.pane = survivor;
+            status(app, "Split pane closed; sibling expanded.");
+        }
+    } else if (app->layout.divider_count == 0) {
+        status(app, "Enlarge the terminal to resize tiled dividers.");
+    } else {
+        app->resizing = true;
+        app->resize_divider = 0;
+        for (int i = 0; i < app->count; ++i) {
+            if (app->controls[i].kind == DIVIDER) { app->focus = i; break; }
+        }
+        status(app, "Resize dividers with arrows; Tab selects another; Enter finishes.");
+    }
 }
 
 static void activate(App *app, Control control)
@@ -503,6 +606,7 @@ static void activate(App *app, Control control)
         app->demo.pane = control.pane;
         app->menu = app->menu == control.pane ? -1 : control.pane;
         app->menu_focus = app->menu >= 0;
+        app->menu_actions = false;
         break;
     case BODY: app->demo.pane = control.pane; break;
     case SHOW_VIEW:
@@ -514,6 +618,17 @@ static void activate(App *app, Control control)
     case FOCUS_PANE:
         app->demo.pane = control.value;
         app->menu = -1;
+        break;
+    case NEXT_PANE: cycle_pane(app, 1); break;
+    case PREVIOUS_PANE: cycle_pane(app, -1); break;
+    case MENU_SECTION:
+        app->menu_actions = !app->menu_actions;
+        app->menu_focus = true;
+        break;
+    case PANE_ACTION: pane_action(app, control.value, control.pane); break;
+    case DIVIDER:
+        app->resizing = true;
+        app->resize_divider = control.value;
         break;
     case CANCEL_RESET: page(app, WORKSPACE); break;
     case CONFIRM_RESET:
@@ -601,6 +716,31 @@ static void mouse_event(App *app)
     if (getmouse(&event) != OK) {
         return;
     }
+    if (app->page == WORKSPACE && app->drag >= 0) {
+        if (event.bstate & (BUTTON1_PRESSED | BUTTON1_RELEASED | REPORT_MOUSE_POSITION)) {
+            if (app->drag < app->layout.divider_count) {
+                TbDivider divider = app->layout.dividers[app->drag];
+                (void)tb_layout_move_divider(&app->layout, app->drag,
+                        divider.direction == TB_SPLIT_RIGHT ? event.x : event.y);
+            }
+            if (event.bstate & BUTTON1_RELEASED) {
+                app->drag = -1;
+                app->resizing = false;
+                status(app, "Divider resized.");
+            }
+        }
+        return;
+    }
+    if (app->page == WORKSPACE && (event.bstate & BUTTON1_PRESSED)) {
+        int divider = tb_layout_divider_at(&app->layout, event.x, event.y);
+        if (divider >= 0) {
+            app->drag = divider;
+            app->menu = -1;
+            status(app, "Dragging divider; release to finish.");
+            return;
+        }
+        app->resizing = false;
+    }
     if (event.bstate & (BUTTON4_PRESSED | BUTTON5_PRESSED)) {
         int direction = event.bstate & BUTTON4_PRESSED ? -1 : 1;
         if (app->page == REVIEW) {
@@ -612,9 +752,10 @@ static void mouse_event(App *app)
         }
         if (app->menu >= 0) {
             for (int i = 0; i < app->count; ++i) {
-                if (app->controls[i].kind == SHOW_VIEW) {
+                if (app->controls[i].kind == SHOW_VIEW || app->controls[i].kind == PANE_ACTION) {
                     int selected = app->focus + direction;
-                    if (selected >= i && selected < i + TB_VIEW_COUNT) { app->focus = selected; }
+                    int count = app->menu_actions ? 5 : TB_VIEW_COUNT;
+                    if (selected >= i && selected < i + count) { app->focus = selected; }
                     return;
                 }
             }
@@ -670,6 +811,9 @@ static void key_event(App *app, wint_t key, bool special)
         return;
     }
     if (special && key == KEY_RESIZE) {
+        app->drag = -1;
+        app->resizing = false;
+        app->focus = 0;
         (void)clearok(stdscr, TRUE);
         return;
     }
@@ -679,6 +823,30 @@ static void key_event(App *app, wint_t key, bool special)
         return;
     }
     Control control = app->controls[app->focus];
+    if (app->resizing) {
+        if ((!special && (key == 27 || key == '\n' || key == '\r')) ||
+            (special && key == KEY_ENTER)) {
+            app->resizing = false;
+            app->drag = -1;
+            app->focus = 0;
+            status(app, "Divider resizing finished.");
+        } else if ((!special && key == '\t') || (special && key == KEY_BTAB)) {
+            int direction = key == KEY_BTAB ? -1 : 1;
+            app->resize_divider = (app->resize_divider + direction + app->layout.divider_count) %
+                                 app->layout.divider_count;
+        } else if (special && control.kind == DIVIDER &&
+                   (key == KEY_LEFT || key == KEY_RIGHT || key == KEY_UP || key == KEY_DOWN)) {
+            TbDivider divider = app->layout.dividers[control.value];
+            bool right = divider.direction == TB_SPLIT_RIGHT;
+            if ((right && (key == KEY_LEFT || key == KEY_RIGHT)) ||
+                (!right && (key == KEY_UP || key == KEY_DOWN))) {
+                int position = right ? divider.rect.x : divider.rect.y;
+                (void)tb_layout_move_divider(&app->layout, control.value,
+                        position + (key == KEY_RIGHT || key == KEY_DOWN ? 1 : -1));
+            }
+        }
+        return;
+    }
     if (special && app->page == REVIEW && (key == KEY_UP || key == KEY_DOWN)) {
         Field list[FORM_FIELDS];
         int count = fields(app, list);
@@ -705,9 +873,14 @@ static void key_event(App *app, wint_t key, bool special)
         return;
     }
     if (edit_field(app, control, key, special)) { return; }
-    if (!special && app->page == WORKSPACE && key >= '1' && key <= '6') {
-        app->demo.pane = (int)(key - '1');
+    if (!special && app->page == WORKSPACE && key >= '1' && key <= '9') {
+        int pane = (int)(key - '1');
+        if (tb_layout_has_pane(&app->layout, pane)) { app->demo.pane = pane; }
         app->menu = -1;
+        return;
+    }
+    if (!special && app->page == WORKSPACE && (key == '[' || key == ']')) {
+        cycle_pane(app, key == ']' ? 1 : -1);
         return;
     }
     if ((!special && (key == '\n' || key == '\r' || key == ' ')) ||
@@ -749,7 +922,9 @@ static void initialize(App *app)
 {
     memset(app, 0, sizeof *app);
     app->menu = -1;
+    app->drag = -1;
     tb_demo_init(&app->demo);
+    tb_layout_init(&app->layout);
     const wchar_t *const samples[3][FORM_FIELDS] = {
         {L"", L"./build/debug-fixture", L"", L".", L"", L"gdb", L"", L"", L""},
         {L"", L"board/st_nucleo_f4.cfg", L"interface/stlink.cfg", L"target/stm32f4x.cfg",
@@ -762,7 +937,7 @@ static void initialize(App *app)
         }
         app->forms[form].start_server = true;
     }
-    status(app, "M01 demo only. Nothing is launched, connected or saved.");
+    status(app, "DEMO only. Nothing is launched, connected or saved.");
 }
 
 int tb_tui_run(void)
@@ -811,7 +986,20 @@ int tb_tui_run(void)
         (void)set_escdelay(25);
         (void)mouseinterval(0);
         mmask_t supported = mousemask(BUTTON1_PRESSED | BUTTON1_RELEASED |
-                                      BUTTON4_PRESSED | BUTTON5_PRESSED, NULL);
+                                      BUTTON4_PRESSED | BUTTON5_PRESSED |
+                                      REPORT_MOUSE_POSITION, NULL);
+        /* ncurses' XM commonly enables click mode 1000 only, even when its
+         * event mask accepts REPORT_MOUSE_POSITION. Ask xterm-compatible
+         * terminals/tmux for held-button motion, and undo it on every exit. */
+        const char *mouse_sequence = tigetstr("kmous");
+        bool drag_reporting = (supported & REPORT_MOUSE_POSITION) != 0 &&
+                              mouse_sequence != NULL && mouse_sequence != (char *)-1 &&
+                              (strcmp(mouse_sequence, "\033[<") == 0 ||
+                               strcmp(mouse_sequence, "\033[M") == 0);
+        if (drag_reporting) {
+            (void)fputs("\033[?1002h", stdout);
+            (void)fflush(stdout);
+        }
         if (supported == 0) {
             status(&app, "Mouse unavailable: use Tab, arrows and Enter. DEMO only.");
         }
@@ -825,6 +1013,7 @@ int tb_tui_run(void)
                 if (!app.quit && interrupted == 0) { draw(&app); }
             }
         }
+        if (drag_reporting) { (void)fputs("\033[?1002l", stdout); }
         (void)mousemask(0, NULL);
         (void)curs_set(1);
         (void)endwin();

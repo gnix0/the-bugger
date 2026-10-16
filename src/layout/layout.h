@@ -1,0 +1,44 @@
+#ifndef THE_BUGGER_LAYOUT_H
+#define THE_BUGGER_LAYOUT_H
+
+#include <stdbool.h>
+
+enum { TB_DEFAULT_PANES = 6, TB_MAX_PANES = 32, TB_LAYOUT_NODES = 64,
+       TB_MIN_PANE_WIDTH = 20, TB_MIN_PANE_HEIGHT = 7 };
+typedef struct { int x, y, w, h; } TbRect;
+typedef enum { TB_SPLIT_RIGHT, TB_SPLIT_BELOW } TbSplit;
+
+typedef struct {
+    bool used;
+    int pane, first, second, ratio;
+    TbSplit direction;
+} TbLayoutNode;
+
+typedef struct {
+    TbRect rect, area;
+    int node, minimum_first, minimum_second;
+    TbSplit direction;
+} TbDivider;
+
+typedef struct {
+    TbLayoutNode nodes[TB_LAYOUT_NODES];
+    int roots[TB_DEFAULT_PANES], columns[3], row_ratio;
+    TbRect panes[TB_MAX_PANES], area;
+    TbDivider dividers[TB_MAX_PANES];
+    int divider_count, order[TB_MAX_PANES], count;
+    int widths[3], minimum_columns[3], minimum_rows[2];
+    bool tiled;
+} TbLayout;
+
+void tb_layout_init(TbLayout *layout);
+bool tb_layout_arrange(TbLayout *layout, TbRect area, int focused);
+bool tb_layout_has_pane(const TbLayout *layout, int pane);
+/* Split requires enough currently visible space; failure leaves the tree intact. */
+int tb_layout_split(TbLayout *layout, int pane, TbSplit direction);
+/* Only a nested leaf can close. Returns a surviving sibling pane, or -1. */
+int tb_layout_close(TbLayout *layout, int pane);
+int tb_layout_divider_at(const TbLayout *layout, int x, int y);
+bool tb_layout_move_divider(TbLayout *layout, int divider, int position);
+bool tb_rect_contains(TbRect rect, int x, int y);
+
+#endif

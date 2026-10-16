@@ -26,6 +26,24 @@ static void clear_screen(TestTerminal *term)
     }
 }
 
+static void scroll_lines(TestTerminal *term, int top, int bottom, int distance)
+{
+    int count = distance < 0 ? -distance : distance;
+    if (count > bottom - top + 1) { count = bottom - top + 1; }
+    size_t size = (size_t)(bottom - top + 1 - count) * sizeof term->cells[0];
+    if (distance > 0) {
+        if (size > 0) { memmove(term->cells[top], term->cells[top + count], size); }
+        for (int y = bottom - count + 1; y <= bottom; ++y) {
+            memset(term->cells[y], ' ', (size_t)term->cols);
+        }
+    } else {
+        if (size > 0) { memmove(term->cells[top + count], term->cells[top], size); }
+        for (int y = top; y < top + count; ++y) {
+            memset(term->cells[y], ' ', (size_t)term->cols);
+        }
+    }
+}
+
 static void csi(TestTerminal *term, char command)
 {
     int first = 0, second = 0;
@@ -42,6 +60,23 @@ static void csi(TestTerminal *term, char command)
     case 'D': term->x -= distance; break;
     case 'G': term->x = distance - 1; break;
     case 'd': term->y = distance - 1; break;
+    case 'r':
+        term->scroll_top = first > 0 ? first - 1 : 0;
+        term->scroll_bottom = second > 0 ? second - 1 : term->rows - 1;
+        if (term->scroll_top < 0 || term->scroll_bottom >= term->rows ||
+            term->scroll_top >= term->scroll_bottom) {
+            term->scroll_top = 0; term->scroll_bottom = term->rows - 1;
+        }
+        term->x = 0; term->y = 0;
+        break;
+    case 'L': case 'M':
+        if (term->y >= term->scroll_top && term->y <= term->scroll_bottom) {
+            scroll_lines(term, term->y, term->scroll_bottom, command == 'M' ? distance : -distance);
+        }
+        break;
+    case 'S': case 'T':
+        scroll_lines(term, term->scroll_top, term->scroll_bottom, command == 'S' ? distance : -distance);
+        break;
     case 'J':
         if (first == 2 || first == 3) { clear_screen(term); }
         else {
@@ -74,7 +109,7 @@ static void csi(TestTerminal *term, char command)
         memset(term->cells[term->y] + term->x, ' ', (size_t)count);
         break;
     }
-    default: break; /* Color, modes, scrolling regions and cursor visibility. */
+    default: break; /* Color, modes and cursor visibility. */
     }
     if (term->x < 0) { term->x = 0; }
     if (term->y < 0) { term->y = 0; }
@@ -92,6 +127,10 @@ static void consume(TestTerminal *term, unsigned char character)
         } else if (character == '(' || character == ')') {
             term->escape = 3;
         } else {
+            if (character == 'M') {
+                if (term->y == term->scroll_top) { scroll_lines(term, term->scroll_top, term->scroll_bottom, -1); }
+                else if (term->y > 0) { --term->y; }
+            }
             term->escape = 0;
         }
         return;
@@ -110,7 +149,8 @@ static void consume(TestTerminal *term, unsigned char character)
     if (character == 27) { term->escape = 1; return; }
     if (character == '\r') { term->x = 0; return; }
     if (character == '\n') {
-        if (term->y < term->rows - 1) { ++term->y; }
+        if (term->y == term->scroll_bottom) { scroll_lines(term, term->scroll_top, term->scroll_bottom, 1); }
+        else if (term->y < term->rows - 1) { ++term->y; }
         return;
     }
     if (character == '\b') { if (term->x > 0) { --term->x; } return; }
@@ -122,11 +162,12 @@ static void consume(TestTerminal *term, unsigned char character)
     term->cells[term->y][term->x++] = (char)character;
 }
 
-void test_terminal_start(TestTerminal *term, const char *binary, const char *type, bool no_color)
+void test_terminal_start_argv(TestTerminal *term, char *const arguments[], const char *type, bool no_color)
 {
     memset(term, 0, sizeof *term);
     term->rows = 44;
     term->cols = 140;
+    term->scroll_bottom = term->rows - 1;
     term->master = posix_openpt(O_RDWR | O_NOCTTY);
     CHECK(term->master >= 0);
     CHECK(grantpt(term->master) == 0 && unlockpt(term->master) == 0);
@@ -149,9 +190,15 @@ void test_terminal_start(TestTerminal *term, const char *binary, const char *typ
         CHECK(setenv("LC_ALL", "C.UTF-8", 1) == 0);
         if (no_color) { CHECK(setenv("NO_COLOR", "1", 1) == 0); }
         else { CHECK(unsetenv("NO_COLOR") == 0); }
-        execl(binary, binary, (char *)NULL);
+        execvp(arguments[0], arguments);
         _exit(127);
     }
+}
+
+void test_terminal_start(TestTerminal *term, const char *binary, const char *type, bool no_color)
+{
+    char *arguments[] = {(char *)binary, NULL};
+    test_terminal_start_argv(term, arguments, type, no_color);
 }
 
 void test_terminal_send(TestTerminal *term, const char *input)
@@ -234,6 +281,7 @@ void test_terminal_resize(TestTerminal *term, int rows, int cols)
 {
     CHECK(rows > 0 && rows <= TEST_ROWS && cols > 0 && cols <= TEST_COLS);
     term->rows = rows; term->cols = cols;
+    term->scroll_top = 0; term->scroll_bottom = rows - 1;
     clear_screen(term);
     struct winsize size = {.ws_row = (unsigned short)rows, .ws_col = (unsigned short)cols};
     CHECK(ioctl(term->slave, TIOCSWINSZ, &size) == 0);

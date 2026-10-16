@@ -141,6 +141,7 @@ int main(int argc, char *argv[])
         test_terminal_start(&term, binary, "xterm-256color", false);
         test_terminal_expect(&term, "Start a debugging session");
         test_terminal_stop(&term, signals[i]);
+        CHECK(strstr(term.output, "\033[?1002l") != NULL);
     }
     puts("PASS M01 normal/SIGINT/SIGTERM/SIGHUP terminal restoration");
     return EXIT_SUCCESS;

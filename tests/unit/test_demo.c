@@ -35,33 +35,12 @@ int main(void)
     CHECK(demo.panes[0].count == TB_VIEW_COUNT);
     CHECK(demo.panes[0].tabs[demo.panes[0].active] == TB_SOURCE);
 
-    /* Half-open hit bounds, zero-size hidden controls, and all screen sizes. */
-    CHECK(tb_rect_contains((TbRect){2, 3, 4, 5}, 2, 3));
-    CHECK(!tb_rect_contains((TbRect){2, 3, 4, 5}, 6, 3));
-    CHECK(!tb_rect_contains((TbRect){2, 3, 4, 5}, 2, 8));
-    CHECK(!tb_rect_contains((TbRect){0}, 0, 0));
-    for (int height = 0; height < 64; ++height) {
-        for (int width = 0; width < 200; ++width) {
-            for (int focused = 0; focused < TB_PANES; ++focused) {
-                TbRect panes[TB_PANES];
-                bool tiled = tb_demo_geometry((TbRect){0, 0, width, height}, focused, panes);
-                int visible = 0;
-                for (int i = 0; i < TB_PANES; ++i) {
-                    TbRect r = panes[i];
-                    if (r.w == 0 || r.h == 0) { continue; }
-                    ++visible;
-                    CHECK(r.x >= 0 && r.y >= 0 && r.x + r.w <= width && r.y + r.h <= height);
-                    for (int j = 0; j < i; ++j) {
-                        TbRect other = panes[j];
-                        if (other.w == 0 || other.h == 0) { continue; }
-                        CHECK(r.x >= other.x + other.w || other.x >= r.x + r.w ||
-                              r.y >= other.y + other.h || other.y >= r.y + r.h);
-                    }
-                }
-                CHECK(visible == (width == 0 || height == 0 ? 0 : tiled ? 6 : 1));
-            }
-        }
-    }
-    puts("PASS M01 demo actions, tab preservation, hit bounds and geometry invariants");
+    demo.panes[0].scroll[TB_SOURCE] = 4;
+    CHECK(tb_demo_close_tab(&demo));
+    tb_demo_view(&demo, TB_SOURCE);
+    CHECK(demo.panes[0].scroll[TB_SOURCE] == 4);
+    while (demo.panes[0].count > 1) { CHECK(tb_demo_close_tab(&demo)); }
+    CHECK(!tb_demo_close_tab(&demo));
+    puts("PASS demo actions and tab/view state preservation");
     return EXIT_SUCCESS;
 }

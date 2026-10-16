@@ -1,12 +1,13 @@
 # Architecture
 
-## Current implementation (M01)
+## Current implementation (M02)
 
 `src/main.c` handles help/version and starts the terminal application.
 `src/tui/app.c` owns startup/configuration/review/workspace pages, keyboard
 and mouse controls, form editing and terminal lifetime. Rendering and theme
 selection are in separate files. `src/tui/demo.c` owns explicitly simulated
-sample data, demo actions, tabs and fixed M01 geometry. These samples are never
+sample data, demo actions and tabs. The layout module owns tiled geometry.
+These samples are never
 debugger-domain state and must be replaced by live data in real sessions.
 
 The build and tests are C17 with strict warnings; Make is the only build driver.
@@ -27,10 +28,9 @@ selected when standalone Alacritty advertises truecolor. The app never changes
 the terminal palette or tmux configuration. See the
 [prototype mapping](design/tui-mapping.md) for rendering adaptations.
 
-Six fixed rectangles follow the prototype's 36/34/30 columns and 56/44 rows
-(rounded to cells). The scaffold preserves per-view scroll/selection and tabs
-through compact rendering. M02 introduces interactive split-tree geometry,
-dragging and closing; M01 does not expose deceptive split/resize controls.
+The workspace preserves per-view scroll/selection and tabs through compact
+rendering, with interactive split-tree geometry, dragging and closing as
+described below.
 
 ## Approved direction
 
@@ -92,3 +92,33 @@ Validate native Linux before STM32 hardware. Exclude in-application flashing,
 CMSIS-SVD, RTOS, trace/profiling, other architecture validation, IDE/editor
 features and plugin systems from v0.1.0. Public library APIs are not introduced
 by M00. Follow AGENTS.md for complete requirements and acceptance gates.
+
+## M02 tiled workspace
+
+`src/layout/layout.c` is independent of curses and debugger data. Six root tiles
+retain the approved 36/34/30 column and 56/44 row proportions. Each tile contains
+a binary split tree. A leaf names a stable pane slot; an internal node stores
+its direction, child indices and fixed-point ratio. The workspace owns a bounded
+pool of 32 pane slots and 64 tree nodes, avoiding heap ownership complexity.
+Closed nodes/slots are reused. There is no preset catalog or layout selector.
+
+Geometry uses half-open rectangles and one-cell gutters. Recursive subtree
+minimums constrain resizing (each leaf needs 20 columns and 7 rows); globally
+shared row/column dividers respect all affected subtrees. New splits require
+currently available space. Closing a nested leaf promotes its sibling into
+the parent; a root leaf cannot close. Tabs retain per-view selection/scroll,
+and each pane retains at least one tab. These rules follow the HTML prototype.
+
+Geometry is recomputed after input, without changing requested ratios on
+terminal resize. If the grid or its subtrees cannot fit, only the focused leaf
+is painted; compact Prev/Next controls and `[`/`]` reach every retained pane.
+Returning to sufficient dimensions restores the tree. Resizing a terminal during
+a drag cancels that drag to avoid applying obsolete coordinates.
+
+The UI maps gutter hit tests to layout operations. ncurses parses mouse input;
+for terminals advertising an xterm-compatible `kmous`, the application explicitly
+enables held-button motion mode 1002 and disables it at shutdown. The installed
+ncurses XM capability otherwise enables click mode alone. Keyboard resize mode
+selects the same dividers and uses the same constrained coordinate updates.
+Physical mouse appearance/usability remains subject to owner acceptance, even
+when the PTY and real tmux forwarding tests pass.

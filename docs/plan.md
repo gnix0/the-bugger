@@ -80,8 +80,9 @@ pushes; wait for confirmation and explicit authorization before advancing.
 
 M00 was manually accepted and committed as `0f5d05b`. The owner confirmed the
 documentation update (`86820c4`) and explicitly authorized the next milestone.
-Current authorized scope is M01 only, followed by manual acceptance and the same
-owner-controlled commit/push gate. M02 remains planned and unauthorized.
+M01 was manually accepted and committed/pushed as `60df655`. The owner then
+authorized M02. Current scope is M02 only, followed by manual acceptance and
+the same owner-controlled commit/push gate. M03 remains planned.
 
 M01 visual correction: the initial presentation was not accepted. Apply the
 component comparison in `docs/design/tui-mapping.md` and inspect the actual

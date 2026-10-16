@@ -8,8 +8,8 @@ States: `planned` → `implemented` → `automated-verified` → `awaiting-user`
 | Milestone | Deliverable | State | Commit SHA |
 |---|---|---|---|
 | M00 | Repository foundation | accepted | `0f5d05b` |
-| M01 | Launcher and DEMO workspace | accepted | Commit/push pending |
-| M02 | Tiled layout engine | planned | — |
+| M01 | Launcher and DEMO workspace | accepted | `60df655` |
+| M02 | Tiled layout engine | accepted | Commit/push pending |
 | M03 | MI and owned-process lifecycle | planned | — |
 | M04 | Native Linux debugging | planned | — |
 | M05 | Live inspection | planned | — |
@@ -194,5 +194,75 @@ visual review checklist in `docs/testing.md`.
 
 The owner explicitly approved the corrected M01 implementation with
 "Approved." M01 is now `accepted`. Automated evidence above remains unchanged.
-Commit and push are pending owner action; no resulting SHA is recorded yet.
-M02 remains planned and requires explicit authorization after commit/push.
+The owner committed/pushed as `60df6550d0434b2c32977ec8179f5eb4ca92f55b`,
+reliably observed at both HEAD and origin/main with a clean working tree.
+The owner then authorized M02.
+
+## M02 — tiled workspace engine
+
+State history: `planned` → `implemented`; automated verification and manual
+handoff are recorded below. Authorization followed the accepted/pushed M01 gate.
+
+Implemented:
+
+- C-only layout module independent of ncurses and debugger data; six root tiles
+  preserve approved default proportions, with nested binary split trees.
+- Shared column/row gutters and internal dividers resize by held-button drag;
+  minimum sizes apply recursively. Keyboard resize selects the same dividers.
+- Pane-menu actions: split right/below, close selected tab, close nested pane,
+  resize dividers. Original pane state survives splitting; sibling expands on
+  close. Final tabs and unsplit root tiles cannot close, matching the HTML.
+- Stable pane IDs, focus, view selection and per-view scroll/selection; compact
+  Prev/Next and `[`/`]` reach all retained panes. Terminal shrinking preserves
+  the tree and ratios; resizing mid-drag cancels obsolete coordinates.
+- Explicit xterm-compatible held-button motion mode 1002 and cleanup. The
+  installed ncurses accepts the motion mask but enables only click mode through
+  its XM capability; an output assertion caught this before handoff.
+- Fixed pool of 32 pane slots / 64 nodes, reused after closing. Tiled leaves
+  require at least 20x7 cells; splits that cannot fit report a recoverable error.
+  No presets, backend, hardware access or persisted layout were added.
+
+Test additions: pure tree/geometry invariants (76,800 size/focus combinations,
+12,000 deterministic operations, capacity/reuse), C PTY workspace interactions,
+and optional C real-tmux forwarding tests. The test VT reader now handles line
+insertion/deletion and scroll regions emitted by ncurses during horizontal
+resizing. This corrected stale test-screen coordinates; it was not counted as
+an application pass until the actual terminal operations were interpreted.
+
+Environment: Linux 7.2.9-arch1-1 x86-64, ncursesw 6.6.20251230, tmux 3.8.
+
+Automated verification (all final commands exited 0):
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make test` | PASS | `build/m02-test.log` |
+| `make CC=clang BUILD_DIR=build/m02-clang test` | PASS | `build/m02-clang.log` |
+| `make sanitize` | PASS, ASan/UBSan/LeakSanitizer | `build/m02-sanitize.log` |
+| `make analyze` | PASS | `build/m02-analyze.log` |
+| `make test-tmux` | PASS, real isolated tmux input forwarding | `build/m02-tmux.log`, `build/m02-tmux-workspace.txt` |
+| `git diff --check` | PASS | No whitespace diagnostics |
+
+The first sanitizer attempt failed under the sandbox's ptrace restriction;
+rerunning outside the sandbox passed without disabling leak checks. The first
+tmux attempt failed because the sandbox denied its local socket; the isolated
+server test passed with execution permission. Intermediate test failures
+included assumptions in capacity/closing tests and missing scroll operations
+in the VT reader; these were corrected and all final suites rerun. The motion
+mode enable/disable assertion and signal cleanup checks passed.
+
+Requirement coverage: FR-13/17 layout/input paths and NFR-01/03/05/09/10/11/12
+have automated evidence within this demo milestone. Full usability, physical
+mouse behavior and visual fidelity require owner acceptance. No live debugging
+or hardware requirement is claimed. There are no known automated test failures.
+
+Manual test now: follow the eight-step M02 checklist in `docs/testing.md`,
+especially seventh/eighth views, both divider axes, close tab/split, keyboard
+resize, shrink/restore and tmux. Compare the default presentation with the
+accepted M01 styling and HTML; all debugger values remain visibly simulated.
+
+State: `implemented` → `automated-verified` → `awaiting-user` → `accepted`.
+The owner explicitly approved M02 after manual validation. Commit/push are
+pending owner action; no resulting SHA is recorded yet. The owner requested a
+break afterward. M03 remains planned until the owner returns and authorizes it.
+The newly added image is outside this milestone and was left untouched.
+No commit, push or tag was made by the agent.
