@@ -1,12 +1,36 @@
 # Architecture
 
-## Current implementation (M00)
+## Current implementation (M01)
 
-`src/main.c` handles the deliberately small CLI. The target version has one
-definition in `include/the_bugger/version.h`. There is no debugger transport,
-session state, terminal initialization, subprocess launch, or configuration
-persistence yet. The build uses C17 and treats enabled compiler warnings as
-errors. Python is used only to exercise the executable in tests.
+`src/main.c` handles help/version and starts the terminal application.
+`src/tui/app.c` owns startup/configuration/review/workspace pages, keyboard
+and mouse controls, form editing and terminal lifetime. Rendering and theme
+selection are in separate files. `src/tui/demo.c` owns explicitly simulated
+sample data, demo actions, tabs and fixed M01 geometry. These samples are never
+debugger-domain state and must be replaced by live data in real sessions.
+
+The build and tests are C17 with strict warnings; Make is the only build driver.
+C tests use POSIX pipes, processes and PTYs. Python tests were replaced at the
+owner's request. The only current application library dependency is ncursesw.
+There is no debugger transport, tool subprocess launch or persistence yet.
+
+The UI waits for input with a 100 ms ncurses timeout and redraws after events
+rather than on every timeout. Raw input preserves function keys and Ctrl+Q;
+Ctrl+C and SIGINT/SIGTERM/SIGHUP leave through normal cleanup. Two module-owned
+globals are documented: a signal-safe exit flag and the screen's color-enabled
+flag. Mouse and keyboard share action dispatch and rendered hit regions.
+
+Theme roles separate workspace, panel, raised header, notice and footer
+surfaces. Selected-row variants retain semantic foreground colors. Direct-color
+terminfo supplies exact RGB values; a matching Alacritty direct entry can be
+selected when standalone Alacritty advertises truecolor. The app never changes
+the terminal palette or tmux configuration. See the
+[prototype mapping](design/tui-mapping.md) for rendering adaptations.
+
+Six fixed rectangles follow the prototype's 36/34/30 columns and 56/44 rows
+(rounded to cells). The scaffold preserves per-view scroll/selection and tabs
+through compact rendering. M02 introduces interactive split-tree geometry,
+dragging and closing; M01 does not expose deceptive split/resize controls.
 
 ## Approved direction
 

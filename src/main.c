@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "the_bugger/version.h"
+#include "the_bugger/tui.h"
 
 static void print_help(void)
 {
@@ -13,16 +14,14 @@ static void print_help(void)
          "  --help       Show this help and exit\n"
          "  --version    Show the target version and exit\n"
          "\n"
-         "M00 foundation: the launcher and debugging are not implemented yet.");
+         "Without arguments, open the M01 demo launcher in a terminal.\n"
+         "All workspace data is simulated; debugging is not implemented yet.");
 }
 
 int main(int argc, char *argv[])
 {
     if (argc == 1) {
-        puts("the-bugger " THE_BUGGER_VERSION "\n"
-             "M00 foundation: the launcher and debugging are not implemented yet.\n"
-             "Run the-bugger --help for available options.");
-        return EXIT_SUCCESS;
+        return tb_tui_run();
     }
 
     if (argc == 2 && strcmp(argv[1], "--version") == 0) {

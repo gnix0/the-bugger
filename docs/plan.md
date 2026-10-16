@@ -1,6 +1,6 @@
 # Development plan — v0.1.0
 
-Revision pending owner approval: single configurable workspace, no layout presets.
+Approved revision: single configurable workspace, no layout presets.
 This replaces the earlier conversational plan's preset-related tasks and criteria.
 All other approved architecture choices, requirements and milestone gates remain.
 
@@ -33,6 +33,7 @@ poll event loop. Use explicit GDB/MI3 with MI2 startup fallback; structured pars
 token correlation and context generations keep stopped snapshots coherent.
 Keep all-stop semantics and explicit stale/unavailable states. Isolate launched
 inferior output in a PTY, disable its startup shell and sanitize displayed output.
+For x86-64, disassembly uses **AT&T syntax**, not Intel syntax.
 
 Use a split-tree layout independent of ncurses. Keyboard and mouse dispatch the
 same semantic actions. Use capability-based truecolor/256-color/monochrome and
@@ -43,7 +44,8 @@ OpenOCD remains optional and ownership-aware. Catalog installed scripts, preserv
 explicit order, preview argv, and never automatically append adapter/target
 scripts to a board script or issue flash/erase/reset/resume commands. Use json-c
 for atomic, validated XDG profiles and optional saved current-workspace geometry;
-environment overrides remain session-only. Python is test tooling only.
+environment overrides remain session-only. Keep the application and tests in C,
+with Make and minimal library dependencies; no Python test dependency.
 
 ## Milestones
 
@@ -76,8 +78,13 @@ explicit acceptance, provide only the requested Conventional Commit message:
 title at most 50 characters, followed by a detailed body. The owner commits and
 pushes; wait for confirmation and explicit authorization before advancing.
 
-M00 code was already manually tested and approved by the owner. This plan revision
-does not authorize M01 or repeat M00 implementation. M00 commit `0f5d05b` was
-observed locally; owner push confirmation remains pending. The current scope
-remains M00 documentation and review until the
-owner approves this revision and completes the existing gate workflow.
+M00 was manually accepted and committed as `0f5d05b`. The owner confirmed the
+documentation update (`86820c4`) and explicitly authorized the next milestone.
+Current authorized scope is M01 only, followed by manual acceptance and the same
+owner-controlled commit/push gate. M02 remains planned and unauthorized.
+
+M01 visual correction: the initial presentation was not accepted. Apply the
+component comparison in `docs/design/tui-mapping.md` and inspect the actual
+rendered interface against the HTML before acceptance. Renderer/color tests
+supplement that review; panel count and interaction tests cannot replace it.
+Milestone boundaries and the no-presets requirement remain unchanged.
