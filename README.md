@@ -1,4 +1,4 @@
-# the-bugger
+# The Bugger
 
 A terminal-native debugger frontend implemented in C for firmware and
 system-level C/C++ development across x86, ARM, and other GDB-supported
