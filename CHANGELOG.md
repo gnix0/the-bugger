@@ -18,6 +18,9 @@
   compact access to all retained panes.
 - C geometry stress tests, PTY workspace interactions and an optional isolated
   tmux mouse-forwarding integration test.
+- Approved development roadmap through v1.0.0 with independent implementation
+  and acceptance gates, documented deferred capabilities, and per-release
+  native x86-64/STM32 ARM/ESP32 Xtensa/ESP32 RISC-V regression requirements.
 
 ### Fixed
 
@@ -27,5 +30,8 @@
   Source/disassembly highlight their current simulated execution positions.
 - Remove the preloaded demo breakpoint; add clickable/draggable vertical
   scrollbars when pane content exceeds the viewport.
+- Inactive tabs immediately lose the stale inverse highlight after switching.
+  Focus follows the promoted active tab, mouse activation keeps normal styling,
+  and subsequent keyboard activation addresses the intended tab.
 
 No live debugger functionality or release is claimed by this entry.

@@ -6,10 +6,11 @@ architectures, alongside native application debugging. GDB provides the debugger
 engine through its structured MI interface; OpenOCD is an optional server for
 targets that use it.
 
-For v0.1.0, validation will focus on native Linux x86-64 and the STM32
-NUCLEO-F446RE through OpenOCD. These are the first release's acceptance targets;
-the product architecture and intended use extend beyond them. Other targets
-will require their own validation before compatibility is claimed.
+Release acceptance requires regression testing on native Linux x86-64,
+STM32/ARM (initially the NUCLEO-F446RE through OpenOCD), ESP32/Xtensa, and
+ESP32/RISC-V. QEMU-based ARM and RISC-V runs provide supplementary coverage
+where available. Compatibility claims will identify the setups actually tested;
+these acceptance targets do not limit the product architecture.
 
 **Development preview:** bare invocation
 opens the clickable launcher and a Monokai six-pane workspace. Configuration,
@@ -47,6 +48,9 @@ The default tiled workspace shows Source, Disassembly and Registers above
 Memory, Locals and Console. Each pane has tabs and a view chooser. Watches,
 Call Stack, Breakpoints and Threads are available as demo views. Symbols,
 Peripherals and Stack are explicitly marked as unimplemented.
+
+The active tab moves to the left. Mouse activation leaves inactive tabs in their
+normal style; keyboard focus remains visible and follows the activated tab.
 
 Use clicks or Tab/Shift+Tab, arrows and Enter. Escape goes back; Session reopens
 the launcher; Quit, `q` in the launcher/workspace, or Ctrl+Q exits. In fields use
@@ -109,7 +113,7 @@ The compiler defaults to `cc`; `CC`, `CPPFLAGS`, `CFLAGS`, `LDFLAGS`, `LDLIBS`,
 build directory or `make clean` when changing compiler or build flags.
 See [testing](docs/testing.md) for suite coverage and terminal checks.
 `test-tmux` additionally requires tmux and uses an isolated temporary server to
-check mouse forwarding, dragging, splitting and terminal resizing.
+check tab styling/focus, mouse forwarding, dragging, splitting and terminal resizing.
 
 ## Project direction
 
@@ -123,6 +127,12 @@ Native sessions will use a local GDB executable. Firmware sessions will use a
 target-compatible GDB and an appropriate GDB server, optionally OpenOCD.
 The design keeps target architectures separate from terminal presentation.
 For x86-64, disassembly will use AT&T syntax.
+
+The [roadmap](docs/plan.md) defines the v0.1.0 debugging scope and the expected
+path to v1.0.0, including editing, embedded text channels, additional inspection
+views and themes. These are planned capabilities, not features of the current
+demo. Release checks and actual coverage are documented in
+[testing](docs/testing.md) and [progress](docs/progress.md).
 
 See the [architecture](docs/architecture.md), [development plan](docs/plan.md),
 [progress](docs/progress.md), and [visual reference](docs/design/prototype.html)

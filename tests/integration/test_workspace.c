@@ -46,9 +46,44 @@ static int count_text(const TestTerminal *term, const char *text)
     return count;
 }
 
+static void tab_focus(const char *binary, const char *type, bool monochrome)
+{
+    TestTerminal term;
+    start(&term, binary, type, monochrome);
+    for (int repeat = 0; repeat < 3; ++repeat) {
+        test_terminal_click(&term, "Call Stack");
+        test_terminal_expect(&term, "# Function     Location");
+        int stack_x, stack_y, asm_x, asm_y;
+        CHECK(test_terminal_find(&term, "Call Stack", &stack_x, &stack_y));
+        CHECK(test_terminal_find(&term, "Disassembly", &asm_x, &asm_y));
+        CHECK(stack_y == asm_y && stack_x < asm_x);
+        CHECK(!term.inverse[asm_y][asm_x]);
+        CHECK(term.inverse[stack_y][stack_x] == monochrome);
+        /* Enter must keep the clicked tab active, not activate its old index. */
+        test_terminal_send(&term, "\r");
+        test_terminal_expect(&term, "# Function     Location");
+        CHECK(test_terminal_find(&term, "Call Stack", &stack_x, &stack_y));
+        CHECK(test_terminal_find(&term, "Disassembly", &asm_x, &asm_y));
+        CHECK(stack_x < asm_x && term.inverse[stack_y][stack_x]);
+        test_terminal_send(&term, "\t");
+        test_terminal_expect(&term, "# Function     Location");
+        CHECK(term.inverse[asm_y][asm_x]); /* visible keyboard focus */
+        test_terminal_send(&term, "\r");
+        test_terminal_expect(&term, "Address    Bytes");
+        CHECK(test_terminal_find(&term, "Disassembly", &asm_x, &asm_y));
+        CHECK(test_terminal_find(&term, "Call Stack", &stack_x, &stack_y));
+        CHECK(asm_x < stack_x && !term.inverse[stack_y][stack_x]);
+    }
+    test_terminal_stop(&term, 0);
+}
+
 int main(int argc, char *argv[])
 {
     CHECK(argc == 2);
+    tab_focus(argv[1], "xterm-direct", false);
+    tab_focus(argv[1], "xterm-256color", false);
+    tab_focus(argv[1], "xterm-256color", true);
+    puts("PASS tab promotion, immediate inactive styling and stable mouse/keyboard focus");
     TestTerminal term;
     start(&term, argv[1], "xterm-256color", false);
     CHECK(strstr(term.output, "\033[?1002h") != NULL); /* held-button motion requested */

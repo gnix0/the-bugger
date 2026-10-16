@@ -10,11 +10,31 @@ States: `planned` → `implemented` → `automated-verified` → `awaiting-user`
 | M00 | Repository foundation | accepted | `0f5d05b` |
 | M01 | Launcher and DEMO workspace | accepted | `60df655` |
 | M02 | Tiled layout engine | accepted | `094fa71` |
-| M03 | MI and owned-process lifecycle | planned | — |
-| M04 | Native Linux debugging | planned | — |
-| M05 | Live inspection | planned | — |
-| M06 | OpenOCD, remote sessions and profiles | planned | — |
-| M07 | Integration and real-hardware release acceptance | planned | — |
+| Post-M02 | Navigation/highlight/scrollbar correction | accepted | `a832eef` |
+| P00 | Expanded roadmap/specification and tab-focus correction | awaiting-user | — |
+| M03 | Incremental MI parser | planned | — |
+| M04 | Nonblocking transport/controller and owned lifecycle | planned | — |
+| M05 | Native sessions, console/output and Save Log | planned | — |
+| M06 | Selected context, Call Stack and Threads | planned | — |
+| M07 | Live code, stepping modes, navigation/source recovery | planned | — |
+| M08 | Code breakpoints and Run to Selected | planned | — |
+| M09 | CPU registers | planned | — |
+| M10 | Independent Memory | planned | — |
+| M11 | Expandable Locals/Watches | planned | — |
+| M12 | Hardware data watchpoints | planned | — |
+| M13 | Basic profiles and key mappings | planned | — |
+| M14 | Native integration acceptance | planned | — |
+| M15 | Existing remote server | planned | — |
+| M16 | OpenOCD wizard/lifecycle/actions | planned | — |
+| M17 | Real release-board acceptance | planned | — |
+| M18 | v0.1.0 release evidence/acceptance | planned | — |
+| F01–F47 | Independent versioned future gates in docs/plan.md | planned | — |
+
+The approved expanded roadmap replaces only the old unimplemented M03–M07
+grouping. Older references to future milestone numbers in historical entries
+below describe their original scopes; [the current roadmap](plan.md) governs
+new work. Historical failures and acceptance evidence are retained. P00 is the
+only currently authorized gate; no backend or release is accepted.
 
 ## M00 — foundation
 
@@ -289,8 +309,10 @@ clickable track and draggable thumb. Rendering and input share scrollbar
 geometry; resizing ends a scrollbar drag safely.
 
 Manual validation: follow the post-M02 checklist in `docs/testing.md`.
-Status: **AWAITING USER ACCEPTANCE** for these corrections. M02 acceptance and
-its existing commit are retained; no new commit/push/tag was made by the agent.
+The original handoff status was **AWAITING USER ACCEPTANCE**. The owner later
+reported "nevermind, it worked now" and committed the correction as `a832eef`,
+reliably observed in local history. These corrections are recorded as accepted;
+M02's separate acceptance/commit remain intact. No agent commit/push/tag occurred.
 
 Final correction verification: `make test`, `make sanitize`, `make analyze`,
 `make test-tmux` and `git diff --check` all passed. Sanitizer/tmux runs used the
@@ -298,4 +320,76 @@ required execution permission; leak detection stayed enabled. Logs are
 `build/navigation-fixes-{test,sanitize,analyze,tmux}.log`. C regressions cover
 ninth-instruction access, scrollbar paging/drag, execution-only highlighting
 and empty initial breakpoints. No running the-bugger process remained after
-checks. Manual visual acceptance is pending.
+checks. The subsequent owner confirmation/commit above resolves that pending
+correction handoff; it does not accept P00 or authorize M03.
+
+## P00 — expanded roadmap and tab-focus correction
+
+Authorized by "Implement the plan" after the roadmap review and exit from Plan
+mode. The subsequent owner instruction adds an every-release regression gate:
+native x86-64, real STM32/ARM, ESP32/Xtensa and ESP32/RISC-V, with QEMU ARM/RISC-V
+as supplementary coverage. The owner explicitly said not to collect exact board
+or probe details now. Hardware configuration/evidence will be recorded when run.
+
+State history: `planned` → `implemented` → `automated-verified` → `awaiting-user`.
+This is documentation and the approved
+narrow UI correction only; M03–M18 and F01–F47 remain planned.
+
+Implemented the approved versioned roadmap through v1.0.0, preserved accepted
+M00–M02, updated the local AGENTS.md specification and tracked architecture/test
+documentation, reconciled navigation-correction acceptance and removed the
+untracked supplied reference JPG. Research inputs/section references and all
+deferred decisions live in docs/plan.md, not a separate research report.
+AGENTS.md remains ignored by existing repository policy; the tracked roadmap
+contains the complete actionable gates and release matrix.
+
+Tab activation previously changed active-first paint order while retaining the
+clicked control's old numeric focus index. Inactive Disassembly then inherited
+inverse styling, and Enter could activate the wrong tab. Activation now rebinds
+focus to the promoted tab; mouse input suppresses extra keyboard inverse styling,
+and keyboard input restores visible focus. The active theme and monochrome
+selection marker are preserved. No backend, new layout mode, theme selector or
+deferred debugger feature was implemented.
+
+The C PTY regression failed against the pre-fix app at the inactive tab's inverse
+attribute (`build/p00-tab-before.log`). It now checks actual inverse attributes,
+promotion, repeated switching, Enter and keyboard focus in direct/256-color and
+monochrome. Extended color components are excluded from SGR inverse decoding.
+The first full run caught an insufficient refresh settle in the new test; using
+the existing bounded refresh-settling helper corrected the test, then it passed.
+The older keyboard test was updated to follow the correctly promoted tab rather
+than rely on the previous stale index. The real tmux test also covers the fix.
+
+Verification (all final commands exited 0):
+
+| Exact command | Result | Local evidence |
+|---|---|---|
+| `make test` | PASS; strict GCC and all default C suites | `build/p00-test.log` |
+| `make CC=clang BUILD_DIR=build/p00-clang test` | PASS; separate strict Clang build and suites | `build/p00-clang.log` |
+| `make sanitize` | PASS; ASan/UBSan/LeakSanitizer, outside ptrace sandbox | `build/p00-sanitize.log` |
+| `make analyze` | PASS; no unsuppressed project diagnostics; existing system-header/NOLINT suppressions reported | `build/p00-analyze.log` |
+| `make test-tmux` | PASS; real isolated tmux, including tab styling/focus | `build/p00-tmux.log`, `build/m02-tmux-workspace.txt` |
+| `git diff --check` | PASS before final README update; repeated at final handoff | No whitespace diagnostics |
+
+The initial sandbox sanitizer run failed because LeakSanitizer cannot run under
+ptrace; the tmux run failed because the sandbox denied its local socket. These
+were rerun with execution permission and passed, without disabling leak checks
+or using/modifying the owner's tmux server. Failed environment attempts remain
+in `build/p00-{sanitize,tmux}-sandbox.log` and are not counted as passes.
+An additional owner README-title commit, `2239e5b`, was observed during P00;
+the final README edit preserves that title. No Git write was performed by the
+agent. The supplied JPG was untracked, so removing it produces no Git deletion.
+
+Manual test now: follow **P00 tab correction** in docs/testing.md. Inspect the
+rendered tabs repeatedly without clicking away, then keyboard focus and Enter,
+in the terminal/tmux and monochrome. Review the roadmap/release matrix and
+current-demo README. Automated tests do not accept visual appearance.
+
+Risks/limits: no live backend was implemented or tested; physical board runs,
+QEMU runs and all release readiness remain UNVERIFIED. AGENTS.md is updated
+locally but remains ignored by existing policy; full tracked requirements and
+gates are in docs/plan.md. P00 has no resulting commit SHA yet.
+
+**Status: AWAITING USER ACCEPTANCE.** Stop before M03. After explicit acceptance,
+provide only the requested Conventional Commit message (title ≤50 characters,
+detailed body), then wait for owner commit/push and explicit continuation.

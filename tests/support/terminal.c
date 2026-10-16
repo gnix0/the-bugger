@@ -22,6 +22,7 @@ static void clear_screen(TestTerminal *term)
 {
     for (int y = 0; y < TEST_ROWS; ++y) {
         memset(term->cells[y], ' ', TEST_COLS);
+        memset(term->inverse[y], term->reverse, sizeof term->inverse[y]);
         term->cells[y][term->cols] = '\0';
     }
 }
@@ -33,13 +34,45 @@ static void scroll_lines(TestTerminal *term, int top, int bottom, int distance)
     size_t size = (size_t)(bottom - top + 1 - count) * sizeof term->cells[0];
     if (distance > 0) {
         if (size > 0) { memmove(term->cells[top], term->cells[top + count], size); }
+        memmove(term->inverse[top], term->inverse[top + count],
+                (size_t)(bottom - top + 1 - count) * sizeof term->inverse[0]);
         for (int y = bottom - count + 1; y <= bottom; ++y) {
             memset(term->cells[y], ' ', (size_t)term->cols);
+            memset(term->inverse[y], term->reverse, (size_t)term->cols * sizeof(bool));
         }
     } else {
         if (size > 0) { memmove(term->cells[top + count], term->cells[top], size); }
+        memmove(term->inverse[top + count], term->inverse[top],
+                (size_t)(bottom - top + 1 - count) * sizeof term->inverse[0]);
         for (int y = top; y < top + count; ++y) {
             memset(term->cells[y], ' ', (size_t)term->cols);
+            memset(term->inverse[y], term->reverse, (size_t)term->cols * sizeof(bool));
+        }
+    }
+}
+
+static void sgr(TestTerminal *term)
+{
+    const char *next = term->sequence;
+    if (*next == '\0') { term->reverse = false; }
+    while (*next != '\0') {
+        char *end;
+        long code = strtol(next, &end, 10);
+        if (end == next) { return; }
+        next = *end == ';' ? end + 1 : end;
+        if (code == 0 || code == 27) { term->reverse = false; }
+        else if (code == 7) { term->reverse = true; }
+        else if (code == 38 || code == 48 || code == 58) {
+            /* A palette index/RGB component of 7 is not an inverse attribute. */
+            long mode = strtol(next, &end, 10);
+            if (end == next) { return; }
+            next = *end == ';' ? end + 1 : end;
+            int components = mode == 2 ? 3 : mode == 5 ? 1 : 0;
+            for (int i = 0; i < components && *next != '\0'; ++i) {
+                (void)strtol(next, &end, 10);
+                if (end == next) { return; }
+                next = *end == ';' ? end + 1 : end;
+            }
         }
     }
 }
@@ -50,6 +83,7 @@ static void csi(TestTerminal *term, char command)
     (void)sscanf(term->sequence, "%d;%d", &first, &second);
     int distance = first == 0 ? 1 : first;
     switch (command) {
+    case 'm': sgr(term); break;
     case 'H': case 'f':
         term->y = first > 0 ? first - 1 : 0;
         term->x = second > 0 ? second - 1 : 0;
@@ -81,8 +115,11 @@ static void csi(TestTerminal *term, char command)
         if (first == 2 || first == 3) { clear_screen(term); }
         else {
             memset(term->cells[term->y] + term->x, ' ', (size_t)(term->cols - term->x));
+            memset(term->inverse[term->y] + term->x, term->reverse,
+                    (size_t)(term->cols - term->x) * sizeof(bool));
             for (int y = term->y + 1; y < term->rows; ++y) {
                 memset(term->cells[y], ' ', (size_t)term->cols);
+                memset(term->inverse[y], term->reverse, (size_t)term->cols * sizeof(bool));
             }
         }
         break;
@@ -90,26 +127,37 @@ static void csi(TestTerminal *term, char command)
         if (first == 2) { memset(term->cells[term->y], ' ', (size_t)term->cols); }
         else if (first == 1) { memset(term->cells[term->y], ' ', (size_t)term->x + 1); }
         else { memset(term->cells[term->y] + term->x, ' ', (size_t)(term->cols - term->x)); }
+        {
+            int start = first == 1 || first == 2 ? 0 : term->x;
+            int count = first == 1 ? term->x + 1 : term->cols - start;
+            memset(term->inverse[term->y] + start, term->reverse, (size_t)count * sizeof(bool));
+        }
         break;
     case 'P': case '@': {
         int count = distance < term->cols - term->x ? distance : term->cols - term->x;
         char *line = term->cells[term->y] + term->x;
+        bool *inverse = term->inverse[term->y] + term->x;
         size_t tail = (size_t)(term->cols - term->x - count);
         if (command == 'P') {
             memmove(line, line + count, tail);
             memset(line + tail, ' ', (size_t)count);
+            memmove(inverse, inverse + count, tail * sizeof(bool));
+            memset(inverse + tail, term->reverse, (size_t)count * sizeof(bool));
         } else {
             memmove(line + count, line, tail);
             memset(line, ' ', (size_t)count);
+            memmove(inverse + count, inverse, tail * sizeof(bool));
+            memset(inverse, term->reverse, (size_t)count * sizeof(bool));
         }
         break;
     }
     case 'X': {
         int count = distance < term->cols - term->x ? distance : term->cols - term->x;
         memset(term->cells[term->y] + term->x, ' ', (size_t)count);
+        memset(term->inverse[term->y] + term->x, term->reverse, (size_t)count * sizeof(bool));
         break;
     }
-    default: break; /* Color, modes and cursor visibility. */
+    default: break; /* Other modes and cursor visibility. */
     }
     if (term->x < 0) { term->x = 0; }
     if (term->y < 0) { term->y = 0; }
@@ -161,6 +209,7 @@ static void consume(TestTerminal *term, unsigned char character)
         term->x = 0;
         if (term->y < term->rows - 1) { ++term->y; }
     }
+    term->inverse[term->y][term->x] = term->reverse;
     term->cells[term->y][term->x++] = (char)character;
 }
 

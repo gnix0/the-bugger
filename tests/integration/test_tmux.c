@@ -57,6 +57,18 @@ int main(int argc, char *argv[])
     test_terminal_send(&term, "\r");
     test_terminal_expect(&term, "DEMO | Paused");
     int x, y;
+    for (int repeat = 0; repeat < 2; ++repeat) {
+        test_terminal_click(&term, "Call Stack");
+        test_terminal_expect(&term, "# Function     Location");
+        CHECK(test_terminal_find(&term, "Disassembly", &x, &y));
+        CHECK(!term.inverse[y][x]);
+        test_terminal_send(&term, "\r");
+        test_terminal_expect(&term, "# Function     Location");
+        test_terminal_click(&term, "Disassembly");
+        test_terminal_expect(&term, "Address    Bytes");
+        CHECK(test_terminal_find(&term, "Call Stack", &x, &y));
+        CHECK(!term.inverse[y][x]);
+    }
     CHECK(test_terminal_find(&term, "...", &x, &y));
     int original_x = x;
     send_mouse(&term, 0, x + 5, y + 2, false);
@@ -85,6 +97,6 @@ int main(int argc, char *argv[])
     for (int row = 0; row < term.rows; ++row) { CHECK(fprintf(capture, "%s\n", term.cells[row]) > 0); }
     CHECK(fclose(capture) == 0);
     test_terminal_stop(&term, 0);
-    puts("PASS real tmux forwarding: click, held-button drag, split, F10, compact resize and clean exit");
+    puts("PASS real tmux forwarding: tab styling/focus, click, held-button drag, split, F10, compact resize and clean exit");
     return EXIT_SUCCESS;
 }

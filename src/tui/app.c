@@ -46,7 +46,7 @@ typedef struct {
     Form forms[3];
     int session, focus, count, menu, form_scroll;
     size_t cursor;
-    bool quit, previewed, menu_focus, menu_actions, resizing;
+    bool quit, previewed, menu_focus, menu_actions, resizing, keyboard_focus;
     int drag, resize_divider;
     int scroll_drag_pane, scroll_drag_grab;
     Control controls[MAX_CONTROLS];
@@ -364,7 +364,7 @@ static void draw_pane(App *app, int pane_index, TbRect rect)
         tb_fill((TbRect){x, rect.y, width, 1}, style);
         tb_text(rect.y, x, width, style,
                 (tab == pane->active ? A_UNDERLINE | A_BOLD : 0) |
-                (control == app->focus ? A_REVERSE : 0), label);
+                (app->keyboard_focus && control == app->focus ? A_REVERSE : 0), label);
         x += width;
     }
     tb_text(rect.y, rect.x, 1, TB_ACTIVE_TAB, A_BOLD,
@@ -608,6 +608,14 @@ static void activate(App *app, Control control)
         app->demo.pane = control.pane;
         app->demo.panes[control.pane].active = control.value;
         app->menu = -1;
+        /* The activated tab moves first. Its previous control index may now
+         * belong to an inactive tab, so keep focus at this pane's first tab. */
+        for (int i = 0; i < app->count; ++i) {
+            if (app->controls[i].kind == TAB && app->controls[i].pane == control.pane) {
+                app->focus = i;
+                break;
+            }
+        }
         break;
     case MENU:
         app->demo.pane = control.pane;
@@ -713,6 +721,7 @@ static void mouse_event(App *app)
     if (getmouse(&event) != OK) {
         return;
     }
+    app->keyboard_focus = false;
     if (app->page == WORKSPACE && app->scroll_drag_pane >= 0) {
         int pane_index = app->scroll_drag_pane;
         TbDemoPane *pane = &app->demo.panes[pane_index];
@@ -844,6 +853,7 @@ static void key_event(App *app, wint_t key, bool special)
         mouse_event(app);
         return;
     }
+    app->keyboard_focus = true;
     Control control = app->controls[app->focus];
     if (app->resizing) {
         if ((!special && (key == 27 || key == '\n' || key == '\r')) ||
@@ -943,6 +953,7 @@ static void key_event(App *app, wint_t key, bool special)
 static void initialize(App *app)
 {
     memset(app, 0, sizeof *app);
+    app->keyboard_focus = true;
     app->menu = -1;
     app->drag = -1;
     app->scroll_drag_pane = -1;

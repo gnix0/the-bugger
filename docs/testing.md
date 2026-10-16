@@ -108,13 +108,13 @@ owner acceptance; PTY simulation alone does not establish those experiences.
 
 The tree has a documented 32-pane capacity; each tiled leaf needs 20x7 cells.
 Requested ratios survive terminal shrinking, while actual sizes are constrained
-to fit all subtree minimums. Profiles and persisted layout are still M06 work.
+to fit all subtree minimums. Basic profiles are M13; persisted workspace is F01.
 No layout selector or presets may appear. All debugger values remain DEMO.
 
 `make test-tmux` is an additional C integration test requiring installed tmux.
 It owns a uniquely named local server and temporary config, enables mouse only
 there, sends real outer-terminal input through tmux, and cleans up that server.
-It verifies clicks, held-button motion, splitting, F10, compact resizing and
+It verifies tab styling/focus after promotion, clicks, held-button motion, splitting, F10, compact resizing and
 terminal restoration. It does not modify an existing server or user config.
 Agent sandboxes may require execution permission for its local socket.
 Output goes to `build/m02-tmux-workspace.txt`; final M02 commands/results are
@@ -127,12 +127,15 @@ tests, using the HTML as the visual/interaction reference. Verify the single
 six-pane default, tab/view changes, divider resizing, dynamic horizontal/vertical
 splits, a seventh visible view and state-preserving terminal resize. No layout
 selector or alternate named layouts may appear; no preset-switching tests are
-planned. M03 adds a structured MI corpus and explicitly fake-server integration
-tests. M04/M05 add real GDB native C/C++ fixtures, optimized/stripped cases,
-attach permissions and coherent inspection. M06 adds profiles, configuration
-tests and a real external gdbserver test. M07 requires real NUCLEO-F446RE
-evidence and the full FR/NFR matrix. Fixture instructions and expected states
-will be stored alongside those fixtures when implemented.
+planned. M03 adds a structured MI corpus; M04 adds explicitly fake-server
+transport/controller tests. M05 introduces real native GDB sessions/output;
+M06–M12 cover context, code/stepping/source recovery, breakpoints, inspection and
+hardware-only watchpoints. M13 adds basic profiles/key mapping; M14 completes
+native end-to-end acceptance. M15 tests a real external gdbserver; M16 covers
+OpenOCD configuration/lifecycle/ownership; M17 requires real release-board
+evidence; M18 audits release-wide FR/NFR results. See [the roadmap](plan.md) for
+each independent gate's tests and exclusions. Fixture instructions and expected
+states are delivered with their implementation, not represented as tests run now.
 
 No mock transcript is hardware evidence. No automated check marks a milestone
 accepted; the owner must perform manual validation and explicitly approve.
@@ -186,3 +189,51 @@ It does not substitute for inspecting the rendered interface.
 The C tests cover empty initial breakpoints, execution-highlight movement,
 scrollbar geometry, track/drag interaction and disassembly endpoints. The test
 screen reader handles cursor save/restore around ncurses scrolling regions.
+
+## P00 tab correction — manual test now
+
+1. Run `make` and `./build/the-bugger` in a 140x44 terminal. Choose Linux
+   application → Review preview → Preview workspace. All values remain DEMO.
+2. In the upper-middle pane, click Call Stack while Disassembly is active.
+   Call Stack moves left and has normal active styling; Disassembly immediately
+   has normal inactive styling, without a gray inverse highlight.
+3. Alternate those two tabs repeatedly without clicking outside the pane.
+   Each old tab immediately becomes inactive. Click Call Stack, press Enter:
+   it must stay active rather than activating Disassembly at the old control index.
+4. From that active tab, press Tab to focus the next tab. Keyboard focus is
+   visible. Enter activates it; Left/Right still switch tabs and keep focus on
+   the promoted tab. Existing view content/scroll, splits and resizing still work.
+5. Repeat with `NO_COLOR=1 ./build/the-bugger` and inside tmux with the owner's
+   opt-in mouse support. Monochrome active tabs retain their selection marker;
+   inactive tabs have no stale marker after mouse activation. Quit cleanly.
+6. Review the versioned roadmap and per-release matrix. Confirm the supplied
+   reference JPG is gone, and that README still distinguishes demo from plans.
+
+C regression checks inspect actual PTY inverse attributes, not just label text,
+in direct/256-color and monochrome. It fails against the pre-fix binary at the
+old inactive-tab highlight. Additional checks verify leftward promotion, Enter
+remaining on the clicked tab and visible keyboard focus. The VT reader skips
+extended-color parameters when interpreting inverse attributes. Physical
+appearance remains subject to owner acceptance.
+
+## Every-release regression matrix
+
+Before every release (including patches), record actual commands, results and
+owner acceptance for the minimum matrix below. Exact ESP/probe setup is not a
+P00 prerequisite; fill it in when conducting the tests. Tool/server paths stay
+editable; OpenOCD is not a requirement for every architecture.
+
+| Environment | Minimum evidence | Current live evidence |
+|---|---|---|
+| Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | UNVERIFIED — backend not implemented |
+| STM32 / ARM | NUCLEO-F446RE fixture via GDB/OpenOCD; halt/step/break/watch, real code/register/RAM/variables, reset/disconnect/cleanup | UNVERIFIED |
+| ESP32 / Xtensa | Owner's board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED |
+| ESP32 / RISC-V | Owner's board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED |
+| QEMU ARM / RISC-V | Supplementary reproducible native/guest runs where available | UNVERIFIED; not a physical-board substitute |
+
+For each release, capture the actual setup/version, relevant fixture/source
+identity, core-workflow results, capability-specific exclusions, new-feature
+regression and cleanup. Unavailable hardware remains UNVERIFIED and is brought
+to the owner before release acceptance. Tests are not waived because a release
+only changes UI. QEMU test infrastructure does not add simulator support to the
+product. Do not claim unsupported target-specific features or untested boards.

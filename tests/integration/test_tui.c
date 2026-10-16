@@ -71,7 +71,8 @@ int main(int argc, char *argv[])
     test_terminal_expect(&term, "NOT IMPLEMENTED");
     test_terminal_send(&term, "\033OD");
     test_terminal_expect(&term, "main.c | Cortex-M4F sample");
-    test_terminal_send(&term, "\t\r");
+    /* Focus follows the promoted Source tab; skip Symbols to reach its menu. */
+    test_terminal_send(&term, "\t\t\r");
     test_terminal_expect(&term, "SHOW VIEW (DEMO)");
     for (int i = 0; i < 6; ++i) { test_terminal_send(&term, "\033OB"); }
     test_terminal_send(&term, "\r");
