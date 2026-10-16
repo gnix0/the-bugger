@@ -1,0 +1,8 @@
+^done,missing="closing quote
+^done,mixed=["value",name="result"]
+~"bad escape \q"
+3~"stream tokens are invalid"
+^done,answer=42
+not-mi
+20^done,recovered="yes"
+(gdb)

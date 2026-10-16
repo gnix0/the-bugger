@@ -1,0 +1,22 @@
+(gdb)
+0007^done,frame={level="0",addr="0x401126",func="main",args=[],file="main.c",fullname="/tmp/source tree/main.c",line="30"}
+8^running
+*running,thread-id="all"
+*stopped,reason="breakpoint-hit",disp="keep",bkptno="1",frame={addr="0x401126",func="main",args=[{name="argc",value="1"}]},thread-id="1",stopped-threads="all"
+21+download,section=".text",section-sent="128",section-size="256"
+=thread-group-added,id="i1"
+=breakpoint-modified,bkpt={number="1",locations=[{number="1.1",enabled="y"},{number="1.2",enabled="n"}]}
+~"console: \"quoted\", backslash \\, newline\n"
+@"target\toutput\000binary\n"
+&"diagnostic: \303\251\n"
+9^error,msg="Undefined MI command: not-a-command",code="undefined-command"
+10^connected
+11^done,stack=[frame={level="0",func="work"},frame={level="1",func="main"}]
+12^done,register-names=["rax","rip","xpsr","a0","mstatus",""]
+13^done,a="",a="duplicate",empty-tuple={},empty-list=[],nested=[[],{},["a",{x="b"}]]
+14^done,memory=[{begin="0x20000000",offset="0x0",end="0x20000004",contents="000102ff"}]
+1234567890123456789012345678901234567890=future-event,details={future_field="retained"}
+~raw console text
+15^future-result,new-field="retained"
+16^exit
+(gdb)

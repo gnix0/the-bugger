@@ -1,8 +1,9 @@
 # Development roadmap — v0.1.0 through v1.0.0
 
 Approved roadmap. Version targets are expected sequencing, not deadlines.
-The immediate authorized change is **P00 only**. All backend milestones remain
-planned until its manual acceptance, owner commit/push, and explicit continuation.
+P00 is accepted and committed/pushed as 36d5ad6. **M03 only** is authorized;
+M04 and later gates require the usual acceptance, owner commit/push and explicit
+continuation.
 
 ## Product and preserved work
 
@@ -48,9 +49,12 @@ architecture notes when interfaces/ownership change, README for shipped behavior
 and CHANGELOG for user-visible changes. Map tests and handoffs to FR/NFR IDs.
 Record exclusions, failed/blocked checks, and compatibility/hardware limitations.
 
-Lifecycle: implement → run/inspect checks → document → **stop for manual review**
-→ fix feedback → explicit acceptance → Conventional Commit message (title at most
-50 characters, detailed body) → owner commits/pushes → explicit continuation.
+Lifecycle: implement → run/inspect checks → document and provide a proposed
+Conventional Commit message (title at most 50 characters, detailed body) →
+**stop for manual review** → fix feedback and revise the message as needed →
+explicit acceptance → owner commits/pushes → explicit continuation.
+Always include the message at delivery so the owner can commit after a successful
+manual review. Providing it does not imply acceptance or authorize advancement.
 No autonomous commit, push, tag, merge, rebase, or milestone advancement. Neither
 automated success nor silence is acceptance. Every release requires its own owner
 acceptance; no prerelease suffixes are used.
@@ -272,5 +276,6 @@ IAR/C-SPY defects. These findings directly informed accepted requirements:
 
 ## Current authorization
 
-P00 implementation is authorized. M03 remains planned. After P00 tests and
-manual handoff, stop. Plan approval is not acceptance of the implementation.
+The owner completed P00, committed/pushed 36d5ad6 and explicitly authorized M03.
+Implement only the incremental parser, C tests/corpus and diagnostic demonstration.
+Stop for M03 manual acceptance with the proposed commit message. Do not start M04.

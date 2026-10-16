@@ -4,6 +4,10 @@
 
 ### Added
 
+- M03 incremental GDB/MI parser with owned records, nested values, byte-string
+  decoding, bounded buffering and line-boundary error recovery.
+- C protocol/fragmentation/resource-limit and allocation-failure tests, synthetic
+  fixture provenance, and a standalone diagnostic decoder via `make mi-demo`.
 - M00 C17 foundation with help, target-version and development-status output.
 - Make build, CLI integration checks, sanitizer and static-analysis targets.
 - Architecture, testing and milestone acceptance documentation.

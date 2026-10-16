@@ -11,8 +11,8 @@ States: `planned` → `implemented` → `automated-verified` → `awaiting-user`
 | M01 | Launcher and DEMO workspace | accepted | `60df655` |
 | M02 | Tiled layout engine | accepted | `094fa71` |
 | Post-M02 | Navigation/highlight/scrollbar correction | accepted | `a832eef` |
-| P00 | Expanded roadmap/specification and tab-focus correction | awaiting-user | — |
-| M03 | Incremental MI parser | planned | — |
+| P00 | Expanded roadmap/specification and tab-focus correction | accepted | `36d5ad6` |
+| M03 | Incremental MI parser | awaiting-user | — |
 | M04 | Nonblocking transport/controller and owned lifecycle | planned | — |
 | M05 | Native sessions, console/output and Save Log | planned | — |
 | M06 | Selected context, Call Stack and Threads | planned | — |
@@ -393,3 +393,93 @@ gates are in docs/plan.md. P00 has no resulting commit SHA yet.
 **Status: AWAITING USER ACCEPTANCE.** Stop before M03. After explicit acceptance,
 provide only the requested Conventional Commit message (title ≤50 characters,
 detailed body), then wait for owner commit/push and explicit continuation.
+
+### P00 acceptance and M03 authorization
+
+The owner requested the commit message, completed the commit/push and explicitly
+authorized the next gate. Commit `36d5ad6` is reliably observed at HEAD and
+origin/main with the P00 tab fix and documentation. P00 is accepted; its earlier
+handoff status above is historical. No Git writes were performed by the agent.
+
+The owner subsequently changed the delivery workflow: always include a proposed
+Conventional Commit message with the manual-review handoff (title ≤50 characters
+and detailed body). Revise it after any fixes. Explicit acceptance, owner
+commit/push and authorization still gate the next milestone.
+
+## M03 — incremental owned MI parser
+
+State: `planned` → `implemented` → `automated-verified` → `awaiting-user`.
+M03 only was authorized. No acceptance or resulting commit SHA is claimed.
+
+Implemented:
+
+- Independent C17 parser and owned ordered trees in `src/gdb/mi.{h,c}`:
+  result/async/stream/prompt records, exact token text, future class/field names,
+  nested tuples/lists, duplicate fields, decoded byte strings with explicit
+  lengths, and quoted/raw stream handling.
+- Incremental CR/LF/CRLF framing across arbitrary chunks, deterministic
+  diagnostics and recovery after malformed/overlong lines, truncated EOF
+  reporting and fatal allocation-error handling with safe destroy/reset.
+- Explicit limits: 1 MiB encoded record, 16,384 values and 64 nested containers.
+  No new library dependency, global parser state or production allocation hooks.
+- C semantic/corpus/bounds/mutation tests and linker-wrapped allocation faults;
+  standalone `mi-dump` demonstration and synthetic fixture provenance.
+- Architecture/testing/roadmap/changelog/README updates and the delivery-message
+  workflow. AGENTS.md was updated locally but remains ignored by existing policy;
+  the tracked gate contract is in docs/plan.md.
+
+Excluded: subprocess transport/controller, token correlation, run-state model,
+command encoding, live TUI integration, real session launch/attach and all hardware
+access. The existing workspace remains DEMO. M04 and later gates remain planned.
+
+Automated verification (commands exited 0 unless an expected decoder exit is
+specified):
+
+| Exact command | Result | Local evidence |
+|---|---|---|
+| `make test` | PASS; strict GCC, both MI suites and all existing suites | `build/m03-test.log` |
+| `make CC=clang BUILD_DIR=build/m03-clang test` | PASS; separate strict Clang build and all suites | `build/m03-clang.log` |
+| `make sanitize` | PASS; ASan/UBSan/LeakSanitizer outside ptrace sandbox | `build/m03-sanitize.log` |
+| `make analyze` | PASS; no unsuppressed project diagnostics; existing system-header/NOLINT suppressions reported | `build/m03-analyze.log` |
+| `make test-mi` | PASS after final test assertion/fixture edits | `build/m03-mi-final.log` |
+| `make CC=clang BUILD_DIR=build/m03-clang test-mi` | PASS after those edits | `build/m03-clang-mi-final.log` |
+| `make BUILD_DIR=build/sanitize CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-mi` | PASS after those edits, leak detection enabled outside ptrace sandbox | `build/m03-sanitize-mi-final.log` |
+| `make mi-demo` | PASS; 22 decoded records, exit 0 | `build/m03-demo.log` |
+| `./build/mi-dump --chunk 1 tests/fixtures/mi/invalid.mi` | Expected exit 1; six diagnostics then two recovered records | `build/m03-invalid.{out,err}` |
+| `printf '7^done' \| ./build/mi-dump` | Expected exit 1, truncated EOF | `build/m03-truncated.{out,err}` |
+| `printf '7^done\n' \| ./build/mi-dump` | PASS, exit 0 | `build/m03-terminated.out` |
+| `./build/mi-dump --chunk 0` | Expected usage exit 2 | `build/m03-usage.err` |
+| `./build/mi-dump /nonexistent/the-bugger-m03.mi` | Expected I/O exit 2 | `build/m03-missing.err` |
+| `git diff --check` | PASS, repeated at final handoff | No whitespace diagnostics |
+
+The MI tests assert semantics and independent ownership, replay every two-chunk
+corpus split and chunk sizes 1–71, exercise all limits, mutate every seed byte
+through all 256 possibilities, and walk representative malloc/calloc/realloc
+failure points including growing an already allocated buffer. No automated
+failure remains. Full suites passed before the final test-only CHECK conversion
+and raw-stream fixture wording cleanup; focused suites then passed again under
+GCC, Clang and sanitizers. Production code did not change between these runs.
+
+Actual-output compatibility probe (native GDB and arm-none-eabi-gdb, both 18.1):
+created `build/m03-probe.commands` using
+`printf '1-list-features\n2-interpreter-exec console "echo parser-check\\n"\n3-not-a-command\n4-gdb-exit\n'`.
+For each executable and each `mi3`/`mi2` interpreter, ran
+`<gdb> --quiet --nx --interpreter=<mi> < build/m03-probe.commands` and decoded
+the output with `./build/mi-dump --chunk 1 <capture>`. All four invocations and
+decodes exited 0, including intentional GDB error responses. Captures, stderr
+and decoded trees are `build/m03-{gdb,arm-none-eabi-gdb}-{mi3,mi2}.{mi,stderr,decoded}`.
+No inferior or target was started; these are parser grammar compatibility checks,
+not live-debugger or hardware acceptance. The tracked corpus remains synthetic.
+
+Requirement evidence: NFR-04 parser behavior and NFR-01/03/09/12 foundations;
+FR-16 parser error handling only. Physical mouse/tmux behavior was not newly
+validated in this parser-only gate; existing PTY suites passed. Hardware and
+release readiness remain UNVERIFIED. No OpenOCD/device configuration was needed.
+
+Manual test now: follow **M03 manual acceptance** in docs/testing.md. In
+particular inspect the valid decoded tree, malformed-record recovery and EOF/
+usage exit codes. No visible TUI change is expected.
+
+**Status: AWAITING USER ACCEPTANCE.** Include the proposed commit message at
+delivery. Stop before M04; wait for owner review, acceptance, commit/push and
+explicit continuation.

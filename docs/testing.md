@@ -15,8 +15,9 @@ git diff --check
 ```
 
 `all` compiles C17 with strict warnings including `-Wall -Wextra -Wpedantic`
-and `-Werror`. `test` builds and runs six C executables: demo, layout, renderer,
-CLI and two PTY integration suites, described in `tests/README.md`. `sanitize` builds separately
+and `-Werror`. `test` builds and runs eight C test executables: two MI suites,
+demo, layout, renderer, CLI and two PTY integration suites, described in
+`tests/README.md`. `sanitize` builds separately
 with ASan/UBSan; a runtime
 diagnostic is a failure, not a skip. `analyze` uses clang-tidy and fails on
 warnings; an unavailable tool is a reported limitation, never a pass. Checks are
@@ -33,6 +34,49 @@ Do not disable leak detection or label that environment failure a passing test.
 retained as `build/m01-*`; these are local evidence, not tracked artifacts.
 Durable command summaries and limitations belong in `docs/progress.md`.
 Changing compiler or flags requires a fresh build directory or cleaning.
+
+## M03 manual acceptance
+
+This gate tests protocol parsing only. No GDB connection, process controller or
+live TUI data is expected. Coverage is NFR-04 and parser ownership/error-path
+foundations for NFR-03/09 and FR-16; complete session cleanup is not claimed.
+
+1. Run `make test-mi`. Expect both corpus/semantic and allocation-failure suites
+   to print PASS. Run `make mi-demo`: expect 22 decoded records, exit 0, retained
+   token digits, nested frames/lists and byte lengths. Control bytes are printed
+   as octal escapes rather than executed by the terminal.
+2. Run `./build/mi-dump --chunk 1 tests/fixtures/mi/invalid.mi`, then `echo $?`.
+   Expect six diagnostics with record byte offsets, recovered records 7 and 8
+   (`20^done` and the prompt), and exit 1. stdout/stderr ordering may differ
+   when redirected; each diagnostic identifies its record.
+3. Run `printf '7^done' | ./build/mi-dump`, then `echo $?`. Expect an
+   unterminated-record-at-EOF diagnostic and exit 1. Add a newline with
+   `printf '7^done\n' | ./build/mi-dump`; expect one result record and exit 0.
+4. Run `./build/mi-dump --chunk 0`, then `echo $?`. Expect usage and exit 2.
+   A nonexistent input path also reports an I/O diagnostic and exits 2.
+5. Optionally run the existing `./build/the-bugger` demo: presentation and
+   interactions should be unchanged. No board, probe or tmux configuration is
+   required for M03 parsing. Stop here; M04 needs separate authorization.
+
+The corpus is replayed across every two-chunk split and chunk sizes 1–71.
+Unit tests also cover CR/LF/CRLF, malformed and raw-NUL input, unknown classes,
+duplicate fields, source paths with spaces, embedded decoded NUL/UTF-8 bytes,
+all resource limits, deterministic byte mutations, recovery and EOF.
+Link-time malloc/calloc/realloc fault injection walks every allocation on
+representative nested/stream records and checks fatal state, cleanup and reuse;
+ASan/UBSan/LeakSanitizer exercise those same paths.
+
+For an optional actual-output compatibility probe, without a target:
+
+```sh
+printf '1-list-features\n2-not-a-command\n3-gdb-exit\n' |
+  gdb --quiet --nx --interpreter=mi3 > build/mi-probe.mi
+./build/mi-dump --chunk 1 build/mi-probe.mi
+```
+
+Repeat with MI2 or an installed ARM GDB. A GDB `^error` result is valid protocol
+and must parse successfully. These probes are grammar evidence only, not native
+or hardware debugging acceptance.
 
 ## M01 manual test now
 

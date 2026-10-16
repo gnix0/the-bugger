@@ -4,6 +4,12 @@ Run `make test` from the repository root. All tests and support code are C,
 built with the same strict compiler flags as the application. No Python or
 external test framework is required.
 
+- `test-mi`: owned MI tree semantics, all record kinds, token/escape handling,
+  duplicate names, embedded bytes, malformed input, CR/LF framing, EOF/recovery,
+  bounds, deterministic byte mutations and exhaustive corpus fragmentation.
+- `test-mi-alloc`: link-time malloc/calloc/realloc failure injection for partial
+  tree/buffer cleanup, fatal errors and destroy/reinitialization. Uses the Linux
+  linker wrapping facility; no allocation hooks are added to production code.
 - `test-unit`: demo state transitions, bounded logs, tab closing and per-view
   state preservation.
 - `test-layout`: tree ownership, unique pane IDs, geometry bounds/non-overlap,
@@ -38,8 +44,9 @@ is disabled to obtain a pass. `make analyze` runs clang-tidy over application
 sources. See `docs/testing.md` for commands and the manual/tmux checklist.
 
 These tests establish UI/layout evidence, not live debugging or complete
-FR-06/07/08/09/10/11/12/13/14/15/16/17 acceptance. GDB/MI fixtures arrive in M03;
-fake transport fixtures in M04, real native C/C++ fixtures from M05, native
+FR-06/07/08/09/10/11/12/13/14/15/16/17 acceptance. M03's synthetic GDB/MI corpus
+is in `fixtures/mi/` with a provenance README; it establishes NFR-04 parser
+evidence. Fake transport fixtures arrive in M04, real native C/C++ fixtures from M05, native
 acceptance in M14 and real board evidence in M17. Every release retests native
 x86-64 and the owner's STM32/ARM, ESP32/Xtensa and ESP32/RISC-V hardware;
 QEMU ARM/RISC-V adds coverage where available and never replaces board evidence.

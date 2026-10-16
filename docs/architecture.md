@@ -1,6 +1,6 @@
 # Architecture
 
-## Current implementation (M02)
+## Current implementation (M03)
 
 `src/main.c` handles help/version and starts the terminal application.
 `src/tui/app.c` owns startup/configuration/review/workspace pages, keyboard
@@ -14,6 +14,8 @@ The build and tests are C17 with strict warnings; Make is the only build driver.
 C tests use POSIX pipes, processes and PTYs. Python tests were replaced at the
 owner's request. The only current application library dependency is ncursesw.
 There is no debugger transport, tool subprocess launch or persistence yet.
+The independent MI parser described below is implemented; the TUI does not yet
+consume it and continues to display explicitly simulated data.
 
 The UI waits for input with a 100 ms ncurses timeout and redraws after events
 rather than on every timeout. Raw input preserves function keys and Ctrl+Q;
@@ -38,6 +40,50 @@ next paint. Mouse input suppresses the additional inverse keyboard-focus marker;
 keyboard input restores it. This prevents the old numeric control index from
 highlighting/activating a different tab after reordering. The active-tab theme
 and monochrome selection indicator remain intact.
+
+## M03 owned MI parser
+
+`src/gdb/mi.h` defines an internal C API; `mi.c` uses only the C library.
+`tb_mi_parse` parses one record without its line delimiter. The returned record,
+token, class, ordered result tree and decoded strings are independently owned;
+release them together with `tb_mi_record_free`. Duplicate names and unnamed
+list elements are preserved. `tb_mi_find` returns the first matching sibling.
+Strings carry an authoritative byte length, including embedded decoded NULs;
+tokens retain their exact digits rather than assuming an integer width.
+
+Zero-initialize `TbMiParser`, feed arbitrary byte chunks, finish at EOF and
+destroy its buffer. CR, LF and CRLF frame records, including a split CRLF.
+Blank lines are ignored; an unterminated EOF tail is reported as truncated.
+Callbacks receive either an owned record or a temporary error with a zero-based
+record byte offset. The callback must not reenter/destroy the parser. Feed's
+success means input was consumed; recoverable parse errors arrive through the
+callback. Malformed and oversized records recover at the next line delimiter.
+Allocation failure is fatal until destroy/reinitialization, with no retry of
+partially consumed input. No callbacks retain pointers into input buffers.
+
+Bounds are 1 MiB per encoded record excluding its delimiter, 16,384 value nodes
+including containers, and 64 nested containers. Overlong lines are discarded
+without growing the buffer further. Limit diagnostics are explicit; a future
+controller must fail the affected operation rather than publish partial data.
+These are defensive internal limits, not target architecture restrictions.
+
+The parser handles result, execution/status/notification async, console/target/
+log stream and prompt records. Unknown class/field names are retained. MI tuples
+contain named results; lists contain either results or values, without mixing
+the two. C string escapes are decoded as bytes; invalid/out-of-range escapes
+are rejected. Raw stream text retains its spaces and gains the documented
+implicit newline. Quoted streams have no added newline.
+
+The grammar follows the official GDB manual's
+[MI output syntax](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Output-Syntax.html)
+and [stream records](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Stream-Records.html).
+It is shared by MI2/MI3; selecting an interpreter, correlating requests and
+interpreting target state belong to M04. No command encoder, transport,
+subprocess lifecycle or live debugger state is introduced in M03.
+
+`make mi-demo` runs the C-only diagnostic decoder with one-byte reads.
+It escapes control/non-ASCII bytes before printing and launches no debugger.
+Synthetic fixture provenance and expectations are in `tests/fixtures/mi/README.md`.
 
 ## Approved direction
 

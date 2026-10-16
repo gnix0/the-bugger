@@ -115,6 +115,25 @@ See [testing](docs/testing.md) for suite coverage and terminal checks.
 `test-tmux` additionally requires tmux and uses an isolated temporary server to
 check tab styling/focus, mouse forwarding, dragging, splitting and terminal resizing.
 
+## MI parser development tools
+
+An independent C parser handles structured GDB/MI records, incremental input,
+nested values, escaped byte strings and malformed-record recovery. It is not
+yet connected to the workspace; all debugger views remain simulated.
+
+```sh
+make test-mi
+make mi-demo
+./build/mi-dump --chunk 1 tests/fixtures/mi/invalid.mi
+```
+
+The demo decodes 22 synthetic records one byte at a time without launching GDB.
+The invalid fixture deliberately reports six errors, recovers for the following
+two records, and exits 1. The decoder also accepts a file or standard input;
+control bytes are printed as escapes. See the
+[fixture notes](tests/fixtures/mi/README.md) and
+[manual checks](docs/testing.md#m03-manual-acceptance).
+
 ## Project direction
 
 The debugger is being developed around live source/disassembly, execution
