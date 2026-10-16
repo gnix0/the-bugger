@@ -10,6 +10,15 @@ errors. Python is used only to exercise the executable in tests.
 
 ## Approved direction
 
+The corrected UI uses one configurable workspace: Source / Disassembly /
+Registers above Memory / Locals / Console. Follow AGENTS.md and the approved
+HTML visual/interaction reference at `docs/design/prototype.html`.
+Preserve the Monokai appearance, toolbar,
+tabs, pane menus and startup configuration within terminal constraints.
+There are no layout presets or selectors. Resizing and dynamic splits edit the
+current tiled workspace; optional geometry restoration restores the user's own
+workspace. See `docs/plan.md` for the revised milestone deliverables and gates.
+
 Introduce modules only as their milestone needs them:
 
 | Milestone | Boundary | Responsibility |

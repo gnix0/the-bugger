@@ -1,10 +1,17 @@
 # the-bugger
 
-A terminal-native C/C++ debugger frontend implemented in C, targeting Linux
-x86-64 first and the STM32 NUCLEO-F446RE through OpenOCD second. GDB provides
-the debugger engine through its structured MI interface.
+A terminal-native debugger frontend implemented in C for firmware and
+system-level C/C++ development across x86, ARM, and other GDB-supported
+architectures, alongside native application debugging. GDB provides the debugger
+engine through its structured MI interface; OpenOCD is an optional server for
+targets that use it.
 
-**Current status: M00 foundation, awaiting manual acceptance.** The executable
+For v0.1.0, validation will focus on native Linux x86-64 and the STM32
+NUCLEO-F446RE through OpenOCD. These are the first release's acceptance targets;
+the product architecture and intended use extend beyond them. Other targets
+will require their own validation before compatibility is claimed.
+
+**Current status: M00 foundation, manually accepted.** The executable
 supports help, target-version output, and a development-status message.
 The launcher, TUI, debugging, profiles, and hardware support are not implemented.
 `0.1.0` is the target version; it is not a declaration of release readiness.

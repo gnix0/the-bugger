@@ -50,7 +50,11 @@ mouse support, process lifecycle correctness or any functional debugger FR.
 ## Later verification gates
 
 M01/M02 add PTY and real-terminal/tmux visual/input acceptance plus pure layout
-tests. M03 adds a structured MI corpus and explicitly fake-server integration
+tests, using the HTML as the visual/interaction reference. Verify the single
+six-pane default, tab/view changes, divider resizing, dynamic horizontal/vertical
+splits, a seventh visible view and state-preserving terminal resize. No layout
+selector or alternate named layouts may appear; no preset-switching tests are
+planned. M03 adds a structured MI corpus and explicitly fake-server integration
 tests. M04/M05 add real GDB native C/C++ fixtures, optimized/stripped cases,
 attach permissions and coherent inspection. M06 adds profiles, configuration
 tests and a real external gdbserver test. M07 requires real NUCLEO-F446RE

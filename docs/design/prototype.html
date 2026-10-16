@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>the-bugger — v0.1.0 UI prototype</title>
+  <style>
+    :root {
+      --bg:#221f22;--panel:#2d2a2e;--raised:#353236;--raised2:#3b373d;
+      --border:#49454b;--fg:#fcfcfa;--muted:#939293;--pink:#ff6188;
+      --green:#a9dc76;--orange:#fc9867;--yellow:#ffd866;
+      --purple:#ab9df2;--cyan:#78dce8;--select:#4b3d4b;
+      --col1:36%;--col2:34%;--toprow:56%;
+    }
+    *{box-sizing:border-box}
+    html,body{width:100%;height:100%;margin:0;background:var(--bg);color:var(--fg);
+      font:12px/1.5 ui-monospace,'SFMono-Regular',Consolas,'Liberation Mono',monospace;overflow:hidden}
+    button,select,input{font:inherit}
+    button{color:inherit;background:none;border:1px solid transparent;border-radius:4px;cursor:pointer}
+    button:hover{background:#4a434c}button:focus-visible,select:focus-visible,input:focus-visible{outline:1px solid var(--cyan);outline-offset:1px}
+    .app{display:flex;flex-direction:column;width:100%;height:100dvh;min-height:400px;overflow:hidden}
+    .topbar{flex:none;display:flex;align-items:center;gap:12px;padding:9px 14px;min-height:55px;background:#29262a;border-bottom:1px solid var(--border)}
+    .brand{color:var(--pink);font-weight:800;font-size:16px;letter-spacing:.6px;white-space:nowrap}
+    .version{font-size:10px;color:var(--muted);white-space:nowrap}
+    .sep{width:1px;height:24px;background:var(--border);flex:none}
+    .target{color:var(--cyan);white-space:nowrap;font-weight:650}
+    .runstate{color:var(--green);white-space:nowrap;font-size:11px}
+    .toolbar{display:flex;align-items:center;gap:4px;flex-wrap:nowrap}
+    .toolbar button,.headerbtn{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid var(--border);background:var(--raised);white-space:nowrap}
+    .toolbar button:hover,.headerbtn:hover{border-color:var(--cyan);background:#403a42}
+    .toolbar .key{color:var(--yellow);font-size:10px}
+    .grow{flex:1;min-width:0}
+    .pane-select,.field select,.field input{background:var(--raised);border:1px solid var(--border);color:var(--fg);padding:6px 9px;border-radius:4px;min-width:0}
+    .demo-ribbon{flex:none;display:flex;align-items:center;gap:8px;padding:5px 14px;color:#cfc9cd;background:#322b34;border-bottom:1px solid #554659;font-size:10px}
+    .demo-ribbon strong{color:var(--orange)}
+    .workspace{flex:1;min-height:0;min-width:0;display:grid;gap:0;padding:8px;
+      grid-template-columns:minmax(0,var(--col1)) 6px minmax(0,var(--col2)) 6px minmax(0,1fr);
+      grid-template-rows:minmax(0,var(--toprow)) 6px minmax(0,1fr)}
+    .tile{min-width:0;min-height:0;overflow:hidden;display:flex;position:relative}
+    .tile[data-cell="0"]{grid-column:1;grid-row:1}.tile[data-cell="1"]{grid-column:3;grid-row:1}
+    .tile[data-cell="2"]{grid-column:5;grid-row:1}.tile[data-cell="3"]{grid-column:1;grid-row:3}
+    .tile[data-cell="4"]{grid-column:3;grid-row:3}.tile[data-cell="5"]{grid-column:5;grid-row:3}
+    .divider{background:var(--bg);position:relative;touch-action:none;z-index:3}
+    .divider::after{content:"";position:absolute;inset:0;opacity:0;background:var(--pink)}
+    .divider:hover::after,.divider.dragging::after{opacity:.8}
+    .divider.vertical{cursor:col-resize;grid-row:1/4}.divider.vertical[data-i="1"]{grid-column:2}.divider.vertical[data-i="2"]{grid-column:4}
+    .divider.horizontal{cursor:row-resize;grid-row:2;grid-column:1/6}
+    .pane{min-width:0;min-height:0;background:var(--panel);border:1px solid var(--border);display:flex;flex-direction:column;flex:1;position:relative;overflow:hidden}
+    .pane.selected{border-color:#79677c}
+    .pane-header{flex:none;min-height:38px;display:flex;align-items:center;gap:1px;background:var(--raised);border-bottom:1px solid var(--border);padding:0 5px}
+    .tab{display:inline-block;color:var(--muted);font-size:11px;white-space:nowrap;padding:9px 9px 7px;border-radius:0;border-bottom:2px solid transparent;max-width:105px;overflow:hidden;text-overflow:ellipsis}
+    .tab.active{color:var(--fg);border-bottom-color:var(--pink)}
+    .pane-header .fill{flex:1;min-width:3px}.pane-menu-btn{color:var(--muted);border:1px solid var(--border);background:#3d383f;font-weight:bold;padding:2px 6px}
+    .pane-body{min-width:0;min-height:0;overflow:auto;flex:1;scrollbar-color:#625b65 transparent;scrollbar-width:thin}
+    .pane-footer{flex:none;min-height:24px;padding:3px 10px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);background:#302d32;display:flex;justify-content:space-between;gap:8px}
+    .viewmenu{position:absolute;top:35px;right:6px;z-index:12;width:184px;max-height:70%;overflow:auto;padding:4px;background:#403a43;border:1px solid #756976;border-radius:5px;box-shadow:0 12px 30px #000a}
+    .viewmenu button{display:block;width:100%;text-align:left;padding:6px 9px;font-size:11px}
+    .viewmenu button:hover{background:#65546b}.viewmenu .menugroup{font-size:10px;color:var(--yellow);padding:8px 9px 3px}
+    .code{min-width:max-content;padding:8px 0 20px}.line{display:flex;white-space:pre;align-items:center;min-height:20px;padding-right:14px;cursor:default}
+    .line:hover{background:#3c363e}.line.current{background:var(--select)}
+    .gutter{display:inline-block;flex:none;width:25px;text-align:center;color:var(--pink);cursor:pointer;user-select:none;font-weight:bold}
+    .lineno{flex:none;display:inline-block;width:32px;text-align:right;margin-right:18px;color:#817c87;user-select:none}
+    .pointer{color:var(--yellow)}.kw{color:var(--pink)}.fn{color:var(--green)}.type{color:var(--cyan)}.str{color:var(--yellow)}.comment{color:#88828d}.lit{color:var(--purple)}.reg{color:var(--cyan)}.addr{color:var(--purple)}.value{color:var(--green)}.changed{color:var(--yellow)}.bad{color:var(--pink)}.muted{color:var(--muted)}
+    table{border-collapse:collapse;width:100%;font-size:11px;white-space:nowrap}
+    th{text-align:left;position:sticky;top:0;color:var(--muted);background:#353137;font-weight:500;padding:6px 10px;border-bottom:1px solid var(--border);z-index:1}
+    td{padding:5px 10px;border-bottom:1px solid #39353b}
+    tr:hover td{background:#3b373e}tr.row-active td{background:#4a3d4a}
+    .inspector-toolbar{display:flex;align-items:center;gap:7px;padding:6px 9px;border-bottom:1px solid var(--border);background:#302d32;font-size:10px;color:var(--muted)}
+    .inspector-toolbar input{background:#252227;color:var(--cyan);border:1px solid var(--border);border-radius:3px;padding:3px 6px;width:117px;min-width:0}
+    .inspector-toolbar select{background:#353236;color:var(--fg);border:1px solid var(--border);border-radius:3px;padding:3px;max-width:100px}
+    .inspector-toolbar button{border:1px solid var(--border);padding:3px 7px;background:var(--raised)}
+    .memdump{white-space:pre;font-size:11px;line-height:1.9;padding:10px 12px;min-width:max-content}
+    .log{white-space:pre-wrap;min-width:270px;padding:9px 12px;font-size:11px;line-height:1.7;word-break:break-word}
+    .consoleinput{flex:none;display:flex;gap:7px;padding:5px 9px;border-top:1px solid var(--border);align-items:center}
+    .consoleinput span{color:var(--green)}.consoleinput input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--fg);font:inherit;font-size:11px}
+    .breakpoint-dot{color:var(--pink);font-size:14px}
+    .splitnode{flex:1;min-width:0;min-height:0;display:flex;overflow:hidden}.splitnode.vertical{flex-direction:column}.splitnode.horizontal{flex-direction:row}
+    .splitnode>.pane,.splitnode>.splitnode{flex:1 1 0;min-width:0;min-height:0}
+    .internal-divider{background:var(--bg);flex:none;touch-action:none}.splitnode.horizontal>.internal-divider{width:6px;cursor:col-resize}.splitnode.vertical>.internal-divider{height:6px;cursor:row-resize}.internal-divider:hover{background:var(--pink)}
+    .footer{flex:none;min-height:27px;background:#29262a;border-top:1px solid var(--border);display:flex;align-items:center;gap:15px;padding:4px 12px;color:var(--muted);font-size:10px}
+    .footer .ok{color:var(--green)}.footer .right{margin-left:auto}.footer .tip{color:var(--cyan)}
+    .overlay{position:fixed;inset:0;background:#131015bd;display:grid;place-items:center;z-index:30;padding:18px}
+    .overlay[hidden]{display:none}.dialog{width:min(570px,100%);max-height:min(770px,90dvh);overflow:auto;background:#2d2a2e;border:1px solid #716575;border-radius:9px;padding:22px;box-shadow:0 20px 80px #000c}
+    .dialog-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.dialog h1{font-size:17px;color:var(--pink);margin:0 0 7px}.dialog p{color:var(--muted);font-size:12px;margin:0 0 15px}
+    .dialog .close{border:1px solid var(--border);padding:3px 9px}
+    .session-option{display:block;width:100%;padding:12px 13px;text-align:left;border:1px solid var(--border);background:var(--raised);margin:8px 0}
+    .session-option:hover{border-color:var(--cyan)}.session-option strong{font-size:12px}.session-option small{display:block;margin-top:3px;color:var(--muted)}
+    .session-option em{color:var(--cyan);font-style:normal}.field{display:grid;grid-template-columns:145px 1fr;align-items:center;gap:10px;margin:12px 0;font-size:11px}
+    .field label{color:var(--muted)}.field input,.field select{width:100%}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+    .dialog-actions button{padding:8px 12px;border:1px solid var(--border);background:var(--raised)}.dialog-actions .primary{background:#514052;color:var(--fg);border-color:var(--pink)}
+    .notice{font-size:11px;color:var(--orange);padding:10px;background:#403339;border:1px solid #6a4d58;border-radius:4px;margin-top:12px}
+    .minor{color:var(--muted);font-size:10px}.hide{display:none!important}
+    @media(max-width:1180px){.version{display:none}.topbar{gap:8px;padding:8px}.toolbar button{padding:4px 6px}.target{font-size:10px}}
+    @media(max-width:910px){.target,.sep.targetsep{display:none}.topbar{gap:5px}.toolbar .key{display:none}.brand{font-size:13px}.footer .tip{display:none}.tab{max-width:77px;padding-left:5px;padding-right:5px}}
+    @media(max-height:650px){.topbar{min-height:42px;padding-top:5px;padding-bottom:5px}.pane-header{min-height:29px}.tab{padding-top:5px;padding-bottom:4px}.demo-ribbon{padding-top:2px;padding-bottom:2px}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">◈ THE BUGGER</div><span class="version">v0.1.0 · design reference</span>
+      <div class="sep targetsep"></div><span class="target" id="targetLabel">STM32F446RE · Cortex-M4F</span>
+      <span class="runstate" id="runstate">● Paused</span><div class="sep"></div>
+      <div class="toolbar">
+        <button id="continue" title="Continue (F5)">▶ <span class="key">F5</span></button>
+        <button id="pause" title="Pause">Ⅱ</button>
+        <button id="over" title="Step over (F10)">↷ <span class="key">F10</span></button>
+        <button id="into" title="Step into (F11)">↳ <span class="key">F11</span></button>
+        <button id="out" title="Step out (Shift+F11)">↰ <span class="key">⇧F11</span></button>
+        <button id="breakpoint" title="Toggle breakpoint (F9)">● <span class="key">F9</span></button>
+        <button id="reset" title="Reset simulated session">⟲</button>
+      </div>
+      <div class="grow"></div><button class="headerbtn" id="sessionButton">⚙ Session</button>
+    </header>
+    <div class="demo-ribbon"><strong>● DEMO / VISUAL REFERENCE</strong><span>All source, registers, memory, events and stepping are simulated. This HTML is not connected to GDB or OpenOCD.</span></div>
+    <main class="workspace" id="workspace">
+      <section class="tile" data-cell="0"></section><div class="divider vertical" data-i="1"></div>
+      <section class="tile" data-cell="1"></section><div class="divider vertical" data-i="2"></div>
+      <section class="tile" data-cell="2"></section><div class="divider horizontal"></div>
+      <section class="tile" data-cell="3"></section><section class="tile" data-cell="4"></section><section class="tile" data-cell="5"></section>
+    </main>
+    <footer class="footer"><span class="ok" id="connectionLabel">● Simulated GDB session</span><span id="pcLabel">PC 0x0800042A</span><span id="threadLabel">Thread 1</span><span class="right tip">Mouse · draggable dividers · F5/F9/F10/F11</span><span>Monokai Pro · UI prototype</span></footer>
+  </div>
+  <div class="overlay" id="overlay" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle">
+      <div class="dialog-top"><h1 id="dialogTitle">◈ THE BUGGER</h1><button class="close" id="closeDialog" aria-label="Close">✕</button></div>
+      <div id="dialogContent"></div>
+    </div>
+  </div>
+<script>
+'use strict';
+// Standalone, dependency-free UI reference. No genuine debugger operations occur here.
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const viewNames=['Source','Symbols','Disassembly','Call Stack','Registers','Peripherals','Memory','Stack','Locals','Watches','Console','Breakpoints','Threads','Faults','RTOS','Auto','Live Watch','Terminal I/O','Profiling'];
+const defaults=[['Source','Symbols'],['Disassembly','Call Stack'],['Registers','Peripherals'],['Memory','Stack'],['Locals','Watches'],['Console','Breakpoints']];
+let nextId=1, activePane=null, stop=0, running=false, target='STM32F446RE · Cortex-M4F', logs=[], breakpoints=new Set([35]), watchExprs=['counter','gpio_state'];
+let roots=defaults.map(pair=>({kind:'pane',id:nextId++,tabs:pair,active:pair[0]}));
+const steppingLines=[30,31,32,34,35,36,30];
+const source=[
+  ['#include <stdint.h>','<span class="kw">#include</span> <span class="str">&lt;stdint.h&gt;</span>'],
+  ['#include "stm32f4xx.h"','<span class="kw">#include</span> <span class="str">"stm32f4xx.h"</span>'],
+  ['', ''],
+  ['#define LED_PIN 5U','<span class="kw">#define</span> LED_PIN <span class="lit">5U</span>'],
+  ['', ''],
+  ['static volatile uint32_t counter = 0;','<span class="kw">static volatile</span> <span class="type">uint32_t</span> counter = <span class="lit">0</span>;'],
+  ['', ''],
+  ['static void gpio_init(void) {','<span class="kw">static void</span> <span class="fn">gpio_init</span>(<span class="kw">void</span>) {'],
+  ['    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;','    RCC-&gt;AHB1ENR |= RCC_AHB1ENR_GPIOAEN;'],
+  ['    GPIOA->MODER &= ~(3U << (LED_PIN * 2));','    GPIOA-&gt;MODER &amp;= ~(<span class="lit">3U</span> &lt;&lt; (LED_PIN * <span class="lit">2</span>));'],
+  ['    GPIOA->MODER |=  (1U << (LED_PIN * 2));','    GPIOA-&gt;MODER |=  (<span class="lit">1U</span> &lt;&lt; (LED_PIN * <span class="lit">2</span>));'],
+  ['}', '}'],
+  ['', ''],
+  ['static void delay(volatile uint32_t n) {','<span class="kw">static void</span> <span class="fn">delay</span>(<span class="kw">volatile</span> <span class="type">uint32_t</span> n) {'],
+  ['    while (n--) { __NOP(); }','    <span class="kw">while</span> (n--) { <span class="fn">__NOP</span>(); }'],
+  ['}', '}'],
+  ['', ''],
+  ['int main(void) {','<span class="type">int</span> <span class="fn">main</span>(<span class="kw">void</span>) {'],
+  ['    gpio_init();','    <span class="fn">gpio_init</span>();'],
+  ['', ''],
+  ['    // Blink the onboard LED','    <span class="comment">// Blink the onboard LED</span>'],
+  ['    for (;;) {','    <span class="kw">for</span> (;;) {'],
+  ['        GPIOA->ODR ^= (1U << LED_PIN);','        GPIOA-&gt;ODR ^= (<span class="lit">1U</span> &lt;&lt; LED_PIN);'],
+  ['        counter++;','        counter++;'],
+  ['        delay(200000);','        <span class="fn">delay</span>(<span class="lit">200000</span>);'],
+  ['    }','    }'],
+  ['}', '}']
+];
+// The visible source snippet starts at line 13 in this invented demo file.
+const baseLine=13;
+const actualLine=()=>steppingLines[stop%steppingLines.length];
+const pc=()=>0x0800042a+stop*2;
+const hex=(n,pad=8)=>'0x'+(n>>>0).toString(16).toUpperCase().padStart(pad,'0');
+const addr=(n,pad=8)=>(n>>>0).toString(16).toUpperCase().padStart(pad,'0');
+const defaultLog=()=>[
+  '<span class="muted">[09:41:02]</span> <span class="value">Session started</span> · visual demonstration',
+  '<span class="muted">[09:41:02]</span> openocd -f board/st_nucleo_f4.cfg',
+  '<span class="muted">[09:41:03]</span> Listening on port 3333 for gdb connections',
+  '<span class="muted">[09:41:03]</span> <span class="value">Connected</span> to STM32F446RE (simulated)',
+  '<span class="muted">[09:41:03]</span> Loaded symbols: build/blinky.elf',
+  '<span class="muted">[09:41:04]</span> <span class="changed">Stopped at breakpoint</span> · main.c:30'
+];
+logs=defaultLog();
+const time=()=>new Date().toLocaleTimeString('en-GB',{hour12:false});
+function addLog(msg){logs.push('<span class="muted">['+time()+']</span> '+msg);if(logs.length>100)logs.shift();}
+function createPane(tabs){return {kind:'pane',id:nextId++,tabs:[...tabs],active:tabs[0]};}
+function eachPane(node,fn){if(node.kind==='pane')fn(node);else{eachPane(node.a,fn);eachPane(node.b,fn);}}
+function findPane(id){let found=null;roots.forEach(r=>eachPane(r,p=>{if(p.id===id)found=p;}));return found;}
+function updateHeader(){const linux=target.includes('Linux');$('#targetLabel').textContent=target;$('#runstate').textContent=running?'● Running':'● Paused';$('#runstate').style.color=running?'var(--orange)':'var(--green)';$('#pcLabel').textContent='PC '+hex(linux?0x401130+stop*3:pc());$('#connectionLabel').textContent='● Simulated '+(linux?'native GDB':'GDB / OpenOCD')+' session';$('#connectionLabel').style.color='var(--green)';}
+function currentBreakpoints(){return [...breakpoints].sort((a,b)=>a-b);}
+function viewHTML(view,pane){
+ if(view==='Source'){
+   const line=actualLine();
+   let out='<div class="code">';source.forEach(([raw,markup],i)=>{const n=baseLine+i;const isPC=n===line;out+='<div class="line'+(isPC?' current':'')+'" data-source-line="'+n+'"><span class="gutter" data-bp="'+n+'" title="Toggle breakpoint">'+(breakpoints.has(n)?'●':isPC?'➜':' ')+'</span><span class="lineno">'+n+'</span><span>'+(markup||' ')+'</span></div>';});
+   return out+'</div>';
+ }
+ if(view==='Disassembly'){
+   const names=['push {r4,lr}','ldr r3, [pc, #20]','ldr r2, [r3, #0]','eors r2, r2, #0x20','str r2, [r3, #0]','ldr r0, [pc, #12]','bl delay','adds r4, r4, #1','b.n 0x0800042A'];
+   return '<table><thead><tr><th></th><th>Address</th><th>Bytes</th><th>Instruction</th></tr></thead><tbody>'+names.map((name,i)=>'<tr class="'+(i===stop%names.length?'row-active':'')+'"><td class="'+(i===stop%names.length?'changed':'')+'">'+(i===stop%names.length?'➜':'')+'</td><td class="addr">'+hex(0x08000428+i*2)+'</td><td class="muted">'+['B5 10','4B 05','68 1A','F0 82','60 1A','48 03','F0 00','34 01','E7 F4'][i]+'</td><td><span class="fn">'+name.split(' ')[0]+'</span> '+esc(name.slice(name.indexOf(' ')+1))+'</td></tr>').join('')+'</tbody></table>';
+ }
+ if(view==='Registers'){
+   const regs=[['r0',hex(0x20000000+stop*4)],['r1',hex(0x00000020)],['r2',hex(0x00000020+(stop%2)*32)],['r3',hex(0x40020000)],['r4',hex(stop)],['r5',hex(0)],['r6',hex(0)],['r7',hex(0x2001fff0)],['r8',hex(0)],['r9',hex(0)],['r10',hex(0)],['r11',hex(0)],['r12',hex(0)],['sp',hex(0x2001fff0)],['lr',hex(0x08000517)],['pc',hex(pc())],['xPSR',hex(0x61000000)]];
+   return '<div class="inspector-toolbar">Core registers <span class="grow"></span> Format <select data-format="reg"><option>Hex</option><option>Decimal</option></select></div><table><thead><tr><th>Register</th><th>Value</th><th>Changed</th></tr></thead><tbody>'+regs.map(([n,v])=>'<tr><td class="reg">'+n+'</td><td class="'+(stop>0&&['r0','r2','r4','pc'].includes(n)?'changed':'value')+'">'+v+'</td><td class="changed">'+(stop>0&&['r0','r2','r4','pc'].includes(n)?'●':'')+'</td></tr>').join('')+'</tbody></table>';
+ }
+ if(view==='Memory'||view==='Stack'){
+   const base=view==='Stack'?0x2001ffb0:0x20000000;
+   let rows='';for(let i=0;i<19;i++){
+     const bytes=Array.from({length:16},(_,j)=>{const k=i*16+j;return (k%17===0?((stop*3+0x20)%256):((k*13+37+stop)%256));});
+     rows+='<div><span class="addr">'+addr(base+i*16)+'</span>  '+bytes.map((b,j)=>'<span class="'+(j===0&&stop>0?'changed':'')+'">'+b.toString(16).toUpperCase().padStart(2,'0')+'</span>'+((j%4===3)?'  ':' ')).join('')+' <span class="comment">'+bytes.map(b=>b>31&&b<127?String.fromCharCode(b):'.').join('')+'</span></div>';
+   }
+   return '<div class="inspector-toolbar">Address <input aria-label="Memory address" value="'+hex(base)+'" data-memory-address> <button data-memory-go>Go</button><span class="grow"></span>Width <select><option>8-bit</option><option>16-bit</option><option>32-bit</option></select></div><div class="memdump">'+rows+'</div>';
+ }
+ if(view==='Locals'||view==='Auto'){
+   const variables=[['counter','uint32_t',String(stop+7)],['gpio_state','uint32_t',hex(stop%2?0x20:0)],['LED_PIN','uint32_t','5'],['i','int',String(stop%7)]];
+   return '<table><thead><tr><th>Name</th><th>Type</th><th>Value</th></tr></thead><tbody>'+variables.map(([n,t,v])=>'<tr><td class="reg">'+esc(n)+'</td><td class="muted">'+esc(t)+'</td><td class="'+(stop&&['counter','gpio_state'].includes(n)?'changed':'value')+'">'+esc(v)+'</td></tr>').join('')+'</tbody></table>';
+ }
+ if(view==='Watches'){
+   return '<div class="inspector-toolbar"><button data-watch-add>+ Watch</button><span class="grow"></span>Values refresh on step</div><table><thead><tr><th>Expression</th><th>Value</th></tr></thead><tbody>'+watchExprs.map((e,i)=>'<tr><td class="reg">'+esc(e)+'</td><td class="value">'+(e==='counter'?stop+7:e==='gpio_state'?hex(stop%2?32:0):i?'&lt;not evaluated&gt;':'&lt;not evaluated&gt;')+'</td></tr>').join('')+'</tbody></table>';
+ }
+ if(view==='Console'){
+   return '<div class="log">'+logs.join('\n')+'</div>';
+ }
+ if(view==='Breakpoints'){
+   return '<div class="inspector-toolbar"><span>Enabled breakpoints</span><span class="grow"></span><button data-clear-bps>Clear all</button></div><table><thead><tr><th>●</th><th>Location</th><th>Enabled</th></tr></thead><tbody>'+currentBreakpoints().map(n=>'<tr><td class="breakpoint-dot">●</td><td>main.c:'+n+'</td><td class="value">yes</td></tr>').join('')+'</tbody></table>';
+ }
+ if(view==='Call Stack'){
+   const frames=[['0','main','main.c:'+actualLine()],['1','Reset_Handler','startup_stm32f446retx.s:63']];
+   return '<table><thead><tr><th>#</th><th>Function</th><th>Location</th></tr></thead><tbody>'+frames.map(([i,n,where])=>'<tr class="'+(i==='0'?'row-active':'')+'"><td>'+i+'</td><td class="fn">'+n+'</td><td class="addr">'+where+'</td></tr>').join('')+'</tbody></table>';
+ }
+ if(view==='Symbols'){
+   return '<table><thead><tr><th>Symbol</th><th>Address</th><th>Kind</th></tr></thead><tbody>'+[['main','08000420','FUNC'],['gpio_init','080003B4','FUNC'],['delay','080003FA','FUNC'],['counter','20000000','OBJECT']].map(([n,a,t])=>'<tr><td class="fn">'+n+'</td><td class="addr">0x'+a+'</td><td class="muted">'+t+'</td></tr>').join('')+'</tbody></table>';
+ }
+ if(view==='Threads')return '<table><thead><tr><th>ID</th><th>State</th><th>Location</th></tr></thead><tbody><tr><td class="reg">1</td><td class="value">stopped</td><td>main.c:'+actualLine()+'</td></tr></tbody></table>';
+ return '<div class="log"><span class="changed">'+esc(view)+'</span>\n\nThis view is a future design placeholder.\nNot implemented in the v0.1.0 visual reference.</div>';
+}
+function footFor(view){return ({Source:'main.c · UTF-8 · C',Disassembly:'Thumb-2 · simulated',Registers:'Cortex-M4F · core',Memory:'20000000 · HEX/ASCII',Stack:'2001FFB0 · stack',Locals:'Frame 0 · main',Console:'GDB/MI · OpenOCD logs',Watches:'Expressions · simulated'})[view]||view+' · preview';}
+function renderNode(node){
+ if(node.kind==='split'){
+   const el=document.createElement('div');el.className='splitnode '+node.dir;
+   const a=renderNode(node.a),b=renderNode(node.b),d=document.createElement('div');d.className='internal-divider';d.title='Drag to resize';
+   a.style.flex=node.ratio+' 1 0';b.style.flex=(100-node.ratio)+' 1 0';el.append(a,d,b);
+   d.addEventListener('pointerdown',e=>{
+     e.preventDefault();d.setPointerCapture(e.pointerId);
+     const rect=el.getBoundingClientRect(),size=node.dir==='horizontal'?rect.width:rect.height;
+     const start=node.dir==='horizontal'?e.clientX:e.clientY,initial=node.ratio;
+     function move(ev){const now=node.dir==='horizontal'?ev.clientX:ev.clientY;node.ratio=Math.max(15,Math.min(85,initial+(now-start)/size*100));a.style.flex=node.ratio+' 1 0';b.style.flex=(100-node.ratio)+' 1 0';}
+     function end(){d.removeEventListener('pointermove',move);d.removeEventListener('pointerup',end);d.removeEventListener('pointercancel',end);}
+     d.addEventListener('pointermove',move);d.addEventListener('pointerup',end);d.addEventListener('pointercancel',end);
+   });return el;
+ }
+ const el=document.createElement('article');el.className='pane'+(activePane===node.id?' selected':'');el.dataset.paneId=node.id;
+ const header=document.createElement('div');header.className='pane-header';
+ node.tabs.forEach(t=>{const b=document.createElement('button');b.className='tab'+(node.active===t?' active':'');b.textContent=t;b.title='Show '+t;b.addEventListener('click',()=>{node.active=t;activePane=node.id;render();});header.append(b);});
+ const filler=document.createElement('div');filler.className='fill';header.append(filler);
+ const menu=document.createElement('button');menu.className='pane-menu-btn';menu.textContent='⋯';menu.title='Change view / Split pane';menu.setAttribute('aria-label','Pane actions');
+ menu.addEventListener('click',event=>{event.stopPropagation();el.querySelector('.viewmenu')?.remove();const popup=document.createElement('div');popup.className='viewmenu';const heading=document.createElement('div');heading.className='menugroup';heading.textContent='SHOW VIEW';popup.append(heading);
+ ['Source','Disassembly','Registers','Memory','Locals','Console','Call Stack','Watches','Breakpoints','Symbols','Stack','Threads','Peripherals','Faults','RTOS'].forEach(name=>{const btn=document.createElement('button');btn.textContent=name;btn.onclick=()=>{if(!node.tabs.includes(name))node.tabs.push(name);node.active=name;activePane=node.id;render();};popup.append(btn);});
+ const actions=document.createElement('div');actions.className='menugroup';actions.textContent='PANE ACTIONS';popup.append(actions);
+ [['Split right',()=>splitPane(node.id,'horizontal')],['Split below',()=>splitPane(node.id,'vertical')],['Close selected tab',()=>closeTab(node.id)],['Close split pane',()=>closePane(node.id)]].forEach(([label,fn])=>{const b=document.createElement('button');b.textContent=label;b.onclick=fn;popup.append(b);});el.append(popup);});header.append(menu);el.append(header);
+ const body=document.createElement('div');body.className='pane-body';body.innerHTML=viewHTML(node.active,node);el.append(body);
+ if(node.active==='Console'){
+   const entry=document.createElement('div');entry.className='consoleinput';entry.innerHTML='<span>(gdb)</span><input aria-label="Demo console command" placeholder="Demo input — enter a note" autocomplete="off">';
+   entry.querySelector('input').addEventListener('keydown',e=>{if(e.key==='Enter'){addLog('<span class="changed">(demo)</span> '+esc(e.target.value)+'  <span class="comment">— not executed</span>');e.target.value='';render();}});el.append(entry);
+ }
+ const footer=document.createElement('div');footer.className='pane-footer';footer.innerHTML='<span>'+esc(footFor(node.active))+'</span><span>DEMO</span>';el.append(footer);
+ body.addEventListener('click',e=>{
+   activePane=node.id;
+   const gutter=e.target.closest('[data-bp]');if(gutter){const n=Number(gutter.dataset.bp);breakpoints.has(n)?breakpoints.delete(n):breakpoints.add(n);addLog('Breakpoint '+(breakpoints.has(n)?'added':'removed')+' at main.c:'+n);render();return;}
+   if(e.target.closest('[data-clear-bps]')){breakpoints.clear();render();return;}
+   if(e.target.closest('[data-watch-add]')){const input=prompt('Watch expression (demo):','counter');if(input?.trim()){watchExprs.push(input.trim());render();}return;}
+   if(e.target.closest('[data-memory-go]')){const value=body.querySelector('[data-memory-address]')?.value;addLog('Memory view address requested: '+esc(value)+' (demo)');render();return;}
+   document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('selected',Number(p.dataset.paneId)===activePane));
+ });
+ return el;
+}
+function render(){document.querySelectorAll('.tile').forEach((tile,i)=>{const scrollPositions=[...tile.querySelectorAll('.pane-body')].map(b=>b.scrollTop);tile.replaceChildren(renderNode(roots[i]));const bodies=tile.querySelectorAll('.pane-body');bodies.forEach((body,j)=>{if(scrollPositions[j])body.scrollTop=scrollPositions[j];});});updateHeader();}
+function replaceTree(node,paneId,replacement){if(node.kind==='pane')return node.id===paneId?replacement:node;node.a=replaceTree(node.a,paneId,replacement);node.b=replaceTree(node.b,paneId,replacement);return node;}
+function splitPane(id,dir){const pane=findPane(id);if(!pane)return;const sibling=createPane(['Disassembly']);roots=roots.map(root=>replaceTree(root,id,{kind:'split',dir,ratio:50,a:pane,b:sibling}));activePane=sibling.id;render();addLog('Workspace pane split '+(dir==='horizontal'?'right':'below')+' (demo)');}
+function closeTab(id){const pane=findPane(id);if(!pane||pane.tabs.length<=1){addLog('At least one tab per pane is required');render();return;}pane.tabs=pane.tabs.filter(t=>t!==pane.active);pane.active=pane.tabs[0];render();}
+function collapseNode(node,id){if(node.kind==='pane')return node;if(node.a.kind==='pane'&&node.a.id===id)return node.b;if(node.b.kind==='pane'&&node.b.id===id)return node.a;node.a=collapseNode(node.a,id);node.b=collapseNode(node.b,id);return node;}
+function closePane(id){let isNested=false;const nested=(n)=>{if(n.kind==='split'){if((n.a.kind==='pane'&&n.a.id===id)||(n.b.kind==='pane'&&n.b.id===id))isNested=true;nested(n.a);nested(n.b);}};roots.forEach(nested);if(!isNested){addLog('Default workspace panes cannot be closed; use tabs or split a pane');render();return;}roots=roots.map(r=>collapseNode(r,id));activePane=null;render();}
+function showDialog(html,title='◈ THE BUGGER'){$('#dialogTitle').textContent=title;$('#dialogContent').innerHTML=html;$('#overlay').hidden=false;}
+function dismissDialog(){$('#overlay').hidden=true;}
+function startMenu(){showDialog('<p>Start a debugging session</p>'+[
+   ['native','▣ Linux application','Launch or attach to a native x86-64 process'],
+   ['embedded','▤ Embedded target · OpenOCD','Choose a board, or configure adapter + target manually'],
+   ['remote','⇄ Connect to GDB server','Use an existing remote debugging endpoint']
+ ].map(([id,label,desc])=>'<button class="session-option" data-session="'+id+'"><strong>'+label+'</strong><small>'+desc+'</small></button>').join('')+'<p class="minor">Recent sessions and saved profiles will appear here in the real application.</p><div class="notice">Visual preview only. Starting a session changes the simulated target label; no local programs or hardware are accessed.</div>');
+ document.querySelectorAll('[data-session]').forEach(b=>b.onclick=()=>openSessionConfig(b.dataset.session));}
+function openSessionConfig(type){
+ let fields='';
+ if(type==='native')fields='<div class="field"><label>Mode</label><select id="mode"><option>Launch executable</option><option>Attach to PID</option></select></div><div class="field"><label>Executable / PID</label><input id="filename" value="./build/debug-fixture" spellcheck="false"></div><div class="field"><label>Arguments</label><input placeholder="Optional command-line arguments"></div><div class="field"><label>Working directory</label><input value="." spellcheck="false"></div><div class="field"><label>GDB binary</label><input value="gdb" spellcheck="false"></div>';
+ if(type==='embedded')fields='<div class="field"><label>OpenOCD setup</label><select id="openocdMode"><option value="board">Board script</option><option value="advanced">Adapter + target (advanced)</option></select></div><div id="scriptFields"></div><div class="field"><label>Symbols (ELF)</label><input value="build/blinky.elf" spellcheck="false"></div><div class="field"><label>GDB binary</label><input value="arm-none-eabi-gdb" spellcheck="false"></div><div class="field"><label>GDB endpoint</label><input value="localhost:3333" spellcheck="false"></div>';
+ if(type==='remote')fields='<div class="field"><label>GDB endpoint</label><input id="endpoint" value="localhost:3333" spellcheck="false"></div><div class="field"><label>Symbols (ELF)</label><input value="build/application.elf" spellcheck="false"></div><div class="field"><label>GDB binary</label><input value="gdb" spellcheck="false"></div>';
+ showDialog('<p>Configure '+({native:'a native Linux session',embedded:'an embedded OpenOCD session',remote:'a remote GDB connection'}[type])+'</p>'+fields+'<div class="notice">Demo wizard: illustrates the proposed user experience. No commands will be executed.</div><div class="dialog-actions"><button id="backMenu">Back</button><button class="primary" id="demoLaunch">Preview workspace →</button></div>','Configure session');
+ $('#backMenu').onclick=startMenu;
+ if(type==='embedded'){
+   const drawFields=()=>{$('#scriptFields').innerHTML=$('#openocdMode').value==='board'?'<div class="field"><label>Board script</label><select><option>board/st_nucleo_f4.cfg</option><option>Choose installed board script…</option></select></div><p class="minor">Board scripts normally include the required adapter and target scripts.</p>':'<div class="field"><label>Adapter script</label><input value="interface/stlink.cfg"></div><div class="field"><label>Target script</label><input value="target/stm32f4x.cfg"></div><p class="minor">Advanced setup is for targets without a suitable board script. Do not combine these with a board script automatically.</p>';};
+   $('#openocdMode').onchange=drawFields;drawFields();
+ }
+ $('#demoLaunch').onclick=()=>{
+   if(type==='native')target='Linux x86-64 · native';else if(type==='embedded')target='STM32F446RE · Cortex-M4F';else target='Remote GDB · '+($('#endpoint')?.value||'localhost:3333');
+   stop=0;running=false;addLog('<span class="value">Session preview selected</span>: '+esc(target));dismissDialog();render();
+ };
+}
+$('#sessionButton').onclick=startMenu;$('#closeDialog').onclick=dismissDialog;$('#overlay').addEventListener('click',e=>{if(e.target===$('#overlay'))dismissDialog();});
+function step(kind){if(running)running=false;stop++;addLog('<span class="changed">'+kind+'</span> · halted at main.c:'+actualLine()+' · PC '+hex(pc()));render();}
+$('#over').onclick=()=>step('Step over');$('#into').onclick=()=>step('Step into');$('#out').onclick=()=>step('Step out');
+$('#continue').onclick=()=>{running=true;addLog('Continue · running (simulated)');render();};
+$('#pause').onclick=()=>{running=false;addLog('Interrupted · paused (simulated)');render();};
+$('#reset').onclick=()=>{stop=0;running=false;addLog('Reset demo execution state');render();};
+$('#breakpoint').onclick=()=>{const n=actualLine();breakpoints.has(n)?breakpoints.delete(n):breakpoints.add(n);addLog('Breakpoint '+(breakpoints.has(n)?'added':'removed')+' at main.c:'+n);render();};
+document.addEventListener('keydown',e=>{
+ if(!$('#overlay').hidden){if(e.key==='Escape')dismissDialog();return;}
+ if(e.target instanceof HTMLInputElement||e.target instanceof HTMLSelectElement)return;
+ const map={F5:'continue',F9:'breakpoint',F10:'over',F11:'into'};
+ const btn=e.key==='F11'&&e.shiftKey?'out':map[e.key];if(btn){e.preventDefault();$('#'+btn).click();}
+ if(e.key==='Escape')document.querySelectorAll('.viewmenu').forEach(m=>m.remove());
+});
+document.addEventListener('click',e=>{if(!e.target.closest('.pane-menu-btn,.viewmenu'))document.querySelectorAll('.viewmenu').forEach(m=>m.remove());});
+const workspace=$('#workspace');
+function setGridFromDrag(which,ratio){
+ const r=Math.max(15,Math.min(70,ratio));
+ if(which==='row')workspace.style.setProperty('--toprow',r+'%');
+ else if(which===1)workspace.style.setProperty('--col1',r+'%');
+ else workspace.style.setProperty('--col2',r+'%');
+}
+// Note: Grid percentage widths include the two 6px gutters. Ratios are relative to the available width.
+function ratioToCSSCols(a,b){
+ const available=workspace.clientWidth-16-12;
+ const left=Math.max(.16,Math.min(.65,a));const middle=Math.max(.15,Math.min(.65,b));
+ const last=1-left-middle;if(last<.16)return;
+ workspace.style.gridTemplateColumns=`minmax(0,${(left*available).toFixed(1)}px) 6px minmax(0,${(middle*available).toFixed(1)}px) 6px minmax(0,1fr)`;
+}
+function ratioToCSSRows(a){
+ const available=workspace.clientHeight-16-6;
+ workspace.style.gridTemplateRows=`minmax(0,${(Math.max(.20,Math.min(.80,a))*available).toFixed(1)}px) 6px minmax(0,1fr)`;
+}
+let colRatios=[.36,.34],rowRatio=.56;
+document.querySelectorAll('.divider').forEach(d=>d.addEventListener('pointerdown',e=>{
+ e.preventDefault();d.setPointerCapture(e.pointerId);d.classList.add('dragging');
+ const horizontal=d.classList.contains('horizontal');const index=Number(d.dataset.i);
+ const start=horizontal?e.clientY:e.clientX;const origin=horizontal?rowRatio:colRatios[index-1];
+ const available=horizontal?workspace.clientHeight-22:workspace.clientWidth-28;
+ const onMove=event=>{const now=horizontal?event.clientY:event.clientX;const val=origin+(now-start)/available;
+   if(horizontal){rowRatio=Math.max(.2,Math.min(.8,val));ratioToCSSRows(rowRatio);}
+   else {const other=colRatios[2-index];const capped=Math.max(.16,Math.min(.84-other-.16,val));colRatios[index-1]=capped;ratioToCSSCols(...colRatios);}
+ };
+ const done=()=>{d.classList.remove('dragging');d.removeEventListener('pointermove',onMove);d.removeEventListener('pointerup',done);d.removeEventListener('pointercancel',done);};
+ d.addEventListener('pointermove',onMove);d.addEventListener('pointerup',done);d.addEventListener('pointercancel',done);
+}));
+window.addEventListener('resize',()=>{ratioToCSSCols(...colRatios);ratioToCSSRows(rowRatio);});
+render();ratioToCSSCols(...colRatios);ratioToCSSRows(rowRatio);
+</script>
+</body></html>

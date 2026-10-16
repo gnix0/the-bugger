@@ -7,7 +7,7 @@ States: `planned` → `implemented` → `automated-verified` → `awaiting-user`
 
 | Milestone | Deliverable | State | Commit SHA |
 |---|---|---|---|
-| M00 | Repository foundation | awaiting-user | — |
+| M00 | Repository foundation | accepted | `0f5d05b` |
 | M01 | Launcher and DEMO workspace | planned | — |
 | M02 | Tiled layout engine | planned | — |
 | M03 | MI and owned-process lifecycle | planned | — |
@@ -23,9 +23,10 @@ Added the CLI, C17 Make build, seven integration checks, sanitizer/static-analys
 targets and foundation documentation. The existing AGENTS.md is preserved.
 License and contributor/security guides remain deferred to release finalization.
 
-State history: `implemented` → `automated-verified` → `awaiting-user`.
-Manual acceptance: pending. **AWAITING USER ACCEPTANCE**.
-No milestone commit SHA is recorded because none exists yet.
+State history: `implemented` → `automated-verified` → `awaiting-user` → `accepted`.
+Manual acceptance: the owner reported "M00 gate tested and approved."
+M00 commit `0f5d05b` was reliably observed in local Git history. Push confirmation
+has not been received.
 
 Automated verification on 2026-10-16:
 
@@ -57,6 +58,21 @@ OpenOCD, ARM GCC, gdbserver and tmux installed. Both GDBs answered MI3 feature
 queries. OpenOCD reports a development/dirty build. USB enumeration failed;
 NUCLEO-F446RE presence/access and all target behavior are **UNVERIFIED**.
 
-The next action after automated checks is owner manual validation using
-`docs/testing.md`. After acceptance, propose a Conventional Commit message and
-wait for the owner to commit/push and explicitly authorize M01.
+A Conventional Commit message was supplied after acceptance, and the resulting
+M00 commit was observed locally. Owner push confirmation and authorization to
+advance have not been received.
+
+## UI specification correction — pending plan approval
+
+Re-read the updated AGENTS.md and the full approved HTML, now located at
+`docs/design/prototype.html` after an owner-authorized move from the root.
+The move preserved its contents; the ignore rule now permits this design file.
+Recorded the revised plan in `docs/plan.md` and aligned architecture/testing
+notes. Removed predefined-layout work from the plan: one six-pane default,
+resizable tiled panes, tabs/view switching and dynamic splits remain. Optional
+restoration refers only to the user's own geometry. All milestone boundaries,
+backend requirements and v0.1.0 release gates remain intact.
+
+This is a documentation correction only. Existing M00 automated evidence is
+unchanged; no new executable tests are claimed. Await revised-plan approval,
+then remain within M00 and the owner-managed acceptance/commit workflow.
