@@ -20,6 +20,7 @@ struct TbNative {
     TbGdb *gdb;
     TbContext *context;
     TbCode *code;
+    TbBreakpoints *breakpoints;
     TbNativeState state;
     bool attach, configured, waiting, completed, success, want_close, failed;
     bool alive, launch_requested, owned, recovery_sent;
@@ -31,6 +32,7 @@ struct TbNative {
     TbNativeWords arguments, environment;
     char message[TB_NATIVE_LOG_WIDTH], reply_error[TB_NATIVE_LOG_WIDTH];
     char code_message[192];
+    char break_message[192];
     char logs[TB_NATIVE_LOG_LINES][TB_NATIVE_LOG_WIDTH];
     size_t first, count;
     char partial[5][TB_NATIVE_LOG_WIDTH - 24];
@@ -152,6 +154,7 @@ static void emit(void *context, const TbGdbEvent *event)
 {
     TbNative *native = context;
     ++native->revision;
+    if (tb_break_event(native->breakpoints, event)) { return; }
     if (tb_code_event(native->code, event)) { return; }
     if (tb_context_event(native->context, event)) { return; }
     if (event->kind == TB_GDB_DIAGNOSTIC) {
@@ -225,6 +228,11 @@ TbNative *tb_native_create(void)
     if (native->code == NULL) {
         tb_context_destroy(native->context); (void)tb_gdb_destroy(native->gdb); free(native); return NULL;
     }
+    native->breakpoints = tb_break_create(native->gdb);
+    if (!native->breakpoints) {
+        tb_code_destroy(native->code); tb_context_destroy(native->context);
+        (void)tb_gdb_destroy(native->gdb); free(native); return NULL;
+    }
     return native;
 }
 
@@ -240,7 +248,7 @@ bool tb_native_destroy(TbNative *native)
     if (native == NULL) { return true; }
     if (tb_native_active(native)) { return false; }
     if (!tb_gdb_destroy(native->gdb)) { return false; }
-    tb_code_destroy(native->code); tb_context_destroy(native->context); close_fds(native); free(native); return true;
+    tb_break_destroy(native->breakpoints); tb_code_destroy(native->code); tb_context_destroy(native->context); close_fds(native); free(native); return true;
 }
 
 static bool elf(const char *path, bool executable)
@@ -313,8 +321,10 @@ bool tb_native_start(TbNative *native, const TbNativeConfig *config)
     native->alive = native->owned = native->launch_requested = native->recovery_sent = false;
     native->stage = 0; native->job = JOB_NONE;
     native->code_message[0] = '\0';
+    native->break_message[0] = '\0';
     tb_context_reset(native->context);
     tb_code_reset(native->code);
+    tb_break_reset(native->breakpoints);
     if (!native->attach) {
         native->master = posix_openpt(O_RDWR | O_NOCTTY | O_CLOEXEC | O_NONBLOCK);
         bool ready = native->master >= 0 && grantpt(native->master) == 0 && unlockpt(native->master) == 0 &&
@@ -351,7 +361,7 @@ static bool issue(TbNative *native, Job job, const char *operation, const char *
 
 bool tb_native_continue(TbNative *native)
 {
-    if (native->waiting || native->want_close || !native->configured) { return false; }
+    if (native->waiting || native->want_close || !native->configured || tb_break_busy(native->breakpoints)) { return false; }
     tb_context_refresh(native->context);
     if (native->state == TB_NATIVE_READY) {
         native->launch_requested = !native->attach;
@@ -369,7 +379,7 @@ bool tb_native_pause(TbNative *native)
 bool tb_native_step(TbNative *native, TbStep step, bool instruction)
 {
     const TbContextSnapshot *context = tb_context_snapshot(native->context);
-    if (native->waiting || native->want_close || !native->configured ||
+    if (native->waiting || native->want_close || !native->configured || tb_break_busy(native->breakpoints) ||
         native->state != TB_NATIVE_STOPPED || context->stale || !context->ready ||
         !*context->selected_thread || step < TB_STEP_OVER || step > TB_STEP_OUT) {
         diagnostic(native, "Stepping needs a fresh stopped context. Use Continue/Pause or Console start first."); return false;
@@ -384,6 +394,7 @@ bool tb_native_step(TbNative *native, TbStep step, bool instruction)
 
 bool tb_native_console(TbNative *native, const char *command)
 {
+    if (tb_break_busy(native->breakpoints)) { diagnostic(native, "Wait for the pending breakpoint operation."); return false; }
     if (native->waiting || native->want_close || !native->configured) {
         diagnostic(native, "Wait for the current operation and a ready session before sending a command."); return false;
     }
@@ -534,6 +545,7 @@ void tb_native_pump(TbNative *native, int wait_ms)
         if (tb_gdb_now_ms() - native->partial_time[i] >= 100 || native->want_close) { partial_flush(native, i); }
     }
     process_reply(native);
+    tb_code_native(native->code, native->target_pid, native->executable);
     TbGdbState gdb = tb_gdb_state(native->gdb);
     if (gdb == TB_GDB_DISCONNECTED) {
         if (native->owned && native->pidfd >= 0) {
@@ -577,11 +589,16 @@ void tb_native_pump(TbNative *native, int wait_ms)
         } else { release_target(native); }
     } else if (!native->configured && !native->waiting && gdb == TB_GDB_READY) { setup(native); }
     else if (native->configured && !native->waiting) {
+        tb_break_pump(native->breakpoints);
         tb_context_pump(native->context); tb_code_pump(native->code);
     }
     if (strcmp(native->code_message, tb_code_message(native->code)) != 0) {
         (void)snprintf(native->code_message, sizeof native->code_message, "%s", tb_code_message(native->code));
         diagnostic(native, native->code_message);
+    }
+    if (strcmp(native->break_message, tb_break_message(native->breakpoints)) != 0) {
+        (void)snprintf(native->break_message, sizeof native->break_message, "%s", tb_break_message(native->breakpoints));
+        if (*native->break_message) { diagnostic(native, native->break_message); }
     }
 }
 
@@ -600,7 +617,7 @@ const char *tb_native_state_name(const TbNative *native)
     return names[native->state];
 }
 const char *tb_native_message(const TbNative *native) { return native->message; }
-uint64_t tb_native_revision(const TbNative *native) { return native->revision + tb_context_revision(native->context) + tb_code_revision(native->code); }
+uint64_t tb_native_revision(const TbNative *native) { return native->revision + tb_context_revision(native->context) + tb_code_revision(native->code) + tb_break_revision(native->breakpoints); }
 size_t tb_native_log_count(const TbNative *native) { return native->count; }
 const char *tb_native_log_line(const TbNative *native, size_t row) { return row < native->count ? native->logs[(native->first + row) % TB_NATIVE_LOG_LINES] : ""; }
 pid_t tb_native_target_pid(const TbNative *native) { return native->target_pid; }
@@ -608,6 +625,19 @@ pid_t tb_native_debugger_pid(const TbNative *native) { return tb_gdb_pid(native-
 bool tb_native_attached(const TbNative *native) { return native->attach; }
 TbContext *tb_native_context(TbNative *native) { return native->context; }
 TbCode *tb_native_code(TbNative *native) { return native->code; }
+TbBreakpoints *tb_native_breakpoints(TbNative *native) { return native->breakpoints; }
+bool tb_native_run_at(TbNative *native, TbBreakLocation location)
+{
+    const TbContextSnapshot *context = tb_context_snapshot(native->context);
+    if (native->waiting || native->want_close || native->state != TB_NATIVE_STOPPED || context->stale || !context->ready) {
+        diagnostic(native, "Run to Selected needs a fresh stopped context."); return false;
+    }
+    return tb_break_run_at(native->breakpoints, location, context->selected_thread);
+}
+bool tb_native_run_to(TbNative *native, const char *location)
+{
+    return tb_native_run_at(native, (TbBreakLocation){.text = location});
+}
 bool tb_native_active(const TbNative *native)
 {
     return tb_gdb_state(native->gdb) != TB_GDB_DISCONNECTED ||

@@ -51,7 +51,7 @@ static void emit(void *context, const TbGdbEvent *event)
         observer->unexpected_exit |= WIFEXITED(event->status) && WEXITSTATUS(event->status) == 13;
         break;
     case TB_GDB_RECORD: ++observer->records; break;
-    case TB_GDB_STATE: break;
+    case TB_GDB_STATE: case TB_GDB_RECONCILED: break;
     }
 }
 

@@ -204,6 +204,19 @@ bool tb_context_event(TbContext *context, const TbGdbEvent *event)
         return true;
     }
     const TbMiRecord *record = event->record;
+    if (event->kind == TB_GDB_RECONCILED && record) {
+        char current[32]; text(current, sizeof current, tb_mi_find(record->results, "current-thread-id"));
+        const TbMiValue *threads = tb_mi_find(record->results, "threads");
+        context->snapshot.stopped_thread[0] = 0; frame(&context->snapshot.stopped, NULL);
+        context->first_frame = 0; context->select_thread = context->select_frame = false; stale(context);
+        for (const TbMiValue *item = threads ? threads->children : NULL; item; item = item->next) {
+            char id[32]; text(id, sizeof id, tb_mi_find(item->children, "id"));
+            if (strcmp(id, current) != 0) { continue; }
+            (void)snprintf(context->snapshot.stopped_thread, sizeof context->snapshot.stopped_thread, "%s", id);
+            frame(&context->snapshot.stopped, tb_mi_find(item->children, "frame"));
+            break;
+        }
+    }
     if (event->kind == TB_GDB_STATE) {
         TbGdbState state = tb_gdb_state(context->gdb);
         if (state == TB_GDB_RUNNING || state == TB_GDB_EXITED || state == TB_GDB_DISCONNECTED) {

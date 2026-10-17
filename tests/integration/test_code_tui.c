@@ -205,6 +205,30 @@ static void instruction_margin(TestTerminal *term)
     CHECK(pc_row >= tab_y + 7 && pc_row <= footer - 7);
     puts("PASS M07 instruction stepping preserves the viewport with five-row top and bottom margins");
 }
+static void disassembly_menu_roundtrip(TestTerminal *term)
+{
+    int x, y; CHECK(test_terminal_find(term, "Disassembly", &x, &y));
+    const char *menu = strstr(term->cells[y] + x, "..."); CHECK(menu);
+    int menu_x = (int)(menu - term->cells[y]), footer = -1;
+    for (int row = y + 3; row < term->rows - 2; ++row) {
+        if (strstr(term->cells[row] + x, "Actions")) { footer = row; break; }
+    }
+    CHECK(footer > y + 3);
+    char saved[TEST_ROWS][TEST_COLS + 1];
+    memcpy(saved, term->cells, sizeof saved);
+    mouse_at(term, 0, menu_x, y, false); mouse_at(term, 0, menu_x, y, true);
+    test_terminal_expect(term, "SHOW VIEW");
+    mouse_at(term, 0, menu_x, y, false); mouse_at(term, 0, menu_x, y, true);
+    long long until = now() + 300;
+    while (now() < until) { test_terminal_pump(term, 10); }
+    for (int row = y + 1; row < footer; ++row) {
+        if (memcmp(saved[row] + x - 2, term->cells[row] + x - 2, (size_t)(menu_x + 5 - x)) != 0) {
+            fprintf(stderr, "Disassembly changed after menu roundtrip at row %d\nbefore: %s\nafter:  %s\n", row, saved[row], term->cells[row]);
+            CHECK(false);
+        }
+    }
+}
+
 static void direct_start(const char *binary, const char *fixture)
 {
     TestTerminal term;
@@ -253,9 +277,23 @@ static void wheel_up_listing(const char *binary, const char *fixture)
     rows = 0;
     for (int row = y + 2; row < y + 15; ++row) { if (strstr(term.cells[row] + x - 2, "0x")) { ++rows; } }
     CHECK(rows >= 8);
+    for (int position = 0; position < 3; ++position) {
+        for (int repeat = 0; repeat < 12; ++repeat) { mouse_at(&term, 64, x + 3, y + 3, false); }
+        until = now() + 350; while (now() < until) { test_terminal_pump(&term, 10); }
+        disassembly_menu_roundtrip(&term);
+    }
+    test_terminal_expect(&term, "bytes not decoded");
+    CHECK(!test_terminal_find(&term, "Code range unknown", NULL, NULL));
+    for (int position = 0; position < 3; ++position) {
+        for (int repeat = 0; repeat < 4; ++repeat) { mouse_at(&term, 65, x + 3, y + 3, false); }
+        until = now() + 350; while (now() < until) { test_terminal_pump(&term, 10); }
+        disassembly_menu_roundtrip(&term);
+        CHECK(!test_terminal_find(&term, "Code range unknown", NULL, NULL));
+    }
     test_terminal_send(&term, "\021"); test_terminal_expect(&term, "Terminate the launched program");
     test_terminal_click(&term, "Close session"); test_terminal_stop(&term, 0);
     puts("PASS M07 real session fixture wheel-up at the first window preserves forward instructions and PC");
+    puts("PASS M08 repeated view-selector open/close retains listing and viewport; section gaps are labeled without sticky warnings");
 }
 
 int main(int argc, char *argv[])

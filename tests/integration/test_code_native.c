@@ -138,7 +138,7 @@ static void copy_file(const char *source, const char *destination)
 }
 static void relocated(const char *fixture, const char *sources)
 {
-    char directory[] = "/tmp/the bugger \"moved\" $()-XXXXXX"; CHECK(mkdtemp(directory));
+    char directory[] = "/tmp/the bugger 'moved' \"quoted\" $()-XXXXXX"; CHECK(mkdtemp(directory));
     char left[512], right[512], from[1024], target[1024];
     (void)snprintf(left, sizeof left, "%s/left", directory); CHECK(mkdir(left, 0700) == 0);
     (void)snprintf(right, sizeof right, "%s/right", directory); CHECK(mkdir(right, 0700) == 0);
@@ -167,8 +167,31 @@ static void relocated(const char *fixture, const char *sources)
         if (!strstr(file->file, "duplicate.c")) { continue; }
         CHECK(strstr(file->full, directory)); CHECK(tb_code_open(code, 0, i));
         CHECK(tb_code_find(code, 0, strstr(file->full, "/left/") ? "LEFT_SOURCE_MARKER" : "RIGHT_SOURCE_MARKER", 0) >= 0); ++matches;
+        TbBreakpoints *breaks = tb_native_breakpoints(native);
+        until = tb_gdb_now_ms() + 5000;
+        while (!tb_break_ready(breaks) && tb_gdb_now_ms() < until) { tb_native_pump(native, 5); }
+        CHECK(tb_break_add_at(breaks, (TbBreakLocation){.source = file->full, .line = 3}, false)); until = tb_gdb_now_ms() + 5000;
+        while (!tb_break_ready(breaks) && tb_gdb_now_ms() < until) { tb_native_pump(native, 5); }
+        CHECK(tb_break_ready(breaks) && tb_break_count(breaks) == 1);
+        const TbBreakpoint *bp = tb_break_row(breaks, 0);
+        if (bp->pending || strcmp(bp->file, file->full) != 0) { dump(native); fprintf(stderr, "location=%s backend=%s\n", file->full, bp->file); CHECK(false); }
+        CHECK(bp->line == 3); CHECK(tb_break_remove(breaks, bp->id)); until = tb_gdb_now_ms() + 5000;
+        while (!tb_break_ready(breaks) && tb_gdb_now_ms() < until) { tb_native_pump(native, 5); }
+        CHECK(tb_break_ready(breaks) && tb_break_count(breaks) == 0);
     }
     CHECK(matches == 2);
+    TbBreakpoints *breaks = tb_native_breakpoints(native);
+    uint64_t before_stop = tb_context_snapshot(tb_native_context(native))->generation.stop;
+    uint64_t before_code = v->assembly_revision;
+    CHECK(tb_native_run_at(native, (TbBreakLocation){.source = v->path, .line = 3}));
+    until = tb_gdb_now_ms() + 5000;
+    while ((tb_context_snapshot(tb_native_context(native))->generation.stop <= before_stop ||
+            tb_native_state(native) != TB_NATIVE_STOPPED) && tb_gdb_now_ms() < until) { tb_native_pump(native, 5); }
+    code_ready(native, before_code);
+    CHECK(tb_context_snapshot(tb_native_context(native))->selected.line == 3);
+    until = tb_gdb_now_ms() + 5000;
+    while (!tb_break_ready(breaks) && tb_gdb_now_ms() < until) { tb_native_pump(native, 5); }
+    CHECK(tb_break_ready(breaks) && tb_break_count(breaks) == 0);
     CHECK(!tb_code_add_rule(code, "/bad\nquit", directory));
     CHECK(!tb_code_add_directory(code, "/no/such/source/directory"));
     revision = v->assembly_revision;

@@ -5,6 +5,22 @@
 #include <stdio.h>
 #include <string.h>
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): named display columns follow output capacity.
+void tb_format_assembly(char *out, size_t capacity, TbAssemblyColumns columns,
+                        const char *address, const char *bytes, const char *instruction)
+{
+    int mnemonic = (int)strcspn(instruction, " \t");
+    const char *operands = instruction + mnemonic;
+    while (*operands == ' ' || *operands == '\t') { ++operands; }
+    if (*operands) {
+        (void)snprintf(out, capacity, "%-*s  %-*s  %-*.*s %s", columns.address, address,
+                       columns.bytes, bytes, columns.mnemonic, mnemonic, instruction, operands);
+    } else {
+        (void)snprintf(out, capacity, "%-*s  %-*s  %.*s", columns.address, address,
+                       columns.bytes, bytes, mnemonic, instruction);
+    }
+}
+
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): follows curses y/x convention.
 void tb_text(int y, int x, int width, TbStyle style, attr_t attributes, const char *text)
 {

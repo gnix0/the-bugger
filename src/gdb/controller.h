@@ -17,7 +17,7 @@ typedef enum { TB_GDB_SESSION, TB_GDB_STOP, TB_GDB_CONTEXT } TbGdbScope;
 typedef struct { uint64_t session, stop, context; } TbGdbGeneration;
 typedef enum { TB_GDB_STATE, TB_GDB_RECORD, TB_GDB_REPLY, TB_GDB_STALE,
                TB_GDB_TIMEOUT, TB_GDB_CANCELLED, TB_GDB_DIAGNOSTIC,
-               TB_GDB_STDERR, TB_GDB_CHILD_EXIT } TbGdbEventKind;
+               TB_GDB_STDERR, TB_GDB_CHILD_EXIT, TB_GDB_RECONCILED } TbGdbEventKind;
 typedef struct {
     TbGdbEventKind kind;
     uint64_t token, cookie;

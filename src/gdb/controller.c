@@ -23,7 +23,7 @@ typedef struct {
     uint64_t token, cookie, deadline;
     TbGdbGeneration generation;
     TbGdbScope scope;
-    bool setup;
+    bool setup, state_query;
 } Request;
 
 struct TbGdb {
@@ -39,6 +39,8 @@ struct TbGdb {
     size_t startup_error_length;
     bool prompted, closing, protocol_failed;
     unsigned startup_ms, setup_left;
+    uint64_t resume_token, resume_stop;
+    bool reconcile_pending;
     TbMiParser parser;
     Request requests[TB_GDB_MAX_PENDING];
 };
@@ -83,7 +85,8 @@ static void fd_close(int *fd)
 static void complete(TbGdb *gdb, Request *request, TbGdbEventKind kind,
                      const TbMiRecord *record)
 {
-    if (!request->setup) { event(gdb, kind, request, record, NULL, 0, 0); }
+    if (!request->setup && !request->state_query) { event(gdb, kind, request, record, NULL, 0, 0); }
+    if (request->state_query && kind == TB_GDB_TIMEOUT) { diagnostic(gdb, "Execution-state verification timed out; state remains unconfirmed.", ETIMEDOUT); }
     free(request->wire);
     memset(request, 0, sizeof *request);
 }
@@ -228,6 +231,7 @@ bool tb_gdb_start(TbGdb *gdb, const char *executable, unsigned startup_ms)
     gdb->startup_ms = startup_ms;
     gdb->startup_deadline = tb_gdb_now_ms() + startup_ms;
     gdb->prompted = gdb->closing = gdb->protocol_failed = false;
+    gdb->resume_token = gdb->resume_stop = 0; gdb->reconcile_pending = false;
     gdb->setup_left = 0; gdb->shutdown_stage = 0;
     gdb->startup_error_length = 0; gdb->startup_error[0] = '\0';
     state_set(gdb, TB_GDB_STARTING);
@@ -354,6 +358,17 @@ static void execution_state(TbGdb *gdb, TbGdbState state)
     state_set(gdb, state);
 }
 
+static bool threads_stopped(const TbMiRecord *record)
+{
+    const TbMiValue *threads = tb_mi_find(record->results, "threads");
+    if (!threads || threads->type != TB_MI_LIST || !threads->children) { return false; }
+    for (const TbMiValue *item = threads->children; item; item = item->next) {
+        const TbMiValue *state = tb_mi_find(item->children, "state");
+        if (!state || state->type != TB_MI_STRING || state->string.length != 7 || memcmp(state->string.data, "stopped", 7) != 0) { return false; }
+    }
+    return true;
+}
+
 static void parsed(void *context, TbMiRecord *record, const TbMiError *error)
 {
     TbGdb *gdb = context;
@@ -383,6 +398,14 @@ static void parsed(void *context, TbMiRecord *record, const TbMiError *error)
             }
         }
         if (request == NULL) {
+            char resume[32]; (void)snprintf(resume, sizeof resume, "%" PRIu64, gdb->resume_token);
+            if (gdb->resume_token && gdb->state == TB_GDB_RUNNING && gdb->generation.stop == gdb->resume_stop &&
+                record->token && strcmp(record->token, resume) == 0 && strcmp(record->klass, "error") == 0) {
+                /* GDB can emit ^running, then ^error with the SAME token when
+                 * hardware insertion aborts, without an asynchronous stop. */
+                gdb->reconcile_pending = true;
+                diagnostic(gdb, "Execution aborted after running result; verifying thread states.", 0);
+            }
             event(gdb, TB_GDB_STALE, NULL, record, "unmatched or late MI token", 26, 0);
         } else if (tb_gdb_now_ms() >= request->deadline) {
             bool setup = request->setup;
@@ -400,6 +423,14 @@ static void parsed(void *context, TbMiRecord *record, const TbMiError *error)
             if (!setup && !stale && request->generation.stop == gdb->generation.stop &&
                 strcmp(record->klass, "running") == 0) {
                 execution_state(gdb, TB_GDB_RUNNING);
+                gdb->resume_token = request->token; gdb->resume_stop = gdb->generation.stop;
+            }
+            if (request->state_query && !stale && request->generation.stop == gdb->generation.stop && gdb->state == TB_GDB_RUNNING) {
+                if (strcmp(record->klass, "done") == 0 && threads_stopped(record)) {
+                    execution_state(gdb, TB_GDB_STOPPED);
+                    event(gdb, TB_GDB_RECONCILED, NULL, record, NULL, 0, 0);
+                    diagnostic(gdb, "GDB confirms all threads stopped after aborted execution.", 0);
+                } else { diagnostic(gdb, "Could not confirm stopped execution; retained state is unconfirmed. Use Pause or close.", 0); }
             }
             complete(gdb, request, stale ? TB_GDB_STALE : TB_GDB_REPLY, record);
             if (exiting) { shutting_down(gdb, false); }
@@ -606,6 +637,15 @@ void tb_gdb_pump(TbGdb *gdb, int wait_ms)
     if (fds[0].revents != 0) { read_pipe(gdb, false); }
     if (fds[1].revents != 0) { read_pipe(gdb, true); }
     if (fds[2].revents != 0) { write_commands(gdb); }
+    if (gdb->reconcile_pending && !gdb->closing && tb_gdb_pending(gdb) < TB_GDB_MAX_PENDING) {
+        gdb->reconcile_pending = false;
+        if (gdb->state == TB_GDB_RUNNING) {
+            uint64_t token = 0;
+            if (enqueue(gdb, "-thread-info", NULL, 0, TB_GDB_SESSION, 0, 1000, &token, false)) {
+                for (size_t i = 0; i < TB_GDB_MAX_PENDING; ++i) { if (gdb->requests[i].token == token) { gdb->requests[i].state_query = true; break; } }
+            }
+        }
+    }
     const unsigned input_errors = (unsigned)POLLERR | (unsigned)POLLHUP | (unsigned)POLLNVAL;
     if (((unsigned)fds[2].revents & input_errors) != 0) {
         if (!gdb->prompted && gdb->state == TB_GDB_STARTING) {

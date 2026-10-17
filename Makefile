@@ -11,10 +11,12 @@ LDLIBS ?=
 
 NCURSES_CFLAGS := $(shell $(PKG_CONFIG) --cflags ncursesw 2>/dev/null)
 NCURSES_LIBS := $(shell $(PKG_CONFIG) --libs ncursesw 2>/dev/null)
-PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session -Isrc/model $(NCURSES_CFLAGS)
+ELF_LIBS := $(shell $(PKG_CONFIG) --libs libelf 2>/dev/null)
+ELF_CFLAGS := $(shell $(PKG_CONFIG) --cflags libelf 2>/dev/null)
+PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session -Isrc/model $(NCURSES_CFLAGS) $(ELF_CFLAGS)
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/model/context.c src/model/code.c
+SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/model/context.c src/model/code.c src/model/images.c src/model/breakpoints.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -23,7 +25,7 @@ BINARY := $(BUILD_DIR)/the-bugger
 all: $(BINARY)
 
 $(BINARY): $(OBJECTS)
-	$(CC) $(LDFLAGS) -o $@ $(OBJECTS) $(NCURSES_LIBS) $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $(OBJECTS) $(NCURSES_LIBS) $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/%.o: %.c Makefile | check-deps
 	mkdir -p $(dir $@)
@@ -31,36 +33,37 @@ $(BUILD_DIR)/%.o: %.c Makefile | check-deps
 
 check-deps:
 	@$(PKG_CONFIG) --exists ncursesw || { echo 'ncursesw development files and pkg-config are required.' >&2; exit 1; }
+	@$(PKG_CONFIG) --exists libelf || { echo 'libelf development files are required.' >&2; exit 1; }
 
 $(BUILD_DIR)/test-unit: $(BUILD_DIR)/tests/unit/test_demo.o $(BUILD_DIR)/src/tui/demo.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/test-cli: $(BUILD_DIR)/tests/integration/test_cli.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/test-tui: $(BUILD_DIR)/tests/integration/test_tui.o $(BUILD_DIR)/tests/support/terminal.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/test-render: $(BUILD_DIR)/tests/unit/test_render.o $(BUILD_DIR)/src/tui/render.o $(BUILD_DIR)/src/tui/theme.o $(BUILD_DIR)/src/tui/demo.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(NCURSES_LIBS) $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(NCURSES_LIBS) $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/test-layout: $(BUILD_DIR)/tests/unit/test_layout.o $(BUILD_DIR)/src/layout/layout.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/test-workspace: $(BUILD_DIR)/tests/integration/test_workspace.o $(BUILD_DIR)/tests/support/terminal.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/test-tmux: $(BUILD_DIR)/tests/integration/test_tmux.o $(BUILD_DIR)/tests/support/terminal.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/test-mi: $(BUILD_DIR)/tests/unit/test_mi.o $(BUILD_DIR)/src/gdb/mi.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/mi-dump: $(BUILD_DIR)/tests/support/mi_dump.o $(BUILD_DIR)/src/gdb/mi.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/test-mi-alloc: $(BUILD_DIR)/tests/unit/test_mi_alloc.o $(BUILD_DIR)/src/gdb/mi.o
-	$(CC) $(LDFLAGS) -Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 test-mi: $(BUILD_DIR)/test-mi $(BUILD_DIR)/test-mi-alloc $(BUILD_DIR)/mi-dump
 	$(BUILD_DIR)/test-mi tests/fixtures/mi/valid.mi tests/fixtures/mi/invalid.mi
@@ -70,26 +73,26 @@ mi-demo: $(BUILD_DIR)/mi-dump
 	$(BUILD_DIR)/mi-dump --chunk 1 tests/fixtures/mi/valid.mi
 
 $(BUILD_DIR)/fake-mi: $(BUILD_DIR)/tests/support/fake_mi.o $(BUILD_DIR)/src/gdb/mi.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/test-controller: $(BUILD_DIR)/tests/integration/test_controller.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 test-controller: $(BUILD_DIR)/test-controller $(BUILD_DIR)/fake-mi $(BUILD_DIR)/controller-demo $(BUILD_DIR)/test-controller-demo
 	$(BUILD_DIR)/test-controller $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-controller-demo $(abspath $(BUILD_DIR)/controller-demo) $(abspath $(BUILD_DIR)/fake-mi)
 
 $(BUILD_DIR)/controller-demo: $(BUILD_DIR)/tests/support/controller_demo.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/test-controller-demo: $(BUILD_DIR)/tests/integration/test_controller_demo.o $(BUILD_DIR)/tests/support/terminal.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 controller-demo: $(BUILD_DIR)/controller-demo $(BUILD_DIR)/fake-mi
 	$(BUILD_DIR)/controller-demo $(abspath $(BUILD_DIR)/fake-mi)
 
 $(BUILD_DIR)/test-gdb-startup: $(BUILD_DIR)/tests/integration/test_gdb_startup.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 test-gdb-startup: $(BUILD_DIR)/test-gdb-startup
 	$(BUILD_DIR)/test-gdb-startup gdb
@@ -140,16 +143,16 @@ $(BUILD_DIR)/code-fixture-relocated: tests/fixtures/native/relocated/main.c test
 
 fixtures: $(BUILD_DIR)/code-fixture $(BUILD_DIR)/code-fixture-optimized $(BUILD_DIR)/code-fixture-stripped $(BUILD_DIR)/code-fixture-cpp $(BUILD_DIR)/code-fixture-relocated
 
-NATIVE_OBJECTS = $(BUILD_DIR)/src/session/native.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o
+NATIVE_OBJECTS = $(BUILD_DIR)/src/session/native.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/model/breakpoints.o
 
 $(BUILD_DIR)/test-native-words: $(BUILD_DIR)/tests/unit/test_native_words.o $(NATIVE_OBJECTS)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/test-native: $(BUILD_DIR)/tests/integration/test_native.o $(NATIVE_OBJECTS)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/test-native-tui: $(BUILD_DIR)/tests/integration/test_native_tui.o $(BUILD_DIR)/tests/support/terminal.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 test-native: all $(BUILD_DIR)/test-native $(BUILD_DIR)/test-native-tui $(BUILD_DIR)/test-context-native $(BUILD_DIR)/test-context-tui $(BUILD_DIR)/test-code-native $(BUILD_DIR)/test-code-tui fixtures
 	$(BUILD_DIR)/test-native $(abspath $(BUILD_DIR)/debug-fixture) $(abspath $(BUILD_DIR)/debug-fixture-cpp)
@@ -160,27 +163,29 @@ test-native: all $(BUILD_DIR)/test-native $(BUILD_DIR)/test-native-tui $(BUILD_D
 	$(BUILD_DIR)/test-code-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/code-fixture) $(abspath $(BUILD_DIR)/debug-fixture)
 
 $(BUILD_DIR)/test-context-native: $(BUILD_DIR)/tests/integration/test_context_native.o $(NATIVE_OBJECTS)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/test-context-tui: $(BUILD_DIR)/tests/integration/test_context_tui.o $(BUILD_DIR)/tests/support/terminal.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/test-code-native: $(BUILD_DIR)/tests/integration/test_code_native.o $(NATIVE_OBJECTS)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
-$(BUILD_DIR)/test-code: $(BUILD_DIR)/tests/integration/test_code.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+$(BUILD_DIR)/test-code: $(BUILD_DIR)/tests/integration/test_code.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/test-code-tui: $(BUILD_DIR)/tests/integration/test_code_tui.o $(BUILD_DIR)/tests/support/terminal.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 test-tmux: all $(BUILD_DIR)/test-tmux
 	$(BUILD_DIR)/test-tmux $(abspath $(BINARY))
 
 $(BUILD_DIR)/test-context: $(BUILD_DIR)/tests/integration/test_context.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 test: all test-mi test-controller $(BUILD_DIR)/test-code $(BUILD_DIR)/test-context $(BUILD_DIR)/test-native-words $(BUILD_DIR)/test-unit $(BUILD_DIR)/test-layout $(BUILD_DIR)/test-render $(BUILD_DIR)/test-cli $(BUILD_DIR)/test-tui $(BUILD_DIR)/test-workspace
+	$(BUILD_DIR)/test-images
+	$(BUILD_DIR)/test-breakpoints $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-code $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-context $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-native-words
@@ -190,6 +195,45 @@ test: all test-mi test-controller $(BUILD_DIR)/test-code $(BUILD_DIR)/test-conte
 	$(BUILD_DIR)/test-cli $(abspath $(BINARY))
 	$(BUILD_DIR)/test-tui $(abspath $(BINARY))
 	$(BUILD_DIR)/test-workspace $(abspath $(BINARY))
+
+$(BUILD_DIR)/test-images: $(BUILD_DIR)/tests/unit/test_images.o $(BUILD_DIR)/src/model/images.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+test: $(BUILD_DIR)/test-images
+
+$(BUILD_DIR)/test-breakpoints: $(BUILD_DIR)/tests/integration/test_breakpoints.o $(BUILD_DIR)/src/model/breakpoints.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+test: $(BUILD_DIR)/test-breakpoints
+
+$(BUILD_DIR)/break-fixture: tests/fixtures/native/breakpoints.c
+	mkdir -p $(dir $@)
+	$(CC) -std=c17 -Wall -Wextra -Wpedantic -Werror -g -O0 $< -o $@ -ldl
+
+$(BUILD_DIR)/break-fixture-cpp: tests/fixtures/native/breakpoints.cpp
+	mkdir -p $(dir $@)
+	$(CXX) -std=c++17 -Wall -Wextra -Wpedantic -Werror -g -O0 $< -o $@
+
+$(BUILD_DIR)/break-fixture-library.so: tests/fixtures/native/breakpoints_library.c
+	mkdir -p $(dir $@)
+	$(CC) -std=c17 -Wall -Wextra -Wpedantic -Werror -g -O0 -fPIC -shared $< -o $@
+
+fixtures: $(BUILD_DIR)/break-fixture $(BUILD_DIR)/break-fixture-cpp $(BUILD_DIR)/break-fixture-library.so
+
+$(BUILD_DIR)/test-break-native: $(BUILD_DIR)/tests/integration/test_break_native.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-m08-native
+test-m08-native: all $(BUILD_DIR)/test-break-native $(BUILD_DIR)/break-fixture $(BUILD_DIR)/break-fixture-cpp $(BUILD_DIR)/break-fixture-library.so
+	$(BUILD_DIR)/test-break-native $(abspath $(BUILD_DIR)/break-fixture) $(abspath $(BUILD_DIR)/break-fixture-cpp) $(abspath $(BUILD_DIR)/break-fixture-library.so)
+	$(BUILD_DIR)/test-break-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/break-fixture)
+
+$(BUILD_DIR)/test-break-tui: $(BUILD_DIR)/tests/integration/test_break_tui.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+test-m08-native: $(BUILD_DIR)/test-break-tui
+
+test-native: test-m08-native
 
 # Separate artifacts keep instrumentation out of the normal executable.
 sanitize:
@@ -227,3 +271,5 @@ clean:
 -include $(BUILD_DIR)/tests/integration/test_context_native.d
 -include $(BUILD_DIR)/tests/integration/test_context_tui.d
 -include $(BUILD_DIR)/tests/integration/test_code.d $(BUILD_DIR)/tests/integration/test_code_native.d $(BUILD_DIR)/tests/integration/test_code_tui.d
+-include $(BUILD_DIR)/tests/unit/test_images.d $(BUILD_DIR)/tests/integration/test_breakpoints.d
+-include $(BUILD_DIR)/tests/integration/test_break_native.d $(BUILD_DIR)/tests/integration/test_break_tui.d

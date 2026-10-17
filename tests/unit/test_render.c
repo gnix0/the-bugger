@@ -12,6 +12,14 @@ static int pair_at(int y, int x)
 
 int main(void)
 {
+    TbAssemblyColumns columns = {18, 44, 7};
+    char short_line[256], long_line[256], tiny[8];
+    tb_format_assembly(short_line, sizeof short_line, columns, "0x0000000000001000", "55", "push   %rbp");
+    tb_format_assembly(long_line, sizeof long_line, columns, "0x0000000000001001", "48 89 e5", "mov\t%rsp,%rbp");
+    CHECK(strstr(short_line, "push") - short_line == strstr(long_line, "mov") - long_line);
+    CHECK(strstr(short_line, "%rbp") - short_line == strstr(long_line, "%rsp") - long_line);
+    tb_format_assembly(tiny, sizeof tiny, columns, "0x0000000000001000", "55", "push %rbp");
+    CHECK(tiny[sizeof tiny - 1] == 0);
     FILE *input = tmpfile(), *output = tmpfile();
     CHECK(input != NULL && output != NULL);
     CHECK(unsetenv("NO_COLOR") == 0);

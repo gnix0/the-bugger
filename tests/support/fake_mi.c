@@ -70,13 +70,49 @@ int main(int argc, char *argv[])
     unsigned setup = 0;
     int selected_thread = 7, selected_frame = 0;
     bool context_held = false, thread_exited = false;
+    bool bp_temporary = false; int bp_table = 0, bp_clean_attempts = 0;
     while (getline(&line, &capacity, stdin) >= 0) {
         size_t digits = strspn(line, "0123456789");
         if (digits == 0 || digits >= sizeof held) { free(line); return 3; }
         char token[32];
         memcpy(token, line, digits); token[digits] = '\0';
         char *command = line + digits;
-        if (strncmp(command, "-gdb-set ", 9) == 0) {
+        if (strncmp(mode, "bp-", 3) == 0 && strcmp(command, "-thread-info\n") == 0) {
+            if (strcmp(mode, "bp-late-error-running") == 0) { reply(token, "^done,threads=[{id=\"1\",state=\"running\"}],current-thread-id=\"1\""); }
+            else if (strcmp(mode, "bp-late-error-unknown") == 0) { reply(token, "^done"); }
+            else { reply(token, "^done,threads=[{id=\"1\",state=\"stopped\",frame={level=\"0\",addr=\"0x1000\",func=\"main\"}}],current-thread-id=\"1\""); }
+        } else if (strncmp(mode, "bp-", 3) == 0 && strcmp(command, "-break-list\n") == 0) {
+            if (bp_table == 2) { reply(token, "^done,BreakpointTable={body=\"malformed\"}"); continue; }
+            (void)printf("%s^done,BreakpointTable={body=[bkpt={number=\"1\",type=\"breakpoint\",enabled=\"y\",addr=\"0x1000\",fullname=\"/source.c\",line=\"7\",times=\"9\"}", token);
+            if (bp_table == 1) {
+                for (int i = 2; i < 302; ++i) { (void)printf(",bkpt={number=\"%d\",type=\"breakpoint\",enabled=\"y\",addr=\"<PENDING>\"}", i); }
+            } else {
+                fputs(",bkpt={number=\"2\",type=\"hw breakpoint\",enabled=\"y\",addr=\"<MULTIPLE>\",locations=[{number=\"2.1\",enabled=\"y\",addr=\"0x2000\"},{number=\"2.2\",enabled=\"n\",addr=\"0x3000\"}]},bkpt={number=\"3\",enabled=\"y\",type=\"breakpoint\",addr=\"<PENDING>\",original-location=\"future\"}", stdout);
+            }
+            if (bp_temporary) {
+                fputs(",bkpt={number=\"5\",type=\"breakpoint\",disp=\"del\",enabled=\"y\",addr=\"0x4000\",original-location=", stdout);
+                fputs(strcmp(mode, "bp-timeout-ambiguous") == 0 ? "\"different spelling\"}" : "\"main\"}", stdout);
+            }
+            puts("]}");
+        } else if (strncmp(mode, "bp-", 3) == 0 && strncmp(command, "-bp-table ", 10) == 0) {
+            bp_table = atoi(command + 10); reply(token, "^done");
+        } else if (strncmp(mode, "bp-", 3) == 0 && strncmp(command, "-break-insert ", 14) == 0) {
+            if (!strstr(command, "-t ")) { reply(token, "^error,msg=\"FAKE hardware slots exhausted\""); continue; }
+            bp_temporary = true;
+            if (strcmp(mode, "bp-timeout-silent") != 0 && strcmp(mode, "bp-timeout-ambiguous") != 0) { puts("=breakpoint-created,bkpt={number=\"5\",type=\"breakpoint\",disp=\"del\",original-location=\"main\"}"); }
+            if (strcmp(mode, "bp-race") == 0) { puts("*stopped,reason=\"signal-received\",thread-id=\"1\""); }
+            if (strncmp(mode, "bp-timeout", 10) == 0) { (void)fflush(stdout); continue; }
+            reply(token, "^done,bkpt={number=\"5\",disp=\"del\"}");
+        } else if (strncmp(mode, "bp-", 3) == 0 && strncmp(command, "-break-delete ", 14) == 0) {
+            if (strcmp(command, "-break-delete 5\n")) { reply(token, "^error,msg=\"FAKE attempted user breakpoint deletion\""); }
+            else if (strcmp(mode, "bp-clean-error") == 0 && !bp_clean_attempts++) { reply(token, "^error,msg=\"FAKE cleanup failure\""); }
+            else { bp_temporary = false; puts("=breakpoint-deleted,id=\"5\""); reply(token, "^done"); }
+        } else if (strncmp(mode, "bp-", 3) == 0 && strncmp(command, "-exec-continue", 14) == 0) {
+            if (strncmp(mode, "bp-late-error", 13) == 0) { reply(token, "^running"); puts("*running,thread-id=\"all\""); reply(token, "^error,msg=\"FAKE command aborted\""); }
+            else if (strcmp(mode, "bp-resume-error") == 0) { reply(token, "^error,msg=\"FAKE cannot insert breakpoint\""); }
+            else if (strcmp(mode, "bp-race") == 0) { reply(token, "^error,msg=\"FAKE race incorrectly resumed\""); }
+            else { reply(token, "^running"); puts("*running,thread-id=\"all\""); puts("*stopped,reason=\"breakpoint-hit\",bkptno=\"1\",thread-id=\"1\""); }
+        } else if (strncmp(command, "-gdb-set ", 9) == 0) {
             if (strcmp(mode, "setup-error") == 0) { reply(token, "^error,msg=\"FAKE unsupported setting\""); }
             else { reply(token, "^done"); }
             if (++setup == 2 && strcmp(mode, "no-read") == 0) { delay(400); }

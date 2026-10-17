@@ -4,6 +4,7 @@
 #include "controller.h"
 #include "context.h"
 #include "code.h"
+#include "breakpoints.h"
 
 enum { TB_NATIVE_WORDS = 32, TB_NATIVE_WORD_BYTES = 512,
        TB_NATIVE_LOG_LINES = 512, TB_NATIVE_LOG_WIDTH = 256 };
@@ -49,5 +50,8 @@ bool tb_native_attached(const TbNative *native);
 bool tb_native_active(const TbNative *native);
 TbContext *tb_native_context(TbNative *native);
 TbCode *tb_native_code(TbNative *native);
+TbBreakpoints *tb_native_breakpoints(TbNative *native);
+bool tb_native_run_to(TbNative *native, const char *location);
+bool tb_native_run_at(TbNative *native, TbBreakLocation location);
 
 #endif

@@ -20,16 +20,17 @@
 
 enum { MAX_CONTROLS = 1024, FIELD_SIZE = 256, FORM_FIELDS = 9 };
 typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
-               COMMAND_INPUT, SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS } Page;
+               COMMAND_INPUT, SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT } Page;
 typedef enum { CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_ADDRESS, CODE_STOPPED,
                CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_DIRECTORY_ADD, CODE_RULE_FROM,
-               CODE_RULE_TO, CODE_SETTINGS_CLEAR } CodeAction;
+               CODE_RULE_TO, CODE_SETTINGS_CLEAR, CODE_RAW, CODE_RUN_TO } CodeAction;
 typedef enum {
     CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
     TOOL, TAB, MENU, BODY, SHOW_VIEW, FOCUS_PANE, CANCEL_RESET, CONFIRM_RESET,
     MENU_SECTION, PANE_ACTION, DIVIDER, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR,
     COMMAND_OPEN, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_PAGE,
-    CODE_ACTIONS, CODE_ACTION, CODE_PAGE, CODE_FILE_PICK, CODE_FILE_PAGE, HSCROLLBAR
+    CODE_ACTIONS, CODE_ACTION, CODE_PAGE, CODE_FILE_PICK, CODE_FILE_PAGE, HSCROLLBAR,
+    BREAK_OPEN, BREAK_ACTION
 } ControlKind;
 
 typedef struct {
@@ -78,11 +79,14 @@ typedef struct {
     bool assembly_tail[TB_MAX_PANES];
     char assembly_previous[TB_MAX_PANES][48];
     int assembly_scroll_up[TB_MAX_PANES];
+    int execution_pane, break_pane, break_action;
+    bool break_hardware;
+    char break_id[32];
 } App;
 
 static bool editing_page(const App *app)
 {
-    return app->page == COMMAND_INPUT || app->page == SAVE_INPUT || app->page == CODE_INPUT || app->page == CODE_FILES;
+    return app->page == COMMAND_INPUT || app->page == SAVE_INPUT || app->page == CODE_INPUT || app->page == CODE_FILES || app->page == BREAK_INPUT;
 }
 
 /* Signal handler communicates only through this flag; cleanup runs normally. */
@@ -437,6 +441,7 @@ static TbScroll workspace_scroll(const App *app, const TbDemoPane *pane, int vis
     const TbContextSnapshot *context = tb_context_snapshot(tb_native_context(app->native));
     const TbCodeView *code = tb_code_view(tb_native_code(app->native), (int)(pane - app->demo.panes));
     int total = view == TB_CONSOLE ? (int)tb_native_log_count(app->native) :
+                       view == TB_BREAKPOINTS ? (int)tb_break_count(tb_native_breakpoints(app->native)) :
                        view == TB_SOURCE ? (int)code->line_count :
                        view == TB_DISASSEMBLY ? assembly_rows(code) :
                        view == TB_CALL_STACK && context->ready && !context->stale ? (int)context->frame_count :
@@ -444,14 +449,40 @@ static TbScroll workspace_scroll(const App *app, const TbDemoPane *pane, int vis
     return axis_scroll(total, visible, pane->scroll[view]);
 }
 
+static void break_text(const TbBreakpoint *bp, char *text, size_t capacity)
+{
+    char raw[1800];
+    (void)snprintf(raw, sizeof raw, "%s%s %c %s%s %.500s | %s | %.500s:%u | ignore %u hit %llu | %.500s",
+                   bp->child ? "  " : "", bp->id, bp->enabled ? 'o' : '-', bp->hardware ? "HW " : "",
+                   bp->pending ? "PENDING" : bp->multiple ? "MULTIPLE" : "",
+                   bp->location, bp->address, bp->file, bp->line, bp->ignore,
+                   (unsigned long long)bp->hits, bp->condition);
+    tb_code_safe(text, capacity, raw, strlen(raw));
+}
+
+static TbAssemblyColumns assembly_columns(const TbCodeView *view)
+{
+    TbAssemblyColumns columns = {10, 11, 7};
+    for (size_t i = 0; i < view->instruction_count; ++i) {
+        const TbInstruction *instruction = &view->instructions[i];
+        int address = (int)strlen(instruction->address), bytes = (int)strlen(instruction->opcodes);
+        int mnemonic = (int)strcspn(instruction->text, " \t");
+        if (address > columns.address) { columns.address = address; }
+        if (bytes > columns.bytes) { columns.bytes = bytes; }
+        if (mnemonic > columns.mnemonic) { columns.mnemonic = mnemonic; }
+    }
+    return columns;
+}
+
 static int native_content_width(const App *app, int index)
 {
     const TbDemoPane *pane = &app->demo.panes[index];
     TbView view = pane->tabs[pane->active];
     const TbCodeView *code = tb_code_view(tb_native_code(app->native), index);
+    TbAssemblyColumns columns = assembly_columns(code);
     const TbContextSnapshot *context = tb_context_snapshot(tb_native_context(app->native));
     size_t rows = view == TB_SOURCE ? code->line_count : view == TB_DISASSEMBLY ? code->instruction_count :
-                  view == TB_CONSOLE ? tb_native_log_count(app->native) : view == TB_CALL_STACK && context->ready && !context->stale ? context->frame_count :
+                  view == TB_CONSOLE ? tb_native_log_count(app->native) : view == TB_BREAKPOINTS ? tb_break_count(tb_native_breakpoints(app->native)) : view == TB_CALL_STACK && context->ready && !context->stale ? context->frame_count :
                   view == TB_THREADS && context->ready && !context->stale ? context->thread_count : 0;
     size_t maximum = 0;
     for (size_t row = 0; row < rows; ++row) {
@@ -459,8 +490,9 @@ static int native_content_width(const App *app, int index)
         if (view == TB_SOURCE) { (void)tb_code_source_line(tb_native_code(app->native), index, row, text, sizeof text); }
         else if (view == TB_DISASSEMBLY) {
             const TbInstruction *instruction = &code->instructions[row];
-            (void)snprintf(text, sizeof text, "%s  %s  %s", instruction->address, instruction->opcodes, instruction->text);
+            tb_format_assembly(text, sizeof text, columns, instruction->address, instruction->opcodes, instruction->text);
         } else if (view == TB_CONSOLE) { (void)snprintf(text, sizeof text, "%s", tb_native_log_line(app->native, row)); }
+        else if (view == TB_BREAKPOINTS) { break_text(tb_break_row(tb_native_breakpoints(app->native), row), text, sizeof text); }
         else { context_row(context, view, (int)row, text, sizeof text, &selected); }
         size_t length = strlen(text); if (length > maximum) { maximum = length; }
         if (view == TB_DISASSEMBLY && code->mixed && code->mixed_available && code->instructions[row].line > 0) {
@@ -472,7 +504,7 @@ static int native_content_width(const App *app, int index)
     return (int)maximum;
 }
 
-static int code_gutter(TbView view) { return view == TB_SOURCE ? 8 : view == TB_DISASSEMBLY ? 2 : 0; }
+static int code_gutter(TbView view) { return view == TB_SOURCE ? 8 : view == TB_DISASSEMBLY ? 3 : 0; }
 
 static void prepare_scrollbars(App *app, int index, TbRect rect)
 {
@@ -508,9 +540,20 @@ static void draw_scrollbars(App *app, int index, TbRect rect)
     }
 }
 
+static bool assembly_gap(const TbCodeView *view, size_t row)
+{
+    if (!row) { return false; }
+    const TbInstruction *previous = &view->instructions[row - 1];
+    return previous->bytes && previous->numeric <= UINT64_MAX - previous->bytes &&
+           previous->numeric + previous->bytes < view->instructions[row].numeric;
+}
+
 static int assembly_rows(const TbCodeView *view)
 {
     int rows = (int)view->instruction_count;
+    for (size_t i = 1; i < view->instruction_count; ++i) {
+        if (assembly_gap(view, i)) { ++rows; }
+    }
     if (view->mixed && view->mixed_available) {
         for (size_t i = 0; i < view->instruction_count; ++i) {
             if (view->instructions[i].line > 0 && (i == 0 || view->instructions[i].line != view->instructions[i - 1].line ||
@@ -524,7 +567,41 @@ static void code_focus(App *app, int pane)
 {
     if (!app->live) { return; }
     TbView view = app->demo.panes[pane].tabs[app->demo.panes[pane].active];
-    if (view == TB_SOURCE || view == TB_DISASSEMBLY) { app->instruction_mode = view == TB_DISASSEMBLY; }
+    if (view == TB_SOURCE || view == TB_DISASSEMBLY) { app->instruction_mode = view == TB_DISASSEMBLY; app->execution_pane = pane; }
+}
+
+static bool selected_location(App *app, char *location, size_t capacity, const TbBreakpoint **existing, TbBreakLocation *where)
+{
+    int id = app->execution_pane; TbDemoPane *pane = &app->demo.panes[id];
+    const TbCodeView *code = tb_code_view(tb_native_code(app->native), id);
+    TbBreakpoints *b = tb_native_breakpoints(app->native);
+    if (!app->instruction_mode) {
+        unsigned line = pane->row[TB_SOURCE] >= 0 ? (unsigned)pane->row[TB_SOURCE] + 1 : 0;
+        *existing = tb_break_at(b, code->path, line, NULL);
+        *where = (TbBreakLocation){.source = code->path, .line = line};
+        return *code->path && line && line <= code->line_count;
+    }
+    int row = 0;
+    for (size_t i = 0; i < code->instruction_count; ++i) {
+        const TbInstruction *instruction = &code->instructions[i];
+        if (assembly_gap(code, i)) { ++row; }
+        if (code->mixed && code->mixed_available && instruction->line > 0 &&
+            (!i || instruction->line != code->instructions[i - 1].line || strcmp(instruction->source, code->instructions[i - 1].source) != 0)) { ++row; }
+        if (row++ != pane->row[TB_DISASSEMBLY]) { continue; }
+        *existing = tb_break_at(b, NULL, 0, instruction->address);
+        (void)snprintf(location, capacity, "*%s", instruction->address); *where = (TbBreakLocation){.text = location}; return !code->stale;
+    }
+    return false;
+}
+static bool toggle_breakpoint(App *app)
+{
+    char location[8192]; const TbBreakpoint *existing = NULL;
+    TbBreakLocation where;
+    TbBreakpoints *b = tb_native_breakpoints(app->native);
+    bool okay = selected_location(app, location, sizeof location, &existing, &where) &&
+                (existing ? tb_break_remove(b, existing->child ? existing->parent : existing->id) : tb_break_add_at(b, where, false));
+    status(app, okay ? "Breakpoint change queued." : *tb_break_message(b) ? tb_break_message(b) : "Select a source line or instruction first.");
+    return okay;
 }
 
 static int assembly_pc_row(const TbCodeView *view, const char *pc)
@@ -534,6 +611,7 @@ static int assembly_pc_row(const TbCodeView *view, const char *pc)
     int row = 0;
     for (size_t i = 0; i < view->instruction_count; ++i) {
         const TbInstruction *instruction = &view->instructions[i];
+        if (assembly_gap(view, i)) { ++row; }
         if (view->mixed && view->mixed_available && instruction->line > 0 &&
             (i == 0 || instruction->line != view->instructions[i - 1].line ||
              strcmp(instruction->source, view->instructions[i - 1].source) != 0)) { ++row; }
@@ -568,8 +646,10 @@ static void draw_code_pane(App *app, int index, TbRect rect)
         *seen = revision;
         if (source && view->source_follow && view->selected_line > 0) {
             pane->scroll[TB_SOURCE] = view->selected_line > 4 ? view->selected_line - 4 : 0;
+            pane->row[TB_SOURCE] = view->selected_line - 1;
         } else if (!source && view->assembly_follow) {
             int pc_row = assembly_pc_row(view, context->selected.address);
+            if (pc_row >= 0) { pane->row[TB_DISASSEMBLY] = pc_row; }
             int margin = scroll.visible > 10 ? 5 : scroll.visible / 3;
             if (pc_row >= 0 && (pc_row < scroll.offset + margin || pc_row >= scroll.offset + scroll.visible - margin)) {
                 if (pc_row < scroll.offset + margin) { pane->scroll[TB_DISASSEMBLY] = pc_row - margin; }
@@ -589,8 +669,20 @@ static void draw_code_pane(App *app, int index, TbRect rect)
     bool selected_valid = tb_code_location(context->selected.address, &selected_pc, &symbol) && !symbol;
     bool stopped_valid = tb_code_location(context->stopped.address, &stopped_pc, &symbol) && !symbol;
     size_t total = source ? view->line_count : view->instruction_count;
+    size_t visible_first = total, visible_end = 0;
+    TbAssemblyColumns columns = assembly_columns(view);
     for (size_t i = 0; i < total && output_row < scroll.visible; ++i) {
         const TbInstruction *instruction = source ? NULL : &view->instructions[i];
+        if (!source && assembly_gap(view, i)) {
+            if (flat_row >= scroll.offset && output_row < scroll.visible) {
+                char gap[128];
+                const TbInstruction *previous = &view->instructions[i - 1];
+                unsigned long long bytes = (unsigned long long)(instruction->numeric - previous->numeric - previous->bytes);
+                (void)snprintf(gap, sizeof gap, "... %llu bytes not decoded", bytes);
+                tb_text(rect.y + 2 + output_row++, rect.x + 4, app->body_width[index] - 3, TB_MUTED, 0, gap);
+            }
+            ++flat_row;
+        }
         bool mixed_header = !source && view->mixed && view->mixed_available && instruction->line > 0 &&
                             (i == 0 || instruction->line != view->instructions[i - 1].line ||
                              strcmp(instruction->source, view->instructions[i - 1].source) != 0);
@@ -599,7 +691,7 @@ static void draw_code_pane(App *app, int index, TbRect rect)
                 char summary[1200]; mixed_summary(app, index, instruction, summary, sizeof summary);
                 size_t offset = (size_t)app->horizontal[index][TB_DISASSEMBLY];
                 if (offset > strlen(summary) - 2) { offset = strlen(summary) - 2; }
-                tb_text(rect.y + 2 + output_row++, rect.x + 3, app->body_width[index] - 2, TB_CYAN, 0, summary + 2 + offset);
+                tb_text(rect.y + 2 + output_row++, rect.x + 4, app->body_width[index] - 3, TB_CYAN, 0, summary + 2 + offset);
             }
             ++flat_row;
         }
@@ -611,7 +703,9 @@ static void draw_code_pane(App *app, int index, TbRect rect)
             stopped = (int)i + 1 == view->stopped_line;
             selected = (int)i + 1 == view->selected_line;
         } else {
-            (void)snprintf(text, sizeof text, "%.47s  %.95s  %.383s", instruction->address, instruction->opcodes, instruction->text);
+            tb_format_assembly(text, sizeof text, columns, instruction->address, instruction->opcodes, instruction->text);
+            if (visible_first == total) { visible_first = i; }
+            visible_end = i + 1;
             stopped = stopped_valid && instruction->numeric == stopped_pc && strcmp(context->selected_thread, context->stopped_thread) == 0;
             selected = selected_valid && instruction->numeric == selected_pc;
         }
@@ -623,14 +717,19 @@ static void draw_code_pane(App *app, int index, TbRect rect)
         char gutter[24];
         (void)snprintf(gutter, sizeof gutter, "%c%c%5zu ", source ? ' ' : stopped ? '>' : inspected ? '~' : ' ',
                        source ? stopped ? '>' : inspected ? '~' : ' ' : ' ', source ? i + 1 : i);
-        int gutter_width = source ? 8 : 2;
+        if (!source) { (void)snprintf(gutter, sizeof gutter, " %c ", stopped ? '>' : inspected ? '~' : ' '); }
+        const TbBreakpoint *bp = tb_break_at(tb_native_breakpoints(app->native), source ? view->path : NULL,
+                                            source ? (unsigned)i + 1 : 0, source ? NULL : instruction->address);
+        if (bp) { gutter[0] = bp->enabled ? 'o' : '-'; }
+        int gutter_width = source ? 8 : 3;
         tb_text(rect.y + 2 + output_row, rect.x + 1, gutter_width, highlighted ? style : TB_MUTED, 0, gutter);
+        if (bp) { tb_text(rect.y + 2 + output_row, rect.x + 1, 1, TB_PINK, 0, bp->enabled ? "o" : "-"); }
         size_t offset = (size_t)app->horizontal[index][source ? TB_SOURCE : TB_DISASSEMBLY];
         if (offset > strlen(text)) { offset = strlen(text); }
         if (source) { tb_render_source_text(rect.y + 2 + output_row, rect.x + 1 + gutter_width, app->body_width[index] - gutter_width, text + offset, highlighted); }
         else {
-            tb_text(rect.y + 2 + output_row, rect.x + 3, app->body_width[index] - 2, style, 0, text + offset);
-            if (!offset) { tb_text(rect.y + 2 + output_row, rect.x + 3, 18, highlighted ? tb_selected_style(TB_PURPLE) : TB_PURPLE, 0, instruction->address); }
+            tb_text(rect.y + 2 + output_row, rect.x + 4, app->body_width[index] - 3, style, 0, text + offset);
+            if (!offset) { tb_text(rect.y + 2 + output_row, rect.x + 4, 18, highlighted ? tb_selected_style(TB_PURPLE) : TB_PURPLE, 0, instruction->address); }
         }
         ++output_row;
     }
@@ -638,6 +737,13 @@ static void draw_code_pane(App *app, int index, TbRect rect)
         const char *error = source ? view->source_error : view->assembly_error;
         tb_text(rect.y + 3, rect.x + 2, rect.w - 4, TB_ORANGE, 0,
                 *error ? error : "Stop a program to inspect live code.");
+    }
+    const char *notice = source ? "" : tb_code_assembly_notice(code, index, visible_first, visible_end > visible_first ? visible_end - visible_first : 0);
+    if (*notice) {
+        tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_ORANGE, 0, notice);
+    }
+    if (!source && total && *view->assembly_error) {
+        tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_ORANGE, 0, view->assembly_error);
     }
     button(app, rect.y + rect.h - 1, rect.x + 1, 9, " Actions ", CODE_ACTIONS, 0, index);
     if (source) {
@@ -762,6 +868,20 @@ static void draw_native_pane(App *app, int index, TbRect rect)
 {
     TbDemoPane *pane = &app->demo.panes[index];
     TbView view = pane->tabs[pane->active];
+    if (view == TB_BREAKPOINTS) {
+        TbBreakpoints *b = tb_native_breakpoints(app->native);
+        tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_CYAN, 0, tb_break_ready(b) ? "LIVE | code breakpoints | o enabled / - disabled" : "Refreshing breakpoint table...");
+        if (tb_break_busy(b) && *tb_break_message(b)) { tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_ORANGE, 0, tb_break_message(b)); }
+        TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
+        for (int row = 0; row < scroll.visible && row + scroll.offset < scroll.total; ++row) {
+            int item = row + scroll.offset; const TbBreakpoint *bp = tb_break_row(b, (size_t)item);
+            char safe[4096]; break_text(bp, safe, sizeof safe);
+            size_t offset = (size_t)app->horizontal[index][view]; if (offset > strlen(safe)) { offset = strlen(safe); }
+            tb_text(rect.y + 2 + row, rect.x + 1, rect.w - 2, TB_PANEL, pane->row[view] == item ? A_UNDERLINE : 0, safe + offset);
+        }
+        if (!scroll.total) { tb_text(rect.y + 3, rect.x + 2, rect.w - 4, TB_MUTED, 0, "No code breakpoints. Use F9/gutter or Manage."); }
+        button(app, rect.y + rect.h - 1, rect.x + 1, 10, " Manage ", BREAK_OPEN, 0, index); return;
+    }
     if (view == TB_SOURCE || view == TB_DISASSEMBLY) { draw_code_pane(app, index, rect); return; }
     if (view == TB_CALL_STACK || view == TB_THREADS) {
         draw_context_pane(app, index, rect); return;
@@ -963,16 +1083,16 @@ static bool field_utf8(const wchar_t *value, char *target, size_t capacity);
 static const char *const code_labels[] = {
     "Choose source file", "Find in current file", "Go to line", "Go to address / symbol",
     "Return to stopped context", "Toggle mixed source/assembly", "Source lookup settings",
-    "Add source directory", "Mapping: build prefix", "Mapping: local prefix", "Clear source overrides"
+    "Add source directory", "Mapping: build prefix", "Mapping: local prefix", "Clear source overrides", "Decode bytes (raw inspection)", "Run to Selected"
 };
 
 static void draw_code_menu(App *app)
 {
     draw_header(app, "Code view actions");
     bool source = app->demo.panes[app->code_pane].tabs[app->demo.panes[app->code_pane].active] == TB_SOURCE;
-    const CodeAction source_actions[] = {CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_STOPPED, CODE_SOURCE_SETTINGS};
-    const CodeAction asm_actions[] = {CODE_ADDRESS, CODE_STOPPED, CODE_MIXED, CODE_SOURCE_SETTINGS};
-    int count = source ? 5 : 4;
+    const CodeAction source_actions[] = {CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_STOPPED, CODE_SOURCE_SETTINGS, CODE_RUN_TO};
+    const CodeAction asm_actions[] = {CODE_ADDRESS, CODE_STOPPED, CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_RAW, CODE_RUN_TO};
+    int count = 6;
     for (int i = 0; i < count; ++i) {
         CodeAction action = source ? source_actions[i] : asm_actions[i];
         button(app, 5 + i, 3, COLS - 6, code_labels[action], CODE_ACTION, action, app->code_pane);
@@ -1046,11 +1166,13 @@ static void draw_input(App *app)
 {
     bool command = app->page == COMMAND_INPUT;
     bool code = app->page == CODE_INPUT;
-    draw_header(app, code ? code_labels[app->code_action] : command ? "GDB console command" : "Save retained log");
+    bool bp = app->page == BREAK_INPUT;
+    const char *bp_label = app->break_action == 0 ? "Add code breakpoint" : app->break_action == 3 ? "Breakpoint condition (empty clears)" : "Breakpoint ignore count";
+    draw_header(app, bp ? bp_label : code ? code_labels[app->code_action] : command ? "GDB console command" : "Save retained log");
     tb_text(5, 3, COLS - 6, TB_CYAN, A_BOLD,
-            code ? code_labels[app->code_action] : command ? "Explicit GDB command (through MI)" : "New log destination (existing files are preserved)");
+            bp ? bp_label : code ? code_labels[app->code_action] : command ? "Explicit GDB command (through MI)" : "New log destination (existing files are preserved)");
     tb_text(7, 3, COLS - 6, TB_MUTED, 0,
-            code ? "Enter literal text/path. Navigation never changes execution. Esc cancels." :
+            bp ? "Location: function, file:line or *0xADDRESS. Changes are validated by GDB." : code ? "Enter literal text/path. Navigation never changes execution. Esc cancels." :
             command ? "Commands are deliberate operations through GDB/MI." :
             "Saves bounded retained history with control bytes escaped; mode 0600.");
     TbRect field = {3, 9, COLS - 6, 1};
@@ -1063,7 +1185,7 @@ static void draw_input(App *app)
         if (cells >= COLS - 8) { start = p; break; }
     }
     wide_text(9, 3, COLS - 6, app->input, start, index == app->focus);
-    button(app, 12, 3, 14, code ? "[ Apply ]" : command ? "[ Send ]" : "[ Save Log ]", INPUT_SUBMIT, 0, 0);
+    button(app, 12, 3, 14, bp || code ? "[ Apply ]" : command ? "[ Send ]" : "[ Save Log ]", INPUT_SUBMIT, 0, 0);
     button(app, 12, 19, 12, "[ Cancel ]", BACK, 0, 0);
     if (index == app->focus) {
         (void)curs_set(1); (void)leaveok(stdscr, FALSE);
@@ -1073,6 +1195,22 @@ static void draw_input(App *app)
         }
         (void)move(9, cursor_x);
     }
+}
+
+static void draw_break_menu(App *app)
+{
+    draw_header(app, "Code breakpoint management");
+    TbDemoPane *pane = &app->demo.panes[app->break_pane];
+    const TbBreakpoint *bp = tb_break_row(tb_native_breakpoints(app->native), (size_t)pane->row[TB_BREAKPOINTS]);
+    char text[1024], safe[1200];
+    if (bp) { (void)snprintf(text, sizeof text, "Selected %s | %.400s | %.400s", bp->id, bp->location, bp->condition); }
+    else { (void)snprintf(text, sizeof text, "Select an existing row in the Breakpoints pane to edit it."); }
+    tb_code_safe(safe, sizeof safe, text, strlen(text)); tb_text(4, 3, COLS - 6, TB_CYAN, 0, safe);
+    const char *labels[] = {"Add code breakpoint", bp && bp->enabled ? "Disable selected" : "Enable selected", "Remove selected",
+                           "Edit condition", "Set ignore count", app->break_hardware ? "New breakpoint: Require hardware" : "New breakpoint: Default", "Refresh"};
+    for (int i = 0; i < 7; ++i) { button(app, 6 + i, 3, COLS - 6, labels[i], BREAK_ACTION, i, app->break_pane); }
+    tb_text(LINES - 5, 3, COLS - 6, TB_MUTED, 0, "Pending and multiple locations follow GDB. Hardware errors never fall back silently.");
+    button(app, LINES - 4, 3, 12, "[ Back ]", BACK, 0, 0);
 }
 
 static void draw_page(App *app)
@@ -1091,6 +1229,8 @@ static void draw_page(App *app)
         draw_form(app, app->page == REVIEW);
     } else if (app->page == CODE_MENU) {
         draw_code_menu(app);
+    } else if (app->page == BREAK_MENU) {
+        draw_break_menu(app);
     } else if (app->page == CODE_FILES) {
         draw_code_files(app);
     } else if (app->page == SOURCE_SETTINGS) {
@@ -1267,7 +1407,7 @@ static void activate(App *app, Control control)
         page(app, WORKSPACE);
         break;
     case BACK:
-        if (app->page == CODE_MENU || app->page == SOURCE_SETTINGS) { page(app, WORKSPACE); break; }
+        if (app->page == CODE_MENU || app->page == SOURCE_SETTINGS || app->page == BREAK_MENU) { page(app, WORKSPACE); break; }
         if (editing_page(app)) { page(app, WORKSPACE); break; }
         page(app, app->page == REVIEW ? CONFIGURE :
              app->page == LAUNCHER ? WORKSPACE : LAUNCHER);
@@ -1291,6 +1431,7 @@ static void activate(App *app, Control control)
     }
     case TOOL:
         if (app->live) {
+            if (control.value == TB_BREAKPOINT) { (void)toggle_breakpoint(app); break; }
             bool okay = control.value == TB_CONTINUE ? tb_native_continue(app->native) :
                         control.value == TB_PAUSE ? tb_native_pause(app->native) :
                         control.value >= TB_NEXT && control.value <= TB_FINISH ?
@@ -1298,7 +1439,7 @@ static void activate(App *app, Control control)
                                        control.value == TB_STEP ? TB_STEP_INTO : TB_STEP_OUT, app->instruction_mode) : false;
             status(app, okay ? "GDB operation queued." : control.value >= TB_NEXT ?
                    control.value <= TB_FINISH ? tb_native_message(app->native) :
-                   "Breakpoint and Reset actions remain unavailable in this milestone." :
+                   "Reset remains unavailable in this milestone." :
                    "GDB operation pending or unavailable in the current state.");
             break;
         }
@@ -1373,6 +1514,23 @@ static void activate(App *app, Control control)
         app->input[0] = L'\0';
         page(app, control.kind == COMMAND_OPEN ? COMMAND_INPUT : SAVE_INPUT);
         break;
+    case BREAK_OPEN:
+        app->break_pane = control.pane; page(app, BREAK_MENU); break;
+    case BREAK_ACTION: {
+        TbBreakpoints *b = tb_native_breakpoints(app->native);
+        TbDemoPane *pane = &app->demo.panes[app->break_pane];
+        const TbBreakpoint *bp = tb_break_row(b, (size_t)pane->row[TB_BREAKPOINTS]);
+        app->break_action = control.value;
+        if (control.value == 5) { app->break_hardware = !app->break_hardware; break; }
+        if (control.value == 6) { tb_break_refresh(b); page(app, WORKSPACE); break; }
+        if (control.value != 0 && !bp) { status(app, "Select a breakpoint row first."); break; }
+        if (bp) { (void)snprintf(app->break_id, sizeof app->break_id, "%s", bp->child ? bp->parent : bp->id); }
+        if (control.value == 1 || control.value == 2) {
+            bool okay = control.value == 1 ? tb_break_enable(b, bp->id, !bp->enabled) : tb_break_remove(b, app->break_id);
+            status(app, okay ? "Breakpoint change queued." : tb_break_message(b)); if (okay) { page(app, WORKSPACE); }
+        } else { app->input[0] = L'\0'; page(app, BREAK_INPUT); }
+        break;
+    }
     case CODE_ACTIONS:
         app->code_pane = control.pane; code_focus(app, control.pane); page(app, CODE_MENU); break;
     case CODE_ACTION: {
@@ -1384,6 +1542,13 @@ static void activate(App *app, Control control)
             app->file_page = 0; page(app, SOURCE_SETTINGS);
         } else if (app->code_action == CODE_STOPPED) {
             status(app, tb_code_stopped(code) ? "Returning to stopped context; execution unchanged." : tb_code_message(code)); page(app, WORKSPACE);
+        } else if (app->code_action == CODE_RUN_TO) {
+            char location[8192]; const TbBreakpoint *existing = NULL;
+            TbBreakLocation where;
+            bool okay = selected_location(app, location, sizeof location, &existing, &where) && tb_native_run_at(app->native, where);
+            status(app, okay ? "Run to Selected queued; an intervening stop cancels it." : "Run to Selected needs a selected code row and fresh stopped context."); page(app, WORKSPACE);
+        } else if (app->code_action == CODE_RAW) {
+            tb_code_raw(code, app->code_pane); page(app, WORKSPACE);
         } else if (app->code_action == CODE_MIXED) {
             tb_code_mixed(code, control.pane, !tb_code_view(code, control.pane)->mixed); page(app, WORKSPACE);
         } else if (app->code_action == CODE_SETTINGS_CLEAR) {
@@ -1418,6 +1583,13 @@ static void activate(App *app, Control control)
         char input[FIELD_SIZE * 4];
         bool command = app->page == COMMAND_INPUT;
         if (!field_utf8(app->input, input, sizeof input)) { status(app, "Invalid text encoding."); break; }
+        if (app->page == BREAK_INPUT) {
+            TbBreakpoints *b = tb_native_breakpoints(app->native);
+            bool okay = app->break_action == 0 ? tb_break_add(b, input, app->break_hardware) :
+                        app->break_action == 3 ? tb_break_condition(b, app->break_id, input) : tb_break_ignore(b, app->break_id, input);
+            status(app, okay ? "Breakpoint change queued; GDB validates the request." : tb_break_message(b));
+            if (okay) { page(app, WORKSPACE); } break;
+        }
         if (app->page == CODE_FILES) { app->file_page = 0; break; }
         if (app->page == CODE_INPUT) {
             TbCode *code = tb_native_code(app->native);
@@ -1523,11 +1695,20 @@ static void scroll_body(App *app, Control control, int amount)
     if (app->live && view == TB_DISASSEMBLY &&
         ((amount < 0 && scroll.offset == 0) || (amount > 0 && scroll.offset == scroll.maximum))) {
         if (tb_code_assembly_page(tb_native_code(app->native), control.pane, amount < 0 ? -1 : 1)) {
-            app->assembly_tail[control.pane] = amount < 0;
-            if (amount < 0) {
+            app->assembly_tail[control.pane] = true;
+            {
                 const TbCodeView *code = tb_code_view(tb_native_code(app->native), control.pane);
+                int flat = 0; size_t visible = 0;
+                for (size_t row = 0; row < code->instruction_count; ++row) {
+                    const TbInstruction *instruction = &code->instructions[row];
+                    if (assembly_gap(code, row)) { ++flat; }
+                    if (code->mixed && code->mixed_available && instruction->line > 0 &&
+                        (!row || instruction->line != code->instructions[row - 1].line || strcmp(instruction->source, code->instructions[row - 1].source) != 0)) { ++flat; }
+                    visible = row;
+                    if (flat++ >= scroll.offset) { break; }
+                }
                 (void)snprintf(app->assembly_previous[control.pane], sizeof app->assembly_previous[control.pane], "%s",
-                               code->instruction_count ? code->instructions[0].address : "");
+                               code->instruction_count ? code->instructions[visible].address : "");
                 app->assembly_scroll_up[control.pane] = -amount;
             }
             pane->scroll[view] = 0;
@@ -1667,6 +1848,7 @@ static void mouse_event(App *app)
                 int target = scroll.offset + row;
                 if (target < scroll.total) { pane->row[view] = target; }
                 if (app->live && target < scroll.total) { select_context_row(app, control.pane); }
+                if (app->live && target < scroll.total && view == TB_SOURCE && event.x < control.rect.x + 2) { (void)toggle_breakpoint(app); }
                 if (!app->live && target < scroll.total && view == TB_SOURCE && event.x < control.rect.x + 2) {
                     tb_demo_action(&app->demo, TB_BREAKPOINT);
                     status(app, "DEMO gutter breakpoint toggled.");

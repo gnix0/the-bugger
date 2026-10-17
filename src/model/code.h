@@ -25,12 +25,16 @@ typedef struct {
 typedef struct TbCode TbCode;
 
 TbCode *tb_code_create(TbGdb *gdb, TbContext *context);
+void tb_code_native(TbCode *code, pid_t pid, const char *executable);
+void tb_code_raw(TbCode *code, int view);
 void tb_code_destroy(TbCode *code);
 void tb_code_reset(TbCode *code);
 bool tb_code_event(TbCode *code, const TbGdbEvent *event);
 void tb_code_pump(TbCode *code);
 void tb_code_visible(TbCode *code, int view, bool source, bool assembly);
 const TbCodeView *tb_code_view(const TbCode *code, int view);
+/* Classify only the displayed instruction slice, never the last fetch request. */
+const char *tb_code_assembly_notice(const TbCode *code, int view, size_t first, size_t count);
 uint64_t tb_code_revision(const TbCode *code);
 const char *tb_code_message(const TbCode *code);
 /* Source navigation is read-only and restricted to GDB-known files. */
