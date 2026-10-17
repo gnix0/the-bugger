@@ -27,7 +27,7 @@ void tb_layout_init(TbLayout *layout)
     layout->columns[0] = 3600;
     layout->columns[1] = 3400;
     layout->columns[2] = 3000;
-    layout->row_ratio = 5600;
+    layout->row_ratio = 6200;
     layout->count = TB_DEFAULT_PANES;
     for (int i = 0; i < TB_DEFAULT_PANES; ++i) {
         layout->nodes[i] = (TbLayoutNode){.used = true, .pane = i};

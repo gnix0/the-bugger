@@ -3,7 +3,10 @@
 Target: **v0.1.0**. No release has been accepted.
 
 States: `planned` → `implemented` → `automated-verified` → `awaiting-user` →
-`accepted`. Only explicit owner acceptance permits the last transition.
+`accepted`. Owner acceptance permits the last transition. Per the owner's later
+instruction, simple positive feedback without issues also means acceptance and
+next-gate authorization, unless specified otherwise; questions/instructions do
+not. The owner commit/push gate still applies before beginning another gate.
 
 | Milestone | Deliverable | State | Commit SHA |
 |---|---|---|---|
@@ -15,9 +18,9 @@ States: `planned` → `implemented` → `automated-verified` → `awaiting-user`
 | M03 | Incremental MI parser | accepted | `ee1cfc5` |
 | M04 | Nonblocking transport/controller and owned lifecycle | accepted | `f29ce3c` |
 | M05 | Native sessions, console/output and Save Log | accepted | `0278b61` |
-| M06 | Selected context, Call Stack and Threads | awaiting-user | — |
-| M07 | Live code, stepping modes, navigation/source recovery | planned | — |
-| M08 | Code breakpoints and Run to Selected | planned | — |
+| M06 | Selected context, Call Stack and Threads | accepted | `1b21504` |
+| M07 | Live code, stepping modes, navigation/source recovery | awaiting-user | — |
+| M08 | Disassembly research/approved changes, then code breakpoints and Run to Selected | planned | — |
 | M09 | CPU registers | planned | — |
 | M10 | Independent Memory | planned | — |
 | M11 | Expandable Locals/Watches | planned | — |
@@ -810,3 +813,325 @@ State: `implemented` → `automated-verified` → `awaiting-user`.
 message at delivery. Do not start M07 until owner acceptance, owner commit/push
 and explicit authorization. AGENTS.md is updated locally but remains ignored by
 the existing policy; its authorization is mirrored in the tracked docs/plan.md.
+
+Subsequent owner acceptance: M06 was approved, committed and pushed as
+`1b215048c7e0d94e9515f8e9321215f08ce8cc6e`, observed in local and origin history.
+The owner authorized M07 and clarified the positive-feedback rule recorded above.
+An owner cleanup commit `10a4662` removes an unrelated root `test` file and is
+also observed at HEAD/origin; accepted M06 history is preserved. No agent Git
+writes were performed.
+
+## M07 — live code, stepping and source recovery
+
+Scope: FR-06 stepping, FR-07, FR-21/22/28 and NFR-01/03/04/05/06/07/08/09/12
+foundations. No M08 breakpoint/gutter/F9/Run-to implementation, later inspection,
+profile persistence, remote/OpenOCD connection or release claim is included.
+
+Implemented:
+
+- Owned C code model, raw filesystem paths separate from escaped display labels,
+  GDB-known source-file catalog, bounded source buffers and instruction windows.
+  Live Source/Disassembly follow selected frame/PC; actual stopped execution and
+  inspected callers have distinct markers. Code remains explicitly stale while
+  running or refreshing, and missing/optimized/stripped mappings stay honest.
+- Real MI source/instruction Next/Step Into and Step Out. Source/Disassembly
+  focus selects F10/F11 mode; toolbar/inspectors retain it. Execution operates on
+  the selected thread's execution frame zero, including after caller inspection.
+  Browsing, address/symbol lookup and return-to-stop never write PC or resume.
+- Optional mixed source/assembly with independent pane fallback and AT&T x86-64
+  syntax. Actual addresses/opcodes and source lexical styling use the approved
+  surfaces. Scrollbars, code horizontal pan, bounded instruction paging and tiled
+  Actions/input screens preserve the existing default workspace and split/tab UX.
+- File filtering, current-file text find/line navigation, strict hex/simple-symbol
+  assembly navigation and original stopped-thread/frame recovery. Symbol lookup
+  uses C address-of semantics, never a C++ overloaded operator/inferior call.
+- GDB source directories and ordered build-prefix substitutions, successful-reply
+  state updates, duplicate/replaced rules and Clear overrides. Literal spaces,
+  quotes and metacharacters pass through distinct CLI/MI encoders without a shell.
+  Unresolved relative paths are rejected rather than guessed from frontend cwd.
+  These source settings are session-only until M13.
+- C synthetic model tests plus actual GDB API/TUI tests and -O0/-O2/stripped/C++/
+  relocated-source fixtures. Source recovery preserves duplicate-basename identity.
+  The application gains no library dependency or test scripting language.
+
+Reviewed limits: 256 catalog files, 1 MiB / 32,768 source lines per code pane,
+128 instructions per 256-byte window, 16 previous window anchors and eight
+directory/mapping overrides each. Limits/errors are visible. Mixed groups outside
+the pane's cached source retain file/line information with unavailable text;
+the frontend does not eagerly load every inline source file. Local source reads
+are bounded but synchronous; unusually slow filesystems remain a latency risk.
+No quantitative UI response/performance acceptance is claimed in this gate.
+
+Corrections during verification: an assembly request's argument count initially
+exceeded its argv array (real-GDB crash), then was fixed using the array's size.
+TUI tests needed real mouse press/release settling and compiler-independent main
+stop expectations. The older context test exposed an actual focus-index defect:
+source availability adds a scrollbar before another pane's controls. Focus now
+tracks body identity across redraws; keyboard caller selection is regression
+covered. Sanitizer compilation caught a restrict-copy warning, corrected with
+an exact-size nonoverlapping-field copy. Failed attempts are not passing evidence.
+
+Hardware/remote/QEMU: **UNVERIFIED** for this gate. Native API/PTY and isolated
+tmux tests do not replace physical visual/input acceptance or board evidence.
+Manual procedure: docs/testing.md's M07 checklist. Launch code-fixture, use the
+deliberate Console `start`, exercise both stepping modes, mixed/AT&T, caller/stop
+markers, navigation and relocated source; repeat in terminal/tmux and degraded
+fixtures. The owner must validate the rendered result before acceptance.
+
+Verification (GCC 16.2.1, Clang 23.1.1, GDB 18.1, tmux 3.8 on Linux x86-64;
+local ignored logs, not hardware/release evidence):
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make -j4 test test-native` | PASS, all deterministic and actual GDB API/TUI suites | `build/m07-delivery.log` |
+| `make -j4 CC=clang CXX=clang++ BUILD_DIR=build/m07-clang test test-native` | PASS | `build/m07-clang-delivery.log` |
+| `make sanitize sanitize-native` | PASS, ASan/UBSan with leak detection | `build/m07-sanitize-delivery.log` |
+| `make analyze` | PASS, no unsuppressed project diagnostics; 168 non-user and nine NOLINT warnings suppressed | `build/m07-analyze-delivery.log` |
+| `make test-tmux` | PASS, isolated real tmux regression of preserved demo tab/mouse/drag/split/F10/resize behavior; live code inside tmux still manual | `build/m07-tmux-final.log` |
+| `make -j4 all build/test-cli` then `build/test-cli "$PWD/build/the-bugger"` | PASS after final help-text update | `build/m07-help.log` |
+| `git diff --check` | PASS | No whitespace diagnostics |
+
+The final source-path safeguard refuses unresolved relative paths; its synthetic
+case includes valid address zero and reruns above cover final model/TUI sources.
+The initial targeted rerun used an old fake-peer binary, correctly failed its
+catalog assertion, then passed after rebuilding that peer. No test was disabled.
+Earlier full GCC/Clang/sanitizer passes and focused code/context TUI runs are in
+`build/m07-{gate,clang-final,sanitize-final,code-native,context-tui}.log`.
+
+Changed files: Makefile and src/main.c help; src/model/code.{c,h}, context.{c,h};
+src/session/native.{c,h}; src/tui/app.c and render.{c,h};
+tests/support/fake_mi.c, tests/integration/test_code*.c and test_context_tui.c;
+tests/fixtures/native/code.{c,cpp} and relocated source tree; README/CHANGELOG,
+architecture/roadmap/testing/progress and test/fixture documentation. AGENTS.md
+tracks the same authorization/workflow locally and remains ignored by policy.
+
+State: `implemented` → `automated-verified` → `awaiting-user`.
+**Status: AWAITING USER ACCEPTANCE.** No commit exists for M07 yet. Stop for
+manual validation; include the proposed Conventional Commit message at delivery.
+M08 requires owner acceptance, owner commit/push and continuation authorization
+under the standing positive-feedback rule. No Git writes or release actions.
+
+M07 manual feedback correction: the owner reported STALE in both code panes;
+the status was Loaded / PID not started. Empty panes were incorrectly described
+as stale before any execution. They now say Awaiting stop; browsed loaded source
+still says BROWSE. True running/refreshing retained data keeps STALE. The direct
+Console-start path is now tested without prior file browsing, asserting both
+initial labels, actual live source/assembly and real PC after `start`.
+
+`make -j4 all build/test-code-tui build/test-context-tui`, followed by
+`build/test-code-tui "$PWD/build/the-bugger" "$PWD/build/code-fixture"` and
+`build/test-context-tui "$PWD/build/the-bugger" "$PWD/build/context-fixture"`
+passed (`build/m07-stale-{build,tui,context}.log`). `git diff --check` passed.
+The checklist explicitly identifies the Console Send action. This corrects a
+misleading Loaded label, not a reproduced failure to refresh after a real stop.
+M07 remains awaiting user acceptance; the proposed commit includes this fix.
+`make analyze` also passed (`build/m07-stale-analyze.log`), with the same
+168 non-user/nine NOLINT suppressions and no unsuppressed project diagnostics.
+
+M07 manual-review scrollbar follow-up: the owner requested wider vertical bars,
+horizontal access to clipped text without resizing panes, and hiding bars when
+their content fits. Vertical tracks/thumbs now have two-cell paint/hit regions.
+Live Source/Disassembly, Console, Call Stack and Threads share overflow geometry,
+reserve horizontal tracks above action footers, and retain independent horizontal
+offsets per pane/view. Source line/execution gutters stay fixed. Thumb dragging,
+track paging and Left/Right operate within clamped bounds; horizontal wheels work
+over the track. Neither axis draws a bar when its data fits. Static demo vertical
+bars use the wider target; live horizontal inspection does not fabricate demo
+backend functionality. Browsing still leaves stopped PC unchanged.
+
+C TUI regressions exercise Source/Console horizontal drag, track paging, keyboard
+clamping, independent positions, two-cell vertical paint, PC preservation and
+bar disappearance when source fits after resizing. The prior render assertion
+expected selection in a column now occupied by the wider scrollbar; its new
+assertions verify both track columns and the adjacent selection boundary.
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make -j4 test test-native` | PASS | `build/m07-scroll-final.log` |
+| `make -j4 CC=clang CXX=clang++ BUILD_DIR=build/m07-clang test test-native` | PASS | `build/m07-scroll-clang-final.log` |
+| `make test-tmux` | PASS, preserved demo mouse/drag/key/layout forwarding | `build/m07-scroll-tmux.log` |
+| `make sanitize sanitize-native` | PASS, ASan/UBSan with leak detection | `build/m07-scroll-sanitize.log` |
+| `make analyze` | PASS, no unsuppressed project diagnostics; 169 non-user/11 NOLINT suppressions | `build/m07-scroll-analyze-final.log` |
+| Rebuild/run `test-code-tui` with GCC and Clang after additional track-paging assertions | PASS | `build/m07-scroll-paging{,-clang}.log` |
+
+Analyzer originally flagged adjacent axis dimensions and view/row parameters;
+two documented narrow NOLINT annotations identify their intentional domain order.
+No diagnostic check was disabled globally. `git diff --check` passes.
+The final additional paging assertions also pass under ASan/UBSan with leak
+detection: rebuild the sanitizer application/test-code-tui using the flags from
+Makefile's sanitize target, then run
+`UBSAN_OPTIONS=halt_on_error=1 build/sanitize/test-code-tui "$PWD/build/sanitize/the-bugger" "$PWD/build/sanitize/code-fixture"`
+(`build/m07-scroll-paging-sanitize{,-build}.log`).
+
+M07 owner-requested launcher refinement: the later supplied image replaces only
+the startup presentation. The card is centered on both axes (up to 100 columns;
+23 rows normally, 15 below 28 terminal rows), using existing Monokai Pro roles,
+pink title, right-aligned v0.1.0, subtle rules, whole-row choices/descriptions,
+small ASCII icons and chevrons. Selected rows retain a non-color marker and
+monochrome behavior. No assets, additional library, animation or polling work was
+introduced. Existing configuration/workspace, session availability, unavailable
+profiles, return-to-preview and quit semantics remain intact; no beta suffix.
+
+The C PTY regression verifies horizontal/vertical centering at 140x44 and 200x60,
+description-row activation, suffix-free version and all three keyboard-selectable
+flows at 48x18. Normal suites retain mouse session forms, direct/256/monochrome
+rendering, workspace controls, terminal cleanup and real native code debugging.
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make -j4 test test-native` | PASS | `build/m07-launcher-gate.log` |
+| `make -j4 CC=clang CXX=clang++ BUILD_DIR=build/m07-clang test test-native` | PASS | `build/m07-launcher-clang.log` |
+| `make analyze` | PASS, no unsuppressed project diagnostics; 173 non-user/11 NOLINT suppressions | `build/m07-launcher-analyze.log` |
+| `make test-tmux` | PASS, isolated server and preserved session/workspace forwarding | `build/m07-launcher-tmux.log` |
+| `make sanitize sanitize-native` | PASS, ASan/UBSan with leak detection | `build/m07-launcher-sanitize.log` |
+| `git diff --check` | PASS | No whitespace diagnostics |
+
+Changed src/tui/app.c, tests/integration/test_tui.c and the existing specification,
+design mapping, architecture, roadmap, testing/progress/changelog and README.
+Manual acceptance: inspect the new launcher at ordinary/large/compact sizes,
+activate titles/descriptions by mouse and keyboard, then complete pending M07
+debugging/scrollbar checks. M07 remains AWAITING USER ACCEPTANCE; no Git writes.
+
+M07 further assembly/scrollbar review: the owner rejected instruction windows
+restarting at PC on every step and the two-column vertical bar. The later agreed
+policy supersedes that earlier width request: vertical bars are one cell, with
+the same cyan thumb/muted track as horizontal bars. Current instructions are
+retained within a refreshed window, and 16 earlier anchors/ranges survive stop
+changes for backward browsing and returning from callees. Wheel/key scrolling
+at window edges can fetch known previous/next windows. Browsing never moves PC.
+
+Initial context uses GDB's structured instruction function offset, where valid,
+for one bounded preceding decode (1024-byte lookbehind plus the ordinary 256-byte
+forward range). Only four preceding instructions and the bounded forward listing
+are retained. Nearby function-origin browsing can decode up to the current window
+and retain at most 128 preceding instructions. No guessed x86 boundaries, eager
+whole-function scan, growing execution history or frontend expression evaluation
+is introduced. Missing/distant origins retain honest navigation limitations.
+Every stopped refresh reads current bytes; old windows are never passed off as
+historical execution or current target values without a fresh reply.
+
+The owner agreed to a stable viewport through the middle, scrolling only to keep
+about five rows below PC; short panes scale this margin. First context can place
+PC around the fifth visible instruction if four earlier instructions are known.
+Manual browsing stays put until stepping/Stopped. Toolbar now spells out
+Shift+F11; actual key input is regression tested returning from code_callee to
+main. Step Out is function return, not leaving a loop; an endless-looping function
+can keep running until interrupted. Official IAR Debug menu documents the same
+binding/meaning; this is not an F12 remap or a new loop-exit action.
+
+Tests add synthetic offsets/earlier bounded decoding, native retention of the
+previous PC instruction across steps, earlier-window browsing after return, and
+20 actual TUI instruction steps checking viewport stability and the lower margin.
+Rendering asserts one-cell styling and the adjacent selection boundary. Earlier
+test failures were stale toolbar text, a clipped source-line expectation and a
+tab-label coordinate used for the execution gutter; all were inspected against
+actual rendered rows rather than changing debugger semantics to satisfy tests.
+
+Changed model/code, TUI app/render, fake MI peer, code model/native/TUI and render
+tests, plus existing specification/roadmap/design/architecture/testing/README/
+changelog documentation. M07 still awaits owner review. No Git writes or M08 work.
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make -j4 test test-native` | PASS | `build/m07-assembly-final.log` |
+| `make -j4 CC=clang CXX=clang++ BUILD_DIR=build/m07-clang test test-native` | PASS | `build/m07-assembly-clang.log` |
+| `make sanitize sanitize-native` | PASS, ASan/UBSan with leak detection | `build/m07-assembly-sanitize.log` |
+| `make analyze` | PASS, no unsuppressed project diagnostics; 173 non-user/11 NOLINT suppressions | `build/m07-assembly-analyze.log` |
+| `make test-tmux` | PASS, isolated real tmux with the narrow bar/explicit key label | `build/m07-padding-tmux.log` |
+| `git diff --check` | PASS | No whitespace diagnostics |
+
+Manual test now: repeat instruction F11/F10 in code-fixture, scroll before/after
+PC, verify earlier instructions persist and a five-row lower margin only moves
+the viewport when necessary. Check one-cell vertical style against the horizontal
+bar. Try Shift+F11 or its explicit toolbar button inside code_callee; it returns
+from that finite function. In an endless-looping main, Step Out may run until
+Pause because main does not return. Inspect ordinary and short panes in terminal/
+tmux. GDB metadata limits initial preceding context; hardware remains UNVERIFIED.
+Status remains **AWAITING USER ACCEPTANCE** for M07 and its corrections.
+
+Latest M07 screenshot feedback — only immediate points 1–2 implemented:
+
+- Vertical scrollbar width stays one cell. Its muted `|` track/cyan `#` thumb
+  express the vertical axis; horizontal bars retain their own `-`/`=` glyphs.
+- Wheel-up at the initial assembly boundary could read a one-instruction prefix
+  and replace the entire forward listing. Backward-prefix replies now prepend
+  those instructions to a bounded owned copy of the existing forward data,
+  retaining at most 128 combined instructions. The old first row anchors viewport
+  movement, so a short prepend neither collapses the display nor jumps to the
+  tail. PC remains unchanged. Copies are freed on completion/error/cancellation,
+  navigation changes, reset and destruction. Further actions reject a queued
+  stale window rather than overwrite a pending navigation.
+- Synthetic regression includes exactly one preceding instruction. Actual GDB
+  repeats wheel-up/down at debug-fixture's main entry and checks that at least
+  eight rows and the original PC remain visible. Existing code/scroll/step and
+  workspace suites remain enabled. Makefile passes the additional fixture to the
+  C TUI harness; its original three-argument invocation remains supported.
+
+Points 3–4 are deliberately **not researched or redesigned in this correction**.
+The tracked docs/plan.md records M08's owner-requested stages: first thorough
+official-source research/report and owner decisions about wider disassembly
+browsing/availability and repeated zero-byte decoding; then the approved browsing
+implementation; finally original M08 breakpoints/Run to Selected. Wait for M07
+manual acceptance, owner commit/push, owner go-ahead and planned model switch.
+Neither the screenshot nor these fixes establish that an entire target's
+assembly is already available or that zero-byte decoding denotes application code.
+
+Immediate changes: src/model/code.c; src/tui/app.c/render.c; C fake-peer/model/TUI
+tests and Makefile; existing specification, roadmap, design, architecture, tests,
+changelog/progress and README. M07 remains AWAITING USER ACCEPTANCE. No Git writes.
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make -j4 test test-native` | PASS, including the original-session wheel regression | `build/m07-wheel-final.log` |
+| `make -j4 CC=clang CXX=clang++ BUILD_DIR=build/m07-clang test test-native` | PASS | `build/m07-wheel-clang-final.log` |
+| `make sanitize sanitize-native` | PASS, ASan/UBSan with leak detection | `build/m07-wheel-sanitize-final.log` |
+| `make analyze` | PASS, no unsuppressed project diagnostics; 173 non-user/11 NOLINT suppressions | `build/m07-wheel-analyze-final.log` |
+| `make test-tmux` | PASS, isolated demo terminal/mouse/layout forwarding | `build/m07-wheel-tmux.log` |
+| `git diff --check` | PASS | No whitespace diagnostics |
+
+Manual check: relaunch, load debug-fixture and send Console `start`; wheel up at
+the top of Disassembly and back down. Rows/current PC must not collapse to the
+single earlier push instruction. Check the vertical one-cell `|`/`#` bar and
+unchanged horizontal `-`/`=` bar. Complete owner review before committing M07.
+Broader browsing/data-boundary limitations remain for M08 research; hardware and
+release acceptance remain UNVERIFIED.
+
+Additional changed files: tests/unit/test_render.c and docs/design/tui-mapping.md;
+the shared scrolling correction stays in src/tui/app.c/render.c and the existing
+code TUI harness. Specification/roadmap/checklists describe the owner request.
+M07 remains awaiting manual acceptance; no Git writes or next-gate work occurred.
+
+### M07 review — symmetric navigation margin and default pane height
+
+Owner requested the existing five-row Disassembly follow margin at the top as
+well as the bottom, and slightly more height for Source/Disassembly/Registers.
+Following now scrolls only when PC enters either margin, with bounds for short
+panes and the available listing. Manual browsing remains unchanged until a new
+step/return-to-stop update. Initial limited preceding context is unchanged;
+broader disassembly availability remains the M08 research decision.
+
+The default upper row receives 62% rather than 56% of usable height. Only the
+initial ratio changed: user dragging, minimum sizes, splits and resize retention
+continue through the existing layout engine. No additional workspace mode.
+
+Changed src/tui/app.c, src/layout/layout.c, tests/unit/test_layout.c and
+tests/integration/test_code_tui.c, plus the existing specification/design/testing/
+architecture/roadmap/changelog notes. The real-GDB C terminal test now browses PC
+near the top, resumes instruction stepping and checks both five-row margins;
+the layout test checks that the default upper row is taller. README is updated
+last. M07 remains awaiting-user; hardware/release evidence is still UNVERIFIED.
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make -j4 test test-native` | PASS | `build/m07-padding-final.log` |
+| `make -j4 CC=clang CXX=clang++ BUILD_DIR=build/m07-clang test test-native` | PASS | `build/m07-padding-clang.log` |
+| `make sanitize sanitize-native` | PASS, ASan/UBSan and leak checks | `build/m07-padding-sanitize.log` |
+| `make analyze` | PASS, no unsuppressed project diagnostics | `build/m07-padding-analyze.log` |
+| `make test-tmux` | PASS, isolated terminal/mouse/layout checks | `build/m07-padding-tmux.log` |
+| `git diff --check` | PASS | No whitespace diagnostics |
+
+Manual check: start the TUI, load code-fixture and send Console `start`. Inspect
+the taller default upper row. Step instructions toward the bottom; browse PC
+near the top and step again. Expect roughly five visible rows on either side
+where context permits. Drag the row divider and shrink/restore the terminal;
+your ratio must remain in effect. Owner visual acceptance remains pending.

@@ -16,7 +16,8 @@ static void print_help(void)
          "  --demo       Open the explicitly simulated visual workspace\n"
          "\n"
          "Without arguments, open the native launch/attach launcher.\n"
-         "Native Continue/Pause and Console work; inspection is not available yet.\n"
+         "Native execution, code/stack/thread inspection and Console are live.\n"
+         "Breakpoints and other inspection remain under development.\n"
          "Embedded/remote configuration remains an explicit preview.");
 }
 

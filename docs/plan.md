@@ -1,9 +1,10 @@
 # Development roadmap — v0.1.0 through v1.0.0
 
 Approved roadmap. Version targets are expected sequencing, not deadlines.
-M05 is accepted and committed/pushed as 0278b61. **M06 only** is authorized;
-M07 and later gates require the usual acceptance, owner commit/push and explicit
-continuation.
+M06 is accepted and committed/pushed as 1b21504. **M07 only** is authorized.
+Simple positive feedback without issues implies acceptance and next-milestone
+authorization unless specified otherwise. Questions/instructions do not. The
+owner commit/push gate always remains required before beginning the next gate.
 
 ## Product and preserved work
 
@@ -26,8 +27,10 @@ unimplemented M03–M07 grouping is replaced by M03–M18 below; Git history is 
 rewritten. Existing demo data proves visual behavior only. The MI parser and
 controller have independent diagnostic tools. Native launch/attach, Continue/Pause,
 console/output and Save Log integrate with the workspace. M06 adds selected
-context, Call Stack and Threads; other inspection and profile persistence remain
-in their later gates. Explicit --demo preserves
+context, Call Stack and Threads. M07 adds live Source/Disassembly, mixed/AT&T,
+focus-driven stepping, read-only code navigation and source recovery; it awaits
+owner validation. Breakpoints/Run to Selected and other inspection/profile
+persistence remain in their later gates. Explicit --demo preserves
 the visual-reference sample and its tests independently of live sessions.
 
 AGENTS.md governs requirements and workflow. The approved visual/interaction
@@ -62,7 +65,9 @@ Record exclusions, failed/blocked checks, and compatibility/hardware limitations
 Lifecycle: implement → run/inspect checks → document and provide a proposed
 Conventional Commit message (title at most 50 characters, detailed body) →
 **stop for manual review** → fix feedback and revise the message as needed →
-explicit acceptance → owner commits/pushes → explicit continuation.
+acceptance → owner commits/pushes → continuation. Simple positive feedback
+without issues also authorizes continuation unless specified otherwise;
+questions/instructions do not. Never bypass the commit/push gate.
 Always include the message at delivery so the owner can commit after a successful
 manual review. Providing it does not imply acceptance or authorize advancement.
 No autonomous commit, push, tag, merge, rebase, or milestone advancement. Neither
@@ -156,7 +161,7 @@ All new v0.1.0 capabilities are release evidence requirements, not just visible 
 | M05 / M04 | Real native launch/attach, Continue/Pause, state, isolated output, console and Save Log; inspection unavailable until its gates. | Real GDB fixtures: argv/cwd/env, spaces, attach allowed/denied, control-character isolation, bad command, file-write failure, exit/cleanup. | Launch/pause/continue, inspect output, use console, save log, attach/detach owned fixture and recover configuration. FR-02/03/12/19/29. |
 | M06 / M05 | Selected thread/frame, stopped-context generations, Call Stack and Threads; no RTOS inspectors. | Recursive/multithread fixtures; thread exit, inline/tail frames as GDB supplies, missing unwind, rapid switches/stale replies. | Switch context and verify real names/arguments and honest unavailable frames. FR-10, NFR-07. |
 | M07 / M06 | Live Source/Disassembly, mixed display, source/instruction stepping, Step Out, navigation and source recovery; no PC-changing commands. | GDB comparisons at -O0/-O2/stripped; multi-instruction lines, retained mode, moved sources, spaces/duplicate basenames/path failures. | Step from each pane/toolbar; verify synchronization, AT&T, caller-frame label, navigation and moved-tree recovery. FR-06/07/21/22/28. |
-| M08 / M07 | Code breakpoints, conditions, ignore counts, pending/multiple locations, hardware requirement and Run to Selected; no logpoints/catchpoint UI. | Set/hit/disable/remove/events, invalid conditions, unresolved locations, exhausted hardware, temporary cleanup and intervening stops/signals. | Exercise gutter/keys/list/properties; run to line/address without damaging other breakpoints. FR-11/23/24. |
+| M08 / M07 | First research/review disassembly browsing, then implement owner-approved findings, then complete code breakpoints, conditions, ignore counts, pending/multiple locations, hardware requirement and Run to Selected. See the staged scope below; no logpoints/catchpoint UI. | Research decisions define focused disassembly tests; original breakpoint tests retain set/hit/disable/remove/events, invalid conditions, unresolved locations, exhausted hardware, temporary cleanup and intervening stops/signals. | Review/approve browsing decisions and validate them, then exercise gutter/keys/list/properties and run to line/address without damaging user breakpoints. FR-07/22/28 and FR-11/23/24. |
 | M09 / M06 | Discovered CPU registers, formats, changes and available groups; no editing/custom groups/bitfield decoder. | Native GDB and x86/ARM MI fixtures; unusual/large sets, unavailable values, frame/thread changes and change-baseline reset. | Compare GDB values, change format, step and inspect context-correct changes. FR-08/20, NFR-07. |
 | M10 / M06 and view-instance state | Independent Memory, bounded expression/address reads, hex/ASCII, grouping/target byte order; no editing/search/export/comparison. | Buffers, partial/unreadable ranges, invalid expressions, overflow/endian, separate instances/paging and no unsolicited MMIO reads. | Inspect two buffers independently, scroll/group, and verify invalid-address and deliberate-refresh behavior. FR-09/20/26. |
 | M11 / M06 | Expandable Locals/Watches, types/formats/change state, lazy children/array paging; no editing/Auto/Statics/STL-specific UI. | C/C++ aggregates, arrays/pointers, scopes/recursion, optimized/unavailable, invalid/mutating expressions, bounds and varobject cleanup. | Add/remove/expand watches, page arrays and change frames without fabricated data. FR-10/27. |
@@ -167,6 +172,46 @@ All new v0.1.0 capabilities are release evidence requirements, not just visible 
 | M16 / M15 | OpenOCD catalog/filter, board/advanced ordered argv, managed server, Reset/Halt and disconnect choices; no Load/Flash UI. | Discovery/order/no duplicated dependencies, paths, readiness/timeout/busy ports, fake-server failures, profiles and ownership. | Review exact scripts/argv; recover missing/bad setup; inspect actions/logs. No hardware claim from offline tests. FR-04/18/30. |
 | M17 / M14–M16 | Real release-target acceptance, starting STM32, then owner's Xtensa and RISC-V ESP32 boards. Reproducible fixtures; no automatic programming or unspecified-board claim. | Firmware fixture builds, architecture MI regressions and applicable native suites; QEMU ARM/RISC-V runs as supplementary coverage when available. | Owner programs fixtures externally; validates halt/step/break/watch, source/assembly/registers/RAM/locals, cleanup and disconnect on real boards. FR-15/31. |
 | M18 / M14 and owner-confirmed M17 | Release evidence, compatibility, docs and remaining defects; no deferred features. | Clean GCC/Clang, suites/sanitizers/analysis/tmux, stress and FR/NFR evidence audit. | README clean-checkout workflow, per-release matrix below, explicit owner release acceptance and existing owner license/provenance finalization. No autonomous tag. |
+
+## M08 staged disassembly review and original scope
+
+The owner's latest M07 feedback adds this ordering to the **next milestone**.
+It is recorded now, not authorized to start during M07 fixes. Wait for M07 manual
+acceptance, owner commit/push and the owner's go-ahead/model switch.
+
+1. **Research and product review first.** Thoroughly examine official IAR/C-SPY,
+   GDB/MI and relevant debugger documentation/implementations. Report sources and
+   section references in the discussion, distinguish observed implementation
+   from assumptions, and ask the owner concrete questions where needed. Investigate:
+   - Browsing instructions before/after PC beyond the current four-line initial
+     context, across functions/images, with PC/breakpoint overlays and return to PC.
+   - Whether and where assembly is actually available at session startup versus
+     obtained/decoded on demand; native and embedded/remote trade-offs.
+   - The reported repeated `00 00` / `add %al,(%rax)` rows after scrolling far
+     down: establish whether displayed bytes belong to code, padding/data or
+     another region; do not assume the screenshot proves either valid code or
+     fabricated data. Decide how unavailable/unmapped/non-code boundaries should
+     be represented and navigated.
+   - Suitable address/function/section boundaries, lazy fetching/cache limits,
+     correct x86 variable-length boundaries, target reads and performance. Do
+     not assume that eagerly decoding an entire target is necessary or desirable.
+   Compare terminal-native alternatives while preserving the approved workspace,
+   architecture-neutral C model, AT&T x86-64 syntax and nonblocking behavior.
+   The owner decides the resulting product behavior and bounded implementation
+   scope before Stage 2; do not preselect a solution in this note.
+2. **Implement the approved browsing decisions.** Deliver the agreed disassembly
+   changes, focused C tests and a reproducible native demonstration before the
+   original M08 feature work. Research decisions must define limits/errors,
+   non-functional requirements, regression fixtures and manual acceptance cases.
+3. **Complete original M08.** Code breakpoints, conditions/ignore counts,
+   pending/multiple locations, Default / Require hardware and Run to Selected,
+   with the existing tests/exclusions above. This scope is preserved, not replaced.
+
+The gate contract still applies: automated evidence, owner manual validation,
+proposed Conventional Commit, owner commit/push, then authorized continuation.
+This note neither accepts M07 nor starts M08. Points 3–4 of the owner's current
+feedback are deliberately deferred to Stage 1; no broader browsing redesign is
+included in the immediate scrollbar/origin-window collapse fix.
 
 ## Per-release architecture regression gate
 
@@ -286,9 +331,33 @@ IAR/C-SPY defects. These findings directly informed accepted requirements:
 
 ## Current authorization
 
-The owner accepted M05, committed/pushed 0278b61 and explicitly authorized M06.
-Deliver only selected thread/frame context, live Call Stack and Threads, bounded
-paging and stale-generation handling, associated C tests, documentation and TUI
-demonstration. Source/assembly, stepping, breakpoint UI, other inspection and
-profiles remain in their later gates. Stop for M06 manual acceptance with the
-proposed commit message. Do not start M07.
+The owner accepted M06, committed/pushed 1b21504 and authorized M07. Deliver live
+Source/Disassembly, mixed display, AT&T x86-64 syntax, source/instruction stepping,
+Step Out, navigation and source recovery with C tests and a TUI demonstration.
+Breakpoint management and Run to Selected remain M08; other inspection and
+profiles retain their gates. Stop for M07 acceptance with a proposed commit.
+Positive feedback implies continuation authorization as described above, after
+the owner commit/push gate; do not advance merely on successful automated tests.
+
+M07 manual-review correction authorized by the owner: provide one-cell vertical
+scrollbars matching horizontal styling and overflow-only horizontal bars in live code/Console/
+context views. Keep independent per-view horizontal position, mouse thumb/track
+and keyboard navigation, fixed source line gutters, clamping across resize/data
+changes, and no bars on a fitting axis. Preserve the accepted workspace geometry
+and action footers. This remains part of M07 review, not authorization for M08.
+
+The owner additionally authorized the supplied launcher image's hierarchy, using
+Monokai Pro, a larger card centered on both axes, full-row choices/descriptions,
+icons/chevrons and compact terminal adaptation. Keep configuration behavior and
+the workspace unchanged, with no heavy rendering dependency or prerelease suffix.
+Include focused launcher/input/resize regressions in the pending M07 review.
+
+Later M07 review refined assembly navigation: retain surrounding decoded code and
+bounded window anchors across stops; allow backward/forward browsing without PC
+changes. Show roughly four preceding instructions initially where valid metadata
+permits; preserve the viewport until the PC reaches a five-row top or bottom
+margin, scaled down for short panes and clamped to available context. Manual
+browsing remains until stepping/Stopped. The default upper row uses 62% of the
+usable row height rather than 56%; all user-adjusted divider ratios remain intact.
+Use GDB function-offset metadata and bounded reads, never guessed x86 boundaries.
+Label Shift+F11 explicitly. Step Out means function return, not leaving a loop.

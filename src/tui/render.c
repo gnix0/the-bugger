@@ -139,9 +139,9 @@ static bool view_line(const TbDemo *demo, TbView view, int index,
     return true;
 }
 
-/* Demo-only lexical coloring; this does not parse or evaluate source code. */
+/* Read-only lexical coloring; this does not parse or evaluate source code. */
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): follows curses y/x convention.
-static void code_text(int y, int x, int width, const char *code, bool selected)
+void tb_render_source_text(int y, int x, int width, const char *code, bool selected)
 {
     int offset = 0;
     while (code[offset] != '\0' && offset < width) {
@@ -181,7 +181,7 @@ static void styled_line(TbView view, int y, int x, int width, const char *text,
         tb_text(y, x, 1, selected ? tb_selected_style(TB_PINK) : TB_PINK, A_BOLD, text);
         tb_text(y, x + 1, 1, selected ? tb_selected_style(TB_YELLOW) : TB_YELLOW, A_BOLD, text + 1);
         tb_text(y, x + 2, 4, selected ? tb_selected_style(TB_MUTED) : TB_MUTED, 0, text + 2);
-        code_text(y, x + 6, width - 6, text + 6, selected);
+        tb_render_source_text(y, x + 6, width - 6, text + 6, selected);
         return;
     }
     /* Column boundaries match the sample table format above. */
@@ -245,7 +245,7 @@ void tb_render_demo(const TbDemo *demo, int pane_index, TbRect rect)
         for (int row = 0; row < scroll.visible; ++row) {
             bool thumb = row >= scroll.thumb_start && row < scroll.thumb_start + scroll.thumb_size;
             tb_text(rect.y + 2 + row, rect.x + rect.w - 1, 1,
-                    thumb ? TB_CYAN : TB_BORDER, 0, thumb ? "#" : "|");
+                    thumb ? TB_CYAN : TB_MUTED, 0, thumb ? "#" : "|");
         }
     }
     static const char *const footers[] = {

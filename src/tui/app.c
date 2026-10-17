@@ -20,12 +20,16 @@
 
 enum { MAX_CONTROLS = 1024, FIELD_SIZE = 256, FORM_FIELDS = 9 };
 typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
-               COMMAND_INPUT, SAVE_INPUT, CLOSE_CONFIRM } Page;
+               COMMAND_INPUT, SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS } Page;
+typedef enum { CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_ADDRESS, CODE_STOPPED,
+               CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_DIRECTORY_ADD, CODE_RULE_FROM,
+               CODE_RULE_TO, CODE_SETTINGS_CLEAR } CodeAction;
 typedef enum {
     CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
     TOOL, TAB, MENU, BODY, SHOW_VIEW, FOCUS_PANE, CANCEL_RESET, CONFIRM_RESET,
     MENU_SECTION, PANE_ACTION, DIVIDER, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR,
-    COMMAND_OPEN, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_PAGE
+    COMMAND_OPEN, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_PAGE,
+    CODE_ACTIONS, CODE_ACTION, CODE_PAGE, CODE_FILE_PICK, CODE_FILE_PAGE, HSCROLLBAR
 } ControlKind;
 
 typedef struct {
@@ -55,6 +59,7 @@ typedef struct {
     bool quit, previewed, menu_focus, menu_actions, resizing, keyboard_focus;
     int drag, resize_divider;
     int scroll_drag_pane, scroll_drag_grab;
+    bool scroll_drag_horizontal;
     Control controls[MAX_CONTROLS];
     TbRect panes[TB_MAX_PANES];
     const char *colors;
@@ -63,7 +68,22 @@ typedef struct {
     bool demo_mode, live, leave_session, exit_after_close;
     bool follow_log[TB_MAX_PANES];
     wchar_t input[FIELD_SIZE];
+    bool instruction_mode;
+    int code_pane, file_page, horizontal[TB_MAX_PANES][TB_VIEW_COUNT];
+    int body_width[TB_MAX_PANES], body_height[TB_MAX_PANES];
+    TbScroll horizontal_scroll[TB_MAX_PANES];
+    CodeAction code_action;
+    char rule_from[FIELD_SIZE * 4];
+    uint64_t source_revision[TB_MAX_PANES], assembly_revision[TB_MAX_PANES];
+    bool assembly_tail[TB_MAX_PANES];
+    char assembly_previous[TB_MAX_PANES][48];
+    int assembly_scroll_up[TB_MAX_PANES];
 } App;
+
+static bool editing_page(const App *app)
+{
+    return app->page == COMMAND_INPUT || app->page == SAVE_INPUT || app->page == CODE_INPUT || app->page == CODE_FILES;
+}
 
 /* Signal handler communicates only through this flag; cleanup runs normally. */
 static volatile sig_atomic_t interrupted;
@@ -213,28 +233,48 @@ static void draw_header(const App *app, const char *subtitle)
 
 static void draw_launcher(App *app)
 {
-    draw_header(app, "Start a debugging session");
-    int width = COLS > 82 ? 76 : COLS - 6;
+    bool compact = LINES < 28;
+    int width = COLS > 108 ? 100 : COLS - 8;
     int left = (COLS - width) / 2;
-    tb_fill((TbRect){left - 1, 4, width + 2, 11}, TB_PANEL);
-    tb_text(4, left, width, TB_PANEL, A_BOLD, "Start a debugging session");
+    int height = compact ? 15 : 23, top = (LINES - 2 - height) / 2;
+    tb_fill((TbRect){left, top, width, height}, TB_PANEL);
+    int title = top + (compact ? 0 : 1);
+    tb_text(title, left + 2, width - 16, TB_PINK, A_BOLD, "THE BUGGER");
+    char version[32]; (void)snprintf(version, sizeof version, "v%s", THE_BUGGER_VERSION);
+    tb_text(title, left + width - 2 - (int)strlen(version), (int)strlen(version), TB_MUTED, 0, version);
+    tb_style(TB_BORDER, 0); (void)mvhline(top + (compact ? 2 : 3), left + 2, ACS_HLINE, width - 4);
+    tb_text(top + (compact ? 3 : 5), left + 2, width - 4, TB_PANEL, A_BOLD, "Start a debugging session");
     const char *const descriptions[] = {
-        "Launch or attach locally", "Board script or advanced adapter + target",
-        "Existing remote endpoint; server stays external"
+        "Launch or attach to a native process", "Choose a board or configure adapter + target",
+        "Use an existing remote debugging endpoint"
     };
+    const char *const icons[] = {">_", "[]", "<>"};
+    const TbStyle accents[] = {TB_GREEN, TB_CYAN, TB_ORANGE};
     for (int i = 0; i < 3; ++i) {
-        char text[96];
-        (void)snprintf(text, sizeof text, "  %s", session_names[i]);
-        button(app, 6 + i * 2, left, width, text, CHOOSE_SESSION, i, 0);
-        tb_fill((TbRect){left, 7 + i * 2, width, 1}, TB_SURFACE);
-        tb_text(7 + i * 2, left + 2, width - 4, TB_TAB, 0, descriptions[i]);
+        int stride = compact ? 2 : 3, y = top + (compact ? 5 : 7) + i * stride;
+        int control = add_control(app, (TbRect){left + 1, y, width - 2, stride}, CHOOSE_SESSION, i, 0);
+        bool selected = control == app->focus;
+        TbStyle surface = selected ? TB_SELECTED : TB_PANEL;
+        tb_fill((TbRect){left + 1, y, width - 2, stride}, surface);
+        tb_text(y, left + 1, 1, surface, A_BOLD, selected ? ">" : " ");
+        tb_text(y, left + 3, 2, selected ? tb_selected_style(accents[i]) : accents[i], A_BOLD, icons[i]);
+        tb_text(y, left + 7, width - 12, surface, selected ? A_BOLD : 0, session_names[i]);
+        tb_text(y + 1, left + 7, width - 12, selected ? tb_selected_style(TB_MUTED) : TB_MUTED, 0, descriptions[i]);
+        tb_text(y, left + width - 4, 1, selected ? tb_selected_style(TB_GREEN) : TB_MUTED, 0, ">");
     }
-    tb_text(13, left, width, TB_MUTED, 0, app->demo_mode ?
+    int rule = top + (compact ? 11 : 17);
+    tb_style(TB_BORDER, 0); (void)mvhline(rule, left + 2, ACS_HLINE, width - 4);
+    tb_text(rule + 1, left + 2, width - 4, TB_MUTED, 0, app->demo_mode ?
             "Recent sessions: none saved in this preview." : "Recent sessions: profiles not implemented yet.");
+    tb_text(rule + 2, left + 2, width - 4, TB_MUTED, 0, app->demo_mode ?
+            "DEMO / VISUAL REFERENCE - no debugger connected" : "Native Linux | Server flows remain previews");
+    int actions = top + height - 1;
     if (app->previewed) {
-        button(app, LINES - 4, 3, 22, "[ Return to preview ]", BACK, 0, 0);
+        button(app, actions, left + 2, 22, "[ Return to preview ]", BACK, 0, 0);
     }
-    button(app, LINES - 4, COLS - 12, 9, "[ Quit ]", QUIT, 0, 0);
+    button(app, actions, left + width - 11, 9, "[ Quit ]", QUIT, 0, 0);
+    tb_text(LINES - 2, 1, COLS - 2, TB_YELLOW, 0, app->status);
+    tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0, "Tab / arrows / Enter or click | Ctrl+Q quit app");
 }
 
 static void draw_form(App *app, bool review)
@@ -356,23 +396,287 @@ static void draw_menu(App *app, int pane, TbRect rect)
             app->menu_actions ? "< Show views" : "Pane actions >", MENU_SECTION, 0, pane);
 }
 
+static int assembly_rows(const TbCodeView *view);
+static void context_row(const TbContextSnapshot *snapshot, TbView view, int item,
+                        char *text, size_t capacity, bool *selected);
+
+static void mixed_summary(const App *app, int index, const TbInstruction *instruction,
+                          char *summary, size_t capacity)
+{
+    const TbCodeView *view = tb_code_view(tb_native_code(app->native), index);
+    char text[1024] = {0};
+    if (strcmp(instruction->source, view->path) == 0) {
+        (void)tb_code_source_line(tb_native_code(app->native), index, (size_t)instruction->line - 1, text, sizeof text);
+    }
+    if (*text) { (void)snprintf(summary, capacity, "  L%d %.1023s", instruction->line, text); }
+    else {
+        char file[512]; tb_code_safe(file, sizeof file, instruction->source, strlen(instruction->source));
+        (void)snprintf(summary, capacity, "  L%d %.511s <source text unavailable>", instruction->line, file);
+    }
+}
+
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): content length, viewport length, then position on that axis.
+static TbScroll axis_scroll(int total, int visible, int offset)
+{
+    TbScroll scroll = {.total = total, .visible = visible};
+    if (visible <= 0) { return scroll; }
+    scroll.maximum = total > visible ? total - visible : 0;
+    scroll.offset = offset < 0 ? 0 : offset > scroll.maximum ? scroll.maximum : offset;
+    scroll.thumb_size = scroll.maximum ? visible * visible / total : visible;
+    if (scroll.thumb_size < 1) { scroll.thumb_size = 1; }
+    scroll.thumb_start = scroll.maximum ? scroll.offset * (visible - scroll.thumb_size) / scroll.maximum : 0;
+    return scroll;
+}
+
 static TbScroll workspace_scroll(const App *app, const TbDemoPane *pane, int visible)
 {
     if (!app->live) { return tb_demo_scrollbar(&app->demo, pane, visible); }
+    int index = (int)(pane - app->demo.panes);
+    if (app->body_height[index] > 0) { visible = app->body_height[index]; }
     TbView view = pane->tabs[pane->active];
     const TbContextSnapshot *context = tb_context_snapshot(tb_native_context(app->native));
-    TbScroll scroll = {.total = view == TB_CONSOLE ? (int)tb_native_log_count(app->native) :
-                       view == TB_CALL_STACK ? (int)context->frame_count :
-                       view == TB_THREADS ? (int)context->thread_count : 0,
-                       .visible = visible};
-    if (visible <= 0) { return scroll; }
-    scroll.maximum = scroll.total > visible ? scroll.total - visible : 0;
-    scroll.offset = pane->scroll[view] < scroll.maximum ? pane->scroll[view] : scroll.maximum;
-    if (scroll.offset < 0) { scroll.offset = 0; }
-    scroll.thumb_size = scroll.maximum == 0 ? visible : visible * visible / scroll.total;
-    if (scroll.thumb_size < 1) { scroll.thumb_size = 1; }
-    scroll.thumb_start = scroll.maximum == 0 ? 0 : scroll.offset * (visible - scroll.thumb_size) / scroll.maximum;
-    return scroll;
+    const TbCodeView *code = tb_code_view(tb_native_code(app->native), (int)(pane - app->demo.panes));
+    int total = view == TB_CONSOLE ? (int)tb_native_log_count(app->native) :
+                       view == TB_SOURCE ? (int)code->line_count :
+                       view == TB_DISASSEMBLY ? assembly_rows(code) :
+                       view == TB_CALL_STACK && context->ready && !context->stale ? (int)context->frame_count :
+                       view == TB_THREADS && context->ready && !context->stale ? (int)context->thread_count : 0;
+    return axis_scroll(total, visible, pane->scroll[view]);
+}
+
+static int native_content_width(const App *app, int index)
+{
+    const TbDemoPane *pane = &app->demo.panes[index];
+    TbView view = pane->tabs[pane->active];
+    const TbCodeView *code = tb_code_view(tb_native_code(app->native), index);
+    const TbContextSnapshot *context = tb_context_snapshot(tb_native_context(app->native));
+    size_t rows = view == TB_SOURCE ? code->line_count : view == TB_DISASSEMBLY ? code->instruction_count :
+                  view == TB_CONSOLE ? tb_native_log_count(app->native) : view == TB_CALL_STACK && context->ready && !context->stale ? context->frame_count :
+                  view == TB_THREADS && context->ready && !context->stale ? context->thread_count : 0;
+    size_t maximum = 0;
+    for (size_t row = 0; row < rows; ++row) {
+        char text[4096]; bool selected;
+        if (view == TB_SOURCE) { (void)tb_code_source_line(tb_native_code(app->native), index, row, text, sizeof text); }
+        else if (view == TB_DISASSEMBLY) {
+            const TbInstruction *instruction = &code->instructions[row];
+            (void)snprintf(text, sizeof text, "%s  %s  %s", instruction->address, instruction->opcodes, instruction->text);
+        } else if (view == TB_CONSOLE) { (void)snprintf(text, sizeof text, "%s", tb_native_log_line(app->native, row)); }
+        else { context_row(context, view, (int)row, text, sizeof text, &selected); }
+        size_t length = strlen(text); if (length > maximum) { maximum = length; }
+        if (view == TB_DISASSEMBLY && code->mixed && code->mixed_available && code->instructions[row].line > 0) {
+            char summary[1200]; mixed_summary(app, index, &code->instructions[row], summary, sizeof summary);
+            length = strlen(summary) - 2;
+            if (length > maximum) { maximum = length; }
+        }
+    }
+    return (int)maximum;
+}
+
+static int code_gutter(TbView view) { return view == TB_SOURCE ? 8 : view == TB_DISASSEMBLY ? 2 : 0; }
+
+static void prepare_scrollbars(App *app, int index, TbRect rect)
+{
+    TbDemoPane *pane = &app->demo.panes[index]; TbView view = pane->tabs[pane->active];
+    int width = native_content_width(app, index), gutter = code_gutter(view);
+    int visible = rect.w - 2 - gutter;
+    int height = rect.h - 3 - (width > visible ? 1 : 0);
+    app->body_width[index] = rect.w - 2;
+    app->body_height[index] = height;
+    app->horizontal_scroll[index] = axis_scroll(width, visible, app->horizontal[index][view]);
+    app->horizontal[index][view] = app->horizontal_scroll[index].offset;
+}
+
+static void draw_scrollbars(App *app, int index, TbRect rect)
+{
+    TbDemoPane *pane = &app->demo.panes[index]; TbView view = pane->tabs[pane->active];
+    TbScroll vertical = workspace_scroll(app, pane, rect.h - 3);
+    if (vertical.maximum > 0) {
+        for (int row = 0; row < vertical.visible; ++row) {
+            bool thumb = row >= vertical.thumb_start && row < vertical.thumb_start + vertical.thumb_size;
+            tb_text(rect.y + 2 + row, rect.x + rect.w - 1, 1, thumb ? TB_CYAN : TB_MUTED, 0, thumb ? "#" : "|");
+        }
+        (void)add_control(app, (TbRect){rect.x + rect.w - 1, rect.y + 2, 1, vertical.visible}, SCROLLBAR, 0, index);
+    }
+    TbScroll horizontal = app->horizontal_scroll[index];
+    if (horizontal.maximum > 0) {
+        int x = rect.x + 1 + code_gutter(view), y = rect.y + rect.h - 2;
+        for (int col = 0; col < horizontal.visible; ++col) {
+            bool thumb = col >= horizontal.thumb_start && col < horizontal.thumb_start + horizontal.thumb_size;
+            tb_text(y, x + col, 1, thumb ? TB_CYAN : TB_MUTED, 0, thumb ? "=" : "-");
+        }
+        (void)add_control(app, (TbRect){x, y, horizontal.visible, 1}, HSCROLLBAR, 0, index);
+    }
+}
+
+static int assembly_rows(const TbCodeView *view)
+{
+    int rows = (int)view->instruction_count;
+    if (view->mixed && view->mixed_available) {
+        for (size_t i = 0; i < view->instruction_count; ++i) {
+            if (view->instructions[i].line > 0 && (i == 0 || view->instructions[i].line != view->instructions[i - 1].line ||
+                strcmp(view->instructions[i].source, view->instructions[i - 1].source) != 0)) { ++rows; }
+        }
+    }
+    return rows;
+}
+
+static void code_focus(App *app, int pane)
+{
+    if (!app->live) { return; }
+    TbView view = app->demo.panes[pane].tabs[app->demo.panes[pane].active];
+    if (view == TB_SOURCE || view == TB_DISASSEMBLY) { app->instruction_mode = view == TB_DISASSEMBLY; }
+}
+
+static int assembly_pc_row(const TbCodeView *view, const char *pc)
+{
+    uint64_t address; bool symbol;
+    if (!tb_code_location(pc, &address, &symbol) || symbol) { return -1; }
+    int row = 0;
+    for (size_t i = 0; i < view->instruction_count; ++i) {
+        const TbInstruction *instruction = &view->instructions[i];
+        if (view->mixed && view->mixed_available && instruction->line > 0 &&
+            (i == 0 || instruction->line != view->instructions[i - 1].line ||
+             strcmp(instruction->source, view->instructions[i - 1].source) != 0)) { ++row; }
+        if (instruction->numeric == address) { return row; }
+        ++row;
+    }
+    return -1;
+}
+
+static void draw_code_pane(App *app, int index, TbRect rect)
+{
+    TbCode *code = tb_native_code(app->native);
+    const TbCodeView *view = tb_code_view(code, index);
+    const TbContextSnapshot *context = tb_context_snapshot(tb_native_context(app->native));
+    TbDemoPane *pane = &app->demo.panes[index];
+    bool source = pane->tabs[pane->active] == TB_SOURCE;
+    bool stale = view->stale || context->stale;
+    bool loaded = tb_native_state(app->native) == TB_NATIVE_READY;
+    bool empty = source ? !view->line_count : !view->instruction_count;
+    char header[512];
+    const char *path = strrchr(view->path, '/'); path = path ? path + 1 : view->path;
+    char label[256]; tb_code_safe(label, sizeof label, path, strlen(path));
+    (void)snprintf(header, sizeof header, "%s | %s%s | %.240s",
+                   loaded ? empty ? "Awaiting stop" : "BROWSE" : stale ? "STALE" : "LIVE",
+                   context->selected.level > 0 ? "caller | " : "",
+                   source ? "C/C++" : view->mixed && view->mixed_available ? "mixed" : "assembly", label);
+    tb_text(rect.y + 1, rect.x + 1, rect.w - 2, stale ? TB_ORANGE : TB_MUTED, 0, header);
+    TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
+    uint64_t *seen = source ? &app->source_revision[index] : &app->assembly_revision[index];
+    uint64_t revision = source ? view->source_revision : view->assembly_revision;
+    if (*seen != revision) {
+        *seen = revision;
+        if (source && view->source_follow && view->selected_line > 0) {
+            pane->scroll[TB_SOURCE] = view->selected_line > 4 ? view->selected_line - 4 : 0;
+        } else if (!source && view->assembly_follow) {
+            int pc_row = assembly_pc_row(view, context->selected.address);
+            int margin = scroll.visible > 10 ? 5 : scroll.visible / 3;
+            if (pc_row >= 0 && (pc_row < scroll.offset + margin || pc_row >= scroll.offset + scroll.visible - margin)) {
+                if (pc_row < scroll.offset + margin) { pane->scroll[TB_DISASSEMBLY] = pc_row - margin; }
+                else { pane->scroll[TB_DISASSEMBLY] = pc_row - scroll.visible + margin + 1; }
+                if (pane->scroll[TB_DISASSEMBLY] < 0) { pane->scroll[TB_DISASSEMBLY] = 0; }
+            }
+        } else if (!source && app->assembly_tail[index]) {
+            int previous = assembly_pc_row(view, app->assembly_previous[index]);
+            pane->scroll[TB_DISASSEMBLY] = previous < 0 ? scroll.maximum :
+                                         previous > app->assembly_scroll_up[index] ? previous - app->assembly_scroll_up[index] : 0;
+        }
+        if (!source) { app->assembly_tail[index] = false; }
+        scroll = workspace_scroll(app, pane, rect.h - 3);
+    }
+    int output_row = 0, flat_row = 0;
+    uint64_t selected_pc = 0, stopped_pc = 0; bool symbol;
+    bool selected_valid = tb_code_location(context->selected.address, &selected_pc, &symbol) && !symbol;
+    bool stopped_valid = tb_code_location(context->stopped.address, &stopped_pc, &symbol) && !symbol;
+    size_t total = source ? view->line_count : view->instruction_count;
+    for (size_t i = 0; i < total && output_row < scroll.visible; ++i) {
+        const TbInstruction *instruction = source ? NULL : &view->instructions[i];
+        bool mixed_header = !source && view->mixed && view->mixed_available && instruction->line > 0 &&
+                            (i == 0 || instruction->line != view->instructions[i - 1].line ||
+                             strcmp(instruction->source, view->instructions[i - 1].source) != 0);
+        if (mixed_header) {
+            if (flat_row >= scroll.offset && output_row < scroll.visible) {
+                char summary[1200]; mixed_summary(app, index, instruction, summary, sizeof summary);
+                size_t offset = (size_t)app->horizontal[index][TB_DISASSEMBLY];
+                if (offset > strlen(summary) - 2) { offset = strlen(summary) - 2; }
+                tb_text(rect.y + 2 + output_row++, rect.x + 3, app->body_width[index] - 2, TB_CYAN, 0, summary + 2 + offset);
+            }
+            ++flat_row;
+        }
+        if (flat_row++ < scroll.offset) { continue; }
+        if (output_row >= scroll.visible) { break; }
+        char text[4096]; bool stopped, selected;
+        if (source) {
+            (void)tb_code_source_line(code, index, i, text, sizeof text);
+            stopped = (int)i + 1 == view->stopped_line;
+            selected = (int)i + 1 == view->selected_line;
+        } else {
+            (void)snprintf(text, sizeof text, "%.47s  %.95s  %.383s", instruction->address, instruction->opcodes, instruction->text);
+            stopped = stopped_valid && instruction->numeric == stopped_pc && strcmp(context->selected_thread, context->stopped_thread) == 0;
+            selected = selected_valid && instruction->numeric == selected_pc;
+        }
+        stopped = stopped && !stale; selected = selected && !stale;
+        bool inspected = selected && (!stopped || context->selected.level > 0 || strcmp(context->selected_thread, context->stopped_thread) != 0);
+        bool highlighted = stopped || inspected;
+        TbStyle style = highlighted ? tb_selected_style(stopped ? TB_YELLOW : TB_CYAN) : TB_PANEL;
+        if (highlighted) { tb_fill((TbRect){rect.x + 1, rect.y + 2 + output_row, rect.w - 2, 1}, style); }
+        char gutter[24];
+        (void)snprintf(gutter, sizeof gutter, "%c%c%5zu ", source ? ' ' : stopped ? '>' : inspected ? '~' : ' ',
+                       source ? stopped ? '>' : inspected ? '~' : ' ' : ' ', source ? i + 1 : i);
+        int gutter_width = source ? 8 : 2;
+        tb_text(rect.y + 2 + output_row, rect.x + 1, gutter_width, highlighted ? style : TB_MUTED, 0, gutter);
+        size_t offset = (size_t)app->horizontal[index][source ? TB_SOURCE : TB_DISASSEMBLY];
+        if (offset > strlen(text)) { offset = strlen(text); }
+        if (source) { tb_render_source_text(rect.y + 2 + output_row, rect.x + 1 + gutter_width, app->body_width[index] - gutter_width, text + offset, highlighted); }
+        else {
+            tb_text(rect.y + 2 + output_row, rect.x + 3, app->body_width[index] - 2, style, 0, text + offset);
+            if (!offset) { tb_text(rect.y + 2 + output_row, rect.x + 3, 18, highlighted ? tb_selected_style(TB_PURPLE) : TB_PURPLE, 0, instruction->address); }
+        }
+        ++output_row;
+    }
+    if (!total) {
+        const char *error = source ? view->source_error : view->assembly_error;
+        tb_text(rect.y + 3, rect.x + 2, rect.w - 4, TB_ORANGE, 0,
+                *error ? error : "Stop a program to inspect live code.");
+    }
+    button(app, rect.y + rect.h - 1, rect.x + 1, 9, " Actions ", CODE_ACTIONS, 0, index);
+    if (source) {
+        button(app, rect.y + rect.h - 1, rect.x + 11, 9, " Stopped ", CODE_ACTION, CODE_STOPPED, index);
+        if (view->truncated) { tb_text(rect.y + rect.h - 1, rect.x + 21, rect.w - 22, TB_ORANGE, 0, "bounded preview"); }
+        else { tb_text(rect.y + rect.h - 1, rect.x + 21, rect.w - 22, TB_MUTED, 0, "> PC | ~ frame"); }
+    } else {
+        button(app, rect.y + rect.h - 1, rect.x + 11, 7, view->mixed ? " Mixed+" : " Mixed ", CODE_ACTION, CODE_MIXED, index);
+        button(app, rect.y + rect.h - 1, rect.x + 19, 3, " < ", CODE_PAGE, -1, index);
+        button(app, rect.y + rect.h - 1, rect.x + 23, 3, " > ", CODE_PAGE, 1, index);
+        if (view->mixed && !view->mixed_available && total) {
+            tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_MUTED, 0, "Assembly only | mixed data unavailable");
+        }
+    }
+}
+
+
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): view kind and its row index identify one bounded display row.
+static void context_row(const TbContextSnapshot *snapshot, TbView view, int item,
+                        char *text, size_t capacity, bool *selected)
+{
+    if (view == TB_CALL_STACK) {
+        const TbFrame *frame = &snapshot->frames[item];
+        *selected = frame->level == snapshot->selected.level;
+        bool stopped = strcmp(snapshot->selected_thread, snapshot->stopped_thread) == 0 && frame->level == 0;
+        char location[416];
+        const char *file = *frame->file ? frame->file : *frame->from ? frame->from : "<source unavailable>";
+        if (frame->line > 0) { (void)snprintf(location, sizeof location, "%.384s:%d", file, frame->line); }
+        else { (void)snprintf(location, sizeof location, "%.384s", file); }
+        (void)snprintf(text, capacity, "%c%c #%d %.100s(%.120s) | %s | %.47s",
+                       *selected ? '>' : ' ', stopped ? '*' : ' ', frame->level,
+                       *frame->function ? frame->function : "<unknown>", frame->arguments, location, frame->address);
+    } else {
+        const TbThread *thread = &snapshot->threads[item];
+        *selected = strcmp(thread->id, snapshot->selected_thread) == 0;
+        (void)snprintf(text, capacity, "%c T%.31s %.23s %.95s | %.159s | %.127s",
+                       *selected ? '>' : ' ', thread->id, thread->state, thread->name,
+                       *thread->frame.function ? thread->frame.function : "<frame unavailable>", thread->target);
+    }
 }
 
 static void draw_context_pane(App *app, int index, TbRect rect)
@@ -410,39 +714,16 @@ static void draw_context_pane(App *app, int index, TbRect rect)
     for (int row = 0; row < scroll.visible && row + scroll.offset < scroll.total; ++row) {
         int item = scroll.offset + row;
         char text[1024]; bool selected;
-        if (stack) {
-            const TbFrame *frame = &snapshot->frames[item];
-            selected = frame->level == snapshot->selected.level;
-            bool stopped = strcmp(snapshot->selected_thread, snapshot->stopped_thread) == 0 && frame->level == 0;
-            char location[416];
-            const char *file = *frame->file ? frame->file : *frame->from ? frame->from : "<source unavailable>";
-            if (frame->line > 0) { (void)snprintf(location, sizeof location, "%.384s:%d", file, frame->line); }
-            else { (void)snprintf(location, sizeof location, "%.384s", file); }
-            (void)snprintf(text, sizeof text, "%c%c #%d %.100s(%.120s) | %s | %.47s",
-                           selected ? '>' : ' ', stopped ? '*' : ' ', frame->level,
-                           *frame->function ? frame->function : "<unknown>", frame->arguments,
-                           location, frame->address);
-        } else {
-            const TbThread *thread = &snapshot->threads[item];
-            selected = strcmp(thread->id, snapshot->selected_thread) == 0;
-            (void)snprintf(text, sizeof text, "%c T%.31s %.23s %.95s | %.159s | %.127s",
-                           selected ? '>' : ' ', thread->id, thread->state, thread->name,
-                           *thread->frame.function ? thread->frame.function : "<frame unavailable>", thread->target);
-        }
+        context_row(snapshot, view, item, text, sizeof text, &selected);
+        size_t offset = (size_t)app->horizontal[index][view];
+        if (offset > strlen(text)) { offset = strlen(text); }
         TbStyle style = selected ? tb_selected_style(TB_CYAN) : TB_PANEL;
         if (selected) { tb_fill((TbRect){rect.x + 1, rect.y + 2 + row, rect.w - 2, 1}, style); }
-        tb_text(rect.y + 2 + row, rect.x + 1, rect.w - 2, style,
-                app->keyboard_focus && pane->row[view] == item ? A_UNDERLINE : 0, text);
+        tb_text(rect.y + 2 + row, rect.x + 1, app->body_width[index], style,
+                app->keyboard_focus && pane->row[view] == item ? A_UNDERLINE : 0, text + offset);
     }
     if (!scroll.total) {
         tb_text(rect.y + 2, rect.x + 1, rect.w - 2, TB_MUTED, 0, stack ? "No frames available from GDB." : "No threads available from GDB.");
-    }
-    if (scroll.maximum > 0) {
-        for (int row = 0; row < scroll.visible; ++row) {
-            bool thumb = row >= scroll.thumb_start && row < scroll.thumb_start + scroll.thumb_size;
-            tb_text(rect.y + 2 + row, rect.x + rect.w - 1, 1,
-                    thumb ? TB_CYAN : TB_MUTED, 0, thumb ? "|" : ":");
-        }
     }
     if (error) {
         tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_ORANGE, 0, error);
@@ -481,6 +762,7 @@ static void draw_native_pane(App *app, int index, TbRect rect)
 {
     TbDemoPane *pane = &app->demo.panes[index];
     TbView view = pane->tabs[pane->active];
+    if (view == TB_SOURCE || view == TB_DISASSEMBLY) { draw_code_pane(app, index, rect); return; }
     if (view == TB_CALL_STACK || view == TB_THREADS) {
         draw_context_pane(app, index, rect); return;
     }
@@ -490,19 +772,13 @@ static void draw_native_pane(App *app, int index, TbRect rect)
         TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
         if (app->follow_log[index]) { pane->scroll[view] = scroll.maximum; scroll = workspace_scroll(app, pane, rect.h - 3); }
         for (int i = 0; i < scroll.visible && scroll.offset + i < scroll.total; ++i) {
-            tb_text(rect.y + 2 + i, rect.x + 1, rect.w - 2, TB_PANEL, 0,
-                    tb_native_log_line(app->native, (size_t)scroll.offset + (size_t)i));
+            const char *text = tb_native_log_line(app->native, (size_t)scroll.offset + (size_t)i);
+            size_t offset = (size_t)app->horizontal[index][view];
+            if (offset > strlen(text)) { offset = strlen(text); }
+            tb_text(rect.y + 2 + i, rect.x + 1, app->body_width[index], TB_PANEL, 0, text + offset);
         }
         button(app, rect.y + rect.h - 1, rect.x + 1, 9, " Command ", COMMAND_OPEN, 0, index);
         button(app, rect.y + rect.h - 1, rect.x + 11, rect.w < 22 ? rect.w - 12 : 10, " Save Log ", SAVE_OPEN, 0, index);
-        if (scroll.maximum > 0) {
-            tb_text(rect.y + 2, rect.x + rect.w - 1, 1, TB_MUTED, 0, "^");
-            for (int i = 0; i < scroll.visible; ++i) {
-                tb_text(rect.y + 2 + i, rect.x + rect.w - 1, 1,
-                        i >= scroll.thumb_start && i < scroll.thumb_start + scroll.thumb_size ? TB_CYAN : TB_MUTED,
-                        0, i >= scroll.thumb_start && i < scroll.thumb_start + scroll.thumb_size ? "|" : ":");
-            }
-        }
     } else {
         tb_text(rect.y + 3, rect.x + 2, rect.w - 4, TB_MUTED, 0, "Live view not implemented yet.");
         tb_text(rect.y + 4, rect.x + 2, rect.w - 4, TB_MUTED, 0, "Use Console for GDB commands.");
@@ -546,10 +822,14 @@ static void draw_pane(App *app, int pane_index, TbRect rect)
     if (app->menu == pane_index) {
         draw_menu(app, pane_index, rect);
     } else {
-        (void)add_control(app, (TbRect){rect.x + 1, rect.y + 2, rect.w - 2, rect.h - 3},
+        if (app->live) { prepare_scrollbars(app, pane_index, rect); }
+        (void)add_control(app, (TbRect){rect.x + 1, rect.y + 2,
+                          app->live ? app->body_width[pane_index] : rect.w - 2,
+                          app->live ? app->body_height[pane_index] : rect.h - 3},
                           BODY, 0, pane_index);
         if (app->live) { draw_native_pane(app, pane_index, rect); }
         else { tb_render_demo(&app->demo, pane_index, rect); }
+        if (app->live) { draw_scrollbars(app, pane_index, rect); return; }
         TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
         if (scroll.maximum > 0) {
             (void)add_control(app, (TbRect){rect.x + rect.w - 1, rect.y + 2, 1, rect.h - 3},
@@ -564,12 +844,12 @@ static void draw_workspace(App *app)
     tb_text(0, 1, 11, TB_BRAND, A_BOLD, "THE BUGGER");
     const char *const actions[] = {
         " Continue F5 ", " Pause ", " Over F10 ", " Into F11 ",
-        " Out S-F11 ", " BP F9 ", " Reset "
+        " Out Shift+F11 ", " BP F9 ", " Reset "
     };
     int y = COLS >= 124 ? 0 : 1, x = COLS >= 124 ? 14 : 1;
     for (int i = 0; i < 7; ++i) {
         int width = (int)strlen(actions[i]);
-        if (x + width > COLS - 1) {
+        if (x + width > COLS - (y == 0 ? 18 : 1)) {
             ++y;
             x = 1;
         }
@@ -586,7 +866,8 @@ static void draw_workspace(App *app)
     ++y;
     tb_fill((TbRect){0, y, COLS, 1}, TB_NOTICE);
     tb_text(y, 1, COLS - 2, TB_NOTICE, 0,
-            app->live ? "LIVE NATIVE | Continue / Pause | live context and console" :
+            app->live ? (app->instruction_mode ? "LIVE NATIVE | instruction stepping | live code, context and console" :
+                         "LIVE NATIVE | source stepping | live code, context and console") :
             "DEMO / VISUAL REFERENCE  |  All values simulated. No debugger connected.");
     ++y;
     tb_fill((TbRect){0, y, COLS, 1}, TB_CHROME);
@@ -607,6 +888,11 @@ static void draw_workspace(App *app)
             frames = frames || view == TB_CALL_STACK;
         }
         tb_context_visible(tb_native_context(app->native), threads, frames);
+        for (int pane = 0; pane < TB_MAX_PANES; ++pane) {
+            bool visible = app->panes[pane].w >= 10 && app->panes[pane].h >= 7 && app->menu != pane;
+            TbView view = app->demo.panes[pane].tabs[app->demo.panes[pane].active];
+            tb_code_visible(tb_native_code(app->native), pane, visible && view == TB_SOURCE, visible && view == TB_DISASSEMBLY);
+        }
     }
     if (!tiled) {
         const char *const labels[] = {"1 Source", "2 Asm", "3 Regs", "4 Mem", "5 Locals", "6 Log"};
@@ -672,14 +958,100 @@ static void draw_workspace(App *app)
             "DEMO | ... pane actions | drag dividers | q launcher | Ctrl+Q quit app");
 }
 
+static bool field_utf8(const wchar_t *value, char *target, size_t capacity);
+
+static const char *const code_labels[] = {
+    "Choose source file", "Find in current file", "Go to line", "Go to address / symbol",
+    "Return to stopped context", "Toggle mixed source/assembly", "Source lookup settings",
+    "Add source directory", "Mapping: build prefix", "Mapping: local prefix", "Clear source overrides"
+};
+
+static void draw_code_menu(App *app)
+{
+    draw_header(app, "Code view actions");
+    bool source = app->demo.panes[app->code_pane].tabs[app->demo.panes[app->code_pane].active] == TB_SOURCE;
+    const CodeAction source_actions[] = {CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_STOPPED, CODE_SOURCE_SETTINGS};
+    const CodeAction asm_actions[] = {CODE_ADDRESS, CODE_STOPPED, CODE_MIXED, CODE_SOURCE_SETTINGS};
+    int count = source ? 5 : 4;
+    for (int i = 0; i < count; ++i) {
+        CodeAction action = source ? source_actions[i] : asm_actions[i];
+        button(app, 5 + i, 3, COLS - 6, code_labels[action], CODE_ACTION, action, app->code_pane);
+    }
+    tb_text(LINES - 5, 3, COLS - 6, TB_MUTED, 0, "Browsing never moves execution. Left/Right scroll long code lines.");
+    button(app, LINES - 4, 3, 12, "[ Back ]", BACK, 0, 0);
+}
+
+static void draw_source_settings(App *app)
+{
+    draw_header(app, "Source lookup settings");
+    TbCode *code = tb_native_code(app->native);
+    tb_text(4, 3, COLS - 6, TB_MUTED, 0, "Directories: newest first. Prefix rules: first match wins, in listed order.");
+    int height = LINES - 12; if (height < 1) { height = 1; }
+    size_t dirs = tb_code_directory_count(code), rules = tb_code_rule_count(code);
+    for (int row = 0; row < height; ++row) {
+        size_t item = (size_t)app->file_page * (size_t)height + (size_t)row;
+        char text[1024], safe_from[400], safe_to[400];
+        if (item < dirs) {
+            const char *path = tb_code_directory(code, item);
+            tb_code_safe(safe_from, sizeof safe_from, path, strlen(path));
+            (void)snprintf(text, sizeof text, "Directory %zu: %s", item + 1, safe_from);
+        } else if (item < dirs + rules) {
+            const TbSourceRule *rule = tb_code_rule(code, item - dirs);
+            tb_code_safe(safe_from, sizeof safe_from, rule->from, strlen(rule->from));
+            tb_code_safe(safe_to, sizeof safe_to, rule->to, strlen(rule->to));
+            (void)snprintf(text, sizeof text, "Rule %zu: %s -> %s", item - dirs + 1, safe_from, safe_to);
+        } else { break; }
+        tb_text(6 + row, 3, COLS - 6, TB_PANEL, 0, text);
+    }
+    button(app, LINES - 6, 3, 15, " Add directory ", CODE_ACTION, CODE_DIRECTORY_ADD, app->code_pane);
+    button(app, LINES - 6, 19, 15, " Add mapping ", CODE_ACTION, CODE_RULE_FROM, app->code_pane);
+    button(app, LINES - 6, 35, COLS - 38, " Clear overrides ", CODE_ACTION, CODE_SETTINGS_CLEAR, app->code_pane);
+    button(app, LINES - 4, 3, 12, "[ Back ]", BACK, 0, 0);
+    button(app, LINES - 4, 17, 10, "Previous", CODE_FILE_PAGE, -1, 0);
+    button(app, LINES - 4, 29, 8, "Next", CODE_FILE_PAGE, 1, 0);
+}
+
+static void draw_code_files(App *app)
+{
+    draw_header(app, "GDB source files");
+    TbCode *code = tb_native_code(app->native);
+    tb_text(4, 3, 8, TB_CYAN, 0, "Filter:");
+    int field = add_control(app, (TbRect){11, 4, COLS - 14, 1}, FIELD, 0, 0);
+    wide_text(4, 11, COLS - 14, app->input, 0, app->focus == field);
+    char filter[FIELD_SIZE * 4] = {0}; (void)field_utf8(app->input, filter, sizeof filter);
+    int height = LINES - 12; if (height < 1) { height = 1; }
+    int match = 0, shown = 0;
+    for (size_t i = 0; i < tb_code_file_count(code); ++i) {
+        const TbCodeFile *file = tb_code_file(code, i);
+        if (*filter && !strstr(file->file, filter) && !strstr(file->full, filter)) { continue; }
+        if (match++ < app->file_page * height || shown == height) { continue; }
+        char label[1024], path[960];
+        const char *name = *file->full ? file->full : file->file;
+        tb_code_safe(path, sizeof path, name, strlen(name));
+        (void)snprintf(label, sizeof label, "%zu  %s", i + 1, path);
+        button(app, 6 + shown++, 3, COLS - 6, label, CODE_FILE_PICK, (int)i, app->code_pane);
+    }
+    if (!shown) { tb_text(6, 3, COLS - 6, TB_MUTED, 0, "No matching GDB source files. Symbols may be absent; use Sources for recovery."); }
+    tb_text(LINES - 6, 3, COLS - 6, TB_MUTED, 0,
+            tb_code_files_limited(code) ? "Catalog limited to 256 files. Full paths distinguish duplicate basenames." :
+            "Full paths distinguish duplicate basenames. Filter, then click or Tab/Enter.");
+    button(app, LINES - 4, 3, 12, "[ Back ]", BACK, 0, 0);
+    button(app, LINES - 4, 17, 10, "Previous", CODE_FILE_PAGE, -1, 0);
+    button(app, LINES - 4, 29, 8, "Next", CODE_FILE_PAGE, 1, 0);
+    if (app->focus == field) { (void)curs_set(1); (void)leaveok(stdscr, FALSE); (void)move(4, 11 + (int)wcslen(app->input) < COLS - 2 ? 11 + (int)wcslen(app->input) : COLS - 2); }
+}
+
+
 static void draw_input(App *app)
 {
     bool command = app->page == COMMAND_INPUT;
-    draw_header(app, command ? "GDB console command" : "Save retained log");
+    bool code = app->page == CODE_INPUT;
+    draw_header(app, code ? code_labels[app->code_action] : command ? "GDB console command" : "Save retained log");
     tb_text(5, 3, COLS - 6, TB_CYAN, A_BOLD,
-            command ? "Explicit GDB command (through MI)" : "New log destination (existing files are preserved)");
+            code ? code_labels[app->code_action] : command ? "Explicit GDB command (through MI)" : "New log destination (existing files are preserved)");
     tb_text(7, 3, COLS - 6, TB_MUTED, 0,
-            command ? "Commands are deliberate operations. Dedicated inspection arrives later." :
+            code ? "Enter literal text/path. Navigation never changes execution. Esc cancels." :
+            command ? "Commands are deliberate operations through GDB/MI." :
             "Saves bounded retained history with control bytes escaped; mode 0600.");
     TbRect field = {3, 9, COLS - 6, 1};
     int index = add_control(app, field, FIELD, 0, 0);
@@ -691,7 +1063,7 @@ static void draw_input(App *app)
         if (cells >= COLS - 8) { start = p; break; }
     }
     wide_text(9, 3, COLS - 6, app->input, start, index == app->focus);
-    button(app, 12, 3, 14, command ? "[ Send ]" : "[ Save Log ]", INPUT_SUBMIT, 0, 0);
+    button(app, 12, 3, 14, code ? "[ Apply ]" : command ? "[ Send ]" : "[ Save Log ]", INPUT_SUBMIT, 0, 0);
     button(app, 12, 19, 12, "[ Cancel ]", BACK, 0, 0);
     if (index == app->focus) {
         (void)curs_set(1); (void)leaveok(stdscr, FALSE);
@@ -703,7 +1075,7 @@ static void draw_input(App *app)
     }
 }
 
-static void draw(App *app)
+static void draw_page(App *app)
 {
     app->count = 0;
     (void)curs_set(0);
@@ -717,7 +1089,13 @@ static void draw(App *app)
         draw_launcher(app);
     } else if (app->page == CONFIGURE || app->page == REVIEW) {
         draw_form(app, app->page == REVIEW);
-    } else if (app->page == COMMAND_INPUT || app->page == SAVE_INPUT) {
+    } else if (app->page == CODE_MENU) {
+        draw_code_menu(app);
+    } else if (app->page == CODE_FILES) {
+        draw_code_files(app);
+    } else if (app->page == SOURCE_SETTINGS) {
+        draw_source_settings(app);
+    } else if (editing_page(app)) {
         draw_input(app);
     } else if (app->page == CLOSE_CONFIRM) {
         draw_header(app, "Close native session?");
@@ -738,6 +1116,24 @@ static void draw(App *app)
     if (app->focus >= app->count) {
         app->focus = app->count > 0 ? app->count - 1 : 0;
     }
+}
+
+static void draw(App *app)
+{
+    Control previous = app->focus >= 0 && app->focus < app->count ? app->controls[app->focus] : (Control){0};
+    bool retain_body = app->page == WORKSPACE && (previous.kind == BODY || previous.kind == SCROLLBAR || previous.kind == HSCROLLBAR);
+    draw_page(app);
+    /* Live source availability can add/remove an earlier pane's scrollbar.
+     * Preserve the focused body by identity rather than its old array index. */
+    if (retain_body) {
+        for (int i = 0; i < app->count; ++i) {
+            if (app->controls[i].kind == previous.kind && app->controls[i].pane == previous.pane &&
+                app->controls[i].value == previous.value) {
+                if (app->focus != i) { app->focus = i; draw_page(app); }
+                break;
+            }
+        }
+    }
     (void)refresh();
 }
 
@@ -747,6 +1143,7 @@ static void cycle_pane(App *app, int direction)
         if (app->layout.order[i] == app->demo.pane) {
             int next = (i + direction + app->layout.count) % app->layout.count;
             app->demo.pane = app->layout.order[next];
+            code_focus(app, app->demo.pane);
             app->menu = -1;
             app->focus = 0;
             return;
@@ -870,12 +1267,13 @@ static void activate(App *app, Control control)
         page(app, WORKSPACE);
         break;
     case BACK:
-        if (app->page == COMMAND_INPUT || app->page == SAVE_INPUT) { page(app, WORKSPACE); break; }
+        if (app->page == CODE_MENU || app->page == SOURCE_SETTINGS) { page(app, WORKSPACE); break; }
+        if (editing_page(app)) { page(app, WORKSPACE); break; }
         page(app, app->page == REVIEW ? CONFIGURE :
              app->page == LAUNCHER ? WORKSPACE : LAUNCHER);
         break;
     case FIELD: {
-        if (app->page == COMMAND_INPUT || app->page == SAVE_INPUT) { break; }
+        if (editing_page(app)) { break; }
         Form *form = &app->forms[app->session];
         bool toggle = (app->session < 2 && control.value == 0) ||
                       (app->session == 1 && control.value == 8);
@@ -894,9 +1292,13 @@ static void activate(App *app, Control control)
     case TOOL:
         if (app->live) {
             bool okay = control.value == TB_CONTINUE ? tb_native_continue(app->native) :
-                        control.value == TB_PAUSE ? tb_native_pause(app->native) : false;
+                        control.value == TB_PAUSE ? tb_native_pause(app->native) :
+                        control.value >= TB_NEXT && control.value <= TB_FINISH ?
+                        tb_native_step(app->native, control.value == TB_NEXT ? TB_STEP_OVER :
+                                       control.value == TB_STEP ? TB_STEP_INTO : TB_STEP_OUT, app->instruction_mode) : false;
             status(app, okay ? "GDB operation queued." : control.value >= TB_NEXT ?
-                   "This action is not implemented yet. Continue, Pause and Console are available." :
+                   control.value <= TB_FINISH ? tb_native_message(app->native) :
+                   "Breakpoint and Reset actions remain unavailable in this milestone." :
                    "GDB operation pending or unavailable in the current state.");
             break;
         }
@@ -910,6 +1312,7 @@ static void activate(App *app, Control control)
     case TAB:
         app->demo.pane = control.pane;
         app->demo.panes[control.pane].active = control.value;
+        code_focus(app, control.pane);
         app->menu = -1;
         /* The activated tab moves first. Its previous control index may now
          * belong to an inactive tab, so keep focus at this pane's first tab. */
@@ -927,16 +1330,18 @@ static void activate(App *app, Control control)
         app->menu_actions = false;
         break;
     case BODY:
-        app->demo.pane = control.pane; select_context_row(app, control.pane); break;
-    case SCROLLBAR: app->demo.pane = control.pane; break;
+        app->demo.pane = control.pane; code_focus(app, control.pane); select_context_row(app, control.pane); break;
+    case SCROLLBAR: case HSCROLLBAR: app->demo.pane = control.pane; break;
     case SHOW_VIEW:
         app->demo.pane = control.pane;
         tb_demo_view(&app->demo, (TbView)control.value);
+        code_focus(app, control.pane);
         app->menu = -1;
         app->focus = 0;
         break;
     case FOCUS_PANE:
         app->demo.pane = control.value;
+        code_focus(app, control.value);
         app->menu = -1;
         break;
     case NEXT_PANE: cycle_pane(app, 1); break;
@@ -968,10 +1373,79 @@ static void activate(App *app, Control control)
         app->input[0] = L'\0';
         page(app, control.kind == COMMAND_OPEN ? COMMAND_INPUT : SAVE_INPUT);
         break;
+    case CODE_ACTIONS:
+        app->code_pane = control.pane; code_focus(app, control.pane); page(app, CODE_MENU); break;
+    case CODE_ACTION: {
+        TbCode *code = tb_native_code(app->native);
+        app->code_pane = control.pane; app->code_action = (CodeAction)control.value;
+        if (app->code_action == CODE_CHOOSE_FILE) {
+            app->input[0] = L'\0'; app->file_page = 0; tb_code_request_files(code); page(app, CODE_FILES);
+        } else if (app->code_action == CODE_SOURCE_SETTINGS) {
+            app->file_page = 0; page(app, SOURCE_SETTINGS);
+        } else if (app->code_action == CODE_STOPPED) {
+            status(app, tb_code_stopped(code) ? "Returning to stopped context; execution unchanged." : tb_code_message(code)); page(app, WORKSPACE);
+        } else if (app->code_action == CODE_MIXED) {
+            tb_code_mixed(code, control.pane, !tb_code_view(code, control.pane)->mixed); page(app, WORKSPACE);
+        } else if (app->code_action == CODE_SETTINGS_CLEAR) {
+            status(app, tb_code_clear_settings(code) ? "Clearing current GDB source overrides." : "Wait for the current source operation.");
+        } else { app->input[0] = L'\0'; page(app, CODE_INPUT); }
+        break;
+    }
+    case CODE_PAGE:
+        status(app, tb_code_assembly_page(tb_native_code(app->native), control.pane, control.value) ?
+               "Loading instruction window; execution unchanged." : "No previous window, or wait for stopped code data.");
+        app->demo.panes[control.pane].scroll[TB_DISASSEMBLY] = 0; break;
+    case CODE_FILE_PAGE: {
+        size_t total = tb_code_directory_count(tb_native_code(app->native)) + tb_code_rule_count(tb_native_code(app->native));
+        if (app->page == CODE_FILES) {
+            char filter[FIELD_SIZE * 4] = {0}; (void)field_utf8(app->input, filter, sizeof filter); total = 0;
+            for (size_t i = 0; i < tb_code_file_count(tb_native_code(app->native)); ++i) {
+                const TbCodeFile *file = tb_code_file(tb_native_code(app->native), i);
+                if (!*filter || strstr(file->file, filter) || strstr(file->full, filter)) { ++total; }
+            }
+        }
+        if (control.value < 0) { if (app->file_page > 0) { --app->file_page; } }
+        else if (((size_t)app->file_page + 1) * (size_t)(LINES - 12) < total) { ++app->file_page; }
+        app->focus = 0; break;
+    }
+    case CODE_FILE_PICK:
+        if (tb_code_open(tb_native_code(app->native), control.pane, (size_t)control.value)) {
+            app->demo.panes[control.pane].scroll[TB_SOURCE] = app->demo.panes[control.pane].row[TB_SOURCE] = 0;
+            status(app, tb_code_message(tb_native_code(app->native))); page(app, WORKSPACE);
+        }
+        break;
     case INPUT_SUBMIT: {
         char input[FIELD_SIZE * 4];
         bool command = app->page == COMMAND_INPUT;
         if (!field_utf8(app->input, input, sizeof input)) { status(app, "Invalid text encoding."); break; }
+        if (app->page == CODE_FILES) { app->file_page = 0; break; }
+        if (app->page == CODE_INPUT) {
+            TbCode *code = tb_native_code(app->native);
+            TbDemoPane *pane = &app->demo.panes[app->code_pane];
+            bool okay = false;
+            if (app->code_action == CODE_FIND || app->code_action == CODE_LINE) {
+                int row = app->code_action == CODE_FIND ? tb_code_find(code, app->code_pane, input, pane->row[TB_SOURCE] + 1) : -1;
+                if (app->code_action == CODE_LINE && *input && strspn(input, "0123456789") == strlen(input)) {
+                    errno = 0; unsigned long line = strtoul(input, NULL, 10);
+                    if (!errno && line > 0 && line <= tb_code_view(code, app->code_pane)->line_count) { row = (int)line - 1; }
+                }
+                okay = row >= 0;
+                if (okay) {
+                    pane->scroll[TB_SOURCE] = row > 2 ? row - 2 : 0; pane->row[TB_SOURCE] = row;
+                    char found[128]; (void)snprintf(found, sizeof found, "Browsing source line %d; execution unchanged.", row + 1); status(app, found);
+                } else { status(app, "Text/line not found in the loaded source. Use source recovery if unavailable."); }
+            } else if (app->code_action == CODE_ADDRESS) { okay = tb_code_address(code, app->code_pane, input); status(app, okay ? "Resolving code location; execution unchanged." : tb_code_message(code)); }
+            else if (app->code_action == CODE_DIRECTORY_ADD) { okay = tb_code_add_directory(code, input); status(app, okay ? "Source directory queued." : tb_code_message(code)); }
+            else if (app->code_action == CODE_RULE_FROM) {
+                if (*input) {
+                    (void)snprintf(app->rule_from, sizeof app->rule_from, "%s", input);
+                    app->code_action = CODE_RULE_TO; app->input[0] = L'\0'; page(app, CODE_INPUT);
+                } else { status(app, "Enter the build prefix first."); }
+                break;
+            } else if (app->code_action == CODE_RULE_TO) { okay = tb_code_add_rule(code, app->rule_from, input); status(app, okay ? "Source mapping queued." : tb_code_message(code)); }
+            if (okay) { page(app, WORKSPACE); }
+            break;
+        }
         bool okay = command ? tb_native_console(app->native, input) : tb_native_save_log(app->native, input);
         status(app, okay ? (command ? "GDB command queued." : tb_native_message(app->native)) : tb_native_message(app->native));
         if (okay) { page(app, WORKSPACE); }
@@ -990,7 +1464,7 @@ static void activate(App *app, Control control)
 
 static bool edit_field(App *app, Control control, wint_t key, bool special)
 {
-    bool input_page = app->page == COMMAND_INPUT || app->page == SAVE_INPUT;
+    bool input_page = editing_page(app);
     if (control.kind != FIELD || (app->page != CONFIGURE && !input_page)) {
         return false;
     }
@@ -1046,6 +1520,20 @@ static void scroll_body(App *app, Control control, int amount)
     TbDemoPane *pane = &app->demo.panes[control.pane];
     TbView view = pane->tabs[pane->active];
     TbScroll scroll = workspace_scroll(app, pane, app->panes[control.pane].h - 3);
+    if (app->live && view == TB_DISASSEMBLY &&
+        ((amount < 0 && scroll.offset == 0) || (amount > 0 && scroll.offset == scroll.maximum))) {
+        if (tb_code_assembly_page(tb_native_code(app->native), control.pane, amount < 0 ? -1 : 1)) {
+            app->assembly_tail[control.pane] = amount < 0;
+            if (amount < 0) {
+                const TbCodeView *code = tb_code_view(tb_native_code(app->native), control.pane);
+                (void)snprintf(app->assembly_previous[control.pane], sizeof app->assembly_previous[control.pane], "%s",
+                               code->instruction_count ? code->instructions[0].address : "");
+                app->assembly_scroll_up[control.pane] = -amount;
+            }
+            pane->scroll[view] = 0;
+            return;
+        }
+    }
     int offset = scroll.offset + amount;
     pane->scroll[view] = offset < 0 ? 0 : offset > scroll.maximum ? scroll.maximum : offset;
     if (app->live) { app->follow_log[control.pane] = pane->scroll[view] == scroll.maximum; }
@@ -1061,13 +1549,19 @@ static void mouse_event(App *app)
     if (app->page == WORKSPACE && app->scroll_drag_pane >= 0) {
         int pane_index = app->scroll_drag_pane;
         TbDemoPane *pane = &app->demo.panes[pane_index];
-        TbScroll scroll = workspace_scroll(app, pane, app->panes[pane_index].h - 3);
+        TbScroll scroll = app->scroll_drag_horizontal ? app->horizontal_scroll[pane_index] :
+                          workspace_scroll(app, pane, app->panes[pane_index].h - 3);
         int travel = scroll.visible - scroll.thumb_size;
-        int position = event.y - app->panes[pane_index].y - 2 - app->scroll_drag_grab;
+        int position = app->scroll_drag_horizontal ? event.x - app->panes[pane_index].x - 1 -
+                       code_gutter(pane->tabs[pane->active]) - app->scroll_drag_grab :
+                       event.y - app->panes[pane_index].y - 2 - app->scroll_drag_grab;
         if (position < 0) { position = 0; }
         if (position > travel) { position = travel; }
-        if (travel > 0) { pane->scroll[pane->tabs[pane->active]] = position * scroll.maximum / travel; }
-        if (app->live) { app->follow_log[pane_index] = pane->scroll[pane->tabs[pane->active]] == scroll.maximum; }
+        if (travel > 0) {
+            int *offset = app->scroll_drag_horizontal ? &app->horizontal[pane_index][pane->tabs[pane->active]] : &pane->scroll[pane->tabs[pane->active]];
+            *offset = position * scroll.maximum / travel;
+        }
+        if (app->live && !app->scroll_drag_horizontal) { app->follow_log[pane_index] = pane->scroll[pane->tabs[pane->active]] == scroll.maximum; }
         if (event.bstate & BUTTON1_RELEASED) { app->scroll_drag_pane = -1; }
         return;
     }
@@ -1121,8 +1615,15 @@ static void mouse_event(App *app)
         if (!tb_rect_contains(control.rect, event.x, event.y)) {
             continue;
         }
-        if ((control.kind == BODY || control.kind == SCROLLBAR) &&
+        if ((control.kind == BODY || control.kind == SCROLLBAR || control.kind == HSCROLLBAR) &&
             (event.bstate & (BUTTON4_PRESSED | BUTTON5_PRESSED))) {
+            if (control.kind == HSCROLLBAR) {
+                TbDemoPane *pane = &app->demo.panes[control.pane];
+                int *offset = &app->horizontal[control.pane][pane->tabs[pane->active]];
+                int next = *offset + (event.bstate & BUTTON4_PRESSED ? -4 : 4);
+                *offset = next < 0 ? 0 : next > app->horizontal_scroll[control.pane].maximum ? app->horizontal_scroll[control.pane].maximum : next;
+                return;
+            }
             scroll_body(app, control, event.bstate & BUTTON4_PRESSED ? -3 : 3);
             return;
         }
@@ -1131,7 +1632,7 @@ static void mouse_event(App *app)
         }
         app->focus = i;
         app->cursor = 0;
-        bool input_page = app->page == COMMAND_INPUT || app->page == SAVE_INPUT;
+        bool input_page = editing_page(app);
         bool text_field = control.kind == FIELD && (input_page ||
                           !((app->session < 2 && control.value == 0) ||
                             (app->session == 1 && control.value == 8)));
@@ -1140,18 +1641,24 @@ static void mouse_event(App *app)
         } else if (control.kind != BODY) {
             activate(app, control);
         }
-        if (control.kind == SCROLLBAR) {
+        if (control.kind == SCROLLBAR || control.kind == HSCROLLBAR) {
             TbDemoPane *pane = &app->demo.panes[control.pane];
-            TbScroll scroll = workspace_scroll(app, pane, control.rect.h);
-            int row = event.y - control.rect.y;
+            bool horizontal = control.kind == HSCROLLBAR;
+            TbScroll scroll = horizontal ? app->horizontal_scroll[control.pane] : workspace_scroll(app, pane, control.rect.h);
+            int row = horizontal ? event.x - control.rect.x : event.y - control.rect.y;
             if (row >= scroll.thumb_start && row < scroll.thumb_start + scroll.thumb_size) {
                 app->scroll_drag_pane = control.pane;
                 app->scroll_drag_grab = row - scroll.thumb_start;
+                app->scroll_drag_horizontal = horizontal;
+            } else if (horizontal) {
+                int next = scroll.offset + (row < scroll.thumb_start ? -scroll.visible : scroll.visible);
+                app->horizontal[control.pane][pane->tabs[pane->active]] = next < 0 ? 0 : next > scroll.maximum ? scroll.maximum : next;
             } else {
                 scroll_body(app, control, row < scroll.thumb_start ? -scroll.visible : scroll.visible);
             }
         } else if (control.kind == BODY) {
             app->demo.pane = control.pane;
+            code_focus(app, control.pane);
             TbDemoPane *pane = &app->demo.panes[control.pane];
             TbView view = pane->tabs[pane->active];
             int row = event.y - app->panes[control.pane].y - 2;
@@ -1237,8 +1744,8 @@ static void key_event(App *app, wint_t key, bool special)
         } else if (app->page == LAUNCHER) {
             if (app->previewed) { page(app, WORKSPACE); }
             else { status(app, "Already at the launcher. Ctrl+Q quits the application."); }
-        } else if (app->page == RESET_CONFIRM || app->page == CLOSE_CONFIRM ||
-                   app->page == COMMAND_INPUT || app->page == SAVE_INPUT) {
+        } else if (app->page == RESET_CONFIRM || app->page == CLOSE_CONFIRM || app->page == CODE_MENU || app->page == SOURCE_SETTINGS ||
+                   editing_page(app)) {
             page(app, WORKSPACE);
         } else if (app->page == WORKSPACE && app->live) {
             request_leave(app, false);
@@ -1252,14 +1759,18 @@ static void key_event(App *app, wint_t key, bool special)
         app->cursor = 0;
         return;
     }
-    if (edit_field(app, control, key, special)) { return; }
-    if ((app->page == COMMAND_INPUT || app->page == SAVE_INPUT) && control.kind == FIELD &&
+    if (edit_field(app, control, key, special)) {
+        if (app->page == CODE_FILES) { app->file_page = 0; }
+        return;
+    }
+    if ((editing_page(app)) && control.kind == FIELD &&
         ((!special && (key == '\n' || key == '\r')) || (special && key == KEY_ENTER))) {
         activate(app, (Control){.kind = INPUT_SUBMIT}); return;
     }
     if (!special && app->page == WORKSPACE && key >= '1' && key <= '9') {
         int pane = (int)(key - '1');
         if (tb_layout_has_pane(&app->layout, pane)) { app->demo.pane = pane; }
+        code_focus(app, app->demo.pane);
         app->menu = -1;
         return;
     }
@@ -1279,6 +1790,15 @@ static void key_event(App *app, wint_t key, bool special)
                 activate(app, (Control){.kind = TOOL, .value = i});
                 return;
             }
+        }
+        if (app->live && (control.kind == BODY || control.kind == HSCROLLBAR || control.kind == SCROLLBAR) && (key == KEY_LEFT || key == KEY_RIGHT)) {
+            TbDemoPane *pane = &app->demo.panes[control.pane];
+            TbView view = pane->tabs[pane->active];
+            int *offset = &app->horizontal[control.pane][view];
+            int next = *offset + (key == KEY_LEFT ? -4 : 4);
+            int maximum = app->horizontal_scroll[control.pane].maximum;
+            *offset = next < 0 ? 0 : next > maximum ? maximum : next;
+            return;
         }
         if ((control.kind == BODY || control.kind == SCROLLBAR) &&
             (key == KEY_UP || key == KEY_DOWN || key == KEY_PPAGE || key == KEY_NPAGE)) {

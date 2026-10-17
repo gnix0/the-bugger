@@ -14,7 +14,7 @@ NCURSES_LIBS := $(shell $(PKG_CONFIG) --libs ncursesw 2>/dev/null)
 PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session -Isrc/model $(NCURSES_CFLAGS)
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/model/context.c
+SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/model/context.c src/model/code.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -118,7 +118,29 @@ $(BUILD_DIR)/context-fixture-stripped: tests/fixtures/native/context.c
 
 fixtures: $(BUILD_DIR)/context-fixture $(BUILD_DIR)/context-fixture-optimized $(BUILD_DIR)/context-fixture-stripped
 
-NATIVE_OBJECTS = $(BUILD_DIR)/src/session/native.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/model/context.o
+$(BUILD_DIR)/code-fixture: tests/fixtures/native/code.c
+	mkdir -p $(dir $@)
+	$(CC) -std=c17 -Wall -Wextra -Wpedantic -Werror -g -O0 $< -o $@
+
+$(BUILD_DIR)/code-fixture-optimized: tests/fixtures/native/code.c
+	mkdir -p $(dir $@)
+	$(CC) -std=c17 -Wall -Wextra -Wpedantic -Werror -g -O2 $< -o $@
+
+$(BUILD_DIR)/code-fixture-stripped: tests/fixtures/native/code.c
+	mkdir -p $(dir $@)
+	$(CC) -std=c17 -Wall -Wextra -Wpedantic -Werror -O2 -s $< -o $@
+
+$(BUILD_DIR)/code-fixture-cpp: tests/fixtures/native/code.cpp
+	mkdir -p $(dir $@)
+	$(CXX) -std=c++17 -Wall -Wextra -Wpedantic -Werror -g -O0 $< -o $@
+
+$(BUILD_DIR)/code-fixture-relocated: tests/fixtures/native/relocated/main.c tests/fixtures/native/relocated/left/duplicate.c tests/fixtures/native/relocated/right/duplicate.c
+	mkdir -p $(dir $@)
+	$(CC) -std=c17 -Wall -Wextra -Wpedantic -Werror -g -O0 '-fdebug-prefix-map=$(CURDIR)/tests/fixtures/native/relocated=/the bugger build tree' $(abspath $^) -o $@
+
+fixtures: $(BUILD_DIR)/code-fixture $(BUILD_DIR)/code-fixture-optimized $(BUILD_DIR)/code-fixture-stripped $(BUILD_DIR)/code-fixture-cpp $(BUILD_DIR)/code-fixture-relocated
+
+NATIVE_OBJECTS = $(BUILD_DIR)/src/session/native.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o
 
 $(BUILD_DIR)/test-native-words: $(BUILD_DIR)/tests/unit/test_native_words.o $(NATIVE_OBJECTS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
@@ -129,16 +151,27 @@ $(BUILD_DIR)/test-native: $(BUILD_DIR)/tests/integration/test_native.o $(NATIVE_
 $(BUILD_DIR)/test-native-tui: $(BUILD_DIR)/tests/integration/test_native_tui.o $(BUILD_DIR)/tests/support/terminal.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-test-native: all $(BUILD_DIR)/test-native $(BUILD_DIR)/test-native-tui $(BUILD_DIR)/test-context-native $(BUILD_DIR)/test-context-tui fixtures
+test-native: all $(BUILD_DIR)/test-native $(BUILD_DIR)/test-native-tui $(BUILD_DIR)/test-context-native $(BUILD_DIR)/test-context-tui $(BUILD_DIR)/test-code-native $(BUILD_DIR)/test-code-tui fixtures
 	$(BUILD_DIR)/test-native $(abspath $(BUILD_DIR)/debug-fixture) $(abspath $(BUILD_DIR)/debug-fixture-cpp)
 	$(BUILD_DIR)/test-native-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/debug-fixture)
 	$(BUILD_DIR)/test-context-native $(abspath $(BUILD_DIR)/context-fixture) $(abspath $(BUILD_DIR)/context-fixture-optimized) $(abspath $(BUILD_DIR)/context-fixture-stripped)
 	$(BUILD_DIR)/test-context-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/context-fixture)
+	$(BUILD_DIR)/test-code-native $(abspath $(BUILD_DIR)/code-fixture) $(abspath $(BUILD_DIR)/code-fixture-optimized) $(abspath $(BUILD_DIR)/code-fixture-stripped) $(abspath $(BUILD_DIR)/code-fixture-cpp) $(abspath $(BUILD_DIR)/code-fixture-relocated) $(abspath tests/fixtures/native/relocated)
+	$(BUILD_DIR)/test-code-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/code-fixture) $(abspath $(BUILD_DIR)/debug-fixture)
 
 $(BUILD_DIR)/test-context-native: $(BUILD_DIR)/tests/integration/test_context_native.o $(NATIVE_OBJECTS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 $(BUILD_DIR)/test-context-tui: $(BUILD_DIR)/tests/integration/test_context_tui.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+$(BUILD_DIR)/test-code-native: $(BUILD_DIR)/tests/integration/test_code_native.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+$(BUILD_DIR)/test-code: $(BUILD_DIR)/tests/integration/test_code.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+$(BUILD_DIR)/test-code-tui: $(BUILD_DIR)/tests/integration/test_code_tui.o $(BUILD_DIR)/tests/support/terminal.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 test-tmux: all $(BUILD_DIR)/test-tmux
@@ -147,7 +180,8 @@ test-tmux: all $(BUILD_DIR)/test-tmux
 $(BUILD_DIR)/test-context: $(BUILD_DIR)/tests/integration/test_context.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-test: all test-mi test-controller $(BUILD_DIR)/test-context $(BUILD_DIR)/test-native-words $(BUILD_DIR)/test-unit $(BUILD_DIR)/test-layout $(BUILD_DIR)/test-render $(BUILD_DIR)/test-cli $(BUILD_DIR)/test-tui $(BUILD_DIR)/test-workspace
+test: all test-mi test-controller $(BUILD_DIR)/test-code $(BUILD_DIR)/test-context $(BUILD_DIR)/test-native-words $(BUILD_DIR)/test-unit $(BUILD_DIR)/test-layout $(BUILD_DIR)/test-render $(BUILD_DIR)/test-cli $(BUILD_DIR)/test-tui $(BUILD_DIR)/test-workspace
+	$(BUILD_DIR)/test-code $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-context $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-native-words
 	$(BUILD_DIR)/test-unit
@@ -192,3 +226,4 @@ clean:
 -include $(BUILD_DIR)/tests/integration/test_context.d
 -include $(BUILD_DIR)/tests/integration/test_context_native.d
 -include $(BUILD_DIR)/tests/integration/test_context_tui.d
+-include $(BUILD_DIR)/tests/integration/test_code.d $(BUILD_DIR)/tests/integration/test_code_native.d $(BUILD_DIR)/tests/integration/test_code_tui.d

@@ -4,13 +4,36 @@
 
 ### Added
 
+- Owner-refined centered launcher with Monokai title/version, subtle separators,
+  full-row session choices, compact icons, descriptions and chevrons. The entire
+  card centers on both axes and adapts to smaller terminals without new assets
+  or rendering dependencies; session and workspace behavior is preserved.
+- Overflow-only horizontal bars in live Source/Disassembly, Console, Call Stack
+  and Threads, with independent view offsets, drag/page/keyboard navigation and
+  fixed source gutters. Vertical scrollbars are one cell wide and match the
+  horizontal thumb/track style.
+- Persistent surrounding assembly across steps, bounded backward/forward window
+  browsing and GDB-derived preceding context. Stepping preserves the viewport
+  until PC reaches a five-row top or bottom margin; the toolbar spells out
+  Shift+F11. The default upper row is modestly taller, with resizing unchanged.
+- Live Source/Disassembly with syntax-colored source, real instruction addresses
+  and opcodes, AT&T x86-64 syntax, optional mixed source/assembly and explicit
+  unavailable/stale states. Source/instruction stepping follows code-pane focus;
+  Step Out and toolbar actions preserve actual stopped context.
+- GDB-known file filtering, current-file find/line navigation, safe assembly
+  address/symbol browsing, return to stopped context and source-directory/ordered
+  prefix recovery. Browsing never changes execution; inspected caller markers
+  remain distinct from actual stopped PC.
+- C synthetic and actual-GDB code tests covering bounded/stale reads, -O0/-O2/
+  stripped/C++ targets, relocated duplicate basenames and literal quoted paths.
+  Breakpoint UI and Run to Selected remain the next gate.
 - Live Call Stack and Threads with mouse/keyboard frame and thread selection,
   simple argument values, stack paging, Refresh and stale/unavailable states.
 - Separate stopped execution PC/thread from an inspected caller or other thread;
   reject obsolete context replies without moving execution.
 - C context model and deterministic delayed-reply/lifecycle/bounds tests, plus
   real GDB API/TUI tests using recursive, multithread, optimized and stripped
-  targets. Source/stepping and other inspection remain in later gates.
+  targets. Other inspection remains in later gates.
 - Fixture terminal-control output now requires explicit --control-bytes;
   ordinary Attach testing retains the printed PID instead of clearing it.
 
@@ -52,6 +75,12 @@
 
 ### Fixed
 
+- Backward assembly reads containing only a short prefix retain the forward
+  listing and viewport context instead of collapsing the pane to one row.
+- One-cell vertical scrollbars use vertical track/thumb glyphs; horizontal
+  dashes remain confined to horizontal bars.
+- Empty Source/Disassembly panes in a Loaded session say Awaiting stop; STALE
+  is reserved for unavailable freshness after execution/context changes.
 - Serialize GDB's CLI-derived setting commands correctly; ^done alone did not
   prove settings were applied. Real probes now verify async/all-stop values,
   while native tests verify shell-free arguments and environment fidelity.
@@ -65,5 +94,6 @@
   Focus follows the promoted active tab, mouse activation keeps normal styling,
   and subsequent keyboard activation addresses the intended tab.
 
-Native launch/control/console are live; inspection, remote/OpenOCD workflows,
-profiles, hardware acceptance and release readiness remain incomplete.
+Native launch/control/console, context and code inspection are live; breakpoints,
+other inspection, remote/OpenOCD workflows, profiles, hardware acceptance and
+release readiness remain incomplete.

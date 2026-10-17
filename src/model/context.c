@@ -11,7 +11,7 @@ enum { COOKIE_BASE = 6000 };
 struct TbContext {
     TbGdb *gdb;
     TbContextSnapshot snapshot, next;
-    bool visible_threads, visible_frames, dirty, invalidate, waiting, failed;
+    bool visible_threads, visible_frames, required, dirty, invalidate, waiting, failed;
     bool select_thread, select_frame;
     char desired_thread[32], selection_error[192];
     int desired_frame, first_frame;
@@ -60,6 +60,11 @@ static void frame(TbFrame *out, const TbMiValue *value)
     const TbMiValue *file = tb_mi_find(value->children, "fullname");
     if (!file) { file = tb_mi_find(value->children, "file"); }
     text(out->file, sizeof out->file, file);
+    if (file && file->type == TB_MI_STRING && file->string.length < sizeof out->path &&
+        memchr(file->string.data, '\0', file->string.length) == NULL) {
+        memcpy(out->path, file->string.data, file->string.length);
+        out->path[file->string.length] = '\0';
+    }
     text(out->from, sizeof out->from, tb_mi_find(value->children, "from"));
     text(out->architecture, sizeof out->architecture, tb_mi_find(value->children, "arch"));
 }
@@ -96,6 +101,11 @@ void tb_context_visible(TbContext *context, bool threads, bool frames)
 {
     if ((threads && !context->visible_threads) || (frames && !context->visible_frames)) { stale(context); }
     context->visible_threads = threads; context->visible_frames = frames;
+}
+void tb_context_require(TbContext *context, bool required)
+{
+    if (required && !context->required) { stale(context); }
+    context->required = required;
 }
 
 static void parse_threads(TbContext *context, const TbMiRecord *record)
@@ -250,7 +260,7 @@ void tb_context_pump(TbContext *context)
         context->invalidate = false; tb_gdb_context_changed(context->gdb);
     }
     if (tb_gdb_state(context->gdb) != TB_GDB_STOPPED || context->waiting ||
-        (!context->visible_threads && !context->visible_frames)) { return; }
+        (!context->visible_threads && !context->visible_frames && !context->required)) { return; }
     if (context->select_thread) {
         context->select_thread = false;
         const char *const args[] = {context->desired_thread};

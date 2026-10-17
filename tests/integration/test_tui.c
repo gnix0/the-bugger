@@ -19,10 +19,41 @@ static void preview(TestTerminal *term, int session)
     test_terminal_expect(term, "DEMO | Paused");
 }
 
+static void launcher_centered(TestTerminal *term)
+{
+    test_terminal_expect(term, "Start a debugging session");
+    int x, y, vx, vy;
+    CHECK(test_terminal_find(term, "THE BUGGER", &x, &y));
+    CHECK(test_terminal_find(term, "v0.1.0", &vx, &vy));
+    CHECK(y == vy && !test_terminal_find(term, "-beta", NULL, NULL));
+    int left = x - 2, right = vx + 6 + 2;
+    CHECK(abs(left + right - term->cols) <= 1);
+    CHECK(abs(2 * (y - 1) + 23 - (term->rows - 2)) <= 1);
+}
+
+static void launcher_reference(const char *binary)
+{
+    TestTerminal term; test_terminal_start(&term, binary, "xterm-256color", false);
+    launcher_centered(&term);
+    test_terminal_click(&term, "Launch or attach to a native process");
+    test_terminal_expect(&term, "Configure session"); test_terminal_send(&term, "\033");
+    test_terminal_expect(&term, "Start a debugging session");
+    test_terminal_resize(&term, 60, 200); launcher_centered(&term);
+    test_terminal_resize(&term, 18, 48);
+    test_terminal_expect(&term, "Linux application");
+    test_terminal_expect(&term, "Embedded target");
+    test_terminal_expect(&term, "Connect to GDB server");
+    test_terminal_send(&term, "\033OB\033OB\r");
+    test_terminal_expect(&term, "GDB endpoint");
+    test_terminal_stop(&term, 0);
+    puts("PASS centered reference launcher, version, whole-row description click, large resize and compact three-flow keyboard access");
+}
+
 int main(int argc, char *argv[])
 {
     CHECK(argc == 2);
     const char *binary = argv[1];
+    launcher_reference(binary);
     TestTerminal term;
     for (int session = 0; session < 3; ++session) {
         test_terminal_start(&term, binary, "xterm-256color", false);
@@ -89,7 +120,7 @@ int main(int argc, char *argv[])
     test_terminal_expect(&term, "PC 0x0800042C");
     test_terminal_click(&term, "Into F11");
     test_terminal_expect(&term, "Step into (simulated)");
-    test_terminal_click(&term, "Out S-F11");
+    test_terminal_click(&term, "Out Shift+F11");
     test_terminal_expect(&term, "Step out (simulated)");
     test_terminal_click(&term, "BP F9");
     test_terminal_expect(&term, "Breakpoint toggled");

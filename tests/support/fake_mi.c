@@ -23,6 +23,16 @@ static void reply(const char *token, const char *body)
     (void)fflush(stdout);
 }
 
+static void quoted(const char *text)
+{
+    (void)putchar('"');
+    for (size_t i = 0; text[i]; ++i) {
+        if (text[i] == '\\' || text[i] == '"') { (void)putchar('\\'); }
+        (void)putchar(text[i]);
+    }
+    (void)putchar('"');
+}
+
 int main(int argc, char *argv[])
 {
     if (argc != 4 || strcmp(argv[1], "--quiet") != 0 || strcmp(argv[2], "--nx") != 0 ||
@@ -88,7 +98,41 @@ int main(int argc, char *argv[])
         } else if (strncmp(mode, "context", 7) == 0 && strncmp(command, "-stack-select-frame ", 20) == 0) {
             selected_frame = atoi(command + 20); reply(token, "^done");
         } else if (strncmp(mode, "context", 7) == 0 && strcmp(command, "-stack-info-frame\n") == 0) {
-            (void)printf("%s^done,frame={level=\"%d\",func=\"%s\",addr=\"0x1234\",arch=\"test:neutral\"}\n", token, selected_frame, selected_thread == 7 ? "leaf" : "worker_leaf");
+            (void)printf("%s^done,frame={level=\"%d\",func=\"%s\",addr=\"0x1234\",arch=\"test:neutral\"", token, selected_frame, selected_thread == 7 ? "leaf" : "worker_leaf");
+            if (strncmp(mode, "context-code", 12) == 0) {
+                fputs(",fullname=", stdout); quoted(getenv("TB_FAKE_SOURCE") ? getenv("TB_FAKE_SOURCE") : "/missing.c");
+                fputs(",line=\"2\"", stdout);
+            }
+            puts("}");
+        } else if (strncmp(mode, "context-code", 12) == 0 && strcmp(command, "-file-list-exec-source-files\n") == 0) {
+            (void)printf("%s^done,files=[{file=\"unit.c\",fullname=", token);
+            quoted(getenv("TB_FAKE_SOURCE") ? getenv("TB_FAKE_SOURCE") : "/missing.c");
+            puts("},{file=\"duplicate.c\",fullname=\"/not/here/duplicate.c\"},{file=\"relative-unresolved.c\"}]");
+        } else if (strncmp(mode, "context-code", 12) == 0 && strncmp(command, "-data-disassemble ", 18) == 0) {
+            if (strcmp(mode, "context-code-stale") == 0 && !context_held) {
+                (void)snprintf(held, sizeof held, "%s", token); context_held = true;
+            } else if (strcmp(mode, "context-code-fallback") == 0 && strstr(command, "-- 5")) {
+                reply(token, "^error,msg=\"FAKE mixed mode unavailable\"");
+            } else {
+                unsigned long long address = 0, end = 0;
+                if (sscanf(command + 18, "-s %llx -e %llx", &address, &end) != 2) { free(line); return 14; }
+                bool mixed = strstr(command, "-- 5") != NULL;
+                (void)printf("%s^done,asm_insns=[", token);
+                if (mixed) {
+                    fputs("src_and_asm_line={line=\"2\",fullname=", stdout);
+                    quoted(getenv("TB_FAKE_SOURCE") ? getenv("TB_FAKE_SOURCE") : "/missing.c");
+                    fputs(",line_asm_insn=[", stdout);
+                }
+                for (unsigned i = 0; i < 140 && address + i < end; ++i) {
+                    unsigned long long base = strcmp(mode, "context-code-short") == 0 ? 0x122f : 0x1228;
+                    unsigned long long offset = address + i >= base && address + i < 0x1328 ? address + i - base : 0;
+                    (void)printf("%s{address=\"0x%llx\",offset=\"%llu\",opcodes=\"90\",inst=\"mov %%eax,%%ebx\"}", i ? "," : "", address + i, offset);
+                }
+                if (mixed) { fputs("]}", stdout); }
+                puts("]");
+            }
+        } else if (strncmp(mode, "context-code", 12) == 0 && strncmp(command, "-data-evaluate-expression ", 26) == 0) {
+            reply(token, "^done,value=\"0x2000 <main>\"");
         } else if (strncmp(mode, "context", 7) == 0 && strncmp(command, "-stack-list-frames ", 19) == 0) {
             if (strcmp(mode, "context-stale") == 0 && !context_held) {
                 (void)snprintf(held, sizeof held, "%s", token); context_held = true;

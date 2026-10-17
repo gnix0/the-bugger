@@ -4,6 +4,9 @@ Run `make test` from the repository root. All tests and support code are C,
 built with the same strict compiler flags as the application. No Python or
 external test framework is required.
 
+- `test-code`: synthetic GDB-known files, bounded source/assembly windows and
+  navigation, mixed fallback, raw-path/display escaping, stale local-view replies,
+  source byte/line limits and no automatic invisible/running/idle reads.
 - `test-native-words`: quoted whitespace/backslash parsing, empty arguments,
   literal metacharacters and input bounds, without a shell or GDB.
 - `test-context`: bounded coherent frame/thread snapshots via a synthetic C
@@ -37,6 +40,8 @@ external test framework is required.
   three explicit --demo session previews, editing/retention, toolbar and function keys, reset
   confirmation, tabs/view selection, compact/tiny resize, direct/256-color and
   monochrome rendering, and normal/SIGINT/SIGTERM/SIGHUP terminal restoration.
+  Launcher regressions check both-axis centering at 140x44 and 200x60, whole-row
+  description clicks, suffix-free version and all three choices at 48x18.
 - `test-workspace`: real PTY mouse press/move/release, global column/row and
   internal dividers, nested seventh/eighth views, tab/split closing, compact
   pane access, keyboard resizing and monochrome keyboard-only splitting.
@@ -114,10 +119,30 @@ tails. Ordinary MI parameters use safe ASCII tokens or escaped C strings.
 - `test-context-tui`: actual native workspace with Call Stack and Threads visible
   together, mouse and keyboard caller/thread selection, caller label, worker
   exit, stale running state and quit cleanup.
+- `test-code-native`: actual source/AT&T/mixed assembly, source/instruction
+  stepping and Step Out, several PC advances per source line, caller inspection
+  and return to execution, read-only symbol lookup including overloaded C++
+  address-of, optimized/stripped fallback, relocated duplicate source identities,
+  literal spaces/quotes/metacharacters and GDB mapping replacement/clear.
+- `test-code-tui`: direct Console start without preliminary browsing, honest
+  Awaiting stop labels for Loaded targets, browse loaded files, actual source/PC
+  and F10 modes retained across inspector focus, file filtering, source find/line/
+  return, symbol/mixed navigation, source-directory form and clean exit.
+  It also drags Source/Console horizontal thumbs, checks independent positions,
+  keyboard clamping, one-cell matching vertical tracks, unchanged PC and bar removal when
+  an enlarged source pane fits its content.
+  Instruction regressions verify surrounding-code retention, stable viewport
+  and five-row top/bottom stepping margins, actual Shift+F11 function return, and bounded
+  backward navigation after returning to the caller. Synthetic offsets verify
+  four preceding decoded instructions without guessed x86 boundaries.
+  The native target passes the original debug-fixture as a second target to
+  reproduce wheel-up at main's initial boundary; multiple visible rows and PC
+  survive upward/downward wheel events. Synthetic coverage includes a backward
+  result containing exactly one instruction merged with the forward window.
 
 Application/harness code remains C. Only the deliberately debugged target
-`fixtures/native/session.cpp` uses C++. Session fixtures build with -g -O0;
-context fixtures also cover -g -O2 and -O2 -s, all with no
+fixtures use C++. Session fixtures build with -g -O0;
+context/code fixtures also cover -g -O2 and -O2 -s, all with no
 sanitizer instrumentation; `make sanitize-native` instruments the frontend and
 test harnesses with ASan/UBSan/LeakSanitizer. Instrumenting a target with LSan
 would conflict with its deliberate execution under GDB/ptrace.

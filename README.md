@@ -13,9 +13,10 @@ where available. Compatibility claims identify the setups actually tested;
 these acceptance targets do not limit the product architecture.
 
 **Current development build:** native Linux launch/attach, Continue/Pause,
-program output, GDB console commands, Save Log, Call Stack and Threads are
-functional. Other inspection panes report unavailable; stepping, breakpoint controls, profiles
-and remote/OpenOCD workflows are not implemented yet. `--demo` opens the
+program output, GDB console commands, Save Log, Call Stack, Threads, live
+Source/Disassembly and source/instruction stepping are functional. Other
+inspection panes report unavailable; breakpoint controls, profiles and
+remote/OpenOCD workflows are not implemented yet. `--demo` opens the
 separate, explicitly simulated visual reference.
 `0.1.0` is the target version, not a declaration of release readiness.
 
@@ -42,6 +43,10 @@ non-TTY interactive execution report an actionable error and exit 1.
 
 Choose **Linux application**, configure **Launch** or **Attach**, then choose
 **Review session** and **Start native**. Inputs remain available after errors.
+The launcher centers its session card horizontally and vertically, with readable
+descriptions and whole-row click targets. Arrow/Tab/Enter navigation and a compact
+presentation keep all three choices accessible on smaller terminals. Monokai Pro
+colors, simple terminal icons and text indicators need no additional assets.
 
 Launch accepts an executable ELF, arguments, working directory, optional
 `NAME=value` environment entries and GDB executable. Arguments/environment use
@@ -54,8 +59,8 @@ Environment overrides are session-only.
 The session starts **Loaded**. Click **Continue** or press **F5** to run; click
 **Pause** to interrupt. State and PID come from GDB. In Console, **Command** opens
 a clearly labelled GDB command field; **Send** executes through MI. Errors leave
-the session usable. Source/Disassembly, Registers, Memory and Locals still show
-unavailable messages and never substitute sample debugger values.
+the session usable. Source/Disassembly show live stopped context; Registers,
+Memory and Locals still report unavailable and never substitute sample values.
 
 A local fixture is available for a first run:
 
@@ -99,7 +104,7 @@ Interactive program input and a full terminal emulator are not provided yet.
 
 The single default tiled workspace shows Source, Disassembly and Registers above
 Memory, Locals and Console. Each pane has tabs and a view chooser. The live
-workspace implements Console, Call Stack and Threads; other live inspection
+workspace implements Source, Disassembly, Console, Call Stack and Threads; other live inspection
 views are marked unavailable. With `--demo`, views display the simulated Cortex-M4F reference,
 including sample source/assembly, values and execution actions. Embedded/remote
 configuration still opens an explicit preview and launches no server.
@@ -122,13 +127,62 @@ Thread display is bounded to the first 128 entries and stack paging to 4096
 levels. See the [context checklist](docs/testing.md#m06-manual-acceptance--call-stack-and-threads)
 for optimized/stripped examples and manual validation.
 
+For a code-stepping example, run `./build/the-bugger`, choose Linux Launch and
+enter `./build/code-fixture` in **Executable / ELF**. Review and Start native.
+The Loaded / PID not started status and **Awaiting stop** code panes mean the
+program has not run yet. In the bottom-right Console click **Command**, type
+`start`, then click **Send** (Enter also submits). Do not run the fixture directly
+in the shell or pass `start` as its argument. This deliberately asks GDB to stop at main; ordinary Launch
+does not insert an automatic breakpoint. Source and Disassembly then follow
+GDB's real frame, source mapping and PC. Click Source for source-level F10/F11,
+or Disassembly for instruction-level stepping. The visible mode persists when
+using the toolbar or inspecting other panes. **Step out** / Shift+F11 returns
+from the execution frame, not from a loop within it. A function that loops forever
+may therefore keep running until Pause. One source line can stay highlighted over several
+instructions; optimized mappings are reported as GDB supplies them.
+
+Code views use `>` for actual stopped execution and `~` for inspected caller
+context. Browsing never changes PC. Source **Actions** offers GDB-known file
+filtering, current-file find, line navigation and source lookup settings.
+Disassembly offers hexadecimal address/simple-symbol navigation and **Mixed**
+source/assembly, with an assembly fallback when source is unavailable. x86-64
+assembly uses AT&T syntax. **Stopped** returns to the original stopped thread
+and frame. Wheel/scrollbars and arrow/Page keys move viewports; Left/Right pans
+long code lines. Disassembly's `<` / `>` footer controls page instruction windows.
+Assembly retains surrounding instructions across stops; scrolling at a window
+edge can load earlier/next code without moving execution. Where GDB supplies
+valid nearby function offsets, initial context includes up to four preceding
+instructions. Stepping leaves the viewport still until PC reaches a five-row
+top or bottom margin (smaller in short panes and limited by available context).
+Manual browsing stays put until stepping
+or **Stopped**. Reads/history are bounded; missing metadata is never replaced by
+guessed x86 instruction boundaries.
+The default upper row gets 62% of the available pane height, giving Source,
+Disassembly and Registers more room. Dragging dividers adjusts this as usual.
+Live code, Console, Call Stack and Threads show a horizontal scrollbar only when
+rows exceed the pane width: drag its thumb, click the track to page, or focus the
+body and use Left/Right. Each view retains its own position; Source keeps its line
+numbers fixed. Vertical scrollbars are one terminal cell wide and match the
+horizontal bar's colors, with a vertical `|` track and `#` thumb. Each bar
+disappears when its content fits, and scrolling preserves pane sizes and PC.
+
+Source lookup settings apply GDB search directories and ordered build-prefix →
+local-prefix substitutions, preserving literal spaces and quoted paths. GDB must
+resolve source identities; the frontend does not guess duplicate basenames or
+unresolved relative paths. Settings are session-only until profiles are available.
+Code browsing is bounded to 256 catalog files, 1 MiB / 32,768 source lines per
+pane and 128 instructions per 256-byte window. Mixed groups outside the cached
+file show their location with unavailable text rather than loading every file.
+See the [code checklist](docs/testing.md#m07-manual-acceptance--live-source-and-disassembly)
+for optimized, stripped and relocated-source examples.
+
 The active tab moves to the left. Mouse activation leaves inactive tabs in their
 normal style; keyboard focus follows the active tab. Use clicks or Tab/Shift+Tab,
 arrows and Enter. In fields use Left/Right, Home/End, Backspace/Delete and Ctrl+U.
 Escape goes back; `q` closes/backs out outside text fields and keeps the launcher
 open. **Quit** or `Ctrl+Q` exits the application, confirming active-session closure.
-Function keys have visible alternatives. Stepping, breakpoint and Reset actions
-remain unavailable in live sessions; demo actions are explicitly simulated.
+Function keys have visible alternatives. Breakpoint and Reset actions remain
+unavailable in live sessions; demo actions are explicitly simulated.
 
 Click `...` for view selection and pane actions. Wheel or a focused body with
 arrows/PageUp/PageDown scrolls; vertical scrollbar tracks page and thumbs drag.
@@ -173,8 +227,9 @@ make test-tmux
 `test` runs deterministic C unit/CLI/PTY suites without GDB or hardware; visual
 regressions explicitly use `--demo`. `test-native` runs actual GDB and C/C++ debug
 fixtures through the native API and TUI. It requires ptrace permission and tests
-launch/attach, output, console/log errors, frame/thread context, optimized and
-stripped stacks, crash recovery and cleanup. Sanitizer
+launch/attach, output, console/log errors, frame/thread context, code/AT&T/mixed
+display, both stepping modes, optimized/stripped targets, relocated source,
+crash recovery and cleanup. Sanitizer
 targets keep instrumentation in `build/sanitize/`; debug targets themselves stay
 uninstrumented. LeakSanitizer cannot run inside a tracing sandbox.
 
@@ -204,10 +259,9 @@ way; it is not firmware/hardware acceptance.
 
 ## Project direction
 
-Live source/disassembly, stepping, breakpoints, architecture-neutral registers,
-independent Memory views, local variables, watches, frames and threads follow
-in bounded development gates. x86-64 disassembly will use AT&T syntax. Basic
-profiles and key remapping are planned. Firmware sessions will use an appropriate
+Breakpoints and Run to Selected, architecture-neutral registers, independent
+Memory views, local variables and watches follow in bounded development gates.
+Basic profiles and key remapping are planned. Firmware sessions will use an appropriate
 GDB/server, optionally OpenOCD, without assuming ARM registers or a universal
 probe backend.
 

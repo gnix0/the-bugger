@@ -24,10 +24,11 @@ int main(int argc, char *argv[])
     const char *level_text = strchr(term.cells[y], '#'); CHECK(level_text);
     int level; CHECK(sscanf(level_text, "#%d", &level) == 1);
     test_terminal_click(&term, "recursive(depth=0");
-    test_terminal_expect(&term, "inspected caller");
+    char selected[64]; (void)snprintf(selected, sizeof selected, "LIVE | T1 frame #%d | inspected caller", level);
+    test_terminal_expect(&term, selected);
     /* Arrow navigation browses rows; Enter deliberately selects the caller. */
     test_terminal_send(&term, "\033OB\r");
-    char selected[64]; (void)snprintf(selected, sizeof selected, "frame #%d", level + 1);
+    (void)snprintf(selected, sizeof selected, "LIVE | T1 frame #%d", level + 1);
     test_terminal_expect(&term, selected);
     test_terminal_click(&term, "...");
     test_terminal_expect(&term, "SHOW VIEW");

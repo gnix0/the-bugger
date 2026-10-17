@@ -6,6 +6,7 @@
 enum { TB_CONTEXT_THREADS = 128, TB_CONTEXT_FRAMES = 32, TB_CONTEXT_MAX_LEVEL = 4095 };
 typedef struct {
     int level, line;
+    char path[4096]; /* Exact filesystem bytes; file below is a render-safe label. */
     char address[48], function[160], file[384], from[160], architecture[64];
     char arguments[256];
 } TbFrame;
@@ -36,6 +37,7 @@ bool tb_context_event(TbContext *context, const TbGdbEvent *event);
  * operations are idle. No polling reads while running or with no visible view. */
 void tb_context_pump(TbContext *context);
 void tb_context_visible(TbContext *context, bool threads, bool frames);
+void tb_context_require(TbContext *context, bool required);
 void tb_context_refresh(TbContext *context); /* Outside controller callbacks. */
 bool tb_context_select_thread(TbContext *context, const char *id);
 /* Frame rows must belong to a fresh snapshot, never the previous thread. */

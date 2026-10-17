@@ -15,8 +15,8 @@ git diff --check
 ```
 
 `all` compiles C17 with strict warnings including `-Wall -Wextra -Wpedantic`
-and `-Werror`. `test` builds and runs twelve C test executables: two MI suites,
-two controller suites, context snapshots, native word parsing, demo, layout,
+and `-Werror`. `test` builds and runs thirteen C test executables: two MI suites,
+two controller suites, context/code models, native word parsing, demo, layout,
 renderer, CLI and two workspace PTY suites, described in
 `tests/README.md`. `sanitize` builds separately
 with ASan/UBSan; a runtime
@@ -36,10 +36,109 @@ retained as `build/m01-*`; these are local evidence, not tracked artifacts.
 Durable command summaries and limitations belong in `docs/progress.md`.
 Changing compiler or flags requires a fresh build directory or cleaning.
 
+## M07 manual acceptance — live Source and Disassembly
+
+M06 is accepted as 1b21504. This gate adds live code, stepping and navigation;
+breakpoint UI/F9/Run to Selected remain M08. Registers/Memory/Locals remain
+unavailable. GDB Console `start` supplies a temporary main breakpoint for this
+gate's demonstration; it is an explicit command, not an automatic frontend stop.
+
+1. Run `make fixtures` and `./build/the-bugger`. Choose Linux application / Launch,
+   executable `./build/code-fixture`, no arguments. Review and Start native:
+   expect Loaded. In Source click **Actions → Choose source file**. Filter with
+   `code.c` and select its full path. Source is browsable before execution, with
+   no invented execution marker. Disassembly explains that no stopped context
+   exists. Escape returns from menus; fields accept ordinary text including q.
+2. Console **Command** → type `start` → click **Send** (Enter also submits).
+   Loaded / PID not started means GDB has not run the target; empty code panes
+   say **Awaiting stop**, not STALE. Expect main's actual GDB line
+   (the brace or initialization, depending on compiler), live source, assembly
+   addresses/opcodes and matching execution markers. `>` marks actual stopped
+   execution; `~` marks an inspected caller. No preloaded breakpoint appears.
+3. Click Source, then use **Step over/F10** to reach the `code_callee` call.
+   Use **Step into/F11**, then click Disassembly and step instructions with F10
+   and F11. The mode indicator changes; Source may remain on one line while PC
+   advances several instructions. Check x86 operands use AT&T `%register` / `$`
+   syntax. Inspector/toolbar clicks preserve the last code-pane stepping mode.
+   **Step out** (or reported Shift+F11) returns from the current function;
+   it does not leave a loop inside that function. An infinite-looping function
+   may therefore keep running until Pause. Buttons are available if
+   the terminal intercepts a key. Let GDB report optimized/inlined mappings.
+4. In Disassembly click **Mixed** (or Actions → Toggle mixed source/assembly).
+   Expect interleaved source where available and assembly-only fallback elsewhere.
+   Wheel/scrollbar and Up/Down/Page keys scroll; Left/Right pans long code lines.
+   `<` / `>` in its footer page bounded instruction windows. No browsing action
+   resumes execution or changes PC; no secondary execution-line selection appears.
+5. In Source Actions, **Find in current file** → `CODE_FIND_MARKER`, then **Go to
+   line** → `1`. The viewport moves without moving execution. In Disassembly
+   Actions use **Go to address / symbol** → `code_callee` or a displayed `0x...`
+   address. Calls such as `code_callee(1)` are rejected. Click **Stopped** to
+   restore the original stopped thread/frame and synchronized code context.
+6. Stop inside the callee again and activate Call Stack. Select a caller, then
+   return to Disassembly: code follows the inspected frame while the real stopped
+   PC stays separate. **Stopped** returns to execution. Continue/Pause and check
+   stale running code becomes fresh only after the actual new stop.
+7. Close the session and launch `./build/code-fixture-relocated`. Console `start`
+   reports missing source. Source Actions → **Source lookup settings** → Add
+   mapping: build prefix `/the bugger build tree`, local prefix the absolute
+   repository path plus `/tests/fixtures/native/relocated`. After refresh expect
+   actual source. Choose each `left/duplicate.c` and `right/duplicate.c` in Files:
+   LEFT/RIGHT markers must match their full identities. Add directory and Clear
+   overrides also report successful GDB application or a useful error. Settings
+   are session-only until M13. Directory order is newest first; mappings show
+   GDB's first-match order (replacing a prefix moves that rule to the end).
+8. Repeat `start` with `code-fixture-optimized`; mappings may skip/repeat lines.
+   For `code-fixture-stripped` use Console `starti`: assembly/instruction steps
+   remain usable, with explicit missing-source/symbol states. Resize, split an
+   extra code view, and repeat the core clicks/stepping/scrolling inside tmux
+   (`set -g mouse on`). Check the approved theme/tabs/layout remain intact.
+   Quit and verify terminal restoration. Stop for owner acceptance.
+9. Keep a narrow Source/Disassembly/Console pane. Drag its horizontal thumb to
+   reveal clipped text, click the track to page, and use Left/Right with its body
+   focused. Source line numbers remain fixed; PC and pane size never change.
+   Switch tabs/panes: horizontal positions remain independent. Vertical tracks
+   and thumbs use one-cell targets matching the horizontal style. Enlarge a pane until its rows/columns
+   fit: the corresponding bar disappears. Shrink it again and verify clamped,
+   usable bars without covering content or footer actions. Repeat in tmux.
+10. Relaunch without arguments and inspect the owner-refined startup card:
+    centered on both axes, pink title, right-aligned v0.1.0, subtle separators,
+    three described choices and selected-row indicator. Click either a title or
+    its description; both open that flow. Check arrows/Tab/Enter, Quit/Ctrl+Q,
+    140x44, a larger terminal and 48x18 compact presentation. Server flows remain
+    explicit previews and recent profiles remain unavailable. The workspace
+    after launch must retain its existing layout/theme.
+11. Step instructions in Disassembly. Earlier instructions must remain browsable,
+    with roughly four before the first PC where available. The viewport stays
+    still through the middle, then scrolls to keep about five rows above and
+    below PC where context permits (reduced in short panes). Browse until PC is
+    near the top, then step: the top margin should return. The default upper row
+    is modestly taller (62%); drag its divider and confirm your sizing survives
+    terminal shrink/restore.
+    Wheel/Up/Down at a window edge can load a known earlier/next window; `<` / `>`
+    footer controls remain available. Browse away and confirm PC never changes;
+    stepping/Stopped returns to execution context. Test **Out Shift+F11** inside
+    code_callee: the real Shift+F11 key or button returns to main. Terminal
+    interception is distinct from a function that never returns.
+12. Launch `./build/debug-fixture`, send Console `start`, and focus Disassembly.
+    Wheel upward at the initial top boundary several times: the forward listing
+    and current-PC marker must remain visible, including when only one earlier
+    instruction was missing. Wheel down again: no blank/one-row collapse. Check
+    the narrow vertical bar uses a vertical track while the bottom bar keeps its
+    horizontal orientation. Broader browsing boundaries and repeated zero-byte
+    decoding are recorded for M08's research, not resolved by this correction.
+
+Automated coverage: `make test` exercises synthetic code windows, mixed fallback,
+caps, escaping, obsolete replies and invisible/running/idle reads. `make test-native`
+adds actual -O0/-O2/stripped/C++ GDB code/stepping, caller inspection, safe symbol
+lookup, relocated duplicate paths with spaces/quotes/metacharacters, mapping
+replacement/clear, and the real TUI browse/find/line/mixed/settings workflow.
+Full visual fidelity and physical terminal/tmux input still require owner review.
+No remote, board or release acceptance is inferred from native tests.
+
 ## M06 manual acceptance — Call Stack and Threads
 
-M05 is accepted as 0278b61. M06 implements frame/thread inspection only;
-Source, Disassembly, Locals, stepping and breakpoint UI remain unavailable.
+M05 is accepted as 0278b61; M06 is accepted as 1b21504. This historical checklist
+covers frame/thread inspection; M07 above adds Source/Disassembly and stepping.
 No real hardware, remote connection or release acceptance is claimed here.
 
 1. Run `make fixtures`, then `./build/the-bugger` without --demo. Choose Linux
@@ -84,7 +183,7 @@ No real hardware, remote connection or release acceptance is claimed here.
 8. Repeat the ordinary Call Stack/Threads click, keyboard, scroll, resize and
    quit workflow inside tmux with opt-in mouse support. Check `--demo` still
    shows the accepted simulated reference separately. Stop for owner acceptance;
-   M07 requires commit/push and explicit continuation.
+   Every next gate requires owner acceptance and commit/push before continuation.
 
 Automated scope: a synthetic C peer supplies bounded pages/arguments, nonordinal
 thread IDs, missing/malformed unwind data, 128-thread truncation, delayed query
@@ -445,7 +544,7 @@ editable; OpenOCD is not a requirement for every architecture.
 
 | Environment | Minimum evidence | Current live evidence |
 |---|---|---|
-| Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | PARTIAL — M05 accepted; M06 automated frame/thread inspection, owner M06 review pending; other inspection, later features and release acceptance pending |
+| Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | PARTIAL — M05/M06 accepted; M07 code/stepping automated evidence and owner review recorded in progress.md; breakpoints/other inspection/profiles and release acceptance pending |
 | STM32 / ARM | NUCLEO-F446RE fixture via GDB/OpenOCD; halt/step/break/watch, real code/register/RAM/variables, reset/disconnect/cleanup | UNVERIFIED |
 | ESP32 / Xtensa | Owner's board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED |
 | ESP32 / RISC-V | Owner's board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED |

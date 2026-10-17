@@ -1,6 +1,6 @@
 # Native session fixtures
 
-These small programs are debug targets authored for M05/M06, not fake debugger
+These small programs are debug targets authored for M05–M07, not fake debugger
 engines or hardware evidence. `make fixtures` creates:
 
 - `build/debug-fixture` from `session.c`: prints its PID, working directory,
@@ -35,8 +35,8 @@ external fixture after checking that frontend detach leaves it alive and
 resumed. Attached stdout stays with its original destination. The target's
 control/OSC bytes are emitted only with --control-bytes and deliberately escaped
 by the frontend. Ordinary runs, including --allow-attach, do not clear the host
-terminal or erase the printed PID. Memory/source/stepping inspection is tested
-in later gates.
+terminal or erase the printed PID. M07 adds source/stepping targets below;
+Memory remains a later gate.
 
 ## M06 context targets
 
@@ -63,3 +63,24 @@ uninstrumented under sanitizers, as in M05. The actual-GDB API test prints its
 reported frames/arguments as evidence; the TUI test uses the unoptimized target.
 Missing/unreliable unwind errors are deterministic synthetic-peer cases, not
 claims that a stripped ELF necessarily lacks unwind information.
+
+## M07 code targets
+
+`code.c` supplies a known main/callee, volatile values, `CODE_FIND_MARKER` and an
+idle loop. Build variants `code-fixture`, `code-fixture-optimized` and
+`code-fixture-stripped` use respectively -g -O0, -g -O2 and -O2 -s. Use Console
+`start` for debug variants, `starti` for stripped, then inspect actual GDB mappings.
+Several instructions can share one source line; exact stops depend on compiler.
+
+`code.cpp` builds `code-fixture-cpp`; its overloaded address-of increments a
+counter. Actual symbol-address browsing verifies that C-language lookup never
+invokes that operator. C++ remains target-only, not frontend/test-harness code.
+
+`relocated/` has main plus left/right files both named `duplicate.c`, with
+distinct LEFT/RIGHT markers. `code-fixture-relocated` uses an absolute
+`-fdebug-prefix-map` to the intentionally absent `/the bugger build tree`.
+Source recovery must use explicit directories/substitute-path rules and retain
+the correct full file identity. The C integration test copies this tree into a
+temporary path containing spaces, quotes and shell metacharacters, verifies GDB
+lookup/order/replacement/clear, and removes its owned files. Targets are always
+uninstrumented; sanitizer runtimes remain in the frontend and C harnesses.

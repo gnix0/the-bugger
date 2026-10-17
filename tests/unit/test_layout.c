@@ -81,6 +81,7 @@ int main(void)
     CHECK(tb_layout_arrange(&layout, (TbRect){1, 4, 138, 38}, 0));
     invariants(&layout, 0);
     CHECK(layout.panes[0].w == 48 && layout.panes[1].w == 46);
+    CHECK(layout.panes[0].h > layout.panes[3].h);
     TbRect original = layout.panes[0];
     int added = tb_layout_split(&layout, 0, TB_SPLIT_RIGHT);
     CHECK(added == 6 && layout.count == 7);

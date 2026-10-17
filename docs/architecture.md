@@ -1,6 +1,6 @@
 # Architecture
 
-## Current implementation (M06)
+## Current implementation (M07)
 
 `src/main.c` handles help/version and starts the terminal application.
 `src/tui/app.c` owns startup/configuration/review/workspace pages, keyboard
@@ -15,7 +15,8 @@ C tests use POSIX pipes, processes and PTYs. Python tests were replaced at the
 owner's request. The only current application library dependency is ncursesw.
 The MI parser/controller and native session module now serve real Linux
 launch/attach sessions through the TUI. Console/output and Continue/Pause are
-live. Call Stack and Threads use the selected-context model; other inspection
+live. Source/Disassembly and stepping use the code model; Call Stack and Threads
+use the selected-context model. Other inspection
 views have explicit unavailable messages. Explicit --demo
 retains simulated presentation separately. Embedded/remote remain previews;
 inspection, OpenOCD management and persistence await their own gates.
@@ -44,6 +45,13 @@ next paint. Mouse input suppresses the additional inverse keyboard-focus marker;
 keyboard input restores it. This prevents the old numeric control index from
 highlighting/activating a different tab after reordering. The active-tab theme
 and monochrome selection indicator remain intact.
+
+The owner-refined launcher uses the existing render/theme primitives: a bounded
+card centered in the usable terminal area, full-row hit regions including choice
+descriptions, simple ASCII icons/chevrons and a compact height below 28 rows.
+No image assets, new dependency, animation or background work is needed. It keeps
+native-vs-preview availability, missing profile persistence and q/Ctrl+Q policy
+explicit; session configuration and the debugging workspace are unchanged.
 
 ## M03 owned MI parser
 
@@ -186,7 +194,8 @@ program. Pause uses MI interrupt. There is no automatic main breakpoint or
 stepping in this gate. Attach uses the selected PID and optional ELF, stops on
 success and retains actionable permission failures. Attached processes retain
 their existing stdio. Source/assembly/register/memory/variable inspection stays
-unavailable; M06 supplies frame/thread inspection. Demo data is never live data.
+unavailable in M05; M06 supplies frame/thread inspection and M07 code/stepping.
+Demo data is never live data.
 Basic console run/r/start/starti operations also establish launch ownership;
 failed operations do not retain a pending ownership claim. Multi-inferior
 coordination and arbitrary session-topology changes are outside this gate.
@@ -263,12 +272,104 @@ Live rows have mouse selection and arrow-key browsing followed by Enter.
 `>` marks the selected context and `*` marks the stopped thread's innermost
 frame; caller inspection is labelled. Stack paging, Refresh, scrollbars and
 normal tiled resize/compact behavior reuse the existing pane controls. Snapshot
-revisions cause redraws through the native event loop. Source/Locals consumers
-will use this context in M07/M11; they remain explicitly unavailable now.
+revisions cause redraws through the native event loop. Source/Disassembly now
+consume this context; Locals remains M11. Code visibility requests selected
+thread/frame metadata without fetching a whole stack when its view is hidden.
+Raw source paths are retained separately from escaped display labels.
 
 The protocol follows GDB's official
 [stack commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Stack-Manipulation.html)
 and [thread commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Thread-Commands.html).
+
+## M07 live code and execution navigation
+
+`src/model/code.{h,c}` owns per-pane source buffers, assembly windows, mixed-mode
+settings and browsing positions independently of curses. The native session owns
+it alongside context, routes distinct request cookies, and pumps both only after
+controller callbacks return. Session/stop/context generations reject obsolete
+backend replies; per-view versions additionally reject an outstanding assembly
+reply after a local mixed/follow change. Resume retains explicitly stale code.
+Stopped source/assembly follow GDB's selected frame; original stopped-PC markers
+remain distinct from inspected caller markers. No compiler semantics are inferred.
+
+`-file-list-exec-source-files` supplies a bounded file catalog, including before
+execution. Exact file/fullname identities preserve spaces and duplicate basenames.
+Source reads accept regular files only, bounded to 1 MiB / 32,768 lines per pane;
+text find and line navigation operate on this local cache. Rendering escapes
+terminal controls/non-ASCII bytes and shares the demo's C/C++ lexical colors.
+These are bounded synchronous local reads; unusually slow filesystems remain a
+latency limitation. There is no eager scan of the project's files or target.
+Unresolved relative source paths require GDB lookup recovery, rather than an
+ambiguous read relative to the frontend's working directory.
+
+`-data-disassemble` requests 256-byte address windows, retaining at most 128
+instructions with opcodes and optional source groups (`-- 2` / `-- 5`). Forward
+navigation uses the last decoded instruction's byte length, with 16 previous
+window anchors retained for Back; it never guesses a backward instruction boundary.
+Stopped refreshes retain the current window if it contains PC, and can restore
+previously decoded ranges after returning from another function. A new window
+may use the structured first instruction's function offset for one bounded
+pre-context read (at most 1024 preceding bytes plus the normal 256-byte forward
+range); parsing retains only the last four preceding instructions and the bounded
+forward listing. Missing/too-distant metadata falls back to the known PC boundary.
+All bytes are fetched fresh after stops; saved anchors are browsing context,
+not trace or retained historical target state. Scrolling beyond a window edge
+can load a known earlier/next window without resuming execution.
+Without an earlier saved anchor, a known nearby function origin can supply a
+bounded backward decode ending at the current window, retaining at most 128
+preceding instructions. Unavailable or distant origins require explicit address/
+symbol navigation; the frontend does not disassemble backwards from arbitrary bytes.
+A short backward-prefix read prepends its rows to a bounded owned copy of the
+current forward listing instead of replacing that listing. At most 128 combined
+instructions remain; pending copies are released on completion, cancellation,
+view-navigation changes, reset and destruction. The TUI preserves the old first
+row's position, adjusted by the requested upward scroll, when it appears in the
+combined result. A full older window uses its end instead. This avoids a one-row
+result collapsing the display or jumping it to the far end of the retained data.
+Mixed failures fall back independently per pane to assembly. Source text is
+interleaved when its exact file matches the cached source; other source groups
+keep their file/line labels with an explicit unavailable-text message. Current
+x86 targets reported by GDB as i386-family explicitly select AT&T syntax.
+
+Address navigation accepts hexadecimal addresses or simple identifiers/qualified
+symbols, excluding calls/operators/command fragments. Symbol addresses use
+`-data-evaluate-expression --language c` and a quoted symbol's address, avoiding
+C++ overloaded address-of calls. Browsing never issues execution/PC-write commands.
+Return to Stopped selects the original stopped thread/frame zero. Source lookup
+settings use MI source directories and ordered GDB substitute-path rules, with
+separate GDB-CLI and MI encoding; only successful replies update saved-in-session
+settings. Clear resets both overrides. Basic profile persistence remains M13.
+
+The native module issues MI next/step/next-instruction/step-instruction/finish
+against the selected thread's execution frame zero. Clicking Source/Disassembly
+chooses the corresponding F10/F11 mode; toolbar and inspector clicks retain it.
+Step Out remains finish. Full-page tiled Actions, file filtering and source
+settings screens share normal mouse/Tab/arrows/Enter/Escape editing. Source/ASM
+scroll and horizontal pan change only the viewport; `>` denotes actual stopped
+execution and `~` an inspected frame. No secondary execution-like cursor is added.
+Breakpoints/gutter/F9/Run to Selected remain M08; other inspection gates are intact.
+
+Live pane scrolling uses shared bounded content/viewport measurements. Optional
+horizontal tracks reserve a row above the action footer; optional vertical
+tracks have one-cell hit regions, vertical `|`/`#` glyphs and the horizontal
+bar's colors/weight. Width/height calculations account for both
+bars before painting and hit testing. Source keeps its line gutter fixed while
+code text pans. Source, Disassembly, Console, Call Stack and Threads retain
+horizontal offsets per pane/view, clamp to content bounds, and expose thumb
+dragging, track paging and Left/Right navigation. A fitting axis renders no bar.
+Later live views must supply their bounded row width to this same viewport path.
+Demo vertical bars use the same narrow style; its static reference has no horizontal
+data-navigation implementation. This adds no layout modes or debugger actions.
+Live assembly initially includes prior decoded context where available, then
+keeps its viewport until PC reaches a five-row top or bottom margin (scaled in
+short panes and clamped to available context). Manual browsing does not
+automatically snap back until stepping/Stopped. The default upper row receives
+62% of the usable height; divider dragging continues to set the user's ratio.
+
+Protocol references: GDB's [MI data commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Data-Manipulation.html),
+[execution commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Program-Execution.html),
+[file commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-File-Commands.html)
+and [source lookup](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Source-Path.html).
 
 ## Approved direction
 

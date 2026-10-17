@@ -37,9 +37,9 @@ int main(void)
     CHECK(pair_at(6, 8) == TB_CYAN);
     CHECK(pair_at(6, 12) == TB_GREEN);
     CHECK(pair_at(7, 3) == (int)tb_selected_style(TB_YELLOW));
-    CHECK(pair_at(7, 48) == TB_SELECTED); /* selection fills the row */
+    CHECK(pair_at(7, 48) == TB_SELECTED); /* selection stops before the narrow bar */
     CHECK(pair_at(13, 2) == TB_FOOTER);
-    CHECK(pair_at(6, 49) == TB_BORDER); /* scrollbar track */
+    CHECK(pair_at(6, 49) == TB_MUTED); /* one-cell track matches horizontal styling */
     CHECK(pair_at(11, 49) == TB_CYAN); /* thumb near the end of the source */
     tb_demo_action(&demo, TB_NEXT);
     tb_fill(rect, TB_PANEL);

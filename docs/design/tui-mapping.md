@@ -3,7 +3,8 @@
 The HTML in `prototype.html` is the approved visual reference. The first M01
 rendering was rejected by the owner for visual differences. The corrected M01
 presentation was subsequently accepted. M02 retains that styling and adds
-layout interactions, which await their own manual acceptance. Passing
+accepted layout interactions. M07 adds live code/inspection scrolling and awaits
+owner validation. Passing
 interaction tests does not establish fidelity to the reference.
 
 | Component | Previous discrepancy | Terminal implementation |
@@ -15,9 +16,15 @@ interaction tests does not establish fidelity to the reference.
 | Source | Whole-line coloring | Separate gutter, line numbers, keywords, types, functions and literals; current line has full-width selection background |
 | Inspection | Whole tables colored uniformly | Purple addresses, muted instruction bytes/types, cyan names, green values, yellow changes; selected rows preserve semantic foreground colors |
 | Status | Identity, target and execution shared a single style | Pink identity, cyan session label, green labeled simulated run state, explicit disconnected demo ribbon, muted diagnostics/footer |
-| Startup | Full-width, loosely grouped controls | Bounded central content area, raised session choices with muted descriptions, aligned labels and fields, selected-input styling |
+| Startup | Full-width, loosely grouped controls | Owner-refined launcher card centered on both axes, pink title/right-aligned version, thin rules, full-row choices with icons/descriptions/chevrons; compact fallback and unchanged configuration forms |
 
 ## Terminal adaptations and limitations
+
+The owner's later launcher image supersedes the initial prototype's launcher
+presentation only. Its hierarchy is implemented with the existing Monokai roles,
+at most a 100-column card, 23 rows normally or 15 on compact terminals. Small
+ASCII icons avoid font/icon dependencies; cells replace pixel spacing/rounding.
+The six-pane workspace and its approved visual identity remain unchanged.
 
 - Fixed character cells cannot reproduce CSS pixel padding, font sizes, rounded
   corners, shadows or one-pixel borders. Background surfaces, cell gutters,
@@ -38,17 +45,28 @@ interaction tests does not establish fidelity to the reference.
   markers remain meaningful without color.
 - The browser's overlay menus are represented by full-page session configuration
   and pane-local view selection, preserving the strictly tiled workspace.
-- Source and log text still clip to pane width. Horizontal scrolling and a live
-  console remain future work. M02 adds dynamic splits, nested pane closing,
+- Live Source/Disassembly, Console, Call Stack and Threads can scroll clipped
+  rows horizontally without resizing panes. Horizontal overflow adds a one-row
+  track above the existing footer; source line numbers and execution gutters
+  remain fixed. The track/thumb support click paging, dragging and Left/Right
+  keys. View offsets persist independently and clamp when content or geometry
+  changes; neither bar appears when its content fits. M02 adds dynamic splits, nested pane closing,
   selected-tab closing and divider dragging through the existing pane menus.
   Idle gutters retain the workspace background; only an actively dragged or
   keyboard-selected divider gains a visible line and selected background.
-- Samples remain Cortex-M demo data in all session previews. Future x86-64
-  disassembly uses AT&T syntax, as recorded in the development plan.
+- Explicit demo/previews remain simulated Cortex-M data; native code/console/
+  context views use GDB. Live x86-64 disassembly uses AT&T syntax.
 - Pane scrolling moves the viewport rather than a highlighted navigation row.
   Source/disassembly reserve row highlighting for the simulated execution
-  position. Overflowing bodies have a one-cell vertical scrollbar; click its
+  position (actual stopped/inspected context in live sessions). Overflowing
+  bodies have a one-cell vertical scrollbar with a cyan `#` thumb and muted `|`
+  track; horizontal `=`/`-` glyphs remain horizontal only. Click its
   track to page or drag its thumb. Initial demo sessions have no breakpoints.
+  Live assembly retains preceding instructions across steps. Initial context can
+  include four decoded instructions before PC; subsequent stepping preserves the
+  viewport until PC enters a five-row top or bottom margin. Smaller panes scale
+  the margin; available context limits it at listing edges. The default upper
+  row receives 62% of the usable height, with divider resizing unchanged.
 
 ## Inspection
 

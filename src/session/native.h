@@ -3,6 +3,7 @@
 
 #include "controller.h"
 #include "context.h"
+#include "code.h"
 
 enum { TB_NATIVE_WORDS = 32, TB_NATIVE_WORD_BYTES = 512,
        TB_NATIVE_LOG_LINES = 512, TB_NATIVE_LOG_WIDTH = 256 };
@@ -26,6 +27,8 @@ bool tb_native_destroy(TbNative *native); /* Refuses a live debugger. */
 bool tb_native_start(TbNative *native, const TbNativeConfig *config);
 bool tb_native_continue(TbNative *native);
 bool tb_native_pause(TbNative *native);
+typedef enum { TB_STEP_OVER, TB_STEP_INTO, TB_STEP_OUT } TbStep;
+bool tb_native_step(TbNative *native, TbStep step, bool instruction);
 bool tb_native_console(TbNative *native, const char *command);
 bool tb_native_save_log(TbNative *native, const char *path);
 /* Launch: terminate the still-owned inferior; Attach: detach/resume. Caller
@@ -45,5 +48,6 @@ pid_t tb_native_debugger_pid(const TbNative *native);
 bool tb_native_attached(const TbNative *native);
 bool tb_native_active(const TbNative *native);
 TbContext *tb_native_context(TbNative *native);
+TbCode *tb_native_code(TbNative *native);
 
 #endif
