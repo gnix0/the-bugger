@@ -49,7 +49,7 @@ static void launch(const char *fixture, const char *cpp)
     TbNative *native = tb_native_create(); CHECK(native);
     char directory[] = "/tmp/the bugger native-XXXXXX"; CHECK(mkdtemp(directory));
     TbNativeWords arguments, environment; char error[128];
-    CHECK(tb_native_words("'hello world' '' '$HOME;$(false)' 'quote\"and\\slash'", &arguments, error, sizeof error));
+    CHECK(tb_native_words("'hello world' '' '$HOME;$(false)' 'quote\"and\\slash' --control-bytes", &arguments, error, sizeof error));
     CHECK(tb_native_words("'THE_BUGGER_TEST=env with spaces;$(false)'", &environment, error, sizeof error));
     TbNativeConfig config = {.gdb = "gdb", .executable = fixture, .directory = directory,
                              .arguments = &arguments, .environment = &environment};
@@ -115,8 +115,16 @@ static pid_t external(const char *fixture, bool allow, int *reader)
         execl(fixture, fixture, allow ? "--allow-attach" : "--deny-attach", (char *)NULL); _exit(127);
     }
     (void)close(fds[1]); *reader = fds[0];
-    char byte;
-    do { CHECK(read(*reader, &byte, 1) == 1); } while (byte != '\n');
+    char initial[8192] = {0}; size_t used = 0;
+    while (!strstr(initial, "tick 0\n") && used + 1 < sizeof initial) {
+        struct pollfd output_fd = {*reader, POLLIN, 0};
+        CHECK(poll(&output_fd, 1, 2000) > 0);
+        CHECK(read(*reader, initial + used, 1) == 1);
+        CHECK(initial[used] != '\033' && initial[used] != '\a');
+        initial[++used] = '\0';
+    }
+    char expected[64]; (void)snprintf(expected, sizeof expected, "FIXTURE PID=%ld\n", (long)pid);
+    CHECK(strncmp(initial, expected, strlen(expected)) == 0 && strstr(initial, "tick 0\n"));
     return pid;
 }
 

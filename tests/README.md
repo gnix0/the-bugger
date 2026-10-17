@@ -6,6 +6,12 @@ external test framework is required.
 
 - `test-native-words`: quoted whitespace/backslash parsing, empty arguments,
   literal metacharacters and input bounds, without a shell or GDB.
+- `test-context`: bounded coherent frame/thread snapshots via a synthetic C
+  peer, numeric thread IDs unrelated to row indices, simple/optimized arguments,
+  32-frame pages and a 128-thread limit, delayed/stale query and selection
+  replies, rapid selection, thread exit, malformed/missing unwind, session reset,
+  and no automatic reads while running, invisible or idle. This is model evidence,
+  not proof of target functionality.
 - `test-controller`: nonblocking fake-peer command/reply correlation, reordered/
   late responses, argument byte round-trip, async state, session/stop/context
   epochs, bounded queues, timeouts/backpressure, floods, EOF/protocol errors,
@@ -101,9 +107,17 @@ tails. Ordinary MI parameters use safe ASCII tokens or escaped C strings.
 - `test-native-tui`: bare launcher, configuration retention after missing GDB,
   live status without sample values, mouse actions, command/log forms, launch/
   attach confirmations, cancellation and SIGINT/SIGTERM/SIGHUP terminal cleanup.
+- `test-context-native`: actual GDB with -O0 recursive/paged, -O2 inline/tail-call
+  and stripped multithread C fixtures, selected frame/thread consistency, stopped
+  PC preservation, simple arguments, thread exit, running invalidation and clean
+  closure. Actual GDB frame names/arguments are retained in command output.
+- `test-context-tui`: actual native workspace with Call Stack and Threads visible
+  together, mouse and keyboard caller/thread selection, caller label, worker
+  exit, stale running state and quit cleanup.
 
 Application/harness code remains C. Only the deliberately debugged target
-`fixtures/native/session.cpp` uses C++. Fixtures build with -g -O0 and no
+`fixtures/native/session.cpp` uses C++. Session fixtures build with -g -O0;
+context fixtures also cover -g -O2 and -O2 -s, all with no
 sanitizer instrumentation; `make sanitize-native` instruments the frontend and
 test harnesses with ASan/UBSan/LeakSanitizer. Instrumenting a target with LSan
 would conflict with its deliberate execution under GDB/ptrace.

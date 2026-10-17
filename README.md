@@ -13,8 +13,8 @@ where available. Compatibility claims identify the setups actually tested;
 these acceptance targets do not limit the product architecture.
 
 **Current development build:** native Linux launch/attach, Continue/Pause,
-program output, GDB console commands and Save Log are functional. Inspection
-panes explicitly report unavailable; stepping, breakpoint controls, profiles
+program output, GDB console commands, Save Log, Call Stack and Threads are
+functional. Other inspection panes report unavailable; stepping, breakpoint controls, profiles
 and remote/OpenOCD workflows are not implemented yet. `--demo` opens the
 separate, explicitly simulated visual reference.
 `0.1.0` is the target version, not a declaration of release readiness.
@@ -54,8 +54,8 @@ Environment overrides are session-only.
 The session starts **Loaded**. Click **Continue** or press **F5** to run; click
 **Pause** to interrupt. State and PID come from GDB. In Console, **Command** opens
 a clearly labelled GDB command field; **Send** executes through MI. Errors leave
-the session usable. Other inspection views show unavailable messages and never
-substitute sample registers, source, assembly or memory.
+the session usable. Source/Disassembly, Registers, Memory and Locals still show
+unavailable messages and never substitute sample debugger values.
 
 A local fixture is available for a first run:
 
@@ -68,7 +68,9 @@ Choose `./build/debug-fixture` as the executable. Continue prints its PID,
 directory, arguments, environment marker and ticks; Pause stops it. Console
 commands such as `info program` and `echo console-ok\n` exercise debugger output.
 The [native checklist](docs/testing.md#m05-manual-acceptance--real-native-linux)
-covers configuration errors, output, logs, cleanup and attach.
+covers configuration errors, output, logs, cleanup and attach. Terminal-control
+test output requires explicit `--control-bytes` under frontend capture; ordinary
+fixture runs retain their printed PID in the terminal.
 
 Attach accepts a permitted PID and optional symbol ELF. GDB checks Linux ptrace
 permissions; the frontend does not change system security settings. For a
@@ -97,15 +99,34 @@ Interactive program input and a full terminal emulator are not provided yet.
 
 The single default tiled workspace shows Source, Disassembly and Registers above
 Memory, Locals and Console. Each pane has tabs and a view chooser. The live
-workspace currently implements Console; other live inspection views are marked
-unavailable. With `--demo`, views display the simulated Cortex-M4F reference,
+workspace implements Console, Call Stack and Threads; other live inspection
+views are marked unavailable. With `--demo`, views display the simulated Cortex-M4F reference,
 including sample source/assembly, values and execution actions. Embedded/remote
 configuration still opens an explicit preview and launches no server.
+
+For a live context example, launch `./build/context-fixture`. It deliberately
+stops with two worker threads waiting while main is inside recursive calls.
+Open **Call Stack**, then choose **Threads** in another pane's `...` menu.
+Click a row to select its frame/thread, or browse rows with Up/Down and press
+Enter. Selecting a caller changes inspection context without moving execution;
+the **inspected caller** label distinguishes it from the original stop.
+`>` marks selection, and `*` marks the stopped thread's innermost frame.
+
+**Refresh** reloads stopped context. **Frames >** and **< Frames** page through
+32 frames at a time; resize a narrow pane to expose its paging controls.
+Add `--deep` as the fixture's Launch argument to exercise multiple pages.
+Continuing the example joins the workers and stops again with main alone.
+While running, context is explicitly stale. Missing symbols, optimized-out
+arguments and unwind errors remain visible rather than becoming sample data.
+Thread display is bounded to the first 128 entries and stack paging to 4096
+levels. See the [context checklist](docs/testing.md#m06-manual-acceptance--call-stack-and-threads)
+for optimized/stripped examples and manual validation.
 
 The active tab moves to the left. Mouse activation leaves inactive tabs in their
 normal style; keyboard focus follows the active tab. Use clicks or Tab/Shift+Tab,
 arrows and Enter. In fields use Left/Right, Home/End, Backspace/Delete and Ctrl+U.
-Escape goes back; Quit, `q` in the launcher/workspace, or Ctrl+Q requests exit.
+Escape goes back; `q` closes/backs out outside text fields and keeps the launcher
+open. **Quit** or `Ctrl+Q` exits the application, confirming active-session closure.
 Function keys have visible alternatives. Stepping, breakpoint and Reset actions
 remain unavailable in live sessions; demo actions are explicitly simulated.
 
@@ -152,7 +173,8 @@ make test-tmux
 `test` runs deterministic C unit/CLI/PTY suites without GDB or hardware; visual
 regressions explicitly use `--demo`. `test-native` runs actual GDB and C/C++ debug
 fixtures through the native API and TUI. It requires ptrace permission and tests
-launch/attach, output, console/log errors, crash recovery and cleanup. Sanitizer
+launch/attach, output, console/log errors, frame/thread context, optimized and
+stripped stacks, crash recovery and cleanup. Sanitizer
 targets keep instrumentation in `build/sanitize/`; debug targets themselves stay
 uninstrumented. LeakSanitizer cannot run inside a tracing sandbox.
 

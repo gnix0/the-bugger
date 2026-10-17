@@ -25,7 +25,7 @@ typedef enum {
     CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
     TOOL, TAB, MENU, BODY, SHOW_VIEW, FOCUS_PANE, CANCEL_RESET, CONFIRM_RESET,
     MENU_SECTION, PANE_ACTION, DIVIDER, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR,
-    COMMAND_OPEN, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT
+    COMMAND_OPEN, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_PAGE
 } ControlKind;
 
 typedef struct {
@@ -203,7 +203,7 @@ static void draw_header(const App *app, const char *subtitle)
     tb_text(0, 14, COLS - 14, TB_CHROME, 0, text);
     tb_fill((TbRect){0, 2, COLS, 1}, TB_NOTICE);
     tb_text(2, 2, COLS - 4, TB_NOTICE, A_BOLD,
-            app->live ? "LIVE NATIVE | GDB console/output | inspection not available yet" :
+            app->live ? "LIVE NATIVE | Console / Call Stack / Threads" :
             app->demo_mode || app->session != 0 ? "DEMO / VISUAL REFERENCE - no debugger connected" :
             "Native Linux | launch or attach through GDB");
     tb_text(LINES - 2, 1, COLS - 2, TB_YELLOW, 0, app->status);
@@ -360,7 +360,10 @@ static TbScroll workspace_scroll(const App *app, const TbDemoPane *pane, int vis
 {
     if (!app->live) { return tb_demo_scrollbar(&app->demo, pane, visible); }
     TbView view = pane->tabs[pane->active];
-    TbScroll scroll = {.total = view == TB_CONSOLE ? (int)tb_native_log_count(app->native) : 0,
+    const TbContextSnapshot *context = tb_context_snapshot(tb_native_context(app->native));
+    TbScroll scroll = {.total = view == TB_CONSOLE ? (int)tb_native_log_count(app->native) :
+                       view == TB_CALL_STACK ? (int)context->frame_count :
+                       view == TB_THREADS ? (int)context->thread_count : 0,
                        .visible = visible};
     if (visible <= 0) { return scroll; }
     scroll.maximum = scroll.total > visible ? scroll.total - visible : 0;
@@ -372,10 +375,115 @@ static TbScroll workspace_scroll(const App *app, const TbDemoPane *pane, int vis
     return scroll;
 }
 
+static void draw_context_pane(App *app, int index, TbRect rect)
+{
+    TbDemoPane *pane = &app->demo.panes[index];
+    TbView view = pane->tabs[pane->active];
+    const TbContextSnapshot *snapshot = tb_context_snapshot(tb_native_context(app->native));
+    bool stack = view == TB_CALL_STACK;
+    char header[256];
+    (void)snprintf(header, sizeof header, "%s | T%.20s frame #%d | %s | stop T%.20s PC %.47s",
+                   snapshot->stale ? "STALE" : "LIVE", snapshot->selected_thread,
+                   snapshot->selected.level, snapshot->selected.level > 0 ? "inspected caller" : "selected context",
+                   snapshot->stopped_thread, snapshot->stopped.address);
+    if (snapshot->selected.level < 0) {
+        (void)snprintf(header, sizeof header, "%s | selected context unavailable",
+                       snapshot->stale ? "STALE" : "LIVE");
+    }
+    tb_text(rect.y + 1, rect.x + 1, rect.w - 2, snapshot->stale ? TB_ORANGE : TB_CYAN, 0, header);
+    button(app, rect.y + rect.h - 1, rect.x + 1, 9, " Refresh ", CONTEXT_REFRESH, 0, index);
+    if (stack && rect.w >= 36) {
+        button(app, rect.y + rect.h - 1, rect.x + 11, 9, " < Frames", CONTEXT_PAGE, -1, index);
+        button(app, rect.y + rect.h - 1, rect.x + 21, 9, " Frames >", CONTEXT_PAGE, 1, index);
+    }
+    TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
+    if (!snapshot->ready || snapshot->stale) {
+        const char *state = tb_native_state(app->native) == TB_NATIVE_RUNNING ? "Running: retained context is stale." :
+                            tb_native_state(app->native) == TB_NATIVE_STOPPED && snapshot->refreshing ?
+                            "Refreshing stopped context..." : "Stop a running program to inspect context.";
+        tb_text(rect.y + 2, rect.x + 1, rect.w - 2, TB_ORANGE, 0, state);
+        return;
+    }
+    const char *error = *snapshot->error ? snapshot->error :
+                        stack && *snapshot->stack_error ? snapshot->stack_error :
+                        stack && *snapshot->arguments_error ? snapshot->arguments_error : NULL;
+    for (int row = 0; row < scroll.visible && row + scroll.offset < scroll.total; ++row) {
+        int item = scroll.offset + row;
+        char text[1024]; bool selected;
+        if (stack) {
+            const TbFrame *frame = &snapshot->frames[item];
+            selected = frame->level == snapshot->selected.level;
+            bool stopped = strcmp(snapshot->selected_thread, snapshot->stopped_thread) == 0 && frame->level == 0;
+            char location[416];
+            const char *file = *frame->file ? frame->file : *frame->from ? frame->from : "<source unavailable>";
+            if (frame->line > 0) { (void)snprintf(location, sizeof location, "%.384s:%d", file, frame->line); }
+            else { (void)snprintf(location, sizeof location, "%.384s", file); }
+            (void)snprintf(text, sizeof text, "%c%c #%d %.100s(%.120s) | %s | %.47s",
+                           selected ? '>' : ' ', stopped ? '*' : ' ', frame->level,
+                           *frame->function ? frame->function : "<unknown>", frame->arguments,
+                           location, frame->address);
+        } else {
+            const TbThread *thread = &snapshot->threads[item];
+            selected = strcmp(thread->id, snapshot->selected_thread) == 0;
+            (void)snprintf(text, sizeof text, "%c T%.31s %.23s %.95s | %.159s | %.127s",
+                           selected ? '>' : ' ', thread->id, thread->state, thread->name,
+                           *thread->frame.function ? thread->frame.function : "<frame unavailable>", thread->target);
+        }
+        TbStyle style = selected ? tb_selected_style(TB_CYAN) : TB_PANEL;
+        if (selected) { tb_fill((TbRect){rect.x + 1, rect.y + 2 + row, rect.w - 2, 1}, style); }
+        tb_text(rect.y + 2 + row, rect.x + 1, rect.w - 2, style,
+                app->keyboard_focus && pane->row[view] == item ? A_UNDERLINE : 0, text);
+    }
+    if (!scroll.total) {
+        tb_text(rect.y + 2, rect.x + 1, rect.w - 2, TB_MUTED, 0, stack ? "No frames available from GDB." : "No threads available from GDB.");
+    }
+    if (scroll.maximum > 0) {
+        for (int row = 0; row < scroll.visible; ++row) {
+            bool thumb = row >= scroll.thumb_start && row < scroll.thumb_start + scroll.thumb_size;
+            tb_text(rect.y + 2 + row, rect.x + rect.w - 1, 1,
+                    thumb ? TB_CYAN : TB_MUTED, 0, thumb ? "|" : ":");
+        }
+    }
+    if (error) {
+        tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_ORANGE, 0, error);
+    } else if (stack && rect.w >= 52) {
+        tb_text(rect.y + rect.h - 1, rect.x + 31, rect.w - 32, TB_MUTED, 0,
+                "> selected | * stopped | click / Enter");
+    } else if (!stack && rect.w >= 34) {
+        tb_text(rect.y + rect.h - 1, rect.x + 11, rect.w - 12, TB_MUTED, 0,
+                snapshot->threads_limited ? "First 128 threads | click / Enter" : "Click / arrows + Enter select");
+    }
+}
+
+static void select_context_row(App *app, int pane_index)
+{
+    if (!app->live) { return; }
+    TbDemoPane *pane = &app->demo.panes[pane_index];
+    TbView view = pane->tabs[pane->active];
+    TbContext *context = tb_native_context(app->native);
+    const TbContextSnapshot *snapshot = tb_context_snapshot(context);
+    int row = pane->row[view];
+    bool okay = false;
+    if (row >= 0 && snapshot->ready && !snapshot->stale) {
+        if (view == TB_CALL_STACK && (size_t)row < snapshot->frame_count) {
+            okay = tb_context_select_frame(context, snapshot->frames[row].level);
+        } else if (view == TB_THREADS && (size_t)row < snapshot->thread_count) {
+            okay = tb_context_select_thread(context, snapshot->threads[row].id);
+        } else { return; }
+    }
+    if (view == TB_CALL_STACK || view == TB_THREADS) {
+        status(app, okay ? "Selecting debugger context; execution is unchanged." : "Wait for a fresh stopped context before selecting.");
+    }
+}
+
+
 static void draw_native_pane(App *app, int index, TbRect rect)
 {
     TbDemoPane *pane = &app->demo.panes[index];
     TbView view = pane->tabs[pane->active];
+    if (view == TB_CALL_STACK || view == TB_THREADS) {
+        draw_context_pane(app, index, rect); return;
+    }
     tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_MUTED, 0,
             view == TB_CONSOLE ? "LIVE | GDB / program log" : "LIVE | inspection unavailable");
     if (view == TB_CONSOLE) {
@@ -478,7 +586,7 @@ static void draw_workspace(App *app)
     ++y;
     tb_fill((TbRect){0, y, COLS, 1}, TB_NOTICE);
     tb_text(y, 1, COLS - 2, TB_NOTICE, 0,
-            app->live ? "LIVE NATIVE | Continue / Pause / Console | inspection not available yet" :
+            app->live ? "LIVE NATIVE | Continue / Pause | live context and console" :
             "DEMO / VISUAL REFERENCE  |  All values simulated. No debugger connected.");
     ++y;
     tb_fill((TbRect){0, y, COLS, 1}, TB_CHROME);
@@ -489,6 +597,17 @@ static void draw_workspace(App *app)
     TbRect area = {1, y + 1, COLS - 2, LINES - y - 3};
     bool tiled = tb_layout_arrange(&app->layout, area, app->demo.pane);
     memcpy(app->panes, app->layout.panes, sizeof app->panes);
+    if (app->live) {
+        bool threads = false, frames = false;
+        for (int i = 0; i < app->layout.count; ++i) {
+            int pane = app->layout.order[i];
+            TbView view = app->demo.panes[pane].tabs[app->demo.panes[pane].active];
+            if (app->panes[pane].w < 10 || app->panes[pane].h < 7 || app->menu == pane) { continue; }
+            threads = threads || view == TB_THREADS;
+            frames = frames || view == TB_CALL_STACK;
+        }
+        tb_context_visible(tb_native_context(app->native), threads, frames);
+    }
     if (!tiled) {
         const char *const labels[] = {"1 Source", "2 Asm", "3 Regs", "4 Mem", "5 Locals", "6 Log"};
         if (app->layout.count == TB_DEFAULT_PANES) {
@@ -807,7 +926,9 @@ static void activate(App *app, Control control)
         app->menu_focus = app->menu >= 0;
         app->menu_actions = false;
         break;
-    case BODY: case SCROLLBAR: app->demo.pane = control.pane; break;
+    case BODY:
+        app->demo.pane = control.pane; select_context_row(app, control.pane); break;
+    case SCROLLBAR: app->demo.pane = control.pane; break;
     case SHOW_VIEW:
         app->demo.pane = control.pane;
         tb_demo_view(&app->demo, (TbView)control.value);
@@ -825,6 +946,19 @@ static void activate(App *app, Control control)
         app->menu_focus = true;
         break;
     case PANE_ACTION: pane_action(app, control.value, control.pane); break;
+    case CONTEXT_REFRESH:
+        tb_context_refresh(tb_native_context(app->native));
+        status(app, "Context refresh requested; reads wait until stopped."); break;
+    case CONTEXT_PAGE:
+        status(app, tb_context_page(tb_native_context(app->native), control.value) ?
+               "Loading stack page." : "No further stack page available; wait for stopped context.");
+        if (control.value > 0 && tb_context_snapshot(tb_native_context(app->native))->first_frame >
+            TB_CONTEXT_MAX_LEVEL - TB_CONTEXT_FRAMES) {
+            status(app, "Stack display is limited to 4096 frames; use Console for deeper inspection.");
+        }
+        app->demo.panes[control.pane].scroll[TB_CALL_STACK] = 0;
+        app->demo.panes[control.pane].row[TB_CALL_STACK] = 0;
+        break;
     case DIVIDER:
         app->resizing = true;
         app->resize_divider = control.value;
@@ -1003,7 +1137,7 @@ static void mouse_event(App *app)
                             (app->session == 1 && control.value == 8)));
         if (text_field) {
             app->cursor = wcslen(input_page ? app->input : app->forms[app->session].values[control.value]);
-        } else {
+        } else if (control.kind != BODY) {
             activate(app, control);
         }
         if (control.kind == SCROLLBAR) {
@@ -1017,6 +1151,7 @@ static void mouse_event(App *app)
                 scroll_body(app, control, row < scroll.thumb_start ? -scroll.visible : scroll.visible);
             }
         } else if (control.kind == BODY) {
+            app->demo.pane = control.pane;
             TbDemoPane *pane = &app->demo.panes[control.pane];
             TbView view = pane->tabs[pane->active];
             int row = event.y - app->panes[control.pane].y - 2;
@@ -1024,6 +1159,7 @@ static void mouse_event(App *app)
                 TbScroll scroll = workspace_scroll(app, pane, app->panes[control.pane].h - 3);
                 int target = scroll.offset + row;
                 if (target < scroll.total) { pane->row[view] = target; }
+                if (app->live && target < scroll.total) { select_context_row(app, control.pane); }
                 if (!app->live && target < scroll.total && view == TB_SOURCE && event.x < control.rect.x + 2) {
                     tb_demo_action(&app->demo, TB_BREAKPOINT);
                     status(app, "DEMO gutter breakpoint toggled.");
@@ -1146,6 +1282,19 @@ static void key_event(App *app, wint_t key, bool special)
         }
         if ((control.kind == BODY || control.kind == SCROLLBAR) &&
             (key == KEY_UP || key == KEY_DOWN || key == KEY_PPAGE || key == KEY_NPAGE)) {
+            TbDemoPane *pane = &app->demo.panes[control.pane];
+            TbView view = pane->tabs[pane->active];
+            if (app->live && (view == TB_CALL_STACK || view == TB_THREADS)) {
+                TbScroll scroll = workspace_scroll(app, pane, app->panes[control.pane].h - 3);
+                int row = pane->row[view] + (key == KEY_UP ? -1 : key == KEY_DOWN ? 1 :
+                                           key == KEY_PPAGE ? -scroll.visible : scroll.visible);
+                if (row < 0) { row = 0; }
+                if (row >= scroll.total) { row = scroll.total ? scroll.total - 1 : 0; }
+                pane->row[view] = row;
+                if (row < scroll.offset) { pane->scroll[view] = row; }
+                else if (row >= scroll.offset + scroll.visible) { pane->scroll[view] = row - scroll.visible + 1; }
+                return;
+            }
             scroll_body(app, control, key == KEY_UP ? -1 : key == KEY_DOWN ? 1 :
                         key == KEY_PPAGE ? -5 : 5);
             return;

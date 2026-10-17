@@ -1,6 +1,6 @@
 # Architecture
 
-## Current implementation (M05)
+## Current implementation (M06)
 
 `src/main.c` handles help/version and starts the terminal application.
 `src/tui/app.c` owns startup/configuration/review/workspace pages, keyboard
@@ -15,7 +15,8 @@ C tests use POSIX pipes, processes and PTYs. Python tests were replaced at the
 owner's request. The only current application library dependency is ncursesw.
 The MI parser/controller and native session module now serve real Linux
 launch/attach sessions through the TUI. Console/output and Continue/Pause are
-live; inspection views have explicit unavailable messages. Explicit --demo
+live. Call Stack and Threads use the selected-context model; other inspection
+views have explicit unavailable messages. Explicit --demo
 retains simulated presentation separately. Embedded/remote remain previews;
 inspection, OpenOCD management and persistence await their own gates.
 
@@ -129,7 +130,8 @@ queries are dropped before writing; already-sent stale results are not published
 as successful replies. Unknown/late tokens are diagnostic stale events.
 Repeated `*running` does not create extra epochs, and a late `^running` cannot
 overwrite a newer `*stopped`. New sessions reset the parser/pipes and advance
-session identity. The future thread/frame model will call the context hook.
+session identity. The thread/frame model calls the context hook on selection
+and refresh, invalidating older inspection requests.
 
 Each accepted public request receives one reply, stale, timeout or cancellation
 completion. Fully sent timeouts do not imply backend cancellation: late replies
@@ -183,8 +185,8 @@ Loaded. Continue starts the program; subsequent Continue resumes a stopped
 program. Pause uses MI interrupt. There is no automatic main breakpoint or
 stepping in this gate. Attach uses the selected PID and optional ELF, stops on
 success and retains actionable permission failures. Attached processes retain
-their existing stdio. Source/assembly/register/memory/variable/frame/thread
-inspection stays unavailable; demo data is never rendered as live data.
+their existing stdio. Source/assembly/register/memory/variable inspection stays
+unavailable; M06 supplies frame/thread inspection. Demo data is never live data.
 Basic console run/r/start/starti operations also establish launch ownership;
 failed operations do not retain a pending ownership claim. Multi-inferior
 coordination and arbitrary session-topology changes are outside this gate.
@@ -220,6 +222,53 @@ orphaned by a debugger crash.
 launcher; unimplemented server flows remain labelled previews. Live tabs/layout
 reuse presentation state only, not sample debugger values. No new presets,
 floating windows, workspace pages, themes or editor modes were added.
+
+## M06 selected context, Call Stack and Threads
+
+`src/model/context.{h,c}` owns a bounded debugger snapshot independently of curses
+and target architecture. The native session owns this model and passes controller
+events to it first. Context requests use distinct cookies so their completion
+cannot complete a native configuration/action request. Callbacks only copy
+borrowed MI fields and mark work; the native pump issues new requests after
+callbacks return and while session actions are idle.
+
+Stopped snapshots carry session/stop/context generations, the original stopped
+thread/PC frame and the independently selected thread/frame. Selecting a caller
+does not move execution. GDB stop records can omit the innermost level; a supplied
+stop frame address identifies frame zero. A later thread/frame selection never
+rewrites that original stop frame. Resume, exit and disconnect mark retained data
+stale; thread-created/exited/selected notifications schedule invalidation outside
+the callback. Context requests from older generations are discarded. Manual
+console commands invalidate context before execution and refresh it afterward.
+
+Only visible context views trigger automatic reads, only while stopped. Refresh
+and selections also wait for a stopped target. Sequential `-thread-info`,
+`-stack-info-frame`, bounded `-stack-list-frames --no-frame-filters` and
+`-stack-list-arguments --no-frame-filters --simple-values` produce an owned
+snapshot, published coherently after the sequence. Partial unwinds, missing
+source/symbols, optimized-out arguments and command failures remain explicit;
+no CLI output is parsed and no target expressions/functions are evaluated.
+The frontend retains the frames GDB reports, including inline/tail-call frames,
+without inventing missing frames. There are no RTOS inspectors in this gate.
+
+Bounds: first 128 reported threads, 32 frames per stack page plus one lookahead,
+and at most the first 4096 frame levels. Strings have fixed render-safe bounds;
+arguments use simple values rather than eager aggregate expansion. Requests have
+three-second deadlines, no automatic retry loop and no idle/running polling.
+Last selection wins when pending thread choices supersede each other; frame
+selection is blocked during a thread-selection request to avoid selecting a
+frame in the wrong thread. Stack pages preserve GDB's selected frame.
+
+Live rows have mouse selection and arrow-key browsing followed by Enter.
+`>` marks the selected context and `*` marks the stopped thread's innermost
+frame; caller inspection is labelled. Stack paging, Refresh, scrollbars and
+normal tiled resize/compact behavior reuse the existing pane controls. Snapshot
+revisions cause redraws through the native event loop. Source/Locals consumers
+will use this context in M07/M11; they remain explicitly unavailable now.
+
+The protocol follows GDB's official
+[stack commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Stack-Manipulation.html)
+and [thread commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Thread-Commands.html).
 
 ## Approved direction
 

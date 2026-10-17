@@ -58,6 +58,8 @@ int main(int argc, char *argv[])
     size_t capacity = 0;
     char held[32] = {0};
     unsigned setup = 0;
+    int selected_thread = 7, selected_frame = 0;
+    bool context_held = false, thread_exited = false;
     while (getline(&line, &capacity, stdin) >= 0) {
         size_t digits = strspn(line, "0123456789");
         if (digits == 0 || digits >= sizeof held) { free(line); return 3; }
@@ -71,6 +73,50 @@ int main(int argc, char *argv[])
             if (setup == 2 && strcmp(mode, "late-fallback") == 0) {
                 fputs("Interpreter mi3 unrecognized\n", stderr); free(line); return 7;
             }
+        } else if (strncmp(mode, "context", 7) == 0 && strcmp(command, "-thread-info\n") == 0) {
+            (void)printf("%s^done,current-thread-id=\"%d\",threads=[{id=\"7\",name=\"main\",target-id=\"FAKE worker\",state=\"stopped\",frame={level=\"0\",func=\"leaf\",addr=\"0x1000\"}}", token, selected_thread);
+            if (!thread_exited) { fputs(",{id=\"42\",name=\"worker\",state=\"stopped\",frame={level=\"0\",func=\"worker_leaf\",addr=\"0x2000\"}}", stdout); }
+            if (strcmp(mode, "context-many") == 0 && !thread_exited) {
+                for (int i = 100; i < 240; ++i) { (void)printf(",{id=\"%d\",state=\"stopped\"}", i); }
+            }
+            puts("]");
+        } else if (strncmp(mode, "context", 7) == 0 && strncmp(command, "-thread-select ", 15) == 0) {
+            selected_thread = atoi(command + 15); selected_frame = 0;
+            if (strcmp(mode, "context-selection-stale") == 0 && !context_held) {
+                (void)snprintf(held, sizeof held, "%s", token); context_held = true;
+            } else { reply(token, "^done"); }
+        } else if (strncmp(mode, "context", 7) == 0 && strncmp(command, "-stack-select-frame ", 20) == 0) {
+            selected_frame = atoi(command + 20); reply(token, "^done");
+        } else if (strncmp(mode, "context", 7) == 0 && strcmp(command, "-stack-info-frame\n") == 0) {
+            (void)printf("%s^done,frame={level=\"%d\",func=\"%s\",addr=\"0x1234\",arch=\"test:neutral\"}\n", token, selected_frame, selected_thread == 7 ? "leaf" : "worker_leaf");
+        } else if (strncmp(mode, "context", 7) == 0 && strncmp(command, "-stack-list-frames ", 19) == 0) {
+            if (strcmp(mode, "context-stale") == 0 && !context_held) {
+                (void)snprintf(held, sizeof held, "%s", token); context_held = true;
+            } else if (strcmp(mode, "context-unwind") == 0) { reply(token, "^error,msg=\"FAKE cannot unwind\""); }
+            else if (strcmp(mode, "context-malformed") == 0) { reply(token, "^done,stack=\"unavailable\""); }
+            else {
+                int low = 0, high = 0;
+                if (sscanf(command + 19, "--no-frame-filters %d %d", &low, &high) != 2) { free(line); return 11; }
+                (void)printf("%s^done,stack=[", token);
+                for (int level = low; level <= high && level < 40; ++level) {
+                    (void)printf("%sframe={level=\"%d\",func=\"%s_%d\",addr=\"0x1234\",file=\"path with spaces.c\",line=\"12\"}", level == low ? "" : ",", level, selected_thread == 7 ? "main" : "worker", level);
+                }
+                puts("]");
+            }
+        } else if (strncmp(mode, "context", 7) == 0 && strncmp(command, "-stack-list-arguments ", 22) == 0) {
+            int low = 0, high = 0;
+            if (sscanf(command + 22, "--no-frame-filters --simple-values %d %d", &low, &high) != 2) { free(line); return 12; }
+            (void)printf("%s^done,stack-args=[", token);
+            for (int level = low; level <= high && level < 40; ++level) {
+                (void)printf("%sframe={level=\"%d\",args=[{name=\"depth\",value=\"%s\"}]}", level == low ? "" : ",", level, level == 1 ? "<optimized out>" : "4");
+            }
+            puts("]");
+        } else if (strcmp(command, "-ctx-release\n") == 0) {
+            reply(token, "^done");
+            if (*held) { reply(held, "^done,stack=[frame={level=\"0\",func=\"OBSOLETE\"}]"); *held = '\0'; }
+        } else if (strcmp(command, "-ctx-exit\n") == 0) {
+            thread_exited = true; selected_thread = 7; selected_frame = 0;
+            puts("=thread-exited,id=\"42\",group-id=\"i1\""); reply(token, "^done");
         } else if (strcmp(command, "-hold\n") == 0) {
             (void)snprintf(held, sizeof held, "%s", token);
         } else if (strcmp(command, "-release\n") == 0) {

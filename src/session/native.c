@@ -18,6 +18,7 @@ typedef enum { JOB_NONE, JOB_SETUP, JOB_RUN, JOB_PAUSE, JOB_CONSOLE,
                JOB_INTERRUPT_CLOSE, JOB_RELEASE } Job;
 struct TbNative {
     TbGdb *gdb;
+    TbContext *context;
     TbNativeState state;
     bool attach, configured, waiting, completed, success, want_close, failed;
     bool alive, launch_requested, owned, recovery_sent;
@@ -149,6 +150,7 @@ static void emit(void *context, const TbGdbEvent *event)
 {
     TbNative *native = context;
     ++native->revision;
+    if (tb_context_event(native->context, event)) { return; }
     if (event->kind == TB_GDB_DIAGNOSTIC) {
         char text[TB_NATIVE_LOG_WIDTH], safe[160];
         safe_text(safe, sizeof safe, event->text, event->length);
@@ -214,6 +216,8 @@ TbNative *tb_native_create(void)
     native->master = native->slave = native->pidfd = -1;
     native->gdb = tb_gdb_create(emit, native);
     if (native->gdb == NULL) { free(native); return NULL; }
+    native->context = tb_context_create(native->gdb);
+    if (native->context == NULL) { (void)tb_gdb_destroy(native->gdb); free(native); return NULL; }
     return native;
 }
 
@@ -229,7 +233,7 @@ bool tb_native_destroy(TbNative *native)
     if (native == NULL) { return true; }
     if (tb_native_active(native)) { return false; }
     if (!tb_gdb_destroy(native->gdb)) { return false; }
-    close_fds(native); free(native); return true;
+    tb_context_destroy(native->context); close_fds(native); free(native); return true;
 }
 
 static bool elf(const char *path, bool executable)
@@ -301,6 +305,7 @@ bool tb_native_start(TbNative *native, const TbNativeConfig *config)
     native->want_close = native->configured = native->waiting = native->completed = false;
     native->alive = native->owned = native->launch_requested = native->recovery_sent = false;
     native->stage = 0; native->job = JOB_NONE;
+    tb_context_reset(native->context);
     if (!native->attach) {
         native->master = posix_openpt(O_RDWR | O_NOCTTY | O_CLOEXEC | O_NONBLOCK);
         bool ready = native->master >= 0 && grantpt(native->master) == 0 && unlockpt(native->master) == 0 &&
@@ -338,6 +343,7 @@ static bool issue(TbNative *native, Job job, const char *operation, const char *
 bool tb_native_continue(TbNative *native)
 {
     if (native->waiting || native->want_close || !native->configured) { return false; }
+    tb_context_refresh(native->context);
     if (native->state == TB_NATIVE_READY) {
         native->launch_requested = !native->attach;
         return issue(native, JOB_RUN, "-exec-run", NULL, 0);
@@ -364,6 +370,7 @@ bool tb_native_console(TbNative *native, const char *command)
         strncmp(command, "set non-stop", 12) == 0) { diagnostic(native, "Interpreter/async mode is managed by the frontend."); return false; }
     char safe[192]; safe_text(safe, sizeof safe, command, strlen(command)); line(native, "[command] ", safe);
     const char *const args[] = {"console", command};
+    tb_context_refresh(native->context);
     bool accepted = issue(native, JOB_CONSOLE, "-interpreter-exec", args, 2);
     const char *verb = command;
     while (*verb == ' ' || *verb == '\t') { ++verb; }
@@ -465,7 +472,10 @@ static void process_reply(TbNative *native)
         ++native->stage;
     }
     else if (native->job == JOB_RELEASE) { native->alive = false; tb_gdb_close(native->gdb); }
-    else if (native->job == JOB_CONSOLE && native->success) { message(native, "GDB command completed."); }
+    else if (native->job == JOB_CONSOLE) {
+        if (native->success) { message(native, "GDB command completed."); }
+        tb_context_refresh(native->context);
+    }
     native->job = JOB_NONE;
 }
 
@@ -541,6 +551,7 @@ void tb_native_pump(TbNative *native, int wait_ms)
             tb_gdb_close(native->gdb);
         } else { release_target(native); }
     } else if (!native->configured && !native->waiting && gdb == TB_GDB_READY) { setup(native); }
+    else if (native->configured && !native->waiting) { tb_context_pump(native->context); }
 }
 
 size_t tb_native_pollfds(const TbNative *native, struct pollfd fds[5])
@@ -558,12 +569,13 @@ const char *tb_native_state_name(const TbNative *native)
     return names[native->state];
 }
 const char *tb_native_message(const TbNative *native) { return native->message; }
-uint64_t tb_native_revision(const TbNative *native) { return native->revision; }
+uint64_t tb_native_revision(const TbNative *native) { return native->revision + tb_context_revision(native->context); }
 size_t tb_native_log_count(const TbNative *native) { return native->count; }
 const char *tb_native_log_line(const TbNative *native, size_t row) { return row < native->count ? native->logs[(native->first + row) % TB_NATIVE_LOG_LINES] : ""; }
 pid_t tb_native_target_pid(const TbNative *native) { return native->target_pid; }
 pid_t tb_native_debugger_pid(const TbNative *native) { return tb_gdb_pid(native->gdb); }
 bool tb_native_attached(const TbNative *native) { return native->attach; }
+TbContext *tb_native_context(TbNative *native) { return native->context; }
 bool tb_native_active(const TbNative *native)
 {
     return tb_gdb_state(native->gdb) != TB_GDB_DISCONNECTED ||

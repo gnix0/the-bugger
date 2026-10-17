@@ -2,6 +2,7 @@
 #define THE_BUGGER_NATIVE_H
 
 #include "controller.h"
+#include "context.h"
 
 enum { TB_NATIVE_WORDS = 32, TB_NATIVE_WORD_BYTES = 512,
        TB_NATIVE_LOG_LINES = 512, TB_NATIVE_LOG_WIDTH = 256 };
@@ -43,5 +44,6 @@ pid_t tb_native_target_pid(const TbNative *native);
 pid_t tb_native_debugger_pid(const TbNative *native);
 bool tb_native_attached(const TbNative *native);
 bool tb_native_active(const TbNative *native);
+TbContext *tb_native_context(TbNative *native);
 
 #endif

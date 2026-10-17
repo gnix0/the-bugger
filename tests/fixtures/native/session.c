@@ -24,7 +24,11 @@ int main(int argc, char *argv[])
     const char *environment = getenv("THE_BUGGER_TEST");
     printf("ENV=<%s>\n", environment ? environment : "unset");
     fprintf(stderr, "STDERR marker\n");
-    printf("CONTROL=\033[2J\033]52;c;not-a-clipboard\aEND\n");
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--control-bytes") == 0) {
+            printf("CONTROL=\033[2J\033]52;c;not-a-clipboard\aEND\n");
+        }
+    }
     if (argc > 1 && strcmp(argv[1], "--exit") == 0) { return 0; }
     if (argc > 1 && strcmp(argv[1], "--flood") == 0) {
         for (int i = 0; i < 20000; ++i) { printf("flood %d abcdefghijklmnopqrstuvwxyz\n", i); }

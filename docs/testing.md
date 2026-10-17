@@ -15,8 +15,9 @@ git diff --check
 ```
 
 `all` compiles C17 with strict warnings including `-Wall -Wextra -Wpedantic`
-and `-Werror`. `test` builds and runs eleven C test executables: two MI suites,
-two controller suites, native word parsing, demo, layout, renderer, CLI and two workspace PTY suites, described in
+and `-Werror`. `test` builds and runs twelve C test executables: two MI suites,
+two controller suites, context snapshots, native word parsing, demo, layout,
+renderer, CLI and two workspace PTY suites, described in
 `tests/README.md`. `sanitize` builds separately
 with ASan/UBSan; a runtime
 diagnostic is a failure, not a skip. `analyze` uses clang-tidy and fails on
@@ -34,6 +35,65 @@ Do not disable leak detection or label that environment failure a passing test.
 retained as `build/m01-*`; these are local evidence, not tracked artifacts.
 Durable command summaries and limitations belong in `docs/progress.md`.
 Changing compiler or flags requires a fresh build directory or cleaning.
+
+## M06 manual acceptance — Call Stack and Threads
+
+M05 is accepted as 0278b61. M06 implements frame/thread inspection only;
+Source, Disassembly, Locals, stepping and breakpoint UI remain unavailable.
+No real hardware, remote connection or release acceptance is claimed here.
+
+1. Run `make fixtures`, then `./build/the-bugger` without --demo. Choose Linux
+   application / Launch. Set executable to `./build/context-fixture`; clear
+   arguments and environment for this run. Review and Start native. Expect
+   Loaded. This fixture deliberately raises SIGTRAP under GDB to provide stops
+   without depending on the future breakpoint UI; do not run it standalone.
+2. Activate **Call Stack**, the existing tab beside Disassembly. Click Continue
+   or press F5. The fixture creates two workers and stops in its main-thread
+   recursive call. Expect Stopped, three real threads in the context, and live
+   frames including `context_checkpoint`, several `recursive` calls and `main`.
+   libc frames may lack symbols/source; their names/addresses follow local GDB.
+   Arguments such as `depth=0, worker=0` come from GDB, not sample UI values.
+3. Click a caller's row. Expect its selection marker `>` and an **inspected
+   caller** label. `*` continues to identify frame zero of the original stopped
+   thread. Selecting frames never resumes or moves execution. With row focus,
+   Up/Down browse and Enter selects; the underline is keyboard navigation, not
+   another execution highlight. Scroll with wheel/scrollbar, resize the pane
+   if needed, and check readable metadata and stable selected context.
+4. In another pane open `...` and select **Threads** (wheel/Down to reach it if
+   necessary). Expect three GDB thread IDs, names where reported, stopped state
+   and top-frame information. Select a worker: the Call Stack changes to that
+   thread and selected frame zero. The original stopped thread/PC remains
+   separate from inspected context. Switch back to the original main thread.
+   A seventh split view is optional; the default six-pane geometry is preserved.
+5. Click Continue. Workers exit and the main thread stops again after joining
+   them. Expect one thread; old workers must disappear. Continue once more:
+   expect Running and explicit stale context, with selection unavailable until
+   Pause. Pause again; expect fresh stack/thread data. Refresh while running
+   must not halt the program or continuously read it.
+6. Close the launch through `q` and its confirmation. Repeat with arguments
+   `--deep`: use **Frames >** / **< Frames** to inspect 32-frame pages, select a
+   caller on another page, then return without changing the selected frame.
+   Pages have one lookahead, a 4096-level display cap and bounded work. At most
+   128 threads are displayed; a limit notice appears if GDB reports more.
+7. Repeat with `./build/context-fixture-optimized`, then
+   `./build/context-fixture-stripped`. GDB may report inline/tail frames,
+   optimized-out arguments, fewer frames or unknown functions/source. Those
+   results must remain honest; do not require the -O0 stack to be reconstructed.
+   With missing unwind information, any available thread/selected-frame context
+   remains usable and errors are visible with a Refresh action.
+8. Repeat the ordinary Call Stack/Threads click, keyboard, scroll, resize and
+   quit workflow inside tmux with opt-in mouse support. Check `--demo` still
+   shows the accepted simulated reference separately. Stop for owner acceptance;
+   M07 requires commit/push and explicit continuation.
+
+Automated scope: a synthetic C peer supplies bounded pages/arguments, nonordinal
+thread IDs, missing/malformed unwind data, 128-thread truncation, delayed query
+and selection replies, rapid changes, thread exit, reconnect, and idle/running
+read checks. Actual GDB runs recursive/multithread -O0, -O2 and stripped C targets,
+checks stopped-PC preservation, selected caller/thread consistency, arguments,
+worker exit, pause/resume and cleanup. A real TUI PTY test exercises row clicks,
+keyboard selection, caller labels, two simultaneous context views and stale
+state. The peer is not hardware evidence; the VT reader is not visual acceptance.
 
 ## M05 manual acceptance — real native Linux
 
@@ -54,7 +114,9 @@ ptrace sandbox. No global permission/sysctl setting is changed.
    simulated registers, instructions or execution PC may appear.
 2. Click Continue or press F5. Expect Running and an actual PID. Console should
    show the program's directory, literal arguments/environment and stderr marker.
-   Escape/OSC bytes appear as text, not terminal commands. Attached stdout is
+   To explicitly test control-byte capture, add `--control-bytes` to Launch
+   arguments: escape/OSC bytes must appear as text, not terminal commands. Do
+   not use that test-only flag for a standalone fixture. Attached stdout is
    deliberately different: it stays with that process's existing terminal.
 3. Click Pause. Expect an actual GDB stop and Stopped. In Console choose Command,
    enter `info program`, Send. Try `this-command-does-not-exist` and verify a
@@ -383,7 +445,7 @@ editable; OpenOCD is not a requirement for every architecture.
 
 | Environment | Minimum evidence | Current live evidence |
 |---|---|---|
-| Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | PARTIAL — M05 automated launch/attach/output/console/cleanup; inspection, later features and owner release acceptance pending |
+| Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | PARTIAL — M05 accepted; M06 automated frame/thread inspection, owner M06 review pending; other inspection, later features and release acceptance pending |
 | STM32 / ARM | NUCLEO-F446RE fixture via GDB/OpenOCD; halt/step/break/watch, real code/register/RAM/variables, reset/disconnect/cleanup | UNVERIFIED |
 | ESP32 / Xtensa | Owner's board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED |
 | ESP32 / RISC-V | Owner's board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED |

@@ -1,8 +1,8 @@
 # Development roadmap — v0.1.0 through v1.0.0
 
 Approved roadmap. Version targets are expected sequencing, not deadlines.
-M04 is accepted and committed/pushed as f29ce3c. **M05 only** is authorized;
-M06 and later gates require the usual acceptance, owner commit/push and explicit
+M05 is accepted and committed/pushed as 0278b61. **M06 only** is authorized;
+M07 and later gates require the usual acceptance, owner commit/push and explicit
 continuation.
 
 ## Product and preserved work
@@ -25,8 +25,9 @@ Their commits are respectively 0f5d05b, 60df655, 094fa71 and a832eef. The former
 unimplemented M03–M07 grouping is replaced by M03–M18 below; Git history is not
 rewritten. Existing demo data proves visual behavior only. The MI parser and
 controller have independent diagnostic tools. Native launch/attach, Continue/Pause,
-console/output and Save Log now integrate with the workspace; inspection and
-profile persistence remain in their later gates. Explicit --demo preserves
+console/output and Save Log integrate with the workspace. M06 adds selected
+context, Call Stack and Threads; other inspection and profile persistence remain
+in their later gates. Explicit --demo preserves
 the visual-reference sample and its tests independently of live sessions.
 
 AGENTS.md governs requirements and workflow. The approved visual/interaction
@@ -285,8 +286,9 @@ IAR/C-SPY defects. These findings directly informed accepted requirements:
 
 ## Current authorization
 
-The owner completed M04, committed/pushed f29ce3c and explicitly authorized M05.
-Deliver only native launch/attach, Continue/Pause, console/output, Save Log and
-the associated C tests, documentation and real TUI demonstration. Inspection,
-stepping, breakpoint UI and profiles remain in their later gates. Stop for M05
-manual acceptance with the proposed commit message. Do not start M06.
+The owner accepted M05, committed/pushed 0278b61 and explicitly authorized M06.
+Deliver only selected thread/frame context, live Call Stack and Threads, bounded
+paging and stale-generation handling, associated C tests, documentation and TUI
+demonstration. Source/assembly, stepping, breakpoint UI, other inspection and
+profiles remain in their later gates. Stop for M06 manual acceptance with the
+proposed commit message. Do not start M07.

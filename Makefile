@@ -11,10 +11,10 @@ LDLIBS ?=
 
 NCURSES_CFLAGS := $(shell $(PKG_CONFIG) --cflags ncursesw 2>/dev/null)
 NCURSES_LIBS := $(shell $(PKG_CONFIG) --libs ncursesw 2>/dev/null)
-PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session $(NCURSES_CFLAGS)
+PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session -Isrc/model $(NCURSES_CFLAGS)
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c
+SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/model/context.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -104,7 +104,21 @@ $(BUILD_DIR)/debug-fixture-cpp: tests/fixtures/native/session.cpp
 
 fixtures: $(BUILD_DIR)/debug-fixture $(BUILD_DIR)/debug-fixture-cpp
 
-NATIVE_OBJECTS = $(BUILD_DIR)/src/session/native.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+$(BUILD_DIR)/context-fixture: tests/fixtures/native/context.c
+	mkdir -p $(dir $@)
+	$(CC) -std=c17 -Wall -Wextra -Wpedantic -Werror -g -O0 -pthread $< -o $@
+
+$(BUILD_DIR)/context-fixture-optimized: tests/fixtures/native/context.c
+	mkdir -p $(dir $@)
+	$(CC) -std=c17 -Wall -Wextra -Wpedantic -Werror -g -O2 -pthread $< -o $@
+
+$(BUILD_DIR)/context-fixture-stripped: tests/fixtures/native/context.c
+	mkdir -p $(dir $@)
+	$(CC) -std=c17 -Wall -Wextra -Wpedantic -Werror -O2 -s -pthread $< -o $@
+
+fixtures: $(BUILD_DIR)/context-fixture $(BUILD_DIR)/context-fixture-optimized $(BUILD_DIR)/context-fixture-stripped
+
+NATIVE_OBJECTS = $(BUILD_DIR)/src/session/native.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/model/context.o
 
 $(BUILD_DIR)/test-native-words: $(BUILD_DIR)/tests/unit/test_native_words.o $(NATIVE_OBJECTS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
@@ -115,14 +129,26 @@ $(BUILD_DIR)/test-native: $(BUILD_DIR)/tests/integration/test_native.o $(NATIVE_
 $(BUILD_DIR)/test-native-tui: $(BUILD_DIR)/tests/integration/test_native_tui.o $(BUILD_DIR)/tests/support/terminal.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-test-native: all $(BUILD_DIR)/test-native $(BUILD_DIR)/test-native-tui fixtures
+test-native: all $(BUILD_DIR)/test-native $(BUILD_DIR)/test-native-tui $(BUILD_DIR)/test-context-native $(BUILD_DIR)/test-context-tui fixtures
 	$(BUILD_DIR)/test-native $(abspath $(BUILD_DIR)/debug-fixture) $(abspath $(BUILD_DIR)/debug-fixture-cpp)
 	$(BUILD_DIR)/test-native-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/debug-fixture)
+	$(BUILD_DIR)/test-context-native $(abspath $(BUILD_DIR)/context-fixture) $(abspath $(BUILD_DIR)/context-fixture-optimized) $(abspath $(BUILD_DIR)/context-fixture-stripped)
+	$(BUILD_DIR)/test-context-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/context-fixture)
+
+$(BUILD_DIR)/test-context-native: $(BUILD_DIR)/tests/integration/test_context_native.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+$(BUILD_DIR)/test-context-tui: $(BUILD_DIR)/tests/integration/test_context_tui.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 test-tmux: all $(BUILD_DIR)/test-tmux
 	$(BUILD_DIR)/test-tmux $(abspath $(BINARY))
 
-test: all test-mi test-controller $(BUILD_DIR)/test-native-words $(BUILD_DIR)/test-unit $(BUILD_DIR)/test-layout $(BUILD_DIR)/test-render $(BUILD_DIR)/test-cli $(BUILD_DIR)/test-tui $(BUILD_DIR)/test-workspace
+$(BUILD_DIR)/test-context: $(BUILD_DIR)/tests/integration/test_context.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+test: all test-mi test-controller $(BUILD_DIR)/test-context $(BUILD_DIR)/test-native-words $(BUILD_DIR)/test-unit $(BUILD_DIR)/test-layout $(BUILD_DIR)/test-render $(BUILD_DIR)/test-cli $(BUILD_DIR)/test-tui $(BUILD_DIR)/test-workspace
+	$(BUILD_DIR)/test-context $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-native-words
 	$(BUILD_DIR)/test-unit
 	$(BUILD_DIR)/test-layout
@@ -162,3 +188,7 @@ clean:
 -include $(BUILD_DIR)/tests/support/controller_demo.d $(BUILD_DIR)/tests/integration/test_controller_demo.d \
 	$(BUILD_DIR)/tests/integration/test_gdb_startup.d $(BUILD_DIR)/tests/unit/test_native_words.d \
 	$(BUILD_DIR)/tests/integration/test_native.d $(BUILD_DIR)/tests/integration/test_native_tui.d
+
+-include $(BUILD_DIR)/tests/integration/test_context.d
+-include $(BUILD_DIR)/tests/integration/test_context_native.d
+-include $(BUILD_DIR)/tests/integration/test_context_tui.d

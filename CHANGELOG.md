@@ -4,6 +4,16 @@
 
 ### Added
 
+- Live Call Stack and Threads with mouse/keyboard frame and thread selection,
+  simple argument values, stack paging, Refresh and stale/unavailable states.
+- Separate stopped execution PC/thread from an inspected caller or other thread;
+  reject obsolete context replies without moving execution.
+- C context model and deterministic delayed-reply/lifecycle/bounds tests, plus
+  real GDB API/TUI tests using recursive, multithread, optimized and stripped
+  targets. Source/stepping and other inspection remain in later gates.
+- Fixture terminal-control output now requires explicit --control-bytes;
+  ordinary Attach testing retains the printed PID instead of clearing it.
+
 - M05 native Linux launch/attach through the launcher, real Continue/Pause and
   execution state, isolated program output, GDB command input and Save Log.
 - Native-session ownership and confirmed exit policy, attached-process

@@ -14,8 +14,8 @@ States: `planned` → `implemented` → `automated-verified` → `awaiting-user`
 | P00 | Expanded roadmap/specification and tab-focus correction | accepted | `36d5ad6` |
 | M03 | Incremental MI parser | accepted | `ee1cfc5` |
 | M04 | Nonblocking transport/controller and owned lifecycle | accepted | `f29ce3c` |
-| M05 | Native sessions, console/output and Save Log | awaiting-user | — |
-| M06 | Selected context, Call Stack and Threads | planned | — |
+| M05 | Native sessions, console/output and Save Log | accepted | `0278b61` |
+| M06 | Selected context, Call Stack and Threads | awaiting-user | — |
 | M07 | Live code, stepping modes, navigation/source recovery | planned | — |
 | M08 | Code breakpoints and Run to Selected | planned | — |
 | M09 | CPU registers | planned | — |
@@ -592,8 +592,9 @@ awaiting-user status is historical. No Git write was performed by the agent.
 
 ## M05 — native sessions, output, console and Save Log
 
-State: `planned` → `implemented` → `automated-verified` → `awaiting-user`.
-Only M05 was authorized. There is no acceptance or resulting commit SHA yet.
+State: `planned` → `implemented` → `automated-verified` → `awaiting-user` → `accepted`.
+The owner explicitly accepted M05 and authorized M06. Commit
+`0278b612a8169253810c778607aa3d244a7b0407` is observed at HEAD and origin/main.
 
 Implemented:
 
@@ -708,6 +709,104 @@ native part of that sandbox run failed on denied ptrace, not counted as PASS.
 `make test-native` rerun outside the sandbox passed, including the native API
 and TUI suites: `build/m05-quit-native.log`.
 
+**Status: ACCEPTED.** The owner completed manual validation, committed/pushed
+0278b61 and explicitly authorized M06. The agent performed no Git writes.
+
+## M06 — selected context, Call Stack and Threads
+
+M05 was explicitly accepted and committed/pushed as
+`0278b612a8169253810c778607aa3d244a7b0407`, observed at HEAD and origin/main.
+The owner authorized M06 only. No Git write, tag or milestone advancement has
+been performed by the agent.
+
+Implemented:
+
+- C debugger-context model independent of curses, with owned snapshots of
+  selected thread/frame, the original stopped thread/PC, structured frame
+  metadata and simple arguments. Native session owns lifetime and routes
+  distinct request cookies without completing another owner's pending request.
+- Callback-safe deferred requests and coherent snapshot publication. Resume,
+  thread lifecycle/selection, manual console operations and reconnect invalidate
+  obsolete data. Pending superseded thread choices cannot publish old replies;
+  frame selection rejects stale rows from a previous thread. No automatic
+  context reads while running, invisible or idle.
+- Live Call Stack/Threads in the approved workspace, with mouse selection,
+  keyboard row browsing/Enter, caller labels, `>` selected and `*` stopped
+  markers, scrollbars, Refresh and stack pages. Geometry/tabs/splits/theme and
+  q-close/Ctrl+Q-quit semantics are preserved. Missing symbols/unwind and
+  optimized/unavailable arguments remain honest. Unavailable context never
+  displays a sentinel negative frame number as a real selection.
+- 32-frame pages plus one lookahead, first 128 threads and a 4096-level display
+  bound, with visible limits/errors. Strings and requests are bounded; selection
+  changes GDB inspection context without moving execution. Source/Disassembly,
+  stepping, Locals/Watches and other inspection remain in their own gates.
+- C fake-peer context tests and real-GDB API/TUI fixtures with recursion, two
+  workers, deliberate SIGTRAP checkpoints, optimized inline/tail-call metadata,
+  stripped symbols, worker exit and repeated stop/resume. No extra frontend
+  library/framework was introduced; pthread is only for the debug target.
+
+Narrow correction to the earlier fixture PID report: the M05 fixture printed its
+PID and then unconditionally emitted ESC[2J/OSC bytes, clearing a standalone
+terminal. The agent's earlier scrolling explanation was wrong. Those bytes now
+require explicit `--control-bytes`, used by the real-GDB output-safety test.
+Ordinary and --allow-attach runs preserve the PID. The C harness verifies the
+exact child PID prefix and no ESC/BEL through the first tick, while the explicit
+control-byte test still verifies escaped output in the frontend.
+
+Verification (local ignored artifacts, not release/hardware evidence):
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make test test-native` | PASS, deterministic and actual GDB API/TUI | `build/m06-gate.log` |
+| `make CC=clang CXX=clang++ BUILD_DIR=build/m06-clang test test-native` | PASS | `build/m06-clang.log` |
+| `make sanitize sanitize-native` | PASS, ASan/UBSan with leak detection | `build/m06-sanitize.log` |
+| `make test-tmux` | PASS, isolated real tmux forwarding of the preserved demo | `build/m06-tmux.log` |
+| `make analyze` | PASS, no unsuppressed project diagnostics | `build/m06-analyze-final.log` |
+| `make CC=clang CXX=clang++ BUILD_DIR=build/m06-clang test` | PASS after final stale-frame guard/header correction | `build/m06-clang-final.log` |
+| `make sanitize sanitize-native` | PASS after final stale-frame guard/header correction | `build/m06-sanitize-final.log` |
+| `./build/test-context "$PWD/build/fake-mi"` | PASS including rejection of stale frame rows and session reset | `build/m06-context-final.log` |
+
+Final native suites after the test-only control-byte/PID correction all passed:
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make test-native` | PASS, GCC actual GDB API/TUI and standalone PID/control regression | `build/m06-native-delivery.log` |
+| `make CC=clang CXX=clang++ BUILD_DIR=build/m06-clang test-native` | PASS | `build/m06-clang-native-delivery.log` |
+| `make sanitize-native` | PASS, ASan/UBSan with leak detection | `build/m06-sanitize-native-delivery.log` |
+| `git diff --check` | PASS | No whitespace diagnostics |
+
+Actual optimized GCC frames included context_checkpoint, recursive and tail_bridge
+with optimized-out depth/worker values. Clang also reported these logical frames,
+with its own unavailable arguments. Stripped runs retained valid addresses and
+unwound unknown functions. Actual frame/argument rows are retained in the native
+logs; no same-stack reconstruction or unwinding capability is inferred merely
+from stripping symbols. Missing/malformed unwind is separately exercised by the
+synthetic peer. There is no hardware/QEMU evidence in this gate.
+
+Intermediate failures were inspected and corrected: GDB stop frames omit level;
+the TUI test initially sent input before raw startup and clicked banner text
+rather than a tab; skipping BODY activation initially omitted focused-pane
+selection in the demo regression. Static analysis caught a missing enum zero
+member and boolean bitwise assignments. A sandbox-only tmux run was denied its
+local socket; it is not counted as a pass and the isolated run outside passed.
+Analyzer success suppresses 149 system-header warnings and six existing NOLINT
+annotations; it is not a claim of no generated warnings.
+
+Requirement evidence: FR-10 Call Stack/context foundation (Locals/Watches remain
+M11), Threads inventory, selected-vs-stopped correctness for FR-21's later code
+views, and NFR-01/03/04/05/07/08/09/12 foundations. Manual visual/input acceptance,
+complete native acceptance, UI/idle performance measurements and release-wide
+requirements are not inferred from the automated results. STM32/ARM, ESP32/Xtensa,
+ESP32/RISC-V and QEMU remain UNVERIFIED.
+
+Manual test now: use the M06 checklist in docs/testing.md, launching
+`./build/context-fixture` under the frontend. Inspect recursive arguments, choose
+callers by mouse/keyboard, show Threads in another pane, switch workers, continue
+to their exit, verify stale running state, Pause and page the --deep variant.
+Repeat in tmux and review optimized/stripped behavior. M07 remains planned.
+
+State: `implemented` → `automated-verified` → `awaiting-user`.
 **Status: AWAITING USER ACCEPTANCE.** Include the proposed Conventional Commit
-message at delivery. Stop before M06; wait for owner acceptance, commit/push and
-explicit continuation.
+message at delivery. Do not start M07 until owner acceptance, owner commit/push
+and explicit authorization. AGENTS.md is updated locally but remains ignored by
+the existing policy; its authorization is mirrored in the tracked docs/plan.md.
