@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
     CHECK(atexit(cleanup) == 0);
     CHECK(unsetenv("TMUX") == 0);
     char *arguments[] = {"tmux", "-L", socket_name, "-f", configuration,
-                         "new-session", "-s", "workspace", argv[1], NULL};
+                         "new-session", "-s", "workspace", argv[1], "--demo", NULL};
     TestTerminal term;
     test_terminal_start_argv(&term, arguments, "xterm-256color", false);
     test_terminal_expect(&term, "Start a debugging session");

@@ -13,8 +13,8 @@ States: `planned` → `implemented` → `automated-verified` → `awaiting-user`
 | Post-M02 | Navigation/highlight/scrollbar correction | accepted | `a832eef` |
 | P00 | Expanded roadmap/specification and tab-focus correction | accepted | `36d5ad6` |
 | M03 | Incremental MI parser | accepted | `ee1cfc5` |
-| M04 | Nonblocking transport/controller and owned lifecycle | awaiting-user | — |
-| M05 | Native sessions, console/output and Save Log | planned | — |
+| M04 | Nonblocking transport/controller and owned lifecycle | accepted | `f29ce3c` |
+| M05 | Native sessions, console/output and Save Log | awaiting-user | — |
 | M06 | Selected context, Call Stack and Threads | planned | — |
 | M07 | Live code, stepping modes, navigation/source recovery | planned | — |
 | M08 | Code breakpoints and Run to Selected | planned | — |
@@ -33,8 +33,8 @@ States: `planned` → `implemented` → `automated-verified` → `awaiting-user`
 The approved expanded roadmap replaces only the old unimplemented M03–M07
 grouping. Older references to future milestone numbers in historical entries
 below describe their original scopes; [the current roadmap](plan.md) governs
-new work. Historical failures and acceptance evidence are retained. M04 is the
-only currently authorized gate; no live target workflow or release is accepted.
+new work. Historical failures and acceptance evidence are retained. M05 is the
+only currently authorized gate; no complete live workflow or release is accepted.
 
 ## M00 — foundation
 
@@ -582,3 +582,132 @@ still displays DEMO and is not expected to connect to a live target yet.
 **Status: AWAITING USER ACCEPTANCE.** Deliver the proposed Conventional Commit
 message now and stop. M05 requires owner acceptance, commit/push and explicit
 authorization.
+
+### M04 acceptance and M05 authorization
+
+The owner explicitly requested the next milestone after committing/pushing M04.
+Commit `f29ce3c23e3d818c64cdee44ddd501c73251a5bc` is reliably observed at both
+HEAD and origin/main, with a clean tree before M05. M04 is accepted; its earlier
+awaiting-user status is historical. No Git write was performed by the agent.
+
+## M05 — native sessions, output, console and Save Log
+
+State: `planned` → `implemented` → `automated-verified` → `awaiting-user`.
+Only M05 was authorized. There is no acceptance or resulting commit SHA yet.
+
+Implemented:
+
+- Internal C native-session layer over the MI controller, with validated ELF/
+  PID/cwd, copied structured arguments/environment and shell-free execution.
+  ELF paths resolve before changing GDB cwd. Attach ignores hidden Launch
+  settings; form inputs survive recoverable failures and mode switching.
+- Bare invocation now starts real native configuration. Launch loads the ELF;
+  Continue starts/resumes it, Pause interrupts it, and actual backend state/PID
+  are displayed. Explicit --demo preserves the accepted visual reference and
+  legacy visual/input regressions. Embedded/remote remain labelled previews.
+- Live Console/GDB command input, output PTY isolation, bounded escaped logs,
+  independently flushed partial streams, scrolling/following and Save Log to a
+  new mode-0600 file. Existing files survive; open/short-write errors are visible.
+- Full-page exit confirmation: terminate a frontend-launched inferior or
+  detach/resume an attached process, then close/reap GDB. Signal exits use the
+  same cleanup. Linux pidfds verify/recover owned inferior exit without stale
+  numeric-PID signals. Basic console run/start commands also establish ownership.
+- C native API and real-TUI PTY tests, C/C++ target fixtures, explicit native/
+  native-sanitizer targets, documentation and README updates. C++ is only a
+  deliberately debugged fixture; application/harness code remains C.
+
+Prerequisite correction: real GDB revealed that the M04 encoder always quoted
+-gdb-set arguments, allowing ^done without applying settings. It also quoted
+native attach PIDs incompatibly with GDB's CLI-derived command handling.
+The encoder now emits safe ASCII tokens normally and uses restricted names/
+literal CR/LF-free tails for -gdb-set/-gdb-show. Actual probes query mi-async and
+non-stop values, and native fixtures verify literal argv/env with the inferior
+startup shell disabled. This fixes a prerequisite without rewriting M04 history.
+
+Explicit exclusions: live Source/Disassembly/registers/memory/variables/frames/
+threads, stepping/breakpoint UI, dedicated Restart/Reset, profiles, program input,
+remote/OpenOCD workflows and hardware. Live inspection panes show unavailable
+messages, never sample values. M06 and later gates remain planned.
+
+Verification (final commands exited 0 unless explicitly labelled expected failure):
+
+| Exact command | Result | Evidence |
+|---|---|---|
+| `make test test-native test-gdb-startup test-tmux` | PASS; GCC, deterministic suites, actual native sessions/TUI, actual startup-setting queries, isolated tmux --demo forwarding | `build/m05-gate.log` |
+| `make CC=clang BUILD_DIR=build/m05-clang test` | PASS; deterministic Clang suites | `build/m05-clang.log` |
+| `make sanitize sanitize-native` | PASS; default and actual-native ASan/UBSan/LeakSanitizer outside ptrace sandbox | `build/m05-sanitize.log` |
+| `make test-native` | PASS after final stream/ownership/mode/status fixes; actual native API and TUI | `build/m05-native-delivery.log` |
+| `make CC=clang CXX=clang++ BUILD_DIR=build/m05-clang test-native` | PASS after final fixes | `build/m05-clang-native-delivery.log` |
+| `make sanitize-native` | PASS after final fixes, ASan/UBSan/LeakSanitizer enabled | `build/m05-sanitize-native-delivery.log` |
+| `make analyze` | PASS; no unsuppressed project diagnostics; existing system-header/NOLINT suppressions reported | `build/m05-analyze-delivery.log` |
+| `./build/test-gdb-startup arm-none-eabi-gdb` | PASS, actual target-free ARM GDB startup and setting-value queries | `build/m05-arm-startup.log` |
+| `git diff --check` | PASS, repeated after README | No whitespace diagnostics |
+
+The broad suites passed before final native-only refinements. Focused native
+GCC/Clang/sanitizer suites and static analysis were then repeated for the final
+code, including hidden-Launch-field Attach, independent partial console output,
+actual echo output rather than its command log, and console-run ownership.
+The ignore-HUP fixture ensures cleanup is deliberate termination, not merely
+PTY hangup. No automated failure remains.
+
+Coverage includes C/C++ launch; spaces/empty arguments/quotes/backslashes and
+literal shell metacharacters; cwd/env fidelity; stdout/stderr and control/OSC
+isolation; pause/continue; console recovery; existing-file preservation and
+actual short-write failure under a temporary per-test RLIMIT_FSIZE; normal exit;
+real allowed/denied ptrace; external survival and resumed heartbeat; output
+flood/512-line retention; GDB crash/owned-inferior exit verification; GUI input
+retention, forms/actions, launch/attach confirmations and signal TTY restoration.
+Only owned test fixtures change per-process ptrace/dumpable flags; no system
+ptrace settings or user tmux server/configuration are modified.
+
+The new startup-setting regression was also compiled against the committed
+pre-fix controller using:
+`git show HEAD:src/gdb/controller.c > build/m05-controller-before.c`,
+`cc -std=c17 -D_DEFAULT_SOURCE -Isrc/gdb -Itests/support tests/integration/test_gdb_startup.c build/m05-controller-before.c src/gdb/mi.c -o build/m05-settings-before`,
+then `./build/m05-settings-before gdb`. It failed as expected (exit 1) when the
+old quoted query did not produce a setting value. See
+`build/m05-settings-before.log`. Actual native argv/env tests additionally caught
+the original settings not being applied. The current probe passes.
+
+Intermediate failures were inspected: sandbox ptrace/pidfd denial (rerun with
+execution permission, never counted as a pass), incorrect set/attach argument
+encoding, compiler truncation/aliasing diagnostics, analyzer bounds/casts, an
+overbroad Cancel-button text match in the PTY test and a test that demanded
+immediate numeric-PID disappearance before the adopting parent reaped a dead
+inferior. Tests now verify actual behavior and permit a bounded reaping interval.
+Logs from those attempts remain under `build/m05-*`.
+
+Environment: native Linux x86-64, GDB/ARM GDB 18.1, GCC 16.2.1, Clang 23.1.1.
+No timing claim for complete native UI response is made; full performance/stress
+and live tmux acceptance remain M14/M18. pidfd recovery is Linux-dependent and
+reports unsupported/unconfirmed cases. The crash case verifies owned death
+and attached survival; it does not force every low-level recovery failure path.
+
+Requirement evidence: FR-02 launch/cwd/args foundation (main/stepping still later),
+FR-03/12/19/29 automated native paths, FR-16 lifecycle and NFR-01/03/04/06/08/09/12
+foundations. Visual quality, physical input, the owner's native/tmux workflow and
+M05 acceptance remain manual. All real boards, QEMU and complete release readiness
+remain UNVERIFIED. An ARM GDB startup probe is not ARM firmware evidence.
+
+Manual test now: follow **M05 manual acceptance** in docs/testing.md. Build the
+fixtures, use the bare native launcher, inspect actual output, Continue/Pause,
+Console/Save Log, launch termination and attached-process detach/resume. Inspect
+the explicit unavailable live panes and separate --demo reference. Review the
+project-focused README. AGENTS.md is updated locally but remains ignored by the
+existing policy; the tracked contract is mirrored in docs/plan.md.
+
+M05 manual-feedback correction: `q` now closes/backs out of the current screen
+outside text fields, leaves the workspace through session confirmation and
+returns to the launcher without exiting. At the launcher it stays open;
+`Ctrl+Q` quits the application from any screen with active-session confirmation.
+Footers name both actions. Text fields retain literal `q`; Escape cancels input.
+The native TUI regression verifies launcher survival, `q` confirmation/cancel,
+return to launcher, Ctrl+Q attached-session confirmation and commands/log paths
+containing `q`. `make test` passed in `build/m05-quit-controls.log`; the subsequent
+native part of that sandbox run failed on denied ptrace, not counted as PASS.
+`make test-native` rerun outside the sandbox passed, including the native API
+and TUI suites: `build/m05-quit-native.log`.
+
+**Status: AWAITING USER ACCEPTANCE.** Include the proposed Conventional Commit
+message at delivery. Stop before M06; wait for owner acceptance, commit/push and
+explicit continuation.

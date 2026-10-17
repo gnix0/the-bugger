@@ -4,6 +4,14 @@
 
 ### Added
 
+- M05 native Linux launch/attach through the launcher, real Continue/Pause and
+  execution state, isolated program output, GDB command input and Save Log.
+- Native-session ownership and confirmed exit policy, attached-process
+  detach/resume, bounded escaped logs and Linux pidfd crash-cleanup checks.
+- C real-GDB API/PTY tests and C/C++ debug-target fixtures, with separate
+  native and native sanitizer targets.
+- Explicit --demo for the preserved simulated workspace; live inspection panes
+  report unavailable instead of presenting sample data.
 - M04 nonblocking GDB/MI controller with literal argv spawning, bounded command/
   I/O queues, token matching, deadlines, stale-generation rejection and owned
   process cleanup. MI3 startup negotiates asynchronous/all-stop operation with
@@ -34,6 +42,9 @@
 
 ### Fixed
 
+- Serialize GDB's CLI-derived setting commands correctly; ^done alone did not
+  prove settings were applied. Real probes now verify async/all-stop values,
+  while native tests verify shell-free arguments and environment fidelity.
 - Disassembly navigation can reach every instruction; view row counts are
   shared by rendering and input handling.
 - Scrolling moves pane viewports directly, without a secondary row highlight.
@@ -44,4 +55,5 @@
   Focus follows the promoted active tab, mouse activation keeps normal styling,
   and subsequent keyboard activation addresses the intended tab.
 
-No live debugger functionality or release is claimed by this entry.
+Native launch/control/console are live; inspection, remote/OpenOCD workflows,
+profiles, hardware acceptance and release readiness remain incomplete.

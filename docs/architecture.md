@@ -1,6 +1,6 @@
 # Architecture
 
-## Current implementation (M04)
+## Current implementation (M05)
 
 `src/main.c` handles help/version and starts the terminal application.
 `src/tui/app.c` owns startup/configuration/review/workspace pages, keyboard
@@ -13,13 +13,15 @@ debugger-domain state and must be replaced by live data in real sessions.
 The build and tests are C17 with strict warnings; Make is the only build driver.
 C tests use POSIX pipes, processes and PTYs. Python tests were replaced at the
 owner's request. The only current application library dependency is ncursesw.
-The independent MI parser and controller described below are implemented and
-can start a debugger process. The TUI does not yet consume them and continues
-to display explicitly simulated data. Native target sessions, inspection,
-OpenOCD management and persistence are not implemented yet.
+The MI parser/controller and native session module now serve real Linux
+launch/attach sessions through the TUI. Console/output and Continue/Pause are
+live; inspection views have explicit unavailable messages. Explicit --demo
+retains simulated presentation separately. Embedded/remote remain previews;
+inspection, OpenOCD management and persistence await their own gates.
 
-The UI waits for input with a 100 ms ncurses timeout and redraws after events
-rather than on every timeout. Raw input preserves function keys and Ctrl+Q;
+The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
+descriptors together, redrawing after input or session revisions. Idle waits are
+100 ms without a session, bounded to 25 ms with one. Raw input preserves function keys and Ctrl+Q;
 Ctrl+C and SIGINT/SIGTERM/SIGHUP leave through normal cleanup. Two module-owned
 globals are documented: a signal-safe exit flag and the screen's color-enabled
 flag. Mouse and keyboard share action dispatch and rendered hit regions.
@@ -108,10 +110,17 @@ separate from parsed MI and is passed as length-delimited bytes.
 
 Requests receive monotonically increasing tokens within a session, independent
 caller cookies, deadlines from enqueue, and session/stop/context stamps. Commands
-are assembled from a restricted operation name and separately quoted C-string
-arguments (fixed-width octal for control/non-ASCII bytes); encoded commands are
+are assembled from a restricted operation name and plain safe ASCII tokens or
+quoted C-string arguments (fixed-width octal for control/non-ASCII bytes); encoded commands are
 bounded to 16 KiB. Raw command fragments are not accepted. This is MI encoding,
 not shell quoting. Partial writes retain their offsets and ordering.
+
+GDB's CLI-derived -gdb-set/-gdb-show consume a raw setting tail. They use a
+restricted setting name and literal arguments without CR/LF instead of quoting
+the name or an entire environment assignment. Quoted names can misleadingly
+return ^done without applying the setting. M05's real tests exposed this M04
+prerequisite defect; startup probes now query actual mi-async/non-stop values,
+and native fixtures verify shell-free argv and exact environment assignments.
 
 Replies match only fully written requests with exact tokens. STOP/CONTEXT queries
 require a stopped target. A resume/new stop invalidates stop-dependent replies;
@@ -146,17 +155,71 @@ The host must not reap the controller's child; unexpected ECHILD is diagnosed
 and clears the PID without signalling it again. A reaped child's pipes get
 200 ms to drain before being closed if another process retained an endpoint.
 Destroy refuses a live controller: close and pump until DISCONNECTED first.
-The host must service the pump during shutdown. M05 must implement native
-detach/target policy before using this process-close primitive for live sessions.
+The host must service the pump during shutdown. The native session implements
+target release before using this process-close primitive.
 
 The C fake peer and interactive diagnostic harness are in `tests/support/`,
 with failure/pressure/PTY coverage in `tests/integration/`. They are explicitly
-fake; the application remains DEMO. An optional actual-GDB startup test performs
+fake; they remain separate from the native workspace. An optional actual-GDB startup test performs
 only negotiation, feature enumeration and MI exit, without any inferior/target.
 The protocol state follows the official GDB manual's
 [input syntax](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Input-Syntax.html),
 [async records](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Async-Records.html)
 and [interpreter options](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Mode-Options.html).
+
+## M05 native session and logs
+
+`src/session/native.{h,c}` owns sequential configuration/actions over the
+controller. Callbacks copy status and mark completions; requests are issued
+after callbacks return, respecting controller ownership/reentrancy rules.
+Startup validates a readable ELF/PID and directory, resolves the ELF before
+changing GDB's working directory, copies bounded structured arguments/environment,
+disables auto-load, pagination, confirmations and the inferior startup shell,
+and preserves normal ASLR. It does not edit host ptrace policy or user GDB files.
+Environment is session-only. The small quoted-word parser performs no expansions.
+
+Launch loads symbols/executable, args/cwd/env and an owned output PTY, then reports
+Loaded. Continue starts the program; subsequent Continue resumes a stopped
+program. Pause uses MI interrupt. There is no automatic main breakpoint or
+stepping in this gate. Attach uses the selected PID and optional ELF, stops on
+success and retains actionable permission failures. Attached processes retain
+their existing stdio. Source/assembly/register/memory/variable/frame/thread
+inspection stays unavailable; demo data is never rendered as live data.
+Basic console run/r/start/starti operations also establish launch ownership;
+failed operations do not retain a pending ownership claim. Multi-inferior
+coordination and arbitrary session-topology changes are outside this gate.
+
+The PTY captures launched stdout/stderr together without using the debugger MI
+pipe or frontend terminal. Only the owned slave's newline translation is changed;
+terminal controls and non-ASCII bytes are escaped before display/export. Program
+input and a full terminal emulator are deferred. Each pump drains at most 16 KiB.
+Logs retain 512 lines of at most 255 bytes including channel prefixes; long
+streams are split, partial lines flush independently per channel after an idle interval, and old lines
+evict from a ring. Console panes scroll independently and normally follow the
+tail. GDB console input is a deliberate single command carried by
+`-interpreter-exec console`; embedded record delimiters are rejected and managed
+interpreter/async changes have an explicit diagnostic.
+
+Save Log flushes pending fragments and exports the bounded readable history.
+It creates a new file with O_EXCL and mode 0600, preserving existing files and
+reporting open/short-write/close failures. It exports retained text, not a profile,
+and cannot recover evicted history.
+
+Normal Quit/Session requests use a full-page confirmation. The session interrupts
+a running target, kills a still-owned launched inferior through GDB or
+detaches/resumes an attached target, then closes/reaps GDB. Signal exits run the
+same cleanup outside the handler. A stable Linux pidfd acquired from the actual
+launch notification verifies/recover-kills the owned inferior if GDB dies;
+numeric inferior PIDs are never used for recovery signals. An explicitly detached
+inferior relinquishes ownership. Missing pidfd support, release failures and
+unconfirmed exit are diagnosed, not counted as successful cleanup. The debugger
+child is reaped by the controller; the kernel/adopting parent reaps an inferior
+orphaned by a debugger crash.
+
+`--demo` is an explicit visual-reference path. Bare invocation uses the native
+launcher; unimplemented server flows remain labelled previews. Live tabs/layout
+reuse presentation state only, not sample debugger values. No new presets,
+floating windows, workspace pages, themes or editor modes were added.
 
 ## Approved direction
 

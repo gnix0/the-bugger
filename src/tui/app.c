@@ -3,8 +3,12 @@
 #include "demo.h"
 #include "render.h"
 #include "theme.h"
+#include "native.h"
 
 #include <curses.h>
+#include <errno.h>
+#include <limits.h>
+#include <poll.h>
 #include <locale.h>
 #include <signal.h>
 #include <stdio.h>
@@ -15,11 +19,13 @@
 #include <wctype.h>
 
 enum { MAX_CONTROLS = 1024, FIELD_SIZE = 256, FORM_FIELDS = 9 };
-typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM } Page;
+typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
+               COMMAND_INPUT, SAVE_INPUT, CLOSE_CONFIRM } Page;
 typedef enum {
     CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
     TOOL, TAB, MENU, BODY, SHOW_VIEW, FOCUS_PANE, CANCEL_RESET, CONFIRM_RESET,
-    MENU_SECTION, PANE_ACTION, DIVIDER, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR
+    MENU_SECTION, PANE_ACTION, DIVIDER, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR,
+    COMMAND_OPEN, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT
 } ControlKind;
 
 typedef struct {
@@ -53,6 +59,10 @@ typedef struct {
     TbRect panes[TB_MAX_PANES];
     const char *colors;
     char status[160];
+    TbNative *native;
+    bool demo_mode, live, leave_session, exit_after_close;
+    bool follow_log[TB_MAX_PANES];
+    wchar_t input[FIELD_SIZE];
 } App;
 
 /* Signal handler communicates only through this flag; cleanup runs normally. */
@@ -112,11 +122,14 @@ static int fields(const App *app, Field list[FORM_FIELDS])
     const Form *form = &app->forms[app->session];
     if (app->session == 0) {
         list[n++] = (Field){"Mode", 0, true};
-        list[n++] = (Field){form->alternate ? "PID (preview only)" : "Executable / ELF", 1, false};
+        list[n++] = (Field){form->alternate ? (app->demo_mode ? "PID (preview only)" : "PID") : "Executable / ELF",
+                           form->alternate && !app->demo_mode ? 6 : 1, false};
         if (!form->alternate) {
-            list[n++] = (Field){"Arguments (preview)", 2, false};
+            list[n++] = (Field){app->demo_mode ? "Arguments (preview)" : "Arguments (quoted)", 2, false};
             list[n++] = (Field){"Working directory", 3, false};
+            if (!app->demo_mode) { list[n++] = (Field){"Environment (NAME=value)", 7, false}; }
         }
+        if (form->alternate && !app->demo_mode) { list[n++] = (Field){"Symbols ELF (optional)", 4, false}; }
         list[n++] = (Field){"GDB binary", 5, false};
     } else if (app->session == 1) {
         list[n++] = (Field){"OpenOCD setup", 0, true};
@@ -190,10 +203,12 @@ static void draw_header(const App *app, const char *subtitle)
     tb_text(0, 14, COLS - 14, TB_CHROME, 0, text);
     tb_fill((TbRect){0, 2, COLS, 1}, TB_NOTICE);
     tb_text(2, 2, COLS - 4, TB_NOTICE, A_BOLD,
-            "DEMO / VISUAL REFERENCE - no debugger connected");
+            app->live ? "LIVE NATIVE | GDB console/output | inspection not available yet" :
+            app->demo_mode || app->session != 0 ? "DEMO / VISUAL REFERENCE - no debugger connected" :
+            "Native Linux | launch or attach through GDB");
     tb_text(LINES - 2, 1, COLS - 2, TB_YELLOW, 0, app->status);
     tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0,
-            "Tab / arrows / Enter / Esc | click controls | Ctrl+Q quit");
+            "Tab / arrows / Enter | q / Esc back (outside text fields) | Ctrl+Q quit app");
 }
 
 static void draw_launcher(App *app)
@@ -214,7 +229,8 @@ static void draw_launcher(App *app)
         tb_fill((TbRect){left, 7 + i * 2, width, 1}, TB_SURFACE);
         tb_text(7 + i * 2, left + 2, width - 4, TB_TAB, 0, descriptions[i]);
     }
-    tb_text(13, left, width, TB_MUTED, 0, "Recent sessions: none saved in this preview.");
+    tb_text(13, left, width, TB_MUTED, 0, app->demo_mode ?
+            "Recent sessions: none saved in this preview." : "Recent sessions: profiles not implemented yet.");
     if (app->previewed) {
         button(app, LINES - 4, 3, 22, "[ Return to preview ]", BACK, 0, 0);
     }
@@ -223,7 +239,8 @@ static void draw_launcher(App *app)
 
 static void draw_form(App *app, bool review)
 {
-    draw_header(app, review ? "Review session preview" : "Configure session");
+    bool native = !app->demo_mode && app->session == 0;
+    draw_header(app, review ? (native ? "Review native session" : "Review session preview") : "Configure session");
     int width = COLS > 84 ? 80 : COLS - 4;
     int left = (COLS - width) / 2;
     tb_fill((TbRect){left - 1, 4, width + 2, LINES - 9}, TB_PANEL);
@@ -283,12 +300,15 @@ static void draw_form(App *app, bool review)
     }
     if (review) {
         tb_text(LINES - 5, 2, COLS - 4, TB_ORANGE, 0,
+                native ? (app->forms[0].alternate ? "Will attach and halt. Exit detaches/resumes; inputs remain on failure." :
+                "Will load the ELF. Continue runs it; exit terminates a launched program.") :
                 "Preview only. Nothing will be launched, connected or saved.");
-        button(app, LINES - 4, 2, 23, "[ Preview workspace ]", PREVIEW, 0, 0);
+        button(app, LINES - 4, 2, 23, native ? "[ Start native ]" : "[ Preview workspace ]", PREVIEW, 0, 0);
     } else {
         tb_text(LINES - 5, 2, COLS - 4, TB_MUTED, 0,
+                native ? "Quotes group arguments/NAME=value entries. No shell expansion. Paths are literal." :
                 "Sample configuration only; tool checks and execution come later.");
-        button(app, LINES - 4, 2, 21, "[ Review preview ]", SUBMIT, 0, 0);
+        button(app, LINES - 4, 2, 21, native ? "[ Review session ]" : "[ Review preview ]", SUBMIT, 0, 0);
     }
     button(app, LINES - 4, COLS - 12, 10, "[ Back ]", BACK, 0, 0);
     if (cursor_y >= 0) {
@@ -301,7 +321,7 @@ static void draw_form(App *app, bool review)
 static void draw_menu(App *app, int pane, TbRect rect)
 {
     tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_YELLOW, A_BOLD,
-            app->menu_actions ? "PANE ACTIONS" : "SHOW VIEW (DEMO)");
+            app->menu_actions ? "PANE ACTIONS" : app->live ? "SHOW VIEW" : "SHOW VIEW (DEMO)");
     int start_control = app->count;
     if (app->menu_focus) {
         app->focus = start_control;
@@ -334,6 +354,51 @@ static void draw_menu(App *app, int pane, TbRect rect)
     tb_text(rect.y + rect.h - 2, rect.x + 1, rect.w - 2, TB_MUTED, 0, "Wheel/Up/Down | Esc close");
     button(app, rect.y + rect.h - 1, rect.x + 1, rect.w - 2,
             app->menu_actions ? "< Show views" : "Pane actions >", MENU_SECTION, 0, pane);
+}
+
+static TbScroll workspace_scroll(const App *app, const TbDemoPane *pane, int visible)
+{
+    if (!app->live) { return tb_demo_scrollbar(&app->demo, pane, visible); }
+    TbView view = pane->tabs[pane->active];
+    TbScroll scroll = {.total = view == TB_CONSOLE ? (int)tb_native_log_count(app->native) : 0,
+                       .visible = visible};
+    if (visible <= 0) { return scroll; }
+    scroll.maximum = scroll.total > visible ? scroll.total - visible : 0;
+    scroll.offset = pane->scroll[view] < scroll.maximum ? pane->scroll[view] : scroll.maximum;
+    if (scroll.offset < 0) { scroll.offset = 0; }
+    scroll.thumb_size = scroll.maximum == 0 ? visible : visible * visible / scroll.total;
+    if (scroll.thumb_size < 1) { scroll.thumb_size = 1; }
+    scroll.thumb_start = scroll.maximum == 0 ? 0 : scroll.offset * (visible - scroll.thumb_size) / scroll.maximum;
+    return scroll;
+}
+
+static void draw_native_pane(App *app, int index, TbRect rect)
+{
+    TbDemoPane *pane = &app->demo.panes[index];
+    TbView view = pane->tabs[pane->active];
+    tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_MUTED, 0,
+            view == TB_CONSOLE ? "LIVE | GDB / program log" : "LIVE | inspection unavailable");
+    if (view == TB_CONSOLE) {
+        TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
+        if (app->follow_log[index]) { pane->scroll[view] = scroll.maximum; scroll = workspace_scroll(app, pane, rect.h - 3); }
+        for (int i = 0; i < scroll.visible && scroll.offset + i < scroll.total; ++i) {
+            tb_text(rect.y + 2 + i, rect.x + 1, rect.w - 2, TB_PANEL, 0,
+                    tb_native_log_line(app->native, (size_t)scroll.offset + (size_t)i));
+        }
+        button(app, rect.y + rect.h - 1, rect.x + 1, 9, " Command ", COMMAND_OPEN, 0, index);
+        button(app, rect.y + rect.h - 1, rect.x + 11, rect.w < 22 ? rect.w - 12 : 10, " Save Log ", SAVE_OPEN, 0, index);
+        if (scroll.maximum > 0) {
+            tb_text(rect.y + 2, rect.x + rect.w - 1, 1, TB_MUTED, 0, "^");
+            for (int i = 0; i < scroll.visible; ++i) {
+                tb_text(rect.y + 2 + i, rect.x + rect.w - 1, 1,
+                        i >= scroll.thumb_start && i < scroll.thumb_start + scroll.thumb_size ? TB_CYAN : TB_MUTED,
+                        0, i >= scroll.thumb_start && i < scroll.thumb_start + scroll.thumb_size ? "|" : ":");
+            }
+        }
+    } else {
+        tb_text(rect.y + 3, rect.x + 2, rect.w - 4, TB_MUTED, 0, "Live view not implemented yet.");
+        tb_text(rect.y + 4, rect.x + 2, rect.w - 4, TB_MUTED, 0, "Use Console for GDB commands.");
+    }
 }
 
 static void draw_pane(App *app, int pane_index, TbRect rect)
@@ -375,8 +440,9 @@ static void draw_pane(App *app, int pane_index, TbRect rect)
     } else {
         (void)add_control(app, (TbRect){rect.x + 1, rect.y + 2, rect.w - 2, rect.h - 3},
                           BODY, 0, pane_index);
-        tb_render_demo(&app->demo, pane_index, rect);
-        TbScroll scroll = tb_demo_scrollbar(&app->demo, pane, rect.h - 3);
+        if (app->live) { draw_native_pane(app, pane_index, rect); }
+        else { tb_render_demo(&app->demo, pane_index, rect); }
+        TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
         if (scroll.maximum > 0) {
             (void)add_control(app, (TbRect){rect.x + rect.w - 1, rect.y + 2, 1, rect.h - 3},
                               SCROLLBAR, 0, pane_index);
@@ -412,12 +478,13 @@ static void draw_workspace(App *app)
     ++y;
     tb_fill((TbRect){0, y, COLS, 1}, TB_NOTICE);
     tb_text(y, 1, COLS - 2, TB_NOTICE, 0,
+            app->live ? "LIVE NATIVE | Continue / Pause / Console | inspection not available yet" :
             "DEMO / VISUAL REFERENCE  |  All values simulated. No debugger connected.");
     ++y;
     tb_fill((TbRect){0, y, COLS, 1}, TB_CHROME);
     tb_text(y, 1, COLS - 20, TB_TARGET, 0, session_names[app->session]);
     tb_text(y, COLS - 18, 17, TB_STATE, A_BOLD,
-            app->demo.running ? "Running / stale" : "Paused (demo)");
+            app->live ? tb_native_state_name(app->native) : app->demo.running ? "Running / stale" : "Paused (demo)");
     ++y;
     TbRect area = {1, y + 1, COLS - 2, LINES - y - 3};
     bool tiled = tb_layout_arrange(&app->layout, area, app->demo.pane);
@@ -467,15 +534,54 @@ static void draw_workspace(App *app)
         }
     }
     char footer[256];
-    (void)snprintf(footer, sizeof footer, "DEMO | %s | PC 0x%08X | %.16s | %.159s",
+    if (app->live) {
+        char target[32] = "not started";
+        if (tb_native_target_pid(app->native) > 0) {
+            (void)snprintf(target, sizeof target, "%ld", (long)tb_native_target_pid(app->native));
+        }
+        (void)snprintf(footer, sizeof footer, "LIVE | %s | PID %s | %.159s",
+                       tb_native_state_name(app->native), target, app->status);
+    } else { (void)snprintf(footer, sizeof footer, "DEMO | %s | PC 0x%08X | %.16s | %.159s",
                    app->demo.running ? "Running / stale" : "Paused",
                    0x0800042aU + (unsigned)app->demo.step * 2U,
-                   app->colors, app->status);
+                   app->colors, app->status); }
     tb_fill((TbRect){0, LINES - 2, COLS, 2}, TB_CHROME);
     tb_text(LINES - 2, 1, COLS - 2, TB_CHROME, 0, footer);
     tb_text(LINES - 1, 1, COLS - 2, TB_CHROME, 0,
             app->resizing ? "Resize: Tab selects divider | arrows move | Enter / Esc finish" :
-            "Not connected | Cortex-M4F sample | ... pane actions | drag dividers | Ctrl+Q quit");
+            app->live ? "Console: Command / Save Log | q close session | Ctrl+Q quit app" :
+            "DEMO | ... pane actions | drag dividers | q launcher | Ctrl+Q quit app");
+}
+
+static void draw_input(App *app)
+{
+    bool command = app->page == COMMAND_INPUT;
+    draw_header(app, command ? "GDB console command" : "Save retained log");
+    tb_text(5, 3, COLS - 6, TB_CYAN, A_BOLD,
+            command ? "Explicit GDB command (through MI)" : "New log destination (existing files are preserved)");
+    tb_text(7, 3, COLS - 6, TB_MUTED, 0,
+            command ? "Commands are deliberate operations. Dedicated inspection arrives later." :
+            "Saves bounded retained history with control bytes escaped; mode 0600.");
+    TbRect field = {3, 9, COLS - 6, 1};
+    int index = add_control(app, field, FIELD, 0, 0);
+    tb_fill(field, index == app->focus ? TB_SELECTED : TB_SURFACE);
+    size_t start = 0;
+    int cells = 0;
+    for (size_t p = app->cursor; p > 0; --p) {
+        int width = wcwidth(app->input[p - 1]); cells += width > 0 ? width : 1;
+        if (cells >= COLS - 8) { start = p; break; }
+    }
+    wide_text(9, 3, COLS - 6, app->input, start, index == app->focus);
+    button(app, 12, 3, 14, command ? "[ Send ]" : "[ Save Log ]", INPUT_SUBMIT, 0, 0);
+    button(app, 12, 19, 12, "[ Cancel ]", BACK, 0, 0);
+    if (index == app->focus) {
+        (void)curs_set(1); (void)leaveok(stdscr, FALSE);
+        int cursor_x = 3;
+        for (size_t p = start; p < app->cursor; ++p) {
+            int width = wcwidth(app->input[p]); cursor_x += width > 0 ? width : 1;
+        }
+        (void)move(9, cursor_x);
+    }
 }
 
 static void draw(App *app)
@@ -492,6 +598,15 @@ static void draw(App *app)
         draw_launcher(app);
     } else if (app->page == CONFIGURE || app->page == REVIEW) {
         draw_form(app, app->page == REVIEW);
+    } else if (app->page == COMMAND_INPUT || app->page == SAVE_INPUT) {
+        draw_input(app);
+    } else if (app->page == CLOSE_CONFIRM) {
+        draw_header(app, "Close native session?");
+        tb_text(6, 3, COLS - 6, TB_ORANGE, A_BOLD, tb_native_attached(app->native) ?
+                "Detach and resume the attached process?" : "Terminate the launched program and close GDB?");
+        tb_text(8, 3, COLS - 6, TB_MUTED, 0, "Only the managed session is closed. Cancel keeps debugging.");
+        button(app, 11, 3, 14, "[ Cancel ]", CANCEL_RESET, 0, 0);
+        button(app, 11, 20, 24, "[ Close session ]", CLOSE_ACCEPT, 0, 0);
     } else if (app->page == RESET_CONFIRM) {
         draw_header(app, "Reset DEMO state?");
         tb_text(6, 3, COLS - 6, TB_ORANGE, A_BOLD, "Reset simulated execution?");
@@ -561,6 +676,60 @@ static void pane_action(App *app, int action, int pane)
     }
 }
 
+static bool field_utf8(const wchar_t *value, char *target, size_t capacity)
+{
+    size_t length = wcstombs(target, value, capacity);
+    if (length == (size_t)-1 || length >= capacity) { return false; }
+    target[length] = '\0'; return true;
+}
+
+static bool start_native(App *app)
+{
+    char values[FORM_FIELDS][FIELD_SIZE * 4];
+    for (int i = 0; i < FORM_FIELDS; ++i) {
+        if (!field_utf8(app->forms[0].values[i], values[i], sizeof values[i])) {
+            status(app, "Field encoding/length is invalid."); return false;
+        }
+    }
+    TbNativeWords arguments = {0}, environment = {0}; char error[160];
+    if (!app->forms[0].alternate &&
+        (!tb_native_words(values[2], &arguments, error, sizeof error) ||
+         !tb_native_words(values[7], &environment, error, sizeof error))) { status(app, error); return false; }
+    pid_t pid = 0;
+    if (app->forms[0].alternate) {
+        unsigned long number = 0;
+        for (size_t i = 0; values[6][i]; ++i) {
+            unsigned char c = (unsigned char)values[6][i];
+            if (c < '0' || c > '9' || number > ((unsigned long)INT_MAX - (c - '0')) / 10) {
+                status(app, "PID must contain decimal digits."); return false;
+            }
+            number = number * 10 + c - '0';
+        }
+        pid = (pid_t)number;
+    }
+    TbNativeConfig config = {.attach = app->forms[0].alternate, .pid = pid, .gdb = values[5],
+        .executable = app->forms[0].alternate ? values[4] : values[1],
+        .directory = app->forms[0].alternate ? "" : values[3],
+        .arguments = &arguments, .environment = &environment};
+    if (!tb_native_start(app->native, &config)) { status(app, tb_native_message(app->native)); return false; }
+    app->live = true; app->previewed = true;
+    for (int i = 0; i < TB_MAX_PANES; ++i) { app->follow_log[i] = true; }
+    status(app, tb_native_message(app->native));
+    return true;
+}
+
+static void request_leave(App *app, bool quit)
+{
+    if (app->live && tb_native_active(app->native)) {
+        app->exit_after_close = quit;
+        page(app, CLOSE_CONFIRM);
+    } else if (quit) { app->quit = true; }
+    else {
+        if (app->live) { app->previewed = false; }
+        app->live = false; page(app, LAUNCHER);
+    }
+}
+
 static void activate(App *app, Control control)
 {
     switch (control.kind) {
@@ -568,19 +737,26 @@ static void activate(App *app, Control control)
         app->session = control.value;
         page(app, CONFIGURE);
         break;
-    case QUIT: app->quit = true; break;
-    case SESSION_MENU: page(app, LAUNCHER); break;
+    case QUIT: request_leave(app, true); break;
+    case SESSION_MENU: request_leave(app, false); break;
     case SUBMIT: page(app, REVIEW); break;
     case PREVIEW:
+        if (!app->demo_mode && app->session == 0) {
+            if (start_native(app)) { page(app, WORKSPACE); }
+            break;
+        }
+        app->live = false;
         app->previewed = true;
         status(app, "Preview selected. All values are simulated.");
         page(app, WORKSPACE);
         break;
     case BACK:
+        if (app->page == COMMAND_INPUT || app->page == SAVE_INPUT) { page(app, WORKSPACE); break; }
         page(app, app->page == REVIEW ? CONFIGURE :
              app->page == LAUNCHER ? WORKSPACE : LAUNCHER);
         break;
     case FIELD: {
+        if (app->page == COMMAND_INPUT || app->page == SAVE_INPUT) { break; }
         Form *form = &app->forms[app->session];
         bool toggle = (app->session < 2 && control.value == 0) ||
                       (app->session == 1 && control.value == 8);
@@ -597,6 +773,14 @@ static void activate(App *app, Control control)
         break;
     }
     case TOOL:
+        if (app->live) {
+            bool okay = control.value == TB_CONTINUE ? tb_native_continue(app->native) :
+                        control.value == TB_PAUSE ? tb_native_pause(app->native) : false;
+            status(app, okay ? "GDB operation queued." : control.value >= TB_NEXT ?
+                   "This action is not implemented yet. Continue, Pause and Console are available." :
+                   "GDB operation pending or unavailable in the current state.");
+            break;
+        }
         if (control.value == TB_RESET) {
             page(app, RESET_CONFIRM);
         } else {
@@ -646,6 +830,22 @@ static void activate(App *app, Control control)
         app->resize_divider = control.value;
         break;
     case CANCEL_RESET: page(app, WORKSPACE); break;
+    case COMMAND_OPEN: case SAVE_OPEN:
+        app->input[0] = L'\0';
+        page(app, control.kind == COMMAND_OPEN ? COMMAND_INPUT : SAVE_INPUT);
+        break;
+    case INPUT_SUBMIT: {
+        char input[FIELD_SIZE * 4];
+        bool command = app->page == COMMAND_INPUT;
+        if (!field_utf8(app->input, input, sizeof input)) { status(app, "Invalid text encoding."); break; }
+        bool okay = command ? tb_native_console(app->native, input) : tb_native_save_log(app->native, input);
+        status(app, okay ? (command ? "GDB command queued." : tb_native_message(app->native)) : tb_native_message(app->native));
+        if (okay) { page(app, WORKSPACE); }
+        break;
+    }
+    case CLOSE_ACCEPT:
+        tb_native_close(app->native); app->leave_session = true;
+        page(app, WORKSPACE); break;
     case CONFIRM_RESET:
         tb_demo_action(&app->demo, TB_RESET);
         status(app, "DEMO reset confirmed.");
@@ -656,18 +856,19 @@ static void activate(App *app, Control control)
 
 static bool edit_field(App *app, Control control, wint_t key, bool special)
 {
-    if (control.kind != FIELD || app->page != CONFIGURE) {
+    bool input_page = app->page == COMMAND_INPUT || app->page == SAVE_INPUT;
+    if (control.kind != FIELD || (app->page != CONFIGURE && !input_page)) {
         return false;
     }
-    if ((app->session < 2 && control.value == 0) ||
-        (app->session == 1 && control.value == 8)) {
+    if (!input_page && ((app->session < 2 && control.value == 0) ||
+        (app->session == 1 && control.value == 8))) {
         if (key == KEY_LEFT || key == KEY_RIGHT || key == ' ') {
             activate(app, control);
             return true;
         }
         return false;
     }
-    wchar_t *value = app->forms[app->session].values[control.value];
+    wchar_t *value = input_page ? app->input : app->forms[app->session].values[control.value];
     size_t length = wcslen(value);
     if (app->cursor > length) {
         app->cursor = length;
@@ -697,7 +898,7 @@ static bool edit_field(App *app, Control control, wint_t key, bool special)
             wmemmove(value + app->cursor + 1, value + app->cursor, length - app->cursor + 1);
             value[app->cursor++] = (wchar_t)key;
         } else {
-            status(app, "Preview field is full (255 characters).");
+            status(app, "Field is full (255 characters).");
         }
     } else {
         return false;
@@ -710,9 +911,10 @@ static void scroll_body(App *app, Control control, int amount)
     app->demo.pane = control.pane;
     TbDemoPane *pane = &app->demo.panes[control.pane];
     TbView view = pane->tabs[pane->active];
-    TbScroll scroll = tb_demo_scrollbar(&app->demo, pane, app->panes[control.pane].h - 3);
+    TbScroll scroll = workspace_scroll(app, pane, app->panes[control.pane].h - 3);
     int offset = scroll.offset + amount;
     pane->scroll[view] = offset < 0 ? 0 : offset > scroll.maximum ? scroll.maximum : offset;
+    if (app->live) { app->follow_log[control.pane] = pane->scroll[view] == scroll.maximum; }
 }
 
 static void mouse_event(App *app)
@@ -725,12 +927,13 @@ static void mouse_event(App *app)
     if (app->page == WORKSPACE && app->scroll_drag_pane >= 0) {
         int pane_index = app->scroll_drag_pane;
         TbDemoPane *pane = &app->demo.panes[pane_index];
-        TbScroll scroll = tb_demo_scrollbar(&app->demo, pane, app->panes[pane_index].h - 3);
+        TbScroll scroll = workspace_scroll(app, pane, app->panes[pane_index].h - 3);
         int travel = scroll.visible - scroll.thumb_size;
         int position = event.y - app->panes[pane_index].y - 2 - app->scroll_drag_grab;
         if (position < 0) { position = 0; }
         if (position > travel) { position = travel; }
         if (travel > 0) { pane->scroll[pane->tabs[pane->active]] = position * scroll.maximum / travel; }
+        if (app->live) { app->follow_log[pane_index] = pane->scroll[pane->tabs[pane->active]] == scroll.maximum; }
         if (event.bstate & BUTTON1_RELEASED) { app->scroll_drag_pane = -1; }
         return;
     }
@@ -794,17 +997,18 @@ static void mouse_event(App *app)
         }
         app->focus = i;
         app->cursor = 0;
-        bool text_field = control.kind == FIELD &&
+        bool input_page = app->page == COMMAND_INPUT || app->page == SAVE_INPUT;
+        bool text_field = control.kind == FIELD && (input_page ||
                           !((app->session < 2 && control.value == 0) ||
-                            (app->session == 1 && control.value == 8));
+                            (app->session == 1 && control.value == 8)));
         if (text_field) {
-            app->cursor = wcslen(app->forms[app->session].values[control.value]);
+            app->cursor = wcslen(input_page ? app->input : app->forms[app->session].values[control.value]);
         } else {
             activate(app, control);
         }
         if (control.kind == SCROLLBAR) {
             TbDemoPane *pane = &app->demo.panes[control.pane];
-            TbScroll scroll = tb_demo_scrollbar(&app->demo, pane, control.rect.h);
+            TbScroll scroll = workspace_scroll(app, pane, control.rect.h);
             int row = event.y - control.rect.y;
             if (row >= scroll.thumb_start && row < scroll.thumb_start + scroll.thumb_size) {
                 app->scroll_drag_pane = control.pane;
@@ -817,10 +1021,10 @@ static void mouse_event(App *app)
             TbView view = pane->tabs[pane->active];
             int row = event.y - app->panes[control.pane].y - 2;
             if (row >= 0) {
-                TbScroll scroll = tb_demo_scrollbar(&app->demo, pane, app->panes[control.pane].h - 3);
+                TbScroll scroll = workspace_scroll(app, pane, app->panes[control.pane].h - 3);
                 int target = scroll.offset + row;
                 if (target < scroll.total) { pane->row[view] = target; }
-                if (target < scroll.total && view == TB_SOURCE && event.x < control.rect.x + 2) {
+                if (!app->live && target < scroll.total && view == TB_SOURCE && event.x < control.rect.x + 2) {
                     tb_demo_action(&app->demo, TB_BREAKPOINT);
                     status(app, "DEMO gutter breakpoint toggled.");
                 }
@@ -837,7 +1041,7 @@ static void key_event(App *app, wint_t key, bool special)
         return;
     }
     if (!special && key == 17) {
-        app->quit = true;
+        request_leave(app, true);
         return;
     }
     if (special && key == KEY_RESIZE) {
@@ -855,6 +1059,10 @@ static void key_event(App *app, wint_t key, bool special)
     }
     app->keyboard_focus = true;
     Control control = app->controls[app->focus];
+    if (!special && key == 'q') {
+        if (edit_field(app, control, key, false)) { return; }
+        key = 27; /* Close/back; Ctrl+Q is the application-wide quit action. */
+    }
     if (app->resizing) {
         if ((!special && (key == 27 || key == '\n' || key == '\r')) ||
             (special && key == KEY_ENTER)) {
@@ -891,9 +1099,13 @@ static void key_event(App *app, wint_t key, bool special)
             app->menu = -1;
             app->focus = 0;
         } else if (app->page == LAUNCHER) {
-            if (app->previewed) { page(app, WORKSPACE); } else { app->quit = true; }
-        } else if (app->page == RESET_CONFIRM) {
+            if (app->previewed) { page(app, WORKSPACE); }
+            else { status(app, "Already at the launcher. Ctrl+Q quits the application."); }
+        } else if (app->page == RESET_CONFIRM || app->page == CLOSE_CONFIRM ||
+                   app->page == COMMAND_INPUT || app->page == SAVE_INPUT) {
             page(app, WORKSPACE);
+        } else if (app->page == WORKSPACE && app->live) {
+            request_leave(app, false);
         } else {
             page(app, app->page == REVIEW ? CONFIGURE : LAUNCHER);
         }
@@ -905,6 +1117,10 @@ static void key_event(App *app, wint_t key, bool special)
         return;
     }
     if (edit_field(app, control, key, special)) { return; }
+    if ((app->page == COMMAND_INPUT || app->page == SAVE_INPUT) && control.kind == FIELD &&
+        ((!special && (key == '\n' || key == '\r')) || (special && key == KEY_ENTER))) {
+        activate(app, (Control){.kind = INPUT_SUBMIT}); return;
+    }
     if (!special && app->page == WORKSPACE && key >= '1' && key <= '9') {
         int pane = (int)(key - '1');
         if (tb_layout_has_pane(&app->layout, pane)) { app->demo.pane = pane; }
@@ -945,14 +1161,15 @@ static void key_event(App *app, wint_t key, bool special)
         bool previous = key == KEY_UP || key == KEY_LEFT;
         app->focus = (app->focus + (previous ? app->count - 1 : 1)) % app->count;
         app->cursor = 0;
-    } else if (!special && key == 'q' && (app->page == WORKSPACE || app->page == LAUNCHER)) {
-        app->quit = true;
     }
 }
 
-static void initialize(App *app)
+static void initialize(App *app, bool demo)
 {
     memset(app, 0, sizeof *app);
+    app->demo_mode = demo;
+    app->native = tb_native_create();
+    if (app->native == NULL) { app->quit = true; }
     app->keyboard_focus = true;
     app->menu = -1;
     app->drag = -1;
@@ -971,10 +1188,11 @@ static void initialize(App *app)
         }
         app->forms[form].start_server = true;
     }
-    status(app, "DEMO only. Nothing is launched, connected or saved.");
+    status(app, demo ? "DEMO only. Nothing is launched, connected or saved." :
+                      "Choose native launch/attach. Embedded and remote remain previews.");
 }
 
-int tb_tui_run(void)
+int tb_tui_run(bool demo)
 {
     const char *term = getenv("TERM");
     if (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO) || term == NULL ||
@@ -1011,7 +1229,7 @@ int tb_tui_run(void)
         fputs("the-bugger: terminal initialization failed; check TERM/terminfo.\n", stderr);
     } else {
         App app;
-        initialize(&app);
+        initialize(&app, demo);
         app.colors = tb_theme_init();
         /* Raw input also disables XON/XOFF, so Ctrl+Q reaches the application. */
         (void)raw();
@@ -1037,15 +1255,47 @@ int tb_tui_run(void)
         if (supported == 0) {
             status(&app, "Mouse unavailable: use Tab, arrows and Enter. DEMO only.");
         }
-        (void)wtimeout(stdscr, 100);
+        (void)wtimeout(stdscr, 0);
         draw(&app);
-        while (!app.quit && interrupted == 0) {
+        uint64_t revision = app.native ? tb_native_revision(app.native) : 0;
+        while (!app.quit) {
+            if (interrupted != 0) {
+                if (app.native) { tb_native_close(app.native); }
+                if (!app.native || !tb_native_active(app.native)) { break; }
+            }
+            if (app.native) {
+                tb_native_pump(app.native, 0);
+                uint64_t next = tb_native_revision(app.native);
+                if (next != revision) {
+                    revision = next;
+                    if (app.live) { status(&app, tb_native_message(app.native)); draw(&app); }
+                }
+                if (app.leave_session && !tb_native_active(app.native)) {
+                    app.leave_session = false;
+                    if (app.exit_after_close) { app.quit = true; continue; }
+                    app.live = false; app.previewed = false; page(&app, LAUNCHER); draw(&app);
+                }
+            }
             wint_t key;
             int type = get_wch(&key);
-            if (type != ERR) {
+            if (type != ERR && interrupted == 0) {
                 key_event(&app, key, type == KEY_CODE_YES);
                 if (!app.quit && interrupted == 0) { draw(&app); }
+                continue;
             }
+            struct pollfd fds[6] = {{STDIN_FILENO, POLLIN, 0}};
+            int timeout = 100;
+            nfds_t count = 1;
+            if (app.native) {
+                count += (nfds_t)tb_native_pollfds(app.native, fds + 1);
+                timeout = tb_native_timeout(app.native, 100);
+            }
+            if (poll(fds, count, timeout) < 0 && errno != EINTR) { interrupted = SIGTERM; }
+        }
+        if (app.native) {
+            tb_native_close(app.native);
+            while (tb_native_active(app.native)) { tb_native_pump(app.native, 20); }
+            (void)tb_native_destroy(app.native);
         }
         if (drag_reporting) { (void)fputs("\033[?1002l", stdout); }
         (void)mousemask(0, NULL);

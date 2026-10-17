@@ -9,24 +9,23 @@ targets that use it.
 Release acceptance requires regression testing on native Linux x86-64,
 STM32/ARM (initially the NUCLEO-F446RE through OpenOCD), ESP32/Xtensa, and
 ESP32/RISC-V. QEMU-based ARM and RISC-V runs provide supplementary coverage
-where available. Compatibility claims will identify the setups actually tested;
+where available. Compatibility claims identify the setups actually tested;
 these acceptance targets do not limit the product architecture.
 
-**Development preview:** bare invocation
-opens the clickable launcher and a Monokai six-pane workspace. Configuration,
-source, instructions, registers, memory, variables, logs and execution actions
-are explicitly simulated. The workspace does not connect to GDB/OpenOCD,
-validate tools, persist profiles or access hardware yet. Independent backend
-development tools exercise the MI parser and controller without a debug target.
-The workspace supports pane resizing and dynamic tiled splits.
-`0.1.0` is the target version; it is not a declaration of release readiness.
+**Current development build:** native Linux launch/attach, Continue/Pause,
+program output, GDB console commands and Save Log are functional. Inspection
+panes explicitly report unavailable; stepping, breakpoint controls, profiles
+and remote/OpenOCD workflows are not implemented yet. `--demo` opens the
+separate, explicitly simulated visual reference.
+`0.1.0` is the target version, not a declaration of release readiness.
 
 ## Build and run
 
-Build with a C17 compiler (GCC or Clang), GNU Make, pkg-config and the ncursesw
-development headers/library. The application and tests are written in C.
-Sanitizer support is needed for `make sanitize` and clang-tidy for `make analyze`.
-GDB, OpenOCD and a board are not required to run the demo.
+Build on Linux with a C17 compiler (GCC or Clang), GNU Make, pkg-config and the
+ncursesw development headers/library. Native sessions require a compatible GDB
+in PATH or an explicitly selected executable. Linux pidfds provide owned-inferior
+crash recovery; unavailable support is reported. Application and test harnesses
+are C; a C++ compiler is used only for the optional debug-target fixtures.
 
 ```sh
 make
@@ -36,140 +35,162 @@ make
 ```
 
 `--version` prints `the-bugger 0.1.0`. Help/version work without a terminal.
-Bare invocation requires a TTY and usable TERM; redirected execution reports
-an actionable diagnostic and exits with status 1. Invalid arguments also exit 1.
+Interactive invocation requires a TTY and usable TERM. Invalid arguments and
+non-TTY interactive execution report an actionable error and exit 1.
 
-Select a session, edit its sample configuration, choose **Review preview**, then
-**Preview workspace**. Nothing is executed or saved. The Cortex-M4F sample from
-the visual reference remains clearly marked DEMO in every session preview.
+## Native Linux sessions
+
+Choose **Linux application**, configure **Launch** or **Attach**, then choose
+**Review session** and **Start native**. Inputs remain available after errors.
+
+Launch accepts an executable ELF, arguments, working directory, optional
+`NAME=value` environment entries and GDB executable. Arguments/environment use
+whitespace, quotes and backslashes for grouping, without shell expansion. For
+example, arguments `"two words" "" '$HOME;$(false)'` preserve a spaced argument,
+an empty argument and literal metacharacters. An environment entry such as
+`THE_BUGGER_TEST="hello world"` preserves its value. Paths are entered literally.
+Environment overrides are session-only.
+
+The session starts **Loaded**. Click **Continue** or press **F5** to run; click
+**Pause** to interrupt. State and PID come from GDB. In Console, **Command** opens
+a clearly labelled GDB command field; **Send** executes through MI. Errors leave
+the session usable. Other inspection views show unavailable messages and never
+substitute sample registers, source, assembly or memory.
+
+A local fixture is available for a first run:
+
+```sh
+make fixtures
+./build/the-bugger
+```
+
+Choose `./build/debug-fixture` as the executable. Continue prints its PID,
+directory, arguments, environment marker and ticks; Pause stops it. Console
+commands such as `info program` and `echo console-ok\n` exercise debugger output.
+The [native checklist](docs/testing.md#m05-manual-acceptance--real-native-linux)
+covers configuration errors, output, logs, cleanup and attach.
+
+Attach accepts a permitted PID and optional symbol ELF. GDB checks Linux ptrace
+permissions; the frontend does not change system security settings. For a
+reproducible same-owner fixture, run `./build/debug-fixture --allow-attach` in
+another terminal and enter its printed PID. That option changes only the
+fixture's per-process tracing permission. An attached process retains its
+original stdout/stderr destination.
+
+**Session** and **Quit** ask before closing an active native session. A launched
+program is terminated; an attached process is detached and resumed. Cancel keeps
+the session. Outside text fields, `q` closes/backs out of the current screen;
+from the workspace it closes the session after confirmation and returns to the
+launcher. At the launcher `q` stays open. `Ctrl+Q` quits the application from any
+screen, with confirmation for an active session. Text fields accept `q` normally;
+Escape cancels input. Ctrl+C/SIGINT, SIGTERM and SIGHUP run cleanup and restore the terminal.
+Unexpected disconnect and unconfirmed target cleanup are reported explicitly.
+
+Program output is captured in an isolated PTY, with stdout/stderr combined.
+Control and non-ASCII bytes are escaped before display. Console retains up to
+512 bounded lines; scroll to inspect older entries and return to the end to
+follow output. **Save Log** creates a new private file containing retained text.
+Existing files are preserved; open/write failures retain the input for correction.
+Interactive program input and a full terminal emulator are not provided yet.
 
 ## Workspace and controls
 
-The default tiled workspace shows Source, Disassembly and Registers above
-Memory, Locals and Console. Each pane has tabs and a view chooser. Watches,
-Call Stack, Breakpoints and Threads are available as demo views. Symbols,
-Peripherals and Stack are explicitly marked as unimplemented.
+The single default tiled workspace shows Source, Disassembly and Registers above
+Memory, Locals and Console. Each pane has tabs and a view chooser. The live
+workspace currently implements Console; other live inspection views are marked
+unavailable. With `--demo`, views display the simulated Cortex-M4F reference,
+including sample source/assembly, values and execution actions. Embedded/remote
+configuration still opens an explicit preview and launches no server.
 
 The active tab moves to the left. Mouse activation leaves inactive tabs in their
-normal style; keyboard focus remains visible and follows the activated tab.
+normal style; keyboard focus follows the active tab. Use clicks or Tab/Shift+Tab,
+arrows and Enter. In fields use Left/Right, Home/End, Backspace/Delete and Ctrl+U.
+Escape goes back; Quit, `q` in the launcher/workspace, or Ctrl+Q requests exit.
+Function keys have visible alternatives. Stepping, breakpoint and Reset actions
+remain unavailable in live sessions; demo actions are explicitly simulated.
 
-Use clicks or Tab/Shift+Tab, arrows and Enter. Escape goes back; Session reopens
-the launcher; Quit, `q` in the launcher/workspace, or Ctrl+Q exits. In fields use
-Left/Right, Home/End, Backspace/Delete and Ctrl+U to clear. The toolbar provides
-simulated F5/F9/F10/F11/Shift+F11 actions and clickable alternatives; Reset asks
-for confirmation. Tab into a pane body for arrow/PageUp/PageDown scrolling, or
-use the wheel. Click `...` for the view chooser; arrows/Enter or clicks select.
-Scrolling moves the viewport directly. Source and Disassembly highlight their
-current simulated execution positions; stepping moves these highlights.
-Overflowing panes have a vertical scrollbar: click the track to page or drag
-the thumb. Demo sessions start with no breakpoints.
-Keys `1`–`9` focus retained pane IDs; `[`/`]` cycles all panes. Future-view tabs
-explicitly say **NOT IMPLEMENTED**.
+Click `...` for view selection and pane actions. Wheel or a focused body with
+arrows/PageUp/PageDown scrolls; vertical scrollbar tracks page and thumbs drag.
+Keys `1`–`9` focus retained pane IDs; `[`/`]` cycles panes. There are no layout
+presets, layout selector, floating windows or Vim modes.
 
-Drag the one-cell gutters to resize columns, rows or nested splits. In `...`,
-choose **Pane actions >** to split right/below, close the selected tab, close a
-nested pane or enter keyboard resizing. In resize mode, Tab/Shift+Tab selects a
-divider, arrows move it, and Enter/Escape finishes. Pane menus support wheel and
-arrow navigation when their choices exceed the available height.
+Drag one-cell gutters to resize columns, rows or nested splits. Pane actions
+split right/below, close a tab, close a nested pane or enter keyboard resizing.
+In resize mode Tab/Shift+Tab selects a divider, arrows move it, and Enter/Escape
+finishes. Closing a nested pane expands its sibling. Each pane retains at least
+one tab; each of the six root tiles retains at least one pane.
 
-Splitting keeps the original pane and opens a Disassembly pane beside/below it;
-use its view chooser to change the view. Closing a nested pane expands its
-sibling. Each pane keeps at least one tab, and each of the six root tiles keeps
-at least one pane. The workspace supports up to 32 panes, with a minimum tiled
-size of 20 columns by 7 rows per pane. Splits that cannot fit report a diagnostic.
+The workspace supports up to 32 panes with a minimum tiled size of 20x7 cells per
+pane. At least 112x28 displays all six default panes; 140x44 is comfortable.
+Smaller terminals show a focused pane with controls to reach every retained pane.
+Below 48x18 a resize message preserves state. Tabs, splits and proportions survive
+shrinking and return when space permits.
 
-At least **112 columns by 28 rows** displays all six panes. Smaller terminals
-show one focused pane. The initial workspace has six accessible pane buttons;
-with additional panes, Prev/Next controls and `[`/`]` reach every pane. Splits,
-tabs and proportions survive terminal shrinking and return when space permits.
-Below 48x18 a controlled resize message preserves state.
+Monokai Pro uses consistent panel, header, tab and footer surfaces. Direct-color
+terminfo enables the exact palette; otherwise 256/8-color or monochrome is used.
+Standalone Alacritty advertising truecolor uses `alacritty-direct` when installed.
+`NO_COLOR=1 ./build/the-bugger` forces monochrome. Use a TERM entry supported by
+your terminal; the application does not alter terminal palettes or tmux settings.
 
-The Monokai Pro workspace uses distinct panel, tab, toolbar and footer surfaces,
-with semantic source and value colors. Direct-color terminfo enables the exact
-24-bit palette; otherwise the application uses 256/8-color or monochrome.
-Standalone Alacritty advertising truecolor uses its matching `alacritty-direct`
-entry when installed. `NO_COLOR=1 ./build/the-bugger` forces monochrome, retaining
-focus, tab and change indicators. Do not change TERM to an entry your terminal
-does not support.
+In tmux, opt into mouse handling with `set -g mouse on`. Function keys depend on
+the sequences the terminal/multiplexer reports; use clickable alternatives when
+intercepted. Truecolor forwarding also requires matching terminal capabilities;
+an inherited COLORTERM alone does not establish support.
 
-In tmux, opt into mouse handling with `set -g mouse on`. Special keys depend on
-the terminal's reported sequences; use the clickable toolbar when a key is
-intercepted. The application does not change tmux configuration.
-Truecolor inside tmux also requires RGB forwarding and a matching direct-color
-terminal description; an inherited `COLORTERM` alone does not establish support.
-
-## Build checks
+## Tests
 
 ```sh
 make test
+make test-native
 make sanitize
+make sanitize-native
 make analyze
 make CC=clang BUILD_DIR=build/clang test
 make test-tmux
 ```
 
-Artifacts are kept in ignored `build/`. `make clean` removes that directory.
-The compiler defaults to `cc`; `CC`, `CPPFLAGS`, `CFLAGS`, `LDFLAGS`, `LDLIBS`,
-`PKG_CONFIG`, and `BUILD_DIR` can be set on the Make command line. Use a fresh
-build directory or `make clean` when changing compiler or build flags.
-See [testing](docs/testing.md) for suite coverage and terminal checks.
-`test-tmux` additionally requires tmux and uses an isolated temporary server to
-check tab styling/focus, mouse forwarding, dragging, splitting and terminal resizing.
+`test` runs deterministic C unit/CLI/PTY suites without GDB or hardware; visual
+regressions explicitly use `--demo`. `test-native` runs actual GDB and C/C++ debug
+fixtures through the native API and TUI. It requires ptrace permission and tests
+launch/attach, output, console/log errors, crash recovery and cleanup. Sanitizer
+targets keep instrumentation in `build/sanitize/`; debug targets themselves stay
+uninstrumented. LeakSanitizer cannot run inside a tracing sandbox.
+
+`analyze` requires clang-tidy. `test-tmux` requires tmux and an available local
+socket; it owns an isolated temporary server and never modifies the user's server.
+Physical visual/input acceptance and real-board validation remain separate.
+See [testing](docs/testing.md), [test coverage](tests/README.md) and
+[progress](docs/progress.md) for exact evidence and outstanding gates.
+
+Artifacts are in ignored `build/`; `make clean` removes it. Compiler/build flags,
+`PKG_CONFIG` and `BUILD_DIR` are configurable through Make. Use a fresh build
+directory when changing compiler/flags. No Python or external test framework is
+required.
 
 ## Backend development tools
 
-An independent C parser and controller handle structured GDB/MI records,
-nonblocking subprocess I/O, command queues, deadlines and owned-process cleanup.
-They are not yet connected to the workspace; all debugger views remain simulated.
+`make test-mi` and `make mi-demo` exercise the owned incremental MI parser;
+[synthetic fixture notes](tests/fixtures/mi/README.md) distinguish valid records,
+deliberate failures and decoder exit codes. `make test-controller` and
+`./build/controller-demo ./build/fake-mi` exercise an explicitly fake C peer,
+without starting a target. These utilities are separate from the native launcher.
 
-```sh
-make test-mi
-make mi-demo
-./build/mi-dump --chunk 1 tests/fixtures/mi/invalid.mi
-```
-
-The demo decodes 22 synthetic records one byte at a time without launching GDB.
-The invalid fixture deliberately reports six errors, recovers for the following
-two records, and exits 1. The decoder also accepts a file or standard input;
-control bytes are printed as escapes. See the
-[fixture notes](tests/fixtures/mi/README.md) and
-[manual checks](docs/testing.md#m03-manual-acceptance).
-
-```sh
-make test-controller
-./build/controller-demo ./build/fake-mi
-```
-
-The controller harness uses an explicitly fake C peer. Wait for READY, then type
-`stop`, `run`, `error`, `hold`, `release`, `flood` or `quit` followed by Enter.
-It demonstrates correlated replies, timeouts, stale responses and clean shutdown.
-See [controller checks](docs/testing.md#m04-manual-acceptance) for context
-invalidation, fallback and failure scenarios. No target or board is launched.
-
-With GDB installed, `make test-gdb-startup` optionally checks real debugger
-startup, asynchronous/all-stop setup, feature enumeration and MI exit.
+`make test-gdb-startup` checks actual native GDB startup, setting values, feature
+enumeration and MI exit without an inferior. The resulting
 `./build/test-gdb-startup arm-none-eabi-gdb` checks an installed ARM GDB the same
-way. These probes do not launch an inferior or connect to hardware.
+way; it is not firmware/hardware acceptance.
 
 ## Project direction
 
-The debugger is being developed around live source/disassembly, execution
-control, breakpoints, architecture-neutral register inspection, memory, local
-variables, watches, frames and threads. The configurable workspace provides
-mouse-resizable panes and dynamic tiled splits. Saved session profiles and
-key remapping are planned.
+Live source/disassembly, stepping, breakpoints, architecture-neutral registers,
+independent Memory views, local variables, watches, frames and threads follow
+in bounded development gates. x86-64 disassembly will use AT&T syntax. Basic
+profiles and key remapping are planned. Firmware sessions will use an appropriate
+GDB/server, optionally OpenOCD, without assuming ARM registers or a universal
+probe backend.
 
-Native sessions will use a local GDB executable. Firmware sessions will use a
-target-compatible GDB and an appropriate GDB server, optionally OpenOCD.
-The design keeps target architectures separate from terminal presentation.
-For x86-64, disassembly will use AT&T syntax.
-
-The [roadmap](docs/plan.md) defines the v0.1.0 debugging scope and the expected
-path to v1.0.0, including editing, embedded text channels, additional inspection
-views and themes. These are planned capabilities, not features of the current
-demo. Release checks and actual coverage are documented in
-[testing](docs/testing.md) and [progress](docs/progress.md).
-
-See the [architecture](docs/architecture.md), [development plan](docs/plan.md),
-[progress](docs/progress.md), and [visual reference](docs/design/prototype.html)
-for implementation details and current coverage.
+The [roadmap](docs/plan.md) defines v0.1.0 scope and the expected path to v1.0.0,
+including editing, embedded text channels, additional inspection views and themes.
+See the [architecture](docs/architecture.md) and
+[visual reference](docs/design/prototype.html) for implementation boundaries and
+the workspace design.

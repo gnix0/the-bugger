@@ -248,7 +248,7 @@ void test_terminal_start_argv(TestTerminal *term, char *const arguments[], const
 
 void test_terminal_start(TestTerminal *term, const char *binary, const char *type, bool no_color)
 {
-    char *arguments[] = {(char *)binary, NULL};
+    char *arguments[] = {(char *)binary, "--demo", NULL};
     test_terminal_start_argv(term, arguments, type, no_color);
 }
 

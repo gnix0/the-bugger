@@ -15,8 +15,8 @@ git diff --check
 ```
 
 `all` compiles C17 with strict warnings including `-Wall -Wextra -Wpedantic`
-and `-Werror`. `test` builds and runs ten C test executables: two MI suites,
-two controller suites, demo, layout, renderer, CLI and two workspace PTY suites, described in
+and `-Werror`. `test` builds and runs eleven C test executables: two MI suites,
+two controller suites, native word parsing, demo, layout, renderer, CLI and two workspace PTY suites, described in
 `tests/README.md`. `sanitize` builds separately
 with ASan/UBSan; a runtime
 diagnostic is a failure, not a skip. `analyze` uses clang-tidy and fails on
@@ -34,6 +34,71 @@ Do not disable leak detection or label that environment failure a passing test.
 retained as `build/m01-*`; these are local evidence, not tracked artifacts.
 Durable command summaries and limitations belong in `docs/progress.md`.
 Changing compiler or flags requires a fresh build directory or cleaning.
+
+## M05 manual acceptance — real native Linux
+
+Run `make fixtures` and `make test-native` first. These separate real-GDB tests
+require native GDB, a C++ compiler for the target fixture, Linux PTYs/pidfds and
+ptrace permission. Default `make test` remains deterministic and board/GDB-free.
+`make sanitize-native` instruments the frontend and harnesses, keeping target
+fixtures uninstrumented so LeakSanitizer does not run inside the ptraced target.
+In restricted agent environments, real-GDB tests may need execution outside the
+ptrace sandbox. No global permission/sysctl setting is changed.
+
+1. Run `./build/the-bugger` without --demo. Choose Linux application / Launch.
+   Use `./build/debug-fixture` as the executable, `/tmp` as working directory,
+   `"two words" "" '$HOME;$(false)'` as arguments and
+   `THE_BUGGER_TEST="hello world"` as environment. Review session, then Start
+   native. Expect Loaded, no program PID yet, and five inspection panes with
+   explicit unavailable messages. Console is live. No Cortex-M sample data,
+   simulated registers, instructions or execution PC may appear.
+2. Click Continue or press F5. Expect Running and an actual PID. Console should
+   show the program's directory, literal arguments/environment and stderr marker.
+   Escape/OSC bytes appear as text, not terminal commands. Attached stdout is
+   deliberately different: it stays with that process's existing terminal.
+3. Click Pause. Expect an actual GDB stop and Stopped. In Console choose Command,
+   enter `info program`, Send. Try `this-command-does-not-exist` and verify a
+   readable error with a usable session. Then `echo console-ok\n` should work.
+   Input uses ordinary arrows/Home/End/Delete/Backspace/Ctrl+U and Tab/Enter.
+4. Choose Save Log and enter a new writable path. Expect success, retained
+   readable log text and mode 0600. Repeat that existing path and try an invalid
+   directory: expect errors with input retained and no overwrite. Pick a new
+   path to retry. Logs contain bounded retained history, not all past output.
+5. Scroll Console using wheel, scrollbar and keyboard; return to its end to
+   follow new output. Resize/split panes and switch views. The established tiled
+   workspace remains usable, and unavailable views never display demo values.
+   Over/Into/Out/Breakpoint/Reset remain unavailable in live sessions in M05.
+6. Click Session or Quit with the native session active. Verify the launch
+   termination confirmation; Cancel preserves the session. Confirm closes GDB
+   and the frontend-launched program, restoring the terminal. Repeat Ctrl+C,
+   SIGTERM or SIGHUP cleanup. A running program must not remain orphaned.
+   Also verify `q` closes the current screen outside text fields: from the
+   workspace it asks to close the session and returns to the launcher after
+   confirmation. In a confirmation, `q` cancels. At the launcher it stays open.
+   `Ctrl+Q` quits the application, asking before closing an active session.
+   Commands and filenames containing `q` remain editable; Escape cancels input.
+   The footer must make the distinction visible.
+7. In a second terminal run `./build/debug-fixture --allow-attach` and note its
+   printed PID. In the launcher select Attach, enter that PID, optionally choose
+   its ELF, review and start. Expect Stopped. Quit now asks to detach/resume;
+   after confirmation the fixture should survive and print new ticks. Stop the
+   fixture in its own terminal afterward. --allow-attach changes only that
+   fixture's ptrace permission; --deny-attach is the real denial fixture.
+8. Repeat with a nonexistent GDB path or bad ELF/PID, then correct it. Expect
+   actionable errors and retained configuration. Try a legitimate permission
+   denial without changing ptrace settings. Repeat the native mouse/keyboard
+   workflow in the owner's terminal/tmux with opt-in mouse support.
+9. Run `./build/the-bugger --demo` for the unchanged visual reference. It must
+   remain explicitly simulated and separate from native state. Embedded/remote
+   flows are still previews. Stop here; M06 requires separate acceptance and
+   owner commit/push.
+
+Automated scope: actual C/C++ launch, argv/cwd/env fidelity, output/control-byte
+isolation, pause/continue, console errors, Save Log open/short-write failures,
+normal exit, permitted/denied attach, external survival/resumption, bounded
+output floods, GDB crash cleanup, live TUI actions/confirmations, input retention
+and signal terminal restoration. Native main/step/inspection and optimized/
+stripped inspection evidence remain in M06–M14, not claimed by this gate.
 
 ## M04 manual acceptance
 
@@ -103,7 +168,7 @@ foundations for NFR-03/09 and FR-16; complete session cleanup is not claimed.
    `printf '7^done\n' | ./build/mi-dump`; expect one result record and exit 0.
 4. Run `./build/mi-dump --chunk 0`, then `echo $?`. Expect usage and exit 2.
    A nonexistent input path also reports an I/O diagnostic and exits 2.
-5. Optionally run the existing `./build/the-bugger` demo: presentation and
+5. Optionally run the existing `./build/the-bugger --demo` demo: presentation and
    interactions should be unchanged. No board, probe or tmux configuration is
    required for M03 parsing. Stop here; M04 needs separate authorization.
 
@@ -132,7 +197,7 @@ or hardware debugging acceptance.
 1. Run `make clean && make && make test`. Expect strict compilation and passing
    C unit, CLI and PTY suites. `--help` and `--version` also work without a TTY.
 2. In a terminal at least 112x28 (140x44 recommended), run
-   `./build/the-bugger`. Expect the three clickable startup choices and a DEMO
+   `./build/the-bugger --demo`. Expect the three clickable startup choices and a DEMO
    notice. Use arrows/Tab/Enter and clicks to select each session type.
 3. Edit paths with spaces and UTF-8 text. Exercise Left/Right, Home/End,
    Backspace/Delete, Ctrl+U, Tab and Shift+Tab. Switch native Launch/Attach and
@@ -157,7 +222,7 @@ or hardware debugging acceptance.
    single focused view. Keys 1-6 switch panes. Below 48x18 expect a resize notice;
    expanding restores tab/view state. Dragging/splitting was added in M02.
 9. Quit using the visible button or Ctrl+Q. Repeat with Ctrl+C. Expect normal
-   shell echo/cursor/mouse behavior afterward. Run `NO_COLOR=1 ./build/the-bugger`
+   shell echo/cursor/mouse behavior afterward. Run `NO_COLOR=1 ./build/the-bugger --demo`
    and verify that text labels, selection and markers remain understandable.
 10. Repeat startup, clicks, wheel, tabs, function keys and resize in tmux with
     the user's opt-in `set -g mouse on`. Do not change existing key bindings.
@@ -170,7 +235,7 @@ owner acceptance; PTY simulation alone does not establish those experiences.
 
 ## M02 manual test now
 
-1. Run `make test`, then `./build/the-bugger` in a 140x44 or larger terminal.
+1. Run `make test`, then `./build/the-bugger --demo` in a 140x44 or larger terminal.
    Choose Linux application, Review preview, Preview workspace. Compare the
    initial six-pane presentation with the accepted M01 interface and HTML.
 2. Drag each vertical column gutter and the horizontal row gutter with the
@@ -249,7 +314,7 @@ with `docs/design/prototype.html`, using the component checklist in
 [the terminal mapping](design/tui-mapping.md). Six panes or passing automated
 checks alone do not satisfy the visual gate.
 
-1. Run `make` and `./build/the-bugger` at 140x44 or larger. Inspect launcher
+1. Run `make` and `./build/the-bugger --demo` at 140x44 or larger. Inspect launcher
    surfaces, descriptions, aligned configuration fields and retained editing.
 2. Enter the workspace. Compare toolbar density, panel backgrounds/gutters,
    active/inactive tabs, table headings and panel footers against the HTML.
@@ -259,7 +324,7 @@ checks alone do not satisfy the visual gate.
    register names/values and yellow `+ changed` markers. All data remains DEMO.
 5. Resize to 112x28, then 80x24, then below 48x18 and back. Check clipping,
    focused-pane navigation and retained state. Repeat inside tmux with mouse on.
-6. Run `NO_COLOR=1 ./build/the-bugger` and verify labels, underline, focus,
+6. Run `NO_COLOR=1 ./build/the-bugger --demo` and verify labels, underline, focus,
    breakpoints and change markers remain readable.
 
 `tests/unit/test_render.c` inspects ncurses cells and exact direct-color pairs.
@@ -285,7 +350,7 @@ screen reader handles cursor save/restore around ncurses scrolling regions.
 
 ## P00 tab correction — manual test now
 
-1. Run `make` and `./build/the-bugger` in a 140x44 terminal. Choose Linux
+1. Run `make` and `./build/the-bugger --demo` in a 140x44 terminal. Choose Linux
    application → Review preview → Preview workspace. All values remain DEMO.
 2. In the upper-middle pane, click Call Stack while Disassembly is active.
    Call Stack moves left and has normal active styling; Disassembly immediately
@@ -296,7 +361,7 @@ screen reader handles cursor save/restore around ncurses scrolling regions.
 4. From that active tab, press Tab to focus the next tab. Keyboard focus is
    visible. Enter activates it; Left/Right still switch tabs and keep focus on
    the promoted tab. Existing view content/scroll, splits and resizing still work.
-5. Repeat with `NO_COLOR=1 ./build/the-bugger` and inside tmux with the owner's
+5. Repeat with `NO_COLOR=1 ./build/the-bugger --demo` and inside tmux with the owner's
    opt-in mouse support. Monochrome active tabs retain their selection marker;
    inactive tabs have no stale marker after mouse activation. Quit cleanly.
 6. Review the versioned roadmap and per-release matrix. Confirm the supplied
@@ -318,7 +383,7 @@ editable; OpenOCD is not a requirement for every architecture.
 
 | Environment | Minimum evidence | Current live evidence |
 |---|---|---|
-| Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | UNVERIFIED — backend not implemented |
+| Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | PARTIAL — M05 automated launch/attach/output/console/cleanup; inspection, later features and owner release acceptance pending |
 | STM32 / ARM | NUCLEO-F446RE fixture via GDB/OpenOCD; halt/step/break/watch, real code/register/RAM/variables, reset/disconnect/cleanup | UNVERIFIED |
 | ESP32 / Xtensa | Owner's board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED |
 | ESP32 / RISC-V | Owner's board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED |

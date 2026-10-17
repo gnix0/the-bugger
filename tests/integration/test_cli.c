@@ -45,7 +45,7 @@ int main(int argc, char *argv[])
     char *const extra[] = {argv[1], "--version", "--help", NULL};
     char *const hostile[] = {argv[1], "$(false);\033[2J", NULL};
     run(argv[1], version, 0, "the-bugger 0.1.0\n", false);
-    run(argv[1], help, 0, "debugging is not implemented", false);
+    run(argv[1], help, 0, "native launch/attach", false);
     run(argv[1], bare, 1, "interactive terminal", true);
     run(argv[1], invalid, 1, "--help", true);
     run(argv[1], extra, 1, "--help", true);

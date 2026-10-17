@@ -1,11 +1,17 @@
 # Development roadmap — v0.1.0 through v1.0.0
 
 Approved roadmap. Version targets are expected sequencing, not deadlines.
-M03 is accepted and committed/pushed as ee1cfc5. **M04 only** is authorized;
-M05 and later gates require the usual acceptance, owner commit/push and explicit
+M04 is accepted and committed/pushed as f29ce3c. **M05 only** is authorized;
+M06 and later gates require the usual acceptance, owner commit/push and explicit
 continuation.
 
 ## Product and preserved work
+
+Quit interaction: `q` closes/backs out of the current screen outside text
+fields; the workspace confirms session closure and returns to the launcher.
+At the launcher `q` stays open. `Ctrl+Q` exits the application from any screen,
+retaining active-session confirmation. Input fields accept literal `q` and use
+Escape to cancel. Footers explicitly distinguish close/back from quit app.
 
 The Bugger is a terminal-native GDB frontend written in C for firmware,
 system-level C/C++, and native applications across GDB-supported architectures.
@@ -18,8 +24,10 @@ M00, M01, M02 and the post-M02 navigation corrections are accepted and preserved
 Their commits are respectively 0f5d05b, 60df655, 094fa71 and a832eef. The former
 unimplemented M03–M07 grouping is replaced by M03–M18 below; Git history is not
 rewritten. Existing demo data proves visual behavior only. The MI parser and
-controller have independent diagnostic tools; live target sessions/inspection
-and profile persistence are not integrated into the workspace yet.
+controller have independent diagnostic tools. Native launch/attach, Continue/Pause,
+console/output and Save Log now integrate with the workspace; inspection and
+profile persistence remain in their later gates. Explicit --demo preserves
+the visual-reference sample and its tests independently of live sessions.
 
 AGENTS.md governs requirements and workflow. The approved visual/interaction
 reference is [the HTML prototype](design/prototype.html), not a backend. Preserve
@@ -277,7 +285,8 @@ IAR/C-SPY defects. These findings directly informed accepted requirements:
 
 ## Current authorization
 
-The owner completed M03, committed/pushed ee1cfc5 and explicitly authorized M04.
-Deliver only the nonblocking controller/transport and owned lifecycle, focused C
-tests/fake peer, documentation and diagnostic demonstration. Stop for M04 manual
-acceptance with the proposed commit message. Do not start M05.
+The owner completed M04, committed/pushed f29ce3c and explicitly authorized M05.
+Deliver only native launch/attach, Continue/Pause, console/output, Save Log and
+the associated C tests, documentation and real TUI demonstration. Inspection,
+stepping, breakpoint UI and profiles remain in their later gates. Stop for M05
+manual acceptance with the proposed commit message. Do not start M06.

@@ -112,6 +112,11 @@ int main(int argc, char *argv[])
         } else if (strcmp(command, "-gdb-exit\n") == 0) {
             reply(token, "^exit"); free(line); return 0;
         } else if (strncmp(command, "-echo ", 6) == 0) {
+            if (command[6] != '"') {
+                (void)printf("%s^done,bytes=\"%zu\"\n", token, strlen(command + 6) - 1);
+                (void)fflush(stdout);
+                continue;
+            }
             /* Reuse MI grammar only to decode generated argument bytes. */
             size_t length = strlen(command + 6);
             char *record_text = malloc(length + 9);

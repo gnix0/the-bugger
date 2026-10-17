@@ -2,6 +2,7 @@
 #define THE_BUGGER_TUI_H
 
 /* Owns terminal initialization and restoration; returns a process exit status. */
-int tb_tui_run(void);
+#include <stdbool.h>
+int tb_tui_run(bool demo);
 
 #endif

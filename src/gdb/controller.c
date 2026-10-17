@@ -262,8 +262,40 @@ static bool enqueue(TbGdb *gdb, const char *operation, const char *const args[],
     int prefix = snprintf(wire, TB_GDB_MAX_COMMAND + 1, "%" PRIu64 "%s", next, operation);
     size_t length = (size_t)prefix;
     bool valid = prefix > 0 && length < TB_GDB_MAX_COMMAND;
+    /* GDB's set/show MI commands consume a CLI-style raw argument tail.
+     * Quoting the setting name can return ^done without changing anything.
+     * Setting names are restricted; tail bytes cannot introduce a new record.
+     * Environment assignment values are literal, including spaces/quotes. */
+    bool setting = strcmp(operation, "-gdb-set") == 0 || strcmp(operation, "-gdb-show") == 0;
+    if (setting && (count == 0 || args[0] == NULL || args[0][0] == '\0')) { valid = false; }
     for (size_t i = 0; valid && i < count; ++i) {
         if (args[i] == NULL || length + 3 >= TB_GDB_MAX_COMMAND) { valid = false; break; }
+        if (setting) {
+            wire[length++] = ' ';
+            for (size_t j = 0; args[i][j] != '\0'; ++j) {
+                unsigned char c = (unsigned char)args[i][j];
+                bool name = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                            (c >= '0' && c <= '9') || c == '-' || c == '_';
+                if (c == '\r' || c == '\n' || (i == 0 && !name) || length + 1 >= TB_GDB_MAX_COMMAND) {
+                    valid = false; break;
+                }
+                wire[length++] = (char)c;
+            }
+            continue;
+        }
+        bool plain = args[i][0] != '\0';
+        for (size_t j = 0; plain && args[i][j] != '\0'; ++j) {
+            unsigned char c = (unsigned char)args[i][j];
+            plain = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                    (c >= '0' && c <= '9') || strchr("_./:=+-", (int)c) != NULL;
+        }
+        if (plain) {
+            size_t bytes = strlen(args[i]);
+            if (bytes + length + 2 >= TB_GDB_MAX_COMMAND) { valid = false; break; }
+            wire[length++] = ' ';
+            memcpy(wire + length, args[i], bytes); length += bytes;
+            continue;
+        }
         wire[length++] = ' '; wire[length++] = '"';
         const unsigned char *argument = (const unsigned char *)args[i];
         for (size_t j = 0; argument[j] != 0; ++j) {
@@ -514,8 +546,8 @@ static void write_commands(TbGdb *gdb)
 void tb_gdb_close(TbGdb *gdb)
 {
     if (gdb == NULL || gdb->state == TB_GDB_DISCONNECTED || gdb->closing) { return; }
-    /* No target is connected in M04. Later sessions must detach explicitly
-     * before closing the debugger; never turn this into target-group killing. */
+    /* The native session releases its target before this process primitive.
+     * Never turn debugger cleanup into process-group killing. */
     shutting_down(gdb, false);
 }
 

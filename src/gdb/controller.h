@@ -40,8 +40,10 @@ bool tb_gdb_destroy(TbGdb *gdb);
  * Adds --quiet --nx --interpreter=mi3. Startup-only MI2 fallback requires an
  * explicit unrecognized-mi3 diagnostic before any prompt/command. */
 bool tb_gdb_start(TbGdb *gdb, const char *executable, unsigned startup_ms);
-/* Internal command API: operation is -lowercase-with-hyphens. Each argument
- * is independently C-string quoted; no raw command/newline injection.
+/* Internal command API: operation is -lowercase-with-hyphens. Arguments are
+ * C-string quoted when not plain ASCII tokens. GDB's CLI-derived -gdb-set/-gdb-show
+ * commands use a restricted setting name and literal tails without CR/LF.
+ * No raw command/record injection; environment assignments remain literal.
  * Deadline starts at enqueue. STOP/CONTEXT requests require a stopped target.
  * A true return owns the copied arguments and yields one completion event
  * (REPLY/STALE/TIMEOUT/CANCELLED). cookie is opaque caller identity. */

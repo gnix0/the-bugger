@@ -11,14 +11,14 @@ LDLIBS ?=
 
 NCURSES_CFLAGS := $(shell $(PKG_CONFIG) --cflags ncursesw 2>/dev/null)
 NCURSES_LIBS := $(shell $(PKG_CONFIG) --libs ncursesw 2>/dev/null)
-PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb $(NCURSES_CFLAGS)
+PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session $(NCURSES_CFLAGS)
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c
+SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
-.PHONY: all test test-mi test-controller test-gdb-startup controller-demo mi-demo test-tmux sanitize analyze clean check-deps
+.PHONY: all test test-native fixtures test-mi test-controller test-gdb-startup controller-demo mi-demo test-tmux sanitize sanitize-native analyze clean check-deps
 
 all: $(BINARY)
 
@@ -94,10 +94,36 @@ $(BUILD_DIR)/test-gdb-startup: $(BUILD_DIR)/tests/integration/test_gdb_startup.o
 test-gdb-startup: $(BUILD_DIR)/test-gdb-startup
 	$(BUILD_DIR)/test-gdb-startup gdb
 
+$(BUILD_DIR)/debug-fixture: tests/fixtures/native/session.c
+	mkdir -p $(dir $@)
+	$(CC) -std=c17 -Wall -Wextra -Wpedantic -Werror -g -O0 $< -o $@
+
+$(BUILD_DIR)/debug-fixture-cpp: tests/fixtures/native/session.cpp
+	mkdir -p $(dir $@)
+	$(CXX) -std=c++17 -Wall -Wextra -Wpedantic -Werror -g -O0 $< -o $@
+
+fixtures: $(BUILD_DIR)/debug-fixture $(BUILD_DIR)/debug-fixture-cpp
+
+NATIVE_OBJECTS = $(BUILD_DIR)/src/session/native.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+
+$(BUILD_DIR)/test-native-words: $(BUILD_DIR)/tests/unit/test_native_words.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+$(BUILD_DIR)/test-native: $(BUILD_DIR)/tests/integration/test_native.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+$(BUILD_DIR)/test-native-tui: $(BUILD_DIR)/tests/integration/test_native_tui.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+test-native: all $(BUILD_DIR)/test-native $(BUILD_DIR)/test-native-tui fixtures
+	$(BUILD_DIR)/test-native $(abspath $(BUILD_DIR)/debug-fixture) $(abspath $(BUILD_DIR)/debug-fixture-cpp)
+	$(BUILD_DIR)/test-native-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/debug-fixture)
+
 test-tmux: all $(BUILD_DIR)/test-tmux
 	$(BUILD_DIR)/test-tmux $(abspath $(BINARY))
 
-test: all test-mi test-controller $(BUILD_DIR)/test-unit $(BUILD_DIR)/test-layout $(BUILD_DIR)/test-render $(BUILD_DIR)/test-cli $(BUILD_DIR)/test-tui $(BUILD_DIR)/test-workspace
+test: all test-mi test-controller $(BUILD_DIR)/test-native-words $(BUILD_DIR)/test-unit $(BUILD_DIR)/test-layout $(BUILD_DIR)/test-render $(BUILD_DIR)/test-cli $(BUILD_DIR)/test-tui $(BUILD_DIR)/test-workspace
+	$(BUILD_DIR)/test-native-words
 	$(BUILD_DIR)/test-unit
 	$(BUILD_DIR)/test-layout
 	$(BUILD_DIR)/test-render
@@ -110,6 +136,11 @@ sanitize:
 	UBSAN_OPTIONS=halt_on_error=1 $(MAKE) BUILD_DIR=build/sanitize \
 		CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
 		LDFLAGS='-fsanitize=address,undefined' test
+
+sanitize-native:
+	UBSAN_OPTIONS=halt_on_error=1 $(MAKE) BUILD_DIR=build/sanitize \
+		CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+		LDFLAGS='-fsanitize=address,undefined' test-native
 
 analyze:
 # Annex K replacements such as snprintf_s are not provided by Linux libc.
@@ -129,4 +160,5 @@ clean:
 	$(BUILD_DIR)/tests/integration/test_controller.d $(BUILD_DIR)/tests/support/fake_mi.d
 
 -include $(BUILD_DIR)/tests/support/controller_demo.d $(BUILD_DIR)/tests/integration/test_controller_demo.d \
-	$(BUILD_DIR)/tests/integration/test_gdb_startup.d
+	$(BUILD_DIR)/tests/integration/test_gdb_startup.d $(BUILD_DIR)/tests/unit/test_native_words.d \
+	$(BUILD_DIR)/tests/integration/test_native.d $(BUILD_DIR)/tests/integration/test_native_tui.d

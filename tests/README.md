@@ -4,6 +4,8 @@ Run `make test` from the repository root. All tests and support code are C,
 built with the same strict compiler flags as the application. No Python or
 external test framework is required.
 
+- `test-native-words`: quoted whitespace/backslash parsing, empty arguments,
+  literal metacharacters and input bounds, without a shell or GDB.
 - `test-controller`: nonblocking fake-peer command/reply correlation, reordered/
   late responses, argument byte round-trip, async state, session/stop/context
   epochs, bounded queues, timeouts/backpressure, floods, EOF/protocol errors,
@@ -26,7 +28,7 @@ external test framework is required.
 - `test-cli`: help/version, non-TTY diagnostics and invalid/literal arguments.
 - `test-tui`: starts the actual ncurses application in an isolated PTY, drives
   keyboard and SGR mouse input, and reads its ASCII screen labels. Covers all
-  three session previews, editing/retention, toolbar and function keys, reset
+  three explicit --demo session previews, editing/retention, toolbar and function keys, reset
   confirmation, tabs/view selection, compact/tiny resize, direct/256-color and
   monochrome rendering, and normal/SIGINT/SIGTERM/SIGHUP terminal restoration.
 - `test-workspace`: real PTY mouse press/move/release, global column/row and
@@ -54,7 +56,8 @@ These tests establish UI/layout evidence, not live debugging or complete
 FR-06/07/08/09/10/11/12/13/14/15/16/17 acceptance. M03's synthetic GDB/MI corpus
 is in `fixtures/mi/` with a provenance README; it establishes NFR-04 parser
 evidence. M04's C fake peer tests controller behavior without launching a target;
-real native C/C++ fixtures arrive from M05, native
+real native C/C++ fixtures are in `fixtures/native/`, with separate M05
+`make test-native` and `make sanitize-native` checks. Complete native
 acceptance in M14 and real board evidence in M17. Every release retests native
 x86-64 and the owner's STM32/ARM, ESP32/Xtensa and ESP32/RISC-V hardware;
 QEMU ARM/RISC-V adds coverage where available and never replaces board evidence.
@@ -81,6 +84,35 @@ It tests actual prompt/setup negotiation, feature enumeration and MI exit only:
 no executable, inferior, remote server or hardware connection. It is separate
 from the default deterministic suite. Use a directly quoted executable path
 when testing paths with spaces.
+
+The startup probe now queries actual mi-async/non-stop values. M05 exposed that
+quoting a CLI-derived -gdb-set setting name may produce ^done without changing
+it. Tests retain this real-GDB regression and reject newlines in raw setting
+tails. Ordinary MI parameters use safe ASCII tokens or escaped C strings.
+
+## M05 actual native tests
+
+`make test-native` requires actual native GDB and permitted ptrace. It runs:
+
+- `test-native`: C/C++ launch, literal argv/cwd/env, output isolation, real
+  Continue/Pause, console errors, log creation/preservation/short-write failures,
+  normal exit, allowed/denied attach, detached process resumption, bounded
+  output floods, GDB crash and owned/attached process policy.
+- `test-native-tui`: bare launcher, configuration retention after missing GDB,
+  live status without sample values, mouse actions, command/log forms, launch/
+  attach confirmations, cancellation and SIGINT/SIGTERM/SIGHUP terminal cleanup.
+
+Application/harness code remains C. Only the deliberately debugged target
+`fixtures/native/session.cpp` uses C++. Fixtures build with -g -O0 and no
+sanitizer instrumentation; `make sanitize-native` instruments the frontend and
+test harnesses with ASan/UBSan/LeakSanitizer. Instrumenting a target with LSan
+would conflict with its deliberate execution under GDB/ptrace.
+
+Native tests are separate from default `make test` so restricted/no-GDB hosts
+can still run deterministic checks. They must be run and recorded separately
+for native milestone acceptance. ptrace/pidfd/LeakSanitizer restrictions are
+reported as failures, not silently skipped or disabled. The fixture's optional
+per-process attach permission does not modify Yama or system configuration.
 
 `unit/test_render.c` checks direct-color palette pairs, semantic source/register
 colors, full-width selected rows and the monochrome active-tab indicator using

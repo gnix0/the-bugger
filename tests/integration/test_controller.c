@@ -144,6 +144,8 @@ static void normal(const char *peer)
     const char *const too_large[] = {large};
     CHECK(!tb_gdb_request(observer.gdb, "-echo", too_large, 1, TB_GDB_SESSION, 0, 100, NULL));
     CHECK(observer.oversized);
+    const char *const injected[] = {"environment", "TEST=value\n99-exec-run"};
+    CHECK(!tb_gdb_request(observer.gdb, "-gdb-set", injected, 2, TB_GDB_SESSION, 0, 100, NULL));
 
     request(&observer, "-stop", TB_GDB_SESSION, 60);
     pump_until(&observer, TB_GDB_STOPPED, 3000);
