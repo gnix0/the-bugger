@@ -1,3 +1,0 @@
-[session] Starting GDB to attach; ptrace permissions will be checked by GDB.
-[session] warning: the /proc/sys/kernel/yama/ptrace_scope setting of 1 might prevent attaching, see 'man 2 ptrace'\x0aptrace: Operation not permitted.
-[session] Attach/setup failed: check PID ownership, Yama ptrace_scope, container policy and capabilities; no permission settings were changed.
