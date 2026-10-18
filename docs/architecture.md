@@ -1,6 +1,6 @@
 # Architecture
 
-## Current implementation (M08)
+## Current implementation (M09)
 
 `src/main.c` handles help/version and starts the terminal application.
 `src/tui/app.c` owns startup/configuration/review/workspace pages, keyboard
@@ -18,7 +18,7 @@ The MI parser/controller and native session module now serve real Linux
 launch/attach sessions through the TUI. Console/output and Continue/Pause are
 live. Source/Disassembly and stepping use the code model; Call Stack and Threads
 use the selected-context model. Code breakpoints and Run to Selected use the
-breakpoint model. Other inspection
+breakpoint model. CPU Registers use the register model. Other inspection
 views have explicit unavailable messages. Explicit --demo
 retains simulated presentation separately. Embedded/remote remain previews;
 inspection, OpenOCD management and persistence await their own gates.
@@ -423,6 +423,32 @@ a structured result confirming every thread stopped establishes stopped state;
 the context model then refreshes the actual reported frame. Missing/running
 thread states stay unconfirmed, with a useful diagnostic. CLI warnings are logs,
 not evidence of execution state. This is native evidence, not remote-board proof.
+
+## M09 read-only CPU registers
+
+`src/model/registers.{c,h}` owns discovered numeric IDs/names and cached values.
+`-data-list-register-names` preserves empty-name positions; no ARM/x86 list is
+canonical. `-data-list-register-values --thread ... --frame ...` reads only
+requested visible rows, in batches of at most 32. Catalog capacity is 512 IDs;
+values are bounded to 1024 bytes and flagged when bounded. Missing values and
+errors are explicit, not zero-filled registers. Failures require explicit retry.
+
+The TUI declares visible row ranges each render pass. A separate context-demand
+flag allows a Registers-only workspace without conflicting with code demand.
+No register reads occur while running, hidden or idle. A shared format selector
+uses GDB Hex, Decimal, Octal, Binary, Raw and Natural representations. Canonical
+hexadecimal samples drive change comparison independently of display format;
+thread/frame/architecture changes reset baselines. Context generations and local
+format versions reject obsolete replies. Long/unavailable canonical values do
+not claim changes that cannot be established from complete samples.
+
+The pane uses existing horizontal/vertical scrolling, Refresh and `*` plus color
+for changed values. It labels selected context and stale data. GDB/MI provides
+no standard structured group-discovery command here; All (ungrouped) is honest
+fallback, without CLI-table parsing or guessed metadata. No writes, peripheral
+polling, SVD interpretation or register editing are added.
+
+Reference: GDB [MI data commands, register names and values](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Data-Manipulation.html).
 
 ## Approved direction
 

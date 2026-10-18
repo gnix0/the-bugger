@@ -12,6 +12,18 @@ this new PTY case passed in the owner's `make test` after correcting menu target
 Agents supply lengthy suite/stress/sanitizer commands for the owner to run;
 only quick focused checks run directly. Record whose run produced each result.
 
+- `test-registers`: x86/ARM target-discovered names, sparse IDs, a 600-name
+  catalog bound, long/unavailable values, numeric formats and canonical change
+  baselines, obsolete format replies, frame/thread changes, errors/malformed
+  responses and no automatic idle/running/hidden reads. `make test-m09-model`
+  runs this focused C peer test; `make test` includes it.
+- `test-registers-native` and `test-registers-tui`: actual GDB register discovery,
+  RIP/PC agreement, instruction stepping, numeric format controls, stable change
+  markers, Refresh, caller baseline reset and compact rendering. Run with
+  `make test-m09-native`; also included in `make test-native`/`sanitize-native`.
+  The native test establishes a real code_callee/main stack before caller
+  selection, respecting GDB's default backtrace boundary at main.
+
 - `test-images`: ELF32/64, both byte orders, code/data and ARM mapping symbols,
   relocation overflow, reset and 1,000 malformed/truncated metadata mutations.
 - `test-breakpoints`: structured breakpoint rows, multiple/pending/hardware

@@ -87,6 +87,11 @@ uninstrumented; sanitizer runtimes remain in the frontend and C harnesses.
 
 ## M08 code-breakpoint targets
 
+M09 also reuses `code-fixture` for real register/PC and caller-context checks.
+Its native test first stops at main, then establishes code_callee/main before
+selecting a caller; it does not assume GDB exposes libc frames above main.
+No new target source or frontend language dependency is required.
+
 `make fixtures` also builds:
 
 - `build/break-fixture` from `breakpoints.c`: silent C target with `m08_tick`,

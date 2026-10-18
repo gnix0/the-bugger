@@ -6,7 +6,8 @@ States: `planned` → `implemented` → `automated-verified` → `awaiting-user`
 `accepted`. Owner acceptance permits the last transition. Per the owner's later
 instruction, simple positive feedback without issues also means acceptance and
 next-gate authorization, unless specified otherwise; questions/instructions do
-not. The owner commit/push gate still applies before beginning another gate.
+not. The owner handles commits/pushes; "Approved" authorizes direct continuation
+without Git-state checks or repeated commit/push confirmation.
 
 | Milestone | Deliverable | State | Commit SHA |
 |---|---|---|---|
@@ -21,8 +22,8 @@ not. The owner commit/push gate still applies before beginning another gate.
 | M06 | Selected context, Call Stack and Threads | accepted | `1b21504` |
 | M07 | Live code, stepping modes, navigation/source recovery | accepted | `8d69475` |
 | M08 | Disassembly research/approved changes, then code breakpoints and Run to Selected | accepted | `55ecbd4` |
-| Post-M08 | Reversible pane tabs and combined documentation handoff | awaiting-user | — |
-| M09 | CPU registers | planned | — |
+| Post-M08 | Reversible pane tabs and combined documentation handoff | accepted | `0023150` |
+| M09 | CPU registers | accepted | Not supplied |
 | M10 | Independent Memory | planned | — |
 | M11 | Expandable Locals/Watches | planned | — |
 | M12 | Hardware data watchpoints | planned | — |
@@ -37,17 +38,60 @@ not. The owner commit/push gate still applies before beginning another gate.
 The approved expanded roadmap replaces only the old unimplemented M03–M07
 grouping. Older references to future milestone numbers in historical entries
 below describe their original scopes; [the current roadmap](plan.md) governs
-new work. Historical failures and acceptance evidence are retained. M08 is
-accepted; M09 follows the separate documentation commit/push gate. No complete
+new work. Historical failures and acceptance evidence are retained. M09 is
+accepted; M10 is the next implementation gate. No complete
 live workflow or release is accepted. Historical awaiting-user statements below
 describe their handoff dates and are superseded by the acceptance entries.
 
 Current workflow: deliver code/tests/build staging commands and a detailed
 Conventional Commit message; the owner manually validates and commits/pushes.
-An observed owner milestone commit establishes acceptance. Record its SHA and
-prepare documentation separately, updating README last. The owner commits that
-handoff before the next implementation gate. Agents run only quick checks;
+"Approved" establishes acceptance and permission to continue without Git checks
+or redundant confirmation. Record a SHA when the owner supplies it or it has
+already been observed; do not invent one. Prepare documentation separately,
+updating README last, and let the owner commit it. Agents run only quick checks;
 lengthy suites/stress/sanitizer matrices are supplied as commands for the owner.
+
+## M09 — accepted CPU-register inspection
+
+The owner accepted M09 with "All set. Proceed to documentations update and
+return with the commit message." M09's code SHA was not supplied or checked;
+no commit identity or remote push is claimed. The earlier pane-tab correction
+is accepted at the previously observed `0023150`. No Git writes were performed.
+
+Implemented target-discovered names and numeric IDs, preserving unnamed-register
+holes; selected thread/frame reads; Hex, Decimal, Octal, Binary, Raw and Natural
+formats; Refresh; scrollbars and non-color `*` changed-value indicators. Reads
+are bounded to visible rows in batches of 32, with 512 register IDs and 1024-byte
+display values. Unavailable, bounded, stale and error states remain explicit.
+Only structured MI data is used. No register writes, peripheral polling or
+guessed architecture groups were introduced; current display is All (ungrouped).
+
+Canonical hexadecimal samples keep format changes from creating false change
+markers. Thread/frame/architecture changes reset comparison baselines; obsolete
+context/format replies are rejected. Registers alone can request fresh selected
+context without making Source, Call Stack or Threads visible. No reads are
+repeated automatically while running, hidden or idle; failures wait for Refresh.
+
+| Command / evidence source | Outcome |
+|---|---|
+| Agent: strict `make -j4 all` and focused register/native/TUI executable builds | PASS; `/tmp/the-bugger-m09-build.log` and terminal output |
+| Agent: `build/test-registers "$PWD/build/fake-mi"` | PASS; synthetic x86/ARM names, sparse IDs, 600-name cap, long/unavailable values, formats, stale replies, frame/thread baselines, errors and bounded idle/running/hidden work |
+| Agent: `git diff --check` before final code delivery | PASS |
+| Owner: first `make test-m09-native` | FAILED at caller-frame selection: test assumed a caller above main |
+| Owner: corrected `make test-m09-native`, reported "All set" | PASS reported; real-GDB and PTY focused acceptance |
+
+The caller test now runs to code_callee before selecting its real main caller;
+GDB's default backtrace boundary at main is preserved. Initial synthetic-frame
+test setup was also corrected to request visible frame data before selection.
+No runtime failure was reclassified as a passing check. Broader GCC/Clang suites,
+sanitizer/static-analysis/tmux reruns and real-board results were not reported
+for M09 and are not claimed PASS. Hardware remains UNVERIFIED.
+
+FR-08/20 have scoped native register/format evidence and owner acceptance;
+NFR-04/07/09 gain bounded, architecture-neutral model coverage. M10 Memory,
+editing, SVD/peripherals, groups not supplied through structured MI and release
+acceptance remain outside this gate. This documentation-only follow-up reruns
+no tests and stops for the owner's documentation commit; it implements no M10.
 
 ## Post-M08 — reversible pane tabs and combined handoff
 

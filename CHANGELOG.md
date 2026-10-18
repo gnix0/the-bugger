@@ -4,6 +4,12 @@
 
 ### Added
 
+- Live read-only CPU Registers discovered through GDB/MI, with selected-frame/
+  thread values, six numeric formats, Refresh, scrolling and change indicators.
+  Bounded visible reads and explicit stale/unavailable/error states; honest
+  ungrouped fallback instead of guessed architecture register groups.
+- C x86/ARM model and native/TUI register regressions, including format-stable
+  change baselines, sparse IDs, long values and actual caller-frame selection.
 - Reversible pane-local tabs in `...`: included views alone have a filled-circle
   marker, defaults can be removed, and each pane retains at least one tab.
   Minimal terminals use an ASCII marker when the circle is unavailable.

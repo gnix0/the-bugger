@@ -15,7 +15,8 @@ these acceptance targets do not limit the product architecture.
 **Current development build:** native Linux launch/attach, Continue/Pause,
 program output, GDB console commands, Save Log, Call Stack, Threads, live
 Source/Disassembly, source/instruction stepping, code breakpoints and Run to
-Selected are functional. Other inspection panes report unavailable; profiles and
+Selected and read-only CPU Registers are functional. Other inspection panes
+report unavailable; profiles and
 remote/OpenOCD workflows are not implemented yet. `--demo` opens the
 separate, explicitly simulated visual reference.
 `0.1.0` is the target version, not a declaration of release readiness.
@@ -60,7 +61,7 @@ Environment overrides are session-only.
 The session starts **Loaded**. Click **Continue** or press **F5** to run; click
 **Pause** to interrupt. State and PID come from GDB. In Console, **Command** opens
 a clearly labelled GDB command field; **Send** executes through MI. Errors leave
-the session usable. Source/Disassembly show live stopped context; Registers,
+the session usable. Source/Disassembly and Registers show actual stopped context;
 Memory and Locals still report unavailable and never substitute sample values.
 
 A local fixture is available for a first run:
@@ -185,6 +186,27 @@ file show their location with unavailable text rather than loading every file.
 See the [code checklist](docs/testing.md#m07-manual-acceptance--live-source-and-disassembly)
 for optimized, stripped and relocated-source examples.
 
+## CPU registers
+
+Registers discovers names and numeric IDs from the active GDB target and reads
+the selected thread/frame. There is no hardcoded ARM or x86 register list.
+Changed values use yellow and `*`; changing display format does not itself
+create a change. Selecting another frame/thread resets the comparison baseline.
+
+Click the format control to cycle Hex, Decimal, Octal, Binary, Raw and Natural.
+**Refresh** rereads stopped values. Running values remain visibly stale; hidden
+or idle panes do not poll. Register editing is not implemented. GDB/MI does not
+provide standard structured register groups here, so the pane says **All
+(ungrouped)** rather than guessing groups from register names.
+
+Visible rows are fetched in batches of 32, with a 512-ID catalog and bounded
+1024-byte value buffers. Unavailable values, bounded output and errors are
+explicit. Existing horizontal/vertical scrollbars handle overflow. To try it,
+launch `build/code-fixture`, enter `start` in Console, focus Disassembly and step
+F11. Compare `rip` with the stopped instruction address, then change formats.
+See the [register checklist](docs/testing.md#m09-acceptance--live-cpu-registers)
+for frame selection and further checks.
+
 ## Code breakpoints and Run to Selected
 
 Click the Source gutter or select a source/instruction row and press **F9**
@@ -299,8 +321,8 @@ way; it is not firmware/hardware acceptance.
 
 ## Project direction
 
-Breakpoints and Run to Selected, architecture-neutral registers, independent
-Memory views, local variables and watches follow in bounded development gates.
+Independent Memory views, local variables and watches follow the existing code,
+breakpoint and CPU-register capabilities in bounded development gates.
 Basic profiles and key remapping are planned. Firmware sessions will use an appropriate
 GDB/server, optionally OpenOCD, without assuming ARM registers or a universal
 probe backend.

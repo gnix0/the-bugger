@@ -70,6 +70,12 @@ The six-pane workspace and its approved visual identity remain unchanged.
 
 ## Inspection
 
+M09's accepted live Registers pane uses actual target names/values, green normal
+values, yellow changed values and `*` as a non-color indicator. Existing pane
+scrollbars handle overflow; the footer offers Refresh, a cycling numeric format
+and All (ungrouped). Stale/unavailable/bounded/error states are explicit. This
+adds no register editing, new workspace mode or simulated live target data.
+
 The pane-local view menu toggles membership. Included views alone show a
 right-aligned filled circle (ASCII star fallback); unselected entries are blank
 there. Defaults start marked. Toggle to add/activate or remove a tab; other panes

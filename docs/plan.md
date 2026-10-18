@@ -1,12 +1,13 @@
 # Development roadmap — v0.1.0 through v1.0.0
 
 Approved roadmap. Version targets are expected sequencing, not deadlines.
-M00–M08 are accepted. M08's code commit is `55ecbd4`; the documentation
-follow-up includes the owner-authorized reversible pane-tab correction in one
-commit. That correction awaits review. M09 follows owner commit/push.
+M00–M09 and the reversible pane-tab correction are accepted. M08 is `55ecbd4`;
+the pane-tab correction is `0023150`. M09's SHA was not supplied or checked.
+This handoff updates documentation only; M10 Memory is next.
 Simple positive feedback without issues implies acceptance and next-milestone
 authorization unless specified otherwise. Questions/instructions do not. The
-owner commit/push gate always remains required before beginning the next gate.
+owner handles commits/pushes. "Approved" means continue directly without Git
+checks or repeated commit/push confirmation. No agent commits/pushes are allowed.
 
 ## Product and preserved work
 
@@ -32,7 +33,8 @@ console/output and Save Log integrate with the workspace. M06 adds selected
 context, Call Stack and Threads. M07 adds live Source/Disassembly, mixed/AT&T,
 focus-driven stepping, read-only code navigation and source recovery; the owner
 accepted it. M08 adds bounded code-aware browsing, live code breakpoints and
-Run to Selected. Other inspection and profile persistence remain in their
+Run to Selected. M09 adds read-only target-discovered CPU registers, formats
+and change indicators. Other inspection and profile persistence remain in their
 later gates. Explicit --demo preserves
 the visual-reference sample and its tests independently of live sessions.
 
@@ -378,12 +380,19 @@ IAR/C-SPY defects. These findings directly informed accepted requirements:
 
 ## Current authorization
 
-The owner accepted M08 and committed its code as `55ecbd4`. Complete the separate
-documentation commit/push before M09 CPU-register implementation. No M09 code
-is included in this handoff. Remote push of M08 was not independently observed;
-the local origin/main tracking ref still showed M07 when this record was made.
-Positive feedback implies continuation authorization as described above, after
-the owner commit/push gate; do not advance merely on successful automated tests.
+M09 is accepted following the owner's focused native/TUI verification. Complete
+the requested documentation handoff and return its commit message; no M10 code
+is included. On the owner's next approval, continue directly without Git-state
+checks or redundant confirmation. Automated success alone is not acceptance.
+
+M09 implementation uses structured register names/values, selected thread/frame,
+32-value batches, a 512-ID catalog and 1024-byte bounded display values. Formats
+follow GDB's Hex/Decimal/Octal/Binary/Raw/Natural modes. Canonical comparisons
+survive format changes; context changes reset baselines. Read only visible rows
+after stops/explicit refresh; retain honest stale/unavailable/bounded errors.
+Current GDB/MI lacks structured group discovery, so display All (ungrouped)
+without parsed CLI text or guessed target groups. Register editing and SVD remain
+deferred. See progress.md for acceptance, the corrected caller test and evidence.
 
 Historical M07 manual-review decisions retained in the accepted interface: provide one-cell vertical
 scrollbars matching horizontal styling and overflow-only horizontal bars in live code/Console/

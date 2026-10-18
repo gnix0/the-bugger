@@ -19,8 +19,8 @@ git diff --check
 ```
 
 `all` compiles C17 with strict warnings including `-Wall -Wextra -Wpedantic`
-and `-Werror`. `test` builds and runs fifteen C test executables: two MI suites,
-two controller suites, ELF/breakpoint/context/code models, native word parsing, demo, layout,
+and `-Werror`. `test` builds and runs sixteen C test executables: two MI suites,
+two controller suites, ELF/breakpoint/register/context/code models, native word parsing, demo, layout,
 renderer, CLI and two workspace PTY suites, described in
 `tests/README.md`. `sanitize` builds separately
 with ASan/UBSan; a runtime
@@ -40,9 +40,36 @@ retained as `build/m01-*`; these are local evidence, not tracked artifacts.
 Durable command summaries and limitations belong in `docs/progress.md`.
 Changing compiler or flags requires a fresh build directory or cleaning.
 
+## M09 acceptance — live CPU registers
+
+Accepted after the owner's corrected `make test-m09-native` run. This checklist
+reproduces the feature; no suites are rerun for the documentation handoff.
+
+1. Launch `build/code-fixture`; Console > Command > `start`. Registers discovers
+   actual target names and stopped values. No fabricated Cortex-M sample values
+   appear in a native session. All (ungrouped) is the current MI fallback.
+2. Focus Disassembly and step F11. Verify changed registers, especially rip,
+   have a `*` and changed-value color. Unavailable/bounded values stay explicit.
+3. Click the format control through Hex, Decimal, Octal, Binary, Raw and Natural.
+   These are read-only display operations; formatting alone must not create
+   changes or clear a valid changed marker. Refresh rereads while stopped.
+4. Add a code_callee breakpoint, Continue and select main in Call Stack. Registers
+   follows the inspected frame and resets comparison baselines. Do not assume
+   a caller above main: GDB normally ends its backtrace at main by default.
+5. Continue/Pause and verify stale retained values while running, then fresh
+   stopped values. Exercise scrollbars, long values, compact resize and a
+   Registers-only visible workspace. Hidden/running/idle views must not poll.
+
+Focused commands (owner-run): `make test-m09-model` for synthetic model coverage,
+`make test-m09-native` for actual GDB and PTY. They are also included in `make test`
+and `make test-native` respectively; sanitizer targets inherit those suites.
+Current M09 evidence is limited to the recorded focused checks and owner native/
+TUI acceptance. New full-suite, sanitizer, analyzer, tmux and hardware passes
+are not inferred. See progress.md for the initial test failure and correction.
+
 ## M08 acceptance — browsing, code breakpoints and Run to Selected
 
-Post-M08 tab correction, pending owner validation: open Registers' `...` menu.
+Accepted post-M08 tab correction: open Registers' `...` menu.
 Registers and Peripherals alone start marked. Add Threads, reopen and remove it;
 add it again and remove Peripherals instead. Threads stays active and Registers
 remains available. Another pane's markers reflect only its own tabs. Check
@@ -80,7 +107,7 @@ acceptance and real-board coverage remain separate.
    temporary state is cleaned up. Manage > Refresh explicitly retries failed
    cleanup; ambiguous ownership blocks execution rather than deleting guesses.
 9. Check resize, narrow panes, tmux with opt-in mouse, and clean session exit.
-   Registers/Memory/Locals and data-watchpoint UI remain later gates.
+   Registers are supplied by M09; Memory/Locals and data-watchpoint UI remain later gates.
 
 Owner-run focused native command: `make test-m08-native`; broad commands remain
 `make test test-native`, `make sanitize sanitize-native`, `make analyze` and
