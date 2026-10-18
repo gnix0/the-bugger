@@ -5,6 +5,55 @@
 Agents run quick, focused checks only. Lengthy suites, stress runs, sanitizer
 and compiler matrices below are commands for the owner to execute; wait for
 their results and distinguish owner-run from agent-run evidence in progress.md.
+The owner explicitly authorizes the relevant checks for the current M10
+completion effort. This exception does not authorize unrelated future suites.
+Native coverage validates the Linux adapter and shared models; embedded-first
+product scope still requires later ARM/Xtensa/RISC-V backend and physical evidence.
+
+## M10 inline Memory acceptance
+
+Contract: persistent Address/expression + Go in the pane; no address-entry page,
+fixed target address or mandatory SP default. No automatic reads on opening a
+tab/stop. Inspect exact deliberate ranges; browse adjacent bounded blocks only
+inside established ordinary-readable regions. Unknown/MMIO boundaries require
+explicit Go. Metadata and byte order belong to session adapters.
+
+Automated commands: `make test-m10-model`, `make test-m10-native`, `make test`,
+`make test-native`, `make test-tmux`; focused ASan/UBSan model/native/TUI tests in
+an isolated build directory. Strict warnings apply. Record actual results and
+tool/environment failures. M10 is accepted at implementation `2f951fb`; the owner
+reported its commit and requested this documentation handoff. The checklist
+below remains reproducible guidance, not individually reported manual results.
+Run the live Memory workflow in real tmux with
+`TB_MEMORY_TEST_TMUX=1 build/test-memory-tui "$PWD/build/the-bugger" "$PWD/build/memory-fixture"`.
+This creates and cleans its own mouse-enabled server; it does not change user tmux
+configuration. The current run results are in docs/progress.md.
+
+1. Build `make all fixtures`, run `./build/the-bugger`, launch
+   `build/memory-fixture`, then Console `start`.
+2. Open Memory: inline controls and empty data area are already visible. Click
+   the address field, type `&memory_buffer`, press Enter; repeat using Go.
+3. Verify `THE BUGGER MEMORY` in ASCII and bytes `54 48 45 20`; horizontal scroll
+   reveals long rows without hiding the toolbar. Change grouping/count and Refresh.
+4. Wheel/arrow/Page keys reach the cached block edges, then fetch earlier/later
+   bounded blocks within the process mapping. No automatic scans; unknown bounds
+   give a readable navigation notice and keep the previous data.
+5. Add Memory to another pane; inspect `&memory_other`. Addresses, drafts,
+   grouping and scroll stay independent through tab switching and resizing.
+6. Enter `0x1`, an unresolved symbol and `memory_checkpoint()`: readable errors,
+   retained previous bytes labelled stale where appropriate, and no inferior call.
+7. Console `break memory_checkpoint`, then Continue: inspect `memory_edge` for
+   known prefix/partial-read warning. GDB may report a boundary byte differently;
+   never invent missing bytes or claim exact hardware readability from this test.
+8. Step/continue/pause: retained memory becomes stale; Refresh fetches explicitly.
+   Close/relaunch: no bytes, region authorization or pending replies cross sessions.
+9. Verify source/instruction stepping, breakpoints, Registers, Console, splits,
+   q/Ctrl+Q, keyboard entry and terminal restoration; repeat mouse/key/resize in tmux.
+
+M17 hardware-only: real STM32 RAM/Flash and safe target-region metadata, ARM
+register/context agreement, OpenOCD errors/disconnect and controlled peripheral
+behavior; repeat applicable workflows on owner ESP32 Xtensa/RISC-V. All are
+UNVERIFIED until actual owner evidence, regardless of simulated MI success.
 
 Run from the repository root on Linux:
 

@@ -3,7 +3,12 @@
 Approved roadmap. Version targets are expected sequencing, not deadlines.
 M00–M09 and the reversible pane-tab correction are accepted. M08 is `55ecbd4`;
 the pane-tab correction is `0023150`. M09's SHA was not supplied or checked.
-This handoff updates documentation only; M10 Memory is next.
+M10 is accepted at `2f951fb8dbaa10f490e5abd6eba31d1ced1dc6af`. Its completed
+scope includes the inline Memory correction and embedded-first architecture review.
+This separate documentation handoff records that implementation; M11 still
+requires explicit authorization.
+Native Linux remains the implementation/validation focus through M14; embedded
+development is the primary product direction, with real hardware gates preserved.
 Simple positive feedback without issues implies acceptance and next-milestone
 authorization unless specified otherwise. Questions/instructions do not. The
 owner handles commits/pushes. "Approved" means continue directly without Git
@@ -17,8 +22,9 @@ At the launcher `q` stays open. `Ctrl+Q` exits the application from any screen,
 retaining active-session confirmation. Input fields accept literal `q` and use
 Escape to cancel. Footers explicitly distinguish close/back from quit app.
 
-The Bugger is a terminal-native GDB frontend written in C for firmware,
-system-level C/C++, and native applications across GDB-supported architectures.
+The Bugger is an embedded-first terminal-native GDB frontend written in C for
+microcontrollers, firmware and system-level C/C++ across GDB-supported architectures.
+Native Linux application debugging remains a fully supported capability.
 GDB supplies debugging; OpenOCD is an optional server, not a universal dependency.
 C17, Make, ncursesw, POSIX APIs, and C test harnesses remain the implementation
 foundation. C++ is permitted for debug-target fixtures. No simulator, browser
@@ -61,12 +67,13 @@ small testable interfaces, terminal/tmux compatibility, non-color indicators and
 reproducible evidence. Protocol gates particularly cover NFR-04; inspection gates
 NFR-07; transport/integration gates measure NFR-02 instead of inventing timings.
 
-Deliver code, test data, exact staging/test commands and manual steps first.
-After the owner accepts and commits the code, observe its SHA and separately
-update docs/progress.md, docs/testing.md and tests/README.md as relevant; update
-architecture notes when interfaces/ownership change, README for shipped behavior,
-and CHANGELOG for user-visible changes. Update README last. The owner commits
-the documentation separately. Map tests and handoffs to FR/NFR IDs.
+For this M10 completion, update requirements/instructions first, implement and
+validate, and prepare the documentation before manual acceptance (README last).
+Keep implementation and documentation staging paths separate. Stop for explicit
+acceptance; only then provide the implementation commit message. After the owner
+commits/pushes code, read its real SHA and finalize documentation/ledger references
+and confirmed acceptance results. Present the documentation commit message and
+stop. No M11 without explicit authorization. Map tests to FR/NFR IDs.
 Record exclusions, failed/blocked checks, and compatibility/hardware limitations.
 
 Lifecycle: implement → focused checks → provide staging commands and a proposed
@@ -77,8 +84,9 @@ owner commit/push → continuation. An owner-created milestone commit establishe
 acceptance; do not leave that gate awaiting approval. Simple positive feedback
 without issues also authorizes continuation unless specified otherwise;
 questions/instructions do not. Never bypass the commit/push gate.
-Always include the message at delivery so the owner can commit after a successful
-manual review. Providing it does not imply acceptance or authorize advancement.
+Normally include a proposed message at delivery. This M10 completion instead
+waits for explicit manual approval before presenting the implementation message,
+as requested by the owner. Neither a message nor tests authorize advancement.
 No autonomous commit, push, tag, merge, rebase, or milestone advancement. Neither
 automated success nor silence is acceptance. Every release requires its own owner
 acceptance; no prerelease suffixes are used.
@@ -87,8 +95,8 @@ Agents run only quick, focused checks. Supply exact commands for lengthy test,
 stress, sanitizer or compiler-matrix runs and wait for the owner's results.
 Record agent-run and owner-run evidence separately; pending checks are unverified.
 
-Current owner-approved exception: combine the pending M08 documentation and
-reversible pane-tab correction in one commit. This does not authorize M09.
+Historical accepted exception: M08 documentation and the reversible pane-tab
+correction were combined in `0023150`; this is not the current M10 commit policy.
 Pane `...` choices toggle local membership: included views alone have a filled
 circle at the right (ASCII star fallback); defaults start marked. Add/activate
 absent views or remove included ones, retaining a survivor and at least one tab.
@@ -141,9 +149,11 @@ falls back to assembly when source information is absent.
 Include Run to Selected; conditional breakpoints/ignore counts; Default / Require
 hardware code-breakpoint properties; hardware-assisted value-change/read/access
 watchpoints with explicit resource errors and no software fallback. Independent
-Memory views own address/expression, grouping and scroll. Read ordinary RAM after
-stops, but unknown/side-effect-prone memory only deliberately; no peripheral
-polling. Registers are target-discovered, grouped only where metadata supports it;
+Memory views keep inline navigation, address/expression, grouping and scroll.
+Go/Refresh are deliberate bounded reads; stops mark old data stale. Wheel/keys
+can fetch adjacent blocks only within established ordinary-memory regions;
+unknown/MMIO boundaries use explicit Go, with no speculative prefetch or polling.
+Registers are target-discovered, grouped only where metadata supports it;
 otherwise show an honest ungrouped display. Expand Locals/Watches lazily through
 MI variable objects and bounded arrays; no specialized STL display yet.
 
@@ -193,6 +203,55 @@ All new v0.1.0 capabilities are release evidence requirements, not just visible 
 | M16 / M15 | OpenOCD catalog/filter, board/advanced ordered argv, managed server, Reset/Halt and disconnect choices; no Load/Flash UI. | Discovery/order/no duplicated dependencies, paths, readiness/timeout/busy ports, fake-server failures, profiles and ownership. | Review exact scripts/argv; recover missing/bad setup; inspect actions/logs. No hardware claim from offline tests. FR-04/18/30. |
 | M17 / M14–M16 | Real release-target acceptance, starting STM32, then owner's Xtensa and RISC-V ESP32 boards. Reproducible fixtures; no automatic programming or unspecified-board claim. | Firmware fixture builds, architecture MI regressions and applicable native suites; QEMU ARM/RISC-V runs as supplementary coverage when available. | Owner programs fixtures externally; validates halt/step/break/watch, source/assembly/registers/RAM/locals, cleanup and disconnect on real boards. FR-15/31. |
 | M18 / M14 and owner-confirmed M17 | Release evidence, compatibility, docs and remaining defects; no deferred features. | Clean GCC/Clang, suites/sanitizers/analysis/tmux, stress and FR/NFR evidence audit. | README clean-checkout workflow, per-release matrix below, explicit owner release acceptance and existing owner license/provenance finalization. No autonomous tag. |
+
+## M10 completion contract and embedded prerequisites
+
+M10 owns FR-09/20/26 and relevant NFR-02/03/04/05/06/07/10/11. It is accepted
+at `2f951fb` (see the ledger). Its objective is a usable persistent Memory inspector within the
+existing six-pane workspace, preserving all accepted native debugging.
+
+- **Scope/deliverables:** inline Address/expression + Go above hex/ASCII, retained
+  drafts/settings across tabs, independent instances, byte grouping/count,
+  bounded forward/backward wheel and keyboard browsing, explicit Refresh,
+  partial/unavailable/error states, and session/context invalidation. No address
+  page, mandatory SP default, arbitrary initial target address, editing, search,
+  export, comparison or new layout. Empty viewer controls stay usable.
+- **Architecture:** keep navigation separate from request publication. Session
+  adapters supply byte order and established ordinary-memory regions. Generic
+  Memory never reads `/proc` or assumes a target OS/architecture. Native Linux
+  metadata is adapter-local; unknown metadata permits explicit Go and byte display.
+  Adjacent fetches require established bounds, never a blanket assumption that
+  unlisted addresses are RAM. Grouping does not promise a peripheral bus width.
+- **Automated acceptance:** C peer tests for endian/unknown maps, bounds,
+  partial/overlap/error replies, stale/hidden/rapid navigation and no unsolicited
+  reads; native fixture buffers and an unmapped boundary; PTY inline entry/Go,
+  keyboard/wheel browsing, ASCII/hex, independent panes, invalid input, resize
+  and terminal cleanup. Existing suites must remain green. Run focused sanitizer
+  coverage and tmux forwarding checks; record blocked tools without claiming PASS.
+- **Manual acceptance:** open the viewer directly, type a symbol/address inline,
+  verify actual hex/ASCII, navigate both directions, refresh after stepping,
+  compare two independently configured views, switch tabs, resize, recover a
+  bad address, and check existing source/assembly/register/breakpoint controls.
+  Real ARM/Flash/MMIO/probe acceptance remains M17, never inferred from PTYs.
+- **Documentation/completion:** this specification, architecture review,
+  tests/limitations and README are prepared before review. Acceptance remains
+  explicit; real implementation SHA and confirmed manual results are added only
+  after the owner's implementation commit, before the documentation commit.
+
+The [M10 architecture review](architecture.md#m10-embedded-readiness-review)
+assigns the following prerequisites to existing gates; no new feature family or
+milestone renumbering is needed:
+
+| Gate | Added prerequisite and deliverable | Objective acceptance |
+|---|---|---|
+| M11 | Share conservative read-only expression policy; variable-object requests/children stay bounded and context-scoped. | Calls/mutations rejected; C/C++ scalar/aggregate and unavailable-value fixtures; cleanup on resume/frame/session changes. |
+| M12 | Preserve hardware-resource/support errors as target capabilities; do not infer hardware slots from Linux results. | Synthetic ARM/Xtensa/RISC-V responses and actual native supported modes; no silent software fallback. |
+| M13 | Persist connection definitions/source rules/action mappings without runtime PID/region/value assumptions. | Existing-server definitions round-trip without running a native launch or claiming target connection. |
+| M14 | Complete native workflow and audit adapter boundaries before remote integration. | Existing launch/attach/output/pidfd/PIE/stack/register/Memory tests stay green; measured responsiveness and terminal/tmux checks. |
+| M15 | Extract only necessary shared session ownership/actions from `TbNative`; remote PIDs are identifiers, never local kill/proc targets. Populate explicit capabilities, target byte order/address units and image/ordinary-memory metadata where available. | Real external gdbserver plus no-local-PID ARM/big-endian/unknown-metadata MI fixtures; RAM/Flash browsing or honest explicit-Go fallback; errors/reconnect and external-server survival; no unconditional x86 settings. |
+| M16 | Backend-specific OpenOCD setup, capability-dependent Reset/Halt and disconnect target-state policy; installed script discovery and argv review. | No symbol load flashes/resets/resumes; duplicate-script/USB/port/timeout failure tests; only owned server cleanup; unsupported state transitions diagnosed. |
+| M17 | Validate target metadata/actions on STM32 first, then owner ESP32 Xtensa/RISC-V. | Real source/assembly/registers/RAM/Flash/locals/break/watch evidence, reset/disconnect choices and no speculative peripheral reads; native regression preserved. |
+| M18 | Audit actual capability matrix and host-vs-target limits. | All release-blocking evidence and owner acceptance; no unrun board marked supported. |
 
 ## M08 staged disassembly review and original scope
 
@@ -380,10 +439,10 @@ IAR/C-SPY defects. These findings directly informed accepted requirements:
 
 ## Current authorization
 
-M09 is accepted following the owner's focused native/TUI verification. Complete
-the requested documentation handoff and return its commit message; no M10 code
-is included. On the owner's next approval, continue directly without Git-state
-checks or redundant confirmation. Automated success alone is not acceptance.
+M09 and M10 are accepted. M10's observed implementation is `2f951fb`; finish the
+separate documentation handoff with the real hash and recorded evidence, provide
+its staging command/message, and stop for the owner's documentation commit/push.
+No M11 without explicit authorization. Automated success alone is not acceptance.
 
 M09 implementation uses structured register names/values, selected thread/frame,
 32-value batches, a 512-ID catalog and 1024-byte bounded display values. Formats

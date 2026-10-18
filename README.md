@@ -1,8 +1,9 @@
 # The Bugger
 
-A terminal-native debugger frontend implemented in C for firmware and
-system-level C/C++ development across x86, ARM, and other GDB-supported
-architectures, alongside native application debugging. GDB provides the debugger
+A terminal-native GDB frontend implemented in C, primarily for embedded firmware
+and system-level C/C++ development across ARM, Xtensa, RISC-V, x86 and other
+GDB-supported targets. Native Linux application debugging is also a supported
+use case. GDB provides the debugger
 engine through its structured MI interface; OpenOCD is an optional server for
 targets that use it.
 
@@ -15,11 +16,16 @@ these acceptance targets do not limit the product architecture.
 **Current development build:** native Linux launch/attach, Continue/Pause,
 program output, GDB console commands, Save Log, Call Stack, Threads, live
 Source/Disassembly, source/instruction stepping, code breakpoints and Run to
-Selected and read-only CPU Registers are functional. Other inspection panes
+Selected, read-only CPU Registers and Memory inspection with inline address
+navigation and bounded hex/ASCII browsing are functional. Other inspection panes
 report unavailable; profiles and
 remote/OpenOCD workflows are not implemented yet. `--demo` opens the
 separate, explicitly simulated visual reference.
 `0.1.0` is the target version, not a declaration of release readiness.
+Native Linux is the development and acceptance focus through M14. Remote and
+OpenOCD workflows follow before physical embedded acceptance; their current
+preview screens do not establish target support. See the [roadmap](docs/plan.md)
+and [architecture review](docs/architecture.md#m10-embedded-readiness-review).
 
 ## Build and run
 
@@ -62,7 +68,8 @@ The session starts **Loaded**. Click **Continue** or press **F5** to run; click
 **Pause** to interrupt. State and PID come from GDB. In Console, **Command** opens
 a clearly labelled GDB command field; **Send** executes through MI. Errors leave
 the session usable. Source/Disassembly and Registers show actual stopped context;
-Memory and Locals still report unavailable and never substitute sample values.
+Memory uses the M10 inspector described below; Locals still reports unavailable
+and never substitutes sample values.
 
 A local fixture is available for a first run:
 
@@ -207,6 +214,27 @@ F11. Compare `rip` with the stopped instruction address, then change formats.
 See the [register checklist](docs/testing.md#m09-acceptance--live-cpu-registers)
 for frame selection and further checks.
 
+## Memory inspection
+
+The Memory pane has an inline Address/expression field and **Go** above hex/ASCII
+data. Enter `&memory_buffer`, a pointer expression or a numeric address, then
+press Enter or click Go. Without a prior location it stays empty with its controls
+visible; no fixed target address or automatic stack-pointer read is assumed.
+
+Wheel and arrow/Page keys browse cached rows and bounded adjacent blocks within
+known ordinary-memory regions. Unknown/device boundaries give a navigation notice;
+enter an exact address and use Go to deliberately inspect it. No background scans
+or speculative peripheral prefetch run. **Options** controls byte count (1–1024)
+and grouping (1/2/4/8 bytes when byte order is known); grouping changes display,
+not a target bus-access width. Horizontal scrolling exposes long hex/ASCII rows.
+
+Each Memory pane keeps its own address draft, location, grouping and scroll.
+Stops/context changes mark retained data stale; **Refresh** reads deliberately.
+Partial bytes appear as `??`; failed reads retain the previous snapshot as stale.
+Calls, writes and user casts are rejected by the conservative expression policy.
+Memory editing/search/export/comparison remain deferred. See
+[manual acceptance](docs/testing.md#m10-inline-memory-acceptance).
+
 ## Code breakpoints and Run to Selected
 
 Click the Source gutter or select a source/instruction row and press **F9**
@@ -321,7 +349,7 @@ way; it is not firmware/hardware acceptance.
 
 ## Project direction
 
-Independent Memory views, local variables and watches follow the existing code,
+M10 delivers independent Memory views; local variables and watches follow the existing code,
 breakpoint and CPU-register capabilities in bounded development gates.
 Basic profiles and key remapping are planned. Firmware sessions will use an appropriate
 GDB/server, optionally OpenOCD, without assuming ARM registers or a universal

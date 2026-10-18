@@ -2,6 +2,42 @@
 
 Target: **v0.1.0**. No release has been accepted.
 
+M10 accepted (2026-10-18). The owner committed/sent the implementation and
+requested the separate documentation handoff. The observed implementation is
+`2f951fb8dbaa10f490e5abd6eba31d1ced1dc6af`
+(`feat(inspect): add persistent memory inspector`). Owner-created milestone
+commits establish acceptance under the agreed workflow. Individual manual
+checklist results were not separately enumerated and are not invented here.
+Documentation was prepared first and is now finalized against that real commit.
+No M11 authorization has been given.
+The product is embedded-first; Linux validation through M14 is preserved, and
+all physical embedded coverage remains UNVERIFIED.
+
+## M10 completion verification
+
+One-time explicit owner authorization allowed the agent to execute the following
+checks. It does not change the standing owner-run policy for lengthy tests.
+
+| Agent-run command | Result and evidence |
+|---|---|
+| `make -s -j4 all build/test-memory build/fake-mi build/test-memory-native build/test-memory-tui` | PASS, strict GCC C17 build |
+| `make test-m10-model test-m10-native` | PASS, `/tmp/the-bugger-m10-inline-focused.log`; inline Go/Enter, scalar expressions, hex/ASCII, bounded keyboard/wheel browsing, independent drafts, target-neutral region/byte-order cases and native partial reads |
+| `make test test-native test-tmux` | PASS, `/tmp/the-bugger-m10-inline-regression.log`; existing native/parser/controller/context/code/break/register/layout/terminal and tmux forwarding regressions |
+| `TB_MEMORY_TEST_TMUX=1 build/test-memory-tui "$PWD/build/the-bugger" "$PWD/build/memory-fixture"` | PASS, `/tmp/the-bugger-m10-inline-tmux.log`; full live Memory workflow in an isolated mouse-enabled tmux server |
+| `ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 make -s -j4 BUILD_DIR=build/m10-sanitize CC=clang CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-m10-model test-m10-native` | PASS, `/tmp/the-bugger-m10-inline-sanitize.log`; strict Clang build and focused ASan/UBSan/leak checks, without an unrelated full sanitizer matrix |
+| `git diff --check` | PASS before handoff |
+
+Earlier M10 failures were test assumptions: exact 32-byte boundary count (GDB
+can report an additional byte), transient footer text, equal-width pane hit
+regions/unsettled mouse events, and a source-only check searching all inspectors
+for STALE. Corrections preserve the asserted data paths; no failed runtime result
+was counted as PASS. The new correction adds the persistent inline viewer and
+adapter boundary documented in architecture.md. Physical STM32/ESP32/QEMU runs
+remain UNVERIFIED; no hardware support or release acceptance follows these checks.
+Owner acceptance is recorded above against the observed implementation hash.
+This documentation handoff remains a separate owner-created commit; no agent
+commit/push was performed and no release acceptance follows milestone acceptance.
+
 States: `planned` → `implemented` → `automated-verified` → `awaiting-user` →
 `accepted`. Owner acceptance permits the last transition. Per the owner's later
 instruction, simple positive feedback without issues also means acceptance and
@@ -24,7 +60,7 @@ without Git-state checks or repeated commit/push confirmation.
 | M08 | Disassembly research/approved changes, then code breakpoints and Run to Selected | accepted | `55ecbd4` |
 | Post-M08 | Reversible pane tabs and combined documentation handoff | accepted | `0023150` |
 | M09 | CPU registers | accepted | Not supplied |
-| M10 | Independent Memory | planned | — |
+| M10 | Persistent inline Memory and embedded-readiness review | accepted | `2f951fb8dbaa10f490e5abd6eba31d1ced1dc6af` |
 | M11 | Expandable Locals/Watches | planned | — |
 | M12 | Hardware data watchpoints | planned | — |
 | M13 | Basic profiles and key mappings | planned | — |
@@ -39,14 +75,14 @@ The approved expanded roadmap replaces only the old unimplemented M03–M07
 grouping. Older references to future milestone numbers in historical entries
 below describe their original scopes; [the current roadmap](plan.md) governs
 new work. Historical failures and acceptance evidence are retained. M09 is
-accepted; M10 is the next implementation gate. No complete
+accepted; M10 is accepted at the implementation commit above. No complete
 live workflow or release is accepted. Historical awaiting-user statements below
 describe their handoff dates and are superseded by the acceptance entries.
 
 Current workflow: deliver code/tests/build staging commands and a detailed
 Conventional Commit message; the owner manually validates and commits/pushes.
-"Approved" establishes acceptance and permission to continue without Git checks
-or redundant confirmation. Record a SHA when the owner supplies it or it has
+For this handoff, M10 acceptance does not authorize M11: finish the separate
+documentation commit and wait for explicit authorization. Record a SHA when the owner supplies it or it has
 already been observed; do not invent one. Prepare documentation separately,
 updating README last, and let the owner commit it. Agents run only quick checks;
 lengthy suites/stress/sanitizer matrices are supplied as commands for the owner.

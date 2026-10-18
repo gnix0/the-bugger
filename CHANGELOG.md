@@ -4,6 +4,12 @@
 
 ### Added
 
+- Persistent inline Memory address/expression and Go, independent navigation/
+  settings, bounded region-aware browsing, hex/ASCII,
+  target-endian grouping, explicit refresh and partial/error/stale states.
+  M10 accepted in implementation commit `2f951fb`.
+- Embedded-first product specification and architecture review, preserving native
+  Linux support and assigning remote/capability/metadata prerequisites to M15–M17.
 - Live read-only CPU Registers discovered through GDB/MI, with selected-frame/
   thread values, six numeric formats, Refresh, scrolling and change indicators.
   Bounded visible reads and explicit stale/unavailable/error states; honest

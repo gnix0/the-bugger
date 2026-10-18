@@ -11,6 +11,19 @@ this new PTY case passed in the owner's `make test` after correcting menu target
 
 Agents supply lengthy suite/stress/sanitizer commands for the owner to run;
 only quick focused checks run directly. Record whose run produced each result.
+The owner authorizes applicable verification for this M10 completion. Synthetic
+target cases are architecture coverage, never evidence of physical-board support.
+
+- `test-memory` / `make test-m10-model`: bounded independent instances, byte order,
+  ordinary/unknown-region browsing, partial/invalid/overlapping replies, expression
+  restrictions, obsolete replies and no opening/idle/running reads.
+- `test-memory-native` and `test-memory-tui` / `make test-m10-native`: real buffers,
+  inline field/Go, keyboard and mouse browsing, hex/ASCII, independent settings,
+  invalid input, stale refresh, unmapped boundary and resize/cleanup. Both are
+  included in `make test-native`; the model is in `make test`. See
+  [M10 manual acceptance](../docs/testing.md#m10-inline-memory-acceptance).
+  Set `TB_MEMORY_TEST_TMUX=1` when invoking `build/test-memory-tui` with the binary
+  and fixture paths to repeat that live workflow in its own isolated tmux server.
 
 - `test-registers`: x86/ARM target-discovered names, sparse IDs, a 600-name
   catalog bound, long/unavailable values, numeric formats and canonical change

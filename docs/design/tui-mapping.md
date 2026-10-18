@@ -20,6 +20,13 @@ interaction tests does not establish fidelity to the reference.
 
 ## Terminal adaptations and limitations
 
+M10 Memory uses an inline Address/expression field and Go above the data, as in
+the HTML inspector toolbar. It remains visible while the hex/ASCII body scrolls;
+no initial address form page. Each pane retains its draft and field scroll/cursor.
+Grouping/count and deliberate Refresh remain accessible in compact panes.
+An unknown initial address leaves an empty data area with usable controls.
+Native/Linux staging does not alter the embedded-first product or Monokai design.
+
 The owner's later launcher image supersedes the initial prototype's launcher
 presentation only. Its hierarchy is implemented with the existing Monokai roles,
 at most a 100-column card, 23 rows normally or 15 on compact terminals. Small

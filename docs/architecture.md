@@ -1,6 +1,11 @@
 # Architecture
 
-## Current implementation (M09)
+## Current implementation (M10 accepted)
+
+The product is embedded-first, with shared target-neutral inspectors. Linux is
+the frontend host and the currently operational target adapter, not the universal
+target OS. Native development/acceptance continues through M14; remote/OpenOCD and
+physical embedded validation remain M15–M17. See the review below for actual gaps.
 
 `src/main.c` handles help/version and starts the terminal application.
 `src/tui/app.c` owns startup/configuration/review/workspace pages, keyboard
@@ -18,7 +23,8 @@ The MI parser/controller and native session module now serve real Linux
 launch/attach sessions through the TUI. Console/output and Continue/Pause are
 live. Source/Disassembly and stepping use the code model; Call Stack and Threads
 use the selected-context model. Code breakpoints and Run to Selected use the
-breakpoint model. CPU Registers use the register model. Other inspection
+breakpoint model. CPU Registers use the register model. M10 Memory is accepted
+at `2f951fb` and uses the persistent inspector described below. Other inspection
 views have explicit unavailable messages. Explicit --demo
 retains simulated presentation separately. Embedded/remote remain previews;
 inspection, OpenOCD management and persistence await their own gates.
@@ -54,6 +60,52 @@ descriptions, simple ASCII icons/chevrons and a compact height below 28 rows.
 No image assets, new dependency, animation or background work is needed. It keeps
 native-vs-preview availability, missing profile persistence and q/Ctrl+Q policy
 explicit; session configuration and the debugging workspace are unchanged.
+
+## M10 embedded-readiness review
+
+Reviewed 2026-10-18 against actual modules, the HTML prototype and official
+protocol documentation. The table records the inspected pre-correction baseline
+and the assigned resolution; M10 corrections passed validation below and were accepted. These
+are scoped findings, not a claim that embedded
+connections already work. Existing Linux behavior is retained. The architecture
+does not need a general framework rewrite before M10 can finish.
+
+| Finding and evidence | Severity/consequence | Required action and gate |
+|---|---|---|
+| **Confirmed interaction defect:** `app.c` Memory Address action opens `MEMORY_INPUT`; the prototype Memory toolbar and IAR place navigation inside the inspector. | M10 blocker: breaks persistent navigation and separates controls from the data. | M10: inline field/Go, keyboard/mouse operation and pane-local drafts; bounded edge browsing with known-region guards. |
+| **Confirmed adapter coupling:** Memory byte-order discovery currently opens `/proc/PID/exe` in `model/memory.c`; no target-neutral region source exists. | M10 prerequisite: remote identifiers cannot safely be treated as local PIDs; absent metadata must not imply safe peripheral reads. | M10: move native metadata into `session/native.c`; inject byte order/ordinary-readable regions into Memory. M15 supplies remote metadata or explicit unknown state. |
+| **Confirmed current limitation:** `TbNative` owns models, launch/attach validation, PTY/pidfd recovery and execution methods; `app.c` routes live actions through it. Remote/OpenOCD launcher entries are previews. | High for M15, not a current native defect. Reusing native kill/proc/start logic for remote sessions would be incorrect. | M15: minimal shared session facade/capabilities and separate native/remote lifecycle; tests with absent/nonlocal target PID and external-server survival. Preserve pidfd safety for native. M16 owns only its spawned OpenOCD. |
+| **Confirmed metadata gap:** `code.c` calls `tb_images_native`; `images.h` also exposes architecture-neutral ELF loading/range queries. GDB performs actual decoding. | High remote dependency: code boundaries/relocation must come from target-appropriate image metadata, never local `/proc` for a remote PID. | M15: connect ELF/target image metadata and explicit unknown fallback; test Cortex-M Thumb addresses, executable/data boundaries and remote relocation without changing PC. No duplicate disassembler. |
+| **Confirmed capability gap:** native Continue can start an executable; Step uses MI context; Reset is not a live remote operation. Controller requires MI async/all-stop setup. | High before embedded connection: executable start, reset, halt, resume and disconnect differ across backend/target. | M15: explicit session/action capabilities and clear unsupported MI setup errors; M16: confirmed backend Reset/Halt/disconnect choice, no auto load/flash/erase/reset/resume. Test errors and state transitions. |
+| **Sound shared foundations:** MI parser/controller are curses-independent and enforce session/stop/context generations; selected-context and registers discover GDB thread/frame/register data. Register groups honestly remain ungrouped. | No demonstrated architectural defect; synthetic ARM cases are not hardware proof. | Keep. M15 validates architecture changes, single-thread bare-metal contexts, register availability/byte order and supported target descriptions. M17 checks actual ARM/Xtensa/RISC-V; specialized peripheral/RTOS metadata stays deferred. |
+| **Confirmed inspection limits:** Memory uses 64-bit addresses and 8-bit bytes; safe expressions force C parsing. User calls/casts/writes are rejected. Pointer formatting can otherwise read character pointees while resolving an address. | Last item is an M10 safety risk; non-octet or wider-address targets are future compatibility limits, not failures of the initial targets. | M10: resolve validated addresses as scalar integers to avoid automatic string printing. M11: bounded safe variable expressions. M15: disclose unsupported address units/width, preserve unknown states; do not claim every GDB architecture works. |
+| **Confirmed test gaps:** native suites exercise Linux GDB, C peer cases cover some ARM/big-endian shapes; no physical board evidence exists. Source TUI once rejected STALE anywhere, including unrelated Registers. | High if interpreted as embedded support; test assertions must match their own view lifecycle. | M10: Memory unknown-map/MMIO-boundary, delayed/partial replies, inline/scroll/session tests and view-scoped assertions. M14 native acceptance; M15 fake/real remote; M16 offline server faults; M17 physical boards; M18 release matrix. |
+
+Memory's revised contract is an owned per-instance navigation/configuration state
+and a separately versioned published byte snapshot. New requests cannot relabel
+old bytes at a new address. Errors retain the old snapshot with stale/error state;
+missing bytes are `??`, never invented zeros. Reads remain stop/context-scoped,
+single-flight and at most 1024 bytes. Idle, tab activation and stops do not probe
+unknown memory. Scrolling requests another block only on a deliberate boundary
+gesture within established ordinary-memory bounds; there is no speculative
+prefetch or unbounded accumulated listing. Explicit Go/Refresh remains available
+for exact RAM/Flash/MMIO requests when region metadata is absent. Display grouping
+is a presentation choice, not a guarantee about backend MMIO access width.
+
+Native metadata may establish anonymous/ordinary-file readable process mappings;
+device/special-file maps are not implicitly safe. Remote memory-map integration
+belongs to M15/M16 and must distinguish known ordinary regions from unknown or
+side-effect-prone addresses. GDB's remote XML format is not a universal direct MI
+query API, and its default assumptions about omitted regions are not frontend
+permission to probe them. No remote map is synthesized from STM32 constants.
+
+Primary references consulted, with relevant sections:
+
+- [IAR Memory window](https://docs.iar.com/ewarm/10.1x/en/c-spy-debugging/memory-and-registers/reference-information-on-memory-and-registers/memory-window.html): Toolbar (Go to), Display area, independent instances; functional reference only.
+- [GDB/MI data manipulation](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Data-Manipulation.html): `-data-evaluate-expression`, `-data-read-memory-bytes`, register commands. Memory reads return successfully read blocks; partial discovery is heuristic, not an exhaustive readability map.
+- [GDB memory-map format](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Memory-Map-Format.html): remote `qXfer:memory-map:read`, RAM/ROM/Flash types and omitted-range assumptions.
+- [GDB memory region attributes](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Memory-Region-Attributes.html): access modes and widths; display grouping does not set them.
+- [GDB target descriptions](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Target-Description-Format.html): architecture/features/register descriptions; backend and GDB support varies.
 
 ## M03 owned MI parser
 
@@ -449,6 +501,39 @@ fallback, without CLI-table parsing or guessed metadata. No writes, peripheral
 polling, SVD interpretation or register editing are added.
 
 Reference: GDB [MI data commands, register names and values](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Data-Manipulation.html).
+
+## M10 persistent Memory inspector
+
+Accepted in implementation commit `2f951fb`; the full hash and owner acceptance
+record are in [the ledger](progress.md). `src/model/memory.{h,c}` owns up to
+32 independent locations/settings and bounded byte/validity snapshots; `app.c`
+owns per-pane inline drafts/cursors and viewport scrolling. The toolbar stays
+above the body while body scrollbars use the adjusted body geometry. Enter and
+Go share navigation; invalid input stays in the pane. Switching tabs retains
+drafts and data. New sessions/split-slot reuse clear old instance state.
+
+Memory has no Linux `/proc`/PID dependency. `tb_memory_order` and
+`tb_memory_regions` take adapter metadata; region entries designate established
+ordinary memory only. `tb_memory_browse` validates the next complete bounded
+range, read completeness, overflow and current context before enqueueing. No
+region metadata grants nothing implicitly; explicit address/Refresh remains
+available. `session/native.c` reads ELF byte order and a bounded process-map
+catalog after stops, excluding device/special-file mappings from ordinary-memory
+authorization. Missing metadata is an honest unknown state.
+
+Snapshots never exceed 1024 bytes; one backend request is active at a time.
+Addresses are at most 64 bits and units are 8-bit bytes for the initial supported
+targets. The metadata catalog holds at most 128 regions; omitted or unavailable
+regions require explicit Go. Unsupported wider/non-octet targets need M15
+capability diagnostics, not fabricated values. GDB memory reads may use heuristic
+partial reads; the frontend preserves the exact reported bytes/validity rather
+than reconstructing inaccessible memory. Scalar address conversion suppresses
+character-pointer string printing. User calls/writes/casts remain rejected.
+
+Focused peer/native/TUI, full regression, real tmux and Clang ASan/UBSan checks
+passed; commands and logs are in [the ledger](progress.md#m10-completion-verification).
+Owner acceptance is recorded separately from automated checks; no physical
+embedded result or release acceptance is implied.
 
 ## Approved direction
 

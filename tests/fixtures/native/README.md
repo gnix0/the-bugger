@@ -3,6 +3,12 @@
 These small programs are debug targets authored for M05–M08, not fake debugger
 engines or hardware evidence. `make fixtures` creates:
 
+- `build/memory-fixture` from `memory.c` (M10): two initialized 2048-byte buffers,
+  an explicitly unmapped boundary and two `memory_checkpoint` calls around a
+  buffer change. Use inline Memory Go on `&memory_buffer` / `&memory_other` after
+  Console `start`. To inspect partial data, break at `memory_checkpoint`, Continue
+  and inspect `memory_edge`. These are real Linux target bytes, not embedded proof.
+
 - `build/debug-fixture` from `session.c`: prints its PID, working directory,
   argument values, THE_BUGGER_TEST, stdout/stderr markers and ticks.
   It runs until terminated, giving Continue/Pause and cleanup a stable target.
