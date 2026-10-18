@@ -5,8 +5,9 @@ M00–M09 and the reversible pane-tab correction are accepted. M08 is `55ecbd4`;
 the pane-tab correction is `0023150`. M09's SHA was not supplied or checked.
 M10 is accepted at `2f951fb8dbaa10f490e5abd6eba31d1ced1dc6af`. Its completed
 scope includes the inline Memory correction and embedded-first architecture review.
-This separate documentation handoff records that implementation; M11 still
-requires explicit authorization.
+M11 Locals/Watches is accepted at `77446434d8e6e1e1a356abaa4d94e028a1098036`.
+This separate documentation handoff records its implementation and validation.
+M12 remains planned; no implementation is included in this handoff.
 Native Linux remains the implementation/validation focus through M14; embedded
 development is the primary product direction, with real hardware gates preserved.
 Simple positive feedback without issues implies acceptance and next-milestone
@@ -67,13 +68,14 @@ small testable interfaces, terminal/tmux compatibility, non-color indicators and
 reproducible evidence. Protocol gates particularly cover NFR-04; inspection gates
 NFR-07; transport/integration gates measure NFR-02 instead of inventing timings.
 
-For this M10 completion, update requirements/instructions first, implement and
+Historical M10-specific sequence: update requirements/instructions first, implement and
 validate, and prepare the documentation before manual acceptance (README last).
 Keep implementation and documentation staging paths separate. Stop for explicit
 acceptance; only then provide the implementation commit message. After the owner
 commits/pushes code, read its real SHA and finalize documentation/ledger references
 and confirmed acceptance results. Present the documentation commit message and
-stop. No M11 without explicit authorization. Map tests to FR/NFR IDs.
+stop. This M10-specific sequence is historical; subsequent gates follow the
+lifecycle below. Map tests to FR/NFR IDs.
 Record exclusions, failed/blocked checks, and compatibility/hardware limitations.
 
 Lifecycle: implement → focused checks → provide staging commands and a proposed
@@ -84,7 +86,7 @@ owner commit/push → continuation. An owner-created milestone commit establishe
 acceptance; do not leave that gate awaiting approval. Simple positive feedback
 without issues also authorizes continuation unless specified otherwise;
 questions/instructions do not. Never bypass the commit/push gate.
-Normally include a proposed message at delivery. This M10 completion instead
+Normally include a proposed message at delivery. The accepted M10 completion instead
 waits for explicit manual approval before presenting the implementation message,
 as requested by the owner. Neither a message nor tests authorize advancement.
 No autonomous commit, push, tag, merge, rebase, or milestone advancement. Neither
@@ -96,7 +98,7 @@ stress, sanitizer or compiler-matrix runs and wait for the owner's results.
 Record agent-run and owner-run evidence separately; pending checks are unverified.
 
 Historical accepted exception: M08 documentation and the reversible pane-tab
-correction were combined in `0023150`; this is not the current M10 commit policy.
+correction were combined in `0023150`; subsequent gates use separate code/docs commits.
 Pane `...` choices toggle local membership: included views alone have a filled
 circle at the right (ASCII star fallback); defaults start marked. Add/activate
 absent views or remove included ones, retaining a survivor and at least one tab.
@@ -195,7 +197,7 @@ All new v0.1.0 capabilities are release evidence requirements, not just visible 
 | M08 / M07 | First research/review disassembly browsing, then implement owner-approved findings, then complete code breakpoints, conditions, ignore counts, pending/multiple locations, hardware requirement and Run to Selected. See the staged scope below; no logpoints/catchpoint UI. | Research decisions define focused disassembly tests; original breakpoint tests retain set/hit/disable/remove/events, invalid conditions, unresolved locations, exhausted hardware, temporary cleanup and intervening stops/signals. | Review/approve browsing decisions and validate them, then exercise gutter/keys/list/properties and run to line/address without damaging user breakpoints. FR-07/22/28 and FR-11/23/24. |
 | M09 / M06 | Discovered CPU registers, formats, changes and available groups; no editing/custom groups/bitfield decoder. | Native GDB and x86/ARM MI fixtures; unusual/large sets, unavailable values, frame/thread changes and change-baseline reset. | Compare GDB values, change format, step and inspect context-correct changes. FR-08/20, NFR-07. |
 | M10 / M06 and view-instance state | Independent Memory, bounded expression/address reads, hex/ASCII, grouping/target byte order; no editing/search/export/comparison. | Buffers, partial/unreadable ranges, invalid expressions, overflow/endian, separate instances/paging and no unsolicited MMIO reads. | Inspect two buffers independently, scroll/group, and verify invalid-address and deliberate-refresh behavior. FR-09/20/26. |
-| M11 / M06 | Expandable Locals/Watches, types/formats/change state, lazy children/array paging; no editing/Auto/Statics/STL-specific UI. | C/C++ aggregates, arrays/pointers, scopes/recursion, optimized/unavailable, invalid/mutating expressions, bounds and varobject cleanup. | Add/remove/expand watches, page arrays and change frames without fabricated data. FR-10/27. |
+| M11 / M06 (accepted) | Scoped read-only Locals/Watches, types/formats/changes, lazy children/array pages; pre-dispatch read authorization and explicit unknown-region inspection. No editing/Auto/Statics/STL-specific UI. | C/C++ aggregates/pointers, optimized/unavailable, invalid/mutating expressions, complete-footprint/region denial before requests, bounds, baselines and varobject cleanup. | Add/read/remove/expand watches, page arrays and change frames; no fabricated values or automatic unknown-region reads. FR-10/27. |
 | M12 / M08, M10, M11 | Hardware-assisted data watchpoints and Watches/Memory actions; no software fallback. | Value-change/read/access where supported; scope expiry, expression/width/alignment/resource failures, fallback rejection and backend reconciliation. | Trigger supported watch modes on known data, inspect reason, disable/remove and see unsupported errors. FR-25. |
 | M13 / session model and M07 | Basic XDG connection/source profiles, recent sessions and key remapping; no rich setup restoration. | Schema/round-trip/corrupt/truncated/atomic-write errors, argv/spaces, source rules, CRUD and key validation. | Save/reopen/edit/delete profile, recover bad data, remap intercepted key and retain mouse alternatives. FR-01/06/14/28. |
 | M14 / M05–M13 | Native integration/acceptance and failure hardening; no new feature family. | Complete C/C++ native suite, optimized/stripped/attach, repeated sessions/output floods, cleanup, sanitizers and measured UI/idle behavior. | Complete native live workflow directly/in tmux, splits, watchpoints, source recovery, profiles and Save Log. FR-02/03 and native release evidence. |
@@ -244,11 +246,11 @@ milestone renumbering is needed:
 
 | Gate | Added prerequisite and deliverable | Objective acceptance |
 |---|---|---|
-| M11 | Share conservative read-only expression policy; variable-object requests/children stay bounded and context-scoped. | Calls/mutations rejected; C/C++ scalar/aggregate and unavailable-value fixtures; cleanup on resume/frame/session changes. |
+| M11 (accepted) | Gate variable creation/evaluation/children before dispatch; complete safe-region proof for automatic reads, explicit inspection otherwise. Bounded context-scoped trees. | Calls/mutations rejected; no proof means no automatic request; explicit pointer/page actions, C/C++ fixtures and cleanup verified. |
 | M12 | Preserve hardware-resource/support errors as target capabilities; do not infer hardware slots from Linux results. | Synthetic ARM/Xtensa/RISC-V responses and actual native supported modes; no silent software fallback. |
 | M13 | Persist connection definitions/source rules/action mappings without runtime PID/region/value assumptions. | Existing-server definitions round-trip without running a native launch or claiming target connection. |
-| M14 | Complete native workflow and audit adapter boundaries before remote integration. | Existing launch/attach/output/pidfd/PIE/stack/register/Memory tests stay green; measured responsiveness and terminal/tmux checks. |
-| M15 | Extract only necessary shared session ownership/actions from `TbNative`; remote PIDs are identifiers, never local kill/proc targets. Populate explicit capabilities, target byte order/address units and image/ordinary-memory metadata where available. | Real external gdbserver plus no-local-PID ARM/big-endian/unknown-metadata MI fixtures; RAM/Flash browsing or honest explicit-Go fallback; errors/reconnect and external-server survival; no unconditional x86 settings. |
+| M14 | Complete native workflow; resolve outstanding full-project analyzer findings and audit adapter boundaries/value-producing requests, including Call Stack simple arguments, before remote integration. | Existing native regressions stay green; full analyzer passes or findings have explicitly reviewed dispositions; inventory automatic reads/policy, test denial before unsafe dispatch; measure responsiveness and terminal/tmux behavior. |
+| M15 | Extract necessary shared session ownership/actions from `TbNative`; remote PIDs never become local kill/proc targets. Populate explicit capabilities, byte order/address units, image/region metadata and conservative read authorization. Do not equate target-description readability with side-effect safety. | Real external gdbserver plus no-local-PID ARM/big-endian/unknown-metadata MI fixtures; no automatic value requests without complete safe-access evidence, explicit inspection fallback, RAM/Flash browsing, reconnect/external-server survival; no unconditional x86 settings. |
 | M16 | Backend-specific OpenOCD setup, capability-dependent Reset/Halt and disconnect target-state policy; installed script discovery and argv review. | No symbol load flashes/resets/resumes; duplicate-script/USB/port/timeout failure tests; only owned server cleanup; unsupported state transitions diagnosed. |
 | M17 | Validate target metadata/actions on STM32 first, then owner ESP32 Xtensa/RISC-V. | Real source/assembly/registers/RAM/Flash/locals/break/watch evidence, reset/disconnect choices and no speculative peripheral reads; native regression preserved. |
 | M18 | Audit actual capability matrix and host-vs-target limits. | All release-blocking evidence and owner acceptance; no unrun board marked supported. |
@@ -439,10 +441,11 @@ IAR/C-SPY defects. These findings directly informed accepted requirements:
 
 ## Current authorization
 
-M09 and M10 are accepted. M10's observed implementation is `2f951fb`; finish the
-separate documentation handoff with the real hash and recorded evidence, provide
-its staging command/message, and stop for the owner's documentation commit/push.
-No M11 without explicit authorization. Automated success alone is not acceptance.
+M00–M11 and the pane-tab correction are accepted. M11's implementation is
+`77446434d8e6e1e1a356abaa4d94e028a1098036`; the owner confirmed acceptance and
+commit/push. Complete this separate documentation handoff and stop for the
+owner's documentation commit. M12 remains the next planned implementation gate;
+this handoff does not begin it. Automated success alone is not acceptance.
 
 M09 implementation uses structured register names/values, selected thread/frame,
 32-value batches, a 512-ID catalog and 1024-byte bounded display values. Formats

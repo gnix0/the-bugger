@@ -2,16 +2,53 @@
 
 Target: **v0.1.0**. No release has been accepted.
 
-M10 accepted (2026-10-18). The owner committed/sent the implementation and
-requested the separate documentation handoff. The observed implementation is
-`2f951fb8dbaa10f490e5abd6eba31d1ced1dc6af`
-(`feat(inspect): add persistent memory inspector`). Owner-created milestone
-commits establish acceptance under the agreed workflow. Individual manual
-checklist results were not separately enumerated and are not invented here.
-Documentation was prepared first and is now finalized against that real commit.
-No M11 authorization has been given.
+M11 accepted (2026-10-18). The owner confirmed acceptance and commit/push, then
+authorized this separate documentation handoff. Observed implementation:
+`77446434d8e6e1e1a356abaa4d94e028a1098036`
+(`feat(inspect): add scoped locals and watches`). The owner specifically checked
+that `variables_ready(0)` is rejected as a call; other manual steps were not
+individually reported and are not invented here. M10 remains accepted at
+`2f951fb8dbaa10f490e5abd6eba31d1ced1dc6af`.
 The product is embedded-first; Linux validation through M14 is preserved, and
 all physical embedded coverage remains UNVERIFIED.
+
+## M11 completion verification
+
+Read-only Locals/Watches now expose selected-context values/types, numeric
+formats, change indicators, lazy aggregate/pointer/C++ expansion, bounded array
+pages and add/remove actions. Value-producing requests are authorized before
+dispatch. Unknown storage requires deliberate inspection; the native adapter
+does not claim complete expression-footprint proof for automatic values.
+See [architecture](architecture.md#m11-scoped-locals-and-watches) and
+[acceptance procedures](testing.md#m11-localswatches-acceptance).
+
+The owner explicitly authorized agent-run tests for this correction. This is a
+scoped exception, not permission to run future lengthy suites autonomously.
+
+| Agent-run command | Result and evidence |
+|---|---|
+| `make test-m11-model test-m11-native` | PASS after the final initialization fix; `build/m11-final.log`. C peer policy/bounds/stale/cleanup cases, actual GDB C/C++/optimized fixtures and live TUI actions. Strict compiler warnings enabled. |
+| `make test test-native` | PASS; `build/m11-regression.log`. Full existing unit/PTY/native regressions, before the final variable-type buffer initialization correction; focused tests were repeated afterward. |
+| `env ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 make -s -j4 BUILD_DIR=build/m11-sanitize CC=clang CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-m11-model test-m11-native` | PASS after final correction; `build/m11-sanitize.log`. Focused ASan/UBSan/leak checks, not a full sanitizer matrix. |
+| `make test-tmux` | PASS; `build/m11-tmux.log`. Existing isolated-server forwarding/layout/input regression, not the complete live M11 workflow under tmux. |
+| `make analyze` | FAIL; `build/m11-analyze.log`. Found M11 type-buffer initialization and style diagnostics, subsequently fixed; existing findings remain in Memory, native mapping parsing and older TUI register/Memory row calculations. Not counted as PASS. |
+| `clang-tidy src/model/variables.c --checks='-*,clang-analyzer-*,bugprone-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling' --warnings-as-errors='*' -- -Iinclude -Isrc/model -Isrc/gdb -std=c17` | PASS after correction; `build/m11-variables-analyze.log`. Does not clear full-project analyzer findings. |
+| `git diff --check` | PASS at implementation delivery; documentation checked separately at handoff. |
+
+Earlier failed native assertions exposed change-baseline invalidation and C++
+access-group assumptions; corrected comparisons and explicit group expansion
+passed the final tests. TUI failures involved accidental demo startup, incomplete
+redraw waits and raw-output capture exhaustion. The test now uses live argv,
+elapsed deadlines and completed-operation checks; the shared PTY reader keeps a
+bounded diagnostic tail and checks sanitizer evidence before eviction. No failed
+attempt is counted as passing. Previous owner-run native API passes are retained
+in the conversation; the table records the later agent-run final evidence.
+
+Known limitations: explicit reads until complete safe-footprint proof exists;
+no editing, specialized STL/pretty-printer display or live-while-running polling.
+M14 owns the remaining analyzer/read-policy audit; M15 remote integration must
+preserve pre-dispatch authorization. Board validation remains M17. No release
+acceptance or M12 implementation follows this documentation handoff.
 
 ## M10 completion verification
 
@@ -61,7 +98,7 @@ without Git-state checks or repeated commit/push confirmation.
 | Post-M08 | Reversible pane tabs and combined documentation handoff | accepted | `0023150` |
 | M09 | CPU registers | accepted | Not supplied |
 | M10 | Persistent inline Memory and embedded-readiness review | accepted | `2f951fb8dbaa10f490e5abd6eba31d1ced1dc6af` |
-| M11 | Expandable Locals/Watches | planned | — |
+| M11 | Scoped read-only Locals/Watches | accepted | `77446434d8e6e1e1a356abaa4d94e028a1098036` |
 | M12 | Hardware data watchpoints | planned | — |
 | M13 | Basic profiles and key mappings | planned | — |
 | M14 | Native integration acceptance | planned | — |
@@ -75,14 +112,14 @@ The approved expanded roadmap replaces only the old unimplemented M03–M07
 grouping. Older references to future milestone numbers in historical entries
 below describe their original scopes; [the current roadmap](plan.md) governs
 new work. Historical failures and acceptance evidence are retained. M09 is
-accepted; M10 is accepted at the implementation commit above. No complete
+accepted; M10 and M11 are accepted at the implementation commits above. No complete
 live workflow or release is accepted. Historical awaiting-user statements below
 describe their handoff dates and are superseded by the acceptance entries.
 
 Current workflow: deliver code/tests/build staging commands and a detailed
 Conventional Commit message; the owner manually validates and commits/pushes.
-For this handoff, M10 acceptance does not authorize M11: finish the separate
-documentation commit and wait for explicit authorization. Record a SHA when the owner supplies it or it has
+For this handoff, finish M11 documentation and stop for the owner's documentation
+commit; M12 remains planned. Record a SHA when the owner supplies it or it has
 already been observed; do not invent one. Prepare documentation separately,
 updating README last, and let the owner commit it. Agents run only quick checks;
 lengthy suites/stress/sanitizer matrices are supplied as commands for the owner.

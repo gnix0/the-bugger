@@ -4,6 +4,12 @@
 
 ### Added
 
+- Scoped read-only Locals/Watches with types, numeric formats, change indicators,
+  explicit reads, lazy aggregate/pointer/C++ expansion and bounded array pages.
+  Authorize value-producing requests before dispatch; unknown storage requires
+  deliberate inspection, with no automatic MMIO polling. Accepted at `7744643`.
+- C model, native C/C++/optimized and live terminal variable-inspection tests;
+  corrected live test startup/redraw waits and bounded PTY diagnostic capture.
 - Persistent inline Memory address/expression and Go, independent navigation/
   settings, bounded region-aware browsing, hex/ASCII,
   target-endian grouping, explicit refresh and partial/error/stale states.

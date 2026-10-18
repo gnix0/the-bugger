@@ -11,8 +11,20 @@ this new PTY case passed in the owner's `make test` after correcting menu target
 
 Agents supply lengthy suite/stress/sanitizer commands for the owner to run;
 only quick focused checks run directly. Record whose run produced each result.
-The owner authorizes applicable verification for this M10 completion. Synthetic
+The owner authorized applicable M10 completion and M11 correction checks. These
+are scoped exceptions. Synthetic
 target cases are architecture coverage, never evidence of physical-board support.
+
+- `test-variables` / `make test-m11-model`: authorization before value-producing
+  requests, complete-footprint/region rules, unknown-region denial, explicit
+  pointer inspection, bounded children/pages, formats/change baselines,
+  optimized/unavailable values, stale replies and owned-object cleanup.
+- `test-variables-native` and `test-variables-tui` / `make test-m11-native`: actual
+  GDB C/C++/optimized Locals/Watches and live TUI add/read/format/expand/page,
+  invalid calls, resize and terminal cleanup. `make test-m11-tui` reruns only the
+  terminal portion. The model is included in `make test`; both native checks
+  are included in `make test-native`. See
+  [M11 acceptance](../docs/testing.md#m11-localswatches-acceptance).
 
 - `test-memory` / `make test-m10-model`: bounded independent instances, byte order,
   ordinary/unknown-region browsing, partial/invalid/overlapping replies, expression
@@ -88,7 +100,9 @@ target cases are architecture coverage, never evidence of physical-board support
   repeated mouse switching, subsequent Enter and keyboard focus in direct color,
   256-color and monochrome.
 
-PTY expectations and shutdown have five-second deadlines. Each child gets its
+PTY expectations and shutdown have five-second deadlines. Raw output retains a
+bounded diagnostic tail; sanitizer evidence is checked before old bytes are
+discarded, independently of the parsed screen. Each child gets its
 own controlling terminal; no user's terminal settings are changed by the tests.
 The small VT reader supports ASCII labels plus ncurses line/scroll-region
 operations used when panes move and inverse attributes (excluding extended-color
@@ -102,7 +116,7 @@ LeakSanitizer needs execution outside ptrace-based agent sandboxes. No check
 is disabled to obtain a pass. `make analyze` runs clang-tidy over application
 sources. See `docs/testing.md` for commands and the manual/tmux checklist.
 
-These tests establish UI/layout evidence, not live debugging or complete
+UI/layout tests alone establish presentation evidence, not live debugging or complete
 FR-06/07/08/09/10/11/12/13/14/15/16/17 acceptance. M03's synthetic GDB/MI corpus
 is in `fixtures/mi/` with a provenance README; it establishes NFR-04 parser
 evidence. M04's C fake peer tests controller behavior without launching a target;

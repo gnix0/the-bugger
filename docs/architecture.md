@@ -1,6 +1,6 @@
 # Architecture
 
-## Current implementation (M10 accepted)
+## Current implementation (M11 accepted)
 
 The product is embedded-first, with shared target-neutral inspectors. Linux is
 the frontend host and the currently operational target adapter, not the universal
@@ -24,8 +24,9 @@ launch/attach sessions through the TUI. Console/output and Continue/Pause are
 live. Source/Disassembly and stepping use the code model; Call Stack and Threads
 use the selected-context model. Code breakpoints and Run to Selected use the
 breakpoint model. CPU Registers use the register model. M10 Memory is accepted
-at `2f951fb` and uses the persistent inspector described below. Other inspection
-views have explicit unavailable messages. Explicit --demo
+at `2f951fb` and uses the persistent inspector described below. Locals/Watches
+use the scoped variable model accepted at `7744643`, described below. Other
+inspection views have explicit unavailable messages. Explicit --demo
 retains simulated presentation separately. Embedded/remote remain previews;
 inspection, OpenOCD management and persistence await their own gates.
 
@@ -327,7 +328,7 @@ Live rows have mouse selection and arrow-key browsing followed by Enter.
 frame; caller inspection is labelled. Stack paging, Refresh, scrollbars and
 normal tiled resize/compact behavior reuse the existing pane controls. Snapshot
 revisions cause redraws through the native event loop. Source/Disassembly now
-consume this context; Locals remains M11. Code visibility requests selected
+consume this context; Locals/Watches also consume it through M11. Code visibility requests selected
 thread/frame metadata without fetching a whole stack when its view is hidden.
 Raw source paths are retained separately from escaped display labels.
 
@@ -535,6 +536,55 @@ passed; commands and logs are in [the ledger](progress.md#m10-completion-verific
 Owner acceptance is recorded separately from automated checks; no physical
 embedded result or release acceptance is implied.
 
+## M11 scoped Locals and Watches
+
+Accepted implementation: `77446434d8e6e1e1a356abaa4d94e028a1098036`.
+`src/model/variables.{h,c}` owns separate shared Locals/Watches trees; panes
+retain their own selection and scroll, but do not create independent watch lists.
+`session/native.c` routes events and drives the model without blocking the TUI.
+Local names come from `-stack-list-variables --no-values`; value inspection uses
+owned MI variable objects, not parsed CLI output or demo data.
+
+Names and expression syntax are not evidence that a value is safe to read.
+Creation, evaluation/formatting and child expansion pass authorization before
+dispatch. The optional adapter callback must establish the complete operation's
+read footprint without reading target memory to discover it. Automatic reads
+require every span to fit established ordinary regions, with unknown or
+side-effecting overlays taking precedence. Bounds are eight spans and 1024 total
+bytes for this proof. Readability alone, an apparent base address, or absence of
+`volatile` is insufficient. No complete proof means unknown, not necessarily unsafe.
+
+The native adapter currently supplies no complete expression-footprint proof.
+Values therefore require deliberate Read, expansion, page or format actions.
+Adding a watch or opening a tab grants no read. Explicit inspection applies to
+pointer children just as to roots; it grants only the current operation/context,
+not ongoing polling or nearby reads. Calls, mutations and unsupported expression
+forms remain rejected even on explicit Read. Explicit operations can access MMIO;
+bounded rows and strings do not guarantee a hardware transaction width or a
+complete byte limit for GDB's own value evaluation. This is not a sandbox around
+GDB or manual Console commands.
+
+Each tree holds at most 64 roots and 256 nodes, with 32 children per page and
+depth limited to 12. Names/types/values have fixed display bounds. Expansion is
+lazy, including C++ access-group children; specialized pretty-printer/STL objects
+are unsupported. Root Read discards its old child page. Numeric formats preserve
+canonical change comparisons across stops; scope changes reset comparisons and
+same-stop refresh does not erase the previous-stop baseline. Optimized-out,
+unavailable, failed and stale states remain explicit.
+
+One variable request is active at a time. Session/stop/context generations reject
+obsolete replies. Resume/context changes retire owned roots, and collapse/paging
+prunes children; cleanup uses session scope while value requests use context
+scope. No automatic idle/running/hidden value polling is introduced.
+
+Remaining integration work belongs to existing gates: M14 audits other value
+producers (including Call Stack's `--simple-values` arguments, which are not
+read-free); M15 carries authorization/unknown-region policy into remote adapters
+before embedded automatic inspection. Target descriptions must not be treated
+as complete MMIO safety evidence. Without sufficient proof, explicit inspection
+remains the fallback. M17 validates real hardware; synthetic policy tests do not
+establish peripheral safety on a board.
+
 ## Approved direction
 
 The corrected UI uses one configurable workspace: Source / Disassembly /
@@ -590,7 +640,8 @@ Introduce typed view-instance settings independently of shared target snapshots.
 Each Memory instance retains its own address/expression, grouping and scroll.
 Fetch only bounded visible ranges/expanded children. MI variable objects support
 lazy Locals/Watches and array paging; delete/recreate them as context changes.
-Conservatively reject mutating automatic expressions/inferior calls. Manual GDB
+Authorize value-producing variable requests before dispatch; expression filtering
+alone does not prevent side-effecting memory reads. Manual GDB
 console operations are deliberate; dedicated value editing is v0.2.0. Register
 names/values come from the target; group only where structured metadata supports
 it, otherwise use an ungrouped display. No CLI-text or hardcoded-ARM canonical set.

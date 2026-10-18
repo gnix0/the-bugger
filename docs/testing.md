@@ -5,10 +5,63 @@
 Agents run quick, focused checks only. Lengthy suites, stress runs, sanitizer
 and compiler matrices below are commands for the owner to execute; wait for
 their results and distinguish owner-run from agent-run evidence in progress.md.
-The owner explicitly authorizes the relevant checks for the current M10
-completion effort. This exception does not authorize unrelated future suites.
+The owner explicitly authorized agent-run M10 completion and M11 correction
+checks. These scoped exceptions do not authorize unrelated future suites.
 Native coverage validates the Linux adapter and shared models; embedded-first
 product scope still requires later ARM/Xtensa/RISC-V backend and physical evidence.
+
+## M11 Locals/Watches acceptance
+
+Accepted implementation: `7744643`; actual evidence and limitations are in
+[the ledger](progress.md#m11-completion-verification). Covers FR-10/27 and
+NFR-03/04/05/07/09/10/11. Name discovery does not grant value reads. Test
+authorization before value-producing MI dispatch, not just before rendering.
+Unknown and potentially side-effecting storage require explicit inspection;
+complete read-free footprint proof and ordinary-region evidence are required
+for automatic reads. Explicit pointer inspection follows the same policy.
+
+Commands:
+
+```sh
+make test-m11-model
+make test-m11-native
+# Rerun only the terminal portion when diagnosing its interaction:
+make test-m11-tui
+```
+
+Model cases cover complete/incomplete access proofs, unknown/side-effect region
+overlays, span/byte limits, explicit pointer inspection, lazy bounded trees/pages,
+formats/baselines, malformed and obsolete replies, context cleanup and no hidden,
+running or unknown-region automatic value reads. Native cases exercise C, C++
+and optimized fixtures. TUI coverage includes live launcher entry, add/read/format,
+selected-row actions, expansion/pages, rejected calls, resize and cleanup.
+The generic tmux suite tests forwarding; live M11 tmux acceptance remains a
+separate manual procedure. Synthetic authorization tests are not board evidence.
+
+1. Run `make all fixtures`, launch `build/variables-fixture` from the native
+   launcher. In Console, enter `break variables_ready`, then `run`.
+2. Open Watches, add `variables_global`. It should say Read required until
+   **Read**; then show `17`. Cycle its numeric format and confirm the value agrees.
+3. Add/read `variables_sample`, expand it, then expand/page `values`. Inspect
+   `count`, `text` and array children; removing a watch removes its tree.
+4. Add `variables_ready(0)`: the call/mutation restriction rejects it without
+   executing the function. Invalid names give explicit errors on inspection.
+5. Select frame 1 in Call Stack. Locals names belong to `variables_checkpoint`;
+   explicitly read/expand scalar, aggregate, pointer and array values. Expanding
+   a pointer is deliberate; a null/unavailable pointer must not fabricate children.
+6. Continue to the second breakpoint. Values become stale and need a new
+   deliberate read; `variables_global` is now `20`. Compare changed indicators,
+   then Refresh in the same stop and confirm the baseline is not lost.
+7. Switch thread/frame, tabs and pane sizes; confirm scope changes reset
+   comparisons and old replies do not populate the new context. Close/relaunch
+   without retaining old live values or authorization. Repeat keys/clicks/resize
+   in mouse-enabled tmux; verify normal terminal restoration on exit.
+
+Native checks do not prove MMIO safety. M14 audits other automatic value paths
+and the remaining full-project static-analysis findings; M15 validates remote
+authorization/unknown metadata before embedded use. M17 checks real target
+variables and deliberately inspected RAM/peripherals on the release boards.
+No arbitrary peripheral read is part of this native checklist.
 
 ## M10 inline Memory acceptance
 

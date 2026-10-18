@@ -16,9 +16,9 @@ these acceptance targets do not limit the product architecture.
 **Current development build:** native Linux launch/attach, Continue/Pause,
 program output, GDB console commands, Save Log, Call Stack, Threads, live
 Source/Disassembly, source/instruction stepping, code breakpoints and Run to
-Selected, read-only CPU Registers and Memory inspection with inline address
-navigation and bounded hex/ASCII browsing are functional. Other inspection panes
-report unavailable; profiles and
+Selected, read-only CPU Registers, Memory with inline address navigation and
+bounded hex/ASCII browsing, and scoped Locals/Watches are functional.
+Other inspection panes report unavailable; profiles and
 remote/OpenOCD workflows are not implemented yet. `--demo` opens the
 separate, explicitly simulated visual reference.
 `0.1.0` is the target version, not a declaration of release readiness.
@@ -68,8 +68,8 @@ The session starts **Loaded**. Click **Continue** or press **F5** to run; click
 **Pause** to interrupt. State and PID come from GDB. In Console, **Command** opens
 a clearly labelled GDB command field; **Send** executes through MI. Errors leave
 the session usable. Source/Disassembly and Registers show actual stopped context;
-Memory uses the M10 inspector described below; Locals still reports unavailable
-and never substitutes sample values.
+Memory uses the inline inspector described below; Locals/Watches expose scoped
+values through deliberate reads and lazy expansion, without substituting samples.
 
 A local fixture is available for a first run:
 
@@ -302,6 +302,29 @@ the sequences the terminal/multiplexer reports; use clickable alternatives when
 intercepted. Truecolor forwarding also requires matching terminal capabilities;
 an inherited COLORTERM alone does not establish support.
 
+## Locals and Watches
+
+Locals lists names for the selected thread/frame. Watches accepts names, members,
+constant indices and simple offsets, such as `counter`, `sample.count` or
+`buffer[3]`. Add expressions with **+ Watch**, select a row and choose **Read**.
+Calls and mutations are rejected; accepting an expression does not itself read it.
+
+Expand aggregates, arrays and pointers through their disclosure control or
+**Actions**. Actions also offers numeric formats, bounded child pages and watch
+removal. C++ access groups may require explicit expansion. Types and unavailable/
+optimized-out states follow GDB; specialized STL presentation and editing are
+not implemented.
+
+Values become stale when execution/context changes. Read again to inspect the
+new stop; changed-value indicators compare matching scope across stops. The
+current adapter requires explicit value reads because it cannot prove the
+complete memory access of arbitrary expressions safe for automatic inspection.
+Explicit pointer expansion remains available, but does not grant background
+polling. Take care when deliberately inspecting memory-mapped peripherals.
+
+See the [Locals/Watches walkthrough](docs/testing.md#m11-localswatches-acceptance)
+for a reproducible fixture and expected observations.
+
 ## Tests
 
 ```sh
@@ -349,9 +372,9 @@ way; it is not firmware/hardware acceptance.
 
 ## Project direction
 
-M10 delivers independent Memory views; local variables and watches follow the existing code,
-breakpoint and CPU-register capabilities in bounded development gates.
-Basic profiles and key remapping are planned. Firmware sessions will use an appropriate
+Independent Memory views and scoped Locals/Watches complement code, breakpoint
+and CPU-register inspection. Hardware data watchpoints, basic profiles and key
+remapping are planned. Firmware sessions will use an appropriate
 GDB/server, optionally OpenOCD, without assuming ARM registers or a universal
 probe backend.
 
