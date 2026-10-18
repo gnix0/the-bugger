@@ -3,7 +3,7 @@
 This specification describes the v0.1.0 target, not the availability of every
 feature today. [Roadmap status](roadmap.md#implementation-status) distinguishes
 completed implementation from pending integration and hardware validation.
-The [interface specification](design/tui-mapping.md) defines presentation and
+The [interface specification](requirements.md#interface-constraints) defines presentation and
 interaction; [architecture](architecture.md) defines the implemented boundaries.
 
 ## Product direction
@@ -128,7 +128,7 @@ Performance numbers are targets to measure, not grounds for hiding failures. The
 3. The same debugger workspace operates successfully for **native Linux x86-64** and **STM32 ARM via OpenOCD**, showing **real** source, disassembly, registers, memory and locals with coherent step/stop behavior.
 4. The startup menu and profiles are usable without writing raw OpenOCD/GDB CLI commands for the tested happy paths; all underlying choices remain inspectable/editable.
 5. `README.md` covers dependencies, build, invocation, native fixture test, OpenOCD setup for the F446RE, tmux mouse instructions, troubleshooting, limitations and a screenshot/terminal capture where feasible.
-6. [historical evidence](history/milestones.md), `CHANGELOG.md`, tests and provenance notes are up to date.
+6. [validation evidence](validation.md), `CHANGELOG.md`, tests and provenance notes are up to date.
    The every-release architecture matrix includes native x86-64 and real STM32/ARM, ESP32/Xtensa and ESP32/RISC-V; QEMU adds coverage without substituting for boards. Target-specific features list their actual supported setups.
 7. Final end-to-end validation and release authorization follow the [maintainer release procedure](maintaining.md#release-procedure). The release version is **`v0.1.0`**, without a prerelease suffix.
 
@@ -141,3 +141,148 @@ Do **not** allow these features to delay the release:
 - CMSIS-SVD peripheral bitfield UI, RTOS awareness, advanced instruction trace, timeline, profiling, cycle-accurate performance analysis, coverage, fault decoding.
 - A full IDE, build system integration, editor replacement, LSP, Vim modes, floating/detachable panes, SSH remote session administration, a theme marketplace or a plugin marketplace.
 - Silent auto-flashing, automatic reset-to-main and device probing that changes target state.
+
+## Interface constraints
+
+### Visual identity
+
+- **Monokai Pro standard** as the visual starting point; prioritize contrast and readability.
+- Suggested palette: background `#221f22`, panel `#2d2a2e`, raised surface `#353236`, border `#49454b`, foreground `#fcfcfa`, muted `#939293`, pink `#ff6188`, green `#a9dc76`, orange `#fc9867`, yellow `#ffd866`, purple `#ab9df2`, cyan `#78dce8`.
+- Use colors semantically and consistently: current execution line, breakpoints, selected row, changed registers/variables, running/halted/error statuses, assembly mnemonics, addresses, and C/C++ source syntax.
+- Provide a **256-color fallback** if truecolor is unavailable, with legible monochrome/minimal-color behavior rather than invisible text. No need to vendor proprietary Monokai assets.
+- Compact borders, understated tabs, a persistent status bar, and visible toolbar/action hints. Keep it fast and restrained rather than decorative.
+- Monokai Pro remains the default. Selection among 6–8 tested community-favorite themes is targeted around v0.5.0 or earlier; user-defined themes near v1.0.0. Neither changes the v0.1.0 visual reference.
+
+### Default workspace
+
+The initial **IAR-inspired** workspace is a 3-column by 2-row arrangement:
+
+|                 | Left              | Middle                    | Right                       |
+|-----------------|-------------------|---------------------------|-----------------------------|
+| **Upper row**   | Source            | Disassembly               | CPU Registers               |
+| **Lower row**   | Memory            | Locals                    | Console / Debug log         |
+
+Other characteristics already accepted:
+
+- Toolbar: **Continue F5**, **Pause**, **Step over F10**, **Step into F11**, **Step out Shift+F11**, **Toggle breakpoint F9**, and **Reset** (reset is capability-dependent and requires explicit confirmation where impactful).
+- Mouse interaction for buttons, tabs, view selector, row selection, source gutter breakpoint toggling, scrolling, and **resizable split dividers**.
+- Each pane has a title/tab bar and a menu (e.g. `...`) to switch views. The user may keep several views as tabs in one pane.
+- Activating a tab promotes it to the left. Inactive tabs immediately return to their normal styling; mouse activation must not leave a gray/reverse-video highlight on the old tab. Keyboard focus remains visibly associated with the intended tab after reordering.
+- **No layout presets or layout selection UI.** The six-pane arrangement shown below is the single approved default workspace. "IAR-inspired" is an internal design description, **not** a user-visible preset name or menu item. In particular, do not implement "Source focus", "Memory focus", or alternate named layouts.
+- **Dynamic split** of any pane horizontally or vertically, so more than six views can be shown; six is the **default**, not a limit. Resizing, tabs, and splitting modify the current workspace; they do **not** select predefined layout modes.
+- **Strictly tiled** workspace. No floating windows. Tabs, resize, focus, splitting, and closing views must maintain valid layout geometry.
+- When the terminal becomes too small, maintain a usable focused view with accessible tabs or a controlled compact mode. Never write outside the terminal, crash, or silently discard pane state.
+- The retired prototype used simulated example addresses, register contents, log entries and step behavior. The shipped debugger must clearly distinguish live data from demo/mock data.
+- A post-v0.1.0 workspace organization **decision gate** is planned for v0.2.1, before the v0.3.x view expansion. Evaluate pages and other navigation then; pages are an idea, not an approved layout or permission to redesign the current workspace now.
+
+### View inventory
+
+**Functional by v0.1.0** (underlying data must be live, not fabricated):
+
+- **Source**: current file/line, breakpoint gutter, scroll, syntax-aware coloring, GDB-known file selection, current-file text find, line navigation and missing-source recovery via GDB search directories/path substitutions.
+- **Disassembly**: addresses, bytes if available, mnemonics/operands, PC highlighting, optional mixed source/assembly and source connection where symbols permit. **AT&T syntax for x86-64**, not Intel. Address/symbol navigation and return to stopped context do not move execution.
+- **Registers**: discover register names from active GDB target; per-group display where supported, selectable numeric format, highlights for values changed since last stop; CPU architecture-neutral model.
+- **Memory**: persistent pane with an inline address/expression field and Go above hex/ASCII data; no initial address-entry page. Independent instances retain address, grouping and scroll. Wheel/keyboard browsing fetches bounded adjacent blocks within established ordinary readable regions, without speculative prefetch. Preserve a prior location; otherwise keep controls visible with a concise empty state. No mandatory SP initialization, fixed target addresses or broad scans. Explicit Go permits RAM/Flash inspection even without region metadata; unknown/MMIO boundaries require deliberate exact-range navigation. Show target byte order and partial/read errors. No editing/search/export/comparison yet.
+- **Locals**: scoped variables for selected frame, values/types and lazy expandable structs/unions/arrays/pointers/C++ fields with bounded array paging; honest optimized-out/unavailable states.
+- **Console**: readable debugger/transport/target events/errors, captured native output, clearly separate manual GDB command input through MI and basic Save Log with visible file-write errors. No dedicated program-input/serial/RTT/SWO controls yet.
+- **Watches**: add/remove/refresh expressions, the same bounded expansion, formats/types/change indicators as Locals; GDB-resolvable global/static expressions work without a dedicated Statics view. No specialized STL display or value editing yet.
+- **Call Stack**: show frames and select a frame, updating source and locals.
+- **Breakpoints**: gutter/F9 and list management, conditions, GDB ignore counts, pending/multiple locations and Default / Require hardware. Run to Selected uses temporary backend state without damaging user breakpoints. Hardware-assisted value-change/read/access watchpoints are capability-dependent, with clear slot/width/support errors and no silent software fallback.
+- **Threads**: list and switch when GDB reports multiple threads; simple/single-core embedded targets can show one.
+
+**Recognized but not required fully functional in v0.1.0**: peripheral/SFR inspector and custom register groups from CMSIS-SVD; stack memory with symbol annotations; Auto, Live Watch (while running), Statics, Symbols, Terminal I/O beyond basic output, RTOS views, Faults, trace, timeline, code coverage, profiling, advanced performance monitoring, image inspection and complex debug macros. These must not masquerade as implemented features. Either omit them from production selectors or show clearly marked `not implemented` descriptions; no deceptive interactive placeholders.
+
+**Design allowance:** device descriptions such as **CMSIS-SVD** should later enrich peripheral register naming and fields, but CPU register inspection must work without a device file. Register/memory reads of MMIO can have side effects: no aggressive automatic peripheral polling.
+
+Locals/Watches, memory and CPU-register editing are targeted for **v0.2.0**. Dedicated Stack is **v0.1.5**. The complete versioned deferred inventory in docs/roadmap.md is retained through v1.0.0; deferral never means forgetting a feature. No simulator feature or dedicated simulator integration is planned.
+
+### Interaction conventions
+
+- Mouse-first **and** keyboard-accessible. The visible controls are authoritative; key bindings are accelerators, not the only mechanism.
+- Overflow scrollbars appear only when needed. Vertical bars are one terminal cell wide, with a vertical `|` track and `#` thumb, retaining the horizontal bar's colors/weight rather than its sideways glyphs. Live Source/Disassembly, Console and context views support independent horizontal scrolling with thumb dragging, track paging and Left/Right keys, preserving pane sizes and execution context. Source line numbers stay fixed.
+- Disassembly retains surrounding instructions across steps. Initially show about four valid preceding instructions where GDB metadata permits; keep the viewport still through its middle, scrolling only to preserve roughly five visible rows above and below the PC (smaller margins in short panes, clamped to available context). Manual browsing stays put until stepping or Return to Stopped. Bounded earlier/later windows remain browsable without moving PC; never guess x86 instruction boundaries or treat this as execution history.
+- `q` closes/backs out of the current screen outside text fields; in the workspace it leaves the session for the launcher after confirmation. At the launcher it does not exit. `Ctrl+Q` quits from any screen, retaining active-session confirmation. Text fields accept a literal `q`; Escape backs out while editing. Footers distinguish these actions.
+- Standard desired shortcuts: `F5` continue, `F9` breakpoint, `F10` next/step over, `F11` step into, `Shift+F11` step out **where the terminal reports it**. Provide clickable alternatives and allow remapping if tmux/terminal intercepts or collapses special keys.
+- Startup-menu selection, text fields, dialogs, confirmation prompts and view changes must all be operable by clicks plus straightforward arrow/Tab/Enter/Escape navigation.
+- Terminal/multiplexer constraints are real: test mouse click, scroll, drag/resize and function keys in tmux with mouse enabled; avoid assuming a browser-level right click or perfect function-key support in every terminal. Use explicit `...` menus if context clicks aren't reliably conveyed.
+- Do not overwrite user bindings for tmux. If tmux requires `set -g mouse on`, document it as an opt-in prerequisite.
+- Source focus selects source F10/F11; Disassembly focus selects instruction F10/F11. Clicking toolbar/inspection panes preserves the last code-pane mode, visibly indicated. Both execution highlights use GDB PC/frame/source mappings; one source line can remain highlighted over several instructions. Browsing never moves PC. Optimized/inlined/tail-call behavior and unavailable values follow GDB; do not reconstruct missing semantics or fabricate precision.
+- Distinguish actual stopped PC from an inspected caller frame; refresh context coherently. Run to Selected is not Set Next Statement/change PC. Force Return and timed Autostep are deferred, distinct from ordinary Step Out.
+
+## Session configuration requirements
+
+### Launcher
+
+The launcher uses a larger card
+centered horizontally and vertically, Monokai Pro title/version and subtle rules,
+three full-row choices with terminal-friendly icons, descriptions and chevrons,
+and recent-session information below. The selected row has a clear surface and
+non-color indicator. Adapt spacing for small terminals; preserve all mouse and
+keyboard actions, honest preview/profile availability and v0.1.0 without suffixes.
+This launcher refinement does not change the approved debugging workspace.
+
+The startup screen should read approximately:
+
+```text
+ THE BUGGER                                            v0.1.0
+ ────────────────────────────────────────────────────────────
+ Start a debugging session
+
+   > Linux application             Launch or attach locally
+     Embedded target · OpenOCD     Board or adapter + target
+     Connect to GDB server         Existing remote endpoint
+
+ Recent sessions: [saved named profiles]
+
+ [Enter / click to select]                     [Configure...]
+```
+
+This is a TUI with clickable items, not an actual GUI/dialog wrapper. A compact wizard is preferable to a pile of flags on the command line.
+
+### Native Linux configuration
+
+Ask for:
+
+- Mode: **Launch** or **Attach**.
+- Launch: executable/ELF path, optional arguments, optional working directory, optional environment variables, optional GDB path (default `gdb`).
+- Attach: PID/process selection and optional symbols path. Show actionable Linux permission/`ptrace` diagnostics when the user is not permitted to attach.
+- Validate the executable or PID and tools *before* claiming connection; retain input on failure for correction.
+- Source search directories and ordered build-prefix → local-prefix mappings are available as source settings, with a recovery action for missing source. Save these in basic profiles; test correct file and breakpoint resolution after relocation.
+- Keep inferior stdout/stderr observable at least in a basic form; do not let target output destroy the debugger TUI. Full interactive TTY integration may follow later.
+
+### OpenOCD configuration
+
+Default **simple path**:
+
+- Firmware ELF **with symbols** (may already be flashed to hardware).
+- **Board** selection from OpenOCD's actual installed `board/*.cfg` scripts; show a friendly display label plus the exact underlying path. Search/filter list; don't claim a perfect human-readable identity can be derived from every file name.
+- GDB executable, default preference `arm-none-eabi-gdb` for ARM, but always editable.
+- OpenOCD executable (default `openocd`), editable host/port (default GDB port 3333 when applicable), and **Start OpenOCD for me** toggle.
+- A summary/confirmation showing the selected paths and **argument-vector preview**, e.g. `openocd -f board/st_nucleo_f4.cfg`. Show the resolved GDB endpoint and whether the tool will start a process or connect to an existing one.
+- Connection should normally be **non-destructive**: attach and halt/read where supported, but **do not automatically flash firmware, erase flash, force reset or resume** without the user's deliberate action/configuration.
+
+**Important:** OpenOCD board scripts can already include adapter and target scripts. **Do not append an additional `interface/*.cfg` or `target/*.cfg` automatically** to a board configuration; doing so may duplicate or conflict with its setup. For the reference NUCLEO-F446RE workflow, prefer `board/st_nucleo_f4.cfg` if present in the installed OpenOCD distribution; it sources `interface/stlink.cfg` and `target/stm32f4x.cfg` in the upstream script referenced below. Always verify the installed version and actual target behavior.
+
+**Advanced configuration** (accessible, but not forced on novice users):
+
+- Choose a manually selected **interface** script plus **target** script when no appropriate board script exists.
+- Choose one or more explicit config files in user-specified order, a custom `.cfg` file, OpenOCD search paths (`-s`), an existing OpenOCD process, or a different GDB server host/port.
+- Display the paths and order plainly. Do **not** pretend that mechanically parsing OpenOCD's Tcl scripts yields a fully reliable semantic board/adapter/device model. Use script discovery as a catalog, with an optional small curated friendly-label mapping, and execute through OpenOCD itself.
+- Friendly names must never hide the true config file or make unsupported hardware compatibility promises. Preserve nonstandard scripts and manual override choices.
+- Firmware **flash/load UI is deferred beyond v0.1.0** (v0.4.x, ahead of independent text-channel integrations). It will be a deliberate confirmed action with progress/errors and a defined reset policy. v0.1.0 loads ELF symbols and debugs firmware already programmed through existing tools; symbol loading must not program the target.
+
+Handle failed board discovery, missing `.cfg`, busy ST-LINK, USB permission error, GDB port collision, absent device, GDB incompatible architecture, and server startup timeout with clear recoverable diagnostics.
+
+Embedded disconnect/exit asks whether to leave halted or resume where supported. Disclose backend/script limitations and state-transition failures. Do not silently rewrite external server scripts or kill external servers. Reset/Halt is explicit and confirmed; native Launch can Restart with confirmation, while native Attach has no Reset action.
+
+### Existing server configuration
+
+Inputs: host, port, GDB executable, optional symbol-bearing ELF and remote protocol choice when needed. Support a locally running GDB server/`gdbserver`/OpenOCD remote endpoint without taking ownership of server lifecycle. Default to safe local host values; don't launch OpenOCD in this mode.
+
+### Profile persistence
+
+- Profiles are explicit named data (Linux native / OpenOCD / existing server); support create, edit, select, delete with confirmation, and **recent sessions**.
+- Persist user files according to XDG (`$XDG_CONFIG_HOME/the-bugger`, falling back to `~/.config/the-bugger`) and document the format. Use a format and parser appropriate for C with limited dependencies.
+- v0.1.0 stores tool names/paths, structured argument arrays, ordered scripts, endpoint, source lookup/mapping settings and remapped actions, with paths including spaces. Use json-c, a versioned JSON format and atomic writes.
+- Rich workspace/tab/Memory/watch/code-breakpoint restoration is **F01, v0.1.4**, ahead of Stack/editing. Do not persist runtime values, hit counts, temporary run-to breakpoints or old hardware allocations as live state. Shareable-profile import/export is **v0.3.x**, separating shared connection definitions and personal workspace/history, with relative paths and prelaunch review; no mandatory project format.
+- Never save passwords/tokens or guess hidden credentials. Avoid executing untrusted session fields as shell snippets. CLI overrides can come later; usability from bare `the-bugger` is the priority.

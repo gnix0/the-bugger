@@ -1,0 +1,355 @@
+# Validation records
+
+This is the project evidence register: implementation references, acceptance
+states, executed checks, significant failures and unresolved validation limits.
+It complements the [roadmap](roadmap.md), [test procedures](testing.md) and
+[architecture](architecture.md). Procedures describe how to test; entries here
+state what was actually recorded. No workflow transcript or superseded agent
+instructions are required to interpret the results.
+
+## Current evidence boundary
+
+M00–M13 and the listed corrections are accepted. M14–M18 remain planned; v0.1.0
+is not accepted. The final M13 full default/native/tmux run passed, and focused
+profile/source-restore native checks passed under ASan/UBSan with leak checking.
+These runs do not establish a full-project sanitizer/analyzer pass or physical
+embedded compatibility. Open issues remain the M14 integration/read-policy and
+analyzer audit, remote/OpenOCD execution, and real STM32/Xtensa/RISC-V validation.
+QEMU coverage is supplementary and currently unverified.
+
+Log paths identify the original local artifacts, which are ignored/disposable;
+the command/result summaries below are the durable record. Unreported runs and
+failed environment checks remain distinct from PASS. Acceptance does not imply
+that every checklist step was separately reported. No tests were rerun to
+restructure these records.
+
+## Implementation references and acceptance
+
+| Milestone | Deliverable | State | Commit SHA |
+|---|---|---|---|
+| M00 | Repository foundation | accepted | `0f5d05b` |
+| M01 | Launcher and DEMO workspace | accepted | `60df655` |
+| M02 | Tiled layout engine | accepted | `094fa71` |
+| Post-M02 | Navigation/highlight/scrollbar correction | accepted | `a832eef` |
+| P00 | Expanded roadmap/specification and tab-focus correction | accepted | `36d5ad6` |
+| M03 | Incremental MI parser | accepted | `ee1cfc5` |
+| M04 | Nonblocking transport/controller and owned lifecycle | accepted | `f29ce3c` |
+| M05 | Native sessions, console/output and Save Log | accepted | `0278b61` |
+| M06 | Selected context, Call Stack and Threads | accepted | `1b21504` |
+| M07 | Live code, stepping modes, navigation/source recovery | accepted | `8d69475` |
+| M08 | Disassembly research/approved changes, then code breakpoints and Run to Selected | accepted | `55ecbd4` |
+| Post-M08 | Reversible pane-local tabs | accepted | `0023150` |
+| M09 | CPU registers | accepted | Not recorded |
+| M10 | Persistent inline Memory and embedded-readiness review | accepted | `2f951fb8dbaa10f490e5abd6eba31d1ced1dc6af` |
+| M11 | Scoped read-only Locals/Watches | accepted | `77446434d8e6e1e1a356abaa4d94e028a1098036` |
+| M12 | Hardware data watchpoints and cross-view actions | accepted | `f1dbb8a70033821e33e9a5506e23758d0723587d` |
+| M13 | Basic profiles and key mappings | accepted | `4030df3fa41da5805cedf1310b8c8ee7694b3112` |
+| M14 | Native integration acceptance | planned | — |
+| M15 | Existing remote server | planned | — |
+| M16 | OpenOCD wizard/lifecycle/actions | planned | — |
+| M17 | Real release-board acceptance | planned | — |
+| M18 | v0.1.0 release evidence/acceptance | planned | — |
+
+
+### Full recorded commit identifiers
+
+- `4030df3fa41da5805cedf1310b8c8ee7694b3112`
+- `f1dbb8a70033821e33e9a5506e23758d0723587d`
+- `77446434d8e6e1e1a356abaa4d94e028a1098036`
+- `2f951fb8dbaa10f490e5abd6eba31d1ced1dc6af`
+- `55ecbd4f627d0374f81176290189ca5b4808ed5d`
+- `60df6550d0434b2c32977ec8179f5eb4ca92f55b`
+- `094fa714da9400ae7a40c0357a1552ba38a1ffd7`
+- `f29ce3c23e3d818c64cdee44ddd501c73251a5bc`
+- `0278b612a8169253810c778607aa3d244a7b0407`
+- `1b215048c7e0d94e9515f8e9321215f08ce8cc6e`
+- `8d6947570a1d8dc1d904472b01b66e6b54415598`
+
+The UI specification correction additionally records `86820c4`; the table
+retains other short identifiers exactly where a full identifier was not recorded.
+
+## M00
+
+Initial sanitizer execution failed because LeakSanitizer cannot run under ptrace; the outside-sandbox rerun passed without disabling leak checks. Static analysis initially enabled no checks; explicit analyzer/bugprone configuration corrected that setup. No debugging or board functionality was validated by the foundation tests.
+
+| Exact command | Outcome | Local log |
+|---|---|---|
+| `make clean && make all && make test` | PASS; clean GCC/cc build, seven tests | Initial terminal output; subsequent run below retained |
+| `make all test` | PASS; rebuilt after Makefile change, seven tests | `build/logs/m00-gcc.log` |
+| `make CC=clang BUILD_DIR=build/clang test` | PASS; strict Clang build, seven tests | `build/logs/m00-clang.log` |
+| `make sanitize` (sandbox) | FAILED; LeakSanitizer aborts under ptrace | `build/logs/m00-sanitize.log` |
+| `make sanitize` (approved outside sandbox) | PASS; final seven tests, ASan/UBSan with leak detection enabled | `build/logs/m00-sanitize-unsandboxed.log` |
+| `make analyze` (initial) | FAILED; machine enabled no checks by default | `build/logs/m00-analyze.log` |
+| `make analyze` (explicit analyzer/bugprone checks) | PASS; no project diagnostics; one system-header warning suppressed by clang-tidy | `build/logs/m00-analyze-fixed.log` |
+| `git diff --check` and `git diff --no-index --check /dev/null <file>` for each new M00 file | PASS; no whitespace errors | Terminal output |
+
+## UI correction
+
+The six-pane/no-presets specification correction was accepted at 86820c4. It changed the documented interface direction and prototype location, not the already recorded foundation test results.
+
+## M01
+
+The initial renderer was rejected on visual fidelity despite interaction tests. Palette, surfaces, source coloring, headings, toolbar density and active-row styling were corrected; acceptance followed the visual correction. PTY and simulated startup/stepping evidence is not live debugging or physical mouse/UTF-8 proof.
+
+| Exact command/check | Outcome | Local evidence |
+|---|---|---|
+| `make BUILD_DIR=build/m01-clean test` | PASS; fresh strict GCC build, C unit/CLI/PTY suites | `build/m01-clean-build-test.log` |
+| `make test` | PASS; default build and all C suites | `build/m01-test-final.log` |
+| `make CC=clang BUILD_DIR=build/clang test` | PASS; strict Clang build and all C suites | `build/m01-clang-test.log` |
+| `make sanitize` (approved outside sandbox) | PASS; ASan/UBSan/leak detection, all C suites | `build/m01-sanitize.log` |
+| `make analyze` | PASS; no unsuppressed project diagnostics | `build/m01-analyze-final.log` |
+| `git diff --check` | PASS; no whitespace errors | Terminal output |
+| Isolated `tmux -L <unique-name> -f /dev/null new-session -d -s demo -x 140 -y 44 <binary>`, opt-in mouse on, `send-keys` startup/F5/F10, `capture-pane -p` | PASS; launcher, six panes, running state and stepped sample PC; test server cleaned up | `build/m01-tmux-{launcher,workspace,running,step}.txt` |
+
+## M02
+
+Layout evidence covers geometry, minimum sizes, split/collapse, compact restoration, bounded pane-pool reuse and real tmux forwarding. It validates UI behavior, not debugger or board support.
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make test` | PASS | `build/m02-test.log` |
+| `make CC=clang BUILD_DIR=build/m02-clang test` | PASS | `build/m02-clang.log` |
+| `make sanitize` | PASS, ASan/UBSan/LeakSanitizer | `build/m02-sanitize.log` |
+| `make analyze` | PASS | `build/m02-analyze.log` |
+| `make test-tmux` | PASS, real isolated tmux input forwarding | `build/m02-tmux.log`, `build/m02-tmux-workspace.txt` |
+| `git diff --check` | PASS | No whitespace diagnostics |
+
+## Post-M02
+
+Navigation corrections were accepted at a832eef: no preloaded demo breakpoint, direct viewport scrolling, reachability of disassembly endpoints and scrollbar paging/dragging. This was presentation evidence, not live target validation.
+
+## P00
+
+Scope was documentation expansion and inactive-tab focus correction, including monochrome/truecolor/tmux cases. The implementation used a combined code/documentation commit; that fact does not alter current contribution procedures.
+
+| Exact command | Result | Local evidence |
+|---|---|---|
+| `make test` | PASS; strict GCC and all default C suites | `build/p00-test.log` |
+| `make CC=clang BUILD_DIR=build/p00-clang test` | PASS; separate strict Clang build and suites | `build/p00-clang.log` |
+| `make sanitize` | PASS; ASan/UBSan/LeakSanitizer, outside ptrace sandbox | `build/p00-sanitize.log` |
+| `make analyze` | PASS; no unsuppressed project diagnostics; existing system-header/NOLINT suppressions reported | `build/p00-analyze.log` |
+| `make test-tmux` | PASS; real isolated tmux, including tab styling/focus | `build/p00-tmux.log`, `build/m02-tmux-workspace.txt` |
+| `git diff --check` | PASS before final README update; repeated at final handoff | No whitespace diagnostics |
+
+## M03
+
+Parser records retain tokens/byte lengths, recovery and allocation-failure evidence. Actual native and ARM GDB target-free protocol probes do not establish target execution or hardware compatibility. No transport/process model was included in parser acceptance.
+
+| Exact command | Result | Local evidence |
+|---|---|---|
+| `make test` | PASS; strict GCC, both MI suites and all existing suites | `build/m03-test.log` |
+| `make CC=clang BUILD_DIR=build/m03-clang test` | PASS; separate strict Clang build and all suites | `build/m03-clang.log` |
+| `make sanitize` | PASS; ASan/UBSan/LeakSanitizer outside ptrace sandbox | `build/m03-sanitize.log` |
+| `make analyze` | PASS; no unsuppressed project diagnostics; existing system-header/NOLINT suppressions reported | `build/m03-analyze.log` |
+| `make test-mi` | PASS after final test assertion/fixture edits | `build/m03-mi-final.log` |
+| `make CC=clang BUILD_DIR=build/m03-clang test-mi` | PASS after those edits | `build/m03-clang-mi-final.log` |
+| `make BUILD_DIR=build/sanitize CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-mi` | PASS after those edits, leak detection enabled outside ptrace sandbox | `build/m03-sanitize-mi-final.log` |
+| `make mi-demo` | PASS; 22 decoded records, exit 0 | `build/m03-demo.log` |
+| `./build/mi-dump --chunk 1 tests/fixtures/mi/invalid.mi` | Expected exit 1; six diagnostics then two recovered records | `build/m03-invalid.{out,err}` |
+| `printf '7^done' \| ./build/mi-dump` | Expected exit 1, truncated EOF | `build/m03-truncated.{out,err}` |
+| `printf '7^done\n' \| ./build/mi-dump` | PASS, exit 0 | `build/m03-terminated.out` |
+| `./build/mi-dump --chunk 0` | Expected usage exit 2 | `build/m03-usage.err` |
+| `./build/mi-dump /nonexistent/the-bugger-m03.mi` | Expected I/O exit 2 | `build/m03-missing.err` |
+| `git diff --check` | PASS, repeated at final handoff | No whitespace diagnostics |
+
+## M04
+
+Transport evidence includes deadlines, reordered/obsolete replies, bounded floods, descriptor/lifecycle failures, externally reaped children and cancellation. The harness stderr preview was capped without changing production parsing. Measured pump time belongs to the fake-peer transport case, not whole-TUI or hardware performance.
+
+| Exact command | Result | Local evidence |
+|---|---|---|
+| `make test` | PASS; strict GCC, ten C suites including existing TUI regressions | `build/m04-test-final.log` |
+| `make CC=clang BUILD_DIR=build/m04-clang test` | PASS; separate Clang build and all suites | `build/m04-clang-final.log` |
+| `make sanitize` | PASS; ASan/UBSan/LeakSanitizer outside ptrace sandbox | `build/m04-sanitize-final.log` |
+| `make analyze` | PASS; no unsuppressed project diagnostics; existing system-header/NOLINT suppressions reported | `build/m04-analyze-final.log` |
+| `make test-controller` | PASS after the final harness-only stderr preview cap | `build/m04-controller-delivery.log` |
+| `make CC=clang BUILD_DIR=build/m04-clang test-controller` | PASS after that cap | `build/m04-clang-controller-delivery.log` |
+| `make BUILD_DIR=build/sanitize CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-controller` | PASS after that cap, leak detection outside ptrace sandbox | `build/m04-sanitize-controller-delivery.log` |
+| `make test-gdb-startup` | PASS; actual native GDB 18.1 startup/setup/features/MI exit, no target | `build/m04-gdb-startup-final.log` |
+| `./build/test-gdb-startup arm-none-eabi-gdb` | PASS; actual ARM GDB 18.1, same target-free probe | `build/m04-arm-gdb-startup-final.log` |
+| `git diff --check` | PASS; repeated at final handoff | No whitespace diagnostics |
+
+## M05
+
+Real GDB tests exposed quoted CLI-derived -gdb-set names returning ^done without applying settings; the encoding was corrected and startup probes verify actual async/all-stop values. Owned launch cleanup uses stable pidfds; attached processes survive detach. A fixture control-byte flag previously erased the standalone printed PID; ordinary fixture output was corrected without suppressing captured-output tests. A sandbox native run failed on ptrace restrictions; the outside-sandbox native rerun passed in build/m05-quit-native.log.
+
+| Exact command | Result | Evidence |
+|---|---|---|
+| `make test test-native test-gdb-startup test-tmux` | PASS; GCC, deterministic suites, actual native sessions/TUI, actual startup-setting queries, isolated tmux --demo forwarding | `build/m05-gate.log` |
+| `make CC=clang BUILD_DIR=build/m05-clang test` | PASS; deterministic Clang suites | `build/m05-clang.log` |
+| `make sanitize sanitize-native` | PASS; default and actual-native ASan/UBSan/LeakSanitizer outside ptrace sandbox | `build/m05-sanitize.log` |
+| `make test-native` | PASS after final stream/ownership/mode/status fixes; actual native API and TUI | `build/m05-native-delivery.log` |
+| `make CC=clang CXX=clang++ BUILD_DIR=build/m05-clang test-native` | PASS after final fixes | `build/m05-clang-native-delivery.log` |
+| `make sanitize-native` | PASS after final fixes, ASan/UBSan/LeakSanitizer enabled | `build/m05-sanitize-native-delivery.log` |
+| `make analyze` | PASS; no unsuppressed project diagnostics; existing system-header/NOLINT suppressions reported | `build/m05-analyze-delivery.log` |
+| `./build/test-gdb-startup arm-none-eabi-gdb` | PASS, actual target-free ARM GDB startup and setting-value queries | `build/m05-arm-startup.log` |
+| `git diff --check` | PASS, repeated after README | No whitespace diagnostics |
+
+## M06
+
+Context tests cover recursive/paged, optimized/stripped, multithread and worker-exit cases. A stale-frame guard/header correction was followed by the recorded final runs. Missing or optimized frames follow GDB rather than fabricated source precision. Real board and RTOS inspection were not established.
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make test test-native` | PASS, deterministic and actual GDB API/TUI | `build/m06-gate.log` |
+| `make CC=clang CXX=clang++ BUILD_DIR=build/m06-clang test test-native` | PASS | `build/m06-clang.log` |
+| `make sanitize sanitize-native` | PASS, ASan/UBSan with leak detection | `build/m06-sanitize.log` |
+| `make test-tmux` | PASS, isolated real tmux forwarding of the preserved demo | `build/m06-tmux.log` |
+| `make analyze` | PASS, no unsuppressed project diagnostics | `build/m06-analyze-final.log` |
+| `make CC=clang CXX=clang++ BUILD_DIR=build/m06-clang test` | PASS after final stale-frame guard/header correction | `build/m06-clang-final.log` |
+| `make sanitize sanitize-native` | PASS after final stale-frame guard/header correction | `build/m06-sanitize-final.log` |
+| `./build/test-context "$PWD/build/fake-mi"` | PASS including rejection of stale frame rows and session reset | `build/m06-context-final.log` |
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make test-native` | PASS, GCC actual GDB API/TUI and standalone PID/control regression | `build/m06-native-delivery.log` |
+| `make CC=clang CXX=clang++ BUILD_DIR=build/m06-clang test-native` | PASS | `build/m06-clang-native-delivery.log` |
+| `make sanitize-native` | PASS, ASan/UBSan with leak detection | `build/m06-sanitize-native-delivery.log` |
+| `git diff --check` | PASS | No whitespace diagnostics |
+
+## M07
+
+Code/TUI corrections covered source identity, startup Awaiting stop versus stale data, horizontal navigation, one-cell vertical bars, persistent assembly context, short backward-read merging, five-row top/bottom margins and the 62% default upper row. The tables distinguish runs before and after those corrections. tmux automation chiefly validates forwarding/demo interaction; live visual/input acceptance is separate. Hardware compatibility and release-wide performance were not established.
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make -j4 test test-native` | PASS, all deterministic and actual GDB API/TUI suites | `build/m07-delivery.log` |
+| `make -j4 CC=clang CXX=clang++ BUILD_DIR=build/m07-clang test test-native` | PASS | `build/m07-clang-delivery.log` |
+| `make sanitize sanitize-native` | PASS, ASan/UBSan with leak detection | `build/m07-sanitize-delivery.log` |
+| `make analyze` | PASS, no unsuppressed project diagnostics; 168 non-user and nine NOLINT warnings suppressed | `build/m07-analyze-delivery.log` |
+| `make test-tmux` | PASS, isolated real tmux regression of preserved demo tab/mouse/drag/split/F10/resize behavior; live code inside tmux still manual | `build/m07-tmux-final.log` |
+| `make -j4 all build/test-cli` then `build/test-cli "$PWD/build/the-bugger"` | PASS after final help-text update | `build/m07-help.log` |
+| `git diff --check` | PASS | No whitespace diagnostics |
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make -j4 test test-native` | PASS | `build/m07-scroll-final.log` |
+| `make -j4 CC=clang CXX=clang++ BUILD_DIR=build/m07-clang test test-native` | PASS | `build/m07-scroll-clang-final.log` |
+| `make test-tmux` | PASS, preserved demo mouse/drag/key/layout forwarding | `build/m07-scroll-tmux.log` |
+| `make sanitize sanitize-native` | PASS, ASan/UBSan with leak detection | `build/m07-scroll-sanitize.log` |
+| `make analyze` | PASS, no unsuppressed project diagnostics; 169 non-user/11 NOLINT suppressions | `build/m07-scroll-analyze-final.log` |
+| Rebuild/run `test-code-tui` with GCC and Clang after additional track-paging assertions | PASS | `build/m07-scroll-paging{,-clang}.log` |
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make -j4 test test-native` | PASS | `build/m07-launcher-gate.log` |
+| `make -j4 CC=clang CXX=clang++ BUILD_DIR=build/m07-clang test test-native` | PASS | `build/m07-launcher-clang.log` |
+| `make analyze` | PASS, no unsuppressed project diagnostics; 173 non-user/11 NOLINT suppressions | `build/m07-launcher-analyze.log` |
+| `make test-tmux` | PASS, isolated server and preserved session/workspace forwarding | `build/m07-launcher-tmux.log` |
+| `make sanitize sanitize-native` | PASS, ASan/UBSan with leak detection | `build/m07-launcher-sanitize.log` |
+| `git diff --check` | PASS | No whitespace diagnostics |
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make -j4 test test-native` | PASS | `build/m07-assembly-final.log` |
+| `make -j4 CC=clang CXX=clang++ BUILD_DIR=build/m07-clang test test-native` | PASS | `build/m07-assembly-clang.log` |
+| `make sanitize sanitize-native` | PASS, ASan/UBSan with leak detection | `build/m07-assembly-sanitize.log` |
+| `make analyze` | PASS, no unsuppressed project diagnostics; 173 non-user/11 NOLINT suppressions | `build/m07-assembly-analyze.log` |
+| `make test-tmux` | PASS, isolated real tmux with the narrow bar/explicit key label | `build/m07-padding-tmux.log` |
+| `git diff --check` | PASS | No whitespace diagnostics |
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make -j4 test test-native` | PASS, including the original-session wheel regression | `build/m07-wheel-final.log` |
+| `make -j4 CC=clang CXX=clang++ BUILD_DIR=build/m07-clang test test-native` | PASS | `build/m07-wheel-clang-final.log` |
+| `make sanitize sanitize-native` | PASS, ASan/UBSan with leak detection | `build/m07-wheel-sanitize-final.log` |
+| `make analyze` | PASS, no unsuppressed project diagnostics; 173 non-user/11 NOLINT suppressions | `build/m07-wheel-analyze-final.log` |
+| `make test-tmux` | PASS, isolated demo terminal/mouse/layout forwarding | `build/m07-wheel-tmux.log` |
+| `git diff --check` | PASS | No whitespace diagnostics |
+
+### M07 review — symmetric navigation margin and default pane height
+
+| Command | Result | Evidence |
+|---|---|---|
+| `make -j4 test test-native` | PASS | `build/m07-padding-final.log` |
+| `make -j4 CC=clang CXX=clang++ BUILD_DIR=build/m07-clang test test-native` | PASS | `build/m07-padding-clang.log` |
+| `make sanitize sanitize-native` | PASS, ASan/UBSan and leak checks | `build/m07-padding-sanitize.log` |
+| `make analyze` | PASS, no unsuppressed project diagnostics | `build/m07-padding-analyze.log` |
+| `make test-tmux` | PASS, isolated terminal/mouse/layout checks | `build/m07-padding-tmux.log` |
+| `git diff --check` | PASS | No whitespace diagnostics |
+
+## M08
+
+Concurrent sanitizer/build execution first failed the existing controller 35 ms timing assertion without a sanitizer runtime diagnostic; the isolated sanitizer rerun passed. Browser/selector warnings and gap rows were tied to visible ranges, and instruction columns aligned. Pre-implementation GDB 18.1 probes inspected native ELF and a Cortex-M4 Thumb object offline, including zero data and unavailable section-query behavior; these were not physical-board tests. Probe artifacts: build/m08-disassembly-probe.mi, build/m08-zero-bytes-probe.mi and build/m08-arm-disassembly-probe.mi.
+
+| Exact command | Outcome | Local evidence |
+|---|---|---|
+| `make -j4 test test-native` | PASS | `build/m08-review-all.log` |
+| `make -j4 CC=clang CXX=clang++ BUILD_DIR=build/m08-clang test test-native` | PASS | `build/m08-review-clang.log` |
+| `make sanitize sanitize-native` alongside other builds | FAILED at the existing controller test's 35 ms deadline assertion, not a sanitizer runtime diagnostic | `build/m08-review-sanitize.log` |
+| `make sanitize sanitize-native` isolated rerun | PASS, ASan/UBSan with leak checks | `build/m08-review-sanitize-isolated.log` |
+| `make analyze` | PASS | `build/m08-review-analyze.log` |
+| `make test-tmux` | PASS, isolated tmux input/layout regression | `build/m08-review-tmux.log` |
+| `git diff --check` before code delivery | PASS | Terminal output |
+
+## Post-M08
+
+Pane-local add/remove membership, selected-view promotion and last-tab protection were accepted at 0023150. The corrected menu-targeting workspace tests and native suite were reported passing. No additional standalone transcript is inferred.
+
+## M09
+
+The first native test failed selecting frame 1 because it assumed a caller above main. The corrected fixture stops in code_callee/main before caller selection; the focused native/TUI result was reported passing. Full-suite, sanitizer, analyzer and board passes were not individually supplied for M09. Its implementation hash is not recorded.
+
+| Command / evidence source | Outcome |
+|---|---|
+| Agent: strict `make -j4 all` and focused register/native/TUI executable builds | PASS; `/tmp/the-bugger-m09-build.log` and terminal output |
+| Agent: `build/test-registers "$PWD/build/fake-mi"` | PASS; synthetic x86/ARM names, sparse IDs, 600-name cap, long/unavailable values, formats, stale replies, frame/thread baselines, errors and bounded idle/running/hidden work |
+| Agent: `git diff --check` before final code delivery | PASS |
+| Owner: first `make test-m09-native` | FAILED at caller-frame selection: test assumed a caller above main |
+| Owner: corrected `make test-m09-native`, reported "All set" | PASS reported; real-GDB and PTY focused acceptance |
+
+## M10
+
+Earlier test assumptions failed on GDB partial-read boundary behavior, transient status text, pane hit regions and a source-only assertion matching unrelated STALE state. The corrected inline viewer and adapter-supplied region/byte-order model passed the listed focused/regression checks. Explicit Go/Refresh and unknown/MMIO boundaries remain deliberate; native results do not prove peripheral safety.
+
+| Agent-run command | Result and evidence |
+|---|---|
+| `make -s -j4 all build/test-memory build/fake-mi build/test-memory-native build/test-memory-tui` | PASS, strict GCC C17 build |
+| `make test-m10-model test-m10-native` | PASS, `/tmp/the-bugger-m10-inline-focused.log`; inline Go/Enter, scalar expressions, hex/ASCII, bounded keyboard/wheel browsing, independent drafts, target-neutral region/byte-order cases and native partial reads |
+| `make test test-native test-tmux` | PASS, `/tmp/the-bugger-m10-inline-regression.log`; existing native/parser/controller/context/code/break/register/layout/terminal and tmux forwarding regressions |
+| `TB_MEMORY_TEST_TMUX=1 build/test-memory-tui "$PWD/build/the-bugger" "$PWD/build/memory-fixture"` | PASS, `/tmp/the-bugger-m10-inline-tmux.log`; full live Memory workflow in an isolated mouse-enabled tmux server |
+| `ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 make -s -j4 BUILD_DIR=build/m10-sanitize CC=clang CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-m10-model test-m10-native` | PASS, `/tmp/the-bugger-m10-inline-sanitize.log`; strict Clang build and focused ASan/UBSan/leak checks, without an unrelated full sanitizer matrix |
+| `git diff --check` | PASS before handoff |
+
+## M11
+
+Recorded acceptance: 2026-10-18.
+
+Failed native assertions exposed change-baseline invalidation and C++ access-group expansion assumptions. TUI failures involved demo startup, redraw waits and raw-output capture exhaustion; the bounded reader and completed-operation checks were corrected. A type-buffer initialization defect and style findings were fixed before final focused runs. Full-project analysis still reports Memory/native-map/older TUI findings assigned to M14; a focused variables-module pass does not clear them.
+
+| Agent-run command | Result and evidence |
+|---|---|
+| `make test-m11-model test-m11-native` | PASS after the final initialization fix; `build/m11-final.log`. C peer policy/bounds/stale/cleanup cases, actual GDB C/C++/optimized fixtures and live TUI actions. Strict compiler warnings enabled. |
+| `make test test-native` | PASS; `build/m11-regression.log`. Full existing unit/PTY/native regressions, before the final variable-type buffer initialization correction; focused tests were repeated afterward. |
+| `env ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 make -s -j4 BUILD_DIR=build/m11-sanitize CC=clang CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-m11-model test-m11-native` | PASS after final correction; `build/m11-sanitize.log`. Focused ASan/UBSan/leak checks, not a full sanitizer matrix. |
+| `make test-tmux` | PASS; `build/m11-tmux.log`. Existing isolated-server forwarding/layout/input regression, not the complete live M11 workflow under tmux. |
+| `make analyze` | FAIL; `build/m11-analyze.log`. Found M11 type-buffer initialization and style diagnostics, subsequently fixed; existing findings remain in Memory, native mapping parsing and older TUI register/Memory row calculations. Not counted as PASS. |
+| `clang-tidy src/model/variables.c --checks='-*,clang-analyzer-*,bugprone-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling' --warnings-as-errors='*' -- -Iinclude -Isrc/model -Isrc/gdb -std=c17` | PASS after correction; `build/m11-variables-analyze.log`. Does not clear full-project analyzer findings. |
+| `git diff --check` | PASS at implementation delivery; documentation checked separately at handoff. |
+
+## M12
+
+Recorded acceptance: 2026-10-18.
+
+Acceptance preceded individually reported transcripts for some requested suites. Do not infer a slow-suite, full-project analyzer or full sanitizer pass. The later M13 full native run includes passing M12 native/TUI checks after harness targeting corrections. Hardware slot, width, alignment and stop behavior on ARM/Xtensa/RISC-V remain unverified. Creation may read watched storage and does not grant automatic variable inspection.
+
+| Evidence | Result |
+|---|---|
+| Agent: strict `make -s -j4 all test-m12-model build/test-watchpoints-native build/test-watchpoints-tui build/test-break-tui` | PASS; C17 warning-clean build and focused C peer tests. Covers three modes, width/overflow validation, hits/scope expiry, fallback/downgrade removal, resource errors, context races, malformed replies, uncertain ownership and blocked cleanup without retry spin. Native/TUI binaries were compiled, not executed by the agent. |
+| Agent: no-inferior GDB/MI syntax probe for `-break-watch --language c missing_symbol` | GDB accepted the command/options and returned the expected missing-symbol-table error; no target ran. Not hardware evidence. |
+| Agent: `git diff --check` | PASS at implementation delivery; repeated for documentation handoff. |
+| Owner command supplied: `make test-m12-native test-m12-slow` | Execution/result not individually reported before acceptance. Native hardware/TUI paths and delayed-reply/timeout recovery have tests, but no PASS transcript is claimed here. |
+| Owner command supplied: `make test test-native test-tmux` | Execution/result not individually reported before acceptance. |
+
+## M13
+
+Initial broad runs passed default/profile-native tests but failed M12 TUI targeting: upper-pane Actions during redraw, the Memory column heading instead of input, and a body hint instead of Manage. The final helper selects the intended controls and waits for live bytes without weakening application safety. The final full regression and focused ASan/UBSan runs passed. The first sandbox native attempt was blocked by ptrace, not counted as PASS. Full-project analysis and physical embedded evidence remain pending.
+
+| Agent-run command | Result / evidence |
+|---|---|
+| `make test-m13-model` | PASS; strict GCC build, JSON/XDG/atomic failure/CRUD/keys/bounds and fake-MI ordered source restore/error/interlock coverage. |
+| `make test-m12-tui` | First sandbox attempt blocked by ptrace; outside sandbox reproduced the Manage misclick. PASS after final helper correction; actual live watchpoint creation, hits, management, Memory and variable actions. |
+| `make test test-native test-tmux` | PASS after final corrections; `build/m13-regression.log`. Existing parser/controller/inspection/layout/terminal regressions, actual GDB native/profile tests and real isolated tmux forwarding. |
+| `ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 make -j4 BUILD_DIR=build/m13-sanitize CC=clang CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-m13-model test-m13-native` | PASS; `build/m13-sanitize.log`. Focused ASan/UBSan/leak and strict Clang checks, actual relocated-source/breakpoint and profile TUI flows. Not a full sanitizer matrix. |
+| `clang-tidy src/session/profiles.c --checks='-*,clang-analyzer-*,bugprone-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling' --warnings-as-errors='*' -- -Iinclude -Isrc/session -std=c17` | PASS; `build/m13-profiles-analyze.log`. Focused new module only; remaining full-project findings stay assigned to M14. |
+| `git diff --check` | PASS at implementation delivery; repeated for documentation. |

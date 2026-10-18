@@ -5,8 +5,8 @@
 ### Added
 
 - User and contributor guides, tracked product requirements, a status-oriented
-  roadmap and separate maintenance/release procedures. Historical milestone
-  evidence is archived with its hashes, failures and acceptance records intact;
+  roadmap and separate maintenance/release procedures. Milestone
+  evidence is integrated into validation records with hashes, failures and acceptance states;
   architecture/testing references describe the system and reproducible checks.
 - Named XDG/json-c connection/source profiles, recent saved native sessions and
   action-key remapping, accepted in M13 implementation `4030df3`. Review profiles

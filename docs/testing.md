@@ -42,7 +42,7 @@ are recorded as limitations or failed runs, not silently skipped passes.
 The [suite catalog](../tests/README.md) lists individual binaries; fixture READMEs
 specify authored data and target behavior. Procedures below describe expected
 behavior, not proof that a particular run passed. Historical executions, blocked
-checks and exact evidence are in the [ledger](history/milestones.md). Store logs
+checks and exact evidence are in the [ledger](validation.md). Store logs
 under ignored `build/`; record durable result summaries separately. Current
 full-project analyzer findings remain tracked for M14; focused passes do not clear them.
 
@@ -651,7 +651,7 @@ or hardware debugging acceptance.
    editing. Preview workspace opens the six default panes, with DEMO in each.
    Every preview uses the explicitly identified Cortex-M4F visual sample.
 5. Compare palette, borders, tabs, toolbar and status with
-   `docs/design/prototype.html`. There is no layout selector or named layout.
+   the [interface constraints](requirements.md#interface-constraints). There is no layout selector or named layout.
    All menus/configuration use pages or pane contents, without floating panes.
 6. Click Continue/Pause, use F5/F10/F11/F9, and try Shift+F11 if your terminal
    reports it. Visible Out provides the alternative. Expect only sample changes,
@@ -679,8 +679,8 @@ not establish those experiences.
 ### Visual inspection checklist
 
 Compare the renderer directly
-with `docs/design/prototype.html`, using the component checklist in
-[the terminal mapping](design/tui-mapping.md). Six panes or passing automated
+with the [interface constraints](requirements.md#interface-constraints), using the component checklist in
+[the terminal mapping](requirements.md#interface-constraints). Six panes or passing automated
 checks alone do not satisfy the visual gate.
 
 1. Run `make` and `./build/the-bugger --demo` at 140x44 or larger. Inspect launcher

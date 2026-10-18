@@ -37,7 +37,7 @@ than counting them as passed. C++ is permitted for debug-target fixtures only.
 - Memory/value inspection must satisfy the [pre-dispatch access policy](docs/architecture.md#locals-and-watches).
   Calls/assignment filters alone are not safety proofs. No implicit flash, reset,
   writes, peripheral polling or termination of external servers.
-- Preserve the [interface specification](docs/design/tui-mapping.md): Monokai Pro,
+- Preserve the [interface specification](docs/requirements.md#interface-constraints): Monokai Pro,
   default six tiles, tabs, dynamic splits, mouse and keyboard access, no presets
   or floating windows. Prototype samples never count as live functionality.
 - Keep changes small and reviewable. Avoid unrelated formatting or framework
@@ -60,11 +60,11 @@ Documentation responsibilities are:
 | [Architecture](docs/architecture.md) | Implemented modules, interfaces, invariants and extension boundaries |
 | [Roadmap](docs/roadmap.md) | Completion status, planned scope, dependencies and version targets |
 | [Testing](docs/testing.md) | Reproducible procedures and evidence requirements |
-| [Design](docs/design/tui-mapping.md) | Interface constraints, terminal mapping and reference rationale |
-| [Historical ledger](docs/history/milestones.md) | Recorded hashes, results, failures and decisions |
+| [Design](docs/requirements.md#interface-constraints) | Interface constraints, terminal mapping and reference rationale |
+| [Validation records](docs/validation.md) | Recorded hashes, results, failures and decisions |
 
 Use concise technical descriptions. Distinguish implemented behavior, validation
-gaps and plans. Keep execution records out of procedures and agent instructions
+gaps and plans. Keep execution records in the evidence register and agent instructions
 out of public technical references. Link to the canonical description instead of
 copying it into several documents. Never invent test results or commit hashes.
 

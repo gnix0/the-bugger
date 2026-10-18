@@ -8,7 +8,7 @@ Pane-membership unit and workspace PTY cases cover add/remove, active/inactive
 selection, retained scroll, pane independence and last-tab protection. Synthetic
 target cases establish architecture coverage, not physical-board support.
 See [testing](../docs/testing.md) for procedures and prerequisites; execution
-records remain in the [historical ledger](../docs/history/milestones.md).
+records remain in the [validation records](../docs/validation.md).
 
 - `test-profiles` and `test-profile-sources` / `make test-m13-model`:
   strict versioned JSON/XDG storage, all connection definitions, literal ordered
@@ -172,7 +172,7 @@ verify aligned mnemonic/operand columns and bounded formatting.
 
 libelf development files are required. These checks require ptrace/PTY support;
 synthetic ARM metadata is not hardware evidence. See [testing](../docs/testing.md) for procedures and the
-[historical ledger](../docs/history/milestones.md) for recorded results and failures.
+[validation records](../docs/validation.md) for recorded results and failures.
 
 ## M04 fake peer and startup probe
 

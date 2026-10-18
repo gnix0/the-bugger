@@ -41,7 +41,7 @@ surfaces. Selected-row variants retain semantic foreground colors. Direct-color
 terminfo supplies exact RGB values; a matching Alacritty direct entry can be
 selected when standalone Alacritty advertises truecolor. The app never changes
 the terminal palette or tmux configuration. See the
-[prototype mapping](design/tui-mapping.md) for rendering adaptations.
+[prototype mapping](requirements.md#interface-constraints) for rendering adaptations.
 
 The workspace preserves per-view scroll/selection and tabs through compact
 rendering, with interactive split-tree geometry, dragging and closing as
@@ -620,7 +620,7 @@ Watchpoints share Breakpoints enable/disable/delete/condition/count controls.
 MI stop records provide hit values and scope-expiry messages; deleted scoped
 watchpoints disappear on reconciliation. They are excluded from code gutter
 matching. Native fixtures and TUI tests are available; recorded execution evidence
-is in [the ledger](history/milestones.md#m12-completion-verification). Physical backend
+is in [the ledger](validation.md#m12). Physical backend
 support remains M17, and software watchpoints remain deferred beyond v0.1.0.
 
 Protocol references: GDB [MI breakpoint commands, `-break-watch` and `-break-list`](https://www.sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Breakpoint-Commands.html)
@@ -714,10 +714,10 @@ are late reviewed candidates; native correctness/maintenance remains continuous.
   alone cannot establish that MMIO access is free of side effects.
 - Full-project static-analysis findings remain assigned to M14; a focused module
   analyzer pass does not clear them. Exact findings and validation limits are in
-  the [historical evidence](history/milestones.md#m11-completion-verification).
+  the [validation evidence](validation.md#m11).
 - Real remote, STM32, ESP32 and optional acquisition compatibility remain unverified.
   See [hardware validation](testing.md#every-release-regression-matrix). Register
   groups have an ungrouped fallback; specialized views remain planned.
 
-The original [embedded-readiness review](history/milestones.md#m10-embedded-readiness-review)
-records the baseline and technical rationale; it is not a current support claim.
+The [Memory validation record](validation.md#m10) summarizes the corrections
+and their evidence limits; the roadmap assigns the remaining integration gaps.

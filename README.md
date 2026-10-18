@@ -26,7 +26,7 @@ not currently verified support claims. OpenOCD is optional, not universal.
 
 `v0.1.0` is the release target, not a completed release. See the
 [roadmap status](docs/roadmap.md#implementation-status) and
-[recorded validation evidence](docs/history/milestones.md).
+[recorded validation evidence](docs/validation.md).
 
 ## Build and first session
 
@@ -73,8 +73,8 @@ It does not connect to hardware. In tmux, mouse support requires the opt-in
 |---|---|
 | Users | [Usage and configuration](docs/usage.md), including profiles, controls and limitations |
 | Contributors | [Contributing](CONTRIBUTING.md), [architecture](docs/architecture.md), [testing](docs/testing.md) and [suite catalog](tests/README.md) |
-| Product and design | [Requirements](docs/requirements.md), [roadmap](docs/roadmap.md), [interface specification](docs/design/tui-mapping.md) and [HTML prototype](docs/design/prototype.html) |
-| Maintainers | [Maintenance/release procedures](docs/maintaining.md) and [historical milestone evidence](docs/history/milestones.md) |
+| Product and design | [Requirements](docs/requirements.md), [roadmap](docs/roadmap.md), [interface specification](docs/requirements.md#interface-constraints) |
+| Maintainers | [Maintenance/release procedures](docs/maintaining.md) and [validation records](docs/validation.md) |
 
 The roadmap retains all M00–M18/F01–F47 gates. Post-release priorities progress
 from safe editing and hardware/fault diagnosis to flashing/text channels, RTOS/

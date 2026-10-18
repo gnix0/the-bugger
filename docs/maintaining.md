@@ -1,10 +1,10 @@
 # Maintenance and release procedures
 
 This document defines repository workflow, not product functionality. Technical
-scope is in [requirements](requirements.md), [design](design/tui-mapping.md) and
+scope is in [requirements](requirements.md), [design](requirements.md#interface-constraints) and
 the [roadmap](roadmap.md). Coding-agent execution rules are in `AGENTS.md`.
-Historical authorization and handoff notes are retained in the
-[ledger archive](history/milestones.md), not used as current instructions.
+Past execution results are in [validation records](validation.md); those results
+do not grant current implementation or test authorization.
 
 ## Milestone lifecycle
 
@@ -57,7 +57,7 @@ Use states `planned`, `implemented`, `automated-verified`, `awaiting-user` and
 `accepted`. Only manual acceptance or an observed owner-created milestone commit
 permits `accepted`. Record command, result, relevant artifact, who ran it, tool/
 environment limitations, physical setup when applicable and the observed SHA.
-The roadmap shows concise current status; the historical ledger preserves detailed
+The roadmap shows concise current status; the validation records preserves detailed
 evidence and corrections. Do not rewrite a failure into PASS or infer board
 compatibility from native/corpus tests. Ignored `build/` logs are local artifacts;
 durable result summaries belong in tracked records. README is updated after the
@@ -91,7 +91,7 @@ For every release, including patches:
    exclusions, new-feature regression, reset/disconnect and cleanup behavior.
    Missing hardware/support requires owner resolution before release acceptance.
 4. Review requirements, compatibility, limitations, clean-checkout instructions,
-   changelog, provenance/license status and the historical evidence summary.
+   changelog, provenance/license status and the validation evidence summary.
 5. Obtain explicit final owner release acceptance and authorization before
    recommending a release commit/tag. Do not create or publish it automatically.
 
