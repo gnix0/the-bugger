@@ -390,7 +390,17 @@ static void draw_menu(App *app, int pane, TbRect rect)
                        !app->menu_actions && i >= TB_SYMBOLS ? " [not implemented]" : "");
         ControlKind kind = app->menu_actions ? PANE_ACTION : SHOW_VIEW;
         if (visible) {
+            int label_width = rect.w - (app->menu_actions ? 2 : 4);
+            if ((size_t)label_width < strlen(text)) { text[label_width] = 0; }
+            bool focused = app->count == app->focus;
             button(app, y, rect.x + 1, rect.w - 2, text, kind, i, pane);
+            if (!app->menu_actions && tb_demo_has_view(&app->demo.panes[pane], (TbView)i)) {
+                TbStyle style = focused ? TB_SELECTED : TB_SURFACE;
+                tb_style(style, A_BOLD);
+                if (MB_CUR_MAX > 1 && wcwidth(L'\u25cf') == 1) {
+                    (void)mvaddnwstr(y, rect.x + rect.w - 3, L"\u25cf", 1);
+                } else { tb_text(y, rect.x + rect.w - 3, 1, style, A_BOLD, "*"); }
+            }
         } else {
             (void)add_control(app, (TbRect){0}, kind, i, pane);
         }
@@ -1475,7 +1485,12 @@ static void activate(App *app, Control control)
     case SCROLLBAR: case HSCROLLBAR: app->demo.pane = control.pane; break;
     case SHOW_VIEW:
         app->demo.pane = control.pane;
-        tb_demo_view(&app->demo, (TbView)control.value);
+        if (!tb_demo_toggle_view(&app->demo, (TbView)control.value)) {
+            status(app, "Each pane needs at least one tab.");
+            break;
+        }
+        status(app, tb_demo_has_view(&app->demo.panes[control.pane], (TbView)control.value) ?
+               "View added to this pane." : "View removed from this pane.");
         code_focus(app, control.pane);
         app->menu = -1;
         app->focus = 0;

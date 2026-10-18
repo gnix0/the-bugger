@@ -19,8 +19,9 @@ not. The owner commit/push gate still applies before beginning another gate.
 | M04 | Nonblocking transport/controller and owned lifecycle | accepted | `f29ce3c` |
 | M05 | Native sessions, console/output and Save Log | accepted | `0278b61` |
 | M06 | Selected context, Call Stack and Threads | accepted | `1b21504` |
-| M07 | Live code, stepping modes, navigation/source recovery | awaiting-user | — |
-| M08 | Disassembly research/approved changes, then code breakpoints and Run to Selected | planned | — |
+| M07 | Live code, stepping modes, navigation/source recovery | accepted | `8d69475` |
+| M08 | Disassembly research/approved changes, then code breakpoints and Run to Selected | accepted | `55ecbd4` |
+| Post-M08 | Reversible pane tabs and combined documentation handoff | awaiting-user | — |
 | M09 | CPU registers | planned | — |
 | M10 | Independent Memory | planned | — |
 | M11 | Expandable Locals/Watches | planned | — |
@@ -36,8 +37,108 @@ not. The owner commit/push gate still applies before beginning another gate.
 The approved expanded roadmap replaces only the old unimplemented M03–M07
 grouping. Older references to future milestone numbers in historical entries
 below describe their original scopes; [the current roadmap](plan.md) governs
-new work. Historical failures and acceptance evidence are retained. M05 is the
-only currently authorized gate; no complete live workflow or release is accepted.
+new work. Historical failures and acceptance evidence are retained. M08 is
+accepted; M09 follows the separate documentation commit/push gate. No complete
+live workflow or release is accepted. Historical awaiting-user statements below
+describe their handoff dates and are superseded by the acceptance entries.
+
+Current workflow: deliver code/tests/build staging commands and a detailed
+Conventional Commit message; the owner manually validates and commits/pushes.
+An observed owner milestone commit establishes acceptance. Record its SHA and
+prepare documentation separately, updating README last. The owner commits that
+handoff before the next implementation gate. Agents run only quick checks;
+lengthy suites/stress/sanitizer matrices are supplied as commands for the owner.
+
+## Post-M08 — reversible pane tabs and combined handoff
+
+Owner-run `make test` failed in the new workspace PTY scenario: a text-only
+click selected the Symbols header tab instead of its same-named menu option.
+The test now selects within that pane's menu body. Failure diagnostics escape
+and bound the raw terminal tail instead of replaying ANSI controls into the
+owner's shell. The owner subsequently reported `make test` PASS after this
+correction; the earlier failure remains recorded for traceability.
+
+The owner authorized this narrow UI correction and the pending M08 documentation
+in one commit, overriding the separate-docs rule for this handoff. M08 code
+remains accepted at 55ecbd4; the new correction awaits manual acceptance.
+
+The `...` list toggles membership only in that pane. Included views alone have
+a right-aligned filled circle (ASCII star fallback). Default tabs start marked.
+Adding activates the view; removing an inactive tab preserves selection, and
+removing the active tab selects a survivor. The last tab is protected. Per-view
+positions remain intact. Other panes are independent; no persistence is added.
+
+Quick checks passed: `make -j4 all build/test-unit`, `build/test-unit` and
+`git diff --check` before the final documentation edits. Unit cases cover
+membership, active/inactive removal, scroll retention, invalid choices,
+last-tab protection and pane independence. A workspace PTY case was added for
+actual menu toggles and last-tab protection; it passed in the owner's `make test`.
+
+Owner-run `make test-native`: PASS, supported by the supplied complete output
+and returned shell prompt. All M05–M08 native API/TUI checks completed, including
+breakpoints, source recovery, selector roundtrips, scrolling and stepping.
+No native rerun is required without further relevant changes. The owner also
+confirmed `make test` already passed after the menu-option correction. Both
+required suites now have owner-run PASS evidence. Optional broader checks
+are `make sanitize sanitize-native`, `make analyze` and `make test-tmux`; no new
+passes for those are claimed. Manually verify selected-only dots, reversible Threads/default tabs and
+independent menus. Stop for owner acceptance/commit/push before M09. No agent
+Git writes or lengthy suites were performed for this correction.
+
+## M08 — accepted code; documentation handoff
+
+State history: `planned` → `implemented` → `automated-verified` →
+`awaiting-user` → `accepted`. After the final disassembly corrections and manual
+handoff, the owner reported "Done." Code commit
+`55ecbd4f627d0374f81176290189ca5b4808ed5d` is observed locally. The local
+origin/main tracking ref still pointed to `8d69475`; remote push is not claimed
+as independently verified. No Git write was performed by the agent.
+
+Delivered bounded libelf-based code/data metadata and native image mapping,
+earlier/later instruction browsing, explicit raw decoding, labeled gaps and
+honest unknown-range states. GDB remains the decoder. Live breakpoint management
+includes gutter/F9, conditions, ignore counts, pending/multiple locations and
+required hardware. Run to Selected owns temporary backend state separately,
+preserves user entries and handles intervening stops/failures/timeouts. A same-
+token GDB running/error sequence is reconciled using structured thread states.
+
+Manual feedback corrected selector roundtrips replacing a broad cache with a
+short section, warnings surviving outside the visible range, and backward scans
+decoding the gap between .init and .plt. The fixture's five-byte gap is now
+consistently labeled as bytes not decoded. Aligned address/byte/mnemonic/operand
+columns retain complete text through horizontal scrolling. Five-row margins,
+one-cell scrollbars, default pane proportions and the approved workspace remain.
+
+Agent-run final code verification (before the owner's new lengthy-check rule):
+
+| Exact command | Outcome | Local evidence |
+|---|---|---|
+| `make -j4 test test-native` | PASS | `build/m08-review-all.log` |
+| `make -j4 CC=clang CXX=clang++ BUILD_DIR=build/m08-clang test test-native` | PASS | `build/m08-review-clang.log` |
+| `make sanitize sanitize-native` alongside other builds | FAILED at the existing controller test's 35 ms deadline assertion, not a sanitizer runtime diagnostic | `build/m08-review-sanitize.log` |
+| `make sanitize sanitize-native` isolated rerun | PASS, ASan/UBSan with leak checks | `build/m08-review-sanitize-isolated.log` |
+| `make analyze` | PASS | `build/m08-review-analyze.log` |
+| `make test-tmux` | PASS, isolated tmux input/layout regression | `build/m08-review-tmux.log` |
+| `git diff --check` before code delivery | PASS | Terminal output |
+
+Coverage includes 1,000 deterministic malformed/truncated ELF mutations,
+ELF32/64 and both byte orders, ARM mapping symbols, 100 browsing sequences,
+100 breakpoint lifecycle cycles, actual C++ multiple locations, pending shared-
+library resolution, quoted/relocated source breakpoints and Run to Selected,
+real native hardware-breakpoint exhaustion, delayed/racing cleanup and no retry
+spin. C PTY cases repeat selector roundtrips at several positions and compare
+the restored listing/viewport. No test was disabled to obtain a pass.
+
+FR-11/23/24 have native automated/manual milestone evidence; FR-07/22/28 gain
+browsing/source-path regressions. NFR-01/03/04/05/06/09/10/12 have scoped evidence.
+No complete release or new performance measurement is claimed. ARM ELF corpus
+checks are not board tests. STM32, ESP32/Xtensa, ESP32/RISC-V and supplementary
+QEMU execution remain UNVERIFIED. M09–M18 and data watchpoints remain separate.
+
+This documentation follow-up records the accepted implementation, dependency,
+usage, tests and corrected collaboration workflow. No application code changed
+and no suites were rerun for this documentation-only handoff. Documentation
+commit/push remains with the owner; do not start M09 within this handoff.
 
 ## M00 — foundation
 
@@ -1135,3 +1236,41 @@ the taller default upper row. Step instructions toward the bottom; browse PC
 near the top and step again. Expect roughly five visible rows on either side
 where context permits. Drag the row divider and shrink/restore the terminal;
 your ratio must remain in effect. Owner visual acceptance remains pending.
+
+### M07 acceptance
+
+The owner explicitly accepted M07 after the symmetric navigation-margin and
+default-pane-height corrections. Commit
+`8d6947570a1d8dc1d904472b01b66e6b54415598` is reliably observed at both local HEAD
+and origin/main. Earlier awaiting-user entries are historical. No Git write was
+performed by the agent.
+
+M08 remains planned, awaiting the owner's go-ahead after the requested model
+switch. Its first stage is the documented disassembly research and decision
+discussion; implementation follows only the approved findings. Hardware/release
+acceptance remains UNVERIFIED. This acceptance-ledger update changes no code;
+`git diff --check` passes.
+
+### M08 Stage 1 — disassembly research started
+
+The owner clarified that the acceptance message authorized continuation, and
+8d69475 is already at HEAD and origin/main. The earlier wait for another
+go-ahead is superseded. M08 remains planned as an implementation gate while its
+research/decision stage is active; no new application feature is implemented.
+
+Consulted official IAR Disassembly window reference (Toolbar, Display area,
+Context menu), GDB MI data/file/symbol commands and memory/machine-code manuals,
+Microsoft VS Code DisassemblyView and MIEngine Disassembly implementations,
+Arm AAELF32 mapping-symbol rules and OpenOCD GDB memory-map documentation.
+Findings and product choices are presented in the discussion, without a separate
+research report or an independently finalized browsing policy.
+
+Read-only local probes using GDB 18.1 and ARM GDB 18.1 demonstrate whole-function
+MI disassembly on native ELF and a Cortex-M4 Thumb object, x86 zero-filled data
+decoded as repeated add instructions, and unavailable file-list-exec-sections
+on both installed GDBs. A range extending beyond available offline code returns
+an MI error. Logs: build/m08-disassembly-probe.mi,
+build/m08-zero-bytes-probe.mi and build/m08-arm-disassembly-probe.mi. The temporary
+C fixture lives in /tmp; no new application code or dependencies were added.
+These probes are not live hardware acceptance. Broad app suites are not rerun
+for this research/documentation step. `git diff --check` passes.

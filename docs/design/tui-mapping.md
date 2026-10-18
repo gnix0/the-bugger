@@ -3,8 +3,8 @@
 The HTML in `prototype.html` is the approved visual reference. The first M01
 rendering was rejected by the owner for visual differences. The corrected M01
 presentation was subsequently accepted. M02 retains that styling and adds
-accepted layout interactions. M07 adds live code/inspection scrolling and awaits
-owner validation. Passing
+accepted layout interactions. M07 live code/scrolling and M08 browsing/breakpoint
+corrections are accepted. Passing
 interaction tests does not establish fidelity to the reference.
 
 | Component | Previous discrepancy | Terminal implementation |
@@ -63,12 +63,18 @@ The six-pane workspace and its approved visual identity remain unchanged.
   track; horizontal `=`/`-` glyphs remain horizontal only. Click its
   track to page or drag its thumb. Initial demo sessions have no breakpoints.
   Live assembly retains preceding instructions across steps. Initial context can
-  include four decoded instructions before PC; subsequent stepping preserves the
+  include preceding decoded instructions where metadata permits; subsequent stepping preserves the
   viewport until PC enters a five-row top or bottom margin. Smaller panes scale
   the margin; available context limits it at listing edges. The default upper
   row receives 62% of the usable height, with divider resizing unchanged.
 
 ## Inspection
+
+The pane-local view menu toggles membership. Included views alone show a
+right-aligned filled circle (ASCII star fallback); unselected entries are blank
+there. Defaults start marked. Toggle to add/activate or remove a tab; other panes
+are independent and at least one tab survives. This correction awaits manual
+visual acceptance and adds neither presets nor saved templates.
 
 Compare at 140x44 or larger first, then at 112x28, 80x24 and below 48x18.
 Inspect the actual terminal directly and inside tmux with mouse enabled.

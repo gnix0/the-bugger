@@ -1,6 +1,6 @@
 # Native session fixtures
 
-These small programs are debug targets authored for M05–M07, not fake debugger
+These small programs are debug targets authored for M05–M08, not fake debugger
 engines or hardware evidence. `make fixtures` creates:
 
 - `build/debug-fixture` from `session.c`: prints its PID, working directory,
@@ -84,3 +84,21 @@ the correct full file identity. The C integration test copies this tree into a
 temporary path containing spaces, quotes and shell metacharacters, verifies GDB
 lookup/order/replacement/clear, and removes its owned files. Targets are always
 uninstrumented; sanitizer runtimes remain in the frontend and C harnesses.
+
+## M08 code-breakpoint targets
+
+`make fixtures` also builds:
+
+- `build/break-fixture` from `breakpoints.c`: silent C target with `m08_tick`,
+  counters, `m08_zeros`, a 4096-NOP `m08_long` function and an optional shared-
+  library path argument. After 100 tick calls it loops until interrupted.
+- `build/break-fixture-cpp` from `breakpoints.cpp`: overloaded `m08_overload`
+  functions for actual multiple-location breakpoints.
+- `build/break-fixture-library.so` from `breakpoints_library.c`: constructor
+  calls `m08_future`, exercising pending-breakpoint resolution after dlopen.
+
+Launch these through The Bugger and enter `start` in Console > Command to stop
+at main; do not pass `start` as an executable argument or expect a standalone
+fixture to print debugger status. To test pending resolution, add `m08_future`
+before running with the library's absolute path as the Launch argument.
+Targets remain uninstrumented; all frontend/harness code remains C.

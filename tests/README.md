@@ -4,6 +4,20 @@ Run `make test` from the repository root. All tests and support code are C,
 built with the same strict compiler flags as the application. No Python or
 external test framework is required.
 
+Pane-membership unit cases cover add/remove, active/inactive selection, retained
+scroll, invalid choices, last-tab protection and pane independence. A workspace
+PTY case toggles added/default tabs via `...` and verifies the final-tab guard;
+this new PTY case passed in the owner's `make test` after correcting menu targeting.
+
+Agents supply lengthy suite/stress/sanitizer commands for the owner to run;
+only quick focused checks run directly. Record whose run produced each result.
+
+- `test-images`: ELF32/64, both byte orders, code/data and ARM mapping symbols,
+  relocation overflow, reset and 1,000 malformed/truncated metadata mutations.
+- `test-breakpoints`: structured breakpoint rows, multiple/pending/hardware
+  state, resource errors, run-to races/timeouts/cleanup failures and ownership,
+  bounded malformed tables, no retry spin and aborted-execution reconciliation.
+
 - `test-code`: synthetic GDB-known files, bounded source/assembly windows and
   navigation, mixed fallback, raw-path/display escaping, stale local-view replies,
   source byte/line limits and no automatic invisible/running/idle reads.
@@ -72,6 +86,25 @@ real native C/C++ fixtures are in `fixtures/native/`, with separate M05
 acceptance in M14 and real board evidence in M17. Every release retests native
 x86-64 and the owner's STM32/ARM, ESP32/Xtensa and ESP32/RISC-V hardware;
 QEMU ARM/RISC-V adds coverage where available and never replaces board evidence.
+
+## M08 native browsing and breakpoint checks
+
+`make test-m08-native` builds/runs `test-break-native` and `test-break-tui`
+against actual GDB and the breakpoint C/C++/shared-library fixtures. This is
+also included in `make test-native` and `make sanitize-native`.
+
+Coverage: section boundaries, explicit raw zeros, sorted 128-instruction caches,
+long-function backward scans, 100 browsing sequences, 100 breakpoint lifecycle
+cycles, conditions/counts, pending library resolution, C++ multiple locations,
+hardware-resource exhaustion and temporary Run-to cleanup. Existing source tests
+also cover quoted relocated filenames, duplicate basenames and source Run-to.
+The code TUI test repeats selector roundtrips at several positions and compares
+the restored listing/viewport, gaps and warning visibility. Renderer checks
+verify aligned mnemonic/operand columns and bounded formatting.
+
+libelf development files are required. These checks require ptrace/PTY support;
+synthetic ARM metadata is not hardware evidence. See docs/testing.md for manual
+procedures and docs/progress.md for the accepted SHA, exact commands and failures.
 
 ## M04 fake peer and startup probe
 

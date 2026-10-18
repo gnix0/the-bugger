@@ -1,7 +1,9 @@
 # Development roadmap — v0.1.0 through v1.0.0
 
 Approved roadmap. Version targets are expected sequencing, not deadlines.
-M06 is accepted and committed/pushed as 1b21504. **M07 only** is authorized.
+M00–M08 are accepted. M08's code commit is `55ecbd4`; the documentation
+follow-up includes the owner-authorized reversible pane-tab correction in one
+commit. That correction awaits review. M09 follows owner commit/push.
 Simple positive feedback without issues implies acceptance and next-milestone
 authorization unless specified otherwise. Questions/instructions do not. The
 owner commit/push gate always remains required before beginning the next gate.
@@ -28,9 +30,10 @@ rewritten. Existing demo data proves visual behavior only. The MI parser and
 controller have independent diagnostic tools. Native launch/attach, Continue/Pause,
 console/output and Save Log integrate with the workspace. M06 adds selected
 context, Call Stack and Threads. M07 adds live Source/Disassembly, mixed/AT&T,
-focus-driven stepping, read-only code navigation and source recovery; it awaits
-owner validation. Breakpoints/Run to Selected and other inspection/profile
-persistence remain in their later gates. Explicit --demo preserves
+focus-driven stepping, read-only code navigation and source recovery; the owner
+accepted it. M08 adds bounded code-aware browsing, live code breakpoints and
+Run to Selected. Other inspection and profile persistence remain in their
+later gates. Explicit --demo preserves
 the visual-reference sample and its tests independently of live sessions.
 
 AGENTS.md governs requirements and workflow. The approved visual/interaction
@@ -56,16 +59,20 @@ small testable interfaces, terminal/tmux compatibility, non-color indicators and
 reproducible evidence. Protocol gates particularly cover NFR-04; inspection gates
 NFR-07; transport/integration gates measure NFR-02 instead of inventing timings.
 
-Deliver code, test data, a documented automated command and exact manual steps.
-Update docs/progress.md, docs/testing.md and tests/README.md as relevant; update
+Deliver code, test data, exact staging/test commands and manual steps first.
+After the owner accepts and commits the code, observe its SHA and separately
+update docs/progress.md, docs/testing.md and tests/README.md as relevant; update
 architecture notes when interfaces/ownership change, README for shipped behavior,
-and CHANGELOG for user-visible changes. Map tests and handoffs to FR/NFR IDs.
+and CHANGELOG for user-visible changes. Update README last. The owner commits
+the documentation separately. Map tests and handoffs to FR/NFR IDs.
 Record exclusions, failed/blocked checks, and compatibility/hardware limitations.
 
-Lifecycle: implement → run/inspect checks → document and provide a proposed
+Lifecycle: implement → focused checks → provide staging commands and a proposed
 Conventional Commit message (title at most 50 characters, detailed body) →
 **stop for manual review** → fix feedback and revise the message as needed →
-acceptance → owner commits/pushes → continuation. Simple positive feedback
+acceptance → owner commits/pushes code → separate documentation handoff and
+owner commit/push → continuation. An owner-created milestone commit establishes
+acceptance; do not leave that gate awaiting approval. Simple positive feedback
 without issues also authorizes continuation unless specified otherwise;
 questions/instructions do not. Never bypass the commit/push gate.
 Always include the message at delivery so the owner can commit after a successful
@@ -73,6 +80,18 @@ manual review. Providing it does not imply acceptance or authorize advancement.
 No autonomous commit, push, tag, merge, rebase, or milestone advancement. Neither
 automated success nor silence is acceptance. Every release requires its own owner
 acceptance; no prerelease suffixes are used.
+
+Agents run only quick, focused checks. Supply exact commands for lengthy test,
+stress, sanitizer or compiler-matrix runs and wait for the owner's results.
+Record agent-run and owner-run evidence separately; pending checks are unverified.
+
+Current owner-approved exception: combine the pending M08 documentation and
+reversible pane-tab correction in one commit. This does not authorize M09.
+Pane `...` choices toggle local membership: included views alone have a filled
+circle at the right (ASCII star fallback); defaults start marked. Add/activate
+absent views or remove included ones, retaining a survivor and at least one tab.
+Other panes are independent; promotion and per-view positions remain unchanged.
+This is current UI behavior, not the later persistence/templates feature.
 
 ## P00 — approved planning handoff and tab correction
 
@@ -175,9 +194,10 @@ All new v0.1.0 capabilities are release evidence requirements, not just visible 
 
 ## M08 staged disassembly review and original scope
 
-The owner's latest M07 feedback adds this ordering to the **next milestone**.
-It is recorded now, not authorized to start during M07 fixes. Wait for M07 manual
-acceptance, owner commit/push and the owner's go-ahead/model switch.
+Completed and accepted in code commit `55ecbd4`. The three approved stages were
+research/comparison, the resulting browsing corrections, then the original
+code-breakpoint/Run-to scope. Their scope and acceptance criteria are retained
+below as the gate record, not outstanding work.
 
 1. **Research and product review first.** Thoroughly examine official IAR/C-SPY,
    GDB/MI and relevant debugger documentation/implementations. Report sources and
@@ -207,11 +227,38 @@ acceptance, owner commit/push and the owner's go-ahead/model switch.
    pending/multiple locations, Default / Require hardware and Run to Selected,
    with the existing tests/exclusions above. This scope is preserved, not replaced.
 
-The gate contract still applies: automated evidence, owner manual validation,
-proposed Conventional Commit, owner commit/push, then authorized continuation.
-This note neither accepts M07 nor starts M08. Points 3–4 of the owner's current
-feedback are deliberately deferred to Stage 1; no broader browsing redesign is
-included in the immediate scrollbar/origin-window collapse fix.
+Approved and delivered behavior:
+
+- GDB decodes bounded ranges on demand; no eager whole-target disassembly.
+  libelf supplies ELF32/64 section/function/object metadata, relocation bounds
+  and ARM mapping symbols. Native mapped-image discovery uses `/proc/PID/maps`.
+- Browse earlier/later code from trusted anchors, retaining at most 128 sorted
+  instructions. Backward scanning is limited to 4096 chunks of 256 bytes.
+  Known gaps/data are skipped and labeled as bytes not decoded; explicit
+  Decode bytes permits raw inspection. Repeated instructions are not filtered
+  by their appearance. Unknown visible ranges are labeled honestly.
+- PC/breakpoint overlays remain independent of browsing. Preserve the viewport
+  through menu roundtrips and five-row follow margins; align assembly columns
+  and retain full text through horizontal scrolling. Warnings follow visible
+  rows, not the last fetch request.
+- Structured live breakpoint management covers conditions, ignore counts,
+  pending/multiple locations and Default / Require hardware. Run to Selected
+  owns separate temporary state, preserves user breakpoints and handles
+  intervening stops, timeouts and cleanup errors conservatively.
+- C tests cover section gaps, menu/viewport preservation, visible warnings,
+  malformed ELF metadata, long-function browsing, quoted source identities,
+  breakpoint lifecycle and hardware-resource errors. Acceptance/evidence are
+  recorded in progress.md; repeatable procedures are in testing.md.
+
+No register/Memory/variable inspector, data-watchpoint UI, remote connection,
+OpenOCD workflow or persistence work was folded into M08. These remain M09–M16.
+
+Decision sources: IAR [Disassembly window, Toolbar/Display/Context menu](https://docs.iar.com/ewarm/10.1x/en/c-spy-debugging/executing-your-application/reference-information-on-application-execution/disassembly-window.html),
+GDB [MI data](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Data-Manipulation.html)
+and [breakpoint commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Breakpoint-Commands.html),
+[VS Code DisassemblyView](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/debug/browser/disassemblyView.ts),
+[MIEngine disassembly](https://github.com/microsoft/MIEngine/blob/main/src/MIDebugEngine/Engine.Impl/Disassembly.cs)
+and [Arm AAELF32 §5.5.5 mapping symbols](https://github.com/ARM-software/abi-aa/blob/main/aaelf32/aaelf32.rst).
 
 ## Per-release architecture regression gate
 
@@ -331,26 +378,25 @@ IAR/C-SPY defects. These findings directly informed accepted requirements:
 
 ## Current authorization
 
-The owner accepted M06, committed/pushed 1b21504 and authorized M07. Deliver live
-Source/Disassembly, mixed display, AT&T x86-64 syntax, source/instruction stepping,
-Step Out, navigation and source recovery with C tests and a TUI demonstration.
-Breakpoint management and Run to Selected remain M08; other inspection and
-profiles retain their gates. Stop for M07 acceptance with a proposed commit.
+The owner accepted M08 and committed its code as `55ecbd4`. Complete the separate
+documentation commit/push before M09 CPU-register implementation. No M09 code
+is included in this handoff. Remote push of M08 was not independently observed;
+the local origin/main tracking ref still showed M07 when this record was made.
 Positive feedback implies continuation authorization as described above, after
 the owner commit/push gate; do not advance merely on successful automated tests.
 
-M07 manual-review correction authorized by the owner: provide one-cell vertical
+Historical M07 manual-review decisions retained in the accepted interface: provide one-cell vertical
 scrollbars matching horizontal styling and overflow-only horizontal bars in live code/Console/
 context views. Keep independent per-view horizontal position, mouse thumb/track
 and keyboard navigation, fixed source line gutters, clamping across resize/data
 changes, and no bars on a fitting axis. Preserve the accepted workspace geometry
-and action footers. This remains part of M07 review, not authorization for M08.
+and action footers. These corrections are accepted; they are not pending work.
 
 The owner additionally authorized the supplied launcher image's hierarchy, using
 Monokai Pro, a larger card centered on both axes, full-row choices/descriptions,
 icons/chevrons and compact terminal adaptation. Keep configuration behavior and
 the workspace unchanged, with no heavy rendering dependency or prerelease suffix.
-Include focused launcher/input/resize regressions in the pending M07 review.
+Focused launcher/input/resize regressions accompany the accepted launcher.
 
 Later M07 review refined assembly navigation: retain surrounding decoded code and
 bounded window anchors across stops; allow backward/forward browsing without PC

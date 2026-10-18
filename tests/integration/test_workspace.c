@@ -26,6 +26,21 @@ static void menu_at(TestTerminal *term, int x, int y)
     test_terminal_expect(term, "PANE ACTIONS");
 }
 
+static void toggle_view_at(TestTerminal *term, int menu_x, int menu_y, const char *name)
+{
+    click_at(term, menu_x, menu_y);
+    test_terminal_expect(term, "SHOW VIEW (DEMO)");
+    /* The same label can be a header tab. Select only this pane's menu body. */
+    for (int row = menu_y + 2; row < term->rows - 2; ++row) {
+        const char *at = strstr(term->cells[row], name);
+        if (at && at - term->cells[row] < menu_x) {
+            click_at(term, (int)(at - term->cells[row]), row);
+            return;
+        }
+    }
+    CHECK(false);
+}
+
 static void start(TestTerminal *term, const char *binary, const char *type, bool monochrome)
 {
     test_terminal_start(term, binary, type, monochrome);
@@ -267,5 +282,17 @@ int main(int argc, char *argv[])
     CHECK(count_text(&term, "...") == 7);
     test_terminal_stop(&term, 0);
     puts("PASS M02 monochrome keyboard-only split flow");
+    start(&term, argv[1], "xterm-256color", false);
+    CHECK(test_terminal_find(&term, "...", &x, &y));
+    toggle_view_at(&term, x, y, "Threads"); test_terminal_expect(&term, "View added to this pane.");
+    CHECK(strstr(term.cells[y], "Threads"));
+    toggle_view_at(&term, x, y, "Symbols"); test_terminal_expect(&term, "View removed from this pane.");
+    CHECK(strstr(term.cells[y], "Threads") && !strstr(term.cells[y], "Symbols"));
+    toggle_view_at(&term, x, y, "Threads"); test_terminal_expect(&term, "View removed from this pane.");
+    CHECK(!strstr(term.cells[y], "Threads") && strstr(term.cells[y], "Source"));
+    toggle_view_at(&term, x, y, "Source"); test_terminal_expect(&term, "Each pane needs at least one tab.");
+    CHECK(strstr(term.cells[y], "Source"));
+    test_terminal_send(&term, "\033"); test_terminal_stop(&term, 0);
+    puts("PASS pane view menu adds/removes active and inactive tabs and protects the final tab");
     return EXIT_SUCCESS;
 }

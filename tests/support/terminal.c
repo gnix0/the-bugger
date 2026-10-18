@@ -306,7 +306,14 @@ void test_terminal_expect(TestTerminal *term, const char *text)
     }
     fprintf(stderr, "Expected on screen: %s\n", text);
     for (int row = 0; row < term->rows; ++row) { fprintf(stderr, "%s\n", term->cells[row]); }
-    fprintf(stderr, "Raw terminal output:\n%s\n", term->output);
+    fputs("Raw terminal tail (escaped, at most 1024 bytes):\n", stderr);
+    size_t start = term->output_length > 1024 ? term->output_length - 1024 : 0;
+    for (size_t i = start; i < term->output_length; ++i) {
+        unsigned char c = (unsigned char)term->output[i];
+        if (c >= 32 && c < 127) { (void)fputc(c, stderr); }
+        else { (void)fprintf(stderr, "\\x%02x", (unsigned)c); }
+    }
+    (void)fputc('\n', stderr);
     (void)kill(term->child, SIGKILL);
     (void)waitpid(term->child, NULL, 0);
     CHECK(false);

@@ -91,6 +91,33 @@ void tb_demo_action(TbDemo *demo, TbDemoAction action)
     }
 }
 
+bool tb_demo_has_view(const TbDemoPane *pane, TbView view)
+{
+    for (int i = 0; i < pane->count; ++i) { if (pane->tabs[i] == view) { return true; } }
+    return false;
+}
+
+static bool remove_tab(TbDemoPane *pane, int tab)
+{
+    if (pane->count <= 1) { return false; }
+    for (int i = tab; i + 1 < pane->count; ++i) { pane->tabs[i] = pane->tabs[i + 1]; }
+    --pane->count;
+    if (pane->active > tab) { --pane->active; }
+    if (pane->active >= pane->count) { pane->active = pane->count - 1; }
+    return true;
+}
+
+bool tb_demo_toggle_view(TbDemo *demo, TbView view)
+{
+    if (view < 0 || view >= TB_VIEW_COUNT) { return false; }
+    TbDemoPane *pane = &demo->panes[demo->pane];
+    for (int i = 0; i < pane->count; ++i) {
+        if (pane->tabs[i] == view) { return remove_tab(pane, i); }
+    }
+    tb_demo_view(demo, view);
+    return true;
+}
+
 void tb_demo_view(TbDemo *demo, TbView view)
 {
     TbDemoPane *pane = &demo->panes[demo->pane];
@@ -110,13 +137,7 @@ void tb_demo_view(TbDemo *demo, TbView view)
 bool tb_demo_close_tab(TbDemo *demo)
 {
     TbDemoPane *pane = &demo->panes[demo->pane];
-    if (pane->count <= 1) { return false; }
-    for (int i = pane->active; i + 1 < pane->count; ++i) {
-        pane->tabs[i] = pane->tabs[i + 1];
-    }
-    --pane->count;
-    if (pane->active >= pane->count) { pane->active = pane->count - 1; }
-    return true;
+    return remove_tab(pane, pane->active);
 }
 
 int tb_demo_row_count(const TbDemo *demo, TbView view)

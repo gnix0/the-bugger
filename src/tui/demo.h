@@ -44,6 +44,8 @@ void tb_demo_init(TbDemo *demo);
 void tb_demo_action(TbDemo *demo, TbDemoAction action);
 void tb_demo_log(TbDemo *demo, const char *message);
 void tb_demo_view(TbDemo *demo, TbView view);
+bool tb_demo_has_view(const TbDemoPane *pane, TbView view);
+bool tb_demo_toggle_view(TbDemo *demo, TbView view);
 bool tb_demo_close_tab(TbDemo *demo);
 int tb_demo_row_count(const TbDemo *demo, TbView view);
 TbScroll tb_demo_scrollbar(const TbDemo *demo, const TbDemoPane *pane, int visible);

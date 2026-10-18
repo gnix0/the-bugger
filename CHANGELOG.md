@@ -4,6 +4,16 @@
 
 ### Added
 
+- Reversible pane-local tabs in `...`: included views alone have a filled-circle
+  marker, defaults can be removed, and each pane retains at least one tab.
+  Minimal terminals use an ASCII marker when the circle is unavailable.
+- Live code-breakpoint management through gutter/F9 and the Breakpoints view:
+  conditions, ignore counts, pending/multiple locations and required hardware.
+- Run to Selected for source lines/instruction addresses, preserving user
+  breakpoints and cleaning up temporary state on intervening stops or errors.
+- Bounded code-aware disassembly browsing through ELF metadata using libelf;
+  explicit raw byte decoding, honest unknown ranges and labeled skipped gaps.
+- C ELF mutation, native-GDB breakpoint/browsing and TUI regression coverage.
 - Owner-refined centered launcher with Monokai title/version, subtle separators,
   full-row session choices, compact icons, descriptions and chevrons. The entire
   card centers on both axes and adapts to smaller terminals without new assets
@@ -26,7 +36,7 @@
   remain distinct from actual stopped PC.
 - C synthetic and actual-GDB code tests covering bounded/stale reads, -O0/-O2/
   stripped/C++ targets, relocated duplicate basenames and literal quoted paths.
-  Breakpoint UI and Run to Selected remain the next gate.
+  M08 adds the breakpoint UI and Run to Selected on this code model.
 - Live Call Stack and Threads with mouse/keyboard frame and thread selection,
   simple argument values, stack paging, Refresh and stale/unavailable states.
 - Separate stopped execution PC/thread from an inspected caller or other thread;
@@ -75,6 +85,12 @@
 
 ### Fixed
 
+- Opening/closing a view selector preserves disassembly cache and viewport.
+- Disassembly warnings follow visible rows; backward scans skip section gaps
+  consistently. Address, byte, mnemonic and operand columns align while complete
+  lines remain accessible through horizontal scrolling.
+- Recover stopped context from structured thread states when GDB reports running
+  and then aborts hardware-breakpoint insertion without a stop notification.
 - Backward assembly reads containing only a short prefix retain the forward
   listing and viewport context instead of collapsing the pane to one row.
 - One-cell vertical scrollbars use vertical track/thumb glyphs; horizontal
@@ -94,6 +110,6 @@
   Focus follows the promoted active tab, mouse activation keeps normal styling,
   and subsequent keyboard activation addresses the intended tab.
 
-Native launch/control/console, context and code inspection are live; breakpoints,
-other inspection, remote/OpenOCD workflows, profiles, hardware acceptance and
+Native launch/control/console, context, code inspection and code breakpoints are
+live; other inspection, remote/OpenOCD workflows, profiles, hardware acceptance and
 release readiness remain incomplete.

@@ -2,6 +2,10 @@
 
 ## Automated checks
 
+Agents run quick, focused checks only. Lengthy suites, stress runs, sanitizer
+and compiler matrices below are commands for the owner to execute; wait for
+their results and distinguish owner-run from agent-run evidence in progress.md.
+
 Run from the repository root on Linux:
 
 ```sh
@@ -15,8 +19,8 @@ git diff --check
 ```
 
 `all` compiles C17 with strict warnings including `-Wall -Wextra -Wpedantic`
-and `-Werror`. `test` builds and runs thirteen C test executables: two MI suites,
-two controller suites, context/code models, native word parsing, demo, layout,
+and `-Werror`. `test` builds and runs fifteen C test executables: two MI suites,
+two controller suites, ELF/breakpoint/context/code models, native word parsing, demo, layout,
 renderer, CLI and two workspace PTY suites, described in
 `tests/README.md`. `sanitize` builds separately
 with ASan/UBSan; a runtime
@@ -36,7 +40,56 @@ retained as `build/m01-*`; these are local evidence, not tracked artifacts.
 Durable command summaries and limitations belong in `docs/progress.md`.
 Changing compiler or flags requires a fresh build directory or cleaning.
 
+## M08 acceptance — browsing, code breakpoints and Run to Selected
+
+Post-M08 tab correction, pending owner validation: open Registers' `...` menu.
+Registers and Peripherals alone start marked. Add Threads, reopen and remove it;
+add it again and remove Peripherals instead. Threads stays active and Registers
+remains available. Another pane's markers reflect only its own tabs. Check
+active/inactive removal, keyboard access, compact menus and last-tab protection.
+Unselected options have no empty-circle marker. Run `make test` for the added
+unit and workspace PTY cases; the owner reported these passing after the
+menu-targeting correction, along with the full native suite.
+
+Accepted code commit: `55ecbd4`. These steps reproduce its workflow; release
+acceptance and real-board coverage remain separate.
+
+1. Run `make fixtures`, then `./build/the-bugger`. Choose Linux Launch and
+   `build/break-fixture`. Review/Start native; Console > Command > `start`
+   stops at main. The fixture is intentionally silent and runs under GDB.
+2. Disassembly > Actions > Go to address/symbol: enter `m08_long`. Scroll
+   forward and backward through its long body. PC must not move. Return to
+   Stopped restores execution context and the five-row follow margins.
+3. Browse `_init`, then forward/backward across its section boundary. The
+   five-byte .init/.plt gap in these Linux fixtures is labeled as bytes not
+   decoded. Ordinary browsing must not decode that gap as application code.
+4. At several scroll positions open/close `...`; addresses, cache and viewport
+   must survive. Warnings describe only visible unknown/raw ranges. Columns
+   align and horizontal scrolling retains complete bytes/operands.
+5. Go to `m08_zeros`: normal inspection identifies data; Actions > Decode bytes
+   explicitly exposes raw decoding. Repeated instructions are legitimate raw
+   output, not filtered based on their appearance.
+6. Toggle Source breakpoints with gutter/F9 and inspect the live Breakpoints
+   view. Manage adds/removes/enables/disables entries, edits conditions and ignore
+   counts, selects Default/Require hardware for new entries and refreshes state.
+7. Add `m08_tick`, condition `value == 3`, Continue and verify the actual stop.
+   Invalid conditions/resource errors must be readable and preserve prior state.
+   Hardware availability is target-dependent; never infer a silent fallback.
+8. Select the function's return line and Actions > Run to Selected. It stops
+   there or reports an intervening stop. Existing user breakpoints survive;
+   temporary state is cleaned up. Manage > Refresh explicitly retries failed
+   cleanup; ambiguous ownership blocks execution rather than deleting guesses.
+9. Check resize, narrow panes, tmux with opt-in mouse, and clean session exit.
+   Registers/Memory/Locals and data-watchpoint UI remain later gates.
+
+Owner-run focused native command: `make test-m08-native`; broad commands remain
+`make test test-native`, `make sanitize sanitize-native`, `make analyze` and
+`make test-tmux`. Final evidence and the earlier timing failure are in progress.md.
+
 ## M07 manual acceptance — live Source and Disassembly
+
+Historical M07 checklist (accepted as `8d69475`); M08 above supersedes its
+four-instruction browsing limits and then-unavailable breakpoint controls.
 
 M06 is accepted as 1b21504. This gate adds live code, stepping and navigation;
 breakpoint UI/F9/Run to Selected remain M08. Registers/Memory/Locals remain

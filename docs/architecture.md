@@ -1,6 +1,6 @@
 # Architecture
 
-## Current implementation (M07)
+## Current implementation (M08)
 
 `src/main.c` handles help/version and starts the terminal application.
 `src/tui/app.c` owns startup/configuration/review/workspace pages, keyboard
@@ -12,11 +12,13 @@ debugger-domain state and must be replaced by live data in real sessions.
 
 The build and tests are C17 with strict warnings; Make is the only build driver.
 C tests use POSIX pipes, processes and PTYs. Python tests were replaced at the
-owner's request. The only current application library dependency is ncursesw.
+owner's request. Application libraries are ncursesw and libelf (ELF metadata
+only; GDB performs instruction decoding).
 The MI parser/controller and native session module now serve real Linux
 launch/attach sessions through the TUI. Console/output and Continue/Pause are
 live. Source/Disassembly and stepping use the code model; Call Stack and Threads
-use the selected-context model. Other inspection
+use the selected-context model. Code breakpoints and Run to Selected use the
+breakpoint model. Other inspection
 views have explicit unavailable messages. Explicit --demo
 retains simulated presentation separately. Embedded/remote remain previews;
 inspection, OpenOCD management and persistence await their own gates.
@@ -310,7 +312,8 @@ Stopped refreshes retain the current window if it contains PC, and can restore
 previously decoded ranges after returning from another function. A new window
 may use the structured first instruction's function offset for one bounded
 pre-context read (at most 1024 preceding bytes plus the normal 256-byte forward
-range); parsing retains only the last four preceding instructions and the bounded
+range). The metadata-free compatibility path retains four preceding instructions;
+the native indexed path retains up to 64 preceding instructions and the bounded
 forward listing. Missing/too-distant metadata falls back to the known PC boundary.
 All bytes are fetched fresh after stops; saved anchors are browsing context,
 not trace or retained historical target state. Scrolling beyond a window edge
@@ -347,7 +350,8 @@ Step Out remains finish. Full-page tiled Actions, file filtering and source
 settings screens share normal mouse/Tab/arrows/Enter/Escape editing. Source/ASM
 scroll and horizontal pan change only the viewport; `>` denotes actual stopped
 execution and `~` an inspected frame. No secondary execution-like cursor is added.
-Breakpoints/gutter/F9/Run to Selected remain M08; other inspection gates are intact.
+Breakpoints/gutter/F9/Run to Selected are provided by M08 below; later inspection
+gates remain intact.
 
 Live pane scrolling uses shared bounded content/viewport measurements. Optional
 horizontal tracks reserve a row above the action footer; optional vertical
@@ -370,6 +374,55 @@ Protocol references: GDB's [MI data commands](https://sourceware.org/gdb/current
 [execution commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Program-Execution.html),
 [file commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-File-Commands.html)
 and [source lookup](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Source-Path.html).
+
+## M08 code boundaries and breakpoints
+
+Pane `...` membership toggles query only that pane's tabs. Included options
+alone receive a filled-circle marker, with ASCII fallback. Shared indexed
+removal preserves active selection when another tab is removed and protects
+the final tab. Adding activates the new view; promotion and per-view positions
+remain. No global membership state or persistence is introduced.
+
+`src/model/images.{c,h}` uses libelf/GElf for ELF32/64 in either byte order.
+Allocated/executable sections, function/object symbols and ARM mapping symbols
+classify ranges and supply trusted anchors. Native `/proc/PID/maps` plus PT_LOAD
+offsets establish mapped-image load bias. Library/PID lifecycle events invalidate
+metadata. Unsupported/unavailable metadata stays unknown, never fabricated.
+Limits are 16 images, 256 allocated sections/image, 8192 retained symbols/image,
+65536 scanned symbols/image and 64 MiB/image; limited catalogs are disclosed.
+
+Indexed instruction caches merge sorted/deduplicated windows, retaining at most
+128 instructions. Backward extension decodes forward from a known anchor in
+256-byte chunks, at most 4096 chunks. It skips unknown/non-code boundaries to
+the next known code anchor instead of guessing a variable-length x86 boundary.
+Failures retain the prior listing. Raw decoding is explicit; repeated byte or
+instruction patterns alone never classify code. Gap rows say how many bytes
+were not decoded. Visible instruction metadata determines warnings, independent
+of the last request or offscreen rows.
+
+Visibility changes do not invalidate a cached code view; stop/context/settings
+changes do. Opening/closing a selector therefore preserves cache and viewport.
+One assembly formatter supplies both rendered rows and horizontal extent,
+aligning address, byte, mnemonic and operand columns without discarding bytes.
+
+`src/model/breakpoints.{c,h}` owns a bounded 256-row MI snapshot, parent/child and
+pending locations, conditions, ignore counts, hits, enabled state and hardware
+policy. Structured source/line arguments preserve literal quoted paths.
+Notifications/stops mark the table dirty; no idle polling or parsed CLI table.
+Gutter/F9 and the tiled Manage screen share this model.
+
+Run to Selected inserts a separately owned, thread-specific temporary breakpoint.
+An intervening stop cancels continuation and triggers cleanup. Stop generations,
+notifications and a pre-insertion ID baseline protect user breakpoints through
+races/timeouts. Ambiguous ownership blocks execution instead of deleting guessed
+entries. Cleanup failure offers explicit Manage > Refresh retry without spinning.
+
+Some GDB hardware-insertion aborts emit ^running then ^error with the same token
+and no *stopped. The controller schedules one bounded -thread-info query. Only
+a structured result confirming every thread stopped establishes stopped state;
+the context model then refreshes the actual reported frame. Missing/running
+thread states stay unconfirmed, with a useful diagnostic. CLI warnings are logs,
+not evidence of execution state. This is native evidence, not remote-board proof.
 
 ## Approved direction
 

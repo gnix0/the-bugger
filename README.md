@@ -14,8 +14,8 @@ these acceptance targets do not limit the product architecture.
 
 **Current development build:** native Linux launch/attach, Continue/Pause,
 program output, GDB console commands, Save Log, Call Stack, Threads, live
-Source/Disassembly and source/instruction stepping are functional. Other
-inspection panes report unavailable; breakpoint controls, profiles and
+Source/Disassembly, source/instruction stepping, code breakpoints and Run to
+Selected are functional. Other inspection panes report unavailable; profiles and
 remote/OpenOCD workflows are not implemented yet. `--demo` opens the
 separate, explicitly simulated visual reference.
 `0.1.0` is the target version, not a declaration of release readiness.
@@ -23,7 +23,8 @@ separate, explicitly simulated visual reference.
 ## Build and run
 
 Build on Linux with a C17 compiler (GCC or Clang), GNU Make, pkg-config and the
-ncursesw development headers/library. Native sessions require a compatible GDB
+ncursesw and libelf development headers/libraries. libelf supplies ELF metadata;
+GDB performs instruction decoding. Native sessions require a compatible GDB
 in PATH or an explicitly selected executable. Linux pidfds provide owned-inferior
 crash recovery; unavailable support is reported. Application and test harnesses
 are C; a C++ compiler is used only for the optional debug-target fixtures.
@@ -150,13 +151,19 @@ assembly uses AT&T syntax. **Stopped** returns to the original stopped thread
 and frame. Wheel/scrollbars and arrow/Page keys move viewports; Left/Right pans
 long code lines. Disassembly's `<` / `>` footer controls page instruction windows.
 Assembly retains surrounding instructions across stops; scrolling at a window
-edge can load earlier/next code without moving execution. Where GDB supplies
-valid nearby function offsets, initial context includes up to four preceding
-instructions. Stepping leaves the viewport still until PC reaches a five-row
+edge can load earlier/next code without moving execution. ELF metadata and GDB
+provide trusted decoding anchors and preceding context where available.
+Stepping leaves the viewport still until PC reaches a five-row
 top or bottom margin (smaller in short panes and limited by available context).
 Manual browsing stays put until stepping
 or **Stopped**. Reads/history are bounded; missing metadata is never replaced by
-guessed x86 instruction boundaries.
+guessed x86 instruction boundaries. Browsing skips known data/section gaps and
+labels the bytes not decoded. **Actions → Decode bytes** explicitly inspects raw
+data; repeated instructions are not hidden merely because they look unusual.
+Unknown ranges are labeled for the instructions currently visible. Opening and
+closing the view selector preserves the listing and viewport. Addresses, bytes,
+mnemonics and operands use aligned columns, with full lines available through
+horizontal scrolling.
 The default upper row gets 62% of the available pane height, giving Source,
 Disassembly and Registers more room. Dragging dividers adjusts this as usual.
 Live code, Console, Call Stack and Threads show a horizontal scrollbar only when
@@ -171,20 +178,53 @@ local-prefix substitutions, preserving literal spaces and quoted paths. GDB must
 resolve source identities; the frontend does not guess duplicate basenames or
 unresolved relative paths. Settings are session-only until profiles are available.
 Code browsing is bounded to 256 catalog files, 1 MiB / 32,768 source lines per
-pane and 128 instructions per 256-byte window. Mixed groups outside the cached
+pane and a 128-instruction cache with bounded, normally 256-byte fetches.
+Backward scans from known anchors have a work limit and retain the prior listing
+on failure. Mixed groups outside the cached
 file show their location with unavailable text rather than loading every file.
 See the [code checklist](docs/testing.md#m07-manual-acceptance--live-source-and-disassembly)
 for optimized, stripped and relocated-source examples.
+
+## Code breakpoints and Run to Selected
+
+Click the Source gutter or select a source/instruction row and press **F9**
+(or toolbar **BP**) to toggle a code breakpoint. The **Breakpoints** view shows
+live enabled/pending/multiple-location state. **Manage** adds, removes, enables
+or disables entries, edits conditions and GDB ignore counts, and selects
+**Default / Require hardware** for newly entered locations. Hardware resources
+are target-dependent; errors never silently substitute a software breakpoint.
+
+From Source or Disassembly **Actions**, **Run to Selected** resumes toward the
+selected line/address without changing PC directly. It preserves user
+breakpoints; an intervening stop cancels the operation and temporary state is
+cleaned up. Failed cleanup blocks execution and offers **Manage → Refresh**;
+ambiguous ownership is reported rather than guessing which entry to delete.
+Hardware data watchpoints are a later capability.
+
+For a reproducible example, build with `make fixtures`, launch
+`build/break-fixture` through the startup menu, then enter `start` in Console
+**Command**. This fixture is silent. Add `m08_tick` in **Breakpoints → Manage**,
+set condition `value == 3`, and Continue to stop inside the function. Browse
+`m08_long` to inspect a long instruction range or `m08_zeros` for explicit raw
+decoding. See the [M08 checklist](docs/testing.md#m08-acceptance--browsing-code-breakpoints-and-run-to-selected).
+
+## Workspace controls
 
 The active tab moves to the left. Mouse activation leaves inactive tabs in their
 normal style; keyboard focus follows the active tab. Use clicks or Tab/Shift+Tab,
 arrows and Enter. In fields use Left/Right, Home/End, Backspace/Delete and Ctrl+U.
 Escape goes back; `q` closes/backs out outside text fields and keeps the launcher
 open. **Quit** or `Ctrl+Q` exits the application, confirming active-session closure.
-Function keys have visible alternatives. Breakpoint and Reset actions remain
-unavailable in live sessions; demo actions are explicitly simulated.
+Function keys have visible alternatives. Reset remains unavailable in live
+sessions; demo actions are explicitly simulated.
 
-Click `...` for view selection and pane actions. Wheel or a focused body with
+Click `...` to customize that pane's tabs or open pane actions. A filled circle
+at the right marks each included view; unselected options have no marker.
+Choose an absent view to add/activate it, or choose an included view to remove
+its tab, including defaults. Each pane retains at least one tab. Membership is
+independent between panes; choosing Threads here does not mark it elsewhere.
+Minimal terminals use `*` when a single-cell filled circle is unavailable.
+Wheel or a focused body with
 arrows/PageUp/PageDown scrolls; vertical scrollbar tracks page and thumbs drag.
 Keys `1`–`9` focus retained pane IDs; `[`/`]` cycles panes. There are no layout
 presets, layout selector, floating windows or Vim modes.
