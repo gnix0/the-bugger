@@ -10,6 +10,54 @@ checks. These scoped exceptions do not authorize unrelated future suites.
 Native coverage validates the Linux adapter and shared models; embedded-first
 product scope still requires later ARM/Xtensa/RISC-V backend and physical evidence.
 
+## M12 hardware data-watchpoint acceptance
+
+Accepted at `f1dbb8a`; [the ledger](progress.md#m12-completion-verification)
+distinguishes agent-run evidence from requested owner runs whose output was not
+reported. Covers FR-25 and NFR-03/04/05/06/07/09/10. No Linux result establishes
+ARM/Xtensa/RISC-V hardware support.
+
+```sh
+make test-m12-model
+make test-m12-native test-m12-slow
+# Terminal-only rerun:
+make test-m12-tui
+```
+
+The quick C peer covers all three backend types, width/overflow guards, hit
+values, scope expiry, fallback/downgrade removal, unsupported hardware, context
+changes, malformed tables, ambiguous ownership and cleanup failure without retry
+spin. The slow variant adds timeout and late-reply recovery. Native tests cover
+actual change/read/access stops, enable/disable/remove, local scope expiry and
+forced software fallback. The TUI test covers variable/Memory entry points,
+mode/width review, hits, rejected calls, resize and terminal cleanup. These are
+test descriptions, not evidence that an unreported run passed. Run full native,
+unit and tmux regressions separately; sanitizers/static analysis remain required
+at integration/release gates with actual results recorded.
+
+1. Build `make all fixtures`, launch `build/watch-fixture`, then Console `start`.
+2. Add `watched_value` in Watches. Actions → Hardware data watchpoint opens an
+   editable expression and mode review; Create explicitly permits GDB evaluation.
+   Confirm hardware verification before Continue is allowed.
+3. Continue: the value-change watch should stop at the write from `17` to `20`.
+   Inspect the reported reason/value and the Breakpoints hit count.
+4. In Breakpoints → Manage, disable, enable and remove it. Re-enable must verify
+   its type again; removing it must preserve unrelated code breakpoints.
+5. Read `&watched_value` in Memory. Options → Hardware watchpoint at selected row
+   reviews the row's first-group address; choose the width and read/access mode
+   explicitly. No watchpoint covers the full displayed range by default.
+6. Reject a call such as `watch_checkpoint(0)` without running it. Unsupported
+   modes/widths/resources must report backend errors rather than retain software
+   fallback. A failed cleanup blocks execution and offers explicit Refresh.
+7. Resize, navigate by keyboard, and repeat clicks/keys in mouse-enabled tmux.
+   Exit normally and confirm terminal restoration.
+
+M17: repeat supported modes and slot/width/alignment failures on real STM32/ARM
+and ESP32/Xtensa/RISC-V targets. Only deliberately chosen safe fixture storage
+is used; GDB may sample watched memory on creation/stops. Peripheral side effects
+are not ruled out by using hardware watchpoints. Hardware rows remain UNVERIFIED
+until real evidence is recorded.
+
 ## M11 Locals/Watches acceptance
 
 Accepted implementation: `7744643`; actual evidence and limitations are in

@@ -6,8 +6,9 @@ the pane-tab correction is `0023150`. M09's SHA was not supplied or checked.
 M10 is accepted at `2f951fb8dbaa10f490e5abd6eba31d1ced1dc6af`. Its completed
 scope includes the inline Memory correction and embedded-first architecture review.
 M11 Locals/Watches is accepted at `77446434d8e6e1e1a356abaa4d94e028a1098036`.
-This separate documentation handoff records its implementation and validation.
-M12 remains planned; no implementation is included in this handoff.
+M12 hardware data watchpoints is accepted at
+`f1dbb8a70033821e33e9a5506e23758d0723587d`. This separate documentation handoff
+records its implementation and the available evidence. M13 remains planned.
 Native Linux remains the implementation/validation focus through M14; embedded
 development is the primary product direction, with real hardware gates preserved.
 Simple positive feedback without issues implies acceptance and next-milestone
@@ -198,7 +199,7 @@ All new v0.1.0 capabilities are release evidence requirements, not just visible 
 | M09 / M06 | Discovered CPU registers, formats, changes and available groups; no editing/custom groups/bitfield decoder. | Native GDB and x86/ARM MI fixtures; unusual/large sets, unavailable values, frame/thread changes and change-baseline reset. | Compare GDB values, change format, step and inspect context-correct changes. FR-08/20, NFR-07. |
 | M10 / M06 and view-instance state | Independent Memory, bounded expression/address reads, hex/ASCII, grouping/target byte order; no editing/search/export/comparison. | Buffers, partial/unreadable ranges, invalid expressions, overflow/endian, separate instances/paging and no unsolicited MMIO reads. | Inspect two buffers independently, scroll/group, and verify invalid-address and deliberate-refresh behavior. FR-09/20/26. |
 | M11 / M06 (accepted) | Scoped read-only Locals/Watches, types/formats/changes, lazy children/array pages; pre-dispatch read authorization and explicit unknown-region inspection. No editing/Auto/Statics/STL-specific UI. | C/C++ aggregates/pointers, optimized/unavailable, invalid/mutating expressions, complete-footprint/region denial before requests, bounds, baselines and varobject cleanup. | Add/read/remove/expand watches, page arrays and change frames; no fabricated values or automatic unknown-region reads. FR-10/27. |
-| M12 / M08, M10, M11 | Hardware-assisted data watchpoints and Watches/Memory actions; no software fallback. | Value-change/read/access where supported; scope expiry, expression/width/alignment/resource failures, fallback rejection and backend reconciliation. | Trigger supported watch modes on known data, inspect reason, disable/remove and see unsupported errors. FR-25. |
+| M12 / M08, M10, M11 (accepted) | Hardware-required value-change/read/access watchpoints and Memory/variable actions; explicit creation, backend type reconciliation and execution interlock; no software fallback. | Scope expiry, width/overflow/resource errors, fallback/downgrade removal, malformed/late replies, context races and cleanup ownership. Real native/TUI tests remain distinct from model evidence. | Trigger supported modes, review width/address, inspect hit reason, enable/disable/remove and recover unsupported/cleanup errors. FR-25. |
 | M13 / session model and M07 | Basic XDG connection/source profiles, recent sessions and key remapping; no rich setup restoration. | Schema/round-trip/corrupt/truncated/atomic-write errors, argv/spaces, source rules, CRUD and key validation. | Save/reopen/edit/delete profile, recover bad data, remap intercepted key and retain mouse alternatives. FR-01/06/14/28. |
 | M14 / M05–M13 | Native integration/acceptance and failure hardening; no new feature family. | Complete C/C++ native suite, optimized/stripped/attach, repeated sessions/output floods, cleanup, sanitizers and measured UI/idle behavior. | Complete native live workflow directly/in tmux, splits, watchpoints, source recovery, profiles and Save Log. FR-02/03 and native release evidence. |
 | M15 / M14 | Generic remote/extended-remote with optional symbols; no OpenOCD ownership in existing-server mode. | Real external gdbserver, disconnect/reconnect/refused/timeout, missing symbols, architecture mismatch and external survival. | Debug through external endpoint and disconnect without terminating its server. FR-05/16. |
@@ -441,10 +442,10 @@ IAR/C-SPY defects. These findings directly informed accepted requirements:
 
 ## Current authorization
 
-M00–M11 and the pane-tab correction are accepted. M11's implementation is
-`77446434d8e6e1e1a356abaa4d94e028a1098036`; the owner confirmed acceptance and
-commit/push. Complete this separate documentation handoff and stop for the
-owner's documentation commit. M12 remains the next planned implementation gate;
+M00–M12 and the pane-tab correction are accepted. M12's implementation is
+`f1dbb8a70033821e33e9a5506e23758d0723587d`; owner acceptance and the implementation
+commit are recorded. Complete this separate documentation handoff and stop for
+the owner's documentation commit. M13 remains the next planned implementation gate;
 this handoff does not begin it. Automated success alone is not acceptance.
 
 M09 implementation uses structured register names/values, selected thread/frame,

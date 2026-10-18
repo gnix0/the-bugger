@@ -17,7 +17,8 @@ these acceptance targets do not limit the product architecture.
 program output, GDB console commands, Save Log, Call Stack, Threads, live
 Source/Disassembly, source/instruction stepping, code breakpoints and Run to
 Selected, read-only CPU Registers, Memory with inline address navigation and
-bounded hex/ASCII browsing, and scoped Locals/Watches are functional.
+bounded hex/ASCII browsing, scoped Locals/Watches, and hardware-required data
+watchpoints are functional where the backend supports them.
 Other inspection panes report unavailable; profiles and
 remote/OpenOCD workflows are not implemented yet. `--demo` opens the
 separate, explicitly simulated visual reference.
@@ -249,7 +250,18 @@ selected line/address without changing PC directly. It preserves user
 breakpoints; an intervening stop cancels the operation and temporary state is
 cleaned up. Failed cleanup blocks execution and offers **Manage → Refresh**;
 ambiguous ownership is reported rather than guessing which entry to delete.
-Hardware data watchpoints are a later capability.
+Data watchpoints use the same list and management controls. **Add hardware data
+watchpoint…** accepts a conservative expression and Value change, Read or
+Read/write access mode. Creation may read watched storage. Hardware type is
+verified before frontend execution; software fallback is removed. Width/slot
+insertion errors can still occur on resume and remain visible.
+
+Locals/Watches **Actions** can prefill a root expression; qualified child paths
+can be entered explicitly. Memory **Options** offers a watchpoint at the selected
+row's first group, with editable address and 1/2/4/8-byte width review. It does
+not implicitly watch the entire visible range. Mode, width and available slots
+depend on the target and GDB/server. See the
+[watchpoint walkthrough](docs/testing.md#m12-hardware-data-watchpoint-acceptance).
 
 For a reproducible example, build with `make fixtures`, launch
 `build/break-fixture` through the startup menu, then enter `start` in Console
@@ -373,8 +385,9 @@ way; it is not firmware/hardware acceptance.
 ## Project direction
 
 Independent Memory views and scoped Locals/Watches complement code, breakpoint
-and CPU-register inspection. Hardware data watchpoints, basic profiles and key
-remapping are planned. Firmware sessions will use an appropriate
+and CPU-register inspection. Hardware data watchpoints add capability-dependent
+stops on data access. Basic profiles and key remapping are planned. Firmware
+sessions will use an appropriate
 GDB/server, optionally OpenOCD, without assuming ARM registers or a universal
 probe backend.
 

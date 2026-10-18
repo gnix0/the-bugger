@@ -1,6 +1,6 @@
 # Architecture
 
-## Current implementation (M11 accepted)
+## Current implementation (M12 accepted)
 
 The product is embedded-first, with shared target-neutral inspectors. Linux is
 the frontend host and the currently operational target adapter, not the universal
@@ -23,7 +23,8 @@ The MI parser/controller and native session module now serve real Linux
 launch/attach sessions through the TUI. Console/output and Continue/Pause are
 live. Source/Disassembly and stepping use the code model; Call Stack and Threads
 use the selected-context model. Code breakpoints and Run to Selected use the
-breakpoint model. CPU Registers use the register model. M10 Memory is accepted
+breakpoint model, which now also provides M12 hardware data watchpoints.
+CPU Registers use the register model. M10 Memory is accepted
 at `2f951fb` and uses the persistent inspector described below. Locals/Watches
 use the scoped variable model accepted at `7744643`, described below. Other
 inspection views have explicit unavailable messages. Explicit --demo
@@ -584,6 +585,50 @@ before embedded automatic inspection. Target descriptions must not be treated
 as complete MMIO safety evidence. Without sufficient proof, explicit inspection
 remains the fallback. M17 validates real hardware; synthetic policy tests do not
 establish peripheral safety on a board.
+
+## M12 hardware data watchpoints
+
+Accepted implementation: `f1dbb8a70033821e33e9a5506e23758d0723587d`.
+The existing breakpoint model issues `-break-watch` with optional `-r` or `-a`
+and C expression parsing. The shared conservative expression grammar rejects
+calls/mutations; creation remains deliberate because evaluation may read storage.
+It does not relax M11 authorization or add automatic peripheral inspection.
+
+Creation requires a stopped target and a complete fresh breakpoint table. The
+model records existing IDs and generation, then reconciles the returned ID/type
+against `-break-list`. Only matching hardware change/read/access types complete
+the operation. Software fallback, mismatched mode, changed context or uncertain
+creation causes owned-entry removal; ambiguous ownership blocks execution rather
+than deleting an unrelated entry. Failed cleanup stays blocked until explicit
+Manage → Refresh or session closure. Requests correlate tokens, and reconciliation
+uses bounded tables rather than idle polling. Native Continue/Step/Console honor
+the existing breakpoint busy interlock; closing the session remains available.
+
+Re-enable repeats hardware verification. Managed software downgrades discovered
+in later complete tables are removed before subsequent frontend execution.
+This is backend reconciliation, not a promise of hardware insertion: slots,
+alignment or width can still fail when GDB resumes, and backend errors remain
+visible. No fixed slot count or architecture capability is inferred from Linux.
+Explicit Console operations are not a sandboxed frontend execution path.
+
+Memory's action reviews the address of the selected cached row's first group
+and a 1/2/4/8-byte width. It requires current data and never watches an entire
+displayed block implicitly. Address forms generate fixed unsigned C lvalues;
+the initial target data-model assumptions require compatible C widths and octet
+addressing. M15's existing address-unit/capability audit must retain that limit.
+Variable actions prefill root expressions; child display labels are not guessed
+into C paths, so qualified child expressions can be entered explicitly.
+The form cancels submission if its stopped context changed.
+
+Watchpoints share Breakpoints enable/disable/delete/condition/count controls.
+MI stop records provide hit values and scope-expiry messages; deleted scoped
+watchpoints disappear on reconciliation. They are excluded from code gutter
+matching. Native fixtures and TUI tests are available; recorded execution evidence
+is in [the ledger](progress.md#m12-completion-verification). Physical backend
+support remains M17, and software watchpoints remain deferred beyond v0.1.0.
+
+Protocol references: GDB [MI breakpoint commands, `-break-watch` and `-break-list`](https://www.sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Breakpoint-Commands.html)
+and [Setting Watchpoints, hardware limits and scope](https://www.sourceware.org/gdb/current/onlinedocs/gdb.html/Set-Watchpoints.html).
 
 ## Approved direction
 

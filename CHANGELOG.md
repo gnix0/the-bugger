@@ -4,6 +4,11 @@
 
 ### Added
 
+- Hardware-required value-change/read/access data watchpoints, with creation
+  from Breakpoints, Memory and variable actions. Verify backend type, remove
+  software fallback and block execution on unresolved ownership/cleanup.
+  Report hit values/scope expiry and retain width/resource errors. M12 accepted
+  at `f1dbb8a`; C model, native and terminal regression tests are available.
 - Scoped read-only Locals/Watches with types, numeric formats, change indicators,
   explicit reads, lazy aggregate/pointer/C++ expansion and bounded array pages.
   Authorize value-producing requests before dispatch; unknown storage requires

@@ -2,6 +2,12 @@
 
 Target: **v0.1.0**. No release has been accepted.
 
+M12 accepted (2026-10-18), with owner-created implementation commit
+`f1dbb8a70033821e33e9a5506e23758d0723587d`
+(`feat(inspect): add hardware data watchpoints`). Owner acceptance is explicit;
+individual manual results and requested suite transcripts were not supplied.
+This separate documentation handoff records acceptance without inventing them.
+
 M11 accepted (2026-10-18). The owner confirmed acceptance and commit/push, then
 authorized this separate documentation handoff. Observed implementation:
 `77446434d8e6e1e1a356abaa4d94e028a1098036`
@@ -11,6 +17,32 @@ individually reported and are not invented here. M10 remains accepted at
 `2f951fb8dbaa10f490e5abd6eba31d1ced1dc6af`.
 The product is embedded-first; Linux validation through M14 is preserved, and
 all physical embedded coverage remains UNVERIFIED.
+
+## M12 completion verification
+
+Implemented hardware-required value-change/read/access data watchpoints in the
+existing breakpoint model, with creation from Breakpoints, Memory and variable
+actions. Creation/re-enable reconcile structured backend types before execution;
+software fallback is removed. Uncertain ownership or failed cleanup blocks
+execution; explicit Refresh retries cleanup without a background retry loop.
+Hit values/scope expiry follow MI records. See
+[architecture](architecture.md#m12-hardware-data-watchpoints) and
+[manual procedures](testing.md#m12-hardware-data-watchpoint-acceptance).
+
+| Evidence | Result |
+|---|---|
+| Agent: strict `make -s -j4 all test-m12-model build/test-watchpoints-native build/test-watchpoints-tui build/test-break-tui` | PASS; C17 warning-clean build and focused C peer tests. Covers three modes, width/overflow validation, hits/scope expiry, fallback/downgrade removal, resource errors, context races, malformed replies, uncertain ownership and blocked cleanup without retry spin. Native/TUI binaries were compiled, not executed by the agent. |
+| Agent: no-inferior GDB/MI syntax probe for `-break-watch --language c missing_symbol` | GDB accepted the command/options and returned the expected missing-symbol-table error; no target ran. Not hardware evidence. |
+| Agent: `git diff --check` | PASS at implementation delivery; repeated for documentation handoff. |
+| Owner command supplied: `make test-m12-native test-m12-slow` | Execution/result not individually reported before acceptance. Native hardware/TUI paths and delayed-reply/timeout recovery have tests, but no PASS transcript is claimed here. |
+| Owner command supplied: `make test test-native test-tmux` | Execution/result not individually reported before acceptance. |
+
+The owner accepted M12 and committed it; acceptance is not inferred from the
+model tests. No M12 sanitizer or full-analyzer pass is claimed. Earlier M11
+analyzer findings remain assigned to M14. ARM/Xtensa/RISC-V watchpoint slots,
+widths, alignment and actual stop behavior require later physical evidence.
+Creation can itself read storage; deliberate data-watchpoint creation is not an
+automatic Locals/Watches read grant. M13 remains the next planned gate.
 
 ## M11 completion verification
 
@@ -99,7 +131,7 @@ without Git-state checks or repeated commit/push confirmation.
 | M09 | CPU registers | accepted | Not supplied |
 | M10 | Persistent inline Memory and embedded-readiness review | accepted | `2f951fb8dbaa10f490e5abd6eba31d1ced1dc6af` |
 | M11 | Scoped read-only Locals/Watches | accepted | `77446434d8e6e1e1a356abaa4d94e028a1098036` |
-| M12 | Hardware data watchpoints | planned | — |
+| M12 | Hardware data watchpoints and cross-view actions | accepted | `f1dbb8a70033821e33e9a5506e23758d0723587d` |
 | M13 | Basic profiles and key mappings | planned | — |
 | M14 | Native integration acceptance | planned | — |
 | M15 | Existing remote server | planned | — |
@@ -112,14 +144,14 @@ The approved expanded roadmap replaces only the old unimplemented M03–M07
 grouping. Older references to future milestone numbers in historical entries
 below describe their original scopes; [the current roadmap](plan.md) governs
 new work. Historical failures and acceptance evidence are retained. M09 is
-accepted; M10 and M11 are accepted at the implementation commits above. No complete
+accepted; M10–M12 are accepted at the implementation commits above. No complete
 live workflow or release is accepted. Historical awaiting-user statements below
 describe their handoff dates and are superseded by the acceptance entries.
 
 Current workflow: deliver code/tests/build staging commands and a detailed
 Conventional Commit message; the owner manually validates and commits/pushes.
-For this handoff, finish M11 documentation and stop for the owner's documentation
-commit; M12 remains planned. Record a SHA when the owner supplies it or it has
+For this handoff, finish M12 documentation and stop for the owner's documentation
+commit; M13 remains planned. Record a SHA when the owner supplies it or it has
 already been observed; do not invent one. Prepare documentation separately,
 updating README last, and let the owner commit it. Agents run only quick checks;
 lengthy suites/stress/sanitizer matrices are supplied as commands for the owner.

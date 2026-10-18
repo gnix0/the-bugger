@@ -15,6 +15,18 @@ The owner authorized applicable M10 completion and M11 correction checks. These
 are scoped exceptions. Synthetic
 target cases are architecture coverage, never evidence of physical-board support.
 
+- `test-watchpoints` / `make test-m12-model`: hardware type reconciliation,
+  change/read/access modes, width/overflow checks, hit/scope messages,
+  fallback/downgrade cleanup, malformed tables, context changes and ambiguous
+  ownership. `make test-m12-slow` adds timeout/late-reply recovery.
+- `test-watchpoints-native` and `test-watchpoints-tui` / `make test-m12-native`:
+  real GDB hardware stops, scope expiry, enable/disable/delete, forced software
+  rejection and live Memory/variable creation with mode/width review. The model
+  is included in `make test`; native/TUI tests in `make test-native`.
+  `make test-m12-tui` reruns only the terminal test. See
+  [M12 acceptance](../docs/testing.md#m12-hardware-data-watchpoint-acceptance)
+  and the ledger for actual run evidence.
+
 - `test-variables` / `make test-m11-model`: authorization before value-producing
   requests, complete-footprint/region rules, unknown-region denial, explicit
   pointer inspection, bounded children/pages, formats/change baselines,
