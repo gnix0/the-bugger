@@ -42,6 +42,7 @@ int main(int argc, char *argv[])
     const char *mode = getenv("TB_FAKE_MODE");
     if (mode == NULL) { mode = "normal"; }
     unsigned register_value = 16; bool register_error = false, register_malformed = false;
+    unsigned memory_mode = 0;
     if ((strcmp(mode, "fallback") == 0 || strcmp(mode, "fallback-fail") == 0) &&
         strcmp(argv[3], "--interpreter=mi3") == 0) {
         fputs("Interpreter `mi3' unrecognized\n", stderr); return 0;
@@ -119,6 +120,29 @@ int main(int argc, char *argv[])
             if (++setup == 2 && strcmp(mode, "no-read") == 0) { delay(400); }
             if (setup == 2 && strcmp(mode, "late-fallback") == 0) {
                 fputs("Interpreter mi3 unrecognized\n", stderr); free(line); return 7;
+            }
+        } else if (strcmp(mode, "context-memory") == 0 && strncmp(command, "-memory-mode ", 13) == 0) {
+            memory_mode = (unsigned)strtoul(command + 13, NULL, 10); reply(token, "^done");
+        } else if (strcmp(mode, "context-memory") == 0 && strncmp(command, "-data-evaluate-expression ", 26) == 0) {
+            if (!strstr(command, "--language c") || !strstr(command, "(unsigned long long)(")) { free(line); return 19; }
+            reply(token, "^done,value=\"0x1000 <buffer>\"");
+        } else if (strcmp(mode, "context-memory") == 0 && strncmp(command, "-data-read-memory-bytes ", 24) == 0) {
+            unsigned long long address; unsigned length;
+            /* MI command name has 23 characters, followed by a space. */
+            if (sscanf(command + 24, "%llx %u", &address, &length) != 2 || !length || length > 1024) { free(line); return 20; }
+            if (memory_mode == 2) { reply(token, "^error,msg=\"FAKE unreadable memory\\nregion\""); }
+            else if (memory_mode == 3) { reply(token, "^done,memory=\"bad\""); }
+            else if (memory_mode == 4) { reply(token, "^done,memory=[{begin=\"0x1000\",end=\"0x1001\",contents=\"00\"},{begin=\"0x1000\",end=\"0x1001\",contents=\"00\"}]"); }
+            else if (memory_mode == 5) { reply(token, "^done,memory=[{begin=\"0x0\",end=\"0xffffffffffffffff\",contents=\"00\"}]"); }
+            else if (memory_mode == 6) { reply(token, "^done,memory=[]"); }
+            else if (memory_mode == 7) { reply(token, "^done,memory=[{begin=\"0x1000\",end=\"0x1001\",contents=\"zz\"}]"); }
+            else {
+                unsigned count = memory_mode == 1 ? length / 2 : length;
+                if (memory_mode == 8) { puts("*running,thread-id=\"all\""); }
+                (void)printf("%s^done,memory=[{begin=\"0x%llx\",end=\"0x%llx\",offset=\"0x0\",contents=\"", token, address, address + count);
+                for (unsigned i = 0; i < count; ++i) { (void)printf("%02x", (unsigned)((address + i) & 255)); }
+                puts("\"}]");
+                if (memory_mode == 8) { puts("*stopped,reason=\"end-stepping-range\",thread-id=\"7\",frame={level=\"0\",addr=\"0x1234\",func=\"main\"}"); }
             }
         } else if (strncmp(mode, "context-registers", 17) == 0 && strcmp(command, "-register-change\n") == 0) {
             register_value += 16; reply(token, "^done");

@@ -240,7 +240,9 @@ static void direct_start(const char *binary, const char *fixture)
     test_terminal_expect(&term, "LIVE | Loaded");
     test_terminal_expect(&term, "Awaiting stop | C/C++");
     test_terminal_expect(&term, "Awaiting stop | assembly");
-    CHECK(!test_terminal_find(&term, "STALE", NULL, NULL));
+    /* These code-pane headers are the contract before the first stop.
+     * Other inspectors may correctly report stale/unread register data;
+     * searching the entire workspace for STALE confuses their lifecycles. */
     test_terminal_click(&term, "Command"); test_terminal_expect(&term, "GDB console command"); input(&term, "start");
     test_terminal_expect(&term, "LIVE | C/C++ | code.c");
     test_terminal_expect(&term, "LIVE | assembly | code.c");

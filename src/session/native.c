@@ -2,6 +2,7 @@
 #include "native.h"
 
 #include <ctype.h>
+#include <elf.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -22,6 +23,7 @@ struct TbNative {
     TbCode *code;
     TbBreakpoints *breakpoints;
     TbRegisters *registers;
+    TbMemory *memory;
     TbNativeState state;
     bool attach, configured, waiting, completed, success, want_close, failed;
     bool alive, launch_requested, owned, recovery_sent;
@@ -29,6 +31,8 @@ struct TbNative {
     int stage, master, slave, pidfd;
     pid_t target_pid, owned_pid;
     uint64_t revision, close_deadline, partial_time[5], recovery_deadline;
+    pid_t memory_pid;
+    uint64_t memory_stop;
     char executable[PATH_MAX], directory[PATH_MAX], debugger[PATH_MAX], tty[PATH_MAX];
     TbNativeWords arguments, environment;
     char message[TB_NATIVE_LOG_WIDTH], reply_error[TB_NATIVE_LOG_WIDTH];
@@ -157,6 +161,7 @@ static void emit(void *context, const TbGdbEvent *event)
     ++native->revision;
     if (tb_break_event(native->breakpoints, event)) { return; }
     if (tb_registers_event(native->registers, event)) { return; }
+    if (tb_memory_event(native->memory, event)) { return; }
     if (tb_code_event(native->code, event)) { return; }
     if (tb_context_event(native->context, event)) { return; }
     if (event->kind == TB_GDB_DIAGNOSTIC) {
@@ -240,6 +245,11 @@ TbNative *tb_native_create(void)
         tb_break_destroy(native->breakpoints); tb_code_destroy(native->code);
         tb_context_destroy(native->context); (void)tb_gdb_destroy(native->gdb); free(native); return NULL;
     }
+    native->memory = tb_memory_create(native->gdb, native->context);
+    if (!native->memory) {
+        tb_registers_destroy(native->registers); tb_break_destroy(native->breakpoints); tb_code_destroy(native->code);
+        tb_context_destroy(native->context); (void)tb_gdb_destroy(native->gdb); free(native); return NULL;
+    }
     return native;
 }
 
@@ -255,7 +265,7 @@ bool tb_native_destroy(TbNative *native)
     if (native == NULL) { return true; }
     if (tb_native_active(native)) { return false; }
     if (!tb_gdb_destroy(native->gdb)) { return false; }
-    tb_registers_destroy(native->registers); tb_break_destroy(native->breakpoints); tb_code_destroy(native->code); tb_context_destroy(native->context); close_fds(native); free(native); return true;
+    tb_memory_destroy(native->memory); tb_registers_destroy(native->registers); tb_break_destroy(native->breakpoints); tb_code_destroy(native->code); tb_context_destroy(native->context); close_fds(native); free(native); return true;
 }
 
 static bool elf(const char *path, bool executable)
@@ -333,6 +343,8 @@ bool tb_native_start(TbNative *native, const TbNativeConfig *config)
     tb_code_reset(native->code);
     tb_break_reset(native->breakpoints);
     tb_registers_reset(native->registers);
+    tb_memory_reset(native->memory);
+    native->memory_pid = 0; native->memory_stop = 0;
     if (!native->attach) {
         native->master = posix_openpt(O_RDWR | O_NOCTTY | O_CLOEXEC | O_NONBLOCK);
         bool ready = native->master >= 0 && grantpt(native->master) == 0 && unlockpt(native->master) == 0 &&
@@ -537,6 +549,41 @@ static void release_target(TbNative *native)
     }
 }
 
+/* Linux metadata belongs to this adapter. No target bytes are probed here. */
+static void memory_metadata(TbNative *native)
+{
+    uint64_t stop = tb_gdb_generation(native->gdb).stop; pid_t pid = native->target_pid;
+    if (pid <= 1 || tb_gdb_state(native->gdb) != TB_GDB_STOPPED ||
+        (native->memory_pid == pid && native->memory_stop == stop)) { return; }
+    native->memory_pid = pid; native->memory_stop = stop;
+    char path[64]; (void)snprintf(path, sizeof path, "/proc/%ld/exe", (long)pid);
+    int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK); unsigned char ident[EI_NIDENT];
+    ssize_t bytes = fd >= 0 ? read(fd, ident, sizeof ident) : -1;
+    if (fd >= 0) { (void)close(fd); }
+    TbMemoryOrder order = TB_MEMORY_UNKNOWN;
+    if (bytes == EI_NIDENT && memcmp(ident, ELFMAG, SELFMAG) == 0 &&
+        (ident[EI_CLASS] == ELFCLASS32 || ident[EI_CLASS] == ELFCLASS64)) {
+        order = ident[EI_DATA] == ELFDATA2LSB ? TB_MEMORY_LITTLE : ident[EI_DATA] == ELFDATA2MSB ? TB_MEMORY_BIG : TB_MEMORY_UNKNOWN;
+    }
+    tb_memory_order(native->memory, order);
+    TbMemoryRegion regions[TB_MEMORY_REGIONS]; size_t count = 0;
+    (void)snprintf(path, sizeof path, "/proc/%ld/maps", (long)pid); FILE *maps = fopen(path, "re");
+    char row[PATH_MAX + 256]; unsigned budget = 4096;
+    while (maps && budget-- && count < TB_MEMORY_REGIONS && fgets(row, sizeof row, maps)) {
+        unsigned long long begin, end, inode; char permissions[5]; int used = 0;
+        if (sscanf(row, "%llx-%llx %4s %*s %*s %llu %n", &begin, &end, permissions, &inode, &used) != 4 ||
+            !used || permissions[0] != 'r' || end <= begin) { continue; }
+        char *name = row + used; name[strcspn(name, "\n")] = 0;
+        bool ordinary = inode == 0 && (!*name || *name == '[');
+        struct stat info;
+        if (*name == '/' && strncmp(name, "/dev/", 5) && strncmp(name, "/sys/", 5) && strncmp(name, "/proc/", 6) &&
+            stat(name, &info) == 0 && S_ISREG(info.st_mode)) { ordinary = true; }
+        if (ordinary) { regions[count++] = (TbMemoryRegion){begin, end}; }
+    }
+    if (maps) { (void)fclose(maps); }
+    tb_memory_regions(native->memory, regions, count);
+}
+
 void tb_native_pump(TbNative *native, int wait_ms)
 {
     if (native == NULL) { return; }
@@ -554,6 +601,7 @@ void tb_native_pump(TbNative *native, int wait_ms)
     }
     process_reply(native);
     tb_code_native(native->code, native->target_pid, native->executable);
+    memory_metadata(native);
     TbGdbState gdb = tb_gdb_state(native->gdb);
     if (gdb == TB_GDB_DISCONNECTED) {
         if (native->owned && native->pidfd >= 0) {
@@ -598,7 +646,7 @@ void tb_native_pump(TbNative *native, int wait_ms)
     } else if (!native->configured && !native->waiting && gdb == TB_GDB_READY) { setup(native); }
     else if (native->configured && !native->waiting) {
         tb_break_pump(native->breakpoints);
-        tb_context_pump(native->context); tb_code_pump(native->code); tb_registers_pump(native->registers);
+        tb_context_pump(native->context); tb_code_pump(native->code); tb_registers_pump(native->registers); tb_memory_pump(native->memory);
     }
     if (strcmp(native->code_message, tb_code_message(native->code)) != 0) {
         (void)snprintf(native->code_message, sizeof native->code_message, "%s", tb_code_message(native->code));
@@ -625,8 +673,9 @@ const char *tb_native_state_name(const TbNative *native)
     return names[native->state];
 }
 const char *tb_native_message(const TbNative *native) { return native->message; }
-uint64_t tb_native_revision(const TbNative *native) { return native->revision + tb_context_revision(native->context) + tb_code_revision(native->code) + tb_break_revision(native->breakpoints) + tb_registers_revision(native->registers); }
+uint64_t tb_native_revision(const TbNative *native) { return native->revision + tb_context_revision(native->context) + tb_code_revision(native->code) + tb_break_revision(native->breakpoints) + tb_registers_revision(native->registers) + tb_memory_revision(native->memory); }
 TbRegisters *tb_native_registers(TbNative *native) { return native->registers; }
+TbMemory *tb_native_memory(TbNative *native) { return native->memory; }
 size_t tb_native_log_count(const TbNative *native) { return native->count; }
 const char *tb_native_log_line(const TbNative *native, size_t row) { return row < native->count ? native->logs[(native->first + row) % TB_NATIVE_LOG_LINES] : ""; }
 pid_t tb_native_target_pid(const TbNative *native) { return native->target_pid; }

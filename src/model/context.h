@@ -39,6 +39,7 @@ void tb_context_pump(TbContext *context);
 void tb_context_visible(TbContext *context, bool threads, bool frames);
 void tb_context_require(TbContext *context, bool required);
 void tb_context_registers(TbContext *context, bool required);
+void tb_context_memory(TbContext *context, bool required);
 void tb_context_refresh(TbContext *context); /* Outside controller callbacks. */
 bool tb_context_select_thread(TbContext *context, const char *id);
 /* Frame rows must belong to a fresh snapshot, never the previous thread. */
