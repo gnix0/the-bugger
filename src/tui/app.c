@@ -20,7 +20,7 @@
 
 enum { MAX_CONTROLS = 1024, FIELD_SIZE = 256, FORM_FIELDS = 9 };
 typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
-               COMMAND_INPUT, SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT } Page;
+               COMMAND_INPUT, SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT, DATA_WATCH_INPUT } Page;
 typedef enum { CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_ADDRESS, CODE_STOPPED,
                CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_DIRECTORY_ADD, CODE_RULE_FROM,
                CODE_RULE_TO, CODE_SETTINGS_CLEAR, CODE_RAW, CODE_RUN_TO } CodeAction;
@@ -31,7 +31,7 @@ typedef enum {
     COMMAND_OPEN, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_PAGE,
     CODE_ACTIONS, CODE_ACTION, CODE_PAGE, CODE_FILE_PICK, CODE_FILE_PAGE, HSCROLLBAR,
     BREAK_OPEN, BREAK_ACTION, REGISTER_REFRESH, REGISTER_FORMAT, MEMORY_ACTION, MEMORY_FIELD,
-    VARIABLE_OPEN, VARIABLE_ACTION
+    VARIABLE_OPEN, VARIABLE_ACTION, DATA_WATCH_OPTION
 } ControlKind;
 
 typedef struct {
@@ -88,11 +88,15 @@ typedef struct {
     wchar_t memory_input[TB_MAX_PANES][FIELD_SIZE];
     size_t memory_cursor[TB_MAX_PANES];
     char break_id[32];
+    TbWatchMode watch_mode;
+    bool watch_address;
+    unsigned watch_width;
+    TbGdbGeneration watch_context;
 } App;
 
 static bool editing_page(const App *app)
 {
-    return app->page == COMMAND_INPUT || app->page == SAVE_INPUT || app->page == CODE_INPUT || app->page == CODE_FILES || app->page == BREAK_INPUT || app->page == MEMORY_INPUT || app->page == WATCH_INPUT;
+    return app->page == COMMAND_INPUT || app->page == SAVE_INPUT || app->page == CODE_INPUT || app->page == CODE_FILES || app->page == BREAK_INPUT || app->page == MEMORY_INPUT || app->page == WATCH_INPUT || app->page == DATA_WATCH_INPUT;
 }
 
 /* Signal handler communicates only through this flag; cleanup runs normally. */
@@ -473,7 +477,7 @@ static void break_text(const TbBreakpoint *bp, char *text, size_t capacity)
     char raw[1800];
     (void)snprintf(raw, sizeof raw, "%s%s %c %s%s %.500s | %s | %.500s:%u | ignore %u hit %llu | %.500s",
                    bp->child ? "  " : "", bp->id, bp->enabled ? 'o' : '-', bp->hardware ? "HW " : "",
-                   bp->pending ? "PENDING" : bp->multiple ? "MULTIPLE" : "",
+                   bp->watchpoint ? tb_break_watch_mode(bp->watch_mode) : bp->pending ? "PENDING" : bp->multiple ? "MULTIPLE" : "",
                    bp->location, bp->address, bp->file, bp->line, bp->ignore,
                    (unsigned long long)bp->hits, bp->condition);
     tb_code_safe(text, capacity, raw, strlen(raw));
@@ -1019,7 +1023,7 @@ static void draw_native_pane(App *app, int index, TbRect rect)
     }
     if (view == TB_BREAKPOINTS) {
         TbBreakpoints *b = tb_native_breakpoints(app->native);
-        tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_CYAN, 0, tb_break_ready(b) ? "LIVE | code breakpoints | o enabled / - disabled" : "Refreshing breakpoint table...");
+        tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_CYAN, 0, tb_break_ready(b) ? "LIVE | breakpoints / data watches | o enabled / - disabled" : "Refreshing breakpoint table...");
         if (tb_break_busy(b) && *tb_break_message(b)) { tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_ORANGE, 0, tb_break_message(b)); }
         TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
         for (int row = 0; row < scroll.visible && row + scroll.offset < scroll.total; ++row) {
@@ -1028,7 +1032,7 @@ static void draw_native_pane(App *app, int index, TbRect rect)
             size_t offset = (size_t)app->horizontal[index][view]; if (offset > strlen(safe)) { offset = strlen(safe); }
             tb_text(rect.y + 2 + row, rect.x + 1, rect.w - 2, TB_PANEL, pane->row[view] == item ? A_UNDERLINE : 0, safe + offset);
         }
-        if (!scroll.total) { tb_text(rect.y + 3, rect.x + 2, rect.w - 4, TB_MUTED, 0, "No code breakpoints. Use F9/gutter or Manage."); }
+        if (!scroll.total) { tb_text(rect.y + 3, rect.x + 2, rect.w - 4, TB_MUTED, 0, "No breakpoints or data watches. Use F9/gutter or Manage."); }
         button(app, rect.y + rect.h - 1, rect.x + 1, 10, " Manage ", BREAK_OPEN, 0, index); return;
     }
     if (view == TB_SOURCE || view == TB_DISASSEMBLY) { draw_code_pane(app, index, rect); return; }
@@ -1318,6 +1322,19 @@ static void draw_code_files(App *app)
 }
 
 
+static void data_watch_open(App *app, const char *expression, bool address, unsigned width)
+{
+    const TbContextSnapshot *context = tb_context_snapshot(tb_native_context(app->native));
+    if (tb_native_state(app->native) != TB_NATIVE_STOPPED || context->stale) {
+        status(app, "Data watchpoints need a fresh stopped context."); return;
+    }
+    app->watch_context = context->generation; app->watch_address = address;
+    app->watch_width = width; app->watch_mode = TB_WATCH_CHANGE;
+    size_t i = 0;
+    for (; expression[i] && i + 1 < FIELD_SIZE; ++i) { app->input[i] = (unsigned char)expression[i]; }
+    app->input[i] = 0; page(app, DATA_WATCH_INPUT); app->cursor = i;
+}
+
 static void draw_input(App *app)
 {
     bool command = app->page == COMMAND_INPUT;
@@ -1325,13 +1342,14 @@ static void draw_input(App *app)
     bool bp = app->page == BREAK_INPUT;
     bool memory = app->page == MEMORY_INPUT;
     bool watch = app->page == WATCH_INPUT;
+    bool data_watch = app->page == DATA_WATCH_INPUT;
     bool memory_length = memory && app->memory_length_input;
     const char *bp_label = app->break_action == 0 ? "Add code breakpoint" : app->break_action == 3 ? "Breakpoint condition (empty clears)" : "Breakpoint ignore count";
-    draw_header(app, watch ? "Add watch expression" : memory_length ? "Memory byte count" : memory ? "Read memory" : bp ? bp_label : code ? code_labels[app->code_action] : command ? "GDB console command" : "Save retained log");
+    draw_header(app, data_watch ? "Add hardware data watchpoint" : watch ? "Add watch expression" : memory_length ? "Memory byte count" : memory ? "Read memory" : bp ? bp_label : code ? code_labels[app->code_action] : command ? "GDB console command" : "Save retained log");
     tb_text(5, 3, COLS - 6, TB_CYAN, A_BOLD,
-            watch ? "Expression: name, member, constant index or simple offset" : memory_length ? "Bytes per range: 1 to 1024" : memory ? "Address / pointer expression (for example &buffer or $sp)" : bp ? bp_label : code ? code_labels[app->code_action] : command ? "Explicit GDB command (through MI)" : "New log destination (existing files are preserved)");
+            data_watch ? (app->watch_address ? "Exact numeric address (0x...); width selected below" : "Expression to watch; qualified child paths may be entered explicitly") : watch ? "Expression: name, member, constant index or simple offset" : memory_length ? "Bytes per range: 1 to 1024" : memory ? "Address / pointer expression (for example &buffer or $sp)" : bp ? bp_label : code ? code_labels[app->code_action] : command ? "Explicit GDB command (through MI)" : "New log destination (existing files are preserved)");
     tb_text(7, 3, COLS - 6, TB_MUTED, 0,
-            watch ? "Adding does not read memory. Select Read afterward; calls/mutations are rejected." : bp ? "Location: function, file:line or *0xADDRESS. Changes are validated by GDB." : code ? "Enter literal text/path. Navigation never changes execution. Esc cancels." :
+            data_watch ? "Create deliberately: GDB may read watched storage. Hardware required; no software fallback." : watch ? "Adding does not read memory. Select Read afterward; calls/mutations are rejected." : bp ? "Location: function, file:line or *0xADDRESS. Changes are validated by GDB." : code ? "Enter literal text/path. Navigation never changes execution. Esc cancels." :
             command ? "Commands are deliberate operations through GDB/MI." :
             "Saves bounded retained history with control bytes escaped; mode 0600.");
     if (memory) {
@@ -1349,8 +1367,15 @@ static void draw_input(App *app)
     }
     wide_text(9, 3, COLS - 6, app->input, start, index == app->focus);
     if (memory && *app->memory_input_error) { tb_text(11, 3, COLS - 6, TB_ORANGE, 0, app->memory_input_error); }
-    button(app, 12, 3, 14, watch ? "[ Add ]" : memory_length ? "[ Apply ]" : memory ? "[ Read ]" : bp || code ? "[ Apply ]" : command ? "[ Send ]" : "[ Save Log ]", INPUT_SUBMIT, 0, 0);
+    button(app, 12, 3, 14, data_watch ? "[ Create ]" : watch ? "[ Add ]" : memory_length ? "[ Apply ]" : memory ? "[ Read ]" : bp || code ? "[ Apply ]" : command ? "[ Send ]" : "[ Save Log ]", INPUT_SUBMIT, 0, 0);
     button(app, 12, 19, 12, "[ Cancel ]", BACK, 0, 0);
+    if (data_watch) {
+        char label[96]; (void)snprintf(label, sizeof label, "Mode: %s", tb_break_watch_mode(app->watch_mode));
+        button(app, 14, 3, COLS - 6, label, DATA_WATCH_OPTION, 0, 0);
+        if (app->watch_address) { (void)snprintf(label, sizeof label, "Width: %u bytes (target must support this C width)", app->watch_width); }
+        else { (void)snprintf(label, sizeof label, "Width: expression type, as reported by GDB"); }
+        button(app, 15, 3, COLS - 6, label, DATA_WATCH_OPTION, 1, 0);
+    }
     if (index == app->focus) {
         (void)curs_set(1); (void)leaveok(stdscr, FALSE);
         int cursor_x = 3;
@@ -1371,7 +1396,8 @@ static void draw_memory_menu(App *app)
     tb_text(7, 3, COLS - 6, TB_MUTED, 0, "Reads are explicit and bounded. Grouping changes cached display only. Range changes require Read/Refresh.");
     const char *labels[] = {"Address / Read", "Refresh this range", "Cycle grouping: 1/2/4/8 bytes", "Byte count: 1 to 1024", "Previous range (read)", "Next range (read)"};
     for (int i = 0; i < 6; ++i) { button(app, 9 + i, 3, COLS - 6, labels[i], MEMORY_ACTION, i, app->memory_pane); }
-    button(app, 16, 3, 12, "[ Back ]", BACK, 0, 0);
+    button(app, 15, 3, COLS - 6, "Hardware watchpoint at selected row (first group)", MEMORY_ACTION, 7, app->memory_pane);
+    button(app, 17, 3, 12, "[ Back ]", BACK, 0, 0);
 }
 
 static void draw_variable_menu(App *app)
@@ -1398,12 +1424,13 @@ static void draw_variable_menu(App *app)
     for (int i = 0; i < 7 && 8 + i < LINES - 3; ++i) {
         button(app, 8 + i, 3, COLS - 6, labels[i], VARIABLE_ACTION, i, app->variable_pane);
     }
+    if (15 < LINES - 3) { button(app, 15, 3, COLS - 6, "Hardware data watchpoint...", VARIABLE_ACTION, 7, app->variable_pane); }
     button(app, LINES - 3, 3, 12, "[ Back ]", BACK, 0, 0);
 }
 
 static void draw_break_menu(App *app)
 {
-    draw_header(app, "Code breakpoint management");
+    draw_header(app, "Breakpoint / data-watchpoint management");
     TbDemoPane *pane = &app->demo.panes[app->break_pane];
     const TbBreakpoint *bp = tb_break_row(tb_native_breakpoints(app->native), (size_t)pane->row[TB_BREAKPOINTS]);
     char text[1024], safe[1200];
@@ -1413,6 +1440,7 @@ static void draw_break_menu(App *app)
     const char *labels[] = {"Add code breakpoint", bp && bp->enabled ? "Disable selected" : "Enable selected", "Remove selected",
                            "Edit condition", "Set ignore count", app->break_hardware ? "New breakpoint: Require hardware" : "New breakpoint: Default", "Refresh"};
     for (int i = 0; i < 7; ++i) { button(app, 6 + i, 3, COLS - 6, labels[i], BREAK_ACTION, i, app->break_pane); }
+    button(app, 13, 3, COLS - 6, "Add hardware data watchpoint...", BREAK_ACTION, 7, app->break_pane);
     tb_text(LINES - 5, 3, COLS - 6, TB_MUTED, 0, "Pending and multiple locations follow GDB. Hardware errors never fall back silently.");
     button(app, LINES - 4, 3, 12, "[ Back ]", BACK, 0, 0);
 }
@@ -1716,11 +1744,20 @@ static void activate(App *app, Control control)
     case MEMORY_FIELD: break;
     case VARIABLE_OPEN:
         app->variable_pane = control.pane; page(app, VARIABLE_MENU); break;
+    case DATA_WATCH_OPTION:
+        if (control.value == 0) { app->watch_mode = (TbWatchMode)((app->watch_mode + 1) % TB_WATCH_MODES); }
+        else if (app->watch_address) { app->watch_width = app->watch_width == 8 ? 1 : app->watch_width * 2; }
+        break;
     case VARIABLE_ACTION: {
         app->variable_pane = control.pane;
         TbDemoPane *pane = &app->demo.panes[control.pane]; TbView view = pane->tabs[pane->active];
         TbVariableView kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
         TbVariables *v = tb_native_variables(app->native); size_t row = (size_t)pane->row[view];
+        if (control.value == 7) {
+            const TbVariable *selected = tb_variables_row(v, kind, row);
+            /* Backend child display names are not trustworthy C paths. */
+            data_watch_open(app, selected && !selected->depth ? selected->name : "", false, 1); break;
+        }
         if (control.value == 5) { app->input[0] = 0; page(app, WATCH_INPUT); break; }
         bool okay = control.value == 0 ? tb_variables_read(v, kind, row) :
                     control.value == 1 ? tb_variables_toggle(v, kind, row) :
@@ -1735,6 +1772,14 @@ static void activate(App *app, Control control)
         TbMemory *m = tb_native_memory(app->native); int id = control.pane;
         const TbMemoryView *v = tb_memory_view(m, id); bool okay = true;
         app->memory_pane = id;
+        if (control.value == 7) {
+            size_t row = (size_t)app->demo.panes[id].row[TB_MEMORY];
+            if (!v->ready || tb_memory_stale(m, id) || row >= (v->data_size + 15) / 16 || row > (UINT64_MAX - v->address) / 16) {
+                status(app, "Read a current Memory range and select a row first."); break;
+            }
+            char address[32]; (void)snprintf(address, sizeof address, "0x%llx", (unsigned long long)(v->address + row * 16));
+            data_watch_open(app, address, true, v->grouping); break;
+        }
         if (control.value == 0) {
             if (app->page == MEMORY_MENU) {
                 page(app, WORKSPACE); status(app, "Edit the inline Address field, then Enter or Go."); break;
@@ -1798,6 +1843,7 @@ static void activate(App *app, Control control)
         TbDemoPane *pane = &app->demo.panes[app->break_pane];
         const TbBreakpoint *bp = tb_break_row(b, (size_t)pane->row[TB_BREAKPOINTS]);
         app->break_action = control.value;
+        if (control.value == 7) { data_watch_open(app, "", false, 1); break; }
         if (control.value == 5) { app->break_hardware = !app->break_hardware; break; }
         if (control.value == 6) { tb_break_refresh(b); page(app, WORKSPACE); break; }
         if (control.value != 0 && !bp) { status(app, "Select a breakpoint row first."); break; }
@@ -1860,6 +1906,25 @@ static void activate(App *app, Control control)
         char input[FIELD_SIZE * 4];
         bool command = app->page == COMMAND_INPUT;
         if (!field_utf8(app->input, input, sizeof input)) { status(app, "Invalid text encoding."); break; }
+        if (app->page == DATA_WATCH_INPUT) {
+            const TbContextSnapshot *context = tb_context_snapshot(tb_native_context(app->native));
+            if (context->stale || context->generation.session != app->watch_context.session ||
+                context->generation.stop != app->watch_context.stop || context->generation.context != app->watch_context.context) {
+                status(app, "Context changed; cancel and reopen data-watchpoint creation."); break;
+            }
+            TbBreakpoints *b = tb_native_breakpoints(app->native); bool okay;
+            if (app->watch_address) {
+                char *end; errno = 0;
+                unsigned long long address = strtoull(input, &end, 0);
+                if (!*input || *input == '-' || *input == '+' || *end || errno) {
+                    status(app, "Enter a complete nonnegative numeric address (for example 0x20000000)."); break;
+                }
+                okay = tb_break_watch_address(b, (uint64_t)address, app->watch_width, app->watch_mode);
+            } else { okay = tb_break_watch(b, input, app->watch_mode); }
+            status(app, okay ? "Data watchpoint requested; execution waits for hardware verification." : tb_break_message(b));
+            if (okay) { page(app, WORKSPACE); }
+            break;
+        }
         if (app->page == WATCH_INPUT) {
             TbVariables *v = tb_native_variables(app->native);
             bool okay = tb_variables_watch(v, input);

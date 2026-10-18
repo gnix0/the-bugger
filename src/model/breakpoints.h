@@ -3,10 +3,13 @@
 #include "controller.h"
 
 enum { TB_BREAK_ROWS = 256 };
+typedef enum { TB_WATCH_CHANGE, TB_WATCH_READ, TB_WATCH_ACCESS, TB_WATCH_MODES } TbWatchMode;
 typedef struct {
     char id[32], parent[32], type[64], address[48], file[4096], location[512], condition[512];
     unsigned line, ignore; uint64_t hits;
     bool enabled, pending, multiple, hardware, temporary, child;
+    bool watchpoint;
+    TbWatchMode watch_mode;
 } TbBreakpoint;
 typedef struct TbBreakpoints TbBreakpoints;
 typedef struct { const char *text, *source; unsigned line; } TbBreakLocation;
@@ -24,6 +27,11 @@ const char *tb_break_message(const TbBreakpoints *breakpoints);
 bool tb_break_ready(const TbBreakpoints *breakpoints);
 bool tb_break_add(TbBreakpoints *breakpoints, const char *location, bool hardware);
 bool tb_break_add_at(TbBreakpoints *breakpoints, TbBreakLocation location, bool hardware);
+/* Deliberate creation can read target storage. Never called automatically.
+ * Execution stays blocked until hardware type is verified or fallback removed. */
+bool tb_break_watch(TbBreakpoints *breakpoints, const char *expression, TbWatchMode mode);
+bool tb_break_watch_address(TbBreakpoints *breakpoints, uint64_t address, unsigned bytes, TbWatchMode mode);
+const char *tb_break_watch_mode(TbWatchMode mode);
 bool tb_break_remove(TbBreakpoints *breakpoints, const char *id);
 bool tb_break_enable(TbBreakpoints *breakpoints, const char *id, bool enabled);
 bool tb_break_condition(TbBreakpoints *breakpoints, const char *id, const char *condition);

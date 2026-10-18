@@ -34,7 +34,7 @@ static void source_mark(TestTerminal *t, bool present)
 }
 static void manage(TestTerminal *t, const char *action)
 {
-    test_terminal_click(t, "Manage"); test_terminal_expect(t, "Code breakpoint management"); test_terminal_click(t, action);
+    test_terminal_click(t, "Manage"); test_terminal_expect(t, "Breakpoint / data-watchpoint management"); test_terminal_click(t, action);
 }
 int main(int argc, char *argv[])
 {
@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
         if (test_terminal_find(&t, "m08_result = (unsigned)", &x, &y)) { reached = memchr(t.cells[y], '>', 8) != NULL; }
     }
     CHECK(reached);
-    test_terminal_click(&t, "Breakpoints"); test_terminal_expect(&t, "No code breakpoints");
+    test_terminal_click(&t, "Breakpoints"); test_terminal_expect(&t, "No breakpoints or data watches");
     manage(&t, "Add code breakpoint"); input(&t, "m08_tick"); test_terminal_expect(&t, "m08_tick");
     manage(&t, "Edit condition"); input(&t, "value == 3"); test_terminal_expect(&t, "m08_tick");
     test_terminal_click(&t, "Manage"); test_terminal_expect(&t, "value == 3"); test_terminal_click(&t, "Back");
@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
         if (test_terminal_find(&t, "m08_result = value + 1", NULL, NULL)) { break; }
     }
     test_terminal_expect(&t, "m08_result = value + 1");
-    manage(&t, "Remove selected"); test_terminal_expect(&t, "No code breakpoints");
+    manage(&t, "Remove selected"); test_terminal_expect(&t, "No breakpoints or data watches");
     test_terminal_resize(&t, 24, 80); test_terminal_expect(&t, "Manage");
     test_terminal_resize(&t, 44, 140); test_terminal_expect(&t, "Breakpoints");
     test_terminal_send(&t, "\021"); test_terminal_expect(&t, "Terminate the launched program"); test_terminal_click(&t, "Close session"); test_terminal_stop(&t, 0);

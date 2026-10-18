@@ -204,7 +204,7 @@ $(BUILD_DIR)/test-images: $(BUILD_DIR)/tests/unit/test_images.o $(BUILD_DIR)/src
 
 test: $(BUILD_DIR)/test-images
 
-$(BUILD_DIR)/test-breakpoints: $(BUILD_DIR)/tests/integration/test_breakpoints.o $(BUILD_DIR)/src/model/breakpoints.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+$(BUILD_DIR)/test-breakpoints: $(BUILD_DIR)/tests/integration/test_breakpoints.o $(BUILD_DIR)/src/model/breakpoints.o $(BUILD_DIR)/src/model/memory.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 test: $(BUILD_DIR)/test-breakpoints
@@ -336,6 +336,43 @@ test-m08-native: $(BUILD_DIR)/test-break-tui
 test-native: test-m08-native
 
 # Separate artifacts keep instrumentation out of the normal executable.
+$(BUILD_DIR)/test-watchpoints: $(BUILD_DIR)/tests/integration/test_watchpoints.o $(BUILD_DIR)/src/model/breakpoints.o $(BUILD_DIR)/src/model/memory.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-m12-model
+test-m12-model: $(BUILD_DIR)/test-watchpoints $(BUILD_DIR)/fake-mi
+	$(BUILD_DIR)/test-watchpoints $(abspath $(BUILD_DIR)/fake-mi)
+
+.PHONY: test-m12-slow
+test-m12-slow: $(BUILD_DIR)/test-watchpoints $(BUILD_DIR)/fake-mi
+	$(BUILD_DIR)/test-watchpoints $(abspath $(BUILD_DIR)/fake-mi) --slow
+
+test: test-m12-model
+-include $(BUILD_DIR)/tests/integration/test_watchpoints.d
+
+$(BUILD_DIR)/watch-fixture: tests/fixtures/native/watchpoints.c
+	mkdir -p $(dir $@)
+	$(CC) -std=c17 -Wall -Wextra -Wpedantic -Werror -g -O0 $< -o $@
+
+$(BUILD_DIR)/test-watchpoints-native: $(BUILD_DIR)/tests/integration/test_watchpoints_native.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-m12-native
+$(BUILD_DIR)/test-watchpoints-tui: $(BUILD_DIR)/tests/integration/test_watchpoints_tui.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+test-m12-native: all $(BUILD_DIR)/test-watchpoints-native $(BUILD_DIR)/test-watchpoints-tui $(BUILD_DIR)/watch-fixture
+	$(BUILD_DIR)/test-watchpoints-native $(abspath $(BUILD_DIR)/watch-fixture)
+	$(BUILD_DIR)/test-watchpoints-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/watch-fixture)
+
+.PHONY: test-m12-tui
+test-m12-tui: all $(BUILD_DIR)/test-watchpoints-tui $(BUILD_DIR)/watch-fixture
+	$(BUILD_DIR)/test-watchpoints-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/watch-fixture)
+
+fixtures: $(BUILD_DIR)/watch-fixture
+test-native: test-m12-native
+-include $(BUILD_DIR)/tests/integration/test_watchpoints_native.d $(BUILD_DIR)/tests/integration/test_watchpoints_tui.d
+
 sanitize:
 	UBSAN_OPTIONS=halt_on_error=1 $(MAKE) BUILD_DIR=build/sanitize \
 		CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \

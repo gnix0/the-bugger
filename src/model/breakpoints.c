@@ -1,22 +1,28 @@
 #include "breakpoints.h"
+#include "memory.h"
 
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-typedef enum { BREAK_NONE, BREAK_LIST, BREAK_CHANGE, BREAK_RUN_INSERT, BREAK_RUN_CONTINUE, BREAK_RUN_CLEAN } BreakJob;
+typedef enum { BREAK_NONE, BREAK_LIST, BREAK_CHANGE, BREAK_RUN_INSERT, BREAK_RUN_CONTINUE, BREAK_RUN_CLEAN, BREAK_WATCH_INSERT, BREAK_WATCH_CLEAN } BreakJob;
 enum { BREAK_COOKIE = 8100 };
 struct TbBreakpoints {
     TbGdb *gdb;
     TbBreakpoint rows[TB_BREAK_ROWS]; size_t count;
     bool dirty, waiting, ready, cleanup, continue_run, cleanup_failed, recover_insert, limited;
     BreakJob job;
-    uint64_t revision;
+    uint64_t revision, request_token;
     char temporary[32], thread[32], message[192];
     TbGdbGeneration run_generation;
     char run_location[8193];
     char baseline[TB_BREAK_ROWS][32]; size_t baseline_count;
+    bool watch_pending, watch_recover, watch_reject, watch_failed;
+    char watch_id[32], watch_expression[512];
+    TbWatchMode watch_mode;
+    TbGdbGeneration watch_generation;
+    char managed[TB_BREAK_ROWS][32]; size_t managed_count;
 };
 static void message(TbBreakpoints *b, const char *text)
 {
@@ -77,9 +83,10 @@ void tb_break_reset(TbBreakpoints *b)
 void tb_break_refresh(TbBreakpoints *b)
 {
     b->dirty = true;
+    if (b->watch_failed && !b->waiting) { b->watch_failed = false; }
     if (b->cleanup_failed && !b->waiting) { b->cleanup_failed = false; b->cleanup = *b->temporary != 0; }
 }
-bool tb_break_busy(const TbBreakpoints *b) { return (b->waiting && b->job != BREAK_LIST) || b->cleanup || b->continue_run || b->cleanup_failed || b->recover_insert; }
+bool tb_break_busy(const TbBreakpoints *b) { return b->watch_pending || (b->waiting && b->job != BREAK_LIST) || b->cleanup || b->continue_run || b->cleanup_failed || b->recover_insert; }
 size_t tb_break_count(const TbBreakpoints *b) { return b->count; }
 const TbBreakpoint *tb_break_row(const TbBreakpoints *b, size_t row) { return row < b->count ? &b->rows[row] : NULL; }
 uint64_t tb_break_revision(const TbBreakpoints *b) { return b->revision; }
@@ -89,7 +96,7 @@ static bool issue(TbBreakpoints *b, BreakJob job, const char *operation, const c
 {
     b->job = job;
     if (job != BREAK_LIST) { b->message[0] = 0; ++b->revision; }
-    b->waiting = tb_gdb_request(b->gdb, operation, args, count, TB_GDB_SESSION, BREAK_COOKIE + (uint64_t)job, 3000, NULL);
+    b->waiting = tb_gdb_request(b->gdb, operation, args, count, TB_GDB_SESSION, BREAK_COOKIE + (uint64_t)job, 3000, &b->request_token);
     if (!b->waiting) { b->job = BREAK_NONE; message(b, "Breakpoint request unavailable; retry while stopped."); }
     return b->waiting;
 }
@@ -126,6 +133,44 @@ bool tb_break_add(TbBreakpoints *b, const char *location, bool hardware)
 {
     return tb_break_add_at(b, (TbBreakLocation){.text = location}, hardware);
 }
+const char *tb_break_watch_mode(TbWatchMode mode)
+{
+    return mode == TB_WATCH_CHANGE ? "Value change" : mode == TB_WATCH_READ ? "Read" : mode == TB_WATCH_ACCESS ? "Read/write access" : "Unknown";
+}
+static bool watch_insert(TbBreakpoints *b, const char *expression, TbWatchMode mode)
+{
+    if (!allowed(b)) { return false; }
+    if (mode < 0 || mode >= TB_WATCH_MODES || tb_gdb_state(b->gdb) != TB_GDB_STOPPED ||
+        !tb_break_ready(b) || b->limited) {
+        message(b, "Data watchpoints need a stopped target and complete fresh breakpoint table."); return false;
+    }
+    b->baseline_count = b->count;
+    for (size_t i = 0; i < b->count; ++i) { (void)snprintf(b->baseline[i], sizeof b->baseline[i], "%s", b->rows[i].id); }
+    b->watch_generation = tb_gdb_generation(b->gdb); b->watch_mode = mode;
+    (void)snprintf(b->watch_expression, sizeof b->watch_expression, "%s", expression);
+    b->watch_id[0] = 0; b->watch_recover = b->watch_reject = b->watch_failed = false;
+    const char *args[4] = {"--language", "c"}; size_t count = 2;
+    if (mode != TB_WATCH_CHANGE) { args[count++] = mode == TB_WATCH_READ ? "-r" : "-a"; }
+    args[count++] = b->watch_expression;
+    b->watch_pending = issue(b, BREAK_WATCH_INSERT, "-break-watch", args, count);
+    return b->watch_pending;
+}
+bool tb_break_watch(TbBreakpoints *b, const char *expression, TbWatchMode mode)
+{
+    if (!tb_memory_expression(expression)) {
+        message(b, "Use a name, member, constant index or simple offset; calls and mutations are rejected."); return false;
+    }
+    return watch_insert(b, expression, mode);
+}
+bool tb_break_watch_address(TbBreakpoints *b, uint64_t address, unsigned bytes, TbWatchMode mode)
+{
+    const char *type = bytes == 1 ? "unsigned char" : bytes == 2 ? "unsigned short" : bytes == 4 ? "unsigned int" : bytes == 8 ? "unsigned long long" : NULL;
+    if (!type || address > UINT64_MAX - (bytes - 1)) {
+        message(b, "Watch width must be 1, 2, 4 or 8 bytes without address overflow."); return false;
+    }
+    char expression[128]; (void)snprintf(expression, sizeof expression, "*(%s *)0x%llx", type, (unsigned long long)address);
+    return watch_insert(b, expression, mode);
+}
 static bool by_id(TbBreakpoints *b, const char *id)
 {
     if (!allowed(b) || !id_valid(id) || (*b->temporary && strcmp(id, b->temporary) == 0)) { return false; }
@@ -140,7 +185,19 @@ bool tb_break_remove(TbBreakpoints *b, const char *id)
 bool tb_break_enable(TbBreakpoints *b, const char *id, bool enabled)
 {
     if (!by_id(b, id)) { return false; } const char *args[] = {id};
-    return issue(b, BREAK_CHANGE, enabled ? "-break-enable" : "-break-disable", args, 1);
+    const TbBreakpoint *row = NULL;
+    for (size_t i = 0; i < b->count; ++i) { if (strcmp(b->rows[i].id, id) == 0) { row = &b->rows[i]; break; } }
+    if (enabled && row && row->watchpoint && !row->hardware) {
+        message(b, "Software data watchpoints cannot be enabled here; hardware support is required."); return false;
+    }
+    bool okay = issue(b, BREAK_CHANGE, enabled ? "-break-enable" : "-break-disable", args, 1);
+    if (okay && enabled && row && row->watchpoint) {
+        b->watch_pending = true; b->watch_recover = b->watch_reject = b->watch_failed = false;
+        b->baseline_count = 0; b->watch_mode = row->watch_mode; b->watch_generation = tb_gdb_generation(b->gdb);
+        (void)snprintf(b->watch_id, sizeof b->watch_id, "%s", id);
+        (void)snprintf(b->watch_expression, sizeof b->watch_expression, "%s", row->location);
+    }
+    return okay;
 }
 bool tb_break_condition(TbBreakpoints *b, const char *id, const char *condition)
 {
@@ -195,6 +252,8 @@ static void parse_row(TbBreakpoints *b, const TbMiValue *tuple, const TbBreakpoi
     copy(row.file, sizeof row.file, tb_mi_find(fields, "fullname"));
     if (!*row.file) { copy(row.file, sizeof row.file, tb_mi_find(fields, "file")); }
     copy(row.location, sizeof row.location, tb_mi_find(fields, "original-location"));
+    if (!*row.location) { copy(row.location, sizeof row.location, tb_mi_find(fields, "exp")); }
+    if (!*row.location) { copy(row.location, sizeof row.location, tb_mi_find(fields, "what")); }
     copy(row.condition, sizeof row.condition, tb_mi_find(fields, "cond"));
     char enabled[8], disp[16]; copy(enabled, sizeof enabled, tb_mi_find(fields, "enabled")); copy(disp, sizeof disp, tb_mi_find(fields, "disp"));
     row.enabled = strcmp(enabled, "y") == 0;
@@ -202,7 +261,10 @@ static void parse_row(TbBreakpoints *b, const TbMiValue *tuple, const TbBreakpoi
     row.ignore = (unsigned)number(tb_mi_find(fields, "ignore"));
     row.pending = strcmp(row.address, "<PENDING>") == 0 || tb_mi_find(fields, "pending") != NULL;
     row.multiple = strcmp(row.address, "<MULTIPLE>") == 0;
-    row.hardware = strstr(row.type, "hw breakpoint") != NULL;
+    row.watchpoint = strstr(row.type, "watchpoint") != NULL;
+    row.watch_mode = strcmp(row.type, "read watchpoint") == 0 ? TB_WATCH_READ : strcmp(row.type, "acc watchpoint") == 0 ? TB_WATCH_ACCESS : TB_WATCH_CHANGE;
+    row.hardware = strstr(row.type, "hw breakpoint") != NULL || strcmp(row.type, "hw watchpoint") == 0 ||
+                   strcmp(row.type, "read watchpoint") == 0 || strcmp(row.type, "acc watchpoint") == 0;
     row.temporary = strcmp(disp, "del") == 0;
     if (parent) {
         row.child = true; (void)snprintf(row.parent, sizeof row.parent, "%s", parent->id);
@@ -217,6 +279,49 @@ static void parse_row(TbBreakpoints *b, const TbMiValue *tuple, const TbBreakpoi
         for (const TbMiValue *v = locations->children; v; v = v->next) { parse_row(b, v, &row); }
     }
 }
+static bool new_id(const TbBreakpoints *b, const char *id)
+{
+    if (!id_valid(id) || strchr(id, '.')) { return false; }
+    for (size_t i = 0; i < b->baseline_count; ++i) { if (strcmp(id, b->baseline[i]) == 0) { return false; } }
+    return true;
+}
+static void watch_verify(TbBreakpoints *b)
+{
+    const TbBreakpoint *found = NULL; unsigned candidates = 0;
+    for (size_t i = 0; i < b->count; ++i) {
+        const TbBreakpoint *row = &b->rows[i];
+        if (*b->watch_id) {
+            if (strcmp(row->id, b->watch_id) == 0 && new_id(b, row->id)) { found = row; ++candidates; }
+        } else if (row->watchpoint && new_id(b, row->id)) {
+            ++candidates;
+            if (strcmp(row->location, b->watch_expression) == 0) { found = row; }
+        }
+    }
+    if (b->limited || candidates > 1 || (candidates && !found)) {
+        b->watch_failed = true;
+        message(b, "Ambiguous data-watchpoint ownership; execution blocked. Close the session safely."); return;
+    }
+    if (!found) {
+        b->watch_pending = b->watch_recover = b->watch_reject = false; b->watch_id[0] = 0;
+        if (!*b->message) { message(b, "Data watchpoint absent/expired; no watchpoint installed."); }
+        return;
+    }
+    (void)snprintf(b->watch_id, sizeof b->watch_id, "%s", found->id);
+    TbGdbGeneration now = tb_gdb_generation(b->gdb);
+    bool context_changed = now.session != b->watch_generation.session || now.stop != b->watch_generation.stop || now.context != b->watch_generation.context;
+    if (b->watch_recover || context_changed || !found->watchpoint || !found->hardware || found->watch_mode != b->watch_mode) {
+        b->watch_reject = true;
+        message(b, "Data watchpoint unconfirmed or software fallback; removing owned entry before execution.");
+    } else {
+        bool tracked = false;
+        for (size_t i = 0; i < b->managed_count; ++i) { tracked = tracked || strcmp(b->managed[i], found->id) == 0; }
+        if (!tracked && b->managed_count < TB_BREAK_ROWS) {
+            (void)snprintf(b->managed[b->managed_count++], sizeof b->managed[0], "%s", found->id);
+        }
+        b->watch_pending = false; b->watch_id[0] = 0;
+        message(b, "Hardware data watchpoint verified. Width/slot insertion can still fail on resume; inspect GDB errors.");
+    }
+}
 bool tb_break_event(TbBreakpoints *b, const TbGdbEvent *event)
 {
     const TbMiRecord *record = event->record;
@@ -224,6 +329,14 @@ bool tb_break_event(TbBreakpoints *b, const TbGdbEvent *event)
     if (event->kind == TB_GDB_RECORD && record) {
         if (record->kind == TB_MI_NOTIFY && strncmp(record->klass, "breakpoint-", 11) == 0) {
             b->dirty = true;
+            if (b->watch_pending && b->job == BREAK_WATCH_INSERT && strcmp(record->klass, "breakpoint-created") == 0) {
+                const TbMiValue *bp = tb_mi_find(record->results, "bkpt");
+                char expression[512], id[32];
+                copy(expression, sizeof expression, bp ? tb_mi_find(bp->children, "exp") : NULL);
+                if (!*expression) { copy(expression, sizeof expression, bp ? tb_mi_find(bp->children, "original-location") : NULL); }
+                copy(id, sizeof id, bp ? tb_mi_find(bp->children, "number") : NULL);
+                if (strcmp(expression, b->watch_expression) == 0 && new_id(b, id)) { (void)snprintf(b->watch_id, sizeof b->watch_id, "%s", id); }
+            }
             if (b->waiting && b->job == BREAK_RUN_INSERT && strcmp(record->klass, "breakpoint-created") == 0) {
                 const TbMiValue *bp = tb_mi_find(record->results, "bkpt");
                 char location[8193], disp[16];
@@ -242,16 +355,36 @@ bool tb_break_event(TbBreakpoints *b, const TbGdbEvent *event)
         }
         if (record->kind == TB_MI_EXEC && strcmp(record->klass, "stopped") == 0) {
             b->dirty = true; b->cleanup = *b->temporary != 0; b->continue_run = false;
+            char reason[64]; copy(reason, sizeof reason, tb_mi_find(record->results, "reason"));
+            if (strstr(reason, "watchpoint")) {
+                char id[32], old[64], value[64], summary[192];
+                const TbMiValue *wp = tb_mi_find(record->results, "wpt");
+                if (!wp) { wp = tb_mi_find(record->results, "hw-rwpt"); }
+                if (!wp) { wp = tb_mi_find(record->results, "hw-awpt"); }
+                copy(id, sizeof id, wp ? tb_mi_find(wp->children, "number") : tb_mi_find(record->results, "wpnum"));
+                const TbMiValue *values = tb_mi_find(record->results, "value");
+                copy(old, sizeof old, values ? tb_mi_find(values->children, "old") : NULL);
+                copy(value, sizeof value, values ? tb_mi_find(values->children, "new") : NULL);
+                if (!*value) { copy(value, sizeof value, values ? tb_mi_find(values->children, "value") : NULL); }
+                (void)snprintf(summary, sizeof summary, "%.40s #%s | %.48s%s%.48s", reason, id, old, *old ? " -> " : "", value);
+                message(b, summary);
+            }
         }
     }
-    if (event->cookie <= BREAK_COOKIE || event->cookie > BREAK_COOKIE + BREAK_RUN_CLEAN ||
+    if (event->cookie <= BREAK_COOKIE || event->cookie > BREAK_COOKIE + BREAK_WATCH_CLEAN ||
         !(event->kind == TB_GDB_REPLY || event->kind == TB_GDB_STALE || event->kind == TB_GDB_TIMEOUT || event->kind == TB_GDB_CANCELLED)) { return false; }
+    if (!b->waiting || event->token != b->request_token) { return true; }
     b->waiting = false; BreakJob job = (BreakJob)(event->cookie - BREAK_COOKIE); b->job = BREAK_NONE;
     bool okay = event->kind == TB_GDB_REPLY && record && (strcmp(record->klass, "done") == 0 || strcmp(record->klass, "running") == 0);
     if (!okay) {
         char error[192]; copy(error, sizeof error, record ? tb_mi_find(record->results, "msg") : NULL);
         if (!*error) { (void)snprintf(error, sizeof error, "Breakpoint operation cancelled/timed out; refresh before retrying."); }
         message(b, error); b->dirty = true;
+        if (job == BREAK_WATCH_INSERT) { b->watch_recover = true; }
+        if (job == BREAK_WATCH_CLEAN) {
+            b->watch_failed = true;
+            message(b, "Data-watchpoint cleanup failed; execution blocked. Manage > Refresh retries; close also releases the session.");
+        }
         if (job == BREAK_RUN_CONTINUE) { b->cleanup = *b->temporary != 0; }
         if (job == BREAK_RUN_INSERT) { b->cleanup = *b->temporary != 0; b->recover_insert = !*b->temporary; b->continue_run = false; }
         if (job == BREAK_RUN_CLEAN) {
@@ -286,6 +419,37 @@ bool tb_break_event(TbBreakpoints *b, const TbGdbEvent *event)
         b->count = 0; b->limited = false;
         for (const TbMiValue *v = body->children; v; v = v->next) { parse_row(b, v, NULL); }
         b->ready = true;
+        if (!b->watch_pending && !b->limited) {
+            size_t keep = 0;
+            for (size_t i = 0; i < b->managed_count; ++i) {
+                for (size_t j = 0; j < b->count; ++j) {
+                    const TbBreakpoint *row = &b->rows[j];
+                    if (strcmp(row->id, b->managed[i]) != 0) { continue; }
+                    if (keep != i) { memcpy(b->managed[keep], b->managed[i], sizeof b->managed[0]); }
+                    ++keep;
+                    if (row->watchpoint && !row->hardware && !b->watch_pending) {
+                        (void)snprintf(b->watch_id, sizeof b->watch_id, "%s", row->id);
+                        b->watch_pending = b->watch_reject = true;
+                        message(b, "Managed watchpoint became software; removing fallback before execution.");
+                    }
+                    break;
+                }
+            }
+            b->managed_count = keep;
+        }
+        if (b->watch_pending && !b->watch_reject && !b->watch_failed) { watch_verify(b); }
+    } else if (job == BREAK_WATCH_INSERT) {
+        const TbMiValue *wp = tb_mi_find(record->results, "wpt");
+        if (!wp) { wp = tb_mi_find(record->results, "hw-rwpt"); }
+        if (!wp) { wp = tb_mi_find(record->results, "hw-awpt"); }
+        char id[32]; copy(id, sizeof id, wp ? tb_mi_find(wp->children, "number") : NULL);
+        if (new_id(b, id)) { (void)snprintf(b->watch_id, sizeof b->watch_id, "%s", id); }
+        else { b->watch_recover = true; }
+        b->dirty = true;
+    } else if (job == BREAK_WATCH_CLEAN) {
+        b->watch_pending = b->watch_reject = b->watch_failed = b->watch_recover = false;
+        b->watch_id[0] = 0; b->dirty = true;
+        message(b, "Data watchpoint rejected and removed; no software fallback retained.");
     } else if (job == BREAK_RUN_INSERT) {
         const TbMiValue *bp = tb_mi_find(record->results, "bkpt");
         copy(b->temporary, sizeof b->temporary, bp ? tb_mi_find(bp->children, "number") : NULL);
@@ -302,6 +466,9 @@ void tb_break_pump(TbBreakpoints *b)
     if (b->waiting) { return; }
     TbGdbState state = tb_gdb_state(b->gdb);
     if (state != TB_GDB_READY && state != TB_GDB_STOPPED) { return; }
+    if (b->watch_pending && b->watch_reject && !b->watch_failed && *b->watch_id) {
+        const char *args[] = {b->watch_id}; (void)issue(b, BREAK_WATCH_CLEAN, "-break-delete", args, 1); return;
+    }
     if (b->cleanup && *b->temporary) {
         const char *args[] = {b->temporary}; (void)issue(b, BREAK_RUN_CLEAN, "-break-delete", args, 1); return;
     }

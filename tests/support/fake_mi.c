@@ -76,13 +76,61 @@ int main(int argc, char *argv[])
     int selected_thread = 7, selected_frame = 0;
     bool context_held = false, thread_exited = false;
     bool bp_temporary = false; int bp_table = 0, bp_clean_attempts = 0;
+    unsigned data_mode = 0; bool data_watch = false;
+    char data_expression[512] = {0}, data_type[64] = "hw watchpoint";
     while (getline(&line, &capacity, stdin) >= 0) {
         size_t digits = strspn(line, "0123456789");
         if (digits == 0 || digits >= sizeof held) { free(line); return 3; }
         char token[32];
         memcpy(token, line, digits); token[digits] = '\0';
         char *command = line + digits;
-        if (strncmp(mode, "bp-", 3) == 0 && strcmp(command, "-thread-info\n") == 0) {
+        if (strcmp(mode, "data-watch") == 0 && strncmp(command, "-data-mode ", 11) == 0) {
+            data_mode = (unsigned)strtoul(command + 11, NULL, 10); reply(token, "^done");
+        } else if (strcmp(mode, "data-watch") == 0 && strcmp(command, "-thread-info\n") == 0) {
+            reply(token, "^done,threads=[{id=\"1\",state=\"stopped\"}],current-thread-id=\"1\"");
+        } else if (strcmp(mode, "data-watch") == 0 && strncmp(command, "-break-watch ", 13) == 0) {
+            if (data_mode == 2) { reply(token, "^error,msg=\"Target watch width/alignment/slots unsupported\""); continue; }
+            const char *type = strstr(command, "-r ") ? "read watchpoint" : strstr(command, "-a ") ? "acc watchpoint" : "hw watchpoint";
+            if (data_mode == 1 || data_mode == 3) { type = "watchpoint"; }
+            (void)snprintf(data_type, sizeof data_type, "%s", type);
+            char *expression = command + 13;
+            if (strncmp(expression, "--language c ", 13) != 0) { free(line); return 32; }
+            expression += 13;
+            if (strncmp(expression, "-r ", 3) == 0 || strncmp(expression, "-a ", 3) == 0) { expression += 3; }
+            /* These tests use literal safe ASCII expressions; MI adds quotes
+             * only for whitespace. Reject escapes rather than fake a parser. */
+            size_t length = strcspn(expression, "\r\n");
+            if (length && expression[0] == '"' && expression[length - 1] == '"') { ++expression; length -= 2; }
+            if (!length || length >= sizeof data_expression || memchr(expression, '\\', length)) { free(line); return 30; }
+            memcpy(data_expression, expression, length); data_expression[length] = 0; data_watch = true;
+            if (data_mode == 4) { puts("*stopped,reason=\"signal-received\",thread-id=\"1\""); }
+            if (data_mode == 12) { (void)snprintf(held, sizeof held, "%s", token); (void)fflush(stdout); continue; }
+            if (data_mode == 8) { reply(token, "^done,wpt={number=\"1\"}"); }
+            else if (data_mode == 5 || data_mode == 6) { reply(token, "^done"); }
+            else { reply(token, "^done,wpt={number=\"2\"}"); }
+        } else if (strcmp(mode, "data-watch") == 0 && strcmp(command, "-break-list\n") == 0) {
+            if (data_mode == 7) { reply(token, "^done,BreakpointTable={body=\"malformed\"}"); continue; }
+            (void)printf("%s^done,BreakpointTable={body=[bkpt={number=\"1\",type=\"breakpoint\",enabled=\"y\",times=\"9\"}", token);
+            if (data_watch) {
+                fputs(",bkpt={number=\"2\",enabled=\"y\",type=", stdout); quoted(data_type);
+                fputs(",what=", stdout); quoted(data_mode == 6 ? "another_expression" : data_expression); putchar('}');
+            }
+            puts("]}");
+        } else if (strcmp(mode, "data-watch") == 0 && strncmp(command, "-break-delete ", 14) == 0) {
+            if (strcmp(command, "-break-delete 2\n") != 0) { free(line); return 31; }
+            if (data_mode == 3) { reply(token, "^error,msg=\"cleanup rejected\""); }
+            else { data_watch = false; puts("=breakpoint-deleted,id=\"2\""); reply(token, "^done"); }
+        } else if (strcmp(mode, "data-watch") == 0 && strcmp(command, "-data-scope\n") == 0) {
+            data_watch = false; puts("=breakpoint-deleted,id=\"2\"");
+            puts("*stopped,reason=\"watchpoint-scope\",wpnum=\"2\",thread-id=\"1\""); reply(token, "^done");
+        } else if (strcmp(mode, "data-watch") == 0 && strcmp(command, "-data-hit\n") == 0) {
+            puts("*stopped,reason=\"watchpoint-trigger\",wpt={number=\"2\",exp=\"watched\"},value={old=\"17\",new=\"20\"},thread-id=\"1\""); reply(token, "^done");
+        } else if (strcmp(mode, "data-watch") == 0 && strcmp(command, "-data-downgrade\n") == 0) {
+            (void)snprintf(data_type, sizeof data_type, "watchpoint");
+            puts("=breakpoint-modified,bkpt={number=\"2\",type=\"watchpoint\"}"); reply(token, "^done");
+        } else if (strcmp(mode, "data-watch") == 0 && strcmp(command, "-data-release\n") == 0) {
+            reply(token, "^done"); if (*held) { reply(held, "^done,wpt={number=\"2\"}"); *held = 0; }
+        } else if (strncmp(mode, "bp-", 3) == 0 && strcmp(command, "-thread-info\n") == 0) {
             if (strcmp(mode, "bp-late-error-running") == 0) { reply(token, "^done,threads=[{id=\"1\",state=\"running\"}],current-thread-id=\"1\""); }
             else if (strcmp(mode, "bp-late-error-unknown") == 0) { reply(token, "^done"); }
             else { reply(token, "^done,threads=[{id=\"1\",state=\"stopped\",frame={level=\"0\",addr=\"0x1000\",func=\"main\"}}],current-thread-id=\"1\""); }
