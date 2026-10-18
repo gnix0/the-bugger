@@ -13,10 +13,12 @@ NCURSES_CFLAGS := $(shell $(PKG_CONFIG) --cflags ncursesw 2>/dev/null)
 NCURSES_LIBS := $(shell $(PKG_CONFIG) --libs ncursesw 2>/dev/null)
 ELF_LIBS := $(shell $(PKG_CONFIG) --libs libelf 2>/dev/null)
 ELF_CFLAGS := $(shell $(PKG_CONFIG) --cflags libelf 2>/dev/null)
-PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session -Isrc/model $(NCURSES_CFLAGS) $(ELF_CFLAGS)
+JSON_LIBS := $(shell $(PKG_CONFIG) --libs json-c 2>/dev/null)
+JSON_CFLAGS := $(shell $(PKG_CONFIG) --cflags json-c 2>/dev/null)
+PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session -Isrc/model $(NCURSES_CFLAGS) $(ELF_CFLAGS) $(JSON_CFLAGS)
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/model/context.c src/model/code.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
+SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/profiles.c src/model/context.c src/model/code.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -25,7 +27,7 @@ BINARY := $(BUILD_DIR)/the-bugger
 all: $(BINARY)
 
 $(BINARY): $(OBJECTS)
-	$(CC) $(LDFLAGS) -o $@ $(OBJECTS) $(NCURSES_LIBS) $(ELF_LIBS) $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $(OBJECTS) $(NCURSES_LIBS) $(ELF_LIBS) $(JSON_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/%.o: %.c Makefile | check-deps
 	mkdir -p $(dir $@)
@@ -34,6 +36,7 @@ $(BUILD_DIR)/%.o: %.c Makefile | check-deps
 check-deps:
 	@$(PKG_CONFIG) --exists ncursesw || { echo 'ncursesw development files and pkg-config are required.' >&2; exit 1; }
 	@$(PKG_CONFIG) --exists libelf || { echo 'libelf development files are required.' >&2; exit 1; }
+	@$(PKG_CONFIG) --exists json-c || { echo 'json-c development files are required.' >&2; exit 1; }
 
 $(BUILD_DIR)/test-unit: $(BUILD_DIR)/tests/unit/test_demo.o $(BUILD_DIR)/src/tui/demo.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
@@ -342,6 +345,37 @@ $(BUILD_DIR)/test-watchpoints: $(BUILD_DIR)/tests/integration/test_watchpoints.o
 .PHONY: test-m12-model
 test-m12-model: $(BUILD_DIR)/test-watchpoints $(BUILD_DIR)/fake-mi
 	$(BUILD_DIR)/test-watchpoints $(abspath $(BUILD_DIR)/fake-mi)
+
+$(BUILD_DIR)/test-profiles: $(BUILD_DIR)/tests/unit/test_profiles.o $(BUILD_DIR)/src/session/profiles.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(JSON_LIBS) $(LDLIBS)
+
+.PHONY: test-m13-model
+$(BUILD_DIR)/test-profile-sources: $(BUILD_DIR)/tests/integration/test_profile_sources.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+test-m13-model: $(BUILD_DIR)/test-profiles $(BUILD_DIR)/test-profile-sources $(BUILD_DIR)/fake-mi
+	$(BUILD_DIR)/test-profiles
+	$(BUILD_DIR)/test-profile-sources $(abspath $(BUILD_DIR)/fake-mi)
+
+test: test-m13-model
+-include $(BUILD_DIR)/tests/unit/test_profiles.d $(BUILD_DIR)/tests/integration/test_profile_sources.d
+
+$(BUILD_DIR)/test-profiles-tui: $(BUILD_DIR)/tests/integration/test_profiles_tui.o $(BUILD_DIR)/tests/support/terminal.o $(BUILD_DIR)/src/session/profiles.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(JSON_LIBS) $(LDLIBS)
+
+.PHONY: test-m13-tui test-m13-native
+test-m13-tui: all $(BUILD_DIR)/test-profiles-tui $(BUILD_DIR)/debug-fixture
+	$(BUILD_DIR)/test-profiles-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/debug-fixture)
+
+$(BUILD_DIR)/test-profiles-native: $(BUILD_DIR)/tests/integration/test_profiles_native.o $(BUILD_DIR)/src/session/profiles.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(JSON_LIBS) $(ELF_LIBS) $(LDLIBS)
+
+test-m13-native: all $(BUILD_DIR)/test-profiles-native $(BUILD_DIR)/test-profiles-tui $(BUILD_DIR)/debug-fixture $(BUILD_DIR)/code-fixture-relocated
+	$(BUILD_DIR)/test-profiles-native $(abspath $(BUILD_DIR)/code-fixture-relocated) $(abspath tests/fixtures/native/relocated)
+	$(BUILD_DIR)/test-profiles-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/debug-fixture) --native
+
+test-native: test-m13-native
+-include $(BUILD_DIR)/tests/integration/test_profiles_tui.d $(BUILD_DIR)/tests/integration/test_profiles_native.d
 
 .PHONY: test-m12-slow
 test-m12-slow: $(BUILD_DIR)/test-watchpoints $(BUILD_DIR)/fake-mi

@@ -56,6 +56,9 @@ struct TbCode {
     char directories[TB_CODE_RULES][TB_CODE_PATH]; size_t directory_count;
     TbSourceRule rules[TB_CODE_RULES], pending_rule; size_t rule_count;
     char pending_directory[TB_CODE_PATH];
+    char restore_directories[TB_CODE_RULES][TB_CODE_PATH]; size_t restore_dirs, restore_dir;
+    TbSourceRule restore_rules[TB_CODE_RULES]; size_t restore_count, restore_rule;
+    bool restoring;
 };
 
 void tb_code_safe(char *out, size_t capacity, const char *bytes, size_t length)
@@ -429,6 +432,7 @@ bool tb_code_event(TbCode *code, const TbGdbEvent *event)
         view->assembly_dirty = true; view->data.stale = true; ++code->revision; return true;
     }
     if (event->kind == TB_GDB_STALE || event->kind == TB_GDB_CANCELLED) {
+        if (job >= CODE_DIRECTORY) { code->restoring = false; message(code, "Source profile application cancelled; review source settings."); }
         cancel_precontext(view);
         if (job == CODE_FILES) { code->files_dirty = true; }
         if (job == CODE_FLAVOR) { code->flavor_done = false; }
@@ -436,6 +440,7 @@ bool tb_code_event(TbCode *code, const TbGdbEvent *event)
     }
     bool okay = event->kind == TB_GDB_REPLY && strcmp(event->record->klass, "done") == 0;
     if (!okay) {
+        if (job >= CODE_DIRECTORY) { code->restoring = false; }
         char error[192]; safe(error, sizeof error, event->record ? tb_mi_find(event->record->results, "msg") : NULL);
         if (!*error) { (void)snprintf(error, sizeof error, "GDB code request timed out or failed."); }
         if (job == CODE_ASSEMBLY && view->data.mixed && !view->fallback) {
@@ -589,6 +594,22 @@ void tb_code_pump(TbCode *code)
         invalidate_sources(code); message(code, "GDB source settings applied; refreshing context.");
     }
     const TbContextSnapshot *context = tb_context_snapshot(code->context);
+    if (code->restoring && !code->waiting) {
+        TbGdbState state = tb_gdb_state(code->gdb);
+        if (state != TB_GDB_READY && state != TB_GDB_STOPPED) { return; }
+        if (code->restore_dir < code->restore_dirs) {
+            size_t index = code->restore_dirs - 1 - code->restore_dir++;
+            if (!tb_code_add_directory(code, code->restore_directories[index])) { code->restoring = false; }
+            return;
+        }
+        if (code->restore_rule < code->restore_count) {
+            const TbSourceRule *rule = &code->restore_rules[code->restore_rule++];
+            if (!tb_code_add_rule(code, rule->from, rule->to)) { code->restoring = false; }
+            return;
+        }
+        code->restoring = false;
+        message(code, "Profile source settings applied.");
+    }
     bool stopped = tb_gdb_state(code->gdb) == TB_GDB_STOPPED;
     bool required = false;
     for (int i = 0; i < TB_CODE_VIEWS; ++i) { required = required || code->views[i].visible_source || code->views[i].visible_assembly; }
@@ -815,6 +836,19 @@ bool tb_code_add_directory(TbCode *code, const char *path)
     if (stat(path, &info) != 0 || !S_ISDIR(info.st_mode)) { message(code, "Source directory does not exist or is inaccessible."); return false; }
     (void)snprintf(code->pending_directory, sizeof code->pending_directory, "%s", path);
     const char *const args[] = {path}; return request(code, CODE_DIRECTORY, "-environment-directory", args, 1, TB_GDB_SESSION);
+}
+bool tb_code_restoring(const TbCode *code) { return code->restoring; }
+bool tb_code_restore_settings(TbCode *code, const char *const dirs[], size_t count,
+                              const TbSourceRule *rules, size_t rule_count)
+{
+    if (code->waiting || code->restoring || code->directory_count || code->rule_count ||
+        count > TB_CODE_RULES || rule_count > TB_CODE_RULES) { return false; }
+    for (size_t i = 0; i < count; ++i) { if (!path_valid(dirs[i])) { return false; } }
+    for (size_t i = 0; i < rule_count; ++i) { if (!path_valid(rules[i].from) || !path_valid(rules[i].to)) { return false; } }
+    for (size_t i = 0; i < count; ++i) { (void)snprintf(code->restore_directories[i], TB_CODE_PATH, "%s", dirs[i]); }
+    if (rule_count) { memcpy(code->restore_rules, rules, rule_count * sizeof *rules); }
+    code->restore_dirs = count; code->restore_count = rule_count;
+    code->restore_dir = code->restore_rule = 0; code->restoring = count || rule_count; return true;
 }
 /* Quote for GDB CLI's argument parser, independently of MI C-string encoding. */
 static bool cli_quote(char *out, size_t capacity, const char *text)

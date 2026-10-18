@@ -84,7 +84,9 @@ int main(int argc, char *argv[])
         char token[32];
         memcpy(token, line, digits); token[digits] = '\0';
         char *command = line + digits;
-        if (strcmp(mode, "data-watch") == 0 && strncmp(command, "-data-mode ", 11) == 0) {
+        if (strcmp(mode, "profile-source") == 0 && strncmp(command, "-environment-directory ", 23) == 0 && strstr(command, "rejected")) {
+            reply(token, "^error,msg=\"Source directory rejected by test backend\"");
+        } else if (strcmp(mode, "data-watch") == 0 && strncmp(command, "-data-mode ", 11) == 0) {
             data_mode = (unsigned)strtoul(command + 11, NULL, 10); reply(token, "^done");
         } else if (strcmp(mode, "data-watch") == 0 && strcmp(command, "-thread-info\n") == 0) {
             reply(token, "^done,threads=[{id=\"1\",state=\"stopped\"}],current-thread-id=\"1\"");

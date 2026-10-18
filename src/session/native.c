@@ -390,6 +390,7 @@ static bool issue(TbNative *native, Job job, const char *operation, const char *
 
 bool tb_native_continue(TbNative *native)
 {
+    if (tb_code_restoring(native->code)) { diagnostic(native, "Wait for profile source settings to finish applying."); return false; }
     if (native->waiting || native->want_close || !native->configured || tb_break_busy(native->breakpoints)) { return false; }
     tb_context_refresh(native->context);
     if (native->state == TB_NATIVE_READY) {
@@ -407,6 +408,7 @@ bool tb_native_pause(TbNative *native)
 
 bool tb_native_step(TbNative *native, TbStep step, bool instruction)
 {
+    if (tb_code_restoring(native->code)) { diagnostic(native, "Wait for profile source settings to finish applying."); return false; }
     const TbContextSnapshot *context = tb_context_snapshot(native->context);
     if (native->waiting || native->want_close || !native->configured || tb_break_busy(native->breakpoints) ||
         native->state != TB_NATIVE_STOPPED || context->stale || !context->ready ||
@@ -423,6 +425,7 @@ bool tb_native_step(TbNative *native, TbStep step, bool instruction)
 
 bool tb_native_console(TbNative *native, const char *command)
 {
+    if (tb_code_restoring(native->code)) { diagnostic(native, "Wait for profile source settings to finish applying."); return false; }
     if (tb_break_busy(native->breakpoints)) { diagnostic(native, "Wait for the pending breakpoint operation."); return false; }
     if (native->waiting || native->want_close || !native->configured) {
         diagnostic(native, "Wait for the current operation and a ready session before sending a command."); return false;

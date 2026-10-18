@@ -40,16 +40,33 @@ static void pane_click(const char *label, int column)
     do {
         int header = -1, left = 0, right = 0, x = -1, y = -1;
         for (int row = 0; row < term.rows - 2; ++row) {
+            /* A redraw can publish the upper row before the lower row.
+             * Identify the intended panes, not merely three menu buttons:
+             * otherwise "Actions" can select Disassembly's footer. */
+            const char *memory = strstr(term.cells[row], "Memory");
+            const char *variables = strstr(term.cells[row], "Watches");
+            const char *console = strstr(term.cells[row], "Console");
+            const char *breakpoints = strstr(term.cells[row], "Breakpoints");
+            if (!memory || !variables || (!console && !breakpoints)) { continue; }
             const char *menus[3]; menus[0] = strstr(term.cells[row], "...");
             menus[1] = menus[0] ? strstr(menus[0] + 3, "...") : NULL;
             menus[2] = menus[1] ? strstr(menus[1] + 3, "...") : NULL;
             if (!menus[2]) { continue; }
+            if (memory >= menus[0] || variables <= menus[0] || variables >= menus[1] ||
+                !((console && console > menus[1] && console < menus[2]) ||
+                  (breakpoints && breakpoints > menus[1] && breakpoints < menus[2]))) { continue; }
             header = row; left = column ? (int)(menus[column - 1] - term.cells[row]) + 6 : 0;
             right = (int)(menus[column] - term.cells[row]) + 3;
         }
         for (int row = header; header >= 0 && row < term.rows - 2; ++row) {
             const char *found = strstr(term.cells[row] + left, label);
-            if (found && found - term.cells[row] < right) { x = (int)(found - term.cells[row]); y = row; }
+            if (found && found - term.cells[row] < right) {
+                x = (int)(found - term.cells[row]); y = row;
+                /* Address also labels the data columns: use its first match.
+                 * Footer actions use the last match, after body hints such as
+                 * "Use the gutter or Manage" in an empty breakpoint list. */
+                if (strcmp(label, "Address") == 0) { break; }
+            }
         }
         if (x >= 0) { click(x + (strcmp(label, "Address") == 0 ? 8 : 1), y); return; }
         test_terminal_pump(&term, 20);
@@ -84,6 +101,7 @@ int main(int argc, char **argv)
     test_terminal_expect(&term, "watchpoint-trigger");
     pane_click("Manage", 2); menu_click("Remove selected");
     pane_click("Address", 0); test_terminal_send(&term, "&watched_value\r");
+    test_terminal_expect(&term, "LIVE | 1B groups");
     test_terminal_expect(&term, "14 00 00 00");
     pane_click("Options", 0); menu_click("Hardware watchpoint at selected row");
     test_terminal_expect(&term, "Exact numeric address");

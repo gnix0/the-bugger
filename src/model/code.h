@@ -56,6 +56,11 @@ void tb_code_refresh(TbCode *code);
 bool tb_code_add_directory(TbCode *code, const char *path);
 bool tb_code_add_rule(TbCode *code, const char *from, const char *to);
 bool tb_code_clear_settings(TbCode *code);
+/* Queue only for a fresh session. Directories are highest-priority first;
+ * apply them in reverse because GDB prepends each directory. */
+bool tb_code_restore_settings(TbCode *code, const char *const directories[], size_t count,
+                              const TbSourceRule *rules, size_t rule_count);
+bool tb_code_restoring(const TbCode *code);
 size_t tb_code_directory_count(const TbCode *code);
 const char *tb_code_directory(const TbCode *code, size_t index);
 size_t tb_code_rule_count(const TbCode *code);

@@ -4,6 +4,7 @@
 #include "render.h"
 #include "theme.h"
 #include "native.h"
+#include "profiles.h"
 
 #include <curses.h>
 #include <errno.h>
@@ -20,7 +21,8 @@
 
 enum { MAX_CONTROLS = 1024, FIELD_SIZE = 256, FORM_FIELDS = 9 };
 typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
-               COMMAND_INPUT, SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT, DATA_WATCH_INPUT } Page;
+               COMMAND_INPUT, SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT, DATA_WATCH_INPUT,
+               PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM } Page;
 typedef enum { CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_ADDRESS, CODE_STOPPED,
                CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_DIRECTORY_ADD, CODE_RULE_FROM,
                CODE_RULE_TO, CODE_SETTINGS_CLEAR, CODE_RAW, CODE_RUN_TO } CodeAction;
@@ -31,7 +33,8 @@ typedef enum {
     COMMAND_OPEN, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_PAGE,
     CODE_ACTIONS, CODE_ACTION, CODE_PAGE, CODE_FILE_PICK, CODE_FILE_PAGE, HSCROLLBAR,
     BREAK_OPEN, BREAK_ACTION, REGISTER_REFRESH, REGISTER_FORMAT, MEMORY_ACTION, MEMORY_FIELD,
-    VARIABLE_OPEN, VARIABLE_ACTION, DATA_WATCH_OPTION
+    VARIABLE_OPEN, VARIABLE_ACTION, DATA_WATCH_OPTION,
+    PROFILE_OPEN, PROFILE_PICK, PROFILE_ACTION, PROFILE_ITEM
 } ControlKind;
 
 typedef struct {
@@ -92,11 +95,24 @@ typedef struct {
     bool watch_address;
     unsigned watch_width;
     TbGdbGeneration watch_context;
+    TbProfiles *profiles;
+    TbProfile *profile;
+    Page profile_return;
+    int profile_group, profile_selected, profile_offset, profile_text;
+    bool profile_replacing, recent_pending;
+    char profile_from[TB_PROFILE_PATH];
+    char profile_original_name[TB_PROFILE_NAME];
 } App;
+
+static bool profile_capture(App *app);
+static bool profile_load(App *app, const TbProfile *profile);
+static void draw_profiles(App *app);
+static void profile_edit(App *app, int operation, const char *initial);
+static void profile_activate(App *app, Control control);
 
 static bool editing_page(const App *app)
 {
-    return app->page == COMMAND_INPUT || app->page == SAVE_INPUT || app->page == CODE_INPUT || app->page == CODE_FILES || app->page == BREAK_INPUT || app->page == MEMORY_INPUT || app->page == WATCH_INPUT || app->page == DATA_WATCH_INPUT;
+    return app->page == COMMAND_INPUT || app->page == SAVE_INPUT || app->page == CODE_INPUT || app->page == CODE_FILES || app->page == BREAK_INPUT || app->page == MEMORY_INPUT || app->page == WATCH_INPUT || app->page == DATA_WATCH_INPUT || app->page == PROFILE_TEXT;
 }
 
 /* Signal handler communicates only through this flag; cleanup runs normally. */
@@ -278,11 +294,18 @@ static void draw_launcher(App *app)
     }
     int rule = top + (compact ? 11 : 17);
     tb_style(TB_BORDER, 0); (void)mvhline(rule, left + 2, ACS_HLINE, width - 4);
-    tb_text(rule + 1, left + 2, width - 4, TB_MUTED, 0, app->demo_mode ?
-            "Recent sessions: none saved in this preview." : "Recent sessions: profiles not implemented yet.");
+    const char *recent = app->profiles ? tb_profiles_recent(app->profiles, 0) : NULL;
+    if (!app->demo_mode && recent) {
+        char label[128]; (void)snprintf(label, sizeof label, "Recent: %s", recent);
+        button(app, rule + 1, left + 2, width - 4, label, PROFILE_PICK, -1, 0);
+    } else {
+        tb_text(rule + 1, left + 2, width - 4, TB_MUTED, 0, app->demo_mode ?
+                "Recent sessions: none saved in this preview." : "Recent sessions: none yet. Save a named profile to retain its setup.");
+    }
     tb_text(rule + 2, left + 2, width - 4, TB_MUTED, 0, app->demo_mode ?
             "DEMO / VISUAL REFERENCE - no debugger connected" : "Native Linux | Server flows remain previews");
     int actions = top + height - 1;
+    if (!app->demo_mode) { button(app, actions, left + 2, 14, "[ Profiles ]", PROFILE_OPEN, 0, 0); }
     if (app->previewed) {
         button(app, actions, left + 2, 22, "[ Return to preview ]", BACK, 0, 0);
     }
@@ -365,6 +388,11 @@ static void draw_form(App *app, bool review)
         button(app, LINES - 4, 2, 21, native ? "[ Review session ]" : "[ Review preview ]", SUBMIT, 0, 0);
     }
     button(app, LINES - 4, COLS - 12, 10, "[ Back ]", BACK, 0, 0);
+    if (!app->demo_mode) {
+        button(app, LINES - 3, 2, 14, "[ Save profile ]", PROFILE_OPEN, 2, 0);
+        button(app, LINES - 3, 18, 16, "[ Profile... ]", PROFILE_OPEN, 1, 0);
+        button(app, LINES - 3, COLS - 12, 10, "[ Delete ]", PROFILE_OPEN, 3, 0);
+    }
     if (cursor_y >= 0) {
         (void)curs_set(1);
         (void)move(cursor_y, cursor_x);
@@ -1032,7 +1060,7 @@ static void draw_native_pane(App *app, int index, TbRect rect)
             size_t offset = (size_t)app->horizontal[index][view]; if (offset > strlen(safe)) { offset = strlen(safe); }
             tb_text(rect.y + 2 + row, rect.x + 1, rect.w - 2, TB_PANEL, pane->row[view] == item ? A_UNDERLINE : 0, safe + offset);
         }
-        if (!scroll.total) { tb_text(rect.y + 3, rect.x + 2, rect.w - 4, TB_MUTED, 0, "No breakpoints or data watches. Use F9/gutter or Manage."); }
+        if (!scroll.total) { tb_text(rect.y + 3, rect.x + 2, rect.w - 4, TB_MUTED, 0, "No breakpoints or data watches. Use the gutter or Manage."); }
         button(app, rect.y + rect.h - 1, rect.x + 1, 10, " Manage ", BREAK_OPEN, 0, index); return;
     }
     if (view == TB_SOURCE || view == TB_DISASSEMBLY) { draw_code_pane(app, index, rect); return; }
@@ -1115,10 +1143,12 @@ static void draw_workspace(App *app)
 {
     tb_fill((TbRect){0, 0, COLS, 1}, TB_CHROME);
     tb_text(0, 1, 11, TB_BRAND, A_BOLD, "THE BUGGER");
-    const char *const actions[] = {
-        " Continue F5 ", " Pause ", " Over F10 ", " Into F11 ",
-        " Out Shift+F11 ", " BP F9 ", " Reset "
-    };
+    const char *const short_names[] = {"Continue", "Pause", "Over", "Into", "Out", "BP", "Reset"};
+    char actions[7][64];
+    for (int i = 0; i < 7; ++i) {
+        char key[24]; tb_profile_key_name(app->profile->keys[i], key, sizeof key);
+        (void)snprintf(actions[i], sizeof actions[i], app->profile->keys[i] ? " %s %s " : " %s%s ", short_names[i], app->profile->keys[i] ? key : "");
+    }
     int y = COLS >= 124 ? 0 : 1, x = COLS >= 124 ? 14 : 1;
     for (int i = 0; i < 7; ++i) {
         int width = (int)strlen(actions[i]);
@@ -1289,6 +1319,7 @@ static void draw_source_settings(App *app)
     button(app, LINES - 4, 3, 12, "[ Back ]", BACK, 0, 0);
     button(app, LINES - 4, 17, 10, "Previous", CODE_FILE_PAGE, -1, 0);
     button(app, LINES - 4, 29, 8, "Next", CODE_FILE_PAGE, 1, 0);
+    if (!app->demo_mode) { button(app, LINES - 3, 3, 24, "Save source/profile...", PROFILE_OPEN, 4, 0); }
 }
 
 static void draw_code_files(App *app)
@@ -1337,6 +1368,7 @@ static void data_watch_open(App *app, const char *expression, bool address, unsi
 
 static void draw_input(App *app)
 {
+    bool profile_text = app->page == PROFILE_TEXT;
     bool command = app->page == COMMAND_INPUT;
     bool code = app->page == CODE_INPUT;
     bool bp = app->page == BREAK_INPUT;
@@ -1346,6 +1378,7 @@ static void draw_input(App *app)
     bool memory_length = memory && app->memory_length_input;
     const char *bp_label = app->break_action == 0 ? "Add code breakpoint" : app->break_action == 3 ? "Breakpoint condition (empty clears)" : "Breakpoint ignore count";
     draw_header(app, data_watch ? "Add hardware data watchpoint" : watch ? "Add watch expression" : memory_length ? "Memory byte count" : memory ? "Read memory" : bp ? bp_label : code ? code_labels[app->code_action] : command ? "GDB console command" : "Save retained log");
+    if (profile_text) { draw_header(app, "Profile field"); }
     tb_text(5, 3, COLS - 6, TB_CYAN, A_BOLD,
             data_watch ? (app->watch_address ? "Exact numeric address (0x...); width selected below" : "Expression to watch; qualified child paths may be entered explicitly") : watch ? "Expression: name, member, constant index or simple offset" : memory_length ? "Bytes per range: 1 to 1024" : memory ? "Address / pointer expression (for example &buffer or $sp)" : bp ? bp_label : code ? code_labels[app->code_action] : command ? "Explicit GDB command (through MI)" : "New log destination (existing files are preserved)");
     tb_text(7, 3, COLS - 6, TB_MUTED, 0,
@@ -1355,6 +1388,12 @@ static void draw_input(App *app)
     if (memory) {
         char summary[160]; (void)snprintf(summary, sizeof summary, "Read exactly %u bytes; no calls/writes/casts. MMIO reads can have side effects. Esc cancels.", tb_memory_view(tb_native_memory(app->native), app->memory_pane)->length);
         tb_text(7, 3, COLS - 6, TB_MUTED, 0, memory_length ? "Changes the requested range only; no target read. Use Address or Refresh afterward." : summary);
+    }
+    if (profile_text) {
+        static const char *const labels[] = {"Profile name", "Source directory (highest priority first)", "Build prefix to replace", "Local replacement prefix", "Ordered OpenOCD config path", "OpenOCD search directory", "Action binding: F1..F24, Shift+F1..F12, Ctrl+B, or None"};
+        tb_fill((TbRect){2, 5, COLS - 4, 3}, TB_WORKSPACE);
+        tb_text(5, 3, COLS - 6, TB_CYAN, A_BOLD, labels[app->profile_text]);
+        tb_text(7, 3, COLS - 6, TB_MUTED, 0, "Paths and arguments are data; saving never launches tools. Reserved/conflicting bindings are rejected.");
     }
     TbRect field = {3, 9, COLS - 6, 1};
     int index = add_control(app, field, FIELD, 0, 0);
@@ -1367,7 +1406,7 @@ static void draw_input(App *app)
     }
     wide_text(9, 3, COLS - 6, app->input, start, index == app->focus);
     if (memory && *app->memory_input_error) { tb_text(11, 3, COLS - 6, TB_ORANGE, 0, app->memory_input_error); }
-    button(app, 12, 3, 14, data_watch ? "[ Create ]" : watch ? "[ Add ]" : memory_length ? "[ Apply ]" : memory ? "[ Read ]" : bp || code ? "[ Apply ]" : command ? "[ Send ]" : "[ Save Log ]", INPUT_SUBMIT, 0, 0);
+    button(app, 12, 3, 14, profile_text ? "[ Apply ]" : data_watch ? "[ Create ]" : watch ? "[ Add ]" : memory_length ? "[ Apply ]" : memory ? "[ Read ]" : bp || code ? "[ Apply ]" : command ? "[ Send ]" : "[ Save Log ]", INPUT_SUBMIT, 0, 0);
     button(app, 12, 19, 12, "[ Cancel ]", BACK, 0, 0);
     if (data_watch) {
         char label[96]; (void)snprintf(label, sizeof label, "Mode: %s", tb_break_watch_mode(app->watch_mode));
@@ -1467,6 +1506,8 @@ static void draw_page(App *app)
         draw_memory_menu(app);
     } else if (app->page == VARIABLE_MENU) {
         draw_variable_menu(app);
+    } else if (app->page == PROFILE_LIST || app->page == PROFILE_OPTIONS || app->page == PROFILE_ITEMS || app->page == PROFILE_CONFIRM) {
+        draw_profiles(app);
     } else if (app->page == CODE_FILES) {
         draw_code_files(app);
     } else if (app->page == SOURCE_SETTINGS) {
@@ -1582,6 +1623,263 @@ static bool field_utf8(const wchar_t *value, char *target, size_t capacity)
     target[length] = '\0'; return true;
 }
 
+static bool form_string(Form *form, int field, const char *text)
+{
+    size_t length = mbstowcs(form->values[field], text, FIELD_SIZE);
+    if (length == (size_t)-1 || length >= FIELD_SIZE) { return false; }
+    form->values[field][length] = 0; return true;
+}
+static bool profile_load(App *app, const TbProfile *p)
+{
+    if (!p) { status(app, "Profile no longer exists; Reload the list."); return false; }
+    Form next = {0}; next.alternate = p->kind == 0 ? p->attach : p->adapter_target; next.start_server = p->start_server;
+    bool ok;
+    if (p->kind == 0) {
+        char arguments[FIELD_SIZE * 4]; size_t at = 0;
+        for (size_t i = 0; i < p->arguments.count; ++i) {
+            if (at + 3 >= sizeof arguments) { status(app, "Profile arguments exceed the configuration field limit."); return false; }
+            if (i) { arguments[at++] = ' '; } arguments[at++] = '"';
+            for (const char *s = p->arguments.values[i]; *s; ++s) {
+                if (at + 4 >= sizeof arguments) { status(app, "Profile arguments exceed the configuration field limit."); return false; }
+                if (*s == '\\' || *s == '"') { arguments[at++] = '\\'; } arguments[at++] = *s;
+            }
+            arguments[at++] = '"';
+        }
+        arguments[at] = 0;
+        ok = form_string(&next, p->attach ? 4 : 1, p->executable) && form_string(&next, 2, arguments) &&
+             form_string(&next, 3, p->directory) && form_string(&next, 5, p->gdb);
+    } else if (p->kind == 1) {
+        ok = form_string(&next, 1, p->board) && form_string(&next, 2, p->adapter) && form_string(&next, 3, p->target) &&
+             form_string(&next, 4, p->executable) && form_string(&next, 5, p->gdb) &&
+             form_string(&next, 6, p->endpoint) && form_string(&next, 7, p->openocd);
+    } else { ok = form_string(&next, 0, p->endpoint) && form_string(&next, 1, p->executable) && form_string(&next, 2, p->gdb); }
+    if (!ok) { status(app, "Profile text exceeds the form's 255-character limit or has invalid encoding."); return false; }
+    *app->profile = *p; app->forms[p->kind] = next; app->session = p->kind;
+    page(app, CONFIGURE); status(app, p->kind ? "Definition loaded for review. Server execution remains a preview." : "Profile loaded for review. PID/environment/runtime state are not restored."); return true;
+}
+static bool profile_capture(App *app)
+{
+    TbProfile next = *app->profile; next.kind = app->session;
+    char values[FORM_FIELDS][FIELD_SIZE * 4];
+    for (int i = 0; i < FORM_FIELDS; ++i) { if (!field_utf8(app->forms[app->session].values[i], values[i], sizeof values[i])) { status(app, "Invalid configuration text."); return false; } }
+    Form *form = &app->forms[app->session];
+    if (!app->session) {
+        next.attach = form->alternate;
+        (void)snprintf(next.executable, sizeof next.executable, "%s", values[form->alternate ? 4 : 1]);
+        (void)snprintf(next.directory, sizeof next.directory, "%s", values[3]);
+        (void)snprintf(next.gdb, sizeof next.gdb, "%s", values[5]);
+        TbNativeWords words = {0}; char error[160];
+        if (!form->alternate && !tb_native_words(values[2], &words, error, sizeof error)) { status(app, error); return false; }
+        if (form->alternate) { next.directory[0] = 0; }
+        next.arguments.count = words.count; memcpy(next.arguments.values, words.values, sizeof words.values);
+    } else if (app->session == 1) {
+        next.adapter_target = form->alternate; next.start_server = form->start_server;
+        (void)snprintf(next.board, sizeof next.board, "%s", values[1]);
+        (void)snprintf(next.adapter, sizeof next.adapter, "%s", values[2]);
+        (void)snprintf(next.target, sizeof next.target, "%s", values[3]);
+        (void)snprintf(next.executable, sizeof next.executable, "%s", values[4]);
+        (void)snprintf(next.gdb, sizeof next.gdb, "%s", values[5]);
+        if (strlen(values[6]) >= sizeof next.endpoint) { status(app, "Endpoint exceeds 255 bytes."); return false; }
+        memcpy(next.endpoint, values[6], strlen(values[6]) + 1);
+        (void)snprintf(next.openocd, sizeof next.openocd, "%s", values[7]);
+    } else {
+        if (strlen(values[0]) >= sizeof next.endpoint) { status(app, "Endpoint exceeds 255 bytes."); return false; }
+        memcpy(next.endpoint, values[0], strlen(values[0]) + 1);
+        (void)snprintf(next.executable, sizeof next.executable, "%s", values[1]);
+        (void)snprintf(next.gdb, sizeof next.gdb, "%s", values[2]);
+    }
+    if (app->live) {
+        TbCode *code = tb_native_code(app->native);
+        next.directory_count = tb_code_directory_count(code); next.rule_count = tb_code_rule_count(code);
+        for (size_t i = 0; i < next.directory_count; ++i) {
+            const char *path = tb_code_directory(code, i);
+            if (strlen(path) >= TB_PROFILE_PATH) { status(app, "Applied source path exceeds profile field limit."); return false; }
+            memcpy(next.directories[i], path, strlen(path) + 1);
+        }
+        for (size_t i = 0; i < next.rule_count; ++i) {
+            const TbSourceRule *rule = tb_code_rule(code, i);
+            if (strlen(rule->from) >= TB_PROFILE_PATH || strlen(rule->to) >= TB_PROFILE_PATH) { status(app, "Applied source mapping exceeds profile field limit."); return false; }
+            memcpy(next.rules[i].from, rule->from, strlen(rule->from) + 1); memcpy(next.rules[i].to, rule->to, strlen(rule->to) + 1);
+        }
+    }
+    *app->profile = next; return true;
+}
+static size_t profile_item_count(const App *app)
+{
+    return app->profile_group == 0 ? app->profile->directory_count : app->profile_group == 1 ? app->profile->rule_count :
+           app->profile_group == 2 ? app->profile->scripts.count : app->profile_group == 3 ? app->profile->search.count : TB_PROFILE_ACTIONS;
+}
+static const char *profile_item_text(const App *app, size_t index)
+{
+    return app->profile_group == 0 ? app->profile->directories[index] : app->profile_group == 1 ? app->profile->rules[index].from :
+           app->profile_group == 2 ? app->profile->scripts.values[index] : app->profile_group == 3 ? app->profile->search.values[index] : "";
+}
+static const TbProfile *profile_list_at(const App *app, size_t index)
+{
+    size_t at = 0;
+    for (size_t i = 0; i < TB_PROFILE_RECENT; ++i) {
+        const char *name = tb_profiles_recent(app->profiles, i); if (!name) { break; }
+        if (at++ == index) { return tb_profiles_find(app->profiles, name); }
+    }
+    for (size_t i = 0; i < tb_profiles_count(app->profiles); ++i) {
+        const TbProfile *p = tb_profiles_at(app->profiles, i); bool recent = false;
+        for (size_t j = 0; j < TB_PROFILE_RECENT; ++j) {
+            const char *name = tb_profiles_recent(app->profiles, j); if (!name) { break; }
+            recent = recent || strcmp(p->name, name) == 0;
+        }
+        if (!recent && at++ == index) { return p; }
+    }
+    return NULL;
+}
+static void profile_edit(App *app, int operation, const char *initial)
+{
+    if (operation == 0) { (void)snprintf(app->profile_original_name, sizeof app->profile_original_name, "%s", app->profile->name); }
+    app->profile_text = operation;
+    size_t n = mbstowcs(app->input, initial, FIELD_SIZE);
+    if (n == (size_t)-1 || n >= FIELD_SIZE) { status(app, "Saved text exceeds this input field; no change made."); return; }
+    app->input[n] = 0; page(app, PROFILE_TEXT); app->cursor = n;
+}
+static void draw_profiles(App *app)
+{
+    draw_header(app, app->page == PROFILE_LIST ? "Saved profiles / recent sessions" : app->page == PROFILE_OPTIONS ? "Profile options (unsaved until Save profile)" : app->page == PROFILE_CONFIRM ? "Confirm profile change" : "Profile entries (unsaved)");
+    if (app->page == PROFILE_CONFIRM) {
+        char text[160]; (void)snprintf(text, sizeof text, "%s profile: %s?", app->profile_replacing ? "Replace" : "Delete", app->profile->name);
+        tb_text(6, 3, COLS - 6, TB_ORANGE, A_BOLD, text);
+        button(app, 9, 3, 16, "[ Confirm ]", PROFILE_ACTION, 30, 0);
+        button(app, 9, 21, 14, "[ Cancel ]", BACK, 0, 0); return;
+    }
+    if (app->page == PROFILE_OPTIONS) {
+        const char *const labels[] = {"Source directories", "Source mappings", "Ordered OpenOCD scripts", "OpenOCD search directories", "Action keys"};
+        int row = 5;
+        for (int i = 0; i < 5; ++i) {
+            if ((i == 2 || i == 3) && app->profile->kind != 1) { continue; }
+            button(app, row++, 3, COLS - 6, labels[i], PROFILE_ACTION, 10 + i, 0);
+        }
+        char protocol[80]; (void)snprintf(protocol, sizeof protocol, "Remote protocol: %s", app->profile->protocol);
+        if (app->profile->kind) { button(app, row + 1, 3, COLS - 6, protocol, PROFILE_ACTION, 23, 0); }
+        tb_text(13, 3, COLS - 6, TB_MUTED, 0, app->profile->kind == 1 ?
+                "Ordered scripts override board/adapter fields; no automatic script appending. Server execution comes later." :
+                "PID, environment overrides and runtime/workspace contents are not saved.");
+        button(app, LINES - 4, 3, 14, "[ Back ]", BACK, 0, 0); return;
+    }
+    int visible = LINES - 13; if (visible > 8) { visible = 8; } if (visible < 1) { visible = 1; }
+    size_t count = app->page == PROFILE_LIST ? tb_profiles_count(app->profiles) : profile_item_count(app);
+    if (app->profile_offset < 0 || (size_t)app->profile_offset >= count) { app->profile_offset = 0; }
+    for (int i = 0; i < visible && (size_t)(i + app->profile_offset) < count; ++i) {
+        int item = i + app->profile_offset; char label[1200];
+        if (app->page == PROFILE_LIST) {
+            const TbProfile *p = profile_list_at(app, (size_t)item);
+            bool recent = false;
+            for (size_t j = 0; j < TB_PROFILE_RECENT; ++j) { const char *name = tb_profiles_recent(app->profiles, j); recent = recent || (name && strcmp(name, p->name) == 0); }
+            (void)snprintf(label, sizeof label, "%s%s | %s%s", recent ? "Recent: " : "", p->name, session_names[p->kind], p->kind ? " | definition only" : "");
+        } else if (app->profile_group == 4) {
+            char key[24]; tb_profile_key_name(app->profile->keys[item], key, sizeof key);
+            (void)snprintf(label, sizeof label, "%s: %s", tb_profile_action((size_t)item), key);
+        } else { (void)snprintf(label, sizeof label, "%s%d: %.1023s", item == app->profile_selected ? "> " : "", item + 1, profile_item_text(app, (size_t)item)); }
+        button(app, 5 + i, 3, COLS - 6, label, app->page == PROFILE_LIST ? PROFILE_PICK : PROFILE_ITEM, item, 0);
+    }
+    if (!count) { tb_text(6, 3, COLS - 6, TB_MUTED, 0, "No entries yet."); }
+    button(app, LINES - 7, 3, 12, "Previous", PROFILE_ACTION, 1, -visible);
+    button(app, LINES - 7, 17, 10, "Next", PROFILE_ACTION, 1, visible);
+    if (app->page == PROFILE_LIST) {
+        button(app, LINES - 5, 3, 12, "New native", CHOOSE_SESSION, 0, 0);
+        button(app, LINES - 5, 17, 13, "New OpenOCD", CHOOSE_SESSION, 1, 0);
+        button(app, LINES - 5, 32, 12, "New remote", CHOOSE_SESSION, 2, 0);
+        button(app, LINES - 4, 3, 12, "Reload file", PROFILE_ACTION, 0, 0);
+    } else if (app->profile_group != 4) {
+        button(app, LINES - 5, 3, 10, "Add entry", PROFILE_ACTION, 20, 0);
+        button(app, LINES - 5, 15, 12, "Edit entry", PROFILE_ACTION, 21, 0);
+        button(app, LINES - 5, 29, 14, "Remove entry", PROFILE_ACTION, 22, 0);
+    }
+    button(app, LINES - 4, COLS - 16, 12, "[ Back ]", BACK, 0, 0);
+}
+static void profile_finish(App *app, bool ok)
+{
+    status(app, !ok || *tb_profiles_error(app->profiles) ? tb_profiles_error(app->profiles) : "Profile file saved atomically.");
+    if (ok) { page(app, app->profile_return); }
+}
+static void profile_activate(App *app, Control control)
+{
+    if (control.kind == PROFILE_OPEN) {
+        if (control.value == 0) { app->profile_offset = 0; page(app, PROFILE_LIST); return; }
+        app->profile_return = app->live ? WORKSPACE : app->page == REVIEW ? REVIEW : CONFIGURE;
+        if (!profile_capture(app)) { return; }
+        if (control.value == 1) { page(app, PROFILE_OPTIONS); }
+        else if (control.value == 3) {
+            if (!tb_profiles_find(app->profiles, app->profile->name)) { status(app, "Load a saved profile before deleting it."); return; }
+            app->profile_replacing = false; page(app, PROFILE_CONFIRM);
+        } else { profile_edit(app, 0, app->profile->name); }
+    } else if (control.kind == PROFILE_PICK) {
+        const TbProfile *p = control.value < 0 ? tb_profiles_find(app->profiles, tb_profiles_recent(app->profiles, 0)) : profile_list_at(app, (size_t)control.value);
+        (void)profile_load(app, p);
+    } else if (control.kind == PROFILE_ITEM) {
+        app->profile_selected = control.value;
+        if (app->profile_group == 4) {
+            char key[24]; tb_profile_key_name(app->profile->keys[control.value], key, sizeof key); profile_edit(app, 6, key);
+        }
+    } else {
+        int action = control.value;
+        if (action == 0) { status(app, tb_profiles_load(app->profiles) ? "Profile file reloaded." : tb_profiles_error(app->profiles)); }
+        else if (action == 1) { app->profile_offset += control.pane; }
+        else if (action >= 10 && action <= 14) { app->profile_group = action - 10; app->profile_selected = app->profile_offset = 0; page(app, PROFILE_ITEMS); }
+        else if (action == 23) { (void)snprintf(app->profile->protocol, sizeof app->profile->protocol, "%s", strcmp(app->profile->protocol, "remote") == 0 ? "extended-remote" : "remote"); }
+        else if (action == 30) {
+            bool ok = app->profile_replacing ? tb_profiles_put(app->profiles, app->profile, true) : tb_profiles_remove(app->profiles, app->profile->name);
+            if (ok && !app->profile_replacing) { app->profile->name[0] = 0; }
+            profile_finish(app, ok);
+        } else if (action >= 20 && action <= 22) {
+            size_t count = profile_item_count(app); int group = app->profile_group;
+            size_t selected = action == 20 ? count : (size_t)app->profile_selected;
+            if ((action != 20 && selected >= count) || (action == 20 && count >= (group < 2 ? TB_PROFILE_SOURCES : TB_PROFILE_WORDS))) { status(app, "Select an entry or remove one before adding beyond the limit."); return; }
+            app->profile_selected = (int)selected;
+            if (action == 22) {
+                if (group == 0) { memmove(app->profile->directories[selected], app->profile->directories[selected + 1], (count - selected - 1) * TB_PROFILE_PATH); --app->profile->directory_count; }
+                else if (group == 1) { memmove(&app->profile->rules[selected], &app->profile->rules[selected + 1], (count - selected - 1) * sizeof app->profile->rules[0]); --app->profile->rule_count; }
+                else {
+                    TbProfileWords *words = group == 2 ? &app->profile->scripts : &app->profile->search;
+                    memmove(words->values[selected], words->values[selected + 1], (count - selected - 1) * TB_PROFILE_WORD); --words->count;
+                }
+            } else { profile_edit(app, group == 0 ? 1 : group == 1 ? 2 : group == 2 ? 4 : 5, action == 20 ? "" : profile_item_text(app, selected)); }
+        }
+    }
+}
+static void profile_text_submit(App *app, const char *input)
+{
+    TbProfile *p = app->profile; size_t index = (size_t)app->profile_selected;
+    if (app->profile_text == 0) {
+        if (!*input || strlen(input) >= sizeof p->name) { status(app, "Use a nonempty profile name shorter than 64 bytes."); return; }
+        (void)snprintf(p->name, sizeof p->name, "%s", input);
+        if (!tb_profile_valid(p)) { status(app, "Invalid fields, duplicate source prefixes, or conflicting/reserved keys."); return; }
+        if (tb_profiles_find(app->profiles, p->name)) { app->profile_replacing = true; page(app, PROFILE_CONFIRM); }
+        else { profile_finish(app, tb_profiles_put(app->profiles, p, false)); }
+        return;
+    }
+    if (app->profile_text == 6) {
+        int key;
+        if (!tb_profile_key_parse(input, &key)) { status(app, "Unsupported/reserved binding. Use F1..F24, Shift+F1..F12, a permitted Ctrl key or None."); return; }
+        for (size_t i = 0; key && i < TB_PROFILE_ACTIONS; ++i) {
+            if (i != index && p->keys[i] == key) { status(app, "That binding already belongs to another action. Unbind it first."); return; }
+        }
+        p->keys[index] = key;
+    } else {
+        size_t limit = app->profile_text >= 4 ? TB_PROFILE_WORD : TB_PROFILE_PATH;
+        if (!*input || strlen(input) >= limit) { status(app, "Entry is empty or exceeds its field limit."); return; }
+        if (app->profile_text == 2) {
+            (void)snprintf(app->profile_from, sizeof app->profile_from, "%s", input);
+            profile_edit(app, 3, index < p->rule_count ? p->rules[index].to : ""); return;
+        }
+        if (app->profile_text == 1) { (void)snprintf(p->directories[index], TB_PROFILE_PATH, "%s", input); if (index == p->directory_count) { ++p->directory_count; } }
+        else if (app->profile_text == 3) {
+            (void)snprintf(p->rules[index].from, TB_PROFILE_PATH, "%s", app->profile_from);
+            (void)snprintf(p->rules[index].to, TB_PROFILE_PATH, "%s", input); if (index == p->rule_count) { ++p->rule_count; }
+        } else {
+            TbProfileWords *words = app->profile_text == 4 ? &p->scripts : &p->search;
+            memcpy(words->values[index], input, strlen(input) + 1); if (index == words->count) { ++words->count; }
+        }
+    }
+    page(app, PROFILE_ITEMS); status(app, "Draft updated. Return to configuration and Save profile to persist.");
+}
+
 static bool start_native(App *app)
 {
     char values[FORM_FIELDS][FIELD_SIZE * 4];
@@ -1611,6 +1909,14 @@ static bool start_native(App *app)
         .directory = app->forms[0].alternate ? "" : values[3],
         .arguments = &arguments, .environment = &environment};
     if (!tb_native_start(app->native, &config)) { status(app, tb_native_message(app->native)); return false; }
+    const char *directories[TB_PROFILE_SOURCES]; TbSourceRule rules[TB_PROFILE_SOURCES];
+    for (size_t i = 0; i < app->profile->directory_count; ++i) { directories[i] = app->profile->directories[i]; }
+    for (size_t i = 0; i < app->profile->rule_count; ++i) {
+        (void)snprintf(rules[i].from, sizeof rules[i].from, "%s", app->profile->rules[i].from);
+        (void)snprintf(rules[i].to, sizeof rules[i].to, "%s", app->profile->rules[i].to);
+    }
+    (void)tb_code_restore_settings(tb_native_code(app->native), directories, app->profile->directory_count, rules, app->profile->rule_count);
+    app->recent_pending = *app->profile->name && tb_profiles_find(app->profiles, app->profile->name);
     memset(app->memory_input, 0, sizeof app->memory_input); memset(app->memory_cursor, 0, sizeof app->memory_cursor);
     app->live = true; app->previewed = true;
     for (int i = 0; i < TB_MAX_PANES; ++i) { app->follow_log[i] = true; }
@@ -1633,7 +1939,10 @@ static void request_leave(App *app, bool quit)
 static void activate(App *app, Control control)
 {
     switch (control.kind) {
+    case PROFILE_OPEN: case PROFILE_PICK: case PROFILE_ACTION: case PROFILE_ITEM:
+        profile_activate(app, control); break;
     case CHOOSE_SESSION:
+        tb_profile_defaults(app->profile, control.value);
         app->session = control.value;
         page(app, CONFIGURE);
         break;
@@ -1651,6 +1960,16 @@ static void activate(App *app, Control control)
         page(app, WORKSPACE);
         break;
     case BACK:
+        if (app->page == PROFILE_LIST) { page(app, LAUNCHER); break; }
+        if (app->page == PROFILE_OPTIONS || app->page == PROFILE_CONFIRM) {
+            if (app->page == PROFILE_CONFIRM && app->profile_replacing) { memcpy(app->profile->name, app->profile_original_name, sizeof app->profile->name); }
+            page(app, app->profile_return); break;
+        }
+        if (app->page == PROFILE_ITEMS) { page(app, PROFILE_OPTIONS); break; }
+        if (app->page == PROFILE_TEXT) {
+            if (app->profile_text == 0) { memcpy(app->profile->name, app->profile_original_name, sizeof app->profile->name); }
+            page(app, app->profile_text == 0 ? app->profile_return : PROFILE_ITEMS); break;
+        }
         if (app->page == CODE_MENU || app->page == SOURCE_SETTINGS || app->page == BREAK_MENU || app->page == MEMORY_MENU || app->page == VARIABLE_MENU) { page(app, WORKSPACE); break; }
         if (editing_page(app)) { page(app, WORKSPACE); break; }
         page(app, app->page == REVIEW ? CONFIGURE :
@@ -1906,6 +2225,7 @@ static void activate(App *app, Control control)
         char input[FIELD_SIZE * 4];
         bool command = app->page == COMMAND_INPUT;
         if (!field_utf8(app->input, input, sizeof input)) { status(app, "Invalid text encoding."); break; }
+        if (app->page == PROFILE_TEXT) { profile_text_submit(app, input); break; }
         if (app->page == DATA_WATCH_INPUT) {
             const TbContextSnapshot *context = tb_context_snapshot(tb_native_context(app->native));
             if (context->stale || context->generation.session != app->watch_context.session ||
@@ -2317,6 +2637,9 @@ static void key_event(App *app, wint_t key, bool special)
         return;
     }
     if (!special && key == 27) {
+        if (app->page == PROFILE_LIST || app->page == PROFILE_OPTIONS || app->page == PROFILE_ITEMS || app->page == PROFILE_TEXT || app->page == PROFILE_CONFIRM) {
+            activate(app, (Control){.kind = BACK}); return;
+        }
         if (control.kind == MEMORY_FIELD && app->page == WORKSPACE && app->menu < 0) {
             for (int i = 0; i < app->count; ++i) {
                 if (app->controls[i].kind == BODY && app->controls[i].pane == control.pane) { app->focus = i; break; }
@@ -2377,14 +2700,17 @@ static void key_event(App *app, wint_t key, bool special)
         activate(app, control);
         return;
     }
-    if (special && app->page == WORKSPACE && app->menu < 0) {
-        const int function_keys[] = {KEY_F(5), 0, KEY_F(10), KEY_F(11), KEY_F(23), KEY_F(9)};
-        for (int i = 0; i < 6; ++i) {
-            if ((int)key == function_keys[i] && function_keys[i] != 0) {
+    if (app->page == WORKSPACE && app->menu < 0 && control.kind != MEMORY_FIELD) {
+        for (int i = 0; i < TB_PROFILE_ACTIONS; ++i) {
+            int binding = app->profile->keys[i];
+            if (binding && ((special && binding > 0 && (int)key == KEY_F(binding)) ||
+                            (!special && binding < 0 && (int)key == -binding))) {
                 activate(app, (Control){.kind = TOOL, .value = i});
                 return;
             }
         }
+    }
+    if (special && app->page == WORKSPACE && app->menu < 0) {
         if (app->live && (control.kind == BODY || control.kind == HSCROLLBAR || control.kind == SCROLLBAR) && (key == KEY_LEFT || key == KEY_RIGHT)) {
             TbDemoPane *pane = &app->demo.panes[control.pane];
             TbView view = pane->tabs[pane->active];
@@ -2431,6 +2757,9 @@ static void initialize(App *app, bool demo)
 {
     memset(app, 0, sizeof *app);
     app->demo_mode = demo;
+    app->profiles = tb_profiles_create(); app->profile = calloc(1, sizeof *app->profile);
+    if (!app->profiles || !app->profile) { app->quit = true; }
+    if (app->profile) { tb_profile_defaults(app->profile, 0); }
     app->native = tb_native_create();
     if (app->native == NULL) { app->quit = true; }
     app->keyboard_focus = true;
@@ -2453,6 +2782,7 @@ static void initialize(App *app, bool demo)
     }
     status(app, demo ? "DEMO only. Nothing is launched, connected or saved." :
                       "Choose native launch/attach. Embedded and remote remain previews.");
+    if (!demo && app->profiles && !tb_profiles_load(app->profiles)) { status(app, tb_profiles_error(app->profiles)); }
 }
 
 int tb_tui_run(bool demo)
@@ -2528,6 +2858,13 @@ int tb_tui_run(bool demo)
             }
             if (app.native) {
                 tb_native_pump(app.native, 0);
+                if (app.recent_pending) {
+                    TbNativeState state = tb_native_state(app.native);
+                    if (state == TB_NATIVE_READY || state == TB_NATIVE_STOPPED) {
+                        app.recent_pending = false;
+                        if (!tb_profiles_touch(app.profiles, app.profile->name)) { status(&app, tb_profiles_error(app.profiles)); draw(&app); }
+                    } else if (state == TB_NATIVE_FAILED || state == TB_NATIVE_CLOSED) { app.recent_pending = false; }
+                }
                 uint64_t next = tb_native_revision(app.native);
                 if (next != revision) {
                     revision = next;
@@ -2565,7 +2902,8 @@ int tb_tui_run(bool demo)
         (void)curs_set(1);
         (void)endwin();
         delscreen(screen);
-        result = interrupted == 0 ? EXIT_SUCCESS : 128 + interrupted;
+        result = !app.profile || !app.profiles || !app.native ? EXIT_FAILURE : interrupted == 0 ? EXIT_SUCCESS : 128 + interrupted;
+        tb_profiles_destroy(app.profiles); free(app.profile);
     }
     for (int i = 0; i < 3; ++i) { (void)sigaction(signals[i], &saved[i], NULL); }
     return result;
