@@ -1,5 +1,13 @@
 # The Bugger
 
+<p align="center">
+  <img src="docs/assets/dashboard.png" alt="The Bugger dashboard">
+</p>
+
+<p align="center">
+  <img src="docs/assets/base_layout.png" alt="The Bugger default debugging workspace">
+</p>
+
 A terminal-native GDB frontend written in C17 for embedded firmware development.
 It combines source, disassembly, registers, memory, variables and debugger output
 in a configurable tiled workspace with a Monokai Pro visual identity.
