@@ -16,7 +16,7 @@ ELF_CFLAGS := $(shell $(PKG_CONFIG) --cflags libelf 2>/dev/null)
 PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session -Isrc/model $(NCURSES_CFLAGS) $(ELF_CFLAGS)
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/model/context.c src/model/code.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c
+SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/model/context.c src/model/code.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -143,7 +143,7 @@ $(BUILD_DIR)/code-fixture-relocated: tests/fixtures/native/relocated/main.c test
 
 fixtures: $(BUILD_DIR)/code-fixture $(BUILD_DIR)/code-fixture-optimized $(BUILD_DIR)/code-fixture-stripped $(BUILD_DIR)/code-fixture-cpp $(BUILD_DIR)/code-fixture-relocated
 
-NATIVE_OBJECTS = $(BUILD_DIR)/src/session/native.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/model/breakpoints.o $(BUILD_DIR)/src/model/registers.o $(BUILD_DIR)/src/model/memory.o
+NATIVE_OBJECTS = $(BUILD_DIR)/src/session/native.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/model/breakpoints.o $(BUILD_DIR)/src/model/registers.o $(BUILD_DIR)/src/model/memory.o $(BUILD_DIR)/src/model/variables.o
 
 $(BUILD_DIR)/test-native-words: $(BUILD_DIR)/tests/unit/test_native_words.o $(NATIVE_OBJECTS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
@@ -187,6 +187,7 @@ test: all test-mi test-controller $(BUILD_DIR)/test-code $(BUILD_DIR)/test-conte
 	$(BUILD_DIR)/test-images
 	$(BUILD_DIR)/test-registers $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-memory $(abspath $(BUILD_DIR)/fake-mi)
+	$(BUILD_DIR)/test-variables $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-breakpoints $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-code $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-context $(abspath $(BUILD_DIR)/fake-mi)
@@ -261,6 +262,47 @@ test-m10-native: all $(BUILD_DIR)/test-memory-native $(BUILD_DIR)/test-memory-tu
 	$(BUILD_DIR)/test-memory-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/memory-fixture)
 
 test-native: test-m10-native
+
+$(BUILD_DIR)/test-variables: $(BUILD_DIR)/tests/integration/test_variables.o $(BUILD_DIR)/src/model/variables.o $(BUILD_DIR)/src/model/memory.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-m11-model
+test-m11-model: $(BUILD_DIR)/test-variables $(BUILD_DIR)/fake-mi
+	$(BUILD_DIR)/test-variables $(abspath $(BUILD_DIR)/fake-mi)
+
+test: $(BUILD_DIR)/test-variables
+
+-include $(BUILD_DIR)/tests/integration/test_variables.d
+
+$(BUILD_DIR)/variables-fixture: tests/fixtures/native/variables.c
+	mkdir -p $(dir $@)
+	$(CC) -D_POSIX_C_SOURCE=200809L -std=c17 -Wall -Wextra -Wpedantic -Werror -g -O0 $< -o $@
+
+$(BUILD_DIR)/variables-fixture-cpp: tests/fixtures/native/variables.cpp tests/fixtures/native/variables.c
+	mkdir -p $(dir $@)
+	$(CXX) -std=c++17 -Wall -Wextra -Wpedantic -Werror -g -O0 $< -o $@
+
+$(BUILD_DIR)/variables-fixture-optimized: tests/fixtures/native/variables.c
+	mkdir -p $(dir $@)
+	$(CC) -D_POSIX_C_SOURCE=200809L -std=c17 -Wall -Wextra -Wpedantic -Werror -g -O2 $< -o $@
+
+$(BUILD_DIR)/test-variables-native: $(BUILD_DIR)/tests/integration/test_variables_native.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+$(BUILD_DIR)/test-variables-tui: $(BUILD_DIR)/tests/integration/test_variables_tui.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-m11-native test-m11-tui
+test-m11-tui: all $(BUILD_DIR)/test-variables-tui $(BUILD_DIR)/variables-fixture
+	$(BUILD_DIR)/test-variables-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/variables-fixture)
+
+test-m11-native: all $(BUILD_DIR)/test-variables-native $(BUILD_DIR)/test-variables-tui $(BUILD_DIR)/variables-fixture $(BUILD_DIR)/variables-fixture-cpp $(BUILD_DIR)/variables-fixture-optimized
+	$(BUILD_DIR)/test-variables-native $(abspath $(BUILD_DIR)/variables-fixture) $(abspath $(BUILD_DIR)/variables-fixture-cpp) $(abspath $(BUILD_DIR)/variables-fixture-optimized)
+	$(BUILD_DIR)/test-variables-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/variables-fixture)
+
+fixtures: $(BUILD_DIR)/variables-fixture $(BUILD_DIR)/variables-fixture-cpp $(BUILD_DIR)/variables-fixture-optimized
+test-native: test-m11-native
+-include $(BUILD_DIR)/tests/integration/test_variables_native.d $(BUILD_DIR)/tests/integration/test_variables_tui.d
 
 -include $(BUILD_DIR)/tests/integration/test_memory_native.d $(BUILD_DIR)/tests/integration/test_memory_tui.d
 

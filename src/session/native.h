@@ -7,6 +7,7 @@
 #include "breakpoints.h"
 #include "registers.h"
 #include "memory.h"
+#include "variables.h"
 
 enum { TB_NATIVE_WORDS = 32, TB_NATIVE_WORD_BYTES = 512,
        TB_NATIVE_LOG_LINES = 512, TB_NATIVE_LOG_WIDTH = 256 };
@@ -55,6 +56,7 @@ TbCode *tb_native_code(TbNative *native);
 TbBreakpoints *tb_native_breakpoints(TbNative *native);
 TbRegisters *tb_native_registers(TbNative *native);
 TbMemory *tb_native_memory(TbNative *native);
+TbVariables *tb_native_variables(TbNative *native);
 bool tb_native_run_to(TbNative *native, const char *location);
 bool tb_native_run_at(TbNative *native, TbBreakLocation location);
 

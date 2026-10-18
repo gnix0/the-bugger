@@ -20,7 +20,7 @@
 
 enum { MAX_CONTROLS = 1024, FIELD_SIZE = 256, FORM_FIELDS = 9 };
 typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
-               COMMAND_INPUT, SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT } Page;
+               COMMAND_INPUT, SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT } Page;
 typedef enum { CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_ADDRESS, CODE_STOPPED,
                CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_DIRECTORY_ADD, CODE_RULE_FROM,
                CODE_RULE_TO, CODE_SETTINGS_CLEAR, CODE_RAW, CODE_RUN_TO } CodeAction;
@@ -30,7 +30,8 @@ typedef enum {
     MENU_SECTION, PANE_ACTION, DIVIDER, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR,
     COMMAND_OPEN, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_PAGE,
     CODE_ACTIONS, CODE_ACTION, CODE_PAGE, CODE_FILE_PICK, CODE_FILE_PAGE, HSCROLLBAR,
-    BREAK_OPEN, BREAK_ACTION, REGISTER_REFRESH, REGISTER_FORMAT, MEMORY_ACTION, MEMORY_FIELD
+    BREAK_OPEN, BREAK_ACTION, REGISTER_REFRESH, REGISTER_FORMAT, MEMORY_ACTION, MEMORY_FIELD,
+    VARIABLE_OPEN, VARIABLE_ACTION
 } ControlKind;
 
 typedef struct {
@@ -79,9 +80,10 @@ typedef struct {
     bool assembly_tail[TB_MAX_PANES];
     char assembly_previous[TB_MAX_PANES][48];
     int assembly_scroll_up[TB_MAX_PANES];
-    int execution_pane, break_pane, break_action, memory_pane;
+    int execution_pane, break_pane, break_action, memory_pane, variable_pane;
     bool break_hardware;
     bool memory_length_input;
+    bool variable_focus;
     char memory_input_error[192];
     wchar_t memory_input[TB_MAX_PANES][FIELD_SIZE];
     size_t memory_cursor[TB_MAX_PANES];
@@ -90,7 +92,7 @@ typedef struct {
 
 static bool editing_page(const App *app)
 {
-    return app->page == COMMAND_INPUT || app->page == SAVE_INPUT || app->page == CODE_INPUT || app->page == CODE_FILES || app->page == BREAK_INPUT || app->page == MEMORY_INPUT;
+    return app->page == COMMAND_INPUT || app->page == SAVE_INPUT || app->page == CODE_INPUT || app->page == CODE_FILES || app->page == BREAK_INPUT || app->page == MEMORY_INPUT || app->page == WATCH_INPUT;
 }
 
 /* Signal handler communicates only through this flag; cleanup runs normally. */
@@ -457,6 +459,7 @@ static TbScroll workspace_scroll(const App *app, const TbDemoPane *pane, int vis
     int total = view == TB_CONSOLE ? (int)tb_native_log_count(app->native) :
                        view == TB_BREAKPOINTS ? (int)tb_break_count(tb_native_breakpoints(app->native)) :
                        view == TB_REGISTERS ? (int)tb_registers_count(tb_native_registers(app->native)) :
+                       view == TB_LOCALS || view == TB_WATCHES ? (int)tb_variables_count(tb_native_variables(app->native), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES) :
                        view == TB_MEMORY ? (int)((tb_memory_view(tb_native_memory(app->native), index)->data_size + 15) / 16) :
                        view == TB_SOURCE ? (int)code->line_count :
                        view == TB_DISASSEMBLY ? assembly_rows(code) :
@@ -496,6 +499,15 @@ static TbAssemblyColumns assembly_columns(const TbCodeView *view)
     return columns;
 }
 
+static void variable_text(const TbVariable *row, char *text, size_t capacity)
+{
+    (void)snprintf(text, capacity, "%c %*s%c %-24s %-18s %s%s%s%s",
+                   row->changed && row->fresh ? '*' : ' ', (int)row->depth * 2, "",
+                   row->expanded ? '-' : row->children || !row->fresh ? '+' : ' ', row->name,
+                   row->type, row->value, row->fresh ? "" : " [read required]", row->limited ? " [bounded]" : "",
+                   row->format_pending ? " [natural; format read required]" : "");
+}
+
 static int native_content_width(const App *app, int index)
 {
     const TbDemoPane *pane = &app->demo.panes[index];
@@ -503,7 +515,7 @@ static int native_content_width(const App *app, int index)
     const TbCodeView *code = tb_code_view(tb_native_code(app->native), index);
     TbAssemblyColumns columns = assembly_columns(code);
     const TbContextSnapshot *context = tb_context_snapshot(tb_native_context(app->native));
-    size_t rows = view == TB_MEMORY ? (tb_memory_view(tb_native_memory(app->native), index)->data_size + 15) / 16 : view == TB_REGISTERS ? tb_registers_count(tb_native_registers(app->native)) : view == TB_SOURCE ? code->line_count : view == TB_DISASSEMBLY ? code->instruction_count :
+    size_t rows = view == TB_LOCALS || view == TB_WATCHES ? tb_variables_count(tb_native_variables(app->native), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES) : view == TB_MEMORY ? (tb_memory_view(tb_native_memory(app->native), index)->data_size + 15) / 16 : view == TB_REGISTERS ? tb_registers_count(tb_native_registers(app->native)) : view == TB_SOURCE ? code->line_count : view == TB_DISASSEMBLY ? code->instruction_count :
                   view == TB_CONSOLE ? tb_native_log_count(app->native) : view == TB_BREAKPOINTS ? tb_break_count(tb_native_breakpoints(app->native)) : view == TB_CALL_STACK && context->ready && !context->stale ? context->frame_count :
                   view == TB_THREADS && context->ready && !context->stale ? context->thread_count : 0;
     size_t maximum = 0;
@@ -511,6 +523,7 @@ static int native_content_width(const App *app, int index)
         char text[4096]; bool selected;
         if (view == TB_MEMORY) { tb_memory_line(tb_native_memory(app->native), index, row, text, sizeof text); }
         else if (view == TB_REGISTERS) { register_text(tb_registers_row(tb_native_registers(app->native), row), text, sizeof text); }
+        else if (view == TB_LOCALS || view == TB_WATCHES) { variable_text(tb_variables_row(tb_native_variables(app->native), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES, row), text, sizeof text); }
         else if (view == TB_SOURCE) { (void)tb_code_source_line(tb_native_code(app->native), index, row, text, sizeof text); }
         else if (view == TB_DISASSEMBLY) {
             const TbInstruction *instruction = &code->instructions[row];
@@ -532,7 +545,8 @@ static int code_gutter(TbView view) { return view == TB_SOURCE ? 8 : view == TB_
 static int body_top(const App *app, int pane)
 {
     const TbDemoPane *p = &app->demo.panes[pane];
-    return app->live && p->tabs[p->active] == TB_MEMORY ? 4 : 2;
+    TbView view = p->tabs[p->active];
+    return app->live && view == TB_MEMORY ? 4 : app->live && (view == TB_LOCALS || view == TB_WATCHES) ? 3 : 2;
 }
 
 static void prepare_scrollbars(App *app, int index, TbRect rect)
@@ -897,6 +911,36 @@ static void draw_native_pane(App *app, int index, TbRect rect)
 {
     TbDemoPane *pane = &app->demo.panes[index];
     TbView view = pane->tabs[pane->active];
+    if (view == TB_LOCALS || view == TB_WATCHES) {
+        TbVariables *v = tb_native_variables(app->native);
+        TbVariableView kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
+        const char *error = tb_variables_error(v, kind);
+        bool stale = tb_variables_stale(v, kind);
+        char header[160]; const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(app->native));
+        (void)snprintf(header, sizeof header, "%s | T%s frame %d | * changed%s",
+                       tb_native_state(app->native) != TB_NATIVE_STOPPED || s->stale ? "STALE" : stale ? "READ REQUIRED" : "LIVE",
+                       s->selected_thread, s->selected.level, tb_variables_limited(v, kind) ? " | limited" : "");
+        tb_text(rect.y + 1, rect.x + 1, rect.w - 2, *error || stale ? TB_ORANGE : TB_MUTED, 0,
+                *error ? error : header);
+        tb_text(rect.y + 2, rect.x + 1, rect.w - 2, TB_MUTED, 0, "    Name                     Type               Value");
+        TbScroll scroll = workspace_scroll(app, pane, rect.h - 4);
+        tb_variables_want(v, kind, (size_t)scroll.offset, (size_t)scroll.visible);
+        for (int row = 0; row < scroll.visible && row + scroll.offset < scroll.total; ++row) {
+            int item = row + scroll.offset;
+            const TbVariable *value = tb_variables_row(v, kind, (size_t)item); char text[1500];
+            variable_text(value, text, sizeof text);
+            size_t offset = (size_t)app->horizontal[index][view]; if (offset > strlen(text)) { offset = strlen(text); }
+            TbStyle style = !value->fresh || s->stale || tb_native_state(app->native) != TB_NATIVE_STOPPED ? TB_MUTED : !value->available ? TB_ORANGE : value->changed ? TB_YELLOW : TB_GREEN;
+            tb_text(rect.y + 3 + row, rect.x + 1, app->body_width[index], style,
+                    pane->row[view] == item ? A_UNDERLINE : 0, text + offset);
+        }
+        if (!scroll.total) { tb_text(rect.y + 3, rect.x + 1, rect.w - 2, TB_MUTED, 0,
+                view == TB_WATCHES ? "Add a watch; Read requests its value." : "No local names in this stopped frame."); }
+        button(app, rect.y + rect.h - 1, rect.x + 1, rect.w < 8 ? rect.w - 2 : 6, " Read ", VARIABLE_ACTION, 0, index);
+        if (rect.w > 16) { button(app, rect.y + rect.h - 1, rect.x + 8, 9, " Actions ", VARIABLE_OPEN, 0, index); }
+        if (view == TB_WATCHES && rect.w > 26) { button(app, rect.y + rect.h - 1, rect.x + 18, 8, "+ Watch", VARIABLE_ACTION, 5, index); }
+        return;
+    }
     if (view == TB_REGISTERS) {
         TbRegisters *r = tb_native_registers(app->native); bool stale = tb_registers_stale(r);
         char header[256]; const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(app->native));
@@ -1104,7 +1148,7 @@ static void draw_workspace(App *app)
     bool tiled = tb_layout_arrange(&app->layout, area, app->demo.pane);
     memcpy(app->panes, app->layout.panes, sizeof app->panes);
     if (app->live) {
-        bool threads = false, frames = false, registers = false;
+        bool threads = false, frames = false, registers = false, locals = false, watches = false;
         for (int i = 0; i < app->layout.count; ++i) {
             int pane = app->layout.order[i];
             TbView view = app->demo.panes[pane].tabs[app->demo.panes[pane].active];
@@ -1112,9 +1156,12 @@ static void draw_workspace(App *app)
             threads = threads || view == TB_THREADS;
             frames = frames || view == TB_CALL_STACK;
             registers = registers || view == TB_REGISTERS;
+            locals = locals || view == TB_LOCALS; watches = watches || view == TB_WATCHES;
         }
         tb_registers_visible(tb_native_registers(app->native), registers);
         tb_registers_begin(tb_native_registers(app->native));
+        tb_variables_visible(tb_native_variables(app->native), locals, watches);
+        tb_variables_begin(tb_native_variables(app->native));
         tb_context_visible(tb_native_context(app->native), threads, frames);
         for (int pane = 0; pane < TB_MAX_PANES; ++pane) {
             bool visible = app->panes[pane].w >= 10 && app->panes[pane].h >= 7 && app->menu != pane;
@@ -1277,13 +1324,14 @@ static void draw_input(App *app)
     bool code = app->page == CODE_INPUT;
     bool bp = app->page == BREAK_INPUT;
     bool memory = app->page == MEMORY_INPUT;
+    bool watch = app->page == WATCH_INPUT;
     bool memory_length = memory && app->memory_length_input;
     const char *bp_label = app->break_action == 0 ? "Add code breakpoint" : app->break_action == 3 ? "Breakpoint condition (empty clears)" : "Breakpoint ignore count";
-    draw_header(app, memory_length ? "Memory byte count" : memory ? "Read memory" : bp ? bp_label : code ? code_labels[app->code_action] : command ? "GDB console command" : "Save retained log");
+    draw_header(app, watch ? "Add watch expression" : memory_length ? "Memory byte count" : memory ? "Read memory" : bp ? bp_label : code ? code_labels[app->code_action] : command ? "GDB console command" : "Save retained log");
     tb_text(5, 3, COLS - 6, TB_CYAN, A_BOLD,
-            memory_length ? "Bytes per range: 1 to 1024" : memory ? "Address / pointer expression (for example &buffer or $sp)" : bp ? bp_label : code ? code_labels[app->code_action] : command ? "Explicit GDB command (through MI)" : "New log destination (existing files are preserved)");
+            watch ? "Expression: name, member, constant index or simple offset" : memory_length ? "Bytes per range: 1 to 1024" : memory ? "Address / pointer expression (for example &buffer or $sp)" : bp ? bp_label : code ? code_labels[app->code_action] : command ? "Explicit GDB command (through MI)" : "New log destination (existing files are preserved)");
     tb_text(7, 3, COLS - 6, TB_MUTED, 0,
-            bp ? "Location: function, file:line or *0xADDRESS. Changes are validated by GDB." : code ? "Enter literal text/path. Navigation never changes execution. Esc cancels." :
+            watch ? "Adding does not read memory. Select Read afterward; calls/mutations are rejected." : bp ? "Location: function, file:line or *0xADDRESS. Changes are validated by GDB." : code ? "Enter literal text/path. Navigation never changes execution. Esc cancels." :
             command ? "Commands are deliberate operations through GDB/MI." :
             "Saves bounded retained history with control bytes escaped; mode 0600.");
     if (memory) {
@@ -1301,7 +1349,7 @@ static void draw_input(App *app)
     }
     wide_text(9, 3, COLS - 6, app->input, start, index == app->focus);
     if (memory && *app->memory_input_error) { tb_text(11, 3, COLS - 6, TB_ORANGE, 0, app->memory_input_error); }
-    button(app, 12, 3, 14, memory_length ? "[ Apply ]" : memory ? "[ Read ]" : bp || code ? "[ Apply ]" : command ? "[ Send ]" : "[ Save Log ]", INPUT_SUBMIT, 0, 0);
+    button(app, 12, 3, 14, watch ? "[ Add ]" : memory_length ? "[ Apply ]" : memory ? "[ Read ]" : bp || code ? "[ Apply ]" : command ? "[ Send ]" : "[ Save Log ]", INPUT_SUBMIT, 0, 0);
     button(app, 12, 19, 12, "[ Cancel ]", BACK, 0, 0);
     if (index == app->focus) {
         (void)curs_set(1); (void)leaveok(stdscr, FALSE);
@@ -1324,6 +1372,33 @@ static void draw_memory_menu(App *app)
     const char *labels[] = {"Address / Read", "Refresh this range", "Cycle grouping: 1/2/4/8 bytes", "Byte count: 1 to 1024", "Previous range (read)", "Next range (read)"};
     for (int i = 0; i < 6; ++i) { button(app, 9 + i, 3, COLS - 6, labels[i], MEMORY_ACTION, i, app->memory_pane); }
     button(app, 16, 3, 12, "[ Back ]", BACK, 0, 0);
+}
+
+static void draw_variable_menu(App *app)
+{
+    draw_header(app, "Locals / Watches inspection");
+    TbDemoPane *pane = &app->demo.panes[app->variable_pane];
+    TbView view = pane->tabs[pane->active];
+    TbVariableView kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
+    TbVariables *v = tb_native_variables(app->native);
+    const TbVariable *row = tb_variables_row(v, kind, (size_t)pane->row[view]);
+    char summary[1000];
+    if (row) {
+        (void)snprintf(summary, sizeof summary, "%.255s | %.191s | %s | children %u, page %u | %s",
+                       row->name, row->type, tb_variables_format_name(row->format), row->children,
+                       row->first / TB_VARIABLE_CHILDREN + 1, row->format_pending ? "format read required; value below is natural" : row->fresh ? "sampled" : "read required");
+    } else { (void)snprintf(summary, sizeof summary, "No selected variable."); }
+    tb_text(5, 3, COLS - 6, TB_CYAN, 0, summary);
+    tb_text(6, 3, COLS - 6, TB_ORANGE, 0, "Read/Expand requests may access MMIO. Unknown storage is never polled automatically.");
+    if (row) { tb_text(7, 3, COLS - 6, row->fresh ? TB_GREEN : TB_MUTED, 0, row->value); }
+    const char *const labels[] = {"Read selected root (discard previous child page)",
+        "Expand / collapse selected row (up to 32 children)", "Cycle selected value format",
+        "Previous child page", "Next child page", "Add watch expression",
+        view == TB_LOCALS ? "Refresh local names (no value read)" : "Remove selected watch"};
+    for (int i = 0; i < 7 && 8 + i < LINES - 3; ++i) {
+        button(app, 8 + i, 3, COLS - 6, labels[i], VARIABLE_ACTION, i, app->variable_pane);
+    }
+    button(app, LINES - 3, 3, 12, "[ Back ]", BACK, 0, 0);
 }
 
 static void draw_break_menu(App *app)
@@ -1362,6 +1437,8 @@ static void draw_page(App *app)
         draw_break_menu(app);
     } else if (app->page == MEMORY_MENU) {
         draw_memory_menu(app);
+    } else if (app->page == VARIABLE_MENU) {
+        draw_variable_menu(app);
     } else if (app->page == CODE_FILES) {
         draw_code_files(app);
     } else if (app->page == SOURCE_SETTINGS) {
@@ -1392,6 +1469,9 @@ static void draw_page(App *app)
 static void draw(App *app)
 {
     Control previous = app->focus >= 0 && app->focus < app->count ? app->controls[app->focus] : (Control){0};
+    if (app->variable_focus && app->page == WORKSPACE) {
+        previous = (Control){.kind = BODY, .pane = app->variable_pane}; app->variable_focus = false;
+    }
     bool retain_body = app->page == WORKSPACE && (previous.kind == BODY || previous.kind == SCROLLBAR || previous.kind == HSCROLLBAR || previous.kind == MEMORY_FIELD);
     draw_page(app);
     /* Live source availability can add/remove an earlier pane's scrollbar.
@@ -1543,7 +1623,7 @@ static void activate(App *app, Control control)
         page(app, WORKSPACE);
         break;
     case BACK:
-        if (app->page == CODE_MENU || app->page == SOURCE_SETTINGS || app->page == BREAK_MENU || app->page == MEMORY_MENU) { page(app, WORKSPACE); break; }
+        if (app->page == CODE_MENU || app->page == SOURCE_SETTINGS || app->page == BREAK_MENU || app->page == MEMORY_MENU || app->page == VARIABLE_MENU) { page(app, WORKSPACE); break; }
         if (editing_page(app)) { page(app, WORKSPACE); break; }
         page(app, app->page == REVIEW ? CONFIGURE :
              app->page == LAUNCHER ? WORKSPACE : LAUNCHER);
@@ -1634,6 +1714,23 @@ static void activate(App *app, Control control)
         break;
     case PANE_ACTION: pane_action(app, control.value, control.pane); break;
     case MEMORY_FIELD: break;
+    case VARIABLE_OPEN:
+        app->variable_pane = control.pane; page(app, VARIABLE_MENU); break;
+    case VARIABLE_ACTION: {
+        app->variable_pane = control.pane;
+        TbDemoPane *pane = &app->demo.panes[control.pane]; TbView view = pane->tabs[pane->active];
+        TbVariableView kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
+        TbVariables *v = tb_native_variables(app->native); size_t row = (size_t)pane->row[view];
+        if (control.value == 5) { app->input[0] = 0; page(app, WATCH_INPUT); break; }
+        bool okay = control.value == 0 ? tb_variables_read(v, kind, row) :
+                    control.value == 1 ? tb_variables_toggle(v, kind, row) :
+                    control.value == 2 ? tb_variables_format(v, kind, row) :
+                    control.value == 3 || control.value == 4 ? tb_variables_page(v, kind, row, control.value == 3 ? -1 : 1) :
+                    view == TB_LOCALS ? tb_variables_names(v) : tb_variables_remove(v, row);
+        status(app, okay ? "Explicit variable operation requested; unknown storage is not automatically refreshed." :
+               "Select a fresh stopped row, or wait for the current request. Read before expanding/formatting; paging needs children.");
+        if (okay) { page(app, WORKSPACE); app->variable_focus = true; } break;
+    }
     case MEMORY_ACTION: {
         TbMemory *m = tb_native_memory(app->native); int id = control.pane;
         const TbMemoryView *v = tb_memory_view(m, id); bool okay = true;
@@ -1763,6 +1860,23 @@ static void activate(App *app, Control control)
         char input[FIELD_SIZE * 4];
         bool command = app->page == COMMAND_INPUT;
         if (!field_utf8(app->input, input, sizeof input)) { status(app, "Invalid text encoding."); break; }
+        if (app->page == WATCH_INPUT) {
+            TbVariables *v = tb_native_variables(app->native);
+            bool okay = tb_variables_watch(v, input);
+            status(app, okay ? "Watch added without a memory read. Select Read to inspect it." : tb_variables_error(v, TB_VARIABLE_WATCHES));
+            if (okay) {
+                app->demo.pane = app->variable_pane; tb_demo_view(&app->demo, TB_WATCHES);
+                TbDemoPane *pane = &app->demo.panes[app->variable_pane];
+                for (size_t row = 0; row < tb_variables_count(v, TB_VARIABLE_WATCHES); ++row) {
+                    const TbVariable *value = tb_variables_row(v, TB_VARIABLE_WATCHES, row);
+                    if (!value->depth && strcmp(value->name, input) == 0) { pane->row[TB_WATCHES] = (int)row; }
+                }
+                int height = app->body_height[app->variable_pane]; if (height < 1) { height = 1; }
+                pane->scroll[TB_WATCHES] = pane->row[TB_WATCHES] >= height ? pane->row[TB_WATCHES] - height + 1 : 0;
+                page(app, WORKSPACE); app->variable_focus = true;
+            }
+            break;
+        }
         if (app->page == MEMORY_INPUT) {
             TbMemory *m = tb_native_memory(app->native); int id = app->memory_pane;
             if (app->memory_length_input) {
@@ -2062,6 +2176,11 @@ static void mouse_event(App *app)
                 if (target < scroll.total) { pane->row[view] = target; }
                 if (app->live && target < scroll.total) { select_context_row(app, control.pane); }
                 if (app->live && target < scroll.total && view == TB_SOURCE && event.x < control.rect.x + 2) { (void)toggle_breakpoint(app); }
+                if (app->live && target < scroll.total && (view == TB_LOCALS || view == TB_WATCHES) &&
+                    event.x - control.rect.x + app->horizontal[control.pane][view] <= 3 +
+                    (int)tb_variables_row(tb_native_variables(app->native), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES, (size_t)target)->depth * 2) {
+                    activate(app, (Control){.kind = VARIABLE_ACTION, .value = 1, .pane = control.pane});
+                }
                 if (!app->live && target < scroll.total && view == TB_SOURCE && event.x < control.rect.x + 2) {
                     tb_demo_action(&app->demo, TB_BREAKPOINT);
                     status(app, "DEMO gutter breakpoint toggled.");
@@ -2145,7 +2264,7 @@ static void key_event(App *app, wint_t key, bool special)
         } else if (app->page == LAUNCHER) {
             if (app->previewed) { page(app, WORKSPACE); }
             else { status(app, "Already at the launcher. Ctrl+Q quits the application."); }
-        } else if (app->page == RESET_CONFIRM || app->page == CLOSE_CONFIRM || app->page == CODE_MENU || app->page == SOURCE_SETTINGS || app->page == MEMORY_MENU ||
+        } else if (app->page == RESET_CONFIRM || app->page == CLOSE_CONFIRM || app->page == CODE_MENU || app->page == SOURCE_SETTINGS || app->page == MEMORY_MENU || app->page == VARIABLE_MENU ||
                    editing_page(app)) {
             page(app, WORKSPACE);
         } else if (app->page == WORKSPACE && app->live) {
@@ -2184,6 +2303,12 @@ static void key_event(App *app, wint_t key, bool special)
     }
     if ((!special && (key == '\n' || key == '\r' || key == ' ')) ||
         (special && key == KEY_ENTER)) {
+        if (app->live && app->page == WORKSPACE && control.kind == BODY) {
+            TbDemoPane *pane = &app->demo.panes[control.pane]; TbView view = pane->tabs[pane->active];
+            if (view == TB_LOCALS || view == TB_WATCHES) {
+                activate(app, (Control){.kind = VARIABLE_ACTION, .value = 1, .pane = control.pane}); return;
+            }
+        }
         activate(app, control);
         return;
     }
@@ -2208,7 +2333,7 @@ static void key_event(App *app, wint_t key, bool special)
             (key == KEY_UP || key == KEY_DOWN || key == KEY_PPAGE || key == KEY_NPAGE)) {
             TbDemoPane *pane = &app->demo.panes[control.pane];
             TbView view = pane->tabs[pane->active];
-            if (app->live && (view == TB_CALL_STACK || view == TB_THREADS)) {
+            if (app->live && (view == TB_CALL_STACK || view == TB_THREADS || view == TB_LOCALS || view == TB_WATCHES)) {
                 TbScroll scroll = workspace_scroll(app, pane, app->panes[control.pane].h - 3);
                 int row = pane->row[view] + (key == KEY_UP ? -1 : key == KEY_DOWN ? 1 :
                                            key == KEY_PPAGE ? -scroll.visible : scroll.visible);

@@ -271,7 +271,16 @@ void test_terminal_pump(TestTerminal *term, int milliseconds)
     char buffer[8192];
     ssize_t length = read(term->master, buffer, sizeof buffer);
     CHECK(length > 0);
-    CHECK(term->output_length + (size_t)length < sizeof term->output);
+    if (term->output_length + (size_t)length >= sizeof term->output) {
+        /* Keep a bounded diagnostic tail independently of the parsed screen.
+         * Check sanitizer evidence before discarding any captured bytes. */
+        CHECK(strstr(term->output, "ERROR: AddressSanitizer") == NULL);
+        CHECK(strstr(term->output, "runtime error:") == NULL);
+        CHECK(strstr(term->output, "LeakSanitizer") == NULL);
+        size_t retain = sizeof term->output / 2;
+        memmove(term->output, term->output + term->output_length - retain, retain);
+        term->output_length = retain;
+    }
     memcpy(term->output + term->output_length, buffer, (size_t)length);
     term->output_length += (size_t)length;
     term->output[term->output_length] = '\0';

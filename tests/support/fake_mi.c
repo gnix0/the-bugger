@@ -43,6 +43,9 @@ int main(int argc, char *argv[])
     if (mode == NULL) { mode = "normal"; }
     unsigned register_value = 16; bool register_error = false, register_malformed = false;
     unsigned memory_mode = 0;
+    char variable_name[64] = {0}; unsigned variable_reads = 0, variable_children = 0, variable_deletes = 0;
+    unsigned variable_mode = 0;
+    unsigned variable_value = 17;
     if ((strcmp(mode, "fallback") == 0 || strcmp(mode, "fallback-fail") == 0) &&
         strcmp(argv[3], "--interpreter=mi3") == 0) {
         fputs("Interpreter `mi3' unrecognized\n", stderr); return 0;
@@ -121,6 +124,62 @@ int main(int argc, char *argv[])
             if (setup == 2 && strcmp(mode, "late-fallback") == 0) {
                 fputs("Interpreter mi3 unrecognized\n", stderr); free(line); return 7;
             }
+        } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-variable-mode ", 15) == 0) {
+            variable_mode = (unsigned)strtoul(command + 15, NULL, 10); reply(token, "^done");
+        } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-variable-value ", 16) == 0) {
+            variable_value = (unsigned)strtoul(command + 16, NULL, 10); reply(token, "^done");
+        } else if (strcmp(mode, "context-variables") == 0 && strcmp(command, "-variable-release\n") == 0) {
+            reply(token, "^done");
+            if (*held) { (void)printf("%s^done,name=\"%s\",numchild=\"0\",type=\"int\",value=\"OBSOLETE\"\n", held, variable_name); *held = 0; }
+        } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-stack-list-variables ", 22) == 0) {
+            if (!strstr(command, "--no-values")) { free(line); return 25; }
+            if (variable_mode == 4 || variable_mode == 5) {
+                (void)printf("%s^done,variables=[", token);
+                for (unsigned i = 0; i < 1000; ++i) { (void)printf("%s{name=\"%s%u\"}", i ? "," : "", variable_mode == 4 ? "old" : "new", i); }
+                puts("]");
+            } else { reply(token, "^done,variables=[{name=\"scalar\"},{name=\"aggregate\"},{name=\"pointer\"},{name=\"unavailable\"}]"); }
+        } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-create ", 12) == 0) {
+            char *name = strstr(command, "tbv");
+            if (!name || sscanf(name, "%63s", variable_name) != 1) { free(line); return 26; }
+            ++variable_reads;
+            if (variable_mode == 3) { (void)snprintf(held, sizeof held, "%s", token); }
+            else if (variable_mode == 1) { reply(token, "^done,type=\"malformed\""); }
+            else if (strstr(command, "invalid")) { reply(token, "^error,msg=\"Unknown symbol\""); }
+            else {
+                char value[32]; (void)snprintf(value, sizeof value, "%u", variable_value);
+                (void)printf("%s^done,name=\"%s\",numchild=\"%u\",type=\"%s\",value=\"%s\"\n", token, variable_name,
+                    strstr(command, "aggregate") ? (variable_mode == 6 ? 1U : 100U) : strstr(command, "pointer") ? 1U : 0U,
+                    strstr(command, "aggregate") ? (variable_mode == 6 ? "Sample" : "int [100]") : strstr(command, "pointer") ? "int *" : "int",
+                    strstr(command, "unavailable") ? "<optimized out>" : strstr(command, "pointer") ? "0x40000000" : value);
+            }
+        } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-list-children ", 19) == 0) {
+            unsigned first, end; char object[256];
+            if (sscanf(command, "-var-list-children --all-values %255s %u %u", object, &first, &end) != 3 || end < first || end - first > 32) { free(line); return 27; }
+            if (variable_mode == 6) {
+                ++variable_children;
+                if (!strstr(object, ".public")) {
+                    (void)printf("%s^done,numchild=\"1\",children=[child={name=\"%s.public\",exp=\"public\",numchild=\"4\",value=\"\"}]\n", token, object);
+                } else {
+                    static const char *const names[] = {"count", "flags", "text", "values"};
+                    (void)printf("%s^done,numchild=\"4\",children=[", token);
+                    for (unsigned i = first; i < end && i < 4; ++i) {
+                        (void)printf("%schild={name=\"%s.%s\",exp=\"%s\",numchild=\"0\",type=\"int\",value=\"%u\"}", i == first ? "" : ",", object, names[i], names[i], variable_value);
+                    }
+                    puts("]");
+                }
+                (void)fflush(stdout); continue;
+            }
+            ++variable_children; (void)printf("%s^done,numchild=\"100\",children=[", token);
+            for (unsigned i = first; i < end; ++i) {
+                (void)printf("%schild={name=\"%s.%u\",exp=\"%u\",numchild=\"0\",type=\"int\",value=\"%u\"}", i == first ? "" : ",", object, i, i, i);
+            }
+            puts("]");
+        } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-evaluate-expression ", 25) == 0) {
+            ++variable_reads; reply(token, "^done,value=\"0x11\"");
+        } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-delete ", 12) == 0) {
+            ++variable_deletes; reply(token, "^done,ndeleted=\"1\"");
+        } else if (strcmp(mode, "context-variables") == 0 && strcmp(command, "-variable-stats\n") == 0) {
+            (void)printf("%s^done,reads=\"%u\",children=\"%u\",deletes=\"%u\"\n", token, variable_reads, variable_children, variable_deletes);
         } else if (strcmp(mode, "context-memory") == 0 && strncmp(command, "-memory-mode ", 13) == 0) {
             memory_mode = (unsigned)strtoul(command + 13, NULL, 10); reply(token, "^done");
         } else if (strcmp(mode, "context-memory") == 0 && strncmp(command, "-data-evaluate-expression ", 26) == 0) {
