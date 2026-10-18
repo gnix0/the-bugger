@@ -41,6 +41,7 @@ int main(int argc, char *argv[])
     }
     const char *mode = getenv("TB_FAKE_MODE");
     if (mode == NULL) { mode = "normal"; }
+    unsigned register_value = 16; bool register_error = false, register_malformed = false;
     if ((strcmp(mode, "fallback") == 0 || strcmp(mode, "fallback-fail") == 0) &&
         strcmp(argv[3], "--interpreter=mi3") == 0) {
         fputs("Interpreter `mi3' unrecognized\n", stderr); return 0;
@@ -118,6 +119,38 @@ int main(int argc, char *argv[])
             if (++setup == 2 && strcmp(mode, "no-read") == 0) { delay(400); }
             if (setup == 2 && strcmp(mode, "late-fallback") == 0) {
                 fputs("Interpreter mi3 unrecognized\n", stderr); free(line); return 7;
+            }
+        } else if (strncmp(mode, "context-registers", 17) == 0 && strcmp(command, "-register-change\n") == 0) {
+            register_value += 16; reply(token, "^done");
+        } else if (strncmp(mode, "context-registers", 17) == 0 && strcmp(command, "-register-error\n") == 0) {
+            register_error = !register_error; reply(token, "^done");
+        } else if (strncmp(mode, "context-registers", 17) == 0 && strcmp(command, "-register-malformed\n") == 0) {
+            register_malformed = !register_malformed; reply(token, "^done");
+        } else if (strncmp(mode, "context-registers", 17) == 0 && strcmp(command, "-data-list-register-names\n") == 0) {
+            if (strstr(mode, "bounds")) {
+                (void)printf("%s^done,register-names=[", token);
+                for (int i = 0; i < 600; ++i) { (void)printf("%s\"target%d\"", i ? "," : "", i); } puts("]");
+            } else { reply(token, strstr(mode, "arm") ? "^done,register-names=[\"r0\",\"\",\"pc\",\"q0\",\"unreadable\"]" :
+                                                      "^done,register-names=[\"rax\",\"\",\"rip\",\"xmm0\",\"unreadable\"]"); }
+        } else if (strncmp(mode, "context-registers", 17) == 0 && strncmp(command, "-data-list-register-values ", 27) == 0) {
+            if (register_error) { reply(token, "^error,msg=\"FAKE register read error\""); }
+            else if (register_malformed) { reply(token, "^done,register-values=\"bad\""); }
+            else {
+                char *at = strstr(command, "--frame ");
+                if (!at) { free(line); return 18; }
+                char *end; long frame_value = strtol(at + 8, &end, 10); at = end;
+                while (*at == ' ') { ++at; } char format = *at++;
+                (void)printf("%s^done,register-values=[", token); bool comma = false;
+                while (*at == ' ') {
+                    unsigned long id = strtoul(at + 1, &end, 10); if (end == at + 1) { break; } at = end;
+                    if (id == 4) { continue; }
+                    (void)printf("%s{number=\"%lu\",value=\"", comma ? "," : "", id); comma = true;
+                    if (id == 3) { for (int i = 0; i < 1200; ++i) { (void)putchar('a'); } }
+                    else if (format == 'x') { (void)printf("0x%x", register_value + (unsigned)frame_value); }
+                    else { (void)printf("%u", register_value + (unsigned)frame_value); }
+                    fputs("\"}", stdout);
+                }
+                puts("]");
             }
         } else if (strncmp(mode, "context", 7) == 0 && strcmp(command, "-thread-info\n") == 0) {
             (void)printf("%s^done,current-thread-id=\"%d\",threads=[{id=\"7\",name=\"main\",target-id=\"FAKE worker\",state=\"stopped\",frame={level=\"0\",func=\"leaf\",addr=\"0x1000\"}}", token, selected_thread);

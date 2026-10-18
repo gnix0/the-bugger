@@ -16,7 +16,7 @@ ELF_CFLAGS := $(shell $(PKG_CONFIG) --cflags libelf 2>/dev/null)
 PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session -Isrc/model $(NCURSES_CFLAGS) $(ELF_CFLAGS)
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/model/context.c src/model/code.c src/model/images.c src/model/breakpoints.c
+SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/model/context.c src/model/code.c src/model/images.c src/model/breakpoints.c src/model/registers.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -143,7 +143,7 @@ $(BUILD_DIR)/code-fixture-relocated: tests/fixtures/native/relocated/main.c test
 
 fixtures: $(BUILD_DIR)/code-fixture $(BUILD_DIR)/code-fixture-optimized $(BUILD_DIR)/code-fixture-stripped $(BUILD_DIR)/code-fixture-cpp $(BUILD_DIR)/code-fixture-relocated
 
-NATIVE_OBJECTS = $(BUILD_DIR)/src/session/native.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/model/breakpoints.o
+NATIVE_OBJECTS = $(BUILD_DIR)/src/session/native.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/model/breakpoints.o $(BUILD_DIR)/src/model/registers.o
 
 $(BUILD_DIR)/test-native-words: $(BUILD_DIR)/tests/unit/test_native_words.o $(NATIVE_OBJECTS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
@@ -185,6 +185,7 @@ $(BUILD_DIR)/test-context: $(BUILD_DIR)/tests/integration/test_context.o $(BUILD
 
 test: all test-mi test-controller $(BUILD_DIR)/test-code $(BUILD_DIR)/test-context $(BUILD_DIR)/test-native-words $(BUILD_DIR)/test-unit $(BUILD_DIR)/test-layout $(BUILD_DIR)/test-render $(BUILD_DIR)/test-cli $(BUILD_DIR)/test-tui $(BUILD_DIR)/test-workspace
 	$(BUILD_DIR)/test-images
+	$(BUILD_DIR)/test-registers $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-breakpoints $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-code $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-context $(abspath $(BUILD_DIR)/fake-mi)
@@ -205,6 +206,30 @@ $(BUILD_DIR)/test-breakpoints: $(BUILD_DIR)/tests/integration/test_breakpoints.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 test: $(BUILD_DIR)/test-breakpoints
+
+$(BUILD_DIR)/test-registers: $(BUILD_DIR)/tests/integration/test_registers.o $(BUILD_DIR)/src/model/registers.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+test: $(BUILD_DIR)/test-registers
+
+.PHONY: test-m09-model
+test-m09-model: $(BUILD_DIR)/test-registers $(BUILD_DIR)/fake-mi
+	$(BUILD_DIR)/test-registers $(abspath $(BUILD_DIR)/fake-mi)
+
+$(BUILD_DIR)/test-registers-native: $(BUILD_DIR)/tests/integration/test_registers_native.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+$(BUILD_DIR)/test-registers-tui: $(BUILD_DIR)/tests/integration/test_registers_tui.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-m09-native
+test-m09-native: all $(BUILD_DIR)/test-registers-native $(BUILD_DIR)/test-registers-tui $(BUILD_DIR)/code-fixture
+	$(BUILD_DIR)/test-registers-native $(abspath $(BUILD_DIR)/code-fixture)
+	$(BUILD_DIR)/test-registers-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/code-fixture)
+
+test-native: test-m09-native
+
+-include $(BUILD_DIR)/tests/integration/test_registers.d $(BUILD_DIR)/tests/integration/test_registers_native.d $(BUILD_DIR)/tests/integration/test_registers_tui.d
 
 $(BUILD_DIR)/break-fixture: tests/fixtures/native/breakpoints.c
 	mkdir -p $(dir $@)

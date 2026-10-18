@@ -30,7 +30,7 @@ typedef enum {
     MENU_SECTION, PANE_ACTION, DIVIDER, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR,
     COMMAND_OPEN, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_PAGE,
     CODE_ACTIONS, CODE_ACTION, CODE_PAGE, CODE_FILE_PICK, CODE_FILE_PAGE, HSCROLLBAR,
-    BREAK_OPEN, BREAK_ACTION
+    BREAK_OPEN, BREAK_ACTION, REGISTER_REFRESH, REGISTER_FORMAT
 } ControlKind;
 
 typedef struct {
@@ -452,6 +452,7 @@ static TbScroll workspace_scroll(const App *app, const TbDemoPane *pane, int vis
     const TbCodeView *code = tb_code_view(tb_native_code(app->native), (int)(pane - app->demo.panes));
     int total = view == TB_CONSOLE ? (int)tb_native_log_count(app->native) :
                        view == TB_BREAKPOINTS ? (int)tb_break_count(tb_native_breakpoints(app->native)) :
+                       view == TB_REGISTERS ? (int)tb_registers_count(tb_native_registers(app->native)) :
                        view == TB_SOURCE ? (int)code->line_count :
                        view == TB_DISASSEMBLY ? assembly_rows(code) :
                        view == TB_CALL_STACK && context->ready && !context->stale ? (int)context->frame_count :
@@ -468,6 +469,12 @@ static void break_text(const TbBreakpoint *bp, char *text, size_t capacity)
                    bp->location, bp->address, bp->file, bp->line, bp->ignore,
                    (unsigned long long)bp->hits, bp->condition);
     tb_code_safe(text, capacity, raw, strlen(raw));
+}
+
+static void register_text(const TbRegister *row, char *text, size_t capacity)
+{
+    (void)snprintf(text, capacity, "%c %-16s %s%s%s", row->changed && row->fresh ? '*' : ' ', row->name,
+                   *row->value ? row->value : "Awaiting read", row->fresh ? "" : " [stale]", row->truncated ? " [bounded]" : "");
 }
 
 static TbAssemblyColumns assembly_columns(const TbCodeView *view)
@@ -491,13 +498,14 @@ static int native_content_width(const App *app, int index)
     const TbCodeView *code = tb_code_view(tb_native_code(app->native), index);
     TbAssemblyColumns columns = assembly_columns(code);
     const TbContextSnapshot *context = tb_context_snapshot(tb_native_context(app->native));
-    size_t rows = view == TB_SOURCE ? code->line_count : view == TB_DISASSEMBLY ? code->instruction_count :
+    size_t rows = view == TB_REGISTERS ? tb_registers_count(tb_native_registers(app->native)) : view == TB_SOURCE ? code->line_count : view == TB_DISASSEMBLY ? code->instruction_count :
                   view == TB_CONSOLE ? tb_native_log_count(app->native) : view == TB_BREAKPOINTS ? tb_break_count(tb_native_breakpoints(app->native)) : view == TB_CALL_STACK && context->ready && !context->stale ? context->frame_count :
                   view == TB_THREADS && context->ready && !context->stale ? context->thread_count : 0;
     size_t maximum = 0;
     for (size_t row = 0; row < rows; ++row) {
         char text[4096]; bool selected;
-        if (view == TB_SOURCE) { (void)tb_code_source_line(tb_native_code(app->native), index, row, text, sizeof text); }
+        if (view == TB_REGISTERS) { register_text(tb_registers_row(tb_native_registers(app->native), row), text, sizeof text); }
+        else if (view == TB_SOURCE) { (void)tb_code_source_line(tb_native_code(app->native), index, row, text, sizeof text); }
         else if (view == TB_DISASSEMBLY) {
             const TbInstruction *instruction = &code->instructions[row];
             tb_format_assembly(text, sizeof text, columns, instruction->address, instruction->opcodes, instruction->text);
@@ -878,6 +886,29 @@ static void draw_native_pane(App *app, int index, TbRect rect)
 {
     TbDemoPane *pane = &app->demo.panes[index];
     TbView view = pane->tabs[pane->active];
+    if (view == TB_REGISTERS) {
+        TbRegisters *r = tb_native_registers(app->native); bool stale = tb_registers_stale(r);
+        char header[256]; const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(app->native));
+        (void)snprintf(header, sizeof header, "%s | registers | T%s frame %d | * changed%s",
+                       stale ? "STALE" : "LIVE", s->selected_thread, s->selected.level,
+                       tb_registers_limited(r) ? " | limited" : "");
+        tb_text(rect.y + 1, rect.x + 1, rect.w - 2, stale ? TB_ORANGE : TB_MUTED, 0,
+                *tb_registers_error(r) ? tb_registers_error(r) : header);
+        TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
+        tb_registers_want(r, (size_t)scroll.offset, (size_t)scroll.visible);
+        for (int i = 0; i < scroll.visible && i + scroll.offset < scroll.total; ++i) {
+            const TbRegister *row = tb_registers_row(r, (size_t)(i + scroll.offset)); char text[1400];
+            register_text(row, text, sizeof text);
+            size_t offset = (size_t)app->horizontal[index][TB_REGISTERS]; if (offset > strlen(text)) { offset = strlen(text); }
+            TbStyle style = stale || !row->fresh || !row->available ? TB_MUTED : row->changed ? TB_YELLOW : TB_GREEN;
+            tb_text(rect.y + 2 + i, rect.x + 1, app->body_width[index], style, 0, text + offset);
+        }
+        if (!scroll.total) { tb_text(rect.y + 3, rect.x + 2, rect.w - 4, TB_MUTED, 0, "Stop a program to discover its registers."); }
+        button(app, rect.y + rect.h - 1, rect.x + 1, 9, " Refresh ", REGISTER_REFRESH, 0, index);
+        char format[32]; (void)snprintf(format, sizeof format, " %s ", tb_registers_format_name(tb_registers_get_format(r)));
+        button(app, rect.y + rect.h - 1, rect.x + 11, (int)strlen(format), format, REGISTER_FORMAT, 0, index);
+        tb_text(rect.y + rect.h - 1, rect.x + 22, rect.w - 23, TB_MUTED, 0, "All (ungrouped)"); return;
+    }
     if (view == TB_BREAKPOINTS) {
         TbBreakpoints *b = tb_native_breakpoints(app->native);
         tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_CYAN, 0, tb_break_ready(b) ? "LIVE | code breakpoints | o enabled / - disabled" : "Refreshing breakpoint table...");
@@ -1009,14 +1040,17 @@ static void draw_workspace(App *app)
     bool tiled = tb_layout_arrange(&app->layout, area, app->demo.pane);
     memcpy(app->panes, app->layout.panes, sizeof app->panes);
     if (app->live) {
-        bool threads = false, frames = false;
+        bool threads = false, frames = false, registers = false;
         for (int i = 0; i < app->layout.count; ++i) {
             int pane = app->layout.order[i];
             TbView view = app->demo.panes[pane].tabs[app->demo.panes[pane].active];
             if (app->panes[pane].w < 10 || app->panes[pane].h < 7 || app->menu == pane) { continue; }
             threads = threads || view == TB_THREADS;
             frames = frames || view == TB_CALL_STACK;
+            registers = registers || view == TB_REGISTERS;
         }
+        tb_registers_visible(tb_native_registers(app->native), registers);
+        tb_registers_begin(tb_native_registers(app->native));
         tb_context_visible(tb_native_context(app->native), threads, frames);
         for (int pane = 0; pane < TB_MAX_PANES; ++pane) {
             bool visible = app->panes[pane].w >= 10 && app->panes[pane].h >= 7 && app->menu != pane;
@@ -1507,6 +1541,14 @@ static void activate(App *app, Control control)
         app->menu_focus = true;
         break;
     case PANE_ACTION: pane_action(app, control.value, control.pane); break;
+    case REGISTER_REFRESH:
+        tb_registers_refresh(tb_native_registers(app->native));
+        status(app, "Register refresh requested; reads wait until stopped."); break;
+    case REGISTER_FORMAT: {
+        TbRegisters *r = tb_native_registers(app->native);
+        tb_registers_format(r, (TbRegisterFormat)((tb_registers_get_format(r) + 1) % TB_REG_FORMATS));
+        status(app, "Register display format changed; target values are not written."); break;
+    }
     case CONTEXT_REFRESH:
         tb_context_refresh(tb_native_context(app->native));
         status(app, "Context refresh requested; reads wait until stopped."); break;

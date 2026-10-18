@@ -12,7 +12,7 @@ struct TbContext {
     TbGdb *gdb;
     TbContextSnapshot snapshot, next;
     bool visible_threads, visible_frames, required, dirty, invalidate, waiting, failed;
-    bool select_thread, select_frame;
+    bool select_thread, select_frame, registers_required;
     char desired_thread[32], selection_error[192];
     int desired_frame, first_frame;
     Query query;
@@ -106,6 +106,11 @@ void tb_context_require(TbContext *context, bool required)
 {
     if (required && !context->required) { stale(context); }
     context->required = required;
+}
+void tb_context_registers(TbContext *context, bool required)
+{
+    if (required && !context->registers_required && !context->snapshot.ready) { stale(context); }
+    context->registers_required = required;
 }
 
 static void parse_threads(TbContext *context, const TbMiRecord *record)
@@ -273,7 +278,7 @@ void tb_context_pump(TbContext *context)
         context->invalidate = false; tb_gdb_context_changed(context->gdb);
     }
     if (tb_gdb_state(context->gdb) != TB_GDB_STOPPED || context->waiting ||
-        (!context->visible_threads && !context->visible_frames && !context->required)) { return; }
+        (!context->visible_threads && !context->visible_frames && !context->required && !context->registers_required)) { return; }
     if (context->select_thread) {
         context->select_thread = false;
         const char *const args[] = {context->desired_thread};

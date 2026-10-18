@@ -21,6 +21,7 @@ struct TbNative {
     TbContext *context;
     TbCode *code;
     TbBreakpoints *breakpoints;
+    TbRegisters *registers;
     TbNativeState state;
     bool attach, configured, waiting, completed, success, want_close, failed;
     bool alive, launch_requested, owned, recovery_sent;
@@ -155,6 +156,7 @@ static void emit(void *context, const TbGdbEvent *event)
     TbNative *native = context;
     ++native->revision;
     if (tb_break_event(native->breakpoints, event)) { return; }
+    if (tb_registers_event(native->registers, event)) { return; }
     if (tb_code_event(native->code, event)) { return; }
     if (tb_context_event(native->context, event)) { return; }
     if (event->kind == TB_GDB_DIAGNOSTIC) {
@@ -233,6 +235,11 @@ TbNative *tb_native_create(void)
         tb_code_destroy(native->code); tb_context_destroy(native->context);
         (void)tb_gdb_destroy(native->gdb); free(native); return NULL;
     }
+    native->registers = tb_registers_create(native->gdb, native->context);
+    if (!native->registers) {
+        tb_break_destroy(native->breakpoints); tb_code_destroy(native->code);
+        tb_context_destroy(native->context); (void)tb_gdb_destroy(native->gdb); free(native); return NULL;
+    }
     return native;
 }
 
@@ -248,7 +255,7 @@ bool tb_native_destroy(TbNative *native)
     if (native == NULL) { return true; }
     if (tb_native_active(native)) { return false; }
     if (!tb_gdb_destroy(native->gdb)) { return false; }
-    tb_break_destroy(native->breakpoints); tb_code_destroy(native->code); tb_context_destroy(native->context); close_fds(native); free(native); return true;
+    tb_registers_destroy(native->registers); tb_break_destroy(native->breakpoints); tb_code_destroy(native->code); tb_context_destroy(native->context); close_fds(native); free(native); return true;
 }
 
 static bool elf(const char *path, bool executable)
@@ -325,6 +332,7 @@ bool tb_native_start(TbNative *native, const TbNativeConfig *config)
     tb_context_reset(native->context);
     tb_code_reset(native->code);
     tb_break_reset(native->breakpoints);
+    tb_registers_reset(native->registers);
     if (!native->attach) {
         native->master = posix_openpt(O_RDWR | O_NOCTTY | O_CLOEXEC | O_NONBLOCK);
         bool ready = native->master >= 0 && grantpt(native->master) == 0 && unlockpt(native->master) == 0 &&
@@ -590,7 +598,7 @@ void tb_native_pump(TbNative *native, int wait_ms)
     } else if (!native->configured && !native->waiting && gdb == TB_GDB_READY) { setup(native); }
     else if (native->configured && !native->waiting) {
         tb_break_pump(native->breakpoints);
-        tb_context_pump(native->context); tb_code_pump(native->code);
+        tb_context_pump(native->context); tb_code_pump(native->code); tb_registers_pump(native->registers);
     }
     if (strcmp(native->code_message, tb_code_message(native->code)) != 0) {
         (void)snprintf(native->code_message, sizeof native->code_message, "%s", tb_code_message(native->code));
@@ -617,7 +625,8 @@ const char *tb_native_state_name(const TbNative *native)
     return names[native->state];
 }
 const char *tb_native_message(const TbNative *native) { return native->message; }
-uint64_t tb_native_revision(const TbNative *native) { return native->revision + tb_context_revision(native->context) + tb_code_revision(native->code) + tb_break_revision(native->breakpoints); }
+uint64_t tb_native_revision(const TbNative *native) { return native->revision + tb_context_revision(native->context) + tb_code_revision(native->code) + tb_break_revision(native->breakpoints) + tb_registers_revision(native->registers); }
+TbRegisters *tb_native_registers(TbNative *native) { return native->registers; }
 size_t tb_native_log_count(const TbNative *native) { return native->count; }
 const char *tb_native_log_line(const TbNative *native, size_t row) { return row < native->count ? native->logs[(native->first + row) % TB_NATIVE_LOG_LINES] : ""; }
 pid_t tb_native_target_pid(const TbNative *native) { return native->target_pid; }
