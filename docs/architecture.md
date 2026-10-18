@@ -1,11 +1,11 @@
 # Architecture
 
-## Current implementation (M12 accepted)
+## Overview
 
 The product is embedded-first, with shared target-neutral inspectors. Linux is
 the frontend host and the currently operational target adapter, not the universal
 target OS. Native development/acceptance continues through M14; remote/OpenOCD and
-physical embedded validation remain M15–M17. See the review below for actual gaps.
+physical embedded validation remain M15–M17. Known integration gaps are listed below and in the roadmap.
 
 `src/main.c` handles help/version and starts the terminal application.
 `src/tui/app.c` owns startup/configuration/review/workspace pages, keyboard
@@ -16,20 +16,18 @@ These samples are never
 debugger-domain state and must be replaced by live data in real sessions.
 
 The build and tests are C17 with strict warnings; Make is the only build driver.
-C tests use POSIX pipes, processes and PTYs. Python tests were replaced at the
-owner's request. Application libraries are ncursesw and libelf (ELF metadata
-only; GDB performs instruction decoding).
+C tests use POSIX pipes, processes and PTYs.  Application libraries are ncursesw and libelf (ELF metadata
+only; GDB performs instruction decoding) and json-c (versioned profiles).
 The MI parser/controller and native session module now serve real Linux
 launch/attach sessions through the TUI. Console/output and Continue/Pause are
 live. Source/Disassembly and stepping use the code model; Call Stack and Threads
 use the selected-context model. Code breakpoints and Run to Selected use the
 breakpoint model, which now also provides M12 hardware data watchpoints.
-CPU Registers use the register model. M10 Memory is accepted
-at `2f951fb` and uses the persistent inspector described below. Locals/Watches
-use the scoped variable model accepted at `7744643`, described below. Other
+CPU Registers, Memory and Locals/Watches use the inspection models described below. Other
 inspection views have explicit unavailable messages. Explicit --demo
 retains simulated presentation separately. Embedded/remote remain previews;
-inspection, OpenOCD management and persistence await their own gates.
+remote inspection and OpenOCD management await their own gates. M13 profiles
+and key mappings are implemented; connection definitions do not imply execution.
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
 descriptors together, redrawing after input or session revisions. Idle waits are
@@ -49,67 +47,77 @@ The workspace preserves per-view scroll/selection and tabs through compact
 rendering, with interactive split-tree geometry, dragging and closing as
 described below.
 
-P00 preserves active-tab promotion to the left. On tab activation, focus moves
+Tab activation promotes the active tab to the left. On tab activation, focus moves
 to that pane's first tab control, which will represent the promoted tab on the
 next paint. Mouse input suppresses the additional inverse keyboard-focus marker;
 keyboard input restores it. This prevents the old numeric control index from
 highlighting/activating a different tab after reordering. The active-tab theme
 and monochrome selection indicator remain intact.
 
-The owner-refined launcher uses the existing render/theme primitives: a bounded
+The launcher uses the existing render/theme primitives: a bounded
 card centered in the usable terminal area, full-row hit regions including choice
 descriptions, simple ASCII icons/chevrons and a compact height below 28 rows.
 No image assets, new dependency, animation or background work is needed. It keeps
-native-vs-preview availability, missing profile persistence and q/Ctrl+Q policy
+native-vs-preview availability, profile review and q/Ctrl+Q policy
 explicit; session configuration and the debugging workspace are unchanged.
 
-## M10 embedded-readiness review
 
-Reviewed 2026-10-18 against actual modules, the HTML prototype and official
-protocol documentation. The table records the inspected pre-correction baseline
-and the assigned resolution; M10 corrections passed validation below and were accepted. These
-are scoped findings, not a claim that embedded
-connections already work. Existing Linux behavior is retained. The architecture
-does not need a general framework rewrite before M10 can finish.
+## Data flow and invariants
 
-| Finding and evidence | Severity/consequence | Required action and gate |
-|---|---|---|
-| **Confirmed interaction defect:** `app.c` Memory Address action opens `MEMORY_INPUT`; the prototype Memory toolbar and IAR place navigation inside the inspector. | M10 blocker: breaks persistent navigation and separates controls from the data. | M10: inline field/Go, keyboard/mouse operation and pane-local drafts; bounded edge browsing with known-region guards. |
-| **Confirmed adapter coupling:** Memory byte-order discovery currently opens `/proc/PID/exe` in `model/memory.c`; no target-neutral region source exists. | M10 prerequisite: remote identifiers cannot safely be treated as local PIDs; absent metadata must not imply safe peripheral reads. | M10: move native metadata into `session/native.c`; inject byte order/ordinary-readable regions into Memory. M15 supplies remote metadata or explicit unknown state. |
-| **Confirmed current limitation:** `TbNative` owns models, launch/attach validation, PTY/pidfd recovery and execution methods; `app.c` routes live actions through it. Remote/OpenOCD launcher entries are previews. | High for M15, not a current native defect. Reusing native kill/proc/start logic for remote sessions would be incorrect. | M15: minimal shared session facade/capabilities and separate native/remote lifecycle; tests with absent/nonlocal target PID and external-server survival. Preserve pidfd safety for native. M16 owns only its spawned OpenOCD. |
-| **Confirmed metadata gap:** `code.c` calls `tb_images_native`; `images.h` also exposes architecture-neutral ELF loading/range queries. GDB performs actual decoding. | High remote dependency: code boundaries/relocation must come from target-appropriate image metadata, never local `/proc` for a remote PID. | M15: connect ELF/target image metadata and explicit unknown fallback; test Cortex-M Thumb addresses, executable/data boundaries and remote relocation without changing PC. No duplicate disassembler. |
-| **Confirmed capability gap:** native Continue can start an executable; Step uses MI context; Reset is not a live remote operation. Controller requires MI async/all-stop setup. | High before embedded connection: executable start, reset, halt, resume and disconnect differ across backend/target. | M15: explicit session/action capabilities and clear unsupported MI setup errors; M16: confirmed backend Reset/Halt/disconnect choice, no auto load/flash/erase/reset/resume. Test errors and state transitions. |
-| **Sound shared foundations:** MI parser/controller are curses-independent and enforce session/stop/context generations; selected-context and registers discover GDB thread/frame/register data. Register groups honestly remain ungrouped. | No demonstrated architectural defect; synthetic ARM cases are not hardware proof. | Keep. M15 validates architecture changes, single-thread bare-metal contexts, register availability/byte order and supported target descriptions. M17 checks actual ARM/Xtensa/RISC-V; specialized peripheral/RTOS metadata stays deferred. |
-| **Confirmed inspection limits:** Memory uses 64-bit addresses and 8-bit bytes; safe expressions force C parsing. User calls/casts/writes are rejected. Pointer formatting can otherwise read character pointees while resolving an address. | Last item is an M10 safety risk; non-octet or wider-address targets are future compatibility limits, not failures of the initial targets. | M10: resolve validated addresses as scalar integers to avoid automatic string printing. M11: bounded safe variable expressions. M15: disclose unsupported address units/width, preserve unknown states; do not claim every GDB architecture works. |
-| **Confirmed test gaps:** native suites exercise Linux GDB, C peer cases cover some ARM/big-endian shapes; no physical board evidence exists. Source TUI once rejected STALE anywhere, including unrelated Registers. | High if interpreted as embedded support; test assertions must match their own view lifecycle. | M10: Memory unknown-map/MMIO-boundary, delayed/partial replies, inline/scroll/session tests and view-scoped assertions. M14 native acceptance; M15 fake/real remote; M16 offline server faults; M17 physical boards; M18 release matrix. |
+```mermaid
+flowchart LR
+    Input[Keyboard and mouse] --> TUI[TUI actions and rendering]
+    TUI --> Session[Session orchestration]
+    Session --> Models[Context and inspection models]
+    Session --> Controller[MI controller]
+    Models --> Controller
+    Controller --> GDB[GDB process]
+    GDB --> Controller
+    Controller --> Models
+    Models --> TUI
+    Layout[Layout tree] --> TUI
+    Profiles[Profile storage] --> Session
+```
 
-Memory's revised contract is an owned per-instance navigation/configuration state
-and a separately versioned published byte snapshot. New requests cannot relabel
-old bytes at a new address. Errors retain the old snapshot with stale/error state;
-missing bytes are `??`, never invented zeros. Reads remain stop/context-scoped,
-single-flight and at most 1024 bytes. Idle, tab activation and stops do not probe
-unknown memory. Scrolling requests another block only on a deliberate boundary
-gesture within established ordinary-memory bounds; there is no speculative
-prefetch or unbounded accumulated listing. Explicit Go/Refresh remains available
-for exact RAM/Flash/MMIO requests when region metadata is absent. Display grouping
-is a presentation choice, not a guarantee about backend MMIO access width.
+Models own snapshots; rendering consumes them. The native session routes events
+and pumps models outside callbacks. Every pending value/result is scoped by
+session, stop and context generations; per-view revisions additionally protect
+local navigation. Bounded work and owned resources keep errors and output floods
+from starving terminal input. Demo samples never become live debugger state.
 
-Native metadata may establish anonymous/ordinary-file readable process mappings;
-device/special-file maps are not implicitly safe. Remote memory-map integration
-belongs to M15/M16 and must distinguish known ordinary regions from unknown or
-side-effect-prone addresses. GDB's remote XML format is not a universal direct MI
-query API, and its default assumptions about omitted regions are not frontend
-permission to probe them. No remote map is synthesized from STM32 constants.
+## Tiled workspace
 
-Primary references consulted, with relevant sections:
+`src/layout/layout.c` is independent of curses and debugger data. Six root tiles
+use 36/34/30 column proportions and a 62/38 default row split; ratios remain
+user-adjustable. The original M02 56/44 row split was superseded by the accepted
+five-row navigation/default-height correction. Each tile contains
+a binary split tree. A leaf names a stable pane slot; an internal node stores
+its direction, child indices and fixed-point ratio. The workspace owns a bounded
+pool of 32 pane slots and 64 tree nodes, avoiding heap ownership complexity.
+Closed nodes/slots are reused. There is no preset catalog or layout selector.
 
-- [IAR Memory window](https://docs.iar.com/ewarm/10.1x/en/c-spy-debugging/memory-and-registers/reference-information-on-memory-and-registers/memory-window.html): Toolbar (Go to), Display area, independent instances; functional reference only.
-- [GDB/MI data manipulation](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Data-Manipulation.html): `-data-evaluate-expression`, `-data-read-memory-bytes`, register commands. Memory reads return successfully read blocks; partial discovery is heuristic, not an exhaustive readability map.
-- [GDB memory-map format](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Memory-Map-Format.html): remote `qXfer:memory-map:read`, RAM/ROM/Flash types and omitted-range assumptions.
-- [GDB memory region attributes](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Memory-Region-Attributes.html): access modes and widths; display grouping does not set them.
-- [GDB target descriptions](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Target-Description-Format.html): architecture/features/register descriptions; backend and GDB support varies.
+Geometry uses half-open rectangles and one-cell gutters. Recursive subtree
+minimums constrain resizing (each leaf needs 20 columns and 7 rows); globally
+shared row/column dividers respect all affected subtrees. New splits require
+currently available space. Closing a nested leaf promotes its sibling into
+the parent; a root leaf cannot close. Tabs retain per-view selection/scroll,
+and each pane retains at least one tab. These rules follow the HTML prototype.
 
-## M03 owned MI parser
+Geometry is recomputed after input, without changing requested ratios on
+terminal resize. If the grid or its subtrees cannot fit, only the focused leaf
+is painted; compact Prev/Next controls and `[`/`]` reach every retained pane.
+Returning to sufficient dimensions restores the tree. Resizing a terminal during
+a drag cancels that drag to avoid applying obsolete coordinates.
+
+The UI maps gutter hit tests to layout operations. ncurses parses mouse input;
+for terminals advertising an xterm-compatible `kmous`, the application explicitly
+enables held-button motion mode 1002 and disables it at shutdown. The installed
+ncurses XM capability otherwise enables click mode alone. Keyboard resize mode
+selects the same dividers and uses the same constrained coordinate updates.
+Physical mouse appearance/usability requires manual validation, even
+when the PTY and real tmux forwarding tests pass.
+
+## Owned MI parser
 
 `src/gdb/mi.h` defines an internal C API; `mi.c` uses only the C library.
 `tb_mi_parse` parses one record without its line delimiter. The returned record,
@@ -153,7 +161,7 @@ command encoder, transport, subprocess lifecycle or debugger-domain state.
 It escapes control/non-ASCII bytes before printing and launches no debugger.
 Synthetic fixture provenance and expectations are in `tests/fixtures/mi/README.md`.
 
-## M04 nonblocking controller and owned process
+## Nonblocking controller and process ownership
 
 `src/gdb/controller.{h,c}` is an internal, single-threaded C interface independent
 of curses. It owns one spawned GDB child, three close-on-exec pipes, the parser
@@ -183,8 +191,7 @@ not shell quoting. Partial writes retain their offsets and ordering.
 GDB's CLI-derived -gdb-set/-gdb-show consume a raw setting tail. They use a
 restricted setting name and literal arguments without CR/LF instead of quoting
 the name or an entire environment assignment. Quoted names can misleadingly
-return ^done without applying the setting. M05's real tests exposed this M04
-prerequisite defect; startup probes now query actual mi-async/non-stop values,
+return ^done without applying the setting. Startup probes query actual mi-async/non-stop values,
 and native fixtures verify shell-free argv and exact environment assignments.
 
 Replies match only fully written requests with exact tokens. STOP/CONTEXT queries
@@ -205,7 +212,7 @@ allocation errors also fail the controller instead of exposing partial state.
 Callbacks borrow events/records until return and must not mutate/reenter the
 controller; consumers must copy data they retain.
 
-`tb_gdb_pollfds` and `tb_gdb_timeout` allow a future terminal event loop to poll
+`tb_gdb_pollfds` and `tb_gdb_timeout` allow the terminal event loop to poll
 all sources together, then call `tb_gdb_pump(..., 0)`. The standalone pump waits
 at most 25 ms or the next deadline, handles EINTR by returning to its caller,
 and reads/writes at most 16 KiB per pipe per turn. It checks deadlines around
@@ -233,7 +240,7 @@ The protocol state follows the official GDB manual's
 [async records](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Async-Records.html)
 and [interpreter options](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Mode-Options.html).
 
-## M05 native session and logs
+## Native session and logs
 
 `src/session/native.{h,c}` owns sequential configuration/actions over the
 controller. Callbacks copy status and mark completions; requests are issued
@@ -246,15 +253,12 @@ Environment is session-only. The small quoted-word parser performs no expansions
 
 Launch loads symbols/executable, args/cwd/env and an owned output PTY, then reports
 Loaded. Continue starts the program; subsequent Continue resumes a stopped
-program. Pause uses MI interrupt. There is no automatic main breakpoint or
-stepping in this gate. Attach uses the selected PID and optional ELF, stops on
+program. Pause uses MI interrupt. There is no automatic main breakpoint. Attach uses the selected PID and optional ELF, stops on
 success and retains actionable permission failures. Attached processes retain
-their existing stdio. Source/assembly/register/memory/variable inspection stays
-unavailable in M05; M06 supplies frame/thread inspection and M07 code/stepping.
-Demo data is never live data.
+their existing stdio. Demo data is never live data.
 Basic console run/r/start/starti operations also establish launch ownership;
 failed operations do not retain a pending ownership claim. Multi-inferior
-coordination and arbitrary session-topology changes are outside this gate.
+coordination and arbitrary session-topology changes are outside the current session model.
 
 The PTY captures launched stdout/stderr together without using the debugger MI
 pipe or frontend terminal. Only the owned slave's newline translation is changed;
@@ -285,10 +289,10 @@ orphaned by a debugger crash.
 
 `--demo` is an explicit visual-reference path. Bare invocation uses the native
 launcher; unimplemented server flows remain labelled previews. Live tabs/layout
-reuse presentation state only, not sample debugger values. No new presets,
-floating windows, workspace pages, themes or editor modes were added.
+reuse presentation state only, not sample debugger values. The workspace has no presets, floating windows or editor modes; pages and
+additional themes remain separate planned gates.
 
-## M06 selected context, Call Stack and Threads
+## Selected context, Call Stack and Threads
 
 `src/model/context.{h,c}` owns a bounded debugger snapshot independently of curses
 and target architecture. The native session owns this model and passes controller
@@ -314,7 +318,7 @@ snapshot, published coherently after the sequence. Partial unwinds, missing
 source/symbols, optimized-out arguments and command failures remain explicit;
 no CLI output is parsed and no target expressions/functions are evaluated.
 The frontend retains the frames GDB reports, including inline/tail-call frames,
-without inventing missing frames. There are no RTOS inspectors in this gate.
+without inventing missing frames. RTOS-specific inspection is planned, not part of this model.
 
 Bounds: first 128 reported threads, 32 frames per stack page plus one lookahead,
 and at most the first 4096 frame levels. Strings have fixed render-safe bounds;
@@ -329,7 +333,7 @@ Live rows have mouse selection and arrow-key browsing followed by Enter.
 frame; caller inspection is labelled. Stack paging, Refresh, scrollbars and
 normal tiled resize/compact behavior reuse the existing pane controls. Snapshot
 revisions cause redraws through the native event loop. Source/Disassembly now
-consume this context; Locals/Watches also consume it through M11. Code visibility requests selected
+consume this context; Locals/Watches also consume it. Code visibility requests selected
 thread/frame metadata without fetching a whole stack when its view is hidden.
 Raw source paths are retained separately from escaped display labels.
 
@@ -337,7 +341,7 @@ The protocol follows GDB's official
 [stack commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Stack-Manipulation.html)
 and [thread commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Thread-Commands.html).
 
-## M07 live code and execution navigation
+## Source, disassembly and execution navigation
 
 `src/model/code.{h,c}` owns per-pane source buffers, assembly windows, mixed-mode
 settings and browsing positions independently of curses. The native session owns
@@ -395,7 +399,7 @@ C++ overloaded address-of calls. Browsing never issues execution/PC-write comman
 Return to Stopped selects the original stopped thread/frame zero. Source lookup
 settings use MI source directories and ordered GDB substitute-path rules, with
 separate GDB-CLI and MI encoding; only successful replies update saved-in-session
-settings. Clear resets both overrides. Basic profile persistence remains M13.
+settings. Clear resets both overrides. Profile persistence is described below.
 
 The native module issues MI next/step/next-instruction/step-instruction/finish
 against the selected thread's execution frame zero. Clicking Source/Disassembly
@@ -404,8 +408,7 @@ Step Out remains finish. Full-page tiled Actions, file filtering and source
 settings screens share normal mouse/Tab/arrows/Enter/Escape editing. Source/ASM
 scroll and horizontal pan change only the viewport; `>` denotes actual stopped
 execution and `~` an inspected frame. No secondary execution-like cursor is added.
-Breakpoints/gutter/F9/Run to Selected are provided by M08 below; later inspection
-gates remain intact.
+Breakpoints/gutter/F9/Run to Selected use the breakpoint model below.
 
 Live pane scrolling uses shared bounded content/viewport measurements. Optional
 horizontal tracks reserve a row above the action footer; optional vertical
@@ -429,7 +432,7 @@ Protocol references: GDB's [MI data commands](https://sourceware.org/gdb/current
 [file commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-File-Commands.html)
 and [source lookup](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Source-Path.html).
 
-## M08 code boundaries and breakpoints
+## Image boundaries and code breakpoints
 
 Pane `...` membership toggles query only that pane's tabs. Included options
 alone receive a filled-circle marker, with ASCII fallback. Shared indexed
@@ -476,9 +479,9 @@ and no *stopped. The controller schedules one bounded -thread-info query. Only
 a structured result confirming every thread stopped establishes stopped state;
 the context model then refreshes the actual reported frame. Missing/running
 thread states stay unconfirmed, with a useful diagnostic. CLI warnings are logs,
-not evidence of execution state. This is native evidence, not remote-board proof.
+not evidence of execution state. Remote-board validation remains separate.
 
-## M09 read-only CPU registers
+## CPU registers
 
 `src/model/registers.{c,h}` owns discovered numeric IDs/names and cached values.
 `-data-list-register-names` preserves empty-name positions; no ARM/x86 list is
@@ -499,15 +502,14 @@ not claim changes that cannot be established from complete samples.
 The pane uses existing horizontal/vertical scrolling, Refresh and `*` plus color
 for changed values. It labels selected context and stale data. GDB/MI provides
 no standard structured group-discovery command here; All (ungrouped) is honest
-fallback, without CLI-table parsing or guessed metadata. No writes, peripheral
-polling, SVD interpretation or register editing are added.
+fallback, without CLI-table parsing or guessed metadata. Writes, peripheral polling, SVD interpretation and register editing are not
+implemented in this model.
 
 Reference: GDB [MI data commands, register names and values](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Data-Manipulation.html).
 
-## M10 persistent Memory inspector
+## Memory inspector
 
-Accepted in implementation commit `2f951fb`; the full hash and owner acceptance
-record are in [the ledger](progress.md). `src/model/memory.{h,c}` owns up to
+`src/model/memory.{h,c}` owns up to
 32 independent locations/settings and bounded byte/validity snapshots; `app.c`
 owns per-pane inline drafts/cursors and viewport scrolling. The toolbar stays
 above the body while body scrollbars use the adjusted body geometry. Enter and
@@ -532,14 +534,9 @@ partial reads; the frontend preserves the exact reported bytes/validity rather
 than reconstructing inaccessible memory. Scalar address conversion suppresses
 character-pointer string printing. User calls/writes/casts remain rejected.
 
-Focused peer/native/TUI, full regression, real tmux and Clang ASan/UBSan checks
-passed; commands and logs are in [the ledger](progress.md#m10-completion-verification).
-Owner acceptance is recorded separately from automated checks; no physical
-embedded result or release acceptance is implied.
 
-## M11 scoped Locals and Watches
+## Locals and Watches
 
-Accepted implementation: `77446434d8e6e1e1a356abaa4d94e028a1098036`.
 `src/model/variables.{h,c}` owns separate shared Locals/Watches trees; panes
 retain their own selection and scroll, but do not create independent watch lists.
 `session/native.c` routes events and drives the model without blocking the TUI.
@@ -586,9 +583,8 @@ as complete MMIO safety evidence. Without sufficient proof, explicit inspection
 remains the fallback. M17 validates real hardware; synthetic policy tests do not
 establish peripheral safety on a board.
 
-## M12 hardware data watchpoints
+## Hardware data watchpoints
 
-Accepted implementation: `f1dbb8a70033821e33e9a5506e23758d0723587d`.
 The existing breakpoint model issues `-break-watch` with optional `-r` or `-a`
 and C expression parsing. The shared conservative expression grammar rejects
 calls/mutations; creation remains deliberate because evaluation may read storage.
@@ -624,150 +620,104 @@ Watchpoints share Breakpoints enable/disable/delete/condition/count controls.
 MI stop records provide hit values and scope-expiry messages; deleted scoped
 watchpoints disappear on reconciliation. They are excluded from code gutter
 matching. Native fixtures and TUI tests are available; recorded execution evidence
-is in [the ledger](progress.md#m12-completion-verification). Physical backend
+is in [the ledger](history/milestones.md#m12-completion-verification). Physical backend
 support remains M17, and software watchpoints remain deferred beyond v0.1.0.
 
 Protocol references: GDB [MI breakpoint commands, `-break-watch` and `-break-list`](https://www.sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Breakpoint-Commands.html)
 and [Setting Watchpoints, hardware limits and scope](https://www.sourceware.org/gdb/current/onlinedocs/gdb.html/Set-Watchpoints.html).
 
-## Approved direction
+## Profiles and source restoration
 
-The corrected UI uses one configurable workspace: Source / Disassembly /
-Registers above Memory / Locals / Console. Follow AGENTS.md and the approved
-HTML visual/interaction reference at `docs/design/prototype.html`.
-Preserve the Monokai appearance, toolbar,
-tabs, pane menus and startup configuration within terminal constraints.
-There are no layout presets or selectors. Resizing and dynamic splits edit the
-current tiled workspace. Rich geometry/state restoration is F01 (v0.1.4), not
-v0.1.0. F06 (v0.2.1) will decide how to organize the later view expansion;
-pages are a candidate, not an approved current layout. See [the roadmap](plan.md).
+`session/profiles.{c,h}` owns bounded connection definitions, action keys and
+recent saved sessions, independent of curses, local process IDs or target values.
+The launcher loads into configuration for review; it never starts a tool merely
+because a profile was selected. Only a successfully initialized saved native
+session enters recents today. Remote/OpenOCD definitions remain inert until
+M15/M16. Attach reload leaves PID empty. Environment overrides are session-only.
 
-Introduce modules only as their milestone needs them:
+Storage is `$XDG_CONFIG_HOME/the-bugger/profiles.json`, falling back to
+`$HOME/.config/the-bugger/profiles.json` for missing/relative XDG configuration.
+Loading absent data creates nothing. json-c parses a strict version-1 UTF-8
+schema, at most 1 MiB, 16 profiles and 8 recent names. Root fields are `version`,
+`profiles` and `recent`. Every profile requires the following fields; unknown
+fields/types/versions and duplicate names or conflicting bindings are rejected.
 
-| Milestone | Boundary | Responsibility |
-|---|---|---|
-| M01 | TUI | ncursesw rendering, theme, input and semantic actions |
-| M02 | Layout | Binary split tree, tab state, geometry and hit testing |
-| M03 | GDB/MI parser | Owned incremental structured records and deterministic corpus |
-| M04 | Process/MI controller | Nonblocking queues, tokens, async state, generations, deadlines and owned children |
-| M05 | Native session | Launch/attach, Continue/Pause, console, isolated output and Save Log |
-| M06–M08 | Context and code | Threads/frames, synchronized code/stepping/source recovery and code breakpoints/run-to |
-| M09–M12 | Inspection | Registers, independent Memory, lazy variable trees and hardware data watchpoints |
-| M13 | Persistence | Basic connection/source profiles, recent sessions and key mappings |
-| M14 | Native integration | Complete native validation before remote/hardware acceptance |
-| M15–M16 | Remote/OpenOCD | Existing endpoints, script catalog, managed server and explicit target actions |
-| M17–M18 | Release validation | Real boards and every-release regression/acceptance |
+| Fields | Representation |
+|---|---|
+| `name`, `kind` | Name; kind integer 0 native, 1 OpenOCD definition, 2 existing-server definition |
+| `attach`, `start_server`, `adapter_target` | Boolean mode/configuration flags |
+| `executable`, `directory`, `gdb`, `openocd`, `endpoint`, `board`, `adapter`, `target`, `protocol` | Literal strings; protocol `remote` or `extended-remote` |
+| `arguments`, `scripts`, `search` | Ordered string arrays, at most 32 elements of at most 511 bytes |
+| `directories`, `mappings` | Up to 8 source directories and 8 ordered `{from,to}` path substitutions |
+| `keys` | Seven strings in Continue/Pause/Over/Into/Out/Breakpoint/Reset order: function key, Ctrl letter or `None` |
 
-One event loop will service terminal input, child pipes, signals and deadlines
-using nonblocking I/O and `poll()`. Rendering consumes model snapshots; views
-do not parse debugger output. Keyboard and mouse controls dispatch the same
-actions. Bounded processing keeps output floods from starving input.
+Names hold up to 63 bytes; paths/source prefixes up to 1023, endpoint up to 255.
+F13–F24 display as Shift+F1–F12; terminal delivery still varies. Reserved
+Ctrl+C/H/I/J/M/Q/S/Z and conflicting actions are rejected; mouse alternatives
+remain. JSON quoting is not shell execution; arguments/scripts remain arrays.
+The format deliberately excludes PID, environment overrides, geometry/tabs,
+watch/breakpoint definitions, region grants, values and temporary backend state.
+F01 and F12 own later restoration/sharing and schema evolution.
 
-Use explicit MI3, with MI2 fallback only on interpreter startup failure before
-connecting to a target. Enable asynchronous execution and retain all-stop
-semantics for v0.1.0. Parse nested structured values and streams rather than
-human CLI output. Correlate replies by token and reject old session/stop/context
-generations. Publish coherent stopped snapshots; show stale data while running.
-Use small owned MI-tree and correlated-request interfaces; replies carry enough
-session/stop/context identity to reject obsolete work. Console commands without
-an MI equivalent still travel through MI; do not parse human CLI text into state.
+Writes use an owned regular file, nonblocking advisory lock, stale-writer stamp
+check, private temporary file, fsync, atomic rename and directory fsync. Corrupt,
+oversized or unsafe files are preserved and block writes until explicitly
+repaired/reloaded; failures retain the previous data. A post-rename directory
+sync failure reports a durability warning, not a claimed rollback. No background
+disk polling, shell snippets or destructive repair is introduced.
 
-Separate actual stopped PC from selected caller-frame location. Source focus
-selects source stepping, Disassembly focus instruction stepping; toolbar and
-inspection-pane clicks retain the last code-pane mode. Display it explicitly.
-Code highlights use GDB's mappings even for optimized/inlined/tail-call code;
-do not infer statement changes from instruction counts. Browsing changes neither
-PC nor execution markers. x86-64 uses AT&T syntax; mixed source/assembly falls
-back honestly if source is absent. Source search directories and ordered prefix
-substitutions use GDB, preserving consistent source/breakpoint identities.
+`model/code.c` restores source settings asynchronously in a fresh session:
+directories are applied in reverse saved order to account for GDB prepending,
+then mappings in saved order. Only successful settings enter published state.
+Native Continue/Step/Console are interlocked during restoration; close remains
+available. A failed setting aborts the queue visibly without retry spin.
+The TUI's source-settings save action captures applied settings, not pending ones.
+M15 must retain this ordering/interlock for remote sessions. See [profile validation](testing.md#profiles-and-action-keys) for reproducible checks.
 
-Introduce typed view-instance settings independently of shared target snapshots.
-Each Memory instance retains its own address/expression, grouping and scroll.
-Fetch only bounded visible ranges/expanded children. MI variable objects support
-lazy Locals/Watches and array paging; delete/recreate them as context changes.
-Authorize value-producing variable requests before dispatch; expression filtering
-alone does not prevent side-effecting memory reads. Manual GDB
-console operations are deliberate; dedicated value editing is v0.2.0. Register
-names/values come from the target; group only where structured metadata supports
-it, otherwise use an ungrouped display. No CLI-text or hardcoded-ARM canonical set.
+## Extension boundaries
 
-Breakpoint properties expose Default / Require hardware. Data watchpoints are
-hardware-assisted only in v0.1.0: reconcile the backend-reported type and reject
-software fallback, width/slot/support errors explicitly. Temporary run-to state
-must be distinguishable from user breakpoints and cleaned up on other stops.
+The [future sequence](roadmap.md#release-progression-and-priority-changes)
+prioritizes firmware diagnosis after the unchanged M14–M18 baseline. Native
+Linux remains a maintained adapter and repeatable regression foundation; future
+features need not have identical availability on native, ARM, Xtensa and RISC-V.
+Shared UI/models and fixes continue to benefit native debugging. These extension points do not add a general framework or a new runtime dependency.
 
-Launch owned tools through argv vectors. Disable GDB's inferior startup shell,
-quote MI arguments separately, and isolate inferior output in a PTY. Sanitize
-control characters before presentation. Preserve ownership information so
-external servers and attached processes are not killed during cleanup.
+| Boundary | Planned consumers and architectural obligation |
+|---|---|
+| Session/server/probe | M15/M16 isolate ownership, lifecycle and capability evidence. F22 flashing and F45/F46 coordination consume explicit operations, never infer local PIDs or universal OpenOCD behavior. |
+| Target architecture/registers | F11 metadata/groups and F35 fault decoding use discovered IDs plus a named core/variant decoder; unknown fields retain raw values. Cortex-M semantics do not enter generic register/state models. |
+| Regions/peripherals | M15 region provenance and M11 pre-dispatch authorization feed F34 SVD and F03–F05 editing. Description readability is not side-effect proof or write permission. Reset/reconnect invalidates stale grants/snapshots. |
+| RTOS/images | F31 bounds version/port-specific kernel readers; F33 owns image identities/relocations. Task IDs, core IDs and GDB threads/inferiors are distinct unless a verified backend maps them. |
+| Acquisition/analysis | F13–F16/F29/F37/F40/F41 establish source capabilities and loss/time semantics before plots, timelines, profiling or coverage consume data. Reject unsupported paths honestly. |
+| Presentation/persistence | F06 approves organization before more inspectors; F01/F12 evolve schemas and reviewed configuration. No presets, floating views or auto-executed shared setup. |
 
-Use ncursesw capability checks for color and mouse behavior, with 256-color
-and monochrome fallbacks. Compact mode preserves the split tree and view state.
-Function keys have visible alternatives and remapping; terminal/tmux acceptance
-must include click, wheel, drag, resize and unsupported key sequences.
+Necessary vendor-specific tooling belongs in the smallest relevant adapter and
+its compatibility tests. Do not require proprietary IDEs/SDKs or vendor protocols
+in the core where standard tools suffice; do not reject a necessary integration
+without examining it. Each gate selects concrete tools only after feasibility
+and design review. Native-only PTY input/signal UI and general process expansion
+are late reviewed candidates; native correctness/maintenance remains continuous.
 
-OpenOCD discovery is a script catalog, not a Tcl interpreter. A board script
-stands alone unless the user explicitly chooses additional files. Display exact
-ordered argv and paths; start managed servers on loopback. Never add implicit
-flash/erase/reset/resume commands. Arbitrary user scripts can have side effects.
-Ask on embedded disconnect whether to remain halted or resume where supported.
-Expose limitations/failures rather than promising state after an arbitrary
-server's disconnect hooks; never silently replace externally owned scripts.
-Explicit confirmed Reset/Halt is separate from connecting. Native Launch may
-Restart with confirmation; attached native processes have no Reset action.
+## Known limitations and integration gaps
 
-Use json-c for versioned JSON profiles, structured argv, ordered scripts,
-source lookup/mappings, recent sessions and key mappings. Persist under the XDG config directory with
-atomic replacement and recoverable validation errors. Environment overrides
-are session-only to avoid persisting credentials. Memory outside known ordinary
-RAM is read on request; no background peripheral polling.
-Rich workspace/watch/breakpoint restoration is deferred to F01; shareable
-import/export with personal/shared separation is F12. Environment overrides are
-not saved. Save Log exports the retained readable log, with bounded retention
-and visible file errors; advanced filters/recording and program input come later.
+- Native Linux is the only operational session adapter. M15 must separate shared
+  actions/models from local PTY/pidfd/proc ownership and must never signal remote
+  target identifiers as local PIDs. M16 adds only explicitly owned OpenOCD lifecycle.
+- The native code index uses process maps and mapped ELF images. Remote image
+  identity, relocation, byte order, address units and region evidence remain M15
+  prerequisites. Initial Memory uses octet addressing and at most 64-bit addresses.
+- Call Stack's `--simple-values` arguments can read memory; they are not a read-free
+  operation. The M14 audit must apply the value-producing-request policy before
+  remote automatic inspection. Expression filtering alone is insufficient.
+- The native variable adapter cannot prove complete expression footprints, so
+  values require deliberate operations. Target descriptions and SVD readability
+  alone cannot establish that MMIO access is free of side effects.
+- Full-project static-analysis findings remain assigned to M14; a focused module
+  analyzer pass does not clear them. Exact findings and validation limits are in
+  the [historical evidence](history/milestones.md#m11-completion-verification).
+- Real remote, STM32, ESP32 and optional acquisition compatibility remain unverified.
+  See [hardware validation](testing.md#every-release-regression-matrix). Register
+  groups have an ungrouped fallback; specialized views remain planned.
 
-## Release boundaries
-
-Validate native Linux first, then STM32 and the owner's Xtensa/RISC-V ESP32
-hardware. Every release, including patches, repeats that architecture matrix;
-QEMU ARM/RISC-V adds coverage where available without replacing boards or adding
-a simulator product feature. Configuration details are recorded when testing,
-not demanded during P00. Unsupported target-specific features are explicit.
-
-Exclude in-application flashing, editing, peripheral/SVD/RTOS-specific inspectors,
-live monitoring, trace/profiling, IDE/editor features and plugin systems from
-v0.1.0. Future gates in docs/plan.md define dependencies: embedded text near
-v0.4.0, built-in themes near v0.5.0, specialized stops near v0.7.x, plotting
-near v0.8.x, automation/custom themes and multicore coordination near v1.0.0.
-No new frontend macro language or built-in/dedicated simulator integration.
-Public library APIs are not introduced. Follow AGENTS.md for release acceptance.
-
-## M02 tiled workspace
-
-`src/layout/layout.c` is independent of curses and debugger data. Six root tiles
-retain the approved 36/34/30 column and 56/44 row proportions. Each tile contains
-a binary split tree. A leaf names a stable pane slot; an internal node stores
-its direction, child indices and fixed-point ratio. The workspace owns a bounded
-pool of 32 pane slots and 64 tree nodes, avoiding heap ownership complexity.
-Closed nodes/slots are reused. There is no preset catalog or layout selector.
-
-Geometry uses half-open rectangles and one-cell gutters. Recursive subtree
-minimums constrain resizing (each leaf needs 20 columns and 7 rows); globally
-shared row/column dividers respect all affected subtrees. New splits require
-currently available space. Closing a nested leaf promotes its sibling into
-the parent; a root leaf cannot close. Tabs retain per-view selection/scroll,
-and each pane retains at least one tab. These rules follow the HTML prototype.
-
-Geometry is recomputed after input, without changing requested ratios on
-terminal resize. If the grid or its subtrees cannot fit, only the focused leaf
-is painted; compact Prev/Next controls and `[`/`]` reach every retained pane.
-Returning to sufficient dimensions restores the tree. Resizing a terminal during
-a drag cancels that drag to avoid applying obsolete coordinates.
-
-The UI maps gutter hit tests to layout operations. ncurses parses mouse input;
-for terminals advertising an xterm-compatible `kmous`, the application explicitly
-enables held-button motion mode 1002 and disables it at shutdown. The installed
-ncurses XM capability otherwise enables click mode alone. Keyboard resize mode
-selects the same dividers and uses the same constrained coordinate updates.
-Physical mouse appearance/usability remains subject to owner acceptance, even
-when the PTY and real tmux forwarding tests pass.
+The original [embedded-readiness review](history/milestones.md#m10-embedded-readiness-review)
+records the baseline and technical rationale; it is not a current support claim.

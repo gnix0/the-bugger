@@ -4,16 +4,25 @@ Run `make test` from the repository root. All tests and support code are C,
 built with the same strict compiler flags as the application. No Python or
 external test framework is required.
 
-Pane-membership unit cases cover add/remove, active/inactive selection, retained
-scroll, invalid choices, last-tab protection and pane independence. A workspace
-PTY case toggles added/default tabs via `...` and verifies the final-tab guard;
-this new PTY case passed in the owner's `make test` after correcting menu targeting.
+Pane-membership unit and workspace PTY cases cover add/remove, active/inactive
+selection, retained scroll, pane independence and last-tab protection. Synthetic
+target cases establish architecture coverage, not physical-board support.
+See [testing](../docs/testing.md) for procedures and prerequisites; execution
+records remain in the [historical ledger](../docs/history/milestones.md).
 
-Agents supply lengthy suite/stress/sanitizer commands for the owner to run;
-only quick focused checks run directly. Record whose run produced each result.
-The owner authorized applicable M10 completion and M11 correction checks. These
-are scoped exceptions. Synthetic
-target cases are architecture coverage, never evidence of physical-board support.
+- `test-profiles` and `test-profile-sources` / `make test-m13-model`:
+  strict versioned JSON/XDG storage, all connection definitions, literal ordered
+  arguments/scripts/paths, key validation, private atomic failures, stale writers,
+  corrupt-file preservation, recents/deletion/bounds and asynchronous source
+  restore order/failure/no-retry behavior.
+- `test-profiles-tui` / `make test-m13-tui`: file-only live launcher/profile CRUD,
+  review, source options, remaps and inert remote/OpenOCD definitions, using an
+  isolated XDG directory and no inferior. Included in `make test`.
+- `test-profiles-native` plus `test-profiles-tui --native` /
+  `make test-m13-native`: actual GDB source restore, relocated duplicate-basename
+  breakpoint resolution, execution interlock, saved native reopen/remapped actions,
+  recents and cleanup. Included in `make test-native`; GDB/ptrace required. See
+  [M13 procedures](../docs/testing.md#profiles-and-action-keys).
 
 - `test-watchpoints` / `make test-m12-model`: hardware type reconciliation,
   change/read/access modes, width/overflow checks, hit/scope messages,
@@ -23,8 +32,11 @@ target cases are architecture coverage, never evidence of physical-board support
   real GDB hardware stops, scope expiry, enable/disable/delete, forced software
   rejection and live Memory/variable creation with mode/width review. The model
   is included in `make test`; native/TUI tests in `make test-native`.
-  `make test-m12-tui` reruns only the terminal test. See
-  [M12 acceptance](../docs/testing.md#m12-hardware-data-watchpoint-acceptance)
+  `make test-m12-tui` reruns only the terminal test.
+  The TUI helper identifies lower pane headers, selects the inline Memory field
+  instead of its column heading, waits for live bytes and targets footer controls
+  rather than matching explanatory body text. Readiness/safety assertions remain.
+  See [M12 acceptance](../docs/testing.md#hardware-data-watchpoints)
   and the ledger for actual run evidence.
 
 - `test-variables` / `make test-m11-model`: authorization before value-producing
@@ -36,7 +48,7 @@ target cases are architecture coverage, never evidence of physical-board support
   invalid calls, resize and terminal cleanup. `make test-m11-tui` reruns only the
   terminal portion. The model is included in `make test`; both native checks
   are included in `make test-native`. See
-  [M11 acceptance](../docs/testing.md#m11-localswatches-acceptance).
+  [M11 acceptance](../docs/testing.md#locals-and-watches).
 
 - `test-memory` / `make test-m10-model`: bounded independent instances, byte order,
   ordinary/unknown-region browsing, partial/invalid/overlapping replies, expression
@@ -45,11 +57,11 @@ target cases are architecture coverage, never evidence of physical-board support
   inline field/Go, keyboard and mouse browsing, hex/ASCII, independent settings,
   invalid input, stale refresh, unmapped boundary and resize/cleanup. Both are
   included in `make test-native`; the model is in `make test`. See
-  [M10 manual acceptance](../docs/testing.md#m10-inline-memory-acceptance).
+  [M10 manual acceptance](../docs/testing.md#memory-inspector).
   Set `TB_MEMORY_TEST_TMUX=1` when invoking `build/test-memory-tui` with the binary
   and fixture paths to repeat that live workflow in its own isolated tmux server.
 
-- `test-registers`: x86/ARM target-discovered names, sparse IDs, a 600-name
+- `test-registers`: x86/ARM target-discovered names, sparse IDs, a 600-name fixture exercising the 512-ID
   catalog bound, long/unavailable values, numeric formats and canonical change
   baselines, obsolete format replies, frame/thread changes, errors/malformed
   responses and no automatic idle/running/hidden reads. `make test-m09-model`
@@ -124,7 +136,7 @@ manual acceptance check. Color tests need the xterm-direct, xterm-256color and
 vt100 terminfo entries installed with ncurses on the development machine.
 
 `make sanitize` runs the same C tests with ASan/UBSan in `build/sanitize/`.
-LeakSanitizer needs execution outside ptrace-based agent sandboxes. No check
+LeakSanitizer needs execution outside ptrace-based execution environments. No check
 is disabled to obtain a pass. `make analyze` runs clang-tidy over application
 sources. See `docs/testing.md` for commands and the manual/tmux checklist.
 
@@ -135,8 +147,13 @@ evidence. M04's C fake peer tests controller behavior without launching a target
 real native C/C++ fixtures are in `fixtures/native/`, with separate M05
 `make test-native` and `make sanitize-native` checks. Complete native
 acceptance in M14 and real board evidence in M17. Every release retests native
-x86-64 and the owner's STM32/ARM, ESP32/Xtensa and ESP32/RISC-V hardware;
+x86-64 and the STM32/ARM validation, ESP32/Xtensa and ESP32/RISC-V hardware;
 QEMU ARM/RISC-V adds coverage where available and never replaces board evidence.
+After v0.1.0, native tests remain the regression foundation while new feature
+acceptance emphasizes embedded capabilities and physical failure/recovery paths.
+The [future validation matrix](../docs/testing.md#post-release-embedded-validation)
+separates corpus/native automation from per-feature hardware requirements.
+Native maintenance and shared improvements continue; no parity quota is added.
 
 ## M08 native browsing and breakpoint checks
 
@@ -154,8 +171,8 @@ the restored listing/viewport, gaps and warning visibility. Renderer checks
 verify aligned mnemonic/operand columns and bounded formatting.
 
 libelf development files are required. These checks require ptrace/PTY support;
-synthetic ARM metadata is not hardware evidence. See docs/testing.md for manual
-procedures and docs/progress.md for the accepted SHA, exact commands and failures.
+synthetic ARM metadata is not hardware evidence. See [testing](../docs/testing.md) for procedures and the
+[historical ledger](../docs/history/milestones.md) for recorded results and failures.
 
 ## M04 fake peer and startup probe
 
@@ -247,6 +264,6 @@ installed `alacritty` and `alacritty-direct` terminfo entries.
 `make test-tmux` separately runs `integration/test_tmux.c` through an isolated
 tmux server. It verifies actual tmux input forwarding for mouse drag, pane menu
 clicks, tab styling/focus, splitting, F10, compact resize and exit. It requires tmux, a usable local
-socket and `tmux-256color` terminfo; it never uses the owner's existing server.
+socket and `tmux-256color` terminfo; it never uses an existing user server.
 It removes its temporary config/server even on a test failure. This optional
 environment test is separate from the default and sanitizer suites.

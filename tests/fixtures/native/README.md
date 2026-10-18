@@ -1,6 +1,6 @@
 # Native session fixtures
 
-These small programs are debug targets authored for M05–M08, not fake debugger
+These small programs are debug targets authored for the native integration/inspection suites, not fake debugger
 engines or hardware evidence. `make fixtures` creates:
 
 - `build/memory-fixture` from `memory.c` (M10): two initialized 2048-byte buffers,
@@ -23,7 +23,7 @@ LSan in a deliberately ptraced target would fail under GDB.
 `make test-native` launches actual GDB, checks argv/cwd/environment without shell
 expansion, reads the real output PTY, pauses/continues, exercises console and
 log failures, verifies exit/cleanup, and tests attach/detach and GDB crashes.
-It also drives the actual TUI in a PTY. See `docs/testing.md` for owner steps.
+It also drives the actual TUI in a PTY. See [testing](../../../docs/testing.md) for reproducible procedures.
 
 Special C fixture arguments:
 
@@ -41,10 +41,9 @@ external fixture after checking that frontend detach leaves it alive and
 resumed. Attached stdout stays with its original destination. The target's
 control/OSC bytes are emitted only with --control-bytes and deliberately escaped
 by the frontend. Ordinary runs, including --allow-attach, do not clear the host
-terminal or erase the printed PID. M07 adds source/stepping targets below;
-Memory remains a later gate.
+terminal or erase the printed PID. Source/stepping and Memory targets are described below.
 
-## M06 context targets
+## Context targets (M06)
 
 `context.c` creates two pthread workers blocked in recursive calls. Main waits
 for both workers, enters its own recursion through a tail-call bridge and raises
@@ -70,7 +69,7 @@ reported frames/arguments as evidence; the TUI test uses the unoptimized target.
 Missing/unreliable unwind errors are deterministic synthetic-peer cases, not
 claims that a stripped ELF necessarily lacks unwind information.
 
-## M07 code targets
+## Code targets (M07)
 
 `code.c` supplies a known main/callee, volatile values, `CODE_FIND_MARKER` and an
 idle loop. Build variants `code-fixture`, `code-fixture-optimized` and
@@ -91,7 +90,7 @@ temporary path containing spaces, quotes and shell metacharacters, verifies GDB
 lookup/order/replacement/clear, and removes its owned files. Targets are always
 uninstrumented; sanitizer runtimes remain in the frontend and C harnesses.
 
-## M08 code-breakpoint targets
+## Code-breakpoint targets (M08)
 
 M09 also reuses `code-fixture` for real register/PC and caller-context checks.
 Its native test first stops at main, then establishes code_callee/main before
@@ -113,3 +112,12 @@ at main; do not pass `start` as an executable argument or expect a standalone
 fixture to print debugger status. To test pending resolution, add `m08_future`
 before running with the library's absolute path as the Launch argument.
 Targets remain uninstrumented; all frontend/harness code remains C.
+
+## Variable and data-watchpoint targets
+
+`variables-fixture`, `variables-fixture-cpp` and `variables-fixture-optimized`
+exercise scoped Locals/Watches, aggregates, pointer/array expansion and optimized
+values (M11). `watch-fixture` exercises hardware-required value-change/read/access
+stops and scope expiry (M12). Follow the [variable](../../../docs/testing.md#locals-and-watches)
+and [watchpoint](../../../docs/testing.md#hardware-data-watchpoints) procedures;
+these native fixtures do not establish embedded behavior.

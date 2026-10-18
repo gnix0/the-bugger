@@ -1,20 +1,124 @@
-# Testing and manual acceptance
+# Testing and validation
 
-## Automated checks
+## Commands and prerequisites
 
-Agents run quick, focused checks only. Lengthy suites, stress runs, sanitizer
-and compiler matrices below are commands for the owner to execute; wait for
-their results and distinguish owner-run from agent-run evidence in progress.md.
-The owner explicitly authorized agent-run M10 completion and M11 correction
-checks. These scoped exceptions do not authorize unrelated future suites.
-Native coverage validates the Linux adapter and shared models; embedded-first
-product scope still requires later ARM/Xtensa/RISC-V backend and physical evidence.
+Run from the repository root on Linux. Required build tools are a C17 compiler,
+GNU Make, pkg-config, ncursesw/libelf/json-c development files and usable terminfo.
+A C++ compiler builds debug-target fixtures only. Native tests additionally need
+GDB, Linux PTYs/pidfds and ptrace permission; tmux checks need tmux and a usable
+local socket. Tests use C without an external test framework.
 
-## M12 hardware data-watchpoint acceptance
+```sh
+make all fixtures
+make test
+make test-native
+make test-tmux
+make CC=clang CXX=clang++ BUILD_DIR=build/clang test test-native
+make sanitize sanitize-native
+make analyze
+git diff --check
+```
 
-Accepted at `f1dbb8a`; [the ledger](progress.md#m12-completion-verification)
-distinguishes agent-run evidence from requested owner runs whose output was not
-reported. Covers FR-25 and NFR-03/04/05/06/07/09/10. No Linux result establishes
+Use a fresh `BUILD_DIR` when changing compilers/flags. `make clean` removes ignored
+`build/` artifacts. Strict C17 warnings include `-Wall -Wextra -Wpedantic -Werror`,
+format, shadow and prototype checks. Sanitizer targets instrument the frontend
+and C harnesses; targets debugged by GDB stay uninstrumented because LeakSanitizer
+cannot operate in a deliberately ptraced target. Sanitizers run with leak checking;
+no suppression or disabled check turns an environment failure into PASS.
+
+`make analyze` enables clang-analyzer and bugprone checks and fails on warnings.
+The Annex K replacement recommendation is excluded because Linux libc does not
+provide those optional `_s` functions. Missing tools and ptrace/socket restrictions
+are recorded as limitations or failed runs, not silently skipped passes.
+
+| Layer | Entry points | Evidence boundary |
+|---|---|---|
+| Deterministic models and PTY UI | `make test`, focused `test-mNN-model` targets | Authored MI, owned-file/profile and terminal behavior; no real target required |
+| Native GDB/API/TUI | `make test-native`, focused `test-mNN-native` | Actual Linux debugger/fixture behavior, not embedded support |
+| Real tmux forwarding | `make test-tmux` | Isolated server, click/drag/keys/resize; physical appearance remains manual |
+| Remote and OpenOCD | M15/M16 tests when implemented | Actual server negotiation/ownership plus offline failure cases |
+| Physical embedded | M17 and per-feature fixtures | Named board/probe/server/toolchain, capability and recovery evidence |
+
+The [suite catalog](../tests/README.md) lists individual binaries; fixture READMEs
+specify authored data and target behavior. Procedures below describe expected
+behavior, not proof that a particular run passed. Historical executions, blocked
+checks and exact evidence are in the [ledger](history/milestones.md). Store logs
+under ignored `build/`; record durable result summaries separately. Current
+full-project analyzer findings remain tracked for M14; focused passes do not clear them.
+
+## Validation strategy
+
+Use units for parsing/layout/storage, deterministic MI for async races, stale
+replies, resource limits and policy denial before dispatch, then actual GDB
+fixtures for integration. Repeat with optimized/stripped binaries and literal
+paths. Hardware tests add architecture/backend correctness, probe loss, reset and
+recovery. A target's readable metadata is not proof of side-effect-free memory.
+
+Test requests before `-var-create`, `-var-update`, evaluation or child expansion;
+unknown is not unsafe, but is unauthorized for automatic reads without complete
+safe-footprint evidence. Deliberate pointer inspection uses the same policy.
+Use only known-safe disposable storage for destructive or MMIO-sensitive tests.
+No arbitrary peripheral scanning or implicit flash/reset is a validation step.
+
+Test terminal behavior directly and in tmux with opt-in mouse support. Record
+TERM/terminal/tmux versions and intercepted keys. Fixtures never rewrite existing
+tmux bindings or security settings. PTY screen parsing is an ASCII-label oracle,
+not a general terminal emulator or proof of UTF-8/physical visual fidelity.
+
+## Profiles and action keys
+
+Coverage: M13; FR-01/06/14/28 and NFR-03/05/06/09/12.
+
+```sh
+make test-m13-model
+make test-m13-tui
+make test-m13-native
+```
+
+Model tests cover all connection kinds, literal ordered argv/scripts/paths,
+XDG fallback, strict/corrupt schema, limits, reserved/conflicting keys, private
+atomic writes, lock/write/stale-writer failures, recents/deletion and source
+restore sequencing. File-only TUI tests use an isolated XDG directory and start
+no target. Native tests require GDB/ptrace: restored relocated sources, duplicate
+basenames, breakpoint resolution, interlock and remapped execution. Both are in
+the full `make test`/`make test-native` path as appropriate.
+
+Manual reproduction (use a temporary XDG directory to avoid personal profiles):
+
+1. `make all fixtures`, then `profile_test_config=$(mktemp -d)` and
+   `XDG_CONFIG_HOME="$profile_test_config" ./build/the-bugger` in the same shell.
+   Keep that variable for inspecting/removing the test directory later;
+   the application does not clean user profile storage. Choose Linux application,
+   set `build/code-fixture`, and enter literal quoted arguments with spaces.
+2. **Save profile**, name it, then **Profile...**. Add source directories and
+   ordered build→local mappings; choose Action keys and remap Continue to F6.
+   Try duplicate F6 for another action and reserved Ctrl+Q: errors retain input.
+   Save again and verify replacement requires confirmation.
+3. Return to launcher, choose **Profiles**, load that name. Configuration is
+   shown for review; no GDB or inferior starts on selection. Review/Start native,
+   use Console `start`, then the remapped action or clickable toolbar. The
+   successful saved session becomes recent. Close normally and reopen the profile.
+4. For moved sources use the existing relocated fixture/mapping procedure below;
+   save applied Source lookup settings and reopen. Execution waits for source
+   restore; intended duplicate-basename source and breakpoint must resolve.
+5. Confirm Attach reload does not retain a PID and environment overrides are not
+   saved. OpenOCD/remote definitions retain script order/endpoint/protocol but still
+   show preview-only execution. Loading them must not launch servers or connect.
+6. Delete a profile: Cancel preserves it; Confirm removes it and its recent entry.
+   In a disposable profile file, malformed JSON must show an error and preserve
+   that file. Restore valid contents and reload/restart; do not silently overwrite
+   corrupt data. Storage/concurrent-writer failures have deterministic model tests.
+7. Repeat keyboard/mouse navigation, remapped key delivery and profile reopen
+   directly and in tmux; inspect compact/monochrome controls. Never rewrite user
+   tmux bindings. A terminal that intercepts F6 still has clickable actions.
+
+No remote/hardware compatibility follows this checklist. Persisted definitions
+are not permissions to perform target operations; M15/M16 must test their actual
+application and lifecycle separately. F01 owns workspace/watch/breakpoint restore.
+
+## Hardware data watchpoints
+
+Coverage: M12; FR-25 and NFR-03/04/05/06/07/09/10. Native results do not establish
 ARM/Xtensa/RISC-V hardware support.
 
 ```sh
@@ -58,11 +162,9 @@ is used; GDB may sample watched memory on creation/stops. Peripheral side effect
 are not ruled out by using hardware watchpoints. Hardware rows remain UNVERIFIED
 until real evidence is recorded.
 
-## M11 Locals/Watches acceptance
+## Locals and Watches
 
-Accepted implementation: `7744643`; actual evidence and limitations are in
-[the ledger](progress.md#m11-completion-verification). Covers FR-10/27 and
-NFR-03/04/05/07/09/10/11. Name discovery does not grant value reads. Test
+Coverage: M11; FR-10/27 and NFR-03/04/05/07/09/10/11. Name discovery does not grant value reads. Test
 authorization before value-producing MI dispatch, not just before rendering.
 Unknown and potentially side-effecting storage require explicit inspection;
 complete read-free footprint proof and ordinary-region evidence are required
@@ -111,7 +213,7 @@ authorization/unknown metadata before embedded use. M17 checks real target
 variables and deliberately inspected RAM/peripherals on the release boards.
 No arbitrary peripheral read is part of this native checklist.
 
-## M10 inline Memory acceptance
+## Memory inspector
 
 Contract: persistent Address/expression + Go in the pane; no address-entry page,
 fixed target address or mandatory SP default. No automatic reads on opening a
@@ -122,13 +224,11 @@ explicit Go. Metadata and byte order belong to session adapters.
 Automated commands: `make test-m10-model`, `make test-m10-native`, `make test`,
 `make test-native`, `make test-tmux`; focused ASan/UBSan model/native/TUI tests in
 an isolated build directory. Strict warnings apply. Record actual results and
-tool/environment failures. M10 is accepted at implementation `2f951fb`; the owner
-reported its commit and requested this documentation handoff. The checklist
-below remains reproducible guidance, not individually reported manual results.
+tool/environment failures. Coverage: M10; FR-09/20/26 and inspection safety.
 Run the live Memory workflow in real tmux with
 `TB_MEMORY_TEST_TMUX=1 build/test-memory-tui "$PWD/build/the-bugger" "$PWD/build/memory-fixture"`.
 This creates and cleans its own mouse-enabled server; it does not change user tmux
-configuration. The current run results are in docs/progress.md.
+configuration.
 
 1. Build `make all fixtures`, run `./build/the-bugger`, launch
    `build/memory-fixture`, then Console `start`.
@@ -153,47 +253,13 @@ configuration. The current run results are in docs/progress.md.
 
 M17 hardware-only: real STM32 RAM/Flash and safe target-region metadata, ARM
 register/context agreement, OpenOCD errors/disconnect and controlled peripheral
-behavior; repeat applicable workflows on owner ESP32 Xtensa/RISC-V. All are
-UNVERIFIED until actual owner evidence, regardless of simulated MI success.
+behavior; repeat applicable workflows on ESP32 Xtensa/RISC-V. All are
+UNVERIFIED until actual recorded evidence, regardless of simulated MI success.
 
-Run from the repository root on Linux:
 
-```sh
-make clean
-make all
-make test
-make sanitize
-make CC=clang BUILD_DIR=build/clang test
-make analyze
-git diff --check
-```
+## CPU registers
 
-`all` compiles C17 with strict warnings including `-Wall -Wextra -Wpedantic`
-and `-Werror`. `test` builds and runs sixteen C test executables: two MI suites,
-two controller suites, ELF/breakpoint/register/context/code models, native word parsing, demo, layout,
-renderer, CLI and two workspace PTY suites, described in
-`tests/README.md`. `sanitize` builds separately
-with ASan/UBSan; a runtime
-diagnostic is a failure, not a skip. `analyze` uses clang-tidy and fails on
-warnings; an unavailable tool is a reported limitation, never a pass. Checks are
-explicitly enabled (`clang-analyzer-*` and `bugprone-*`) rather than relying on
-machine defaults. The Annex K recommendation check is excluded: it flags even
-bounded `snprintf`/`memmove`/`memset` and suggests optional `_s` functions that
-Linux libc does not provide. Other analyzer/security checks remain enabled.
-
-LeakSanitizer cannot run under ptrace. In an agent sandbox that uses tracing,
-the sanitizer command may require execution outside that sandbox with approval.
-Do not disable leak detection or label that environment failure a passing test.
-
-`build/` is disposable and ignored. M01 command output and tmux captures are
-retained as `build/m01-*`; these are local evidence, not tracked artifacts.
-Durable command summaries and limitations belong in `docs/progress.md`.
-Changing compiler or flags requires a fresh build directory or cleaning.
-
-## M09 acceptance — live CPU registers
-
-Accepted after the owner's corrected `make test-m09-native` run. This checklist
-reproduces the feature; no suites are rerun for the documentation handoff.
+Coverage: M09; FR-08/20 and selected-context correctness.
 
 1. Launch `build/code-fixture`; Console > Command > `start`. Registers discovers
    actual target names and stopped values. No fabricated Cortex-M sample values
@@ -210,26 +276,22 @@ reproduces the feature; no suites are rerun for the documentation handoff.
    stopped values. Exercise scrollbars, long values, compact resize and a
    Registers-only visible workspace. Hidden/running/idle views must not poll.
 
-Focused commands (owner-run): `make test-m09-model` for synthetic model coverage,
+Focused commands: `make test-m09-model` for synthetic model coverage,
 `make test-m09-native` for actual GDB and PTY. They are also included in `make test`
 and `make test-native` respectively; sanitizer targets inherit those suites.
-Current M09 evidence is limited to the recorded focused checks and owner native/
-TUI acceptance. New full-suite, sanitizer, analyzer, tmux and hardware passes
-are not inferred. See progress.md for the initial test failure and correction.
 
-## M08 acceptance — browsing, code breakpoints and Run to Selected
 
-Accepted post-M08 tab correction: open Registers' `...` menu.
+## Disassembly browsing and code breakpoints
+
+Coverage: M08 and pane-tab regression. Open Registers' `...` menu.
 Registers and Peripherals alone start marked. Add Threads, reopen and remove it;
 add it again and remove Peripherals instead. Threads stays active and Registers
 remains available. Another pane's markers reflect only its own tabs. Check
 active/inactive removal, keyboard access, compact menus and last-tab protection.
 Unselected options have no empty-circle marker. Run `make test` for the added
-unit and workspace PTY cases; the owner reported these passing after the
-menu-targeting correction, along with the full native suite.
+unit and workspace PTY cases.
 
-Accepted code commit: `55ecbd4`. These steps reproduce its workflow; release
-acceptance and real-board coverage remain separate.
+Release acceptance and real-board coverage require separate evidence.
 
 1. Run `make fixtures`, then `./build/the-bugger`. Choose Linux Launch and
    `build/break-fixture`. Review/Start native; Console > Command > `start`
@@ -257,21 +319,15 @@ acceptance and real-board coverage remain separate.
    temporary state is cleaned up. Manage > Refresh explicitly retries failed
    cleanup; ambiguous ownership blocks execution rather than deleting guesses.
 9. Check resize, narrow panes, tmux with opt-in mouse, and clean session exit.
-   Registers are supplied by M09; Memory/Locals and data-watchpoint UI remain later gates.
+   Check existing Registers, Memory, Locals/Watches and data-watchpoint controls for regressions.
 
-Owner-run focused native command: `make test-m08-native`; broad commands remain
+Focused native command: `make test-m08-native`; broad commands remain
 `make test test-native`, `make sanitize sanitize-native`, `make analyze` and
-`make test-tmux`. Final evidence and the earlier timing failure are in progress.md.
+`make test-tmux`.
 
-## M07 manual acceptance — live Source and Disassembly
+## Source and instruction stepping
 
-Historical M07 checklist (accepted as `8d69475`); M08 above supersedes its
-four-instruction browsing limits and then-unavailable breakpoint controls.
-
-M06 is accepted as 1b21504. This gate adds live code, stepping and navigation;
-breakpoint UI/F9/Run to Selected remain M08. Registers/Memory/Locals remain
-unavailable. GDB Console `start` supplies a temporary main breakpoint for this
-gate's demonstration; it is an explicit command, not an automatic frontend stop.
+Coverage: M07/M08; source/instruction mapping, navigation and non-mutating browsing.
 
 1. Run `make fixtures` and `./build/the-bugger`. Choose Linux application / Launch,
    executable `./build/code-fixture`, no arguments. Review and Start native:
@@ -315,14 +371,14 @@ gate's demonstration; it is an explicit command, not an automatic frontend stop.
    actual source. Choose each `left/duplicate.c` and `right/duplicate.c` in Files:
    LEFT/RIGHT markers must match their full identities. Add directory and Clear
    overrides also report successful GDB application or a useful error. Settings
-   are session-only until M13. Directory order is newest first; mappings show
+   can be saved through M13 profiles. Directory order is newest first; mappings show
    GDB's first-match order (replacing a prefix moves that rule to the end).
 8. Repeat `start` with `code-fixture-optimized`; mappings may skip/repeat lines.
    For `code-fixture-stripped` use Console `starti`: assembly/instruction steps
    remain usable, with explicit missing-source/symbol states. Resize, split an
    extra code view, and repeat the core clicks/stepping/scrolling inside tmux
    (`set -g mouse on`). Check the approved theme/tabs/layout remain intact.
-   Quit and verify terminal restoration. Stop for owner acceptance.
+   Quit and verify terminal restoration.
 9. Keep a narrow Source/Disassembly/Console pane. Drag its horizontal thumb to
    reveal clipped text, click the track to page, and use Left/Right with its body
    focused. Source line numbers remain fixed; PC and pane size never change.
@@ -330,12 +386,12 @@ gate's demonstration; it is an explicit command, not an automatic frontend stop.
    and thumbs use one-cell targets matching the horizontal style. Enlarge a pane until its rows/columns
    fit: the corresponding bar disappears. Shrink it again and verify clamped,
    usable bars without covering content or footer actions. Repeat in tmux.
-10. Relaunch without arguments and inspect the owner-refined startup card:
+10. Relaunch without arguments and inspect the startup card:
     centered on both axes, pink title, right-aligned v0.1.0, subtle separators,
     three described choices and selected-row indicator. Click either a title or
     its description; both open that flow. Check arrows/Tab/Enter, Quit/Ctrl+Q,
     140x44, a larger terminal and 48x18 compact presentation. Server flows remain
-    explicit previews and recent profiles remain unavailable. The workspace
+    explicit previews; recent saved native profiles are available after M13. The workspace
     after launch must retain its existing layout/theme.
 11. Step instructions in Disassembly. Earlier instructions must remain browsable,
     with roughly four before the first PC where available. The viewport stays
@@ -354,28 +410,26 @@ gate's demonstration; it is an explicit command, not an automatic frontend stop.
     and current-PC marker must remain visible, including when only one earlier
     instruction was missing. Wheel down again: no blank/one-row collapse. Check
     the narrow vertical bar uses a vertical track while the bottom bar keeps its
-    horizontal orientation. Broader browsing boundaries and repeated zero-byte
-    decoding are recorded for M08's research, not resolved by this correction.
+    horizontal orientation. Known code/data boundaries and explicit raw decoding follow the browsing
+    checks above; repeated byte patterns alone do not classify instructions.
 
 Automated coverage: `make test` exercises synthetic code windows, mixed fallback,
 caps, escaping, obsolete replies and invisible/running/idle reads. `make test-native`
 adds actual -O0/-O2/stripped/C++ GDB code/stepping, caller inspection, safe symbol
 lookup, relocated duplicate paths with spaces/quotes/metacharacters, mapping
 replacement/clear, and the real TUI browse/find/line/mixed/settings workflow.
-Full visual fidelity and physical terminal/tmux input still require owner review.
+Full visual fidelity and physical terminal/tmux input require manual validation.
 No remote, board or release acceptance is inferred from native tests.
 
-## M06 manual acceptance — Call Stack and Threads
+## Call Stack and Threads
 
-M05 is accepted as 0278b61; M06 is accepted as 1b21504. This historical checklist
-covers frame/thread inspection; M07 above adds Source/Disassembly and stepping.
-No real hardware, remote connection or release acceptance is claimed here.
+Coverage: M06; FR-10 and context coherence. Native tests are not remote or board evidence.
 
 1. Run `make fixtures`, then `./build/the-bugger` without --demo. Choose Linux
    application / Launch. Set executable to `./build/context-fixture`; clear
    arguments and environment for this run. Review and Start native. Expect
    Loaded. This fixture deliberately raises SIGTRAP under GDB to provide stops
-   without depending on the future breakpoint UI; do not run it standalone.
+   without needing a configured breakpoint; do not run it standalone.
 2. Activate **Call Stack**, the existing tab beside Disassembly. Click Continue
    or press F5. The fixture creates two workers and stops in its main-thread
    recursive call. Expect Stopped, three real threads in the context, and live
@@ -412,8 +466,7 @@ No real hardware, remote connection or release acceptance is claimed here.
    remains usable and errors are visible with a Refresh action.
 8. Repeat the ordinary Call Stack/Threads click, keyboard, scroll, resize and
    quit workflow inside tmux with opt-in mouse support. Check `--demo` still
-   shows the accepted simulated reference separately. Stop for owner acceptance;
-   Every next gate requires owner acceptance and commit/push before continuation.
+   shows the simulated reference separately.
 
 Automated scope: a synthetic C peer supplies bounded pages/arguments, nonordinal
 thread IDs, missing/malformed unwind data, 128-thread truncation, delayed query
@@ -424,22 +477,23 @@ worker exit, pause/resume and cleanup. A real TUI PTY test exercises row clicks,
 keyboard selection, caller labels, two simultaneous context views and stale
 state. The peer is not hardware evidence; the VT reader is not visual acceptance.
 
-## M05 manual acceptance — real native Linux
+## Native launch, attach and cleanup
 
 Run `make fixtures` and `make test-native` first. These separate real-GDB tests
 require native GDB, a C++ compiler for the target fixture, Linux PTYs/pidfds and
 ptrace permission. Default `make test` remains deterministic and board/GDB-free.
 `make sanitize-native` instruments the frontend and harnesses, keeping target
 fixtures uninstrumented so LeakSanitizer does not run inside the ptraced target.
-In restricted agent environments, real-GDB tests may need execution outside the
+In restricted execution environments, real-GDB tests may need execution outside the
 ptrace sandbox. No global permission/sysctl setting is changed.
 
 1. Run `./build/the-bugger` without --demo. Choose Linux application / Launch.
    Use `./build/debug-fixture` as the executable, `/tmp` as working directory,
    `"two words" "" '$HOME;$(false)'` as arguments and
    `THE_BUGGER_TEST="hello world"` as environment. Review session, then Start
-   native. Expect Loaded, no program PID yet, and five inspection panes with
-   explicit unavailable messages. Console is live. No Cortex-M sample data,
+   native. Expect Loaded, no program PID yet, live Console and code panes
+   awaiting the first stop. Memory controls remain accessible without a location;
+   inspectors must not fabricate target values. No Cortex-M sample data,
    simulated registers, instructions or execution PC may appear.
 2. Click Continue or press F5. Expect Running and an actual PID. Console should
    show the program's directory, literal arguments/environment and stderr marker.
@@ -458,7 +512,7 @@ ptrace sandbox. No global permission/sysctl setting is changed.
 5. Scroll Console using wheel, scrollbar and keyboard; return to its end to
    follow new output. Resize/split panes and switch views. The established tiled
    workspace remains usable, and unavailable views never display demo values.
-   Over/Into/Out/Breakpoint/Reset remain unavailable in live sessions in M05.
+   Stepping and breakpoints operate after a stop; Reset remains unavailable in native sessions.
 6. Click Session or Quit with the native session active. Verify the launch
    termination confirmation; Cancel preserves the session. Confirm closes GDB
    and the frontend-launched program, restoring the terminal. Repeat Ctrl+C,
@@ -478,22 +532,21 @@ ptrace sandbox. No global permission/sysctl setting is changed.
 8. Repeat with a nonexistent GDB path or bad ELF/PID, then correct it. Expect
    actionable errors and retained configuration. Try a legitimate permission
    denial without changing ptrace settings. Repeat the native mouse/keyboard
-   workflow in the owner's terminal/tmux with opt-in mouse support.
+   workflow directly/in tmux with opt-in mouse support.
 9. Run `./build/the-bugger --demo` for the unchanged visual reference. It must
    remain explicitly simulated and separate from native state. Embedded/remote
-   flows are still previews. Stop here; M06 requires separate acceptance and
-   owner commit/push.
+   flows are still previews.
 
 Automated scope: actual C/C++ launch, argv/cwd/env fidelity, output/control-byte
 isolation, pause/continue, console errors, Save Log open/short-write failures,
 normal exit, permitted/denied attach, external survival/resumption, bounded
 output floods, GDB crash cleanup, live TUI actions/confirmations, input retention
-and signal terminal restoration. Native main/step/inspection and optimized/
-stripped inspection evidence remain in M06–M14, not claimed by this gate.
+and signal terminal restoration. Use the code/context/inspector procedures for stepping and optimized/stripped
+inspection; complete native integration remains M14.
 
-## M04 manual acceptance
+## MI controller diagnostic harness
 
-This gate exercises transport/controller foundations, not live native debugging.
+This harness exercises transport/controller foundations, not live native debugging.
 The standalone harness does not change the TUI and labels its peer/state FAKE.
 
 1. Run `make test-controller`. Expect protocol/lifecycle/pressure checks and
@@ -511,7 +564,7 @@ The standalone harness does not change the TUI and labels its peer/state FAKE.
    work. The ordinary release request still succeeds.
 5. Type `flood` and then `error`. Expect input to remain usable and the error
    reply to arrive. Only the first four stderr chunks are printed, to keep the
-   harness readable; this is not the future application log-retention policy.
+   harness readable; this is not the application log-retention policy.
    Type `quit`. Expect closing, owned-child reaping and
    `cleanup: disconnected, no owned child`, then normal terminal behavior.
 6. Run `./build/controller-demo ./build/fake-mi fallback`. Expect one MI2 retry
@@ -538,11 +591,11 @@ The pressure test reports measured maximum pump wall time and checks per-turn
 byte bounds and actual idle waiting. These are fake-peer transport observations,
 not proof of whole-TUI latency or release performance. Final native performance
 and terminal/tmux acceptance remain M14/M18. No new mouse/visual behavior is
-introduced in M04; the existing workspace PTY regressions still run.
+introduced by this harness; workspace PTY regressions run separately.
 
-## M03 manual acceptance
+## MI parser diagnostic tools
 
-This gate tests protocol parsing only. No GDB connection, process controller or
+These tools test protocol parsing only. No GDB connection, process controller or
 live TUI data is expected. Coverage is NFR-04 and parser ownership/error-path
 foundations for NFR-03/09 and FR-16; complete session cleanup is not claimed.
 
@@ -561,7 +614,7 @@ foundations for NFR-03/09 and FR-16; complete session cleanup is not claimed.
    A nonexistent input path also reports an I/O diagnostic and exits 2.
 5. Optionally run the existing `./build/the-bugger --demo` demo: presentation and
    interactions should be unchanged. No board, probe or tmux configuration is
-   required for M03 parsing. Stop here; M04 needs separate authorization.
+   required for parsing.
 
 The corpus is replayed across every two-chunk split and chunk sizes 1–71.
 Unit tests also cover CR/LF/CRLF, malformed and raw-NUL input, unknown classes,
@@ -583,7 +636,7 @@ Repeat with MI2 or an installed ARM GDB. A GDB `^error` result is valid protocol
 and must parse successfully. These probes are grammar evidence only, not native
 or hardware debugging acceptance.
 
-## M01 manual test now
+## Demo and visual regression
 
 1. Run `make clean && make && make test`. Expect strict compilation and passing
    C unit, CLI and PTY suites. `--help` and `--version` also work without a TTY.
@@ -609,9 +662,9 @@ or hardware debugging acceptance.
    Peripherals and Stack say NOT IMPLEMENTED rather than inventing values.
    Select source rows or click the gutter to toggle sample breakpoints. Wheel
    scrolls the pane under the pointer; a focused body supports arrows/Page keys.
-8. For the initial workspace, resize below six-pane dimensions. Expect six pane navigation buttons and a
-   single focused view. Keys 1-6 switch panes. Below 48x18 expect a resize notice;
-   expanding restores tab/view state. Dragging/splitting was added in M02.
+8. Resize below six-pane dimensions. Expect a single focused view and retained
+   pane navigation. Keys 1–9 and [/] reach panes. Below 48x18 expect a resize
+   notice; expanding restores tab/view state. Test dragging/splitting below.
 9. Quit using the visible button or Ctrl+Q. Repeat with Ctrl+C. Expect normal
    shell echo/cursor/mouse behavior afterward. Run `NO_COLOR=1 ./build/the-bugger --demo`
    and verify that text labels, selection and markers remain understandable.
@@ -619,12 +672,35 @@ or hardware debugging acceptance.
     the user's opt-in `set -g mouse on`. Do not change existing key bindings.
     Record terminal type, tmux version and any intercepted keys for the ledger.
 
-M01 evidence covered FR-01's UI and portions of FR-13/17, plus foundations
-for NFR-01/03/05/08/09/10/11/12. Live debugging, full layout behavior and hardware
-requirements remain incomplete. Physical mouse/UTF-8/visual fidelity still need
-owner acceptance; PTY simulation alone does not establish those experiences.
+Coverage: startup/demo, FR-13/17 and visual/input foundations. Physical mouse,
+UTF-8 and visual fidelity require manual validation; PTY simulation alone does
+not establish those experiences.
 
-## M02 manual test now
+### Visual inspection checklist
+
+Compare the renderer directly
+with `docs/design/prototype.html`, using the component checklist in
+[the terminal mapping](design/tui-mapping.md). Six panes or passing automated
+checks alone do not satisfy the visual gate.
+
+1. Run `make` and `./build/the-bugger --demo` at 140x44 or larger. Inspect launcher
+   surfaces, descriptions, aligned configuration fields and retained editing.
+2. Enter the workspace. Compare toolbar density, panel backgrounds/gutters,
+   active/inactive tabs, table headings and panel footers against the HTML.
+3. Click tabs and view menus. Check keyboard focus remains distinguishable
+   from the active tab and that all controls still work.
+4. Step with F10 and toolbar actions. Inspect source token colors, PC row,
+   register names/values and yellow `+ changed` markers. All data remains DEMO.
+5. Resize to 112x28, then 80x24, then below 48x18 and back. Check clipping,
+   focused-pane navigation and retained state. Repeat inside tmux with mouse on.
+6. Run `NO_COLOR=1 ./build/the-bugger --demo` and verify labels, underline, focus,
+   breakpoints and change markers remain readable.
+
+`tests/unit/test_render.c` inspects ncurses cells and exact direct-color pairs.
+It does not substitute for inspecting the rendered interface.
+
+
+## Tiling, tabs and terminal resizing
 
 1. Run `make test`, then `./build/the-bugger --demo` in a 140x44 or larger terminal.
    Choose Linux application, Review preview, Preview workspace. Compare the
@@ -651,7 +727,7 @@ owner acceptance; PTY simulation alone does not establish those experiences.
    reach every pane; `1`–`9` selects a retained pane ID directly. Below 48x18,
    expect a resize message. Restore the larger terminal: splits, ratios, tabs
    and selection remain. Resize during a drag: it cancels safely.
-8. Repeat inside tmux with the owner's opt-in `set -g mouse on`, and repeat in
+8. Repeat inside tmux with opt-in `set -g mouse on`, and repeat in
    monochrome. Check wheel/menu navigation and F5/F9/F10/F11 after splitting.
    Quit and verify normal shell echo, cursor and mouse selection afterward.
 
@@ -665,63 +741,11 @@ It owns a uniquely named local server and temporary config, enables mouse only
 there, sends real outer-terminal input through tmux, and cleans up that server.
 It verifies tab styling/focus after promotion, clicks, held-button motion, splitting, F10, compact resizing and
 terminal restoration. It does not modify an existing server or user config.
-Agent sandboxes may require execution permission for its local socket.
-Output goes to `build/m02-tmux-workspace.txt`; final M02 commands/results are
-recorded in `docs/progress.md`. Physical visual/input acceptance remains manual.
+Restricted execution environments may prohibit the local socket.
+Output goes to `build/m02-tmux-workspace.txt`. Physical visual/input validation
+remains manual.
 
-## Later verification gates
-
-M01/M02 add PTY and real-terminal/tmux visual/input acceptance plus pure layout
-tests, using the HTML as the visual/interaction reference. Verify the single
-six-pane default, tab/view changes, divider resizing, dynamic horizontal/vertical
-splits, a seventh visible view and state-preserving terminal resize. No layout
-selector or alternate named layouts may appear; no preset-switching tests are
-planned. M03 adds a structured MI corpus; M04 adds explicitly fake-server
-transport/controller tests. M05 introduces real native GDB sessions/output;
-M06–M12 cover context, code/stepping/source recovery, breakpoints, inspection and
-hardware-only watchpoints. M13 adds basic profiles/key mapping; M14 completes
-native end-to-end acceptance. M15 tests a real external gdbserver; M16 covers
-OpenOCD configuration/lifecycle/ownership; M17 requires real release-board
-evidence; M18 audits release-wide FR/NFR results. See [the roadmap](plan.md) for
-each independent gate's tests and exclusions. Fixture instructions and expected
-states are delivered with their implementation, not represented as tests run now.
-
-No mock transcript is hardware evidence. No automated check marks a milestone
-accepted; the owner must perform manual validation and explicitly approve.
-
-## CI proposal
-
-Once CI setup is authorized, use a Linux job with GCC, Clang, Make, pkg-config,
-ncursesw development files/terminfo and clang-tidy, running the commands above.
-No Python is required. Upload command logs on failure.
-Extend dependencies and suites as milestones arrive. Hardware acceptance stays
-a separate recorded owner gate; CI must not label it passed based on fixtures.
-No hosted workflow or external service has been configured in M00.
-
-### M01 corrected visual review
-
-The original presentation was rejected. Compare the corrected renderer directly
-with `docs/design/prototype.html`, using the component checklist in
-[the terminal mapping](design/tui-mapping.md). Six panes or passing automated
-checks alone do not satisfy the visual gate.
-
-1. Run `make` and `./build/the-bugger --demo` at 140x44 or larger. Inspect launcher
-   surfaces, descriptions, aligned configuration fields and retained editing.
-2. Enter the workspace. Compare toolbar density, panel backgrounds/gutters,
-   active/inactive tabs, table headings and panel footers against the HTML.
-3. Click tabs and view menus. Check keyboard focus remains distinguishable
-   from the active tab and that all controls still work.
-4. Step with F10 and toolbar actions. Inspect source token colors, PC row,
-   register names/values and yellow `+ changed` markers. All data remains DEMO.
-5. Resize to 112x28, then 80x24, then below 48x18 and back. Check clipping,
-   focused-pane navigation and retained state. Repeat inside tmux with mouse on.
-6. Run `NO_COLOR=1 ./build/the-bugger --demo` and verify labels, underline, focus,
-   breakpoints and change markers remain readable.
-
-`tests/unit/test_render.c` inspects ncurses cells and exact direct-color pairs.
-It does not substitute for inspecting the rendered interface.
-
-## Post-M02 navigation correction
+### Scrolling and execution markers
 
 1. Open the default workspace. No breakpoint marker should appear until F9 or
    a gutter click. The current demo execution line is initially line 30
@@ -739,7 +763,7 @@ The C tests cover empty initial breakpoints, execution-highlight movement,
 scrollbar geometry, track/drag interaction and disassembly endpoints. The test
 screen reader handles cursor save/restore around ncurses scrolling regions.
 
-## P00 tab correction — manual test now
+### Tab focus and promotion
 
 1. Run `make` and `./build/the-bugger --demo` in a 140x44 terminal. Choose Linux
    application → Review preview → Preview workspace. All values remain DEMO.
@@ -752,37 +776,87 @@ screen reader handles cursor save/restore around ncurses scrolling regions.
 4. From that active tab, press Tab to focus the next tab. Keyboard focus is
    visible. Enter activates it; Left/Right still switch tabs and keep focus on
    the promoted tab. Existing view content/scroll, splits and resizing still work.
-5. Repeat with `NO_COLOR=1 ./build/the-bugger --demo` and inside tmux with the owner's
+5. Repeat with `NO_COLOR=1 ./build/the-bugger --demo` and inside tmux with
    opt-in mouse support. Monochrome active tabs retain their selection marker;
    inactive tabs have no stale marker after mouse activation. Quit cleanly.
-6. Review the versioned roadmap and per-release matrix. Confirm the supplied
-   reference JPG is gone, and that README still distinguishes demo from plans.
-
 C regression checks inspect actual PTY inverse attributes, not just label text,
 in direct/256-color and monochrome. It fails against the pre-fix binary at the
 old inactive-tab highlight. Additional checks verify leftward promotion, Enter
 remaining on the clicked tab and visible keyboard focus. The VT reader skips
-extended-color parameters when interpreting inverse attributes. Physical
-appearance remains subject to owner acceptance.
+extended-color parameters when interpreting inverse attributes. Physical appearance requires manual inspection.
+
+## Physical-board core workflow (planned M17)
+
+- Build a simple **firmware.elf** for the NUCLEO-F446RE with DWARF debug symbols and known GPIO/register operations. Save reproducible build instructions; record actual board/toolchain versions.
+- Connect board, run startup wizard **Embedded target → OpenOCD → Board → `st_nucleo_f4.cfg`**; make sure no duplicate adapter/target `-f` is appended.
+- Start the OpenOCD server from the UI (or explicitly connect to an existing one). Confirm visible connection state and logs.
+- Select compatible `arm-none-eabi-gdb` and symbol ELF; connect to target, halt and inspect PC, source/disassembly, Cortex-M core registers, SRAM and locals where applicable.
+- Step, continue and hit a chosen breakpoint. Verify memory reads and changed-register highlights across stop events.
+- Exit/disconnect without unintentionally flashing, erasing, or resetting firmware and without leaving owned OpenOCD/GDB processes behind.
+- If ELF differs from firmware currently flashed, detect/report mismatch when feasible; **do not quietly download it**. Explicit flashing is only required if separately implemented and approved.
+- When hardware is not accessible to the tester, mark this **UNVERIFIED** and wait for physical test evidence. No v0.1.0 tag without recorded real hardware acceptance.
+
+For every release, also exercise the same applicable core workflow on the ESP32 validation/Xtensa and ESP32/RISC-V boards through the appropriate GDB/server. Native x86-64 is always retested. Exact board/probe details are recorded with actual evidence, not required during planning. QEMU ARM/RISC-V guest/native tests are supplementary when available. This is validation coverage, not an in-product simulator or a promise that hardware-specific features work on every target. See docs/testing.md for the release matrix.
+
 
 ## Every-release regression matrix
 
 Before every release (including patches), record actual commands, results and
-owner acceptance for the minimum matrix below. Exact ESP/probe setup is not a
+release acceptance for the minimum matrix below. Exact ESP/probe setup is not a
 P00 prerequisite; fill it in when conducting the tests. Tool/server paths stay
 editable; OpenOCD is not a requirement for every architecture.
 
 | Environment | Minimum evidence | Current live evidence |
 |---|---|---|
-| Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | PARTIAL — M05/M06 accepted; M07 code/stepping automated evidence and owner review recorded in progress.md; breakpoints/other inspection/profiles and release acceptance pending |
+| Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | M05–M13 accepted, broad regressions passed at M13; complete M14 integration, per-release evidence and release acceptance remain pending |
 | STM32 / ARM | NUCLEO-F446RE fixture via GDB/OpenOCD; halt/step/break/watch, real code/register/RAM/variables, reset/disconnect/cleanup | UNVERIFIED |
-| ESP32 / Xtensa | Owner's board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED |
-| ESP32 / RISC-V | Owner's board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED |
+| ESP32 / Xtensa | Validation board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED |
+| ESP32 / RISC-V | Validation board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED |
 | QEMU ARM / RISC-V | Supplementary reproducible native/guest runs where available | UNVERIFIED; not a physical-board substitute |
 
 For each release, capture the actual setup/version, relevant fixture/source
 identity, core-workflow results, capability-specific exclusions, new-feature
 regression and cleanup. Unavailable hardware remains UNVERIFIED and is brought
-to the owner before release acceptance. Tests are not waived because a release
+for resolution before release acceptance. Tests are not waived because a release
 only changes UI. QEMU test infrastructure does not add simulator support to the
 product. Do not claim unsupported target-specific features or untested boards.
+
+## Post-release embedded validation
+
+After v0.1.0, native fixtures remain a required, repeatable regression foundation;
+feature acceptance increasingly requires real embedded evidence. No native-only
+feature parity goal is imposed. M14's complete native acceptance and M15–M18's
+remote/hardware/release criteria are unchanged. The F ordering is in
+[the roadmap](roadmap.md#release-progression-and-priority-changes).
+
+Every hardware-dependent gate plans both automation and physical acceptance
+before implementation, recording exact board/core, probe, GDB/server versions,
+firmware/build identity, configuration/argv, capability limits and logs. Captured
+MI is labelled captured with provenance; synthetic exchanges are labelled authored.
+Test unsupported capabilities, obsolete replies, disconnect/reset/reconnect,
+ownership, responsive cancellation and stale-value invalidation. No corpus,
+QEMU run or successful native test substitutes for the named physical check.
+
+| Gates / planning target | Automated validation available without feature hardware | Physical acceptance and required setup |
+|---|---|---|
+| F01/F02, v0.1.x | Schema/state migration, unknown stack bounds and bounded/partial reads; native stack fixtures. | Release boards for restored definitions and stack context; known bounds from actual firmware metadata where used. No invented usage/high-water result. |
+| F03–F05, v0.2.0 | Write authorization before dispatch, widths/endian, partial failures/read-only/context changes, no collateral writes. | Disposable RAM/CPU-register fixtures on STM32 and applicable ESP32 setups via tested GDB/server. MMIO writes require deliberate documented safe access; Flash remains F22. |
+| F11/F34/F35, v0.3.x | Register/description variants, malformed SVD/inheritance/arrays/access modes, side-effect-policy denial before reads; fault combinations/corrupt exception frames. | NUCLEO-F446RE/GDB/OpenOCD for safe peripheral inspection and injected Cortex-M faults; check metadata against actual device/firmware. ESP32 metadata only with tested descriptions/backends; Cortex-M fault decoder unavailable there. |
+| F07–F09/F12, v0.3.x | Bounded symbol/duplicate-name queries, no automatic unknown reads, relocation/import validation, exclude personal/runtime state. | Reopen/share an actual embedded setup and inspect intended symbols without programming/resetting on load; existing release boards/tools suffice. |
+| F13–F16/F18, v0.4.x | Stream fragmentation/loss/routing, clocks, bounds, file errors and reconnect/ownership. | Each channel needs suitable firmware plus actual UART endpoint, RTT-capable backend, semihosting configuration or SWO/ITM-capable core/probe/server. Do not assume every board/probe supports every channel. |
+| F22, v0.4.x before text-channel integrations | Programming sequence/confirmation/timeout/cancel/error/reset policy; no dependency on UART/RTT/semihosting/SWO. | Expendable firmware on each claimed programming backend; program/verify and test recovery on approved validation boards using established M16/M17 tools. Preserve independent attach and untouched unrelated memory. |
+| F20/F21, v0.5.x | Bounded region-safe search, export and diff identity; no broad unknown/MMIO scan. | Known RAM/Flash fixture ranges on tested release boards; verify exact bytes, gaps and snapshot identity without collateral access. |
+| F31/F33/F23/F24/F26, v0.6.x | Kernel version/port layouts, corrupt lists, image overlap/relocation, task-ID lifetime, unsupported stops/logpoint intrusion. | One named RTOS/version/port per supported setup and a bootloader/application fixture where images are claimed. Probe/server must expose valid task/context/stop operations. |
+| F29/F41/F32/F27/F28, v0.7.x | No hidden halt/resume, region authorization, rates/gaps/units/overflow, plot bounds, explicit slow-watchpoint/PC-change failures. | Proven non-halting acquisition/counter source for claimed target; suitable text telemetry can feed plots independently. Run disruptive execution overrides only on disposable fixtures; verify actual backend behavior. |
+| F10/F30, v0.8.x | Printer absent/error/raw fallback, authorization for complete value footprint before requests and bounded automatic discovery. | Supported embedded C++/debug-info/printer configuration before claiming convenience; native regressions remain useful. No printer availability promise across toolchains. |
+| F36–F40, v0.8.x–v0.9.5 | Decoder corpus, timestamps/synchronization/loss, attribution/statistics, coverage completeness and measurement units. | A proven trace/event/sampling source per consumer; F37 needs instruction-trace-capable hardware, F40 an actual measurement device. Current board ownership alone establishes none of these capabilities. |
+| F42/F43/F45/F46, late v0.9.x | Hook order/failure/cancel, bounded timers, per-core/inferior context/address-space/ownership isolation. | Supported script/lifecycle target; multicore needs a demonstrated multicore board/backend, multiple inferiors a justified real workflow. No general native process-feature expansion implied. |
+
+F06/F19/F44 remain shared TUI/persistence gates: automate geometry/input/parse
+and fallback tests, then manually inspect directly/in tmux with color and small
+terminals. They do not need special probes, but their releases still need the
+every-release hardware regression matrix. F17/F25 are late scope-review native
+candidates; do not create new native suites for unapproved implementation.
+F47 requires actual supported-workflow evidence and critical-defect resolution,
+not unsupported hardware-dependent feature counts. Absent equipment is an
+UNVERIFIED dependency for technical rescoping, not PASS or silent feature removal.

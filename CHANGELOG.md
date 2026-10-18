@@ -4,6 +4,23 @@
 
 ### Added
 
+- User and contributor guides, tracked product requirements, a status-oriented
+  roadmap and separate maintenance/release procedures. Historical milestone
+  evidence is archived with its hashes, failures and acceptance records intact;
+  architecture/testing references describe the system and reproducible checks.
+- Named XDG/json-c connection/source profiles, recent saved native sessions and
+  action-key remapping, accepted in M13 implementation `4030df3`. Review profiles
+  before starting tools; confirm replacement/deletion. Persist ordered arguments,
+  scripts and source settings with bounded private atomic writes, corrupt-file
+  preservation and stale-writer detection. Restore source settings asynchronously
+  before execution. Remote/OpenOCD definitions remain preview-only.
+- Profile model/source-restore/native/TUI regressions, including relocated-source
+  breakpoint resolution, remapped execution and successful-session recents.
+- Embedded-first post-v0.1.0 sequencing, retaining F01–F47 IDs and
+  M14–M18 release scope. Earlier peripheral/fault, firmware, RTOS/image and
+  monitoring workflows; continued native maintenance/shared improvements.
+  F22 flashing leads v0.4.x independently of text-channel readiness. Planning
+  targets do not claim implementation or hardware support.
 - Hardware-required value-change/read/access data watchpoints, with creation
   from Breakpoints, Memory and variable actions. Verify backend type, remove
   software fallback and block execution on unresolved ownership/cleanup.
@@ -37,7 +54,7 @@
 - Bounded code-aware disassembly browsing through ELF metadata using libelf;
   explicit raw byte decoding, honest unknown ranges and labeled skipped gaps.
 - C ELF mutation, native-GDB breakpoint/browsing and TUI regression coverage.
-- Owner-refined centered launcher with Monokai title/version, subtle separators,
+- Centered launcher with Monokai title/version, subtle separators,
   full-row session choices, compact icons, descriptions and chevrons. The entire
   card centers on both axes and adapts to smaller terminals without new assets
   or rendering dependencies; session and workspace behavior is preserved.
@@ -108,6 +125,9 @@
 
 ### Fixed
 
+- Watchpoint TUI test targets intended lower panes, inline Memory address input
+  and footer actions across redraws; wait for current Memory data without
+  weakening application read/watchpoint safety checks.
 - Opening/closing a view selector preserves disassembly cache and viewport.
 - Disassembly warnings follow visible rows; backward scans skip section gaps
   consistently. Address, byte, mnemonic and operand columns align while complete
@@ -133,6 +153,7 @@
   Focus follows the promoted active tab, mouse activation keeps normal styling,
   and subsequent keyboard activation addresses the intended tab.
 
-Native launch/control/console, context, code inspection and code breakpoints are
-live; other inspection, remote/OpenOCD workflows, profiles, hardware acceptance and
+Native launch/control/console, context, code inspection, code/data breakpoints,
+Registers, Memory, scoped Locals/Watches and basic profiles/action keys are live.
+Remote/OpenOCD execution, other specialized inspectors, hardware acceptance and
 release readiness remain incomplete.
