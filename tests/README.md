@@ -10,6 +10,19 @@ target cases establish architecture coverage, not physical-board support.
 See [testing](../docs/testing.md) for procedures and prerequisites; execution
 records remain in the [validation records](../docs/validation.md).
 
+- `make test-m17-offline`: optional ARM cross-build, ELF vectors/SRAM/stack/DWARF
+  checks and actual ARM GDB offline source/disassembly lookup; builds the opt-in
+  hardware runners. No connection or programming occurs.
+- `test-board`: explicit real-board core workflow through the shared session and
+  inspector models; source/assembly, PC/SP, locals/callers, SRAM/Flash, stepping,
+  hardware break/watch and counter-proven disconnect policies. Requires the
+  programmed fixture and an external OpenOCD. `--reset-halt` enables explicit reset.
+- `test-board-tui`: actual board-backed TUI review/connect, code/PC/instruction
+  step, inline SRAM, reset cancellation, resize and terminal cleanup. Set
+  `TB_BOARD_TMUX=1` for its isolated tmux workflow. See the
+  [fixture guide](fixtures/embedded/README.md) and
+  [physical procedures](../docs/testing.md#physical-board-core-workflow-m17).
+
 - `test-openocd` / `make test-m16-model`: metadata catalog and bounded literal
   argument planning, board/advanced/explicit script ordering, search paths and
   configuration errors. Included in `make test`.

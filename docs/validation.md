@@ -9,7 +9,7 @@ instructions are required to interpret the results.
 
 ## Current evidence boundary
 
-M00–M16 and the listed corrections are accepted. M17–M18 remain planned.
+M00–M17 and the listed corrections are accepted. M18 remains planned.
 v0.1.0 is not accepted. M14 records passing GCC/Clang default/native/tmux suites,
 slow watchpoint recovery, full default/native ASan/UBSan with leak detection and
 full-project static analysis. These results do not establish physical embedded
@@ -18,9 +18,10 @@ passing GCC/Clang default/native/remote/tmux regressions, full default/native/re
 ASan/UBSan with leak detection and full-project static analysis. M15 is accepted
 through its implementation commit; individual manual outcomes were not separately
 reported. M16 records passing GCC/Clang regressions, sanitizer/leak checks and static
-analysis, including focused offline OpenOCD lifecycle coverage. Real
-STM32/Xtensa/RISC-V validation remains outstanding. QEMU
-coverage is supplementary and currently unverified.
+analysis, including focused offline OpenOCD lifecycle coverage. M17 records
+physical NUCLEO-F446RE/ARM and ESP32-S3/Xtensa workflows with sanitizer and
+terminal/tmux coverage. Other physical targets remain unverified. QEMU coverage
+is supplementary and currently unverified.
 
 Log paths identify the original local artifacts, which are ignored/disposable;
 the command/result summaries below are the durable record. Unreported runs and
@@ -52,7 +53,7 @@ restructure these records.
 | M14 | Native integration acceptance | accepted | `1dee59f33323d37af9739ce846f1a676ea56d2d5` |
 | M15 | Existing remote server | accepted | `75435199e498cc087941cd8a75d7232b65d4c720` |
 | M16 | OpenOCD wizard/lifecycle/actions | accepted | `18e460ddd4cbc897409e2879c03ed0fc983212df` |
-| M17 | Real release-board acceptance | planned | — |
+| M17 | NUCLEO-F446RE and ESP32-S3 validation | accepted | `f568bd2482b2309e3534ebc8e197854ada37bf77` |
 | M18 | v0.1.0 release evidence/acceptance | planned | — |
 
 
@@ -551,3 +552,101 @@ Documentation consistency checks passed: 10 Markdown files, 99 relative links,
 balanced fenced blocks, retained roadmap/requirement identifiers and
 `git diff --check`. Acceptance is established by the implementation commit;
 physical-board results remain UNVERIFIED.
+
+## M17 — Physical-board validation
+
+Status: **accepted** through implementation commit
+`f568bd2482b2309e3534ebc8e197854ada37bf77`; implementation commit/push was
+reported by the repository owner. Final scope covers NUCLEO-F446RE/ARM and
+ESP32-S3/Xtensa. The broader manual acceptance session is deferred to M18;
+individual manual checklist outcomes are not inferred from this acceptance.
+The every-release matrix and v0.1.0 release acceptance remain separate.
+
+### Hardware and fixtures
+
+| Setup | Recorded configuration |
+|---|---|
+| NUCLEO-F446RE | Cortex-M4 r0p1; onboard ST-LINK/V2.1, serial `066CFF495154787867161137`, firmware V2J48M35; direct DAP/SWD through `tests/fixtures/embedded/openocd/nucleo-f446re.cfg`. OpenOCD `0.12.0-01004-g9ea7f3d64-dirty`, ARM GCC 16.2.0 and ARM GDB 18.1. |
+| ESP32-S3 | Chip revision v0.2, dual Xtensa LX7; native USB/JTAG serial `84:FC:E6:64:27:EC`; `tests/fixtures/embedded/openocd/esp32s3.cfg` with hardware-thread awareness. ESP-IDF v6.1, toolchain `esp15.2.0_20251204`, Xtensa GDB `17.1_20260402`, Espressif OpenOCD `v0.12.0-esp32-20260703`. |
+
+The authored fixtures expose nested calls, explicit locals/aggregate reads, a
+counter, SRAM ASCII buffer and Flash string. Programming was separately approved
+and performed externally with verification. Default fixtures do not configure
+GPIO; the separate STM32 LED variant was built/inspected offline only. No frontend
+programming feature, security-eFuse modification or automatic MMIO permission is
+introduced. Native Linux remains regression-tested.
+
+Recorded SHA-256 identities:
+
+- STM32 loaded symbol ELF: `e05d162fb4fe1a130c25c257e0dbd3435bb7bd4b71448e425b568956d67af1ed`.
+  The originally programmed ELF was `66aafe4d81cee4efeb277ab64904b4b5a4c91516efd241402d96e74c0e75cef5`;
+  rebuilding changed debug metadata. Actual GDB `compare-sections .vectors`
+  and `.text` matched the current ELF to the board; this does not claim that
+  the complete rebuilt ELF was programmed. Artifact: `build/m17/stm32-image-identity.log`.
+- S3 symbol ELF: `29d12b3bc5c52e5b0435f49c8af9c4dad40610b532021feec59414cabfd35c50`;
+  application binary: `f4da1cffca36eb6a675f797363d7d889dc9ff3e36025e477a6cd91d1b4ce7476`.
+  Actual GDB comparisons of `.flash.text` and `.flash.rodata` matched;
+  artifact: `build/m17/esp32s3-image-identity.log`.
+
+### Executed validation
+
+All checks below were executed by the coding agent. Host: Linux
+7.2.9-arch1-1 x86-64, GCC 16.2.1, Clang 23.1.1 and tmux 3.8.
+The hardware runner commands and manual procedures are in
+[testing](testing.md#physical-board-core-workflow-m17).
+
+| Check | Result / local artifact |
+|---|---|
+| `make all test-m17-offline` | PASS; strict build, both STM32 ELF variants, reset vectors, SRAM/stack/DWARF and offline ARM GDB source/disassembly. `build/m17/offline-final.log`. |
+| `make test test-native test-tmux test-m15-native test-m16-server test-m16-tui test-m12-slow` | PASS; default/native/remote/terminal regressions and monitor-verification failure cases. `build/m17/gcc-regression.log`. |
+| `make CC=clang CXX=clang++ BUILD_DIR=build/clang-m17 all test-m17-offline test-m16-server test-m12-slow` | PASS; focused strict Clang build and recovery regressions. `build/m17/clang-focused.log`. |
+| `test test-native test-m15-native test-m16-server test-m16-tui test-m12-slow` with `CC=clang CXX=clang++ BUILD_DIR=build/m17-sanitize CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined'`, `ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1` | PASS; full default/native and focused remote/OpenOCD regressions, with leak detection. `build/m17/sanitizer-regression.log`. |
+| `make analyze` and focused harness clang-tidy using the repository analyzer/bugprone checks with warnings-as-errors | PASS after harness corrections; no unsuppressed diagnostics. `build/m17/analyze.log`, `analyze-harness-final.log`. |
+| Actual `test-board GDB ENDPOINT ELF ARCH --reset-halt` on each named board | PASS; `build/m17/{stm32,esp32s3}-board-reconnected-1.log` and corresponding `-session-reconnected-1.log`. |
+| ASan/UBSan/leak-instrumented `test-board` on each board | PASS; `build/m17/{stm32,esp32s3}-board-sanitized-reconnected.log`. |
+| Actual `test-board-tui` on each board | PASS; `build/m17/{stm32,esp32s3}-tui-reconnected.log`. |
+| Instrumented frontend and terminal harness with `TB_BOARD_TMUX=1` on each board | PASS; `build/m17/{stm32,esp32s3}-tmux-sanitized-reconnected.log`. |
+
+The hardware assertions cover source/disassembly, discovered PC/SP and stopped-PC
+agreement, two independent SRAM/Flash snapshots with expected bytes/ASCII, explicit
+Locals/aggregate reads, caller selection without moving execution, source and
+instruction stepping/Step Out, hardware code breakpoints and classified data
+watchpoint hits. Resume-disconnect advances the physical counter; leave-halted
+retains it after reconnect. Reset requires a fresh stopped context. PTY/tmux checks
+cover review/connect, actual instruction stepping, inline Memory, reset cancellation,
+resize and terminal restoration. Repeated sessions retained external servers;
+explicit final cleanup verified no OpenOCD/GDB/GDBserver processes remained
+(`build/m17/cleanup-reconnected.log`).
+
+### Findings and evidence boundaries
+
+S3 reset with FreeRTOS-aware GDB task contexts exposed a production defect:
+stopped threads alone could confirm an action after the selected task vanished,
+without a valid current frame/PC. The controller now requires a reported current
+thread with a numeric frame address for explicit monitor verification. Fake-MI
+regressions retain failure assertions for missing current threads, missing frames
+and unavailable addresses. Normal aborted-execution recovery stays state-only.
+The tested S3 configuration uses explicit core-thread awareness across reset;
+it does not implement an RTOS task inspector.
+
+The installed STM32 HLA configuration produced an unclassified SIGTRAP for a
+hardware watchpoint, reproduced with GDB alone. Direct ST-LINK DAP/SWD supplied
+classified watchpoint stops and passed the retained hit-count assertions. This is
+a configuration boundary, not evidence that every ST-LINK/OpenOCD combination
+reports the same reasons.
+
+Harness corrections preserved application assertions: the register wait must
+include fresh SP as well as PC; watchpoint checks use the retained typed event and
+actual hit count rather than transient status text; TUI clicks target the actual
+managed-server toggle. Reusing existing Save Log paths caused two final-run
+failures after hardware assertions completed; fresh non-overwriting paths passed.
+Initial harness static-analysis findings in feature macros, parameter ordering and
+unsigned bit operations were corrected before the final passing checks.
+
+This record does not establish physical probe-removal/recovery, optional LED
+behavior, exhaustive manual appearance/usability, or every profile/split workflow
+on hardware. Those manual checks remain for M18. Firmware identity was checked
+externally; the frontend does not automatically verify flashed-image identity.
+No unlisted board, architecture, probe or acquisition feature gains a support
+claim from these results. Documentation finalization uses consistency checks;
+application suites were not rerun for the documentation-only commit.

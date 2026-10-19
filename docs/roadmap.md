@@ -6,10 +6,11 @@ implemented features or hardware support claims. See [architecture](architecture
 
 ## Implementation status
 
-M00–M16 and the documented pane corrections are accepted. M17–M18 and F01–F47
-remain planned. Physical-board compatibility and release acceptance are not
-complete. The latest accepted implementation is M16
-`18e460ddd4cbc897409e2879c03ed0fc983212df`. Acceptance records, observed hashes,
+M00–M17 and the documented pane corrections are accepted. M17 physically validates
+NUCLEO-F446RE/ARM and ESP32-S3/Xtensa. M18 and F01–F47 remain planned; v0.1.0
+release acceptance and the complete every-release matrix remain outstanding.
+The latest accepted implementation is M17
+`f568bd2482b2309e3534ebc8e197854ada37bf77`. Acceptance records, observed hashes,
 failures and test evidence are in [validation records](validation.md).
 M09's implementation hash is not recorded; acceptance alone does not supply it.
 
@@ -35,7 +36,7 @@ M09's implementation hash is not recorded; acceptance alone does not supply it.
 | M14 | Native integration acceptance | accepted | `1dee59f33323d37af9739ce846f1a676ea56d2d5` |
 | M15 | Existing remote server | accepted | `75435199e498cc087941cd8a75d7232b65d4c720` |
 | M16 | OpenOCD wizard/lifecycle/actions | accepted | `18e460ddd4cbc897409e2879c03ed0fc983212df` |
-| M17 | Real release-board acceptance | planned | — |
+| M17 | NUCLEO-F446RE and ESP32-S3 validation | accepted | `f568bd2482b2309e3534ebc8e197854ada37bf77` |
 | M18 | v0.1.0 release evidence/acceptance | planned | — |
 | F01–F47 | Independent versioned future gates below | planned | — |
 
@@ -101,7 +102,7 @@ summarized above and in the [usage guide](usage.md).
 | M14 / M05–M13 | Native integration/acceptance and failure hardening; no new feature family. | Complete C/C++ native suite, optimized/stripped/attach, repeated sessions/output floods, cleanup, sanitizers and measured UI/idle behavior. | Complete native live workflow directly/in tmux, splits, watchpoints, source recovery, profiles and Save Log. FR-02/03 and native release evidence. |
 | M15 / M14 | Generic remote/extended-remote with optional symbols; no OpenOCD ownership in existing-server mode. | Real external gdbserver, disconnect/reconnect/refused/timeout, missing symbols, architecture mismatch and external survival. | Debug through external endpoint and disconnect without terminating its server. FR-05/16. |
 | M16 / M15 | OpenOCD catalog/filter, board/advanced ordered argv, managed server, Reset/Halt and disconnect choices; no Load/Flash UI. | Discovery/order/no duplicated dependencies, paths, readiness/timeout/busy ports, fake-server failures, profiles and ownership. | Review exact scripts/argv; recover missing/bad setup; inspect actions/logs. No hardware claim from offline tests. FR-04/18/30. |
-| M17 / M14–M16 | Real release-target acceptance, starting STM32, then the Xtensa and RISC-V ESP32 validation boards. Reproducible fixtures; no automatic programming or unspecified-board claim. | Firmware fixture builds, architecture MI regressions and applicable native suites; QEMU ARM/RISC-V runs as supplementary coverage when available. | Program fixtures externally; validate halt/step/break/watch, source/assembly/registers/RAM/locals, cleanup and disconnect on real boards. FR-15/31. |
+| M17 / M14–M16 | Real NUCLEO-F446RE/ARM and ESP32-S3/Xtensa acceptance with reproducible fixtures; no automatic programming or unspecified-board claim. The every-release matrix below remains separate. | Firmware fixture builds, architecture MI regressions and applicable native suites; QEMU ARM/RISC-V runs as supplementary coverage when available. | Program fixtures externally; validate halt/step/break/watch, source/assembly/registers/RAM/locals, cleanup and disconnect on real boards. FR-15/31. |
 | M18 / M14 and physically validated M17 | Release evidence, compatibility, docs and remaining defects; no deferred features. | Clean GCC/Clang, suites/sanitizers/analysis/tmux, stress and FR/NFR evidence audit. | README clean-checkout workflow, per-release matrix below, final release acceptance and license/provenance finalization under the [release procedure](maintaining.md#release-procedure). |
 
 
@@ -118,7 +119,7 @@ No additional feature family or milestone renumbering is introduced.
 | M14 | Complete native workflow; resolve outstanding full-project analyzer findings and audit adapter boundaries/value-producing requests, including Call Stack simple arguments, before remote integration. | Existing native regressions stay green; full analyzer passes or findings have explicitly reviewed dispositions; inventory automatic reads/policy, test denial before unsafe dispatch; measure responsiveness and terminal/tmux behavior. |
 | M15 | Extract necessary shared session ownership/actions from `TbNative`; remote PIDs never become local kill/proc targets. Populate explicit capabilities, byte order/address units, image/region metadata and conservative read authorization. Do not equate target-description readability with side-effect safety. | Real external gdbserver plus no-local-PID ARM/big-endian/unknown-metadata MI fixtures; no automatic value requests without complete safe-access evidence, explicit inspection fallback, RAM/Flash browsing, reconnect/external-server survival; no unconditional x86 settings. |
 | M16 | Backend-specific OpenOCD setup, capability-dependent Reset/Halt and disconnect target-state policy; installed script discovery and argv review. | No symbol load flashes/resets/resumes; duplicate-script/USB/port/timeout failure tests; only owned server cleanup; unsupported state transitions diagnosed. |
-| M17 | Validate target metadata/actions on STM32 first, then ESP32 Xtensa/RISC-V. | Real source/assembly/registers/RAM/Flash/locals/break/watch evidence, reset/disconnect choices and no speculative peripheral reads; native regression preserved. |
+| M17 | Validate target metadata/actions on NUCLEO-F446RE and ESP32-S3. | Real source/assembly/registers/RAM/Flash/locals/break/watch evidence, reset/disconnect choices and no speculative peripheral reads; native regression preserved. |
 | M18 | Audit actual capability matrix and host-vs-target limits. | All release-blocking evidence and release acceptance; no unrun board marked supported. |
 
 

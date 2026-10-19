@@ -957,18 +957,85 @@ old inactive-tab highlight. Additional checks verify leftward promotion, Enter
 remaining on the clicked tab and visible keyboard focus. The VT reader skips
 extended-color parameters when interpreting inverse attributes. Physical appearance requires manual inspection.
 
-## Physical-board core workflow (planned M17)
+## Physical-board core workflow (M17)
 
-- Build a simple **firmware.elf** for the NUCLEO-F446RE with DWARF debug symbols and known GPIO/register operations. Save reproducible build instructions; record actual board/toolchain versions.
-- Connect board, run startup wizard **Embedded target → OpenOCD → Board → `st_nucleo_f4.cfg`**; make sure no duplicate adapter/target `-f` is appended.
-- Start the OpenOCD server from the UI (or explicitly connect to an existing one). Confirm visible connection state and logs.
-- Select compatible `arm-none-eabi-gdb` and symbol ELF; connect to target, halt and inspect PC, source/disassembly, Cortex-M core registers, SRAM and locals where applicable.
-- Step, continue and hit a chosen breakpoint. Verify memory reads and changed-register highlights across stop events.
-- Exit/disconnect without unintentionally flashing, erasing, or resetting firmware and without leaving owned OpenOCD/GDB processes behind.
-- If ELF differs from firmware currently flashed, detect/report mismatch when feasible; **do not quietly download it**. Explicit flashing is only required if separately implemented and approved.
-- When hardware is not accessible to the tester, mark this **UNVERIFIED** and wait for physical test evidence. No v0.1.0 tag without recorded real hardware acceptance.
+M17 validates NUCLEO-F446RE with its onboard ST-LINK and ESP32-S3 with native
+USB/JTAG. These results do not imply support for unnamed boards, probes or
+architectures. Build instructions and non-destructive defaults are in the
+[embedded fixture guide](../tests/fixtures/embedded/README.md).
 
-For every release, also exercise the same applicable core workflow on the ESP32 validation/Xtensa and ESP32/RISC-V boards through the appropriate GDB/server. Native x86-64 is always retested. Exact board/probe details are recorded with actual evidence, not required during planning. QEMU ARM/RISC-V guest/native tests are supplementary when available. This is validation coverage, not an in-product simulator or a promise that hardware-specific features work on every target. See docs/testing.md for the release matrix.
+Build offline without connecting or programming:
+
+```sh
+make test-m17-offline
+```
+
+The authored firmware provides a counter, SRAM buffer, Flash string, aggregates,
+locals and nested calls. The optional STM32 LED image is separate; the default
+fixture does not configure GPIO. ESP-IDF builds the S3 platform startup and the
+same C workload. Firmware programming is external and deliberate. Record image
+hashes; loading ELF symbols in The Bugger must never download firmware.
+
+Start one explicit server per board. Use the matching installed script roots:
+
+```sh
+/usr/bin/openocd -f tests/fixtures/embedded/openocd/nucleo-f446re.cfg
+# In an activated ESP-IDF environment, use its Espressif OpenOCD:
+openocd -f tests/fixtures/embedded/openocd/esp32s3.cfg
+```
+
+The Nucleo configuration uses direct ST-LINK DAP/SWD for watchpoint stop reasons.
+The installed HLA board script remains useful for connection testing but did not
+supply a classified watchpoint stop in the recorded setup. S3 uses hardware-thread
+awareness for stable core contexts through reset; RTOS task awareness is a separate
+server capability. Never identify a task with a core by inference.
+
+Build `build/test-board` and `build/test-board-tui` with `make test-m17-offline`.
+An already-programmed target and an externally running OpenOCD are required:
+
+```sh
+TB_BOARD_LOG=build/m17/board-session-new.log build/test-board \
+  arm-none-eabi-gdb 127.0.0.1:3333 \
+  build/m17/stm32f446re/firmware.elf arm --reset-halt
+build/test-board-tui "$PWD/build/the-bugger" arm-none-eabi-gdb \
+  127.0.0.1:3333 "$PWD/build/m17/stm32f446re/firmware.elf"
+```
+
+For the S3, substitute `xtensa-esp32s3-elf-gdb`, the S3 ELF, and `xtensa` as the
+architecture substring. Set `TB_BOARD_TMUX=1` for the terminal runner to use its
+own isolated tmux server. Use a fresh `TB_BOARD_LOG` path for each backend run;
+Save Log deliberately refuses to overwrite an existing file.
+
+The backend runner explicitly executes halt/continue/step, hardware break/watch
+and selected fixture reads. It never programs, guesses broad safe regions or
+terminates an external server. `--reset-halt` additionally requests reset. It
+checks source/disassembly, discovered PC/SP, explicit locals/aggregate reads,
+caller selection without moving execution and independent SRAM/Flash snapshots.
+Resume/leave-halted behavior is checked by reconnecting and comparing the actual
+fixture counter after a bounded interval. A stopped flag without a current frame
+and numeric PC must not complete reset verification.
+
+Manual review on each named board:
+
+1. Program the matching fixture deliberately; select its ELF and compatible GDB
+   in the OpenOCD wizard. Review exact scripts, ownership and arguments.
+2. Halt and compare source, disassembly, PC/SP and explicit Memory/variable reads
+   with the actual fixture. Hex and ASCII must match. Select a caller and return
+   without moving execution; exercise source/instruction stepping and Step Out.
+3. Set/hit/disable/remove code and data hardware breakpoints. Preserve backend
+   slot/width errors; do not silently downgrade to software watchpoints.
+4. Inspect two independent Memory panes, then resize/split/switch views directly
+   and inside tmux. Target values must become stale on execution transitions.
+5. Confirm Reset deliberately. A fresh stopped PC is required; unavailable context
+   must produce an error and block value reads, not manufacture a location.
+6. Exercise both disconnect choices, profile reopen and externally owned server
+   survival. Check logs and terminal restoration. Probe removal/recovery and
+   firmware/symbol identity require separately recorded evidence.
+
+Actual execution evidence is in [validation records](validation.md#m17--physical-board-validation).
+Unperformed manual steps are not implied by automated terminal checks.
+
+For every release, also exercise the same applicable core workflow on the ESP32 validation/Xtensa and ESP32/RISC-V boards through the appropriate GDB/server. Native x86-64 is always retested. Exact board/probe details are recorded with actual evidence, not required during planning. QEMU ARM/RISC-V guest/native tests are supplementary when available. This is validation coverage, not an in-product simulator or a promise that hardware-specific features work on every target. See the [release matrix](#every-release-regression-matrix).
 
 
 ## Every-release regression matrix

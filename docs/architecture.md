@@ -4,8 +4,9 @@
 
 The product is embedded-first, with shared target-neutral inspectors. Linux is
 the frontend host, not the universal target OS. Native and existing remote-server integration are accepted
-through M15. M16 adds reviewed OpenOCD management, awaiting acceptance;
-physical validation remains M17. Known integration gaps are listed below and in the roadmap.
+through M15. M16's reviewed OpenOCD management is also accepted;
+M17 records physical validation on NUCLEO-F446RE and ESP32-S3. Known integration
+gaps are listed below and in the roadmap.
 
 `src/main.c` handles help/version and starts the terminal application.
 `src/tui/app.c` owns startup/configuration/review/workspace pages, keyboard
@@ -25,7 +26,7 @@ use the selected-context model. Code breakpoints and Run to Selected use the
 breakpoint model, which now also provides M12 hardware data watchpoints.
 CPU Registers, Memory and Locals/Watches use the inspection models described below. Other
 inspection views have explicit unavailable messages. Explicit --demo
-retains simulated presentation separately. OpenOCD management is implemented and awaiting M16 acceptance.
+retains simulated presentation separately. OpenOCD management is implemented and accepted at M16.
 Remote connections use the shared inspectors and preserve capability limitations.
 Profiles and key mappings retain a review step before connection.
 
@@ -166,7 +167,12 @@ race; listener and connection failures remain explicit.
 Reset is an explicitly confirmed `monitor reset halt`; Halt is deliberate too.
 Running operations first wait for GDB's asynchronous stop. Monitor completion alone
 is insufficient: the session flushes GDB's register/frame cache and verifies a
-fresh stop using structured thread information. Stop/context generations and the
+fresh stop using structured thread information. Explicit monitor-operation
+verification requires a reported current thread and its numeric PC; all threads
+being stopped alone is insufficient after reset invalidates RTOS task contexts.
+Missing/departed current threads, absent frames and unavailable addresses fail
+verification and revoke value inspection. Ordinary aborted-execution reconciliation
+retains its state-only recovery semantics. Stop/context generations and the
 original stop PC are updated only from backend evidence. Unconfirmed operations
 leave value inspection unavailable, with an explicit reconnect diagnostic.
 Disconnect offers Leave halted or Resume. The former requests Halt before
@@ -823,8 +829,9 @@ are late reviewed candidates; native correctness/maintenance remains continuous.
 ## Known limitations and integration gaps
 
 - Shared sessions isolate local PTY/pidfd/proc ownership from remote target IDs.
-  Existing-server mode never owns the server. M16 adds explicitly managed OpenOCD lifecycle; physical target behavior
-  still needs M17 evidence.
+  Existing-server mode never owns the server. Managed OpenOCD lifecycle and
+  named STM32/S3 target behavior have [M17 evidence](validation.md#m17--physical-board-validation);
+  this does not establish behavior for other scripts, probes or boards.
 - The native code index uses process maps and mapped ELF images. Remote runtime image identity/relocation remain unverified; configured ELF
   metadata is not independent proof of the loaded firmware. Remote metadata
   queries supply width/units and preserve unknown byte order without guessing. Initial Memory uses octet addressing and at most 64-bit addresses.
@@ -836,8 +843,9 @@ are late reviewed candidates; native correctness/maintenance remains continuous.
 - The native variable adapter cannot prove complete expression footprints, so
   values require deliberate operations. Target descriptions and SVD readability
   alone cannot establish that MMIO access is free of side effects.
-- Localhost GDB/gdbserver has focused automated coverage. Physical STM32,
-  ESP32 and optional acquisition compatibility remain unverified.
+- Localhost GDB/gdbserver has focused automated coverage. Physical validation
+  covers the named NUCLEO-F446RE and ESP32-S3 setups only; other targets and
+  optional acquisition capabilities require separate evidence.
   See [hardware validation](testing.md#every-release-regression-matrix). Register
   groups have an ungrouped fallback; specialized views remain planned.
 
