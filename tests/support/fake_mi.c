@@ -77,6 +77,7 @@ int main(int argc, char *argv[])
     bool context_held = false, thread_exited = false, arguments_held = false;
     int held_argument_level = -1;
     bool bp_temporary = false; int bp_table = 0, bp_clean_attempts = 0;
+    unsigned remote_resets = 0;
     unsigned data_mode = 0; bool data_watch = false;
     char data_expression[512] = {0}, data_type[64] = "hw watchpoint";
     while (getline(&line, &capacity, stdin) >= 0) {
@@ -105,9 +106,24 @@ int main(int argc, char *argv[])
             } else if (strcmp(command, "-gdb-show endian\n") == 0) {
                 reply(token, strcmp(mode, "remote-unknown") == 0 ? "^done,value=\"auto\"" : "^done,value=\"big\"");
             } else if (strcmp(command, "-stack-info-frame\n") == 0) {
-                reply(token, "^done,frame={level=\"0\",addr=\"0x8000100\",func=\"remote_main\",arch=\"arm\"}");
+                reply(token, remote_resets ? "^done,frame={level=\"0\",addr=\"0x8000200\",func=\"remote_main\",arch=\"arm\"}" : "^done,frame={level=\"0\",addr=\"0x8000100\",func=\"remote_main\",arch=\"arm\"}");
+            } else if (strcmp(command, "-thread-info\n") == 0 && !strcmp(mode, "remote-openocd-verify-error")) {
+                reply(token, "^error,msg=\"Target state unavailable after monitor operation\"");
             } else if (strcmp(command, "-thread-info\n") == 0) {
-                reply(token, "^done,threads=[{id=\"1\",state=\"stopped\"}],current-thread-id=\"1\"");
+                reply(token, remote_resets ? "^done,threads=[{id=\"1\",state=\"stopped\",frame={level=\"0\",addr=\"0x8000200\",arch=\"arm\"}}],current-thread-id=\"1\"" : "^done,threads=[{id=\"1\",state=\"stopped\"}],current-thread-id=\"1\"");
+            } else if (strstr(command, "monitor reset halt") && !strncmp(mode, "remote-openocd", 14)) {
+                ++remote_resets; puts("~\"M16 reset requested\\n\"");
+                reply(token, !strcmp(mode, "remote-openocd-error") ? "^error,msg=\"Reset unsupported by this target\"" : "^done");
+            } else if (strstr(command, "maintenance flush register-cache") && !strncmp(mode, "remote-openocd", 14)) {
+                puts("~\"M16 flush requested\\n\"");
+                reply(token, !strcmp(mode, "remote-openocd-flush-error") ? "^error,msg=\"Register cache flush unsupported\"" : "^done");
+            } else if (strstr(command, "monitor resume") && !strncmp(mode, "remote-openocd", 14)) {
+                puts("~\"M16 resume requested\\n\"");
+                reply(token, !strcmp(mode, "remote-openocd-resume-error") ? "^error,msg=\"Resume unsupported by this target\"" : "^done");
+            } else if (strstr(command, "monitor halt") && !strncmp(mode, "remote-openocd", 14)) {
+                puts("~\"M16 halt requested\\n\""); reply(token, "^done");
+            } else if (strcmp(command, "-target-detach\n") == 0 && !strncmp(mode, "remote-openocd", 14)) {
+                puts("~\"M16 detach requested\\n\""); reply(token, "^done");
             } else if (strcmp(command, "-target-disconnect\n") == 0) {
                 reply(token, strcmp(mode, "remote-disconnect-error") == 0 ? "^error,msg=\"Disconnect not confirmed\"" : "^done");
             } else if (strstr(command, "-data-read-memory-bytes") && strcmp(mode, "remote-regions") == 0) {

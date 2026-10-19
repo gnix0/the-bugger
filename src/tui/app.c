@@ -22,7 +22,7 @@
 enum { MAX_CONTROLS = 1024, FIELD_SIZE = 256, FORM_FIELDS = 9 };
 typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
                COMMAND_INPUT, SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT, DATA_WATCH_INPUT,
-               PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM } Page;
+               PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM, SCRIPT_LIST, SCRIPT_FILTER } Page;
 typedef enum { CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_ADDRESS, CODE_STOPPED,
                CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_DIRECTORY_ADD, CODE_RULE_FROM,
                CODE_RULE_TO, CODE_SETTINGS_CLEAR, CODE_RAW, CODE_RUN_TO } CodeAction;
@@ -34,7 +34,7 @@ typedef enum {
     CODE_ACTIONS, CODE_ACTION, CODE_PAGE, CODE_FILE_PICK, CODE_FILE_PAGE, HSCROLLBAR,
     BREAK_OPEN, BREAK_ACTION, REGISTER_REFRESH, REGISTER_FORMAT, MEMORY_ACTION, MEMORY_FIELD,
     VARIABLE_OPEN, VARIABLE_ACTION, DATA_WATCH_OPTION,
-    PROFILE_OPEN, PROFILE_PICK, PROFILE_ACTION, PROFILE_ITEM
+    PROFILE_OPEN, PROFILE_PICK, PROFILE_ACTION, PROFILE_ITEM, SCRIPT_OPEN, SCRIPT_PICK, SCRIPT_ACTION, REVIEW_PAGE, CLOSE_POLICY
 } ControlKind;
 
 typedef struct {
@@ -97,6 +97,9 @@ typedef struct {
     TbGdbGeneration watch_context;
     TbProfiles *profiles;
     TbProfile *profile;
+    TbOpenOcdPlan *server_plan; TbOpenOcdCatalog *catalog;
+    char script_filter[FIELD_SIZE]; int script_kind, script_offset, review_offset;
+    bool close_resume;
     Page profile_return;
     int profile_group, profile_selected, profile_offset, profile_text;
     bool profile_replacing, recent_pending;
@@ -109,10 +112,13 @@ static bool profile_load(App *app, const TbProfile *profile);
 static void draw_profiles(App *app);
 static void profile_edit(App *app, int operation, const char *initial);
 static void profile_activate(App *app, Control control);
+static void draw_server_review(App *app);
+static void draw_scripts(App *app);
+static bool prepare_server(App *app);
 
 static bool editing_page(const App *app)
 {
-    return app->page == COMMAND_INPUT || app->page == SAVE_INPUT || app->page == CODE_INPUT || app->page == CODE_FILES || app->page == BREAK_INPUT || app->page == MEMORY_INPUT || app->page == WATCH_INPUT || app->page == DATA_WATCH_INPUT || app->page == PROFILE_TEXT;
+    return app->page == SCRIPT_FILTER || app->page == COMMAND_INPUT || app->page == SAVE_INPUT || app->page == CODE_INPUT || app->page == CODE_FILES || app->page == BREAK_INPUT || app->page == MEMORY_INPUT || app->page == WATCH_INPUT || app->page == DATA_WATCH_INPUT || app->page == PROFILE_TEXT;
 }
 
 /* Signal handler communicates only through this flag; cleanup runs normally. */
@@ -187,7 +193,7 @@ static int fields(const App *app, Field list[FORM_FIELDS])
             list[n++] = (Field){"Adapter script", 2, false};
             list[n++] = (Field){"Target script", 3, false};
         } else {
-            list[n++] = (Field){"Board script (sample)", 1, false};
+            list[n++] = (Field){app->demo_mode ? "Board script (sample)" : "Board script", 1, false};
         }
         list[n++] = (Field){"Symbols (ELF)", 4, false};
         list[n++] = (Field){"GDB binary", 5, false};
@@ -212,7 +218,7 @@ static const wchar_t *field_value(const App *app, Field field)
         return form->alternate ? L"< Attach to PID >" : L"< Launch executable >";
     }
     if (field.index == 8) {
-        return form->start_server ? L"< Yes - preview only >" : L"< No - existing server >";
+        return form->start_server ? (app->demo_mode ? L"< Yes - preview only >" : L"< Yes - managed process >") : L"< No - existing server >";
     }
     return form->alternate ? L"< Adapter + target (advanced) >" : L"< Board script >";
 }
@@ -253,7 +259,8 @@ static void draw_header(const App *app, const char *subtitle)
     tb_text(0, 14, COLS - 14, TB_CHROME, 0, text);
     tb_fill((TbRect){0, 2, COLS, 1}, TB_NOTICE);
     tb_text(2, 2, COLS - 4, TB_NOTICE, A_BOLD,
-            app->live ? (app->session == 2 ? "LIVE REMOTE | Console / Call Stack / Threads" : "LIVE NATIVE | Console / Call Stack / Threads") :
+            app->live ? (app->session == 1 ? "LIVE OPENOCD | Console / Call Stack / Threads" : app->session == 2 ? "LIVE REMOTE | Console / Call Stack / Threads" : "LIVE NATIVE | Console / Call Stack / Threads") :
+            !app->demo_mode && app->session == 1 ? "OpenOCD | reviewed configuration; no automatic programming or reset" :
             !app->demo_mode && app->session == 2 ? "Remote GDB server | existing endpoint; no server ownership" :
             app->demo_mode || app->session != 0 ? "DEMO / VISUAL REFERENCE - no debugger connected" :
             "Native Linux | launch or attach through GDB");
@@ -317,6 +324,8 @@ static void draw_launcher(App *app)
 
 static void draw_form(App *app, bool review)
 {
+    if (app->session < 0 || app->session >= 3) { return; }
+    if (review && !app->demo_mode && app->session == 1) { draw_server_review(app); return; }
     bool native = !app->demo_mode && app->session == 0;
     bool remote = !app->demo_mode && app->session == 2;
     draw_header(app, review ? (native ? "Review native session" : remote ? "Review remote session" : "Review session preview") : "Configure session");
@@ -327,7 +336,7 @@ static void draw_form(App *app, bool review)
     Field list[FORM_FIELDS];
     int n = fields(app, list);
     int cursor_y = -1, cursor_x = 0;
-    int visible = LINES - 11;
+    int visible = LINES - (!app->demo_mode && app->session == 1 ? 12 : 11);
     if (visible < 1) {
         visible = 1;
     }
@@ -388,14 +397,18 @@ static void draw_form(App *app, bool review)
         tb_text(LINES - 5, 2, COLS - 4, TB_MUTED, 0,
                 native ? "Quotes group arguments/NAME=value entries. No shell expansion. Paths are literal." :
                 remote ? "TCP host:port (IPv6 in brackets). Optional ELF supplies symbols. Protocol is in profile options." :
-                "Sample configuration only; tool checks and execution come later.");
-        button(app, LINES - 4, 2, 21, (native || remote) ? "[ Review session ]" : "[ Review preview ]", SUBMIT, 0, 0);
+                (app->demo_mode ? "Sample configuration only; no tool is launched." : "Choose installed scripts or enter literal paths. Ordered scripts/search paths are in Profile options."));
+        button(app, LINES - 4, 2, 21, !app->demo_mode ? "[ Review session ]" : "[ Review preview ]", SUBMIT, 0, 0);
     }
     button(app, LINES - 4, COLS - 12, 10, "[ Back ]", BACK, 0, 0);
     if (!app->demo_mode) {
         button(app, LINES - 3, 2, 14, "[ Save profile ]", PROFILE_OPEN, 2, 0);
         button(app, LINES - 3, 18, 16, "[ Profile... ]", PROFILE_OPEN, 1, 0);
         button(app, LINES - 3, COLS - 12, 10, "[ Delete ]", PROFILE_OPEN, 3, 0);
+    }
+    if (!review && !app->demo_mode && app->session == 1) {
+        button(app, LINES - 6, 2, 20, app->forms[1].alternate ? "[ Browse adapter ]" : "[ Browse boards ]", SCRIPT_OPEN, app->forms[1].alternate ? 1 : 0, 0);
+        if (app->forms[1].alternate) { button(app, LINES - 6, 24, 20, "[ Browse target ]", SCRIPT_OPEN, 2, 0); }
     }
     if (cursor_y >= 0) {
         (void)curs_set(1);
@@ -1150,7 +1163,7 @@ static void draw_workspace(App *app)
 {
     tb_fill((TbRect){0, 0, COLS, 1}, TB_CHROME);
     tb_text(0, 1, 11, TB_BRAND, A_BOLD, "THE BUGGER");
-    const char *const short_names[] = {"Continue", "Pause", "Over", "Into", "Out", "BP", "Reset"};
+    const char *const short_names[] = {"Continue", app->live && app->session == 1 ? "Halt" : "Pause", "Over", "Into", "Out", "BP", "Reset"};
     char actions[7][64];
     for (int i = 0; i < 7; ++i) {
         char key[24]; tb_profile_key_name(app->profile->keys[i], key, sizeof key);
@@ -1176,7 +1189,7 @@ static void draw_workspace(App *app)
     ++y;
     tb_fill((TbRect){0, y, COLS, 1}, TB_NOTICE);
     tb_text(y, 1, COLS - 2, TB_NOTICE, 0,
-            app->live ? (app->session == 2 ? (app->instruction_mode ? "LIVE REMOTE | instruction stepping | live code, context and console" :
+            app->live ? (app->session == 1 ? (app->instruction_mode ? "LIVE OPENOCD | instruction stepping | live code, context and console" : "LIVE OPENOCD | source stepping | live code, context and console") : app->session == 2 ? (app->instruction_mode ? "LIVE REMOTE | instruction stepping | live code, context and console" :
                          "LIVE REMOTE | source stepping | live code, context and console") :
                          app->instruction_mode ? "LIVE NATIVE | instruction stepping | live code, context and console" :
                          "LIVE NATIVE | source stepping | live code, context and console") :
@@ -1263,10 +1276,10 @@ static void draw_workspace(App *app)
         if (tb_session_target_pid(app->debugger) > 0) {
             (void)snprintf(target, sizeof target, "%ld", (long)tb_session_target_pid(app->debugger));
         }
-        if (app->session == 2) {
+        if (app->session) {
             (void)snprintf(target, sizeof target, "%.31s", tb_session_capabilities(app->debugger)->target_id);
         }
-        (void)snprintf(footer, sizeof footer, app->session == 2 ? "LIVE | %s | target %s | %.159s" : "LIVE | %s | PID %s | %.159s",
+        (void)snprintf(footer, sizeof footer, app->session ? "LIVE | %s | target %s | %.159s" : "LIVE | %s | PID %s | %.159s",
                        tb_session_state_name(app->debugger), target, app->status);
     } else { (void)snprintf(footer, sizeof footer, "DEMO | %s | PC 0x%08X | %.16s | %.159s",
                    app->demo.running ? "Running / stale" : "Paused",
@@ -1391,6 +1404,7 @@ static void draw_input(App *app)
     const char *bp_label = app->break_action == 0 ? "Add code breakpoint" : app->break_action == 3 ? "Breakpoint condition (empty clears)" : "Breakpoint ignore count";
     draw_header(app, data_watch ? "Add hardware data watchpoint" : watch ? "Add watch expression" : memory_length ? "Memory byte count" : memory ? "Read memory" : bp ? bp_label : code ? code_labels[app->code_action] : command ? "GDB console command" : "Save retained log");
     if (profile_text) { draw_header(app, "Profile field"); }
+    if (app->page == SCRIPT_FILTER) { draw_header(app, "Filter installed scripts"); }
     tb_text(5, 3, COLS - 6, TB_CYAN, A_BOLD,
             data_watch ? (app->watch_address ? "Exact numeric address (0x...); width selected below" : "Expression to watch; qualified child paths may be entered explicitly") : watch ? "Expression: name, member, constant index or simple offset" : memory_length ? "Bytes per range: 1 to 1024" : memory ? "Address / pointer expression (for example &buffer or $sp)" : bp ? bp_label : code ? code_labels[app->code_action] : command ? "Explicit GDB command (through MI)" : "New log destination (existing files are preserved)");
     tb_text(7, 3, COLS - 6, TB_MUTED, 0,
@@ -1407,6 +1421,10 @@ static void draw_input(App *app)
         tb_text(5, 3, COLS - 6, TB_CYAN, A_BOLD, labels[app->profile_text]);
         tb_text(7, 3, COLS - 6, TB_MUTED, 0, "Paths and arguments are data; saving never launches tools. Reserved/conflicting bindings are rejected.");
     }
+    if (app->page == SCRIPT_FILTER) {
+        tb_text(5, 3, COLS - 6, TB_CYAN, A_BOLD, "Match filename or exact installed path (empty shows all)");
+        tb_text(7, 3, COLS - 6, TB_MUTED, 0, "Catalog metadata only; no configuration script is executed.");
+    }
     TbRect field = {3, 9, COLS - 6, 1};
     int index = add_control(app, field, FIELD, 0, 0);
     tb_fill(field, index == app->focus ? TB_SELECTED : TB_SURFACE);
@@ -1418,7 +1436,7 @@ static void draw_input(App *app)
     }
     wide_text(9, 3, COLS - 6, app->input, start, index == app->focus);
     if (memory && *app->memory_input_error) { tb_text(11, 3, COLS - 6, TB_ORANGE, 0, app->memory_input_error); }
-    button(app, 12, 3, 14, profile_text ? "[ Apply ]" : data_watch ? "[ Create ]" : watch ? "[ Add ]" : memory_length ? "[ Apply ]" : memory ? "[ Read ]" : bp || code ? "[ Apply ]" : command ? "[ Send ]" : "[ Save Log ]", INPUT_SUBMIT, 0, 0);
+    button(app, 12, 3, 14, profile_text || app->page == SCRIPT_FILTER ? "[ Apply ]" : data_watch ? "[ Create ]" : watch ? "[ Add ]" : memory_length ? "[ Apply ]" : memory ? "[ Read ]" : bp || code ? "[ Apply ]" : command ? "[ Send ]" : "[ Save Log ]", INPUT_SUBMIT, 0, 0);
     button(app, 12, 19, 12, "[ Cancel ]", BACK, 0, 0);
     if (data_watch) {
         char label[96]; (void)snprintf(label, sizeof label, "Mode: %s", tb_break_watch_mode(app->watch_mode));
@@ -1510,6 +1528,7 @@ static void draw_page(App *app)
         draw_launcher(app);
     } else if (app->page == CONFIGURE || app->page == REVIEW) {
         draw_form(app, app->page == REVIEW);
+    } else if (app->page == SCRIPT_LIST) { draw_scripts(app);
     } else if (app->page == CODE_MENU) {
         draw_code_menu(app);
     } else if (app->page == BREAK_MENU) {
@@ -1527,19 +1546,23 @@ static void draw_page(App *app)
     } else if (editing_page(app)) {
         draw_input(app);
     } else if (app->page == CLOSE_CONFIRM) {
-        draw_header(app, app->session == 2 ? "Disconnect remote session?" : "Close native session?");
-        tb_text(6, 3, COLS - 6, TB_ORANGE, A_BOLD, app->session == 2 ?
+        draw_header(app, app->session ? "Disconnect target session?" : "Close native session?");
+        tb_text(6, 3, COLS - 6, TB_ORANGE, A_BOLD, app->session ?
                 "Disconnect from the existing server? Running targets are interrupted first; server controls the final target state." : tb_session_attached(app->debugger) ?
                 "Detach and resume the attached process?" : "Terminate the launched program and close GDB?");
         tb_text(8, 3, COLS - 6, TB_MUTED, 0, "Only the managed session is closed. Cancel keeps debugging.");
+        if (app->session == 1) {
+            button(app, 9, 3, COLS - 6, app->close_resume ? "Target on disconnect: Resume (backend-dependent)" : "Target on disconnect: Leave halted (backend-dependent)", CLOSE_POLICY, 0, 0);
+            tb_text(10, 3, COLS - 6, TB_MUTED, 0, "Only an owned OpenOCD is stopped; custom detach events may override target state.");
+        }
         button(app, 11, 3, 14, "[ Cancel ]", CANCEL_RESET, 0, 0);
         button(app, 11, 20, 24, "[ Close session ]", CLOSE_ACCEPT, 0, 0);
     } else if (app->page == RESET_CONFIRM) {
-        draw_header(app, "Reset DEMO state?");
-        tb_text(6, 3, COLS - 6, TB_ORANGE, A_BOLD, "Reset simulated execution?");
-        tb_text(8, 3, COLS - 6, TB_PANEL, 0, "No hardware or process will be reset.");
+        draw_header(app, app->live ? "Reset and halt target?" : "Reset DEMO state?");
+        tb_text(6, 3, COLS - 6, TB_ORANGE, A_BOLD, app->live ? "Reset and halt the connected OpenOCD target?" : "Reset simulated execution?");
+        tb_text(8, 3, COLS - 6, TB_PANEL, 0, app->live ? "Explicit reset; target scripts/hardware determine reset behavior. No firmware is programmed." : "No hardware or process will be reset.");
         button(app, 11, 3, 14, "[ Cancel ]", CANCEL_RESET, 0, 0);
-        button(app, 11, 20, 22, "[ Reset DEMO state ]", CONFIRM_RESET, 0, 0);
+        button(app, 11, 20, 22, app->live ? "[ Reset and halt ]" : "[ Reset DEMO state ]", CONFIRM_RESET, 0, 0);
     } else {
         draw_workspace(app);
     }
@@ -1668,7 +1691,7 @@ static bool profile_load(App *app, const TbProfile *p)
     } else { ok = form_string(&next, 0, p->endpoint) && form_string(&next, 1, p->executable) && form_string(&next, 2, p->gdb); }
     if (!ok) { status(app, "Profile text exceeds the form's 255-character limit or has invalid encoding."); return false; }
     *app->profile = *p; app->forms[p->kind] = next; app->session = p->kind;
-    page(app, CONFIGURE); status(app, p->kind == 1 ? "Definition loaded for review. OpenOCD execution remains a preview." :
+    page(app, CONFIGURE); status(app, p->kind == 1 ? "OpenOCD profile loaded for review. Scripts are not executed until explicitly started." :
         p->kind == 2 ? "Remote profile loaded for review. Connect explicitly; server stays externally owned." :
         "Profile loaded for review. PID/environment/runtime state are not restored."); return true;
 }
@@ -1773,7 +1796,7 @@ static void draw_profiles(App *app)
         char protocol[80]; (void)snprintf(protocol, sizeof protocol, "Remote protocol: %s", app->profile->protocol);
         if (app->profile->kind) { button(app, row + 1, 3, COLS - 6, protocol, PROFILE_ACTION, 23, 0); }
         tb_text(13, 3, COLS - 6, TB_MUTED, 0, app->profile->kind == 1 ?
-                "Ordered scripts override board/adapter fields; no automatic script appending. Server execution comes later." :
+                "Ordered scripts override board/adapter fields; search paths retain order. Review before starting tools." :
                 "PID, environment overrides and runtime/workspace contents are not saved.");
         button(app, LINES - 4, 3, 14, "[ Back ]", BACK, 0, 0); return;
     }
@@ -1782,12 +1805,14 @@ static void draw_profiles(App *app)
     if (app->profile_offset < 0 || (size_t)app->profile_offset >= count) { app->profile_offset = 0; }
     for (int i = 0; i < visible && (size_t)i + (size_t)app->profile_offset < count; ++i) {
         int item = i + app->profile_offset; char label[1200];
+        if (app->page == SCRIPT_LIST) { page(app, CONFIGURE); break; }
+        if (app->page == SCRIPT_FILTER) { page(app, SCRIPT_LIST); break; }
         if (app->page == PROFILE_LIST) {
             const TbProfile *p = profile_list_at(app, (size_t)item);
             if (!p) { continue; }
             bool recent = false;
             for (size_t j = 0; j < TB_PROFILE_RECENT; ++j) { const char *name = tb_profiles_recent(app->profiles, j); recent = recent || (name && strcmp(name, p->name) == 0); }
-            (void)snprintf(label, sizeof label, "%s%s | %s%s", recent ? "Recent: " : "", p->name, session_names[p->kind], p->kind == 1 ? " | definition only" : "");
+            (void)snprintf(label, sizeof label, "%s%s | %s%s", recent ? "Recent: " : "", p->name, session_names[p->kind], "");
         } else if (app->profile_group == 4) {
             char key[24]; tb_profile_key_name(app->profile->keys[item], key, sizeof key);
             (void)snprintf(label, sizeof label, "%s: %s", tb_profile_action((size_t)item), key);
@@ -1896,6 +1921,59 @@ static void profile_text_submit(App *app, const char *input)
     page(app, PROFILE_ITEMS); status(app, "Draft updated. Return to configuration and Save profile to persist.");
 }
 
+static bool prepare_server(App *app)
+{
+    if (!profile_capture(app)) { return false; }
+    if (!app->server_plan) { app->server_plan = malloc(sizeof *app->server_plan); }
+    if (!app->server_plan) { status(app, "Cannot allocate server configuration."); return false; }
+    char error[192];
+    if (!tb_openocd_plan(app->profile, app->server_plan, error, sizeof error)) { status(app, error); return false; }
+    return true;
+}
+static void draw_server_review(App *app)
+{
+    draw_header(app, "Review OpenOCD session"); TbOpenOcdPlan *p = app->server_plan;
+    if (!p) { tb_text(5, 3, COLS - 6, TB_ORANGE, 0, "Return to configuration and review the setup."); button(app, 9, 3, 12, "[ Back ]", BACK, 0, 0); return; }
+    char summary[1200];
+    (void)snprintf(summary, sizeof summary, "Endpoint: %s | %s", p->endpoint, p->start_server ? "Start owned OpenOCD" : "Connect to existing server (never owned)");
+    tb_text(4, 3, COLS - 6, TB_CYAN, A_BOLD, summary);
+    (void)snprintf(summary, sizeof summary, "GDB: %s", app->profile->gdb); tb_text(5, 3, COLS - 6, TB_MUTED, 0, summary);
+    (void)snprintf(summary, sizeof summary, "Symbols: %s", app->profile->executable); tb_text(6, 3, COLS - 6, TB_MUTED, 0, summary);
+    tb_text(7, 3, COLS - 6, TB_PANEL, A_BOLD, "Literal argument vector (each indexed item is one argument)");
+    int width = COLS - 8, visible = LINES - 15, logical = 0; if (width < 1) { width = 1; } if (visible < 1) { visible = 1; }
+    for (size_t i = 0; i < p->count; ++i) {
+        (void)snprintf(summary, sizeof summary, "argv[%zu]: %s", i, p->argv[i]);
+        size_t n = strlen(summary);
+        for (size_t at = 0; at < n; at += (size_t)width, ++logical) {
+            if (logical >= app->review_offset && logical < app->review_offset + visible) { tb_text(9 + logical - app->review_offset, 3, width, TB_PANEL, 0, summary + at); }
+        }
+    }
+    tb_text(LINES - 6, 3, COLS - 6, TB_ORANGE, 0, "No frontend flash/reset/resume commands are added.");
+    tb_text(LINES - 5, 3, COLS - 6, TB_ORANGE, 0, "OpenOCD initialization and selected scripts can affect the target; review the actual configuration.");
+    button(app, LINES - 4, 3, 18, p->start_server ? "[ Start session ]" : "[ Connect ]", PREVIEW, 0, 0);
+    button(app, LINES - 4, 23, 12, "[ Back ]", BACK, 0, 0);
+    button(app, LINES - 3, 3, 14, "Previous argv", REVIEW_PAGE, -visible, 0);
+    if (app->review_offset + visible < logical) { button(app, LINES - 3, 20, 14, "Next argv", REVIEW_PAGE, visible, 0); }
+}
+static void draw_scripts(App *app)
+{
+    draw_header(app, "Installed OpenOCD scripts");
+    char summary[384]; (void)snprintf(summary, sizeof summary, "Filter: %s%s", *app->script_filter ? app->script_filter : "(all)", app->catalog && app->catalog->truncated ? " | bounded catalog; manual paths remain available" : "");
+    tb_text(4, 3, COLS - 6, TB_CYAN, 0, summary);
+    int visible = LINES - 12; if (visible < 1) { visible = 1; } int found = 0;
+    for (size_t i = 0; app->catalog && i < app->catalog->count; ++i) {
+        const TbOpenOcdScript *script = &app->catalog->scripts[i];
+        if (script->kind != app->script_kind || (*app->script_filter && !strstr(script->path, app->script_filter))) { continue; }
+        if (found >= app->script_offset && found < app->script_offset + visible) { button(app, 6 + found - app->script_offset, 3, COLS - 6, script->path, SCRIPT_PICK, (int)i, 0); }
+        ++found;
+    }
+    if (!found) { tb_text(6, 3, COLS - 6, TB_ORANGE, 0, "No matching installed scripts. Add search paths in Profile options or type a custom path."); }
+    button(app, LINES - 4, 3, 12, "[ Filter ]", SCRIPT_ACTION, 0, 0);
+    button(app, LINES - 4, 17, 12, "[ Back ]", BACK, 0, 0);
+    button(app, LINES - 3, 3, 12, "Previous", SCRIPT_ACTION, -visible, 0);
+    if (app->script_offset + visible < found) { button(app, LINES - 3, 17, 12, "Next", SCRIPT_ACTION, visible, 0); }
+}
+
 static bool start_session(App *app)
 {
     char values[FORM_FIELDS][FIELD_SIZE * 4];
@@ -1928,6 +2006,11 @@ static bool start_session(App *app)
         config = (TbSessionConfig){.kind = strcmp(app->profile->protocol, "extended-remote") == 0 ? TB_SESSION_EXTENDED_REMOTE : TB_SESSION_REMOTE,
                                   .endpoint = values[0], .executable = values[1], .gdb = values[2]};
     }
+    if (app->session == 1) {
+        if (!prepare_server(app)) { return false; }
+        config = (TbSessionConfig){.kind = strcmp(app->profile->protocol, "extended-remote") == 0 ? TB_SESSION_EXTENDED_REMOTE : TB_SESSION_REMOTE,
+            .endpoint = app->server_plan->endpoint, .executable = app->profile->executable, .gdb = app->profile->gdb, .openocd = app->server_plan};
+    }
     if (!tb_session_start(app->debugger, &config)) { status(app, tb_session_message(app->debugger)); return false; }
     const char *directories[TB_PROFILE_SOURCES]; TbSourceRule rules[TB_PROFILE_SOURCES];
     for (size_t i = 0; i < app->profile->directory_count; ++i) { directories[i] = app->profile->directories[i]; }
@@ -1947,7 +2030,7 @@ static bool start_session(App *app)
 static void request_leave(App *app, bool quit)
 {
     if (app->live && tb_session_active(app->debugger)) {
-        app->exit_after_close = quit;
+        app->exit_after_close = quit; app->close_resume = false;
         page(app, CLOSE_CONFIRM);
     } else if (quit) { app->quit = true; }
     else {
@@ -1959,18 +2042,37 @@ static void request_leave(App *app, bool quit)
 static void activate(App *app, Control control)
 {
     switch (control.kind) {
+    case REVIEW_PAGE: app->review_offset += control.value; if (app->review_offset < 0) { app->review_offset = 0; } break;
+    case SCRIPT_OPEN:
+        if (!app->catalog) { app->catalog = malloc(sizeof *app->catalog); }
+        if (!app->catalog || !profile_capture(app)) { status(app, "Cannot prepare script catalog."); break; }
+        tb_openocd_catalog(app->catalog, &app->profile->search); app->script_kind = control.value; app->script_offset = 0;
+        page(app, SCRIPT_LIST); break;
+    case SCRIPT_PICK:
+        if (app->catalog && control.value >= 0 && (size_t)control.value < app->catalog->count) {
+            if (form_string(&app->forms[1], app->script_kind == 0 ? 1 : app->script_kind == 1 ? 2 : 3, app->catalog->scripts[control.value].path)) { page(app, CONFIGURE); }
+            else { status(app, "Path exceeds the configuration field limit; use ordered profile scripts."); }
+        }
+        break;
+    case SCRIPT_ACTION:
+        if (!control.value) { (void)mbstowcs(app->input, app->script_filter, FIELD_SIZE); page(app, SCRIPT_FILTER); app->cursor = wcslen(app->input); }
+        else { app->script_offset += control.value; if (app->script_offset < 0) { app->script_offset = 0; } }
+        break;
     case PROFILE_OPEN: case PROFILE_PICK: case PROFILE_ACTION: case PROFILE_ITEM:
         profile_activate(app, control); break;
     case CHOOSE_SESSION:
+        if (control.value < 0 || control.value >= 3) { break; }
         tb_profile_defaults(app->profile, control.value);
         app->session = control.value;
         page(app, CONFIGURE);
         break;
     case QUIT: request_leave(app, true); break;
     case SESSION_MENU: request_leave(app, false); break;
-    case SUBMIT: page(app, REVIEW); break;
+    case SUBMIT:
+        if (!app->demo_mode && app->session == 1 && !prepare_server(app)) { break; }
+        app->review_offset = 0; page(app, REVIEW); break;
     case PREVIEW:
-        if (!app->demo_mode && (app->session == 0 || app->session == 2)) {
+        if (!app->demo_mode) {
             if (start_session(app)) { page(app, WORKSPACE); }
             break;
         }
@@ -2014,9 +2116,10 @@ static void activate(App *app, Control control)
     }
     case TOOL:
         if (app->live) {
+            if (control.value == TB_RESET && tb_session_capabilities(app->debugger)->openocd) { page(app, RESET_CONFIRM); break; }
             if (control.value == TB_BREAKPOINT) { (void)toggle_breakpoint(app); break; }
             bool okay = control.value == TB_CONTINUE ? tb_session_continue(app->debugger) :
-                        control.value == TB_PAUSE ? tb_session_pause(app->debugger) :
+                        control.value == TB_PAUSE ? (tb_session_capabilities(app->debugger)->openocd ? tb_session_halt(app->debugger) : tb_session_pause(app->debugger)) :
                         control.value >= TB_NEXT && control.value <= TB_FINISH ?
                         tb_session_step(app->debugger, control.value == TB_NEXT ? TB_STEP_OVER :
                                        control.value == TB_STEP ? TB_STEP_INTO : TB_STEP_OUT, app->instruction_mode) : false;
@@ -2248,6 +2351,7 @@ static void activate(App *app, Control control)
         char input[FIELD_SIZE * 4];
         bool command = app->page == COMMAND_INPUT;
         if (!field_utf8(app->input, input, sizeof input)) { status(app, "Invalid text encoding."); break; }
+        if (app->page == SCRIPT_FILTER) { (void)snprintf(app->script_filter, sizeof app->script_filter, "%.*s", (int)sizeof app->script_filter - 1, input); app->script_offset = 0; page(app, SCRIPT_LIST); break; }
         if (app->page == PROFILE_TEXT) { profile_text_submit(app, input); break; }
         if (app->page == DATA_WATCH_INPUT) {
             const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
@@ -2346,9 +2450,11 @@ static void activate(App *app, Control control)
         break;
     }
     case CLOSE_ACCEPT:
-        tb_session_close(app->debugger); app->leave_session = true;
+        tb_session_disconnect(app->debugger, app->close_resume); app->leave_session = true;
         page(app, WORKSPACE); break;
+    case CLOSE_POLICY: app->close_resume = !app->close_resume; break;
     case CONFIRM_RESET:
+        if (app->live) { bool okay = tb_session_reset_halt(app->debugger); page(app, WORKSPACE); status(app, okay ? "OpenOCD reset/halt queued." : tb_session_message(app->debugger)); break; }
         tb_demo_action(&app->demo, TB_RESET);
         status(app, "DEMO reset confirmed.");
         page(app, WORKSPACE);
@@ -2675,6 +2781,8 @@ static void key_event(App *app, wint_t key, bool special)
         } else if (app->page == LAUNCHER) {
             if (app->previewed) { page(app, WORKSPACE); }
             else { status(app, "Already at the launcher. Ctrl+Q quits the application."); }
+        } else if (app->page == SCRIPT_LIST || app->page == SCRIPT_FILTER) {
+            page(app, app->page == SCRIPT_FILTER ? SCRIPT_LIST : CONFIGURE);
         } else if (app->page == RESET_CONFIRM || app->page == CLOSE_CONFIRM || app->page == CODE_MENU || app->page == SOURCE_SETTINGS || app->page == MEMORY_MENU || app->page == VARIABLE_MENU ||
                    editing_page(app)) {
             page(app, WORKSPACE);
@@ -2804,7 +2912,7 @@ static void initialize(App *app, bool demo)
         app->forms[form].start_server = true;
     }
     status(app, demo ? "DEMO only. Nothing is launched, connected or saved." :
-                      "Choose native launch/attach or an existing GDB server. OpenOCD setup remains a preview.");
+                      "Choose native launch/attach, an OpenOCD setup or an existing GDB server.");
     if (!demo && app->profiles && !tb_profiles_load(app->profiles)) { status(app, tb_profiles_error(app->profiles)); }
 }
 
@@ -2926,6 +3034,7 @@ int tb_tui_run(bool demo)
         (void)endwin();
         delscreen(screen);
         result = !app.profile || !app.profiles || !app.debugger ? EXIT_FAILURE : interrupted == 0 ? EXIT_SUCCESS : 128 + interrupted;
+        free(app.server_plan); free(app.catalog);
         tb_profiles_destroy(app.profiles); free(app.profile);
     }
     for (int i = 0; i < 3; ++i) { (void)sigaction(signals[i], &saved[i], NULL); }

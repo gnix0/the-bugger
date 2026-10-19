@@ -18,7 +18,7 @@ JSON_CFLAGS := $(shell $(PKG_CONFIG) --cflags json-c 2>/dev/null)
 PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session -Isrc/model $(NCURSES_CFLAGS) $(ELF_CFLAGS) $(JSON_CFLAGS)
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/session.c src/session/profiles.c src/model/context.c src/model/code.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
+SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/session.c src/session/openocd.c src/session/profiles.c src/model/context.c src/model/code.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -146,7 +146,7 @@ $(BUILD_DIR)/code-fixture-relocated: tests/fixtures/native/relocated/main.c test
 
 fixtures: $(BUILD_DIR)/code-fixture $(BUILD_DIR)/code-fixture-optimized $(BUILD_DIR)/code-fixture-stripped $(BUILD_DIR)/code-fixture-cpp $(BUILD_DIR)/code-fixture-relocated
 
-NATIVE_OBJECTS = $(BUILD_DIR)/src/session/native.o $(BUILD_DIR)/src/session/session.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/model/breakpoints.o $(BUILD_DIR)/src/model/registers.o $(BUILD_DIR)/src/model/memory.o $(BUILD_DIR)/src/model/variables.o
+NATIVE_OBJECTS = $(BUILD_DIR)/src/session/native.o $(BUILD_DIR)/src/session/session.o $(BUILD_DIR)/src/session/openocd.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/model/breakpoints.o $(BUILD_DIR)/src/model/registers.o $(BUILD_DIR)/src/model/memory.o $(BUILD_DIR)/src/model/variables.o
 
 $(BUILD_DIR)/test-native-words: $(BUILD_DIR)/tests/unit/test_native_words.o $(NATIVE_OBJECTS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
@@ -485,3 +485,46 @@ test-m15-native: all $(BUILD_DIR)/test-remote-native $(BUILD_DIR)/remote-fixture
 
 test: test-m15-model
 -include $(BUILD_DIR)/tests/integration/test_remote_native.d
+
+$(BUILD_DIR)/test-openocd: $(BUILD_DIR)/tests/unit/test_openocd.o $(BUILD_DIR)/src/session/openocd.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+$(BUILD_DIR)/fake-openocd: $(BUILD_DIR)/tests/support/fake_openocd.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-m16-model
+test-m16-model: $(BUILD_DIR)/test-openocd
+	$(BUILD_DIR)/test-openocd
+
+test: test-m16-model
+-include $(BUILD_DIR)/tests/unit/test_openocd.d $(BUILD_DIR)/tests/support/fake_openocd.d
+
+$(BUILD_DIR)/test-openocd-server: $(BUILD_DIR)/tests/integration/test_openocd_server.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-m16-server test-m16-slow
+test-m16-server: $(BUILD_DIR)/test-openocd-server $(BUILD_DIR)/fake-openocd $(BUILD_DIR)/fake-mi
+	$(BUILD_DIR)/test-openocd-server $(abspath $(BUILD_DIR)/fake-openocd) $(abspath $(BUILD_DIR)/fake-mi)
+
+test-m16-slow: $(BUILD_DIR)/test-openocd-server $(BUILD_DIR)/fake-openocd $(BUILD_DIR)/fake-mi
+	$(BUILD_DIR)/test-openocd-server $(abspath $(BUILD_DIR)/fake-openocd) $(abspath $(BUILD_DIR)/fake-mi) --timeout
+
+-include $(BUILD_DIR)/tests/integration/test_openocd_server.d
+
+$(BUILD_DIR)/test-openocd-tui: $(BUILD_DIR)/tests/integration/test_openocd_tui.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-m16-tui
+test-m16-tui: all $(BUILD_DIR)/test-openocd-tui $(BUILD_DIR)/fake-openocd $(BUILD_DIR)/fake-mi
+	$(BUILD_DIR)/test-openocd-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/fake-openocd) $(abspath $(BUILD_DIR)/fake-mi)
+
+-include $(BUILD_DIR)/tests/integration/test_openocd_tui.d
+
+$(BUILD_DIR)/test-openocd-real: $(BUILD_DIR)/tests/integration/test_openocd_real.o $(BUILD_DIR)/src/session/openocd.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-m16-openocd
+test-m16-openocd: $(BUILD_DIR)/test-openocd-real
+	$(BUILD_DIR)/test-openocd-real openocd
+
+-include $(BUILD_DIR)/tests/integration/test_openocd_real.d

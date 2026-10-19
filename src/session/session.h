@@ -8,6 +8,7 @@
 #include "registers.h"
 #include "memory.h"
 #include "variables.h"
+#include "openocd.h"
 
 enum { TB_SESSION_WORDS = 32, TB_SESSION_WORD_BYTES = 512,
        TB_SESSION_LOG_LINES = 512, TB_SESSION_LOG_WIDTH = 256 };
@@ -17,7 +18,7 @@ bool tb_session_words(const char *input, TbSessionWords *words, char *error, siz
 
 typedef enum { TB_SESSION_LOCAL, TB_SESSION_REMOTE, TB_SESSION_EXTENDED_REMOTE } TbSessionKind;
 typedef struct {
-    bool connected, octet_addressing, local_process, server_owned;
+    bool connected, octet_addressing, local_process, server_owned, openocd;
     unsigned address_bits;
     TbMemoryOrder byte_order;
     char architecture[64], target_id[32], symbol_image[4096];
@@ -29,6 +30,7 @@ bool tb_session_endpoint(const char *endpoint);
 typedef struct {
     TbSessionKind kind;
     const char *endpoint;
+    const TbOpenOcdPlan *openocd;
     /* Affirmative adapter/user evidence, not inferred from target readability.
      * Empty for unknown servers. Never automatically derived from an ELF. */
     const TbMemoryRegion *ordinary_regions;
@@ -58,6 +60,10 @@ bool tb_session_save_log(TbSession *native, const char *path);
  * Remote: disconnect only, with target disposition controlled by the server.
  * Caller confirms this policy before normal close; signals use the same cleanup. */
 void tb_session_close(TbSession *native);
+/* Explicit OpenOCD-only operations; monitor errors remain visible. */
+bool tb_session_reset_halt(TbSession *session);
+bool tb_session_halt(TbSession *session);
+void tb_session_disconnect(TbSession *session, bool resume);
 void tb_session_pump(TbSession *native, int wait_ms);
 size_t tb_session_pollfds(const TbSession *native, struct pollfd fds[5]);
 int tb_session_timeout(const TbSession *native, int maximum_ms);

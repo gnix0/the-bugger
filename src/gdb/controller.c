@@ -40,7 +40,7 @@ struct TbGdb {
     bool prompted, closing, protocol_failed;
     unsigned startup_ms, setup_left;
     uint64_t resume_token, resume_stop;
-    bool reconcile_pending;
+    bool reconcile_pending, reconcile_stopped;
     TbMiParser parser;
     Request requests[TB_GDB_MAX_PENDING];
 };
@@ -231,7 +231,7 @@ bool tb_gdb_start(TbGdb *gdb, const char *executable, unsigned startup_ms)
     gdb->startup_ms = startup_ms;
     gdb->startup_deadline = tb_gdb_now_ms() + startup_ms;
     gdb->prompted = gdb->closing = gdb->protocol_failed = false;
-    gdb->resume_token = gdb->resume_stop = 0; gdb->reconcile_pending = false;
+    gdb->resume_token = gdb->resume_stop = 0; gdb->reconcile_pending = gdb->reconcile_stopped = false;
     gdb->setup_left = 0; gdb->shutdown_stage = 0;
     gdb->startup_error_length = 0; gdb->startup_error[0] = '\0';
     state_set(gdb, TB_GDB_STARTING);
@@ -349,6 +349,12 @@ void tb_gdb_context_changed(TbGdb *gdb)
     if (gdb != NULL) { ++gdb->generation.context; }
 }
 
+bool tb_gdb_verify_stop(TbGdb *gdb)
+{
+    if (!gdb || gdb->closing || (gdb->state != TB_GDB_STOPPED && gdb->state != TB_GDB_RUNNING)) { return false; }
+    gdb->reconcile_pending = gdb->reconcile_stopped = true; return true;
+}
+
 static void execution_state(TbGdb *gdb, TbGdbState state)
 {
     if (state != TB_GDB_RUNNING || gdb->state != state) {
@@ -425,11 +431,12 @@ static void parsed(void *context, TbMiRecord *record, const TbMiError *error)
                 execution_state(gdb, TB_GDB_RUNNING);
                 gdb->resume_token = request->token; gdb->resume_stop = gdb->generation.stop;
             }
-            if (request->state_query && !stale && request->generation.stop == gdb->generation.stop && gdb->state == TB_GDB_RUNNING) {
+            if (request->state_query && !stale && request->generation.stop == gdb->generation.stop &&
+                (gdb->state == TB_GDB_RUNNING || gdb->state == TB_GDB_STOPPED)) {
                 if (strcmp(record->klass, "done") == 0 && threads_stopped(record)) {
                     execution_state(gdb, TB_GDB_STOPPED);
                     event(gdb, TB_GDB_RECONCILED, NULL, record, NULL, 0, 0);
-                    diagnostic(gdb, "GDB confirms all threads stopped after aborted execution.", 0);
+                    diagnostic(gdb, "GDB confirms all threads stopped after execution-state verification.", 0);
                 } else { diagnostic(gdb, "Could not confirm stopped execution; retained state is unconfirmed. Use Pause or close.", 0); }
             }
             complete(gdb, request, stale ? TB_GDB_STALE : TB_GDB_REPLY, record);
@@ -647,8 +654,9 @@ void tb_gdb_pump(TbGdb *gdb, int wait_ms)
     if (fds[1].revents != 0) { read_pipe(gdb, true); }
     if (fds[2].revents != 0) { write_commands(gdb); }
     if (gdb->reconcile_pending && !gdb->closing && tb_gdb_pending(gdb) < TB_GDB_MAX_PENDING) {
-        gdb->reconcile_pending = false;
-        if (gdb->state == TB_GDB_RUNNING) {
+        bool stopped = gdb->reconcile_stopped;
+        gdb->reconcile_pending = gdb->reconcile_stopped = false;
+        if (gdb->state == TB_GDB_RUNNING || (stopped && gdb->state == TB_GDB_STOPPED)) {
             uint64_t token = 0;
             if (enqueue(gdb, "-thread-info", NULL, 0, TB_GDB_SESSION, 0, 1000, &token, false)) {
                 for (size_t i = 0; i < TB_GDB_MAX_PENDING; ++i) { if (gdb->requests[i].token == token) { gdb->requests[i].state_query = true; break; } }

@@ -17,9 +17,12 @@
 #include <unistd.h>
 
 typedef enum { JOB_NONE, JOB_SETUP, JOB_RUN, JOB_PAUSE, JOB_CONSOLE,
-               JOB_INTERRUPT_CLOSE, JOB_RELEASE, JOB_REMOTE_CONNECT, JOB_REMOTE_UNITS, JOB_REMOTE_WIDTH, JOB_REMOTE_ENDIAN, JOB_REMOTE_FRAME, JOB_REMOTE_DISCONNECT } Job;
+               JOB_INTERRUPT_CLOSE, JOB_RELEASE, JOB_REMOTE_CONNECT, JOB_REMOTE_UNITS, JOB_REMOTE_WIDTH, JOB_REMOTE_ENDIAN, JOB_REMOTE_FRAME, JOB_REMOTE_DISCONNECT, JOB_TARGET, JOB_CLOSE_POLICY, JOB_TARGET_FLUSH } Job;
 struct TbSession {
     TbGdb *gdb;
+    TbOpenOcd *server;
+    bool close_resume, close_prepared, target_uncertain;
+    int target_action; uint64_t target_deadline;
     TbSessionKind kind;
     TbSessionCapabilities capabilities;
     bool target_connected, remote_metadata_dirty, close_interrupt_sent;
@@ -83,6 +86,9 @@ static void line(TbSession *native, const char *prefix, const char *text)
     memcpy(native->logs[slot], row, strlen(row) + 1);
     ++native->revision;
 }
+
+static void server_log(void *context, const char *text)
+{ line(context, "[openocd] ", text); }
 
 static void diagnostic(TbSession *native, const char *text)
 {
@@ -173,6 +179,10 @@ static void emit(void *context, const TbGdbEvent *event)
     if (tb_variables_event(native->variables, event)) { return; }
     if (tb_code_event(native->code, event)) { return; }
     if (tb_context_event(native->context, event)) { return; }
+    if (event->kind == TB_GDB_RECONCILED && native->target_action == 4) {
+        native->target_action = 0; native->target_uncertain = false;
+        diagnostic(native, "OpenOCD command completed; stopped state verified through GDB. Target script behavior remains backend-dependent.");
+    }
     if (event->kind == TB_GDB_DIAGNOSTIC) {
         char text[TB_SESSION_LOG_WIDTH], safe[160];
         safe_text(safe, sizeof safe, event->text, event->length);
@@ -303,6 +313,8 @@ TbSession *tb_session_create(void)
         tb_break_destroy(native->breakpoints); tb_code_destroy(native->code);
         tb_context_destroy(native->context); (void)tb_gdb_destroy(native->gdb); free(native); return NULL;
     }
+    native->server = tb_openocd_create(server_log, native);
+    if (!native->server) { (void)tb_session_destroy(native); return NULL; }
     return native;
 }
 
@@ -317,6 +329,7 @@ bool tb_session_destroy(TbSession *native)
 {
     if (native == NULL) { return true; }
     if (tb_session_active(native)) { return false; }
+    if (!tb_openocd_destroy(native->server)) { return false; }
     if (!tb_gdb_destroy(native->gdb)) { return false; }
     tb_variables_destroy(native->variables); tb_memory_destroy(native->memory); tb_registers_destroy(native->registers); tb_break_destroy(native->breakpoints); tb_code_destroy(native->code); tb_context_destroy(native->context); close_fds(native); free(native); return true;
 }
@@ -351,6 +364,12 @@ bool tb_session_start(TbSession *native, const TbSessionConfig *config)
     if (config->ordinary_region_count > TB_MEMORY_REGIONS || (config->ordinary_region_count && !config->ordinary_regions)) { return false; }
     for (size_t i = 0; i < config->ordinary_region_count; ++i) {
         if (config->ordinary_regions[i].begin >= config->ordinary_regions[i].end) { return false; }
+    }
+    if (config->openocd && config->kind == TB_SESSION_LOCAL) { return false; }
+    if (config->openocd && config->openocd->start_server &&
+        (strnlen(config->openocd->endpoint, sizeof config->openocd->endpoint) == sizeof config->openocd->endpoint ||
+         strcmp(config->endpoint, config->openocd->endpoint) != 0)) {
+        diagnostic(native, "GDB endpoint must match the reviewed owned-server plan."); return false;
     }
     native->kind = config->kind;
     if (!copy_path(native->endpoint, sizeof native->endpoint, config->endpoint)) { return false; }
@@ -401,9 +420,11 @@ bool tb_session_start(TbSession *native, const TbSessionConfig *config)
     native->alive = native->owned = native->launch_requested = native->recovery_sent = false;
     native->stage = 0; native->job = JOB_NONE;
     native->target_connected = native->remote_metadata_dirty = false;
-    native->close_interrupt_sent = false;
+    native->close_interrupt_sent = native->close_resume = native->close_prepared = native->target_uncertain = false;
+    native->target_action = 0; native->target_uncertain = false;
     memset(&native->capabilities, 0, sizeof native->capabilities);
     native->capabilities.local_process = native->kind == TB_SESSION_LOCAL;
+    native->capabilities.openocd = config->openocd != NULL;
     (void)copy_path(native->capabilities.symbol_image, sizeof native->capabilities.symbol_image, native->executable);
     native->ordinary_region_count = config->ordinary_region_count;
     if (config->ordinary_region_count) {
@@ -437,9 +458,15 @@ bool tb_session_start(TbSession *native, const TbSessionConfig *config)
         }
     }
     state_set(native, TB_SESSION_STARTING);
-    diagnostic(native, native->kind != TB_SESSION_LOCAL ? "Starting GDB for an existing server; no server process is launched." : native->attach ? "Starting GDB to attach; ptrace permissions will be checked by GDB." : "Starting GDB; Continue will run the loaded executable.");
+    diagnostic(native, native->kind != TB_SESSION_LOCAL ? (config->openocd && config->openocd->start_server ? "Starting owned OpenOCD and GDB; no automatic flash, reset or resume commands." : "Starting GDB for an existing server; no server process is launched.") : native->attach ? "Starting GDB to attach; ptrace permissions will be checked by GDB." : "Starting GDB; Continue will run the loaded executable.");
+    if (config->openocd && config->openocd->start_server) {
+        if (!tb_openocd_start(native->server, config->openocd)) {
+            diagnostic(native, tb_openocd_message(native->server)); state_set(native, TB_SESSION_FAILED); return false;
+        }
+        native->capabilities.server_owned = true;
+    }
     if (!tb_gdb_start(native->gdb, native->debugger, 3000)) {
-        state_set(native, TB_SESSION_FAILED); close_fds(native); return false;
+        native->failed = true; tb_openocd_stop(native->server); state_set(native, TB_SESSION_FAILED); close_fds(native); return false;
     }
     return true;
 }
@@ -456,7 +483,7 @@ static bool issue(TbSession *native, Job job, const char *operation, const char 
 bool tb_session_continue(TbSession *native)
 {
     if (tb_code_restoring(native->code)) { diagnostic(native, "Wait for profile source settings to finish applying."); return false; }
-    if (native->waiting || native->want_close || !native->configured || tb_break_busy(native->breakpoints)) { return false; }
+    if (native->waiting || native->want_close || native->target_action || !native->configured || tb_break_busy(native->breakpoints)) { return false; }
     tb_context_refresh(native->context);
     if (native->state == TB_SESSION_READY && native->kind != TB_SESSION_LOCAL) {
         diagnostic(native, "No stopped remote inferior. Use Console for an explicit remote launch/attach."); return false;
@@ -478,7 +505,7 @@ bool tb_session_step(TbSession *native, TbStep step, bool instruction)
 {
     if (tb_code_restoring(native->code)) { diagnostic(native, "Wait for profile source settings to finish applying."); return false; }
     const TbContextSnapshot *context = tb_context_snapshot(native->context);
-    if (native->waiting || native->want_close || !native->configured || tb_break_busy(native->breakpoints) ||
+    if (native->waiting || native->want_close || native->target_action || !native->configured || tb_break_busy(native->breakpoints) ||
         native->state != TB_SESSION_STOPPED || context->stale || !context->ready ||
         !*context->selected_thread || step < TB_STEP_OVER || step > TB_STEP_OUT) {
         diagnostic(native, "Stepping needs a fresh stopped context. Use Continue/Pause or Console start first."); return false;
@@ -495,7 +522,7 @@ bool tb_session_console(TbSession *native, const char *command)
 {
     if (tb_code_restoring(native->code)) { diagnostic(native, "Wait for profile source settings to finish applying."); return false; }
     if (tb_break_busy(native->breakpoints)) { diagnostic(native, "Wait for the pending breakpoint operation."); return false; }
-    if (native->waiting || native->want_close || !native->configured) {
+    if (native->waiting || native->want_close || native->target_action || !native->configured) {
         diagnostic(native, "Wait for the current operation and a ready session before sending a command."); return false;
     }
     if (command == NULL || !*command) { diagnostic(native, "Enter a GDB console command."); return false; }
@@ -553,6 +580,25 @@ void tb_session_close(TbSession *native)
     }
 }
 
+static bool target_action(TbSession *s, int action)
+{
+    if (!s->capabilities.openocd || !s->configured || tb_code_restoring(s->code) || tb_break_busy(s->breakpoints) || s->waiting || s->want_close || s->target_action ||
+        (s->state != TB_SESSION_STOPPED && s->state != TB_SESSION_RUNNING)) {
+        diagnostic(s, "OpenOCD action unavailable; connect a target and wait for pending operations."); return false;
+    }
+    s->target_action = action; s->target_deadline = tb_gdb_now_ms() + 10000;
+    tb_context_refresh(s->context);
+    if (s->state == TB_SESSION_RUNNING && !issue(s, JOB_PAUSE, "-exec-interrupt", NULL, 0)) { s->target_action = 0; return false; }
+    return true;
+}
+bool tb_session_reset_halt(TbSession *s) { return target_action(s, 2); }
+bool tb_session_halt(TbSession *s) { return target_action(s, 1); }
+void tb_session_disconnect(TbSession *s, bool resume)
+{
+    if (s->capabilities.openocd) { s->close_resume = resume; }
+    tb_session_close(s);
+}
+
 static void remote_setup(TbSession *session);
 static void setup(TbSession *native)
 {
@@ -608,7 +654,7 @@ static void process_reply(TbSession *native)
             /* Unsupported metadata stays unknown; never substitute host data. */
             ++native->stage; native->job = JOB_NONE; return;
         }
-        if (native->kind != TB_SESSION_LOCAL && (native->job == JOB_SETUP || native->job == JOB_INTERRUPT_CLOSE || native->job >= JOB_REMOTE_CONNECT)) {
+        if (native->kind != TB_SESSION_LOCAL && (native->job == JOB_SETUP || native->job == JOB_INTERRUPT_CLOSE || native->job == JOB_CLOSE_POLICY || (native->job >= JOB_REMOTE_CONNECT && native->job <= JOB_REMOTE_DISCONNECT))) {
             native->failed = true; native->target_connected = false;
             diagnostic(native, "Remote operation failed; closing only this GDB. Server/target state is unverified.");
             tb_gdb_abort(native->gdb); native->job = JOB_NONE; return;
@@ -620,7 +666,18 @@ static void process_reply(TbSession *native)
             diagnostic(native, "Target release was not confirmed; closing debugger with this limitation.");
             tb_gdb_close(native->gdb);
         }
+        if ((native->job == JOB_TARGET || native->job == JOB_TARGET_FLUSH || native->job == JOB_PAUSE) && native->target_action) {
+            native->target_action = 0; native->alive = false; native->target_uncertain = true;
+            tb_memory_target(native->memory, false, 0); tb_memory_regions(native->memory, NULL, 0);
+            state_set(native, TB_SESSION_READY);
+        }
         if (native->job == JOB_RUN || native->job == JOB_CONSOLE) { native->launch_requested = false; }
+    } else if (native->job == JOB_TARGET) {
+        native->target_action = 3;
+    } else if (native->job == JOB_TARGET_FLUSH) {
+        native->target_action = 4; native->target_deadline = tb_gdb_now_ms() + 1500;
+        if (!tb_gdb_verify_stop(native->gdb)) { native->target_deadline = 0; }
+    } else if (native->job == JOB_CLOSE_POLICY) { native->close_prepared = true;
     } else if (native->job == JOB_REMOTE_DISCONNECT) {
         native->target_connected = native->alive = false;
         native->capabilities.connected = false; tb_gdb_close(native->gdb);
@@ -644,13 +701,23 @@ static void release_target(TbSession *native)
     if (native->waiting || tb_gdb_state(native->gdb) == TB_GDB_CLOSING) { return; }
     if (native->kind != TB_SESSION_LOCAL) {
         if (native->target_connected) {
-            if (tb_gdb_state(native->gdb) == TB_GDB_RUNNING) {
+            if (native->target_uncertain) {
+                native->failed = true; native->target_uncertain = false;
+                diagnostic(native, "Target halt/resume disposition remains unverified; releasing connection only.");
+            }
+            if (tb_gdb_state(native->gdb) == TB_GDB_RUNNING &&
+                !(native->capabilities.openocd && native->close_resume && native->close_prepared)) {
                 /* ^done acknowledges the request, not the later *stopped.
                  * Wait for that notification without a retry loop. */
                 if (!native->close_interrupt_sent) {
                     native->close_interrupt_sent = issue(native, JOB_INTERRUPT_CLOSE, "-exec-interrupt", NULL, 0);
                 }
-            } else { (void)issue(native, JOB_REMOTE_DISCONNECT, "-target-disconnect", NULL, 0); }
+            } else if (native->capabilities.openocd && native->alive && !native->close_prepared) {
+                const char *const args[] = {"console", native->close_resume ? "monitor resume" : "monitor halt"};
+                tb_context_refresh(native->context); (void)issue(native, JOB_CLOSE_POLICY, "-interpreter-exec", args, 2);
+            } else {
+                (void)issue(native, JOB_REMOTE_DISCONNECT, "-target-disconnect", NULL, 0);
+            }
         } else { tb_gdb_abort(native->gdb); }
         return;
     }
@@ -703,6 +770,11 @@ static void memory_metadata(TbSession *native)
 void tb_session_pump(TbSession *native, int wait_ms)
 {
     if (native == NULL) { return; }
+    tb_openocd_pump(native->server);
+    if (native->capabilities.server_owned && tb_openocd_failed(native->server) && !native->want_close) {
+        native->failed = true; diagnostic(native, tb_openocd_message(native->server));
+        tb_session_close(native); tb_gdb_abort(native->gdb);
+    }
     tb_gdb_pump(native->gdb, wait_ms);
     if (native->master >= 0) {
         char buffer[4096]; size_t budget = TB_GDB_IO_BUDGET;
@@ -767,7 +839,13 @@ void tb_session_pump(TbSession *native, int wait_ms)
             if (!native->want_close) { native->failed = true; diagnostic(native, "Debugger disconnected unexpectedly."); }
             state_set(native, native->failed ? TB_SESSION_FAILED : TB_SESSION_CLOSED);
         }
-        close_fds(native); return;
+        close_fds(native);
+        if (native->capabilities.server_owned) {
+            tb_openocd_stop(native->server);
+            if (tb_openocd_active(native->server)) { state_set(native, TB_SESSION_CLOSING); return; }
+            state_set(native, native->failed ? TB_SESSION_FAILED : TB_SESSION_CLOSED);
+        }
+        return;
     }
     if (native->want_close) {
         if (tb_gdb_now_ms() >= native->close_deadline && gdb != TB_GDB_CLOSING) {
@@ -777,6 +855,18 @@ void tb_session_pump(TbSession *native, int wait_ms)
         } else { release_target(native); }
     } else if (!native->configured && !native->waiting &&
              (gdb == TB_GDB_READY || (native->kind != TB_SESSION_LOCAL && gdb != TB_GDB_STARTING && gdb != TB_GDB_CLOSING))) { setup(native); }
+    else if (native->target_action && !native->waiting) {
+        if (tb_gdb_now_ms() >= native->target_deadline) {
+            native->target_action = 0; native->alive = false; native->target_uncertain = true;
+            tb_memory_target(native->memory, false, 0); tb_memory_regions(native->memory, NULL, 0);
+            state_set(native, TB_SESSION_READY);
+            diagnostic(native, "OpenOCD action could not verify a fresh stop; reconnect before inspecting target values.");
+        } else if (gdb == TB_GDB_STOPPED && native->target_action < 4) {
+            bool flush = native->target_action == 3;
+            const char *const args[] = {"console", flush ? "maintenance flush register-cache" : native->target_action == 2 ? "monitor reset halt" : "monitor halt"};
+            if (!issue(native, flush ? JOB_TARGET_FLUSH : JOB_TARGET, "-interpreter-exec", args, 2)) { native->target_deadline = 0; }
+        }
+    }
     else if (native->configured && !native->waiting && (native->kind == TB_SESSION_LOCAL || native->alive)) {
         tb_break_pump(native->breakpoints);
         tb_context_pump(native->context);
@@ -799,7 +889,7 @@ void tb_session_pump(TbSession *native, int wait_ms)
 size_t tb_session_pollfds(const TbSession *native, struct pollfd fds[5])
 {
     (void)tb_gdb_pollfds(native->gdb, fds);
-    fds[3] = (struct pollfd){native->master, POLLIN, 0};
+    fds[3] = (struct pollfd){native->capabilities.server_owned ? tb_openocd_fd(native->server) : native->master, POLLIN, 0};
     fds[4] = (struct pollfd){native->owned ? native->pidfd : -1, POLLIN, 0};
     return 5;
 }
@@ -827,7 +917,7 @@ TbBreakpoints *tb_session_breakpoints(TbSession *native) { return native->breakp
 bool tb_session_run_at(TbSession *native, TbBreakLocation location)
 {
     const TbContextSnapshot *context = tb_context_snapshot(native->context);
-    if (native->waiting || native->want_close || native->state != TB_SESSION_STOPPED || context->stale || !context->ready) {
+    if (native->waiting || native->want_close || native->target_action || native->state != TB_SESSION_STOPPED || context->stale || !context->ready) {
         diagnostic(native, "Run to Selected needs a fresh stopped context."); return false;
     }
     return tb_break_run_at(native->breakpoints, location, context->selected_thread);
@@ -838,7 +928,7 @@ bool tb_session_run_to(TbSession *native, const char *location)
 }
 bool tb_session_active(const TbSession *native)
 {
-    return tb_gdb_state(native->gdb) != TB_GDB_DISCONNECTED ||
+    return tb_openocd_active(native->server) || tb_gdb_state(native->gdb) != TB_GDB_DISCONNECTED ||
            (native->state != TB_SESSION_IDLE && native->state != TB_SESSION_FAILED && native->state != TB_SESSION_CLOSED);
 }
 
@@ -924,6 +1014,7 @@ static void remote_setup(TbSession *session)
             (void)issue(session, JOB_SETUP, "-file-exec-and-symbols", args, 1);
         } else { ++session->stage; }
     } else if (session->stage == 7) {
+        if (session->capabilities.server_owned && !tb_openocd_ready(session->server)) { return; }
         const char *const args[] = {session->kind == TB_SESSION_EXTENDED_REMOTE ? "extended-remote" : "remote", session->endpoint};
         (void)issue(session, JOB_REMOTE_CONNECT, "-target-select", args, 2);
     } else if (session->stage == 8 || session->stage == 9) {

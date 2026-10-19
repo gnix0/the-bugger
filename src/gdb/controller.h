@@ -51,6 +51,9 @@ bool tb_gdb_request(TbGdb *gdb, const char *operation, const char *const args[],
                     size_t count, TbGdbScope scope, uint64_t cookie,
                     unsigned timeout_ms, uint64_t *token);
 void tb_gdb_context_changed(TbGdb *gdb);
+/* Explicit monitor actions may change registers without an MI stop event.
+ * Verify through structured thread state; emits RECONCILED only on proof. */
+bool tb_gdb_verify_stop(TbGdb *gdb);
 /* Nonblocking close: command-input EOF, then TERM/KILL deadlines and reap.
  * Only the still-owned child PID is ever signalled. No process group signals. */
 void tb_gdb_close(TbGdb *gdb);
