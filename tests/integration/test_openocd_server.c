@@ -64,7 +64,7 @@ static void pump_state(TbSession *s, TbSessionState expected)
 static void session_case(const char *helper, const char *peer, bool managed, bool resume, int error)
 {
     CHECK(setenv("TB_FAKE_OPENOCD", "ready", 1) == 0);
-    CHECK(setenv("TB_FAKE_MODE", error == 1 ? "remote-openocd-error" : error == 2 ? "remote-openocd-flush-error" : error == 3 ? "remote-openocd-verify-error" : error == 4 ? "remote-openocd-resume-error" : "remote-openocd", 1) == 0);
+    CHECK(setenv("TB_FAKE_MODE", error == 1 ? "remote-openocd-error" : error == 2 ? "remote-openocd-flush-error" : error == 3 ? "remote-openocd-verify-error" : error == 4 ? "remote-openocd-resume-error" : error == 5 ? "remote-openocd-current-error" : error == 6 ? "remote-openocd-frame-error" : error == 7 ? "remote-openocd-address-error" : "remote-openocd", 1) == 0);
     TbSession *s = tb_session_create(); TbOpenOcdPlan *plan = calloc(1, sizeof *plan); CHECK(s && plan);
     int fd; unsigned number = port(&fd); CHECK(close(fd) == 0);
     plan->start_server = managed; plan->port = number; plan->count = 3;
@@ -81,7 +81,7 @@ static void session_case(const char *helper, const char *peer, bool managed, boo
     CHECK(tb_session_capabilities(s)->openocd && tb_session_capabilities(s)->server_owned == managed);
     CHECK(tb_session_target_pid(s) == 0 && !logged(s, "M16 reset") && !logged(s, "M16 halt") && !logged(s, "M16 resume"));
     CHECK(tb_session_reset_halt(s)); CHECK(!tb_session_continue(s) && !tb_session_step(s, TB_STEP_INTO, true));
-    const char *expected = error == 1 ? "Reset unsupported" : error == 2 ? "Register cache flush unsupported" : error == 3 ? "OpenOCD action could not verify" : "OpenOCD command completed";
+    const char *expected = error == 1 ? "Reset unsupported" : error == 2 ? "Register cache flush unsupported" : (error == 3 || error >= 5) ? "OpenOCD action could not verify" : "OpenOCD command completed";
     uint64_t until = tb_gdb_now_ms() + 2500;
     while (!logged(s, expected) && tb_gdb_now_ms() < until) { tb_session_pump(s, 1); }
     CHECK(logged(s, "M16 reset requested")); CHECK(logged(s, expected));
@@ -129,6 +129,7 @@ int main(int argc, char **argv)
     crash_case(argv[1], argv[2]);
     session_case(argv[1], argv[2], true, false, false); session_case(argv[1], argv[2], true, true, false);
     session_case(argv[1], argv[2], true, true, 4);
+    session_case(argv[1], argv[2], false, false, 5); session_case(argv[1], argv[2], false, false, 6); session_case(argv[1], argv[2], false, false, 7);
     session_case(argv[1], argv[2], false, false, 1);
     session_case(argv[1], argv[2], false, false, 2); session_case(argv[1], argv[2], false, false, 3); session_case(argv[1], argv[2], false, true, false);
     CHECK(unsetenv("TB_FAKE_OPENOCD") == 0 && unsetenv("TB_FAKE_MODE") == 0); CHECK(lines > 0);

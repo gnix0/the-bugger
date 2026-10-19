@@ -528,3 +528,49 @@ test-m16-openocd: $(BUILD_DIR)/test-openocd-real
 	$(BUILD_DIR)/test-openocd-real openocd
 
 -include $(BUILD_DIR)/tests/integration/test_openocd_real.d
+
+# Optional physical-acceptance fixtures. Building never connects or programs.
+ARM_CC ?= arm-none-eabi-gcc
+ARM_GDB ?= arm-none-eabi-gdb
+STM32_FIXTURE := tests/fixtures/embedded/stm32f446re
+M17_WORKLOAD := tests/fixtures/embedded/workload.c
+M17_WORKLOAD_HEADER := tests/fixtures/embedded/workload.h
+STM32_FLAGS := -mcpu=cortex-m4 -mthumb -mfloat-abi=soft -Og -g3 \
+	-ffreestanding -fno-builtin -fno-omit-frame-pointer -fno-optimize-sibling-calls \
+	-ffunction-sections -fdata-sections -nostdlib $(PROJECT_CFLAGS)
+
+$(BUILD_DIR)/m17/stm32f446re/firmware.elf: $(STM32_FIXTURE)/firmware.c $(STM32_FIXTURE)/startup.S $(STM32_FIXTURE)/firmware.ld $(M17_WORKLOAD) $(M17_WORKLOAD_HEADER) Makefile
+	mkdir -p $(dir $@)
+	$(ARM_CC) $(STM32_FLAGS) -Wl,--gc-sections,--build-id=none,-Map,$(@:.elf=.map) \
+		-T$(STM32_FIXTURE)/firmware.ld $(STM32_FIXTURE)/startup.S $(STM32_FIXTURE)/firmware.c $(M17_WORKLOAD) -o $@
+
+$(BUILD_DIR)/m17/stm32f446re/firmware-led.elf: $(STM32_FIXTURE)/firmware.c $(STM32_FIXTURE)/startup.S $(STM32_FIXTURE)/firmware.ld $(M17_WORKLOAD) $(M17_WORKLOAD_HEADER) Makefile
+	mkdir -p $(dir $@)
+	$(ARM_CC) $(STM32_FLAGS) -DTB_FIXTURE_LED=1 -Wl,--gc-sections,--build-id=none,-Map,$(@:.elf=.map) \
+		-T$(STM32_FIXTURE)/firmware.ld $(STM32_FIXTURE)/startup.S $(STM32_FIXTURE)/firmware.c $(M17_WORKLOAD) -o $@
+
+$(BUILD_DIR)/test-firmware: $(BUILD_DIR)/tests/unit/test_firmware.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: fixture-m17-stm32 fixture-m17-stm32-led test-m17-fixture
+fixture-m17-stm32: $(BUILD_DIR)/m17/stm32f446re/firmware.elf
+fixture-m17-stm32-led: $(BUILD_DIR)/m17/stm32f446re/firmware-led.elf
+test-m17-fixture: fixture-m17-stm32 fixture-m17-stm32-led $(BUILD_DIR)/test-firmware
+	$(BUILD_DIR)/test-firmware $(BUILD_DIR)/m17/stm32f446re/firmware.elf $(BUILD_DIR)/m17/stm32f446re/firmware-led.elf
+	$(ARM_GDB) --nx --batch $(BUILD_DIR)/m17/stm32f446re/firmware.elf -ex 'info line fixture_checkpoint' -ex 'disassemble fixture_callee'
+
+-include $(BUILD_DIR)/tests/unit/test_firmware.d
+
+# Opt-in runner: requires an externally started OpenOCD and programmed fixture.
+$(BUILD_DIR)/test-board: $(BUILD_DIR)/tests/integration/test_board.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+-include $(BUILD_DIR)/tests/integration/test_board.d
+
+$(BUILD_DIR)/test-board-tui: $(BUILD_DIR)/tests/integration/test_board_tui.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+-include $(BUILD_DIR)/tests/integration/test_board_tui.d
+
+.PHONY: test-m17-offline
+test-m17-offline: test-m17-fixture $(BUILD_DIR)/test-board $(BUILD_DIR)/test-board-tui

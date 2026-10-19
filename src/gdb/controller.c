@@ -23,7 +23,7 @@ typedef struct {
     uint64_t token, cookie, deadline;
     TbGdbGeneration generation;
     TbGdbScope scope;
-    bool setup, state_query;
+    bool setup, state_query, require_frame;
 } Request;
 
 struct TbGdb {
@@ -375,6 +375,28 @@ static bool threads_stopped(const TbMiRecord *record)
     return true;
 }
 
+static bool current_stop_frame(const TbMiRecord *record)
+{
+    const TbMiValue *current = tb_mi_find(record->results, "current-thread-id");
+    const TbMiValue *threads = tb_mi_find(record->results, "threads");
+    if (!current || current->type != TB_MI_STRING || !current->string.length || !threads) { return false; }
+    for (const TbMiValue *item = threads->children; item; item = item->next) {
+        const TbMiValue *id = tb_mi_find(item->children, "id");
+        if (!id || id->type != TB_MI_STRING || id->string.length != current->string.length ||
+            memcmp(id->string.data, current->string.data, id->string.length) != 0) { continue; }
+        const TbMiValue *frame = tb_mi_find(item->children, "frame");
+        const TbMiValue *address = frame && frame->type == TB_MI_TUPLE ? tb_mi_find(frame->children, "addr") : NULL;
+        if (!address || address->type != TB_MI_STRING || address->string.length < 3 ||
+            address->string.length > 18 || memcmp(address->string.data, "0x", 2) != 0) { return false; }
+        for (size_t i = 2; i < address->string.length; ++i) {
+            char c = address->string.data[i];
+            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) { return false; }
+        }
+        return true;
+    }
+    return false;
+}
+
 static void parsed(void *context, TbMiRecord *record, const TbMiError *error)
 {
     TbGdb *gdb = context;
@@ -433,11 +455,12 @@ static void parsed(void *context, TbMiRecord *record, const TbMiError *error)
             }
             if (request->state_query && !stale && request->generation.stop == gdb->generation.stop &&
                 (gdb->state == TB_GDB_RUNNING || gdb->state == TB_GDB_STOPPED)) {
-                if (strcmp(record->klass, "done") == 0 && threads_stopped(record)) {
+                if (strcmp(record->klass, "done") == 0 && threads_stopped(record) &&
+                    (!request->require_frame || current_stop_frame(record))) {
                     execution_state(gdb, TB_GDB_STOPPED);
                     event(gdb, TB_GDB_RECONCILED, NULL, record, NULL, 0, 0);
                     diagnostic(gdb, "GDB confirms all threads stopped after execution-state verification.", 0);
-                } else { diagnostic(gdb, "Could not confirm stopped execution; retained state is unconfirmed. Use Pause or close.", 0); }
+                } else { diagnostic(gdb, "Could not confirm stopped execution/current frame; retained state is unconfirmed. Use Pause or close.", 0); }
             }
             complete(gdb, request, stale ? TB_GDB_STALE : TB_GDB_REPLY, record);
             if (exiting) { shutting_down(gdb, false); }
@@ -659,7 +682,11 @@ void tb_gdb_pump(TbGdb *gdb, int wait_ms)
         if (gdb->state == TB_GDB_RUNNING || (stopped && gdb->state == TB_GDB_STOPPED)) {
             uint64_t token = 0;
             if (enqueue(gdb, "-thread-info", NULL, 0, TB_GDB_SESSION, 0, 1000, &token, false)) {
-                for (size_t i = 0; i < TB_GDB_MAX_PENDING; ++i) { if (gdb->requests[i].token == token) { gdb->requests[i].state_query = true; break; } }
+                for (size_t i = 0; i < TB_GDB_MAX_PENDING; ++i) {
+                    if (gdb->requests[i].token == token) {
+                        gdb->requests[i].state_query = true; gdb->requests[i].require_frame = stopped; break;
+                    }
+                }
             }
         }
     }

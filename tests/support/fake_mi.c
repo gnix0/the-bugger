@@ -109,6 +109,12 @@ int main(int argc, char *argv[])
                 reply(token, remote_resets ? "^done,frame={level=\"0\",addr=\"0x8000200\",func=\"remote_main\",arch=\"arm\"}" : "^done,frame={level=\"0\",addr=\"0x8000100\",func=\"remote_main\",arch=\"arm\"}");
             } else if (strcmp(command, "-thread-info\n") == 0 && !strcmp(mode, "remote-openocd-verify-error")) {
                 reply(token, "^error,msg=\"Target state unavailable after monitor operation\"");
+            } else if (strcmp(command, "-thread-info\n") == 0 && remote_resets && !strcmp(mode, "remote-openocd-current-error")) {
+                reply(token, "^done,threads=[{id=\"1\",state=\"stopped\",frame={addr=\"0x8000200\"}}],current-thread-id=\"3\"");
+            } else if (strcmp(command, "-thread-info\n") == 0 && remote_resets && !strcmp(mode, "remote-openocd-frame-error")) {
+                reply(token, "^done,threads=[{id=\"1\",state=\"stopped\"}],current-thread-id=\"1\"");
+            } else if (strcmp(command, "-thread-info\n") == 0 && remote_resets && !strcmp(mode, "remote-openocd-address-error")) {
+                reply(token, "^done,threads=[{id=\"1\",state=\"stopped\",frame={addr=\"<unavailable>\"}}],current-thread-id=\"1\"");
             } else if (strcmp(command, "-thread-info\n") == 0) {
                 reply(token, remote_resets ? "^done,threads=[{id=\"1\",state=\"stopped\",frame={level=\"0\",addr=\"0x8000200\",arch=\"arm\"}}],current-thread-id=\"1\"" : "^done,threads=[{id=\"1\",state=\"stopped\"}],current-thread-id=\"1\"");
             } else if (strstr(command, "monitor reset halt") && !strncmp(mode, "remote-openocd", 14)) {
