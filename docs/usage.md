@@ -80,6 +80,10 @@ configuration still opens an explicit preview and launches no server.
 For a live context example, launch `./build/context-fixture`. It deliberately
 stops with two worker threads waiting while main is inside recursive calls.
 Open **Call Stack**, then choose **Threads** in another pane's `...` menu.
+Arguments initially show names with `<read required>`. Select a frame and choose
+**Read Args** to read that frame's simple argument values deliberately. Values
+are invalidated by refresh or context/execution changes; they are not polled.
+Widen a very narrow pane to expose its footer actions.
 Click a row to select its frame/thread, or browse rows with Up/Down and press
 Enter. Selecting a caller changes inspection context without moving execution;
 the **inspected caller** label distinguishes it from the original stop.

@@ -43,8 +43,9 @@ The [suite catalog](../tests/README.md) lists individual binaries; fixture READM
 specify authored data and target behavior. Procedures below describe expected
 behavior, not proof that a particular run passed. Historical executions, blocked
 checks and exact evidence are in the [ledger](validation.md). Store logs
-under ignored `build/`; record durable result summaries separately. Current
-full-project analyzer findings remain tracked for M14; focused passes do not clear them.
+under ignored `build/`; record durable result summaries separately. M14 includes
+a full-project analyzer pass; focused checks alone never establish that result
+for subsequent changes.
 
 ## Validation strategy
 
@@ -207,8 +208,8 @@ separate manual procedure. Synthetic authorization tests are not board evidence.
    without retaining old live values or authorization. Repeat keys/clicks/resize
    in mouse-enabled tmux; verify normal terminal restoration on exit.
 
-Native checks do not prove MMIO safety. M14 audits other automatic value paths
-and the remaining full-project static-analysis findings; M15 validates remote
+Native checks do not prove MMIO safety. The M14 [request-policy audit](architecture.md#value-producing-request-audit)
+covers automatic value paths and records corrected analyzer findings. M15 validates remote
 authorization/unknown metadata before embedded use. M17 checks real target
 variables and deliberately inspected RAM/peripherals on the release boards.
 No arbitrary peripheral read is part of this native checklist.
@@ -421,6 +422,57 @@ replacement/clear, and the real TUI browse/find/line/mixed/settings workflow.
 Full visual fidelity and physical terminal/tmux input require manual validation.
 No remote, board or release acceptance is inferred from native tests.
 
+## Native integration and hardening
+
+M14 is accepted; automated results and evidence limits are recorded in the
+[validation register](validation.md#m14--native-integration-acceptance). Commands
+and manual checks below are reproducible procedures, not additional execution claims.
+
+```sh
+make test-m14-model
+make test-m14-native
+make test test-native test-tmux test-m12-slow
+make analyze
+make CC=clang CXX=clang++ BUILD_DIR=build/m14-clang test test-native test-tmux
+ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 make CC=clang CXX=clang++ BUILD_DIR=build/m14-sanitize CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test test-native
+```
+
+`test-m14-model` covers names-only automatic argument requests, both MI argument
+name encodings, unsolicited values, selected-frame reads, rejection before ready/
+while running/busy, errors and obsolete replies. Native mapping cases include
+permissions, unsigned overflow, truncation, device and unknown special mappings.
+`test-m14-native` adds repeated C/C++ sessions with simultaneous code, registers,
+Memory and Watches; explicit frame values, step invalidation, Save Log and owned
+cleanup. It also runs the recursive/optimized/stripped context and terminal tests.
+Existing full suites retain attach, output-flood, crash and profile/watchpoint
+coverage. Run in a host permitting ptrace; a sandbox denial is not a PASS.
+
+The combined test reports host/kernel/architecture, one-second settled idle wall
+and frontend process CPU time, and maximum pump duration with a 10 ms requested
+wait. Inspector revisions must remain stable at settled idle. These measurements
+do not include GDB CPU or measure terminal input-to-redraw latency. Record CPU,
+compiler/instrumentation and terminal details with results; timing values are
+observations, not a claim that every platform meets the NFR-02 response target.
+
+Manual acceptance, directly and inside tmux:
+
+1. Launch the context fixture, open Call Stack/Threads, select callers/threads,
+   read arguments deliberately, refresh and resume. Names remain available;
+   previous values never become fresh in another context.
+2. Launch the variables fixture with Source/Disassembly/Registers/Memory/Watches.
+   Inspect known globals explicitly, step, navigate Memory independently and
+   create/remove a hardware watchpoint. Confirm stale indicators and current PC.
+3. Split/resize panes, toggle their tabs, browse long listings and resize the
+   terminal. Verify mouse/function keys and roughly 100 ms local interaction
+   response while backend work is pending; record method and observed delays.
+4. Save Log to a new file, reopen a saved native profile, close/restart sessions,
+   then interrupt/terminate the TUI. Check terminal restoration and owned-process
+   cleanup. Preserve externally attached processes.
+
+Physical embedded compatibility and remote disconnect/reset recovery remain
+M15–M17 work; native tests do not establish those results.
+
+
 ## Call Stack and Threads
 
 Coverage: M06; FR-10 and context coherence. Native tests are not remote or board evidence.
@@ -435,7 +487,9 @@ Coverage: M06; FR-10 and context coherence. Native tests are not remote or board
    recursive call. Expect Stopped, three real threads in the context, and live
    frames including `context_checkpoint`, several `recursive` calls and `main`.
    libc frames may lack symbols/source; their names/addresses follow local GDB.
-   Arguments such as `depth=0, worker=0` come from GDB, not sample UI values.
+   Arguments initially show `<read required>`. Select a recursive frame and
+   click Read Args: values such as `depth=0, worker=0` come from GDB. Refresh or
+   select another frame: argument values require another deliberate read.
 3. Click a caller's row. Expect its selection marker `>` and an **inspected
    caller** label. `*` continues to identify frame zero of the original stopped
    thread. Selecting frames never resumes or moves execution. With row focus,
@@ -542,7 +596,7 @@ isolation, pause/continue, console errors, Save Log open/short-write failures,
 normal exit, permitted/denied attach, external survival/resumption, bounded
 output floods, GDB crash cleanup, live TUI actions/confirmations, input retention
 and signal terminal restoration. Use the code/context/inspector procedures for stepping and optimized/stripped
-inspection; complete native integration remains M14.
+inspection; the M14 integration procedure exercises the models together.
 
 ## MI controller diagnostic harness
 
@@ -589,8 +643,8 @@ cleanup with unchanged terminal attributes.
 
 The pressure test reports measured maximum pump wall time and checks per-turn
 byte bounds and actual idle waiting. These are fake-peer transport observations,
-not proof of whole-TUI latency or release performance. Final native performance
-and terminal/tmux acceptance remain M14/M18. No new mouse/visual behavior is
+not proof of whole-TUI latency or release performance. M14 adds integrated native
+and terminal/tmux coverage; M18 retains the release performance/evidence gate. No new mouse/visual behavior is
 introduced by this harness; workspace PTY regressions run separately.
 
 ## MI parser diagnostic tools
@@ -808,7 +862,7 @@ editable; OpenOCD is not a requirement for every architecture.
 
 | Environment | Minimum evidence | Current live evidence |
 |---|---|---|
-| Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | M05–M13 accepted, broad regressions passed at M13; complete M14 integration, per-release evidence and release acceptance remain pending |
+| Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | M05–M14 accepted; GCC/Clang native and tmux regressions plus full default/native sanitizers passed at M14. Per-release evidence and release acceptance remain required |
 | STM32 / ARM | NUCLEO-F446RE fixture via GDB/OpenOCD; halt/step/break/watch, real code/register/RAM/variables, reset/disconnect/cleanup | UNVERIFIED |
 | ESP32 / Xtensa | Validation board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED |
 | ESP32 / RISC-V | Validation board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED |

@@ -6,11 +6,11 @@ implemented features or hardware support claims. See [architecture](architecture
 
 ## Implementation status
 
-M00–M13 and the documented pane corrections are accepted. M14–M18 and F01–F47
-remain planned. Native integration, remote/OpenOCD execution, physical-board
-compatibility and release acceptance are not complete. The latest implementation
-is M13 `4030df3fa41da5805cedf1310b8c8ee7694b3112`. Acceptance records, observed
-hashes, failures and test evidence are in [validation records](validation.md).
+M00–M14 and the documented pane corrections are accepted. M15–M18 and F01–F47
+remain planned. Remote/OpenOCD execution, physical-board compatibility and
+release acceptance are not complete. The latest implementation is M14
+`1dee59f33323d37af9739ce846f1a676ea56d2d5`. Acceptance records, observed hashes,
+failures and test evidence are in [validation records](validation.md).
 M09's implementation hash is not recorded; acceptance alone does not supply it.
 
 | Milestone | Deliverable | State | Commit SHA |
@@ -32,7 +32,7 @@ M09's implementation hash is not recorded; acceptance alone does not supply it.
 | M11 | Scoped read-only Locals/Watches | accepted | `77446434d8e6e1e1a356abaa4d94e028a1098036` |
 | M12 | Hardware data watchpoints and cross-view actions | accepted | `f1dbb8a70033821e33e9a5506e23758d0723587d` |
 | M13 | Basic profiles and key mappings | accepted | `4030df3fa41da5805cedf1310b8c8ee7694b3112` |
-| M14 | Native integration acceptance | planned | — |
+| M14 | Native integration acceptance | accepted | `1dee59f33323d37af9739ce846f1a676ea56d2d5` |
 | M15 | Existing remote server | planned | — |
 | M16 | OpenOCD wizard/lifecycle/actions | planned | — |
 | M17 | Real release-board acceptance | planned | — |

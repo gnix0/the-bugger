@@ -10,6 +10,15 @@ target cases establish architecture coverage, not physical-board support.
 See [testing](../docs/testing.md) for procedures and prerequisites; execution
 records remain in the [validation records](../docs/validation.md).
 
+- `make test-m14-model`: names-only automatic Call Stack arguments, deliberate
+  selected-frame values, errors/obsolete replies and strict native mapping policy.
+- `test-acceptance-native` / `make test-m14-native`: repeated integrated C/C++
+  sessions, simultaneous inspectors, stale-state transitions, Save Log, owned
+  cleanup and reported idle CPU/pump timing. The focused target also runs native
+  context and its terminal test. Integrated acceptance is included in
+  `make test-native`; ptrace is required. See
+  [M14 procedures](../docs/testing.md#native-integration-and-hardening).
+
 - `test-profiles` and `test-profile-sources` / `make test-m13-model`:
   strict versioned JSON/XDG storage, all connection definitions, literal ordered
   arguments/scripts/paths, key validation, private atomic failures, stale writers,
@@ -145,8 +154,8 @@ FR-06/07/08/09/10/11/12/13/14/15/16/17 acceptance. M03's synthetic GDB/MI corpus
 is in `fixtures/mi/` with a provenance README; it establishes NFR-04 parser
 evidence. M04's C fake peer tests controller behavior without launching a target;
 real native C/C++ fixtures are in `fixtures/native/`, with separate M05
-`make test-native` and `make sanitize-native` checks. Complete native
-acceptance in M14 and real board evidence in M17. Every release retests native
+`make test-native` and `make sanitize-native` checks. M14 records native
+integration acceptance; real board evidence remains M17. Every release retests native
 x86-64 and the STM32/ARM validation, ESP32/Xtensa and ESP32/RISC-V hardware;
 QEMU ARM/RISC-V adds coverage where available and never replaces board evidence.
 After v0.1.0, native tests remain the regression foundation while new feature

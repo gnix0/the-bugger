@@ -4,7 +4,7 @@
 
 The product is embedded-first, with shared target-neutral inspectors. Linux is
 the frontend host and the currently operational target adapter, not the universal
-target OS. Native development/acceptance continues through M14; remote/OpenOCD and
+target OS. Native integration is accepted through M14; remote/OpenOCD and
 physical embedded validation remain M15–M17. Known integration gaps are listed below and in the roadmap.
 
 `src/main.c` handles help/version and starts the terminal application.
@@ -313,16 +313,17 @@ console commands invalidate context before execution and refresh it afterward.
 Only visible context views trigger automatic reads, only while stopped. Refresh
 and selections also wait for a stopped target. Sequential `-thread-info`,
 `-stack-info-frame`, bounded `-stack-list-frames --no-frame-filters` and
-`-stack-list-arguments --no-frame-filters --simple-values` produce an owned
+`-stack-list-arguments --no-frame-filters --no-values` produce an owned
 snapshot, published coherently after the sequence. Partial unwinds, missing
 source/symbols, optimized-out arguments and command failures remain explicit;
-no CLI output is parsed and no target expressions/functions are evaluated.
+no CLI output is parsed and automatic argument discovery does not evaluate values.
 The frontend retains the frames GDB reports, including inline/tail-call frames,
 without inventing missing frames. RTOS-specific inspection is planned, not part of this model.
 
 Bounds: first 128 reported threads, 32 frames per stack page plus one lookahead,
 and at most the first 4096 frame levels. Strings have fixed render-safe bounds;
-arguments use simple values rather than eager aggregate expansion. Requests have
+argument discovery returns names only. Read Args deliberately requests simple
+values for the selected frame only, with no automatic repeat or aggregate expansion. Requests have
 three-second deadlines, no automatic retry loop and no idle/running polling.
 Last selection wins when pending thread choices supersede each other; frame
 selection is blocked during a thread-selection request to avoid selecting a
@@ -674,6 +675,33 @@ available. A failed setting aborts the queue visibly without retry spin.
 The TUI's source-settings save action captures applied settings, not pending ones.
 M15 must retain this ordering/interlock for remote sessions. See [profile validation](testing.md#profiles-and-action-keys) for reproducible checks.
 
+## Value-producing request audit
+
+The M14 audit distinguishes target value inspection from symbol discovery and
+GDB's own execution/unwind machinery. It does not infer remote compatibility
+from native behavior. Authorization precedes dispatch, not rendering.
+
+| Request path | Dispatch rule and boundary |
+|---|---|
+| Context / Call Stack | Automatic argument discovery uses `--no-values` and disables frame filters. Read Args requests `--simple-values` for the selected frame only, deliberately in a fresh stopped context. Refresh, resume, thread/frame changes and session reset invalidate this permission; no automatic repeat. Unexpected values in a names-only reply are ignored. |
+| Native frame printing | Session setup applies `print frame-arguments none` before loading/attaching. This suppresses implicit argument-value formatting in frame/stop output; an explicit Console command can change GDB settings. Remote setup must establish the same policy before connecting. |
+| Locals / Watches | Names-only discovery; creation, evaluation, formatting and child expansion require a deliberate operation or complete-footprint/ordinary-region proof. The native adapter supplies no automatic value authorization. No automatic pointer expansion. |
+| Memory | Go/Refresh are deliberate bounded reads. Browsing requires an established ordinary region; unknown/MMIO does not inherit permission from the previous location. Native mapping metadata is parsed with checked fields, overflow/order validation and complete records; device and unknown special mappings are excluded. |
+| CPU registers | Bounded visible-register reads while stopped, through GDB register IDs. These are CPU/debugger registers, not an MMIO peripheral inspector. M15 must validate target capabilities; F34 peripheral reads need their own policy. |
+| Code / source | Source reads local files. Instruction fetches are bounded around selected code and validated executable-image ranges; explicit raw decoding is labelled. Address/symbol navigation is deliberate, uses a restricted address expression and never moves execution. |
+| Breakpoints / data watches | Listing is metadata. Creation, conditions, Run to Selected and hardware watches are deliberate operations with execution/ownership interlocks. Watchpoint installation may read watched storage; it does not authorize future variable/Memory reads. |
+| Console / profiles | Console and command files are deliberate GDB operations, not a sandbox. Profiles restore approved configuration/source mappings, not stale values or automatic arbitrary commands. Saved remote/OpenOCD definitions remain inert previews. |
+
+The [GDB stack command reference](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Stack-Manipulation.html)
+defines names-only and simple-value modes; [frame argument settings](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Print-Settings.html)
+define implicit frame formatting. GDB may access stack, unwind information and
+debug registers to report context or perform execution control. Disabling argument values does not eliminate those
+protocol/backend requirements. Remote memory-map/capability evidence, unsupported
+operations and target-specific debug access remain M15/M16 validation tasks.
+See [M14 checks](testing.md#native-integration-and-hardening) for reproducible
+coverage and the [validation register](validation.md) for recorded outcomes.
+
+
 ## Extension boundaries
 
 The [future sequence](roadmap.md#release-progression-and-priority-changes)
@@ -706,15 +734,14 @@ are late reviewed candidates; native correctness/maintenance remains continuous.
 - The native code index uses process maps and mapped ELF images. Remote image
   identity, relocation, byte order, address units and region evidence remain M15
   prerequisites. Initial Memory uses octet addressing and at most 64-bit addresses.
-- Call Stack's `--simple-values` arguments can read memory; they are not a read-free
-  operation. The M14 audit must apply the value-producing-request policy before
-  remote automatic inspection. Expression filtering alone is insufficient.
+- Call Stack argument discovery is names-only. Explicit argument reads and native
+  frame-print suppression have M14 native/terminal automated coverage. Metadata
+  and stack unwinding can still require
+  GDB-internal target accesses; this is not a claim that context discovery is
+  read-free or that a remote server has authorized arbitrary memory access.
 - The native variable adapter cannot prove complete expression footprints, so
   values require deliberate operations. Target descriptions and SVD readability
   alone cannot establish that MMIO access is free of side effects.
-- Full-project static-analysis findings remain assigned to M14; a focused module
-  analyzer pass does not clear them. Exact findings and validation limits are in
-  the [validation evidence](validation.md#m11).
 - Real remote, STM32, ESP32 and optional acquisition compatibility remain unverified.
   See [hardware validation](testing.md#every-release-regression-matrix). Register
   groups have an ungrouped fallback; specialized views remain planned.

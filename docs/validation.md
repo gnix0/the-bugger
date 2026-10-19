@@ -9,13 +9,13 @@ instructions are required to interpret the results.
 
 ## Current evidence boundary
 
-M00–M13 and the listed corrections are accepted. M14–M18 remain planned; v0.1.0
-is not accepted. The final M13 full default/native/tmux run passed, and focused
-profile/source-restore native checks passed under ASan/UBSan with leak checking.
-These runs do not establish a full-project sanitizer/analyzer pass or physical
-embedded compatibility. Open issues remain the M14 integration/read-policy and
-analyzer audit, remote/OpenOCD execution, and real STM32/Xtensa/RISC-V validation.
-QEMU coverage is supplementary and currently unverified.
+M00–M14 and the listed corrections are accepted; M15–M18 remain planned.
+v0.1.0 is not accepted. M14 records passing GCC/Clang default/native/tmux suites,
+slow watchpoint recovery, full default/native ASan/UBSan with leak detection and
+full-project static analysis. These results do not establish physical embedded
+compatibility or measured terminal input-to-redraw latency. Remote/OpenOCD
+execution and real STM32/Xtensa/RISC-V validation remain outstanding. QEMU
+coverage is supplementary and currently unverified.
 
 Log paths identify the original local artifacts, which are ignored/disposable;
 the command/result summaries below are the durable record. Unreported runs and
@@ -44,7 +44,7 @@ restructure these records.
 | M11 | Scoped read-only Locals/Watches | accepted | `77446434d8e6e1e1a356abaa4d94e028a1098036` |
 | M12 | Hardware data watchpoints and cross-view actions | accepted | `f1dbb8a70033821e33e9a5506e23758d0723587d` |
 | M13 | Basic profiles and key mappings | accepted | `4030df3fa41da5805cedf1310b8c8ee7694b3112` |
-| M14 | Native integration acceptance | planned | — |
+| M14 | Native integration acceptance | accepted | `1dee59f33323d37af9739ce846f1a676ea56d2d5` |
 | M15 | Existing remote server | planned | — |
 | M16 | OpenOCD wizard/lifecycle/actions | planned | — |
 | M17 | Real release-board acceptance | planned | — |
@@ -53,6 +53,7 @@ restructure these records.
 
 ### Full recorded commit identifiers
 
+- `1dee59f33323d37af9739ce846f1a676ea56d2d5`
 - `4030df3fa41da5805cedf1310b8c8ee7694b3112`
 - `f1dbb8a70033821e33e9a5506e23758d0723587d`
 - `77446434d8e6e1e1a356abaa4d94e028a1098036`
@@ -353,3 +354,49 @@ Initial broad runs passed default/profile-native tests but failed M12 TUI target
 | `ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 make -j4 BUILD_DIR=build/m13-sanitize CC=clang CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-m13-model test-m13-native` | PASS; `build/m13-sanitize.log`. Focused ASan/UBSan/leak and strict Clang checks, actual relocated-source/breakpoint and profile TUI flows. Not a full sanitizer matrix. |
 | `clang-tidy src/session/profiles.c --checks='-*,clang-analyzer-*,bugprone-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling' --warnings-as-errors='*' -- -Iinclude -Isrc/session -std=c17` | PASS; `build/m13-profiles-analyze.log`. Focused new module only; remaining full-project findings stay assigned to M14. |
 | `git diff --check` | PASS at implementation delivery; repeated for documentation. |
+
+## M14 — native integration acceptance
+
+Accepted through implementation commit `1dee59f33323d37af9739ce846f1a676ea56d2d5`
+(`fix: harden native inspection for M14`). Individual manual checklist outcomes
+were not separately reported; acceptance does not supply unrecorded measurements
+or physical hardware results.
+
+The first owner-run integrated test failed because the harness expected Continue
+to stop at main. Continue correctly runs until a real stop. The harness now
+requests `start` explicitly and includes retained logs in stop-timeout diagnostics;
+application stop/read assertions are preserved. A sandbox rerun was blocked by
+ptrace and is not a PASS. Outside the sandbox, `make -s test-m14-native` passed:
+three integrated C/C++ sessions, recursive/optimized/stripped context, explicit
+argument reads and terminal interaction. Maximum observed pump duration was
+11 ms with a requested 10 ms wait; frontend idle CPU was 10.84–11.40 ms per
+roughly one-second observation on Linux 7.2.9-arch1-1 x86-64.
+
+Names-only automatic Call Stack arguments and deliberate selected-frame Read
+Args replace page-wide automatic value evaluation. Native setup suppresses
+implicit frame-argument values. Checked native mapping parsing and Memory/TUI
+arithmetic corrections address the recorded analyzer findings; profile rendering
+also guards a possibly missing profile. The request-policy inventory is in
+[architecture](architecture.md#value-producing-request-audit).
+
+| Execution | Result / scope |
+|---|---|
+| Agent: strict `make -s -j4 all build/test-context build/fake-mi build/test-native-words build/test-acceptance-native build/test-context-native build/test-context-tui` | PASS; C17 build. Native/terminal binaries compiled, not executed. |
+| Agent: `make -s test-m14-model` | PASS; names-only argument encodings, unsolicited values ignored, selected-frame read, overlapping/hidden/running denial, missing/error replies, refresh/resume obsolescence and no idle retries. |
+| Agent: `build/test-native-words` after adding actual `/proc/self/maps` validation | PASS; real host stack mapping recognized, malformed/overflow/truncated/device/unknown-special mappings rejected. No inferior launched. |
+| Agent: focused clang-tidy on `context.c`, `memory.c`, `native.c` and `app.c`, using the repository analyzer/bugprone checks and warnings as errors | PASS after corrections; logs `/tmp/the-bugger-m14-analyze.log`, `/tmp/the-bugger-m14-context-analyze.log`, `/tmp/the-bugger-m14-tui-analyze.log`. Initial focused runs found arithmetic conversions, possible null profile access and a nested stream-read error path; these were corrected. This is not a full-project analyzer pass. |
+| Agent: local documentation link/anchor/fence check and `git diff --check` | PASS; 93 local links/anchors before this evidence/roadmap update. |
+| Agent: `make -s test test-native test-tmux test-m12-slow analyze` | Default/native/tmux and slow recovery goals PASS; `build/m14-regression.log`. The command then failed on the analyzer's adjacent watchpoint width/mode API warning. Existing validated API retained with a narrowly justified local suppression. |
+| Agent: `make -s analyze` after that correction | PASS; full project, warnings as errors; `build/m14-analyze.log`. Clears the outstanding full-project analyzer gate for these changes. |
+| Agent: `make -s CC=clang CXX=clang++ BUILD_DIR=build/m14-clang test test-native test-tmux` | Default tests PASS; initial native run failed on the harness's assumption that optimized recursive frames always retain argument metadata. Direct GDB MI inspection confirmed `args=[]` for Clang's optimized recursive frame and a named depth argument in tail_bridge. Test now selects a frame with reported depth metadata and retains required name/value/invalidation assertions. `build/m14-clang.log`. |
+| Agent: `make -s CC=clang CXX=clang++ BUILD_DIR=build/m14-clang test-native test-tmux` after that correction | PASS; `build/m14-clang-native.log`. Actual C/C++/optimized/stripped/attach, context/read-policy, native integration and isolated tmux coverage. |
+| Agent: corrected GCC `build/test-context-native` against recursive/optimized/stripped fixtures | PASS; `build/m14-context-native.log`; verifies the compiler-portable assertion retains GCC coverage. |
+| Agent: `ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 make -s CC=clang CXX=clang++ BUILD_DIR=build/m14-sanitize CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test test-native` | PASS; full default/native ASan/UBSan and leak-detection matrix, including repeated integrated C/C++ sessions and actual terminal interaction; `build/m14-sanitize.log`. |
+| Acceptance / physical hardware | Accepted through the implementation commit. Individual manual outcomes were not separately reported. No embedded hardware result claimed. |
+
+The integrated native test participates in `make test-native`. Runtime measurements
+above cover frontend pumping/idle CPU, not terminal input-to-redraw latency or
+GDB CPU. Test host: Intel Core i5-8265U, Linux 7.2.9-arch1-1 x86-64, GCC 16.2.1,
+Clang 23.1.1, GDB 18.1 and tmux 3.8. The direct/tmux manual procedure remains
+available for reproduction; individual outcomes and terminal input-to-redraw
+measurements were not separately reported. Hardware limitations remain unchanged.
