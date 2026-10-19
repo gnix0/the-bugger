@@ -582,6 +582,15 @@ void tb_gdb_close(TbGdb *gdb)
     shutting_down(gdb, false);
 }
 
+static void reap(TbGdb *gdb);
+void tb_gdb_abort(TbGdb *gdb)
+{
+    if (!gdb || gdb->state == TB_GDB_DISCONNECTED) { return; }
+    if (gdb->pid > 0) { reap(gdb); }
+    if (gdb->pid > 0) { (void)kill(gdb->pid, SIGKILL); }
+    shutting_down(gdb, true); gdb->shutdown_stage = 1;
+}
+
 static void deadlines(TbGdb *gdb)
 {
     uint64_t now = tb_gdb_now_ms();

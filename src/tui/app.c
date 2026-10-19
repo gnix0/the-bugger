@@ -3,7 +3,7 @@
 #include "demo.h"
 #include "render.h"
 #include "theme.h"
-#include "native.h"
+#include "session.h"
 #include "profiles.h"
 
 #include <curses.h>
@@ -69,7 +69,7 @@ typedef struct {
     TbRect panes[TB_MAX_PANES];
     const char *colors;
     char status[160];
-    TbNative *native;
+    TbSession *debugger;
     bool demo_mode, live, leave_session, exit_after_close;
     bool follow_log[TB_MAX_PANES];
     wchar_t input[FIELD_SIZE];
@@ -253,7 +253,8 @@ static void draw_header(const App *app, const char *subtitle)
     tb_text(0, 14, COLS - 14, TB_CHROME, 0, text);
     tb_fill((TbRect){0, 2, COLS, 1}, TB_NOTICE);
     tb_text(2, 2, COLS - 4, TB_NOTICE, A_BOLD,
-            app->live ? "LIVE NATIVE | Console / Call Stack / Threads" :
+            app->live ? (app->session == 2 ? "LIVE REMOTE | Console / Call Stack / Threads" : "LIVE NATIVE | Console / Call Stack / Threads") :
+            !app->demo_mode && app->session == 2 ? "Remote GDB server | existing endpoint; no server ownership" :
             app->demo_mode || app->session != 0 ? "DEMO / VISUAL REFERENCE - no debugger connected" :
             "Native Linux | launch or attach through GDB");
     tb_text(LINES - 2, 1, COLS - 2, TB_YELLOW, 0, app->status);
@@ -317,7 +318,8 @@ static void draw_launcher(App *app)
 static void draw_form(App *app, bool review)
 {
     bool native = !app->demo_mode && app->session == 0;
-    draw_header(app, review ? (native ? "Review native session" : "Review session preview") : "Configure session");
+    bool remote = !app->demo_mode && app->session == 2;
+    draw_header(app, review ? (native ? "Review native session" : remote ? "Review remote session" : "Review session preview") : "Configure session");
     int width = COLS > 84 ? 80 : COLS - 4;
     int left = (COLS - width) / 2;
     tb_fill((TbRect){left - 1, 4, width + 2, LINES - 9}, TB_PANEL);
@@ -379,13 +381,15 @@ static void draw_form(App *app, bool review)
         tb_text(LINES - 5, 2, COLS - 4, TB_ORANGE, 0,
                 native ? (app->forms[0].alternate ? "Will attach and halt. Exit detaches/resumes; inputs remain on failure." :
                 "Will load the ELF. Continue runs it; exit terminates a launched program.") :
+                remote ? "Connect may halt the target. Server stays externally owned; symbol loading does not flash." :
                 "Preview only. Nothing will be launched, connected or saved.");
-        button(app, LINES - 4, 2, 23, native ? "[ Start native ]" : "[ Preview workspace ]", PREVIEW, 0, 0);
+        button(app, LINES - 4, 2, 23, native ? "[ Start native ]" : remote ? "[ Connect ]" : "[ Preview workspace ]", PREVIEW, 0, 0);
     } else {
         tb_text(LINES - 5, 2, COLS - 4, TB_MUTED, 0,
                 native ? "Quotes group arguments/NAME=value entries. No shell expansion. Paths are literal." :
+                remote ? "TCP host:port (IPv6 in brackets). Optional ELF supplies symbols. Protocol is in profile options." :
                 "Sample configuration only; tool checks and execution come later.");
-        button(app, LINES - 4, 2, 21, native ? "[ Review session ]" : "[ Review preview ]", SUBMIT, 0, 0);
+        button(app, LINES - 4, 2, 21, (native || remote) ? "[ Review session ]" : "[ Review preview ]", SUBMIT, 0, 0);
     }
     button(app, LINES - 4, COLS - 12, 10, "[ Back ]", BACK, 0, 0);
     if (!app->demo_mode) {
@@ -455,10 +459,10 @@ static void context_row(const TbContextSnapshot *snapshot, TbView view, int item
 static void mixed_summary(const App *app, int index, const TbInstruction *instruction,
                           char *summary, size_t capacity)
 {
-    const TbCodeView *view = tb_code_view(tb_native_code(app->native), index);
+    const TbCodeView *view = tb_code_view(tb_session_code(app->debugger), index);
     char text[1024] = {0};
     if (strcmp(instruction->source, view->path) == 0) {
-        (void)tb_code_source_line(tb_native_code(app->native), index, (size_t)instruction->line - 1, text, sizeof text);
+        (void)tb_code_source_line(tb_session_code(app->debugger), index, (size_t)instruction->line - 1, text, sizeof text);
     }
     if (*text) { (void)snprintf(summary, capacity, "  L%d %.1023s", instruction->line, text); }
     else {
@@ -486,13 +490,13 @@ static TbScroll workspace_scroll(const App *app, const TbDemoPane *pane, int vis
     int index = (int)(pane - app->demo.panes);
     if (app->body_height[index] > 0) { visible = app->body_height[index]; }
     TbView view = pane->tabs[pane->active];
-    const TbContextSnapshot *context = tb_context_snapshot(tb_native_context(app->native));
-    const TbCodeView *code = tb_code_view(tb_native_code(app->native), (int)(pane - app->demo.panes));
-    int total = view == TB_CONSOLE ? (int)tb_native_log_count(app->native) :
-                       view == TB_BREAKPOINTS ? (int)tb_break_count(tb_native_breakpoints(app->native)) :
-                       view == TB_REGISTERS ? (int)tb_registers_count(tb_native_registers(app->native)) :
-                       view == TB_LOCALS || view == TB_WATCHES ? (int)tb_variables_count(tb_native_variables(app->native), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES) :
-                       view == TB_MEMORY ? (int)((tb_memory_view(tb_native_memory(app->native), index)->data_size + 15) / 16) :
+    const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
+    const TbCodeView *code = tb_code_view(tb_session_code(app->debugger), (int)(pane - app->demo.panes));
+    int total = view == TB_CONSOLE ? (int)tb_session_log_count(app->debugger) :
+                       view == TB_BREAKPOINTS ? (int)tb_break_count(tb_session_breakpoints(app->debugger)) :
+                       view == TB_REGISTERS ? (int)tb_registers_count(tb_session_registers(app->debugger)) :
+                       view == TB_LOCALS || view == TB_WATCHES ? (int)tb_variables_count(tb_session_variables(app->debugger), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES) :
+                       view == TB_MEMORY ? (int)((tb_memory_view(tb_session_memory(app->debugger), index)->data_size + 15) / 16) :
                        view == TB_SOURCE ? (int)code->line_count :
                        view == TB_DISASSEMBLY ? assembly_rows(code) :
                        view == TB_CALL_STACK && context->ready && !context->stale ? (int)context->frame_count :
@@ -544,24 +548,24 @@ static int native_content_width(const App *app, int index)
 {
     const TbDemoPane *pane = &app->demo.panes[index];
     TbView view = pane->tabs[pane->active];
-    const TbCodeView *code = tb_code_view(tb_native_code(app->native), index);
+    const TbCodeView *code = tb_code_view(tb_session_code(app->debugger), index);
     TbAssemblyColumns columns = assembly_columns(code);
-    const TbContextSnapshot *context = tb_context_snapshot(tb_native_context(app->native));
-    size_t rows = view == TB_LOCALS || view == TB_WATCHES ? tb_variables_count(tb_native_variables(app->native), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES) : view == TB_MEMORY ? (tb_memory_view(tb_native_memory(app->native), index)->data_size + 15) / 16 : view == TB_REGISTERS ? tb_registers_count(tb_native_registers(app->native)) : view == TB_SOURCE ? code->line_count : view == TB_DISASSEMBLY ? code->instruction_count :
-                  view == TB_CONSOLE ? tb_native_log_count(app->native) : view == TB_BREAKPOINTS ? tb_break_count(tb_native_breakpoints(app->native)) : view == TB_CALL_STACK && context->ready && !context->stale ? context->frame_count :
+    const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
+    size_t rows = view == TB_LOCALS || view == TB_WATCHES ? tb_variables_count(tb_session_variables(app->debugger), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES) : view == TB_MEMORY ? (tb_memory_view(tb_session_memory(app->debugger), index)->data_size + 15) / 16 : view == TB_REGISTERS ? tb_registers_count(tb_session_registers(app->debugger)) : view == TB_SOURCE ? code->line_count : view == TB_DISASSEMBLY ? code->instruction_count :
+                  view == TB_CONSOLE ? tb_session_log_count(app->debugger) : view == TB_BREAKPOINTS ? tb_break_count(tb_session_breakpoints(app->debugger)) : view == TB_CALL_STACK && context->ready && !context->stale ? context->frame_count :
                   view == TB_THREADS && context->ready && !context->stale ? context->thread_count : 0;
     size_t maximum = 0;
     for (size_t row = 0; row < rows; ++row) {
         char text[4096]; bool selected;
-        if (view == TB_MEMORY) { tb_memory_line(tb_native_memory(app->native), index, row, text, sizeof text); }
-        else if (view == TB_REGISTERS) { register_text(tb_registers_row(tb_native_registers(app->native), row), text, sizeof text); }
-        else if (view == TB_LOCALS || view == TB_WATCHES) { variable_text(tb_variables_row(tb_native_variables(app->native), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES, row), text, sizeof text); }
-        else if (view == TB_SOURCE) { (void)tb_code_source_line(tb_native_code(app->native), index, row, text, sizeof text); }
+        if (view == TB_MEMORY) { tb_memory_line(tb_session_memory(app->debugger), index, row, text, sizeof text); }
+        else if (view == TB_REGISTERS) { register_text(tb_registers_row(tb_session_registers(app->debugger), row), text, sizeof text); }
+        else if (view == TB_LOCALS || view == TB_WATCHES) { variable_text(tb_variables_row(tb_session_variables(app->debugger), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES, row), text, sizeof text); }
+        else if (view == TB_SOURCE) { (void)tb_code_source_line(tb_session_code(app->debugger), index, row, text, sizeof text); }
         else if (view == TB_DISASSEMBLY) {
             const TbInstruction *instruction = &code->instructions[row];
             tb_format_assembly(text, sizeof text, columns, instruction->address, instruction->opcodes, instruction->text);
-        } else if (view == TB_CONSOLE) { (void)snprintf(text, sizeof text, "%s", tb_native_log_line(app->native, row)); }
-        else if (view == TB_BREAKPOINTS) { break_text(tb_break_row(tb_native_breakpoints(app->native), row), text, sizeof text); }
+        } else if (view == TB_CONSOLE) { (void)snprintf(text, sizeof text, "%s", tb_session_log_line(app->debugger, row)); }
+        else if (view == TB_BREAKPOINTS) { break_text(tb_break_row(tb_session_breakpoints(app->debugger), row), text, sizeof text); }
         else { context_row(context, view, (int)row, text, sizeof text, &selected); }
         size_t length = strlen(text); if (length > maximum) { maximum = length; }
         if (view == TB_DISASSEMBLY && code->mixed && code->mixed_available && code->instructions[row].line > 0) {
@@ -648,8 +652,8 @@ static void code_focus(App *app, int pane)
 static bool selected_location(App *app, char *location, size_t capacity, const TbBreakpoint **existing, TbBreakLocation *where)
 {
     int id = app->execution_pane; TbDemoPane *pane = &app->demo.panes[id];
-    const TbCodeView *code = tb_code_view(tb_native_code(app->native), id);
-    TbBreakpoints *b = tb_native_breakpoints(app->native);
+    const TbCodeView *code = tb_code_view(tb_session_code(app->debugger), id);
+    TbBreakpoints *b = tb_session_breakpoints(app->debugger);
     if (!app->instruction_mode) {
         unsigned line = pane->row[TB_SOURCE] >= 0 ? (unsigned)pane->row[TB_SOURCE] + 1 : 0;
         *existing = tb_break_at(b, code->path, line, NULL);
@@ -672,7 +676,7 @@ static bool toggle_breakpoint(App *app)
 {
     char location[8192]; const TbBreakpoint *existing = NULL;
     TbBreakLocation where;
-    TbBreakpoints *b = tb_native_breakpoints(app->native);
+    TbBreakpoints *b = tb_session_breakpoints(app->debugger);
     bool okay = selected_location(app, location, sizeof location, &existing, &where) &&
                 (existing ? tb_break_remove(b, existing->child ? existing->parent : existing->id) : tb_break_add_at(b, where, false));
     status(app, okay ? "Breakpoint change queued." : *tb_break_message(b) ? tb_break_message(b) : "Select a source line or instruction first.");
@@ -698,13 +702,13 @@ static int assembly_pc_row(const TbCodeView *view, const char *pc)
 
 static void draw_code_pane(App *app, int index, TbRect rect)
 {
-    TbCode *code = tb_native_code(app->native);
+    TbCode *code = tb_session_code(app->debugger);
     const TbCodeView *view = tb_code_view(code, index);
-    const TbContextSnapshot *context = tb_context_snapshot(tb_native_context(app->native));
+    const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
     TbDemoPane *pane = &app->demo.panes[index];
     bool source = pane->tabs[pane->active] == TB_SOURCE;
     bool stale = view->stale || context->stale;
-    bool loaded = tb_native_state(app->native) == TB_NATIVE_READY;
+    bool loaded = tb_session_state(app->debugger) == TB_SESSION_READY;
     bool empty = source ? !view->line_count : !view->instruction_count;
     char header[512];
     const char *path = strrchr(view->path, '/'); path = path ? path + 1 : view->path;
@@ -793,7 +797,7 @@ static void draw_code_pane(App *app, int index, TbRect rect)
         (void)snprintf(gutter, sizeof gutter, "%c%c%5zu ", source ? ' ' : stopped ? '>' : inspected ? '~' : ' ',
                        source ? stopped ? '>' : inspected ? '~' : ' ' : ' ', source ? i + 1 : i);
         if (!source) { (void)snprintf(gutter, sizeof gutter, " %c ", stopped ? '>' : inspected ? '~' : ' '); }
-        const TbBreakpoint *bp = tb_break_at(tb_native_breakpoints(app->native), source ? view->path : NULL,
+        const TbBreakpoint *bp = tb_break_at(tb_session_breakpoints(app->debugger), source ? view->path : NULL,
                                             source ? (unsigned)i + 1 : 0, source ? NULL : instruction->address);
         if (bp) { gutter[0] = bp->enabled ? 'o' : '-'; }
         int gutter_width = source ? 8 : 3;
@@ -864,7 +868,7 @@ static void draw_context_pane(App *app, int index, TbRect rect)
 {
     TbDemoPane *pane = &app->demo.panes[index];
     TbView view = pane->tabs[pane->active];
-    const TbContextSnapshot *snapshot = tb_context_snapshot(tb_native_context(app->native));
+    const TbContextSnapshot *snapshot = tb_context_snapshot(tb_session_context(app->debugger));
     bool stack = view == TB_CALL_STACK;
     char header[256];
     (void)snprintf(header, sizeof header, "%s | T%.20s frame #%d | %s | stop T%.20s PC %.47s",
@@ -886,8 +890,8 @@ static void draw_context_pane(App *app, int index, TbRect rect)
     }
     TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
     if (!snapshot->ready || snapshot->stale) {
-        const char *state = tb_native_state(app->native) == TB_NATIVE_RUNNING ? "Running: retained context is stale." :
-                            tb_native_state(app->native) == TB_NATIVE_STOPPED && snapshot->refreshing ?
+        const char *state = tb_session_state(app->debugger) == TB_SESSION_RUNNING ? "Running: retained context is stale." :
+                            tb_session_state(app->debugger) == TB_SESSION_STOPPED && snapshot->refreshing ?
                             "Refreshing stopped context..." : "Stop a running program to inspect context.";
         tb_text(rect.y + 2, rect.x + 1, rect.w - 2, TB_ORANGE, 0, state);
         return;
@@ -925,7 +929,7 @@ static void select_context_row(App *app, int pane_index)
     if (!app->live) { return; }
     TbDemoPane *pane = &app->demo.panes[pane_index];
     TbView view = pane->tabs[pane->active];
-    TbContext *context = tb_native_context(app->native);
+    TbContext *context = tb_session_context(app->debugger);
     const TbContextSnapshot *snapshot = tb_context_snapshot(context);
     int row = pane->row[view];
     bool okay = false;
@@ -947,13 +951,13 @@ static void draw_native_pane(App *app, int index, TbRect rect)
     TbDemoPane *pane = &app->demo.panes[index];
     TbView view = pane->tabs[pane->active];
     if (view == TB_LOCALS || view == TB_WATCHES) {
-        TbVariables *v = tb_native_variables(app->native);
+        TbVariables *v = tb_session_variables(app->debugger);
         TbVariableView kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
         const char *error = tb_variables_error(v, kind);
         bool stale = tb_variables_stale(v, kind);
-        char header[160]; const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(app->native));
+        char header[160]; const TbContextSnapshot *s = tb_context_snapshot(tb_session_context(app->debugger));
         (void)snprintf(header, sizeof header, "%s | T%s frame %d | * changed%s",
-                       tb_native_state(app->native) != TB_NATIVE_STOPPED || s->stale ? "STALE" : stale ? "READ REQUIRED" : "LIVE",
+                       tb_session_state(app->debugger) != TB_SESSION_STOPPED || s->stale ? "STALE" : stale ? "READ REQUIRED" : "LIVE",
                        s->selected_thread, s->selected.level, tb_variables_limited(v, kind) ? " | limited" : "");
         tb_text(rect.y + 1, rect.x + 1, rect.w - 2, *error || stale ? TB_ORANGE : TB_MUTED, 0,
                 *error ? error : header);
@@ -965,7 +969,7 @@ static void draw_native_pane(App *app, int index, TbRect rect)
             const TbVariable *value = tb_variables_row(v, kind, (size_t)item); char text[1500];
             variable_text(value, text, sizeof text);
             size_t offset = (size_t)app->horizontal[index][view]; if (offset > strlen(text)) { offset = strlen(text); }
-            TbStyle style = !value->fresh || s->stale || tb_native_state(app->native) != TB_NATIVE_STOPPED ? TB_MUTED : !value->available ? TB_ORANGE : value->changed ? TB_YELLOW : TB_GREEN;
+            TbStyle style = !value->fresh || s->stale || tb_session_state(app->debugger) != TB_SESSION_STOPPED ? TB_MUTED : !value->available ? TB_ORANGE : value->changed ? TB_YELLOW : TB_GREEN;
             tb_text(rect.y + 3 + row, rect.x + 1, app->body_width[index], style,
                     pane->row[view] == item ? A_UNDERLINE : 0, text + offset);
         }
@@ -977,8 +981,8 @@ static void draw_native_pane(App *app, int index, TbRect rect)
         return;
     }
     if (view == TB_REGISTERS) {
-        TbRegisters *r = tb_native_registers(app->native); bool stale = tb_registers_stale(r);
-        char header[256]; const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(app->native));
+        TbRegisters *r = tb_session_registers(app->debugger); bool stale = tb_registers_stale(r);
+        char header[256]; const TbContextSnapshot *s = tb_context_snapshot(tb_session_context(app->debugger));
         (void)snprintf(header, sizeof header, "%s | registers | T%s frame %d | * changed%s",
                        stale ? "STALE" : "LIVE", s->selected_thread, s->selected.level,
                        tb_registers_limited(r) ? " | limited" : "");
@@ -1000,7 +1004,7 @@ static void draw_native_pane(App *app, int index, TbRect rect)
         tb_text(rect.y + rect.h - 1, rect.x + 22, rect.w - 23, TB_MUTED, 0, "All (ungrouped)"); return;
     }
     if (view == TB_MEMORY) {
-        TbMemory *memory = tb_native_memory(app->native); const TbMemoryView *data = tb_memory_view(memory, index);
+        TbMemory *memory = tb_session_memory(app->debugger); const TbMemoryView *data = tb_memory_view(memory, index);
         int label = rect.w >= 25 ? 8 : 1, field_x = rect.x + label;
         int field_width = rect.w - label - 5;
         tb_text(rect.y + 1, rect.x + 1, label - 1, TB_CYAN, 0, "Address");
@@ -1053,7 +1057,7 @@ static void draw_native_pane(App *app, int index, TbRect rect)
         return;
     }
     if (view == TB_BREAKPOINTS) {
-        TbBreakpoints *b = tb_native_breakpoints(app->native);
+        TbBreakpoints *b = tb_session_breakpoints(app->debugger);
         tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_CYAN, 0, tb_break_ready(b) ? "LIVE | breakpoints / data watches | o enabled / - disabled" : "Refreshing breakpoint table...");
         if (tb_break_busy(b) && *tb_break_message(b)) { tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_ORANGE, 0, tb_break_message(b)); }
         TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
@@ -1076,7 +1080,7 @@ static void draw_native_pane(App *app, int index, TbRect rect)
         TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
         if (app->follow_log[index]) { pane->scroll[view] = scroll.maximum; scroll = workspace_scroll(app, pane, rect.h - 3); }
         for (int i = 0; i < scroll.visible && scroll.offset + i < scroll.total; ++i) {
-            const char *text = tb_native_log_line(app->native, (size_t)scroll.offset + (size_t)i);
+            const char *text = tb_session_log_line(app->debugger, (size_t)scroll.offset + (size_t)i);
             size_t offset = (size_t)app->horizontal[index][view];
             if (offset > strlen(text)) { offset = strlen(text); }
             tb_text(rect.y + 2 + i, rect.x + 1, app->body_width[index], TB_PANEL, 0, text + offset);
@@ -1172,14 +1176,16 @@ static void draw_workspace(App *app)
     ++y;
     tb_fill((TbRect){0, y, COLS, 1}, TB_NOTICE);
     tb_text(y, 1, COLS - 2, TB_NOTICE, 0,
-            app->live ? (app->instruction_mode ? "LIVE NATIVE | instruction stepping | live code, context and console" :
+            app->live ? (app->session == 2 ? (app->instruction_mode ? "LIVE REMOTE | instruction stepping | live code, context and console" :
+                         "LIVE REMOTE | source stepping | live code, context and console") :
+                         app->instruction_mode ? "LIVE NATIVE | instruction stepping | live code, context and console" :
                          "LIVE NATIVE | source stepping | live code, context and console") :
             "DEMO / VISUAL REFERENCE  |  All values simulated. No debugger connected.");
     ++y;
     tb_fill((TbRect){0, y, COLS, 1}, TB_CHROME);
     tb_text(y, 1, COLS - 20, TB_TARGET, 0, session_names[app->session]);
     tb_text(y, COLS - 18, 17, TB_STATE, A_BOLD,
-            app->live ? tb_native_state_name(app->native) : app->demo.running ? "Running / stale" : "Paused (demo)");
+            app->live ? tb_session_state_name(app->debugger) : app->demo.running ? "Running / stale" : "Paused (demo)");
     ++y;
     TbRect area = {1, y + 1, COLS - 2, LINES - y - 3};
     bool tiled = tb_layout_arrange(&app->layout, area, app->demo.pane);
@@ -1195,16 +1201,16 @@ static void draw_workspace(App *app)
             registers = registers || view == TB_REGISTERS;
             locals = locals || view == TB_LOCALS; watches = watches || view == TB_WATCHES;
         }
-        tb_registers_visible(tb_native_registers(app->native), registers);
-        tb_registers_begin(tb_native_registers(app->native));
-        tb_variables_visible(tb_native_variables(app->native), locals, watches);
-        tb_variables_begin(tb_native_variables(app->native));
-        tb_context_visible(tb_native_context(app->native), threads, frames);
+        tb_registers_visible(tb_session_registers(app->debugger), registers);
+        tb_registers_begin(tb_session_registers(app->debugger));
+        tb_variables_visible(tb_session_variables(app->debugger), locals, watches);
+        tb_variables_begin(tb_session_variables(app->debugger));
+        tb_context_visible(tb_session_context(app->debugger), threads, frames);
         for (int pane = 0; pane < TB_MAX_PANES; ++pane) {
             bool visible = app->panes[pane].w >= 10 && app->panes[pane].h >= 7 && app->menu != pane;
             TbView view = app->demo.panes[pane].tabs[app->demo.panes[pane].active];
-            tb_code_visible(tb_native_code(app->native), pane, visible && view == TB_SOURCE, visible && view == TB_DISASSEMBLY);
-            tb_memory_visible(tb_native_memory(app->native), pane, visible && view == TB_MEMORY);
+            tb_code_visible(tb_session_code(app->debugger), pane, visible && view == TB_SOURCE, visible && view == TB_DISASSEMBLY);
+            tb_memory_visible(tb_session_memory(app->debugger), pane, visible && view == TB_MEMORY);
         }
     }
     if (!tiled) {
@@ -1254,11 +1260,14 @@ static void draw_workspace(App *app)
     char footer[256];
     if (app->live) {
         char target[32] = "not started";
-        if (tb_native_target_pid(app->native) > 0) {
-            (void)snprintf(target, sizeof target, "%ld", (long)tb_native_target_pid(app->native));
+        if (tb_session_target_pid(app->debugger) > 0) {
+            (void)snprintf(target, sizeof target, "%ld", (long)tb_session_target_pid(app->debugger));
         }
-        (void)snprintf(footer, sizeof footer, "LIVE | %s | PID %s | %.159s",
-                       tb_native_state_name(app->native), target, app->status);
+        if (app->session == 2) {
+            (void)snprintf(target, sizeof target, "%.31s", tb_session_capabilities(app->debugger)->target_id);
+        }
+        (void)snprintf(footer, sizeof footer, app->session == 2 ? "LIVE | %s | target %s | %.159s" : "LIVE | %s | PID %s | %.159s",
+                       tb_session_state_name(app->debugger), target, app->status);
     } else { (void)snprintf(footer, sizeof footer, "DEMO | %s | PC 0x%08X | %.16s | %.159s",
                    app->demo.running ? "Running / stale" : "Paused",
                    0x0800042aU + (unsigned)app->demo.step * 2U,
@@ -1297,7 +1306,7 @@ static void draw_code_menu(App *app)
 static void draw_source_settings(App *app)
 {
     draw_header(app, "Source lookup settings");
-    TbCode *code = tb_native_code(app->native);
+    TbCode *code = tb_session_code(app->debugger);
     tb_text(4, 3, COLS - 6, TB_MUTED, 0, "Directories: newest first. Prefix rules: first match wins, in listed order.");
     int height = LINES - 12; if (height < 1) { height = 1; }
     size_t dirs = tb_code_directory_count(code), rules = tb_code_rule_count(code);
@@ -1328,7 +1337,7 @@ static void draw_source_settings(App *app)
 static void draw_code_files(App *app)
 {
     draw_header(app, "GDB source files");
-    TbCode *code = tb_native_code(app->native);
+    TbCode *code = tb_session_code(app->debugger);
     tb_text(4, 3, 8, TB_CYAN, 0, "Filter:");
     int field = add_control(app, (TbRect){11, 4, COLS - 14, 1}, FIELD, 0, 0);
     wide_text(4, 11, COLS - 14, app->input, 0, app->focus == field);
@@ -1358,8 +1367,8 @@ static void draw_code_files(App *app)
 
 static void data_watch_open(App *app, const char *expression, bool address, unsigned width)
 {
-    const TbContextSnapshot *context = tb_context_snapshot(tb_native_context(app->native));
-    if (tb_native_state(app->native) != TB_NATIVE_STOPPED || context->stale) {
+    const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
+    if (tb_session_state(app->debugger) != TB_SESSION_STOPPED || context->stale) {
         status(app, "Data watchpoints need a fresh stopped context."); return;
     }
     app->watch_context = context->generation; app->watch_address = address;
@@ -1389,7 +1398,7 @@ static void draw_input(App *app)
             command ? "Commands are deliberate operations through GDB/MI." :
             "Saves bounded retained history with control bytes escaped; mode 0600.");
     if (memory) {
-        char summary[160]; (void)snprintf(summary, sizeof summary, "Read exactly %u bytes; no calls/writes/casts. MMIO reads can have side effects. Esc cancels.", tb_memory_view(tb_native_memory(app->native), app->memory_pane)->length);
+        char summary[160]; (void)snprintf(summary, sizeof summary, "Read exactly %u bytes; no calls/writes/casts. MMIO reads can have side effects. Esc cancels.", tb_memory_view(tb_session_memory(app->debugger), app->memory_pane)->length);
         tb_text(7, 3, COLS - 6, TB_MUTED, 0, memory_length ? "Changes the requested range only; no target read. Use Address or Refresh afterward." : summary);
     }
     if (profile_text) {
@@ -1431,7 +1440,7 @@ static void draw_input(App *app)
 static void draw_memory_menu(App *app)
 {
     draw_header(app, "Memory inspection options");
-    const TbMemoryView *v = tb_memory_view(tb_native_memory(app->native), app->memory_pane);
+    const TbMemoryView *v = tb_memory_view(tb_session_memory(app->debugger), app->memory_pane);
     char text[512];
     (void)snprintf(text, sizeof text, "Pane %d | %s%+lld | requested range %u bytes | grouping %uB", app->memory_pane + 1, v->configured ? v->expression : "No address", (long long)v->offset, v->length, v->grouping);
     tb_text(5, 3, COLS - 6, TB_CYAN, 0, text);
@@ -1448,7 +1457,7 @@ static void draw_variable_menu(App *app)
     TbDemoPane *pane = &app->demo.panes[app->variable_pane];
     TbView view = pane->tabs[pane->active];
     TbVariableView kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
-    TbVariables *v = tb_native_variables(app->native);
+    TbVariables *v = tb_session_variables(app->debugger);
     const TbVariable *row = tb_variables_row(v, kind, (size_t)pane->row[view]);
     char summary[1000];
     if (row) {
@@ -1474,7 +1483,7 @@ static void draw_break_menu(App *app)
 {
     draw_header(app, "Breakpoint / data-watchpoint management");
     TbDemoPane *pane = &app->demo.panes[app->break_pane];
-    const TbBreakpoint *bp = tb_break_row(tb_native_breakpoints(app->native), (size_t)pane->row[TB_BREAKPOINTS]);
+    const TbBreakpoint *bp = tb_break_row(tb_session_breakpoints(app->debugger), (size_t)pane->row[TB_BREAKPOINTS]);
     char text[1024], safe[1200];
     if (bp) { (void)snprintf(text, sizeof text, "Selected %s | %.400s | %.400s", bp->id, bp->location, bp->condition); }
     else { (void)snprintf(text, sizeof text, "Select an existing row in the Breakpoints pane to edit it."); }
@@ -1518,8 +1527,9 @@ static void draw_page(App *app)
     } else if (editing_page(app)) {
         draw_input(app);
     } else if (app->page == CLOSE_CONFIRM) {
-        draw_header(app, "Close native session?");
-        tb_text(6, 3, COLS - 6, TB_ORANGE, A_BOLD, tb_native_attached(app->native) ?
+        draw_header(app, app->session == 2 ? "Disconnect remote session?" : "Close native session?");
+        tb_text(6, 3, COLS - 6, TB_ORANGE, A_BOLD, app->session == 2 ?
+                "Disconnect from the existing server? Running targets are interrupted first; server controls the final target state." : tb_session_attached(app->debugger) ?
                 "Detach and resume the attached process?" : "Terminate the launched program and close GDB?");
         tb_text(8, 3, COLS - 6, TB_MUTED, 0, "Only the managed session is closed. Cancel keeps debugging.");
         button(app, 11, 3, 14, "[ Cancel ]", CANCEL_RESET, 0, 0);
@@ -1590,7 +1600,7 @@ static void pane_action(App *app, int action, int pane)
         memset(&app->demo.panes[added], 0, sizeof app->demo.panes[added]);
         memset(app->horizontal[added], 0, sizeof app->horizontal[added]);
         app->memory_input[added][0] = 0; app->memory_cursor[added] = 0;
-        if (app->live) { tb_memory_clear(tb_native_memory(app->native), added); }
+        if (app->live) { tb_memory_clear(tb_session_memory(app->debugger), added); }
         app->demo.pane = added;
         tb_demo_view(&app->demo, TB_DISASSEMBLY);
         status(app, action == 0 ? "Pane split right." : "Pane split below.");
@@ -1603,7 +1613,7 @@ static void pane_action(App *app, int action, int pane)
             status(app, "Only nested split panes can close. Keep the six workspace tiles.");
         } else {
             memset(&app->demo.panes[pane], 0, sizeof app->demo.panes[pane]);
-            if (app->live) { tb_memory_clear(tb_native_memory(app->native), pane); }
+            if (app->live) { tb_memory_clear(tb_session_memory(app->debugger), pane); }
             app->demo.pane = survivor;
             status(app, "Split pane closed; sibling expanded.");
         }
@@ -1658,7 +1668,9 @@ static bool profile_load(App *app, const TbProfile *p)
     } else { ok = form_string(&next, 0, p->endpoint) && form_string(&next, 1, p->executable) && form_string(&next, 2, p->gdb); }
     if (!ok) { status(app, "Profile text exceeds the form's 255-character limit or has invalid encoding."); return false; }
     *app->profile = *p; app->forms[p->kind] = next; app->session = p->kind;
-    page(app, CONFIGURE); status(app, p->kind ? "Definition loaded for review. Server execution remains a preview." : "Profile loaded for review. PID/environment/runtime state are not restored."); return true;
+    page(app, CONFIGURE); status(app, p->kind == 1 ? "Definition loaded for review. OpenOCD execution remains a preview." :
+        p->kind == 2 ? "Remote profile loaded for review. Connect explicitly; server stays externally owned." :
+        "Profile loaded for review. PID/environment/runtime state are not restored."); return true;
 }
 static bool profile_capture(App *app)
 {
@@ -1671,8 +1683,8 @@ static bool profile_capture(App *app)
         (void)snprintf(next.executable, sizeof next.executable, "%s", values[form->alternate ? 4 : 1]);
         (void)snprintf(next.directory, sizeof next.directory, "%s", values[3]);
         (void)snprintf(next.gdb, sizeof next.gdb, "%s", values[5]);
-        TbNativeWords words = {0}; char error[160];
-        if (!form->alternate && !tb_native_words(values[2], &words, error, sizeof error)) { status(app, error); return false; }
+        TbSessionWords words = {0}; char error[160];
+        if (!form->alternate && !tb_session_words(values[2], &words, error, sizeof error)) { status(app, error); return false; }
         if (form->alternate) { next.directory[0] = 0; }
         next.arguments.count = words.count; memcpy(next.arguments.values, words.values, sizeof words.values);
     } else if (app->session == 1) {
@@ -1692,7 +1704,7 @@ static bool profile_capture(App *app)
         (void)snprintf(next.gdb, sizeof next.gdb, "%s", values[2]);
     }
     if (app->live) {
-        TbCode *code = tb_native_code(app->native);
+        TbCode *code = tb_session_code(app->debugger);
         next.directory_count = tb_code_directory_count(code); next.rule_count = tb_code_rule_count(code);
         for (size_t i = 0; i < next.directory_count; ++i) {
             const char *path = tb_code_directory(code, i);
@@ -1775,7 +1787,7 @@ static void draw_profiles(App *app)
             if (!p) { continue; }
             bool recent = false;
             for (size_t j = 0; j < TB_PROFILE_RECENT; ++j) { const char *name = tb_profiles_recent(app->profiles, j); recent = recent || (name && strcmp(name, p->name) == 0); }
-            (void)snprintf(label, sizeof label, "%s%s | %s%s", recent ? "Recent: " : "", p->name, session_names[p->kind], p->kind ? " | definition only" : "");
+            (void)snprintf(label, sizeof label, "%s%s | %s%s", recent ? "Recent: " : "", p->name, session_names[p->kind], p->kind == 1 ? " | definition only" : "");
         } else if (app->profile_group == 4) {
             char key[24]; tb_profile_key_name(app->profile->keys[item], key, sizeof key);
             (void)snprintf(label, sizeof label, "%s: %s", tb_profile_action((size_t)item), key);
@@ -1884,20 +1896,20 @@ static void profile_text_submit(App *app, const char *input)
     page(app, PROFILE_ITEMS); status(app, "Draft updated. Return to configuration and Save profile to persist.");
 }
 
-static bool start_native(App *app)
+static bool start_session(App *app)
 {
     char values[FORM_FIELDS][FIELD_SIZE * 4];
     for (int i = 0; i < FORM_FIELDS; ++i) {
-        if (!field_utf8(app->forms[0].values[i], values[i], sizeof values[i])) {
+        if (!field_utf8(app->forms[app->session].values[i], values[i], sizeof values[i])) {
             status(app, "Field encoding/length is invalid."); return false;
         }
     }
-    TbNativeWords arguments = {0}, environment = {0}; char error[160];
-    if (!app->forms[0].alternate &&
-        (!tb_native_words(values[2], &arguments, error, sizeof error) ||
-         !tb_native_words(values[7], &environment, error, sizeof error))) { status(app, error); return false; }
+    TbSessionWords arguments = {0}, environment = {0}; char error[160];
+    if (app->session == 0 && !app->forms[0].alternate &&
+        (!tb_session_words(values[2], &arguments, error, sizeof error) ||
+         !tb_session_words(values[7], &environment, error, sizeof error))) { status(app, error); return false; }
     pid_t pid = 0;
-    if (app->forms[0].alternate) {
+    if (app->session == 0 && app->forms[0].alternate) {
         unsigned long number = 0;
         for (size_t i = 0; values[6][i]; ++i) {
             unsigned char c = (unsigned char)values[6][i];
@@ -1908,29 +1920,33 @@ static bool start_native(App *app)
         }
         pid = (pid_t)number;
     }
-    TbNativeConfig config = {.attach = app->forms[0].alternate, .pid = pid, .gdb = values[5],
+    TbSessionConfig config = {.attach = app->forms[0].alternate, .pid = pid, .gdb = values[5],
         .executable = app->forms[0].alternate ? values[4] : values[1],
         .directory = app->forms[0].alternate ? "" : values[3],
         .arguments = &arguments, .environment = &environment};
-    if (!tb_native_start(app->native, &config)) { status(app, tb_native_message(app->native)); return false; }
+    if (app->session == 2) {
+        config = (TbSessionConfig){.kind = strcmp(app->profile->protocol, "extended-remote") == 0 ? TB_SESSION_EXTENDED_REMOTE : TB_SESSION_REMOTE,
+                                  .endpoint = values[0], .executable = values[1], .gdb = values[2]};
+    }
+    if (!tb_session_start(app->debugger, &config)) { status(app, tb_session_message(app->debugger)); return false; }
     const char *directories[TB_PROFILE_SOURCES]; TbSourceRule rules[TB_PROFILE_SOURCES];
     for (size_t i = 0; i < app->profile->directory_count; ++i) { directories[i] = app->profile->directories[i]; }
     for (size_t i = 0; i < app->profile->rule_count; ++i) {
         (void)snprintf(rules[i].from, sizeof rules[i].from, "%s", app->profile->rules[i].from);
         (void)snprintf(rules[i].to, sizeof rules[i].to, "%s", app->profile->rules[i].to);
     }
-    (void)tb_code_restore_settings(tb_native_code(app->native), directories, app->profile->directory_count, rules, app->profile->rule_count);
+    (void)tb_code_restore_settings(tb_session_code(app->debugger), directories, app->profile->directory_count, rules, app->profile->rule_count);
     app->recent_pending = *app->profile->name && tb_profiles_find(app->profiles, app->profile->name);
     memset(app->memory_input, 0, sizeof app->memory_input); memset(app->memory_cursor, 0, sizeof app->memory_cursor);
     app->live = true; app->previewed = true;
     for (int i = 0; i < TB_MAX_PANES; ++i) { app->follow_log[i] = true; }
-    status(app, tb_native_message(app->native));
+    status(app, tb_session_message(app->debugger));
     return true;
 }
 
 static void request_leave(App *app, bool quit)
 {
-    if (app->live && tb_native_active(app->native)) {
+    if (app->live && tb_session_active(app->debugger)) {
         app->exit_after_close = quit;
         page(app, CLOSE_CONFIRM);
     } else if (quit) { app->quit = true; }
@@ -1954,8 +1970,8 @@ static void activate(App *app, Control control)
     case SESSION_MENU: request_leave(app, false); break;
     case SUBMIT: page(app, REVIEW); break;
     case PREVIEW:
-        if (!app->demo_mode && app->session == 0) {
-            if (start_native(app)) { page(app, WORKSPACE); }
+        if (!app->demo_mode && (app->session == 0 || app->session == 2)) {
+            if (start_session(app)) { page(app, WORKSPACE); }
             break;
         }
         app->live = false;
@@ -1999,13 +2015,13 @@ static void activate(App *app, Control control)
     case TOOL:
         if (app->live) {
             if (control.value == TB_BREAKPOINT) { (void)toggle_breakpoint(app); break; }
-            bool okay = control.value == TB_CONTINUE ? tb_native_continue(app->native) :
-                        control.value == TB_PAUSE ? tb_native_pause(app->native) :
+            bool okay = control.value == TB_CONTINUE ? tb_session_continue(app->debugger) :
+                        control.value == TB_PAUSE ? tb_session_pause(app->debugger) :
                         control.value >= TB_NEXT && control.value <= TB_FINISH ?
-                        tb_native_step(app->native, control.value == TB_NEXT ? TB_STEP_OVER :
+                        tb_session_step(app->debugger, control.value == TB_NEXT ? TB_STEP_OVER :
                                        control.value == TB_STEP ? TB_STEP_INTO : TB_STEP_OUT, app->instruction_mode) : false;
             status(app, okay ? "GDB operation queued." : control.value >= TB_NEXT ?
-                   control.value <= TB_FINISH ? tb_native_message(app->native) :
+                   control.value <= TB_FINISH ? tb_session_message(app->debugger) :
                    "Reset remains unavailable in this milestone." :
                    "GDB operation pending or unavailable in the current state.");
             break;
@@ -2075,7 +2091,7 @@ static void activate(App *app, Control control)
         app->variable_pane = control.pane;
         TbDemoPane *pane = &app->demo.panes[control.pane]; TbView view = pane->tabs[pane->active];
         TbVariableView kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
-        TbVariables *v = tb_native_variables(app->native); size_t row = (size_t)pane->row[view];
+        TbVariables *v = tb_session_variables(app->debugger); size_t row = (size_t)pane->row[view];
         if (control.value == 7) {
             const TbVariable *selected = tb_variables_row(v, kind, row);
             /* Backend child display names are not trustworthy C paths. */
@@ -2092,7 +2108,7 @@ static void activate(App *app, Control control)
         if (okay) { page(app, WORKSPACE); app->variable_focus = true; } break;
     }
     case MEMORY_ACTION: {
-        TbMemory *m = tb_native_memory(app->native); int id = control.pane;
+        TbMemory *m = tb_session_memory(app->debugger); int id = control.pane;
         const TbMemoryView *v = tb_memory_view(m, id); bool okay = true;
         app->memory_pane = id;
         if (control.value == 7) {
@@ -2130,23 +2146,23 @@ static void activate(App *app, Control control)
                *v->error ? v->error : "Choose an address and stop the target before reading."); break;
     }
     case REGISTER_REFRESH:
-        tb_registers_refresh(tb_native_registers(app->native));
+        tb_registers_refresh(tb_session_registers(app->debugger));
         status(app, "Register refresh requested; reads wait until stopped."); break;
     case REGISTER_FORMAT: {
-        TbRegisters *r = tb_native_registers(app->native);
+        TbRegisters *r = tb_session_registers(app->debugger);
         tb_registers_format(r, (TbRegisterFormat)((tb_registers_get_format(r) + 1) % TB_REG_FORMATS));
         status(app, "Register display format changed; target values are not written."); break;
     }
     case CONTEXT_REFRESH:
-        tb_context_refresh(tb_native_context(app->native));
+        tb_context_refresh(tb_session_context(app->debugger));
         status(app, "Context refresh requested; reads wait until stopped."); break;
     case CONTEXT_ARGUMENTS:
-        status(app, tb_context_read_arguments(tb_native_context(app->native)) ?
+        status(app, tb_context_read_arguments(tb_session_context(app->debugger)) ?
                "Reading selected frame arguments on request." : "Select a fresh, stopped frame before reading arguments."); break;
     case CONTEXT_PAGE:
-        status(app, tb_context_page(tb_native_context(app->native), control.value) ?
+        status(app, tb_context_page(tb_session_context(app->debugger), control.value) ?
                "Loading stack page." : "No further stack page available; wait for stopped context.");
-        if (control.value > 0 && tb_context_snapshot(tb_native_context(app->native))->first_frame >
+        if (control.value > 0 && tb_context_snapshot(tb_session_context(app->debugger))->first_frame >
             TB_CONTEXT_MAX_LEVEL - TB_CONTEXT_FRAMES) {
             status(app, "Stack display is limited to 4096 frames; use Console for deeper inspection.");
         }
@@ -2165,7 +2181,7 @@ static void activate(App *app, Control control)
     case BREAK_OPEN:
         app->break_pane = control.pane; page(app, BREAK_MENU); break;
     case BREAK_ACTION: {
-        TbBreakpoints *b = tb_native_breakpoints(app->native);
+        TbBreakpoints *b = tb_session_breakpoints(app->debugger);
         TbDemoPane *pane = &app->demo.panes[app->break_pane];
         const TbBreakpoint *bp = tb_break_row(b, (size_t)pane->row[TB_BREAKPOINTS]);
         app->break_action = control.value;
@@ -2183,7 +2199,7 @@ static void activate(App *app, Control control)
     case CODE_ACTIONS:
         app->code_pane = control.pane; code_focus(app, control.pane); page(app, CODE_MENU); break;
     case CODE_ACTION: {
-        TbCode *code = tb_native_code(app->native);
+        TbCode *code = tb_session_code(app->debugger);
         app->code_pane = control.pane; app->code_action = (CodeAction)control.value;
         if (app->code_action == CODE_CHOOSE_FILE) {
             app->input[0] = L'\0'; app->file_page = 0; tb_code_request_files(code); page(app, CODE_FILES);
@@ -2194,7 +2210,7 @@ static void activate(App *app, Control control)
         } else if (app->code_action == CODE_RUN_TO) {
             char location[8192]; const TbBreakpoint *existing = NULL;
             TbBreakLocation where;
-            bool okay = selected_location(app, location, sizeof location, &existing, &where) && tb_native_run_at(app->native, where);
+            bool okay = selected_location(app, location, sizeof location, &existing, &where) && tb_session_run_at(app->debugger, where);
             status(app, okay ? "Run to Selected queued; an intervening stop cancels it." : "Run to Selected needs a selected code row and fresh stopped context."); page(app, WORKSPACE);
         } else if (app->code_action == CODE_RAW) {
             tb_code_raw(code, app->code_pane); page(app, WORKSPACE);
@@ -2206,15 +2222,15 @@ static void activate(App *app, Control control)
         break;
     }
     case CODE_PAGE:
-        status(app, tb_code_assembly_page(tb_native_code(app->native), control.pane, control.value) ?
+        status(app, tb_code_assembly_page(tb_session_code(app->debugger), control.pane, control.value) ?
                "Loading instruction window; execution unchanged." : "No previous window, or wait for stopped code data.");
         app->demo.panes[control.pane].scroll[TB_DISASSEMBLY] = 0; break;
     case CODE_FILE_PAGE: {
-        size_t total = tb_code_directory_count(tb_native_code(app->native)) + tb_code_rule_count(tb_native_code(app->native));
+        size_t total = tb_code_directory_count(tb_session_code(app->debugger)) + tb_code_rule_count(tb_session_code(app->debugger));
         if (app->page == CODE_FILES) {
             char filter[FIELD_SIZE * 4] = {0}; (void)field_utf8(app->input, filter, sizeof filter); total = 0;
-            for (size_t i = 0; i < tb_code_file_count(tb_native_code(app->native)); ++i) {
-                const TbCodeFile *file = tb_code_file(tb_native_code(app->native), i);
+            for (size_t i = 0; i < tb_code_file_count(tb_session_code(app->debugger)); ++i) {
+                const TbCodeFile *file = tb_code_file(tb_session_code(app->debugger), i);
                 if (!*filter || strstr(file->file, filter) || strstr(file->full, filter)) { ++total; }
             }
         }
@@ -2223,9 +2239,9 @@ static void activate(App *app, Control control)
         app->focus = 0; break;
     }
     case CODE_FILE_PICK:
-        if (tb_code_open(tb_native_code(app->native), control.pane, (size_t)control.value)) {
+        if (tb_code_open(tb_session_code(app->debugger), control.pane, (size_t)control.value)) {
             app->demo.panes[control.pane].scroll[TB_SOURCE] = app->demo.panes[control.pane].row[TB_SOURCE] = 0;
-            status(app, tb_code_message(tb_native_code(app->native))); page(app, WORKSPACE);
+            status(app, tb_code_message(tb_session_code(app->debugger))); page(app, WORKSPACE);
         }
         break;
     case INPUT_SUBMIT: {
@@ -2234,12 +2250,12 @@ static void activate(App *app, Control control)
         if (!field_utf8(app->input, input, sizeof input)) { status(app, "Invalid text encoding."); break; }
         if (app->page == PROFILE_TEXT) { profile_text_submit(app, input); break; }
         if (app->page == DATA_WATCH_INPUT) {
-            const TbContextSnapshot *context = tb_context_snapshot(tb_native_context(app->native));
+            const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
             if (context->stale || context->generation.session != app->watch_context.session ||
                 context->generation.stop != app->watch_context.stop || context->generation.context != app->watch_context.context) {
                 status(app, "Context changed; cancel and reopen data-watchpoint creation."); break;
             }
-            TbBreakpoints *b = tb_native_breakpoints(app->native); bool okay;
+            TbBreakpoints *b = tb_session_breakpoints(app->debugger); bool okay;
             if (app->watch_address) {
                 char *end; errno = 0;
                 unsigned long long address = strtoull(input, &end, 0);
@@ -2253,7 +2269,7 @@ static void activate(App *app, Control control)
             break;
         }
         if (app->page == WATCH_INPUT) {
-            TbVariables *v = tb_native_variables(app->native);
+            TbVariables *v = tb_session_variables(app->debugger);
             bool okay = tb_variables_watch(v, input);
             status(app, okay ? "Watch added without a memory read. Select Read to inspect it." : tb_variables_error(v, TB_VARIABLE_WATCHES));
             if (okay) {
@@ -2270,7 +2286,7 @@ static void activate(App *app, Control control)
             break;
         }
         if (app->page == MEMORY_INPUT) {
-            TbMemory *m = tb_native_memory(app->native); int id = app->memory_pane;
+            TbMemory *m = tb_session_memory(app->debugger); int id = app->memory_pane;
             if (app->memory_length_input) {
                 errno = 0; char *end; unsigned long length = strtoul(input, &end, 10);
                 if (!*input || *end || errno || length < 1 || length > TB_MEMORY_BYTES) {
@@ -2290,7 +2306,7 @@ static void activate(App *app, Control control)
             break;
         }
         if (app->page == BREAK_INPUT) {
-            TbBreakpoints *b = tb_native_breakpoints(app->native);
+            TbBreakpoints *b = tb_session_breakpoints(app->debugger);
             bool okay = app->break_action == 0 ? tb_break_add(b, input, app->break_hardware) :
                         app->break_action == 3 ? tb_break_condition(b, app->break_id, input) : tb_break_ignore(b, app->break_id, input);
             status(app, okay ? "Breakpoint change queued; GDB validates the request." : tb_break_message(b));
@@ -2298,7 +2314,7 @@ static void activate(App *app, Control control)
         }
         if (app->page == CODE_FILES) { app->file_page = 0; break; }
         if (app->page == CODE_INPUT) {
-            TbCode *code = tb_native_code(app->native);
+            TbCode *code = tb_session_code(app->debugger);
             TbDemoPane *pane = &app->demo.panes[app->code_pane];
             bool okay = false;
             if (app->code_action == CODE_FIND || app->code_action == CODE_LINE) {
@@ -2324,13 +2340,13 @@ static void activate(App *app, Control control)
             if (okay) { page(app, WORKSPACE); }
             break;
         }
-        bool okay = command ? tb_native_console(app->native, input) : tb_native_save_log(app->native, input);
-        status(app, okay ? (command ? "GDB command queued." : tb_native_message(app->native)) : tb_native_message(app->native));
+        bool okay = command ? tb_session_console(app->debugger, input) : tb_session_save_log(app->debugger, input);
+        status(app, okay ? (command ? "GDB command queued." : tb_session_message(app->debugger)) : tb_session_message(app->debugger));
         if (okay) { page(app, WORKSPACE); }
         break;
     }
     case CLOSE_ACCEPT:
-        tb_native_close(app->native); app->leave_session = true;
+        tb_session_close(app->debugger); app->leave_session = true;
         page(app, WORKSPACE); break;
     case CONFIRM_RESET:
         tb_demo_action(&app->demo, TB_RESET);
@@ -2403,17 +2419,17 @@ static void scroll_body(App *app, Control control, int amount)
     TbScroll scroll = workspace_scroll(app, pane, app->panes[control.pane].h - 3);
     if (app->live && view == TB_MEMORY &&
         ((amount < 0 && scroll.offset == 0) || (amount > 0 && scroll.offset == scroll.maximum))) {
-        if (tb_memory_browse(tb_native_memory(app->native), control.pane, amount)) {
+        if (tb_memory_browse(tb_session_memory(app->debugger), control.pane, amount)) {
             pane->scroll[view] = amount > 0 ? 0 : scroll.maximum;
         }
         return;
     }
     if (app->live && view == TB_DISASSEMBLY &&
         ((amount < 0 && scroll.offset == 0) || (amount > 0 && scroll.offset == scroll.maximum))) {
-        if (tb_code_assembly_page(tb_native_code(app->native), control.pane, amount < 0 ? -1 : 1)) {
+        if (tb_code_assembly_page(tb_session_code(app->debugger), control.pane, amount < 0 ? -1 : 1)) {
             app->assembly_tail[control.pane] = true;
             {
-                const TbCodeView *code = tb_code_view(tb_native_code(app->native), control.pane);
+                const TbCodeView *code = tb_code_view(tb_session_code(app->debugger), control.pane);
                 int flat = 0; size_t visible = 0;
                 for (size_t row = 0; row < code->instruction_count; ++row) {
                     const TbInstruction *instruction = &code->instructions[row];
@@ -2570,7 +2586,7 @@ static void mouse_event(App *app)
                 if (app->live && target < scroll.total && view == TB_SOURCE && event.x < control.rect.x + 2) { (void)toggle_breakpoint(app); }
                 if (app->live && target < scroll.total && (view == TB_LOCALS || view == TB_WATCHES) &&
                     event.x - control.rect.x + app->horizontal[control.pane][view] <= 3 +
-                    (int)tb_variables_row(tb_native_variables(app->native), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES, (size_t)target)->depth * 2) {
+                    (int)tb_variables_row(tb_session_variables(app->debugger), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES, (size_t)target)->depth * 2) {
                     activate(app, (Control){.kind = VARIABLE_ACTION, .value = 1, .pane = control.pane});
                 }
                 if (!app->live && target < scroll.total && view == TB_SOURCE && event.x < control.rect.x + 2) {
@@ -2767,8 +2783,8 @@ static void initialize(App *app, bool demo)
     app->profiles = tb_profiles_create(); app->profile = calloc(1, sizeof *app->profile);
     if (!app->profiles || !app->profile) { app->quit = true; }
     if (app->profile) { tb_profile_defaults(app->profile, 0); }
-    app->native = tb_native_create();
-    if (app->native == NULL) { app->quit = true; }
+    app->debugger = tb_session_create();
+    if (app->debugger == NULL) { app->quit = true; }
     app->keyboard_focus = true;
     app->menu = -1;
     app->drag = -1;
@@ -2788,7 +2804,7 @@ static void initialize(App *app, bool demo)
         app->forms[form].start_server = true;
     }
     status(app, demo ? "DEMO only. Nothing is launched, connected or saved." :
-                      "Choose native launch/attach. Embedded and remote remain previews.");
+                      "Choose native launch/attach or an existing GDB server. OpenOCD setup remains a preview.");
     if (!demo && app->profiles && !tb_profiles_load(app->profiles)) { status(app, tb_profiles_error(app->profiles)); }
 }
 
@@ -2857,27 +2873,27 @@ int tb_tui_run(bool demo)
         }
         (void)wtimeout(stdscr, 0);
         draw(&app);
-        uint64_t revision = app.native ? tb_native_revision(app.native) : 0;
+        uint64_t revision = app.debugger ? tb_session_revision(app.debugger) : 0;
         while (!app.quit) {
             if (interrupted != 0) {
-                if (app.native) { tb_native_close(app.native); }
-                if (!app.native || !tb_native_active(app.native)) { break; }
+                if (app.debugger) { tb_session_close(app.debugger); }
+                if (!app.debugger || !tb_session_active(app.debugger)) { break; }
             }
-            if (app.native) {
-                tb_native_pump(app.native, 0);
+            if (app.debugger) {
+                tb_session_pump(app.debugger, 0);
                 if (app.recent_pending) {
-                    TbNativeState state = tb_native_state(app.native);
-                    if (state == TB_NATIVE_READY || state == TB_NATIVE_STOPPED) {
+                    TbSessionState state = tb_session_state(app.debugger);
+                    if (state == TB_SESSION_READY || state == TB_SESSION_STOPPED) {
                         app.recent_pending = false;
                         if (!tb_profiles_touch(app.profiles, app.profile->name)) { status(&app, tb_profiles_error(app.profiles)); draw(&app); }
-                    } else if (state == TB_NATIVE_FAILED || state == TB_NATIVE_CLOSED) { app.recent_pending = false; }
+                    } else if (state == TB_SESSION_FAILED || state == TB_SESSION_CLOSED) { app.recent_pending = false; }
                 }
-                uint64_t next = tb_native_revision(app.native);
+                uint64_t next = tb_session_revision(app.debugger);
                 if (next != revision) {
                     revision = next;
-                    if (app.live) { status(&app, tb_native_message(app.native)); draw(&app); }
+                    if (app.live) { status(&app, tb_session_message(app.debugger)); draw(&app); }
                 }
-                if (app.leave_session && !tb_native_active(app.native)) {
+                if (app.leave_session && !tb_session_active(app.debugger)) {
                     app.leave_session = false;
                     if (app.exit_after_close) { app.quit = true; continue; }
                     app.live = false; app.previewed = false; page(&app, LAUNCHER); draw(&app);
@@ -2893,23 +2909,23 @@ int tb_tui_run(bool demo)
             struct pollfd fds[6] = {{STDIN_FILENO, POLLIN, 0}};
             int timeout = 100;
             nfds_t count = 1;
-            if (app.native) {
-                count += (nfds_t)tb_native_pollfds(app.native, fds + 1);
-                timeout = tb_native_timeout(app.native, 100);
+            if (app.debugger) {
+                count += (nfds_t)tb_session_pollfds(app.debugger, fds + 1);
+                timeout = tb_session_timeout(app.debugger, 100);
             }
             if (poll(fds, count, timeout) < 0 && errno != EINTR) { interrupted = SIGTERM; }
         }
-        if (app.native) {
-            tb_native_close(app.native);
-            while (tb_native_active(app.native)) { tb_native_pump(app.native, 20); }
-            (void)tb_native_destroy(app.native);
+        if (app.debugger) {
+            tb_session_close(app.debugger);
+            while (tb_session_active(app.debugger)) { tb_session_pump(app.debugger, 20); }
+            (void)tb_session_destroy(app.debugger);
         }
         if (drag_reporting) { (void)fputs("\033[?1002l", stdout); }
         (void)mousemask(0, NULL);
         (void)curs_set(1);
         (void)endwin();
         delscreen(screen);
-        result = !app.profile || !app.profiles || !app.native ? EXIT_FAILURE : interrupted == 0 ? EXIT_SUCCESS : 128 + interrupted;
+        result = !app.profile || !app.profiles || !app.debugger ? EXIT_FAILURE : interrupted == 0 ? EXIT_SUCCESS : 128 + interrupted;
         tb_profiles_destroy(app.profiles); free(app.profile);
     }
     for (int i = 0; i < 3; ++i) { (void)sigaction(signals[i], &saved[i], NULL); }

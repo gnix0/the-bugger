@@ -85,7 +85,43 @@ int main(int argc, char *argv[])
         char token[32];
         memcpy(token, line, digits); token[digits] = '\0';
         char *command = line + digits;
-        if (strcmp(mode, "profile-source") == 0 && strncmp(command, "-environment-directory ", 23) == 0 && strstr(command, "rejected")) {
+        if (strncmp(mode, "remote-", 7) == 0) {
+            if (strstr(command, "disable-randomization") || strstr(command, "startup-with-shell") ||
+                strstr(command, "inferior-tty-set") || strstr(command, "exec-arguments") ||
+                strstr(command, "-target-attach") || strstr(command, "kill")) { free(line); return 80; }
+            if (strncmp(command, "-target-select ", 15) == 0) {
+                if (strcmp(mode, "remote-timeout") == 0 || strcmp(mode, "remote-cancel") == 0) { continue; }
+                if (strcmp(mode, "remote-drop") == 0) { free(line); return 0; }
+                if (strcmp(mode, "remote-refused") == 0) { reply(token, "^error,msg=\"Connection refused\""); }
+                else {
+                    puts("=thread-group-started,id=\"i1\",pid=\"987654321\"");
+                    puts("*stopped,reason=\"signal-received\",thread-id=\"1\",frame={level=\"0\",addr=\"0x8000100\",func=\"remote_main\",arch=\"arm\"}");
+                    reply(token, "^connected");
+                }
+            } else if (strncmp(command, "-data-evaluate-expression ", 26) == 0) {
+                if (strstr(command, "unsigned char")) { reply(token, strcmp(mode, "remote-wide") == 0 ? "^done,value=\"256\"" : "^done,value=\"0\""); }
+                else if (strstr(command, "sizeof(void*)")) { reply(token, "^done,value=\"4\""); }
+                else { reply(token, "^error,msg=\"Unexpected automatic value evaluation\""); }
+            } else if (strcmp(command, "-gdb-show endian\n") == 0) {
+                reply(token, strcmp(mode, "remote-unknown") == 0 ? "^done,value=\"auto\"" : "^done,value=\"big\"");
+            } else if (strcmp(command, "-stack-info-frame\n") == 0) {
+                reply(token, "^done,frame={level=\"0\",addr=\"0x8000100\",func=\"remote_main\",arch=\"arm\"}");
+            } else if (strcmp(command, "-thread-info\n") == 0) {
+                reply(token, "^done,threads=[{id=\"1\",state=\"stopped\"}],current-thread-id=\"1\"");
+            } else if (strcmp(command, "-target-disconnect\n") == 0) {
+                reply(token, strcmp(mode, "remote-disconnect-error") == 0 ? "^error,msg=\"Disconnect not confirmed\"" : "^done");
+            } else if (strstr(command, "-data-read-memory-bytes") && strcmp(mode, "remote-regions") == 0) {
+                const char *address = strstr(command, "0x");
+                if (!address) { free(line); return 82; }
+                char start[32]; size_t n = strspn(address, "0x0123456789abcdefABCDEF");
+                if (!n || n >= sizeof start) { free(line); return 82; }
+                memcpy(start, address, n); start[n] = 0;
+                printf("%s^done,memory=[{begin=\"%s\",end=\"0x%llx\",offset=\"0x0\",contents=\"000102030405060708090a0b0c0d0e0f\"}]\n",
+                       token, start, strtoull(start, NULL, 16) + 16); fflush(stdout);
+            } else if (strncmp(command, "-var-", 5) == 0 || strncmp(command, "-data-read-memory", 17) == 0) {
+                free(line); return 81; /* No automatic target value reads. */
+            } else { reply(token, "^done"); }
+        } else if (strcmp(mode, "profile-source") == 0 && strncmp(command, "-environment-directory ", 23) == 0 && strstr(command, "rejected")) {
             reply(token, "^error,msg=\"Source directory rejected by test backend\"");
         } else if (strcmp(mode, "data-watch") == 0 && strncmp(command, "-data-mode ", 11) == 0) {
             data_mode = (unsigned)strtoul(command + 11, NULL, 10); reply(token, "^done");

@@ -54,6 +54,9 @@ void tb_gdb_context_changed(TbGdb *gdb);
 /* Nonblocking close: command-input EOF, then TERM/KILL deadlines and reap.
  * Only the still-owned child PID is ever signalled. No process group signals. */
 void tb_gdb_close(TbGdb *gdb);
+/* Stop only the owned local debugger immediately, without allowing GDB quit
+ * handlers to kill a remote inferior after an unconfirmed disconnect. */
+void tb_gdb_abort(TbGdb *gdb);
 /* At most budget bytes per pipe per pump; waits at most 25 ms, or an earlier
  * deadline. Expose the same fds/timeout to a caller's larger poll loop; after
  * poll call pump(gdb, 0). EINTR returns promptly for caller signal handling. */

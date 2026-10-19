@@ -18,7 +18,7 @@ typedef struct {
 struct TbMemory {
     TbGdb *gdb; TbContext *context;
     View views[TB_MEMORY_VIEWS];
-    bool waiting; int active, cursor;
+    bool waiting, unsupported; unsigned address_bits; int active, cursor;
     uint64_t revision, request_version;
     TbGdbGeneration request_generation;
     TbMemoryOrder order;
@@ -120,6 +120,7 @@ bool tb_memory_stale(const TbMemory *m, int id)
 bool tb_memory_refresh(TbMemory *m, int id)
 {
     if (!valid_view(id)) { return false; } View *v = &m->views[id];
+    if (m->unsupported) { error(m, v, "Target address units/width unknown or unsupported; no memory request sent."); return false; }
     if (!v->data.configured || tb_gdb_state(m->gdb) != TB_GDB_STOPPED) {
         error(m, v, "Choose an address and stop the target before reading."); return false;
     }
@@ -205,7 +206,7 @@ static bool address_value(const TbMiValue *v, uint64_t *address)
     char text[256]; if (!raw(text, sizeof text, v)) { return false; }
     const char *p = text; return numeric(&p, address) && (*p == 0 || *p == ' ');
 }
-static bool locate(View *v, uint64_t base)
+static bool locate(const TbMemory *m, View *v, uint64_t base)
 {
     uint64_t address;
     if (v->data.offset >= 0) {
@@ -214,7 +215,9 @@ static bool locate(View *v, uint64_t base)
         uint64_t distance = (uint64_t)(-(v->data.offset + 1)) + 1;
         if (base < distance) { return false; } address = base - distance;
     }
-    if (address > UINT64_MAX - v->data.length) { return false; }
+    if (address > UINT64_MAX - v->data.length ||
+        (m->address_bits && m->address_bits < 64 &&
+         (address >= (UINT64_C(1) << m->address_bits) || v->data.length > (UINT64_C(1) << m->address_bits) - address))) { return false; }
     v->next_address = address; v->phase = MEMORY_READ; return true;
 }
 bool tb_memory_event(TbMemory *m, const TbGdbEvent *event)
@@ -236,7 +239,7 @@ bool tb_memory_event(TbMemory *m, const TbGdbEvent *event)
     }
     if (event->cookie == MEMORY_RESOLVE) {
         uint64_t base;
-        if (!address_value(tb_mi_find(record->results, "value"), &base) || !locate(v, base)) {
+        if (!address_value(tb_mi_find(record->results, "value"), &base) || !locate(m, v, base)) {
             error(m, v, "Address unavailable/overflow; use &buffer for arrays and objects.");
         }
         return true;
@@ -281,7 +284,7 @@ void tb_memory_pump(TbMemory *m)
         if (v->phase == MEMORY_RESOLVE) {
             const char *p = spaces(v->data.expression); uint64_t base;
             if (numeric(&p, &base) && *spaces(p) == 0) {
-                if (!locate(v, base)) { error(m, v, "Memory range or page offset overflow."); continue; }
+                if (!locate(m, v, base)) { error(m, v, "Memory range or page offset overflow."); continue; }
             }
         }
         char address[48], length[24], scalar[320]; const char *args[3]; size_t count;
@@ -329,4 +332,16 @@ void tb_memory_line(const TbMemory *m, int id, size_t row, char *out, size_t cap
     }
     ascii[16] = 0;
     (void)snprintf(out, capacity, "0x%016" PRIx64 "  %s |%s|", v->address + first, digits, ascii);
+}
+
+void tb_memory_target(TbMemory *m, bool octets, unsigned address_bits)
+{
+    bool unsupported = !octets || !address_bits || address_bits > 64;
+    if (m->unsupported == unsupported && m->address_bits == address_bits) { return; }
+    m->unsupported = unsupported; m->address_bits = address_bits;
+    for (int i = 0; i < TB_MEMORY_VIEWS; ++i) {
+        View *v = &m->views[i]; ++v->version; v->phase = 0;
+        v->data.pending = v->data.ready = false;
+    }
+    ++m->revision;
 }

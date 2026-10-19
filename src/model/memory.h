@@ -32,6 +32,8 @@ void tb_memory_regions(TbMemory *memory, const TbMemoryRegion *regions, size_t c
 bool tb_memory_length(TbMemory *memory, int view, unsigned bytes);
 bool tb_memory_group(TbMemory *memory, int view, unsigned bytes);
 /* Metadata is supplied by a session adapter, never inferred from the host. */
+/* Capability metadata only; unknown/non-octet/wider targets reject reads before dispatch. */
+void tb_memory_target(TbMemory *memory, bool octets, unsigned address_bits);
 void tb_memory_order(TbMemory *memory, TbMemoryOrder order);
 TbMemoryOrder tb_memory_get_order(const TbMemory *memory);
 const TbMemoryView *tb_memory_view(const TbMemory *memory, int view);

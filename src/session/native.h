@@ -1,67 +1,56 @@
 #ifndef THE_BUGGER_NATIVE_H
 #define THE_BUGGER_NATIVE_H
-
-#include "controller.h"
-#include "context.h"
-#include "code.h"
-#include "breakpoints.h"
-#include "registers.h"
-#include "memory.h"
-#include "variables.h"
-
-enum { TB_NATIVE_WORDS = 32, TB_NATIVE_WORD_BYTES = 512,
-       TB_NATIVE_LOG_LINES = 512, TB_NATIVE_LOG_WIDTH = 256 };
-typedef struct { char values[TB_NATIVE_WORDS][TB_NATIVE_WORD_BYTES]; size_t count; } TbNativeWords;
-/* Quoted whitespace/backslash parsing only; no expansions or shell execution. */
-bool tb_native_words(const char *input, TbNativeWords *words, char *error, size_t capacity);
-
-/* Linux adapter metadata only; excludes unreadable, unknown special and device
- * mappings. No target reads are performed by this parser. */
+#include "session.h"
+/* Source compatibility for accepted native integrations. The implementation
+ * and target-neutral operations are owned by the shared session module. */
+typedef TbSessionWords TbNativeWords;
+typedef TbSessionConfig TbNativeConfig;
+typedef TbSessionState TbNativeState;
+typedef TbSession TbNative;
+#define TB_NATIVE_CLOSED TB_SESSION_CLOSED
+#define TB_NATIVE_CLOSING TB_SESSION_CLOSING
+#define TB_NATIVE_EXITED TB_SESSION_EXITED
+#define TB_NATIVE_FAILED TB_SESSION_FAILED
+#define TB_NATIVE_IDLE TB_SESSION_IDLE
+#define TB_NATIVE_LOG_LINES TB_SESSION_LOG_LINES
+#define TB_NATIVE_LOG_WIDTH TB_SESSION_LOG_WIDTH
+#define TB_NATIVE_READY TB_SESSION_READY
+#define TB_NATIVE_RUNNING TB_SESSION_RUNNING
+#define TB_NATIVE_STARTING TB_SESSION_STARTING
+#define TB_NATIVE_STOPPED TB_SESSION_STOPPED
+#define TB_NATIVE_WORDS TB_SESSION_WORDS
+#define TB_NATIVE_WORD_BYTES TB_SESSION_WORD_BYTES
+#define tb_native_words tb_session_words
+#define tb_native_create tb_session_create
+#define tb_native_destroy tb_session_destroy
+#define tb_native_start tb_session_start
+#define tb_native_continue tb_session_continue
+#define tb_native_pause tb_session_pause
+#define tb_native_step tb_session_step
+#define tb_native_console tb_session_console
+#define tb_native_save_log tb_session_save_log
+#define tb_native_close tb_session_close
+#define tb_native_pump tb_session_pump
+#define tb_native_pollfds tb_session_pollfds
+#define tb_native_timeout tb_session_timeout
+#define tb_native_state tb_session_state
+#define tb_native_state_name tb_session_state_name
+#define tb_native_message tb_session_message
+#define tb_native_revision tb_session_revision
+#define tb_native_log_count tb_session_log_count
+#define tb_native_log_line tb_session_log_line
+#define tb_native_target_pid tb_session_target_pid
+#define tb_native_debugger_pid tb_session_debugger_pid
+#define tb_native_attached tb_session_attached
+#define tb_native_active tb_session_active
+#define tb_native_context tb_session_context
+#define tb_native_code tb_session_code
+#define tb_native_breakpoints tb_session_breakpoints
+#define tb_native_registers tb_session_registers
+#define tb_native_memory tb_session_memory
+#define tb_native_variables tb_session_variables
+#define tb_native_run_to tb_session_run_to
+#define tb_native_run_at tb_session_run_at
+/* Linux metadata parser; never used for remote target identifiers. */
 bool tb_native_memory_region(const char *row, TbMemoryRegion *region);
-
-typedef struct {
-    bool attach;
-    pid_t pid;
-    const char *gdb, *executable, *directory;
-    const TbNativeWords *arguments, *environment;
-} TbNativeConfig;
-typedef enum { TB_NATIVE_IDLE, TB_NATIVE_STARTING, TB_NATIVE_READY,
-               TB_NATIVE_RUNNING, TB_NATIVE_STOPPED, TB_NATIVE_EXITED,
-               TB_NATIVE_CLOSING, TB_NATIVE_CLOSED, TB_NATIVE_FAILED } TbNativeState;
-typedef struct TbNative TbNative;
-
-TbNative *tb_native_create(void);
-bool tb_native_destroy(TbNative *native); /* Refuses a live debugger. */
-bool tb_native_start(TbNative *native, const TbNativeConfig *config);
-bool tb_native_continue(TbNative *native);
-bool tb_native_pause(TbNative *native);
-typedef enum { TB_STEP_OVER, TB_STEP_INTO, TB_STEP_OUT } TbStep;
-bool tb_native_step(TbNative *native, TbStep step, bool instruction);
-bool tb_native_console(TbNative *native, const char *command);
-bool tb_native_save_log(TbNative *native, const char *path);
-/* Launch: terminate the still-owned inferior; Attach: detach/resume. Caller
- * confirms this policy before normal close; signals also use this cleanup. */
-void tb_native_close(TbNative *native);
-void tb_native_pump(TbNative *native, int wait_ms);
-size_t tb_native_pollfds(const TbNative *native, struct pollfd fds[5]);
-int tb_native_timeout(const TbNative *native, int maximum_ms);
-TbNativeState tb_native_state(const TbNative *native);
-const char *tb_native_state_name(const TbNative *native);
-const char *tb_native_message(const TbNative *native);
-uint64_t tb_native_revision(const TbNative *native);
-size_t tb_native_log_count(const TbNative *native);
-const char *tb_native_log_line(const TbNative *native, size_t row);
-pid_t tb_native_target_pid(const TbNative *native);
-pid_t tb_native_debugger_pid(const TbNative *native);
-bool tb_native_attached(const TbNative *native);
-bool tb_native_active(const TbNative *native);
-TbContext *tb_native_context(TbNative *native);
-TbCode *tb_native_code(TbNative *native);
-TbBreakpoints *tb_native_breakpoints(TbNative *native);
-TbRegisters *tb_native_registers(TbNative *native);
-TbMemory *tb_native_memory(TbNative *native);
-TbVariables *tb_native_variables(TbNative *native);
-bool tb_native_run_to(TbNative *native, const char *location);
-bool tb_native_run_at(TbNative *native, TbBreakLocation location);
-
 #endif
