@@ -55,6 +55,25 @@ static void run(const char *fixture, bool symbols, bool deep)
         CHECK(tb_context_page(context, 1)); fresh(native); CHECK(s->first_frame == 32);
         CHECK(tb_context_page(context, -1)); fresh(native);
     }
+    for (size_t i = 0; i < s->frame_count; ++i) { CHECK(!s->frames[i].arguments_read); }
+    if (symbols) {
+        size_t argument_frame = 0;
+        /* Optimized Clang omits recursive's formal parameters entirely in
+         * DWARF. Exercise a frame whose argument names GDB actually reports
+         * (tail_bridge in that build), retaining the required depth assertion. */
+        while (argument_frame < s->frame_count && !strstr(s->frames[argument_frame].arguments, "depth=<read required>")) { ++argument_frame; }
+        CHECK(argument_frame < s->frame_count);
+        CHECK(strstr(s->frames[argument_frame].arguments, "depth=<read required>"));
+        CHECK(tb_context_select_frame(context, s->frames[argument_frame].level)); fresh(native);
+        CHECK(tb_context_read_arguments(context));
+        uint64_t argument_deadline = tb_gdb_now_ms() + 5000;
+        while (!s->frames[argument_frame].arguments_read && !*s->arguments_error && tb_gdb_now_ms() < argument_deadline) { tb_native_pump(native, 5); }
+        CHECK(s->frames[argument_frame].arguments_read);
+        CHECK(strstr(s->frames[argument_frame].arguments, "depth="));
+        CHECK(!strstr(s->frames[argument_frame].arguments, "<read required>"));
+        tb_context_refresh(context); fresh(native);
+        CHECK(!s->frames[argument_frame].arguments_read);
+    }
     CHECK(s->frame_count > 2);
     int caller = s->frames[2].level;
     char stopped_address[48]; (void)snprintf(stopped_address, sizeof stopped_address, "%s", s->stopped.address);

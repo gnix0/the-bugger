@@ -1,4 +1,4 @@
-#define _POSIX_C_SOURCE 200809L
+#define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- POSIX interfaces. */
 #include "memory.h"
 #include "code.h"
 #include <inttypes.h>
@@ -148,6 +148,7 @@ bool tb_memory_group(TbMemory *m, int id, unsigned bytes)
     if (bytes > 1 && m->order == TB_MEMORY_UNKNOWN) { error(m, v, "Target byte order unknown; use byte grouping."); return false; }
     v->data.grouping = bytes; ++m->revision; return true;
 }
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters) -- Existing pane ID/direction API.
 bool tb_memory_page(TbMemory *m, int id, int direction)
 {
     if (!valid_view(id) || !m->views[id].data.configured || tb_gdb_state(m->gdb) != TB_GDB_STOPPED) { return false; }
@@ -301,6 +302,7 @@ void tb_memory_pump(TbMemory *m)
         m->cursor = (id + 1) % TB_MEMORY_VIEWS; return;
     }
 }
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters) -- Existing pane ID/row API.
 void tb_memory_line(const TbMemory *m, int id, size_t row, char *out, size_t capacity)
 {
     if (!capacity) { return; } out[0] = 0;
@@ -314,13 +316,16 @@ void tb_memory_line(const TbMemory *m, int id, size_t row, char *out, size_t cap
             size_t at = first + group + offset;
             if (at >= v->data_size) { digits[col++] = ' '; digits[col++] = ' '; }
             else if (!v->valid[at]) { digits[col++] = '?'; digits[col++] = '?'; }
-            else { digits[col++] = hexes[v->bytes[at] >> 4]; digits[col++] = hexes[v->bytes[at] & 15]; }
+            else { unsigned byte = v->bytes[at]; digits[col++] = hexes[byte >> 4U]; digits[col++] = hexes[byte & 15U]; }
         }
         ++col;
     }
     for (unsigned i = 0; i < 16; ++i) {
         size_t at = first + i; unsigned char c = at < v->data_size ? v->bytes[at] : 0;
-        ascii[i] = at >= v->data_size ? ' ' : !v->valid[at] ? '?' : c >= 32 && c < 127 ? (char)c : '.';
+        if (at >= v->data_size) { ascii[i] = ' '; }
+        else if (!v->valid[at]) { ascii[i] = '?'; }
+        else if (c >= 32 && c < 127) { ascii[i] = (char)c; }
+        else { ascii[i] = '.'; }
     }
     ascii[16] = 0;
     (void)snprintf(out, capacity, "0x%016" PRIx64 "  %s |%s|", v->address + first, digits, ascii);

@@ -488,29 +488,30 @@ static void setup(TbNative *native)
     const char *const shell[] = {"startup-with-shell", "off"};
     const char *const autoload[] = {"auto-load", "off"};
     const char *const page[] = {"pagination", "off"};
+    const char *const frame_args[] = {"print", "frame-arguments", "none"};
     const char *const no_random[] = {"disable-randomization", "off"};
     const char *const path[] = {native->executable};
     const char *const cwd[] = {native->directory};
     const char *const tty[] = {native->tty};
-    if (native->stage < 5) {
-        const char *const *settings[] = {confirm, shell, autoload, page, no_random};
-        (void)issue(native, JOB_SETUP, "-gdb-set", settings[native->stage], 2);
-    } else if (native->stage == 5) {
+    if (native->stage < 6) {
+        const char *const *settings[] = {confirm, shell, autoload, page, no_random, frame_args};
+        (void)issue(native, JOB_SETUP, "-gdb-set", settings[native->stage], native->stage == 5 ? 3 : 2);
+    } else if (native->stage == 6) {
         if (*native->directory) { (void)issue(native, JOB_SETUP, "-environment-cd", cwd, 1); }
         else { ++native->stage; }
-    } else if (native->stage == 6) {
+    } else if (native->stage == 7) {
         if (*native->executable) { (void)issue(native, JOB_SETUP, "-file-exec-and-symbols", path, 1); }
         else { ++native->stage; }
-    } else if (native->stage == 7 && !native->attach) { (void)issue(native, JOB_SETUP, "-inferior-tty-set", tty, 1); }
-    else if (native->stage == 8 && !native->attach) {
+    } else if (native->stage == 8 && !native->attach) { (void)issue(native, JOB_SETUP, "-inferior-tty-set", tty, 1); }
+    else if (native->stage == 9 && !native->attach) {
         const char *args[TB_NATIVE_WORDS];
         for (size_t i = 0; i < native->arguments.count; ++i) { args[i] = native->arguments.values[i]; }
         (void)issue(native, JOB_SETUP, "-exec-arguments", args, native->arguments.count);
-    } else if (native->stage >= 9 && (size_t)(native->stage - 9) < native->environment.count && !native->attach) {
-        const char *const args[] = {"environment", native->environment.values[native->stage - 9]};
+    } else if (native->stage >= 10 && (size_t)(native->stage - 10) < native->environment.count && !native->attach) {
+        const char *const args[] = {"environment", native->environment.values[native->stage - 10]};
         (void)issue(native, JOB_SETUP, "-gdb-set", args, 2);
-    } else if (native->stage < 9 + (int)native->environment.count) { ++native->stage; }
-    else if (native->attach && native->stage == 9 + (int)native->environment.count) {
+    } else if (native->stage < 10 + (int)native->environment.count) { ++native->stage; }
+    else if (native->attach && native->stage == 10 + (int)native->environment.count) {
         char pid[32]; (void)snprintf(pid, sizeof pid, "%ld", (long)native->target_pid);
         const char *const args[] = {pid};
         (void)issue(native, JOB_SETUP, "-target-attach", args, 1);
@@ -536,7 +537,7 @@ static void process_reply(TbNative *native)
         }
         if (native->job == JOB_RUN || native->job == JOB_CONSOLE) { native->launch_requested = false; }
     } else if (native->job == JOB_SETUP) {
-        if (native->attach && native->stage == 9 + (int)native->environment.count) { native->alive = true; }
+        if (native->attach && native->stage == 10 + (int)native->environment.count) { native->alive = true; }
         ++native->stage;
     }
     else if (native->job == JOB_RELEASE) { native->alive = false; tb_gdb_close(native->gdb); }
@@ -562,6 +563,50 @@ static void release_target(TbNative *native)
 }
 
 /* Linux metadata belongs to this adapter. No target bytes are probed here. */
+/* Strict maps fields: conversion overflow or a malformed/truncated record must
+ * never turn unknown storage into automatic-read permission. */
+static bool map_number(const char **cursor, char delimiter, uint64_t *value)
+{
+    const char *start = *cursor;
+    if (!*start || *start == '-' || *start == '+' || *start == ' ' || *start == '\t') { return false; }
+    char *end = NULL; errno = 0;
+    unsigned long long parsed = strtoull(start, &end, 16);
+    if (errno || end == start || *end != delimiter || parsed > UINT64_MAX) { return false; }
+    *value = (uint64_t)parsed; *cursor = end + 1; return true;
+}
+
+bool tb_native_memory_region(const char *row, TbMemoryRegion *region)
+{
+    if (!row || !region || !strchr(row, '\n')) { return false; }
+    uint64_t begin, end, unused, inode;
+    const char *cursor = row;
+    if (!map_number(&cursor, '-', &begin) || !map_number(&cursor, ' ', &end) || end <= begin) { return false; }
+    if (strlen(cursor) < 5 || cursor[0] != 'r' ||
+        (cursor[1] != 'w' && cursor[1] != '-') || (cursor[2] != 'x' && cursor[2] != '-') ||
+        (cursor[3] != 'p' && cursor[3] != 's') || cursor[4] != ' ') { return false; }
+    cursor += 5;
+    if (!map_number(&cursor, ' ', &unused) || !map_number(&cursor, ':', &unused) ||
+        !map_number(&cursor, ' ', &unused)) { return false; }
+    /* The inode field can end immediately before a newline or have padding. */
+    const char *start = cursor; char *tail = NULL; errno = 0;
+    if (*start < '0' || *start > '9') { return false; }
+    unsigned long long parsed = strtoull(start, &tail, 10);
+    if (errno || tail == start || parsed > UINT64_MAX || (*tail != ' ' && *tail != '\n')) { return false; }
+    inode = (uint64_t)parsed; cursor = tail;
+    while (*cursor == ' ') { ++cursor; }
+    const char *newline = strchr(cursor, '\n');
+    if (!newline || newline[1] != 0) { return false; }
+    size_t length = (size_t)(newline - cursor);
+    if (length >= PATH_MAX) { return false; }
+    char name[PATH_MAX]; memcpy(name, cursor, length); name[length] = 0;
+    bool ordinary = inode == 0 && (!*name || strcmp(name, "[heap]") == 0 || strcmp(name, "[stack]") == 0);
+    struct stat info;
+    if (*name == '/' && strncmp(name, "/dev/", 5) != 0 && strncmp(name, "/sys/", 5) != 0 &&
+        strncmp(name, "/proc/", 6) != 0 && stat(name, &info) == 0 && S_ISREG(info.st_mode)) { ordinary = true; }
+    if (!ordinary) { return false; }
+    *region = (TbMemoryRegion){begin, end}; return true;
+}
+
 static void memory_metadata(TbNative *native)
 {
     uint64_t stop = tb_gdb_generation(native->gdb).stop; pid_t pid = native->target_pid;
@@ -581,16 +626,14 @@ static void memory_metadata(TbNative *native)
     TbMemoryRegion regions[TB_MEMORY_REGIONS]; size_t count = 0;
     (void)snprintf(path, sizeof path, "/proc/%ld/maps", (long)pid); FILE *maps = fopen(path, "re");
     char row[PATH_MAX + 256]; unsigned budget = 4096;
-    while (maps && budget-- && count < TB_MEMORY_REGIONS && fgets(row, sizeof row, maps)) {
-        unsigned long long begin, end, inode; char permissions[5]; int used = 0;
-        if (sscanf(row, "%llx-%llx %4s %*s %*s %llu %n", &begin, &end, permissions, &inode, &used) != 4 ||
-            !used || permissions[0] != 'r' || end <= begin) { continue; }
-        char *name = row + used; name[strcspn(name, "\n")] = 0;
-        bool ordinary = inode == 0 && (!*name || *name == '[');
-        struct stat info;
-        if (*name == '/' && strncmp(name, "/dev/", 5) && strncmp(name, "/sys/", 5) && strncmp(name, "/proc/", 6) &&
-            stat(name, &info) == 0 && S_ISREG(info.st_mode)) { ordinary = true; }
-        if (ordinary) { regions[count++] = (TbMemoryRegion){begin, end}; }
+    bool discard = false;
+    while (maps && budget > 0 && count < TB_MEMORY_REGIONS && fgets(row, sizeof row, maps)) {
+        --budget;
+        bool complete = strchr(row, '\n') != NULL;
+        if (discard) { discard = !complete; continue; }
+        if (!complete) { discard = true; continue; }
+        TbMemoryRegion region;
+        if (tb_native_memory_region(row, &region)) { regions[count++] = region; }
     }
     if (maps) { (void)fclose(maps); }
     tb_memory_regions(native->memory, regions, count);

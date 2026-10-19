@@ -9,6 +9,7 @@ typedef struct {
     char path[4096]; /* Exact filesystem bytes; file below is a render-safe label. */
     char address[48], function[160], file[384], from[160], architecture[64];
     char arguments[256];
+    bool arguments_read;
 } TbFrame;
 typedef struct {
     char id[32], name[96], target[128], state[24];
@@ -45,6 +46,9 @@ void tb_context_refresh(TbContext *context); /* Outside controller callbacks. */
 bool tb_context_select_thread(TbContext *context, const char *id);
 /* Frame rows must belong to a fresh snapshot, never the previous thread. */
 bool tb_context_select_frame(TbContext *context, int level);
+/* Deliberate value read of the selected frame only. Never repeated automatically.
+ * Unknown storage is not authorized for automatic argument reads. */
+bool tb_context_read_arguments(TbContext *context);
 bool tb_context_page(TbContext *context, int direction);
 const TbContextSnapshot *tb_context_snapshot(const TbContext *context);
 uint64_t tb_context_revision(const TbContext *context);

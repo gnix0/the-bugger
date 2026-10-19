@@ -6,7 +6,7 @@
 #include <string.h>
 
 typedef enum { QUERY_NONE, QUERY_THREADS, QUERY_CURRENT, QUERY_FRAMES, QUERY_ARGUMENTS,
-               SELECT_THREAD, SELECT_FRAME } Query;
+               SELECT_THREAD, SELECT_FRAME, READ_ARGUMENTS } Query;
 enum { COOKIE_BASE = 6000 };
 struct TbContext {
     TbGdb *gdb;
@@ -91,7 +91,7 @@ uint64_t tb_context_revision(const TbContext *context) { return context->revisio
 static void stale(TbContext *context)
 {
     context->dirty = true; context->snapshot.stale = true;
-    context->snapshot.refreshing = true; ++context->revision;
+    context->snapshot.refreshing = tb_gdb_state(context->gdb) == TB_GDB_STOPPED; ++context->revision;
 }
 void tb_context_refresh(TbContext *context)
 {
@@ -160,37 +160,46 @@ static void parse_frames(TbContext *context, const TbMiRecord *record)
     }
 }
 
-static void parse_arguments(TbContext *context, const TbMiRecord *record)
+static void parse_arguments(TbContextSnapshot *snapshot, const TbMiRecord *record, bool values)
 {
     const TbMiValue *list = tb_mi_find(record->results, "stack-args");
     if (!list || list->type != TB_MI_LIST) {
-        (void)snprintf(context->next.arguments_error, sizeof context->next.arguments_error, "Frame arguments unavailable."); return;
+        (void)snprintf(snapshot->arguments_error, sizeof snapshot->arguments_error, "Frame arguments unavailable."); return;
     }
+    bool matched = false;
     for (const TbMiValue *item = list->children; item; item = item->next) {
+        if (item->type != TB_MI_TUPLE) { continue; }
         int level = number(tb_mi_find(item->children, "level"));
-        for (size_t i = 0; i < context->next.frame_count; ++i) {
-            TbFrame *out = &context->next.frames[i];
+        if (values && level != snapshot->selected.level) { continue; }
+        for (size_t i = 0; i < snapshot->frame_count; ++i) {
+            TbFrame *out = &snapshot->frames[i];
             if (out->level != level) { continue; }
             const TbMiValue *args = tb_mi_find(item->children, "args");
             if (!args || args->type != TB_MI_LIST) { continue; }
-            size_t used = 0;
+            matched = true;
+            size_t used = 0; out->arguments[0] = 0; out->arguments_read = values;
             for (const TbMiValue *arg = args->children; arg && used + 1 < sizeof out->arguments; arg = arg->next) {
                 char name[64], value[128];
-                text(name, sizeof name, tb_mi_find(arg->children, "name"));
-                const TbMiValue *v = tb_mi_find(arg->children, "value");
+                if (arg->type == TB_MI_STRING && (!arg->name || strcmp(arg->name, "name") != 0)) { continue; }
+                text(name, sizeof name, arg->type == TB_MI_STRING ? arg : tb_mi_find(arg->children, "name"));
+                if (!*name) { continue; }
+                const TbMiValue *v = values ? tb_mi_find(arg->children, "value") : NULL;
                 text(value, sizeof value, v);
                 int written = snprintf(out->arguments + used, sizeof out->arguments - used,
-                                       "%s%s=%s", used ? ", " : "", name, v ? value : "<aggregate/unavailable>");
+                                       "%s%s=%s", used ? ", " : "", name, v ? value : values ? "<aggregate/unavailable>" : "<read required>");
                 if (written < 0 || (size_t)written >= sizeof out->arguments - used) { break; }
                 used += (size_t)written;
             }
         }
     }
+    if (values && !matched) {
+        (void)snprintf(snapshot->arguments_error, sizeof snapshot->arguments_error, "Selected frame arguments unavailable.");
+    }
 }
 
 bool tb_context_event(TbContext *context, const TbGdbEvent *event)
 {
-    if (event->cookie > COOKIE_BASE && event->cookie <= COOKIE_BASE + SELECT_FRAME &&
+    if (event->cookie > COOKIE_BASE && event->cookie <= COOKIE_BASE + READ_ARGUMENTS &&
         (event->kind == TB_GDB_REPLY || event->kind == TB_GDB_STALE ||
          event->kind == TB_GDB_TIMEOUT || event->kind == TB_GDB_CANCELLED)) {
         context->waiting = false;
@@ -198,6 +207,24 @@ bool tb_context_event(TbContext *context, const TbGdbEvent *event)
             stale(context); context->query = QUERY_NONE; return true;
         }
         Query query = (Query)(event->cookie - COOKIE_BASE);
+        if (query == READ_ARGUMENTS) {
+            /* A refresh can invalidate the snapshot before the controller's
+             * generation changes (e.g. newly visible inspectors). */
+            if (!context->snapshot.stale && !context->dirty && !context->invalidate &&
+                tb_gdb_state(context->gdb) == TB_GDB_STOPPED) {
+                if (event->kind == TB_GDB_REPLY && strcmp(event->record->klass, "done") == 0) {
+                    parse_arguments(&context->snapshot, event->record, true);
+                } else {
+                    text(context->snapshot.arguments_error, sizeof context->snapshot.arguments_error,
+                         event->record ? tb_mi_find(event->record->results, "msg") : NULL);
+                    if (!*context->snapshot.arguments_error) {
+                        (void)snprintf(context->snapshot.arguments_error, sizeof context->snapshot.arguments_error,
+                                       "Argument read failed; use Read Args to retry.");
+                    }
+                }
+            }
+            context->query = QUERY_NONE; ++context->revision; return true;
+        }
         context->failed = event->kind != TB_GDB_REPLY || strcmp(event->record->klass, "done") != 0;
         if (context->failed) {
             char *error = query >= SELECT_THREAD ? context->selection_error :
@@ -214,7 +241,7 @@ bool tb_context_event(TbContext *context, const TbGdbEvent *event)
             }
         }
         else if (query == QUERY_FRAMES) { parse_frames(context, event->record); }
-        else if (query == QUERY_ARGUMENTS) { parse_arguments(context, event->record); }
+        else if (query == QUERY_ARGUMENTS) { parse_arguments(&context->next, event->record, false); }
         context->query = query; ++context->revision;
         return true;
     }
@@ -322,7 +349,7 @@ void tb_context_pump(TbContext *context)
         char low[24], high[24];
         (void)snprintf(low, sizeof low, "%d", context->first_frame);
         (void)snprintf(high, sizeof high, "%d", context->next.frames[context->next.frame_count - 1].level);
-        const char *const args[] = {"--no-frame-filters", "--simple-values", low, high};
+        const char *const args[] = {"--no-frame-filters", "--no-values", low, high};
         (void)issue(context, QUERY_ARGUMENTS, "-stack-list-arguments", args, 4);
     } else if (context->query) { publish(context); }
 }
@@ -360,4 +387,27 @@ bool tb_context_page(TbContext *context, int direction)
     if (direction < 0 && context->first_frame == 0) { return false; }
     context->first_frame += direction > 0 ? TB_CONTEXT_FRAMES : -TB_CONTEXT_FRAMES;
     tb_context_refresh(context); return true;
+}
+
+bool tb_context_read_arguments(TbContext *context)
+{
+    if (!context->visible_frames || !context->snapshot.ready || context->snapshot.stale ||
+        context->dirty || context->invalidate || context->waiting || context->query != QUERY_NONE ||
+        tb_gdb_state(context->gdb) != TB_GDB_STOPPED) { return false; }
+    int selected = context->snapshot.selected.level;
+    bool found = false;
+    for (size_t i = 0; i < context->snapshot.frame_count; ++i) {
+        if (context->snapshot.frames[i].level == selected) { found = true; break; }
+    }
+    if (!found) { return false; }
+    char level[24]; (void)snprintf(level, sizeof level, "%d", selected);
+    const char *const args[] = {"--no-frame-filters", "--simple-values", level, level};
+    context->snapshot.arguments_error[0] = 0;
+    if (!issue(context, READ_ARGUMENTS, "-stack-list-arguments", args, 4)) {
+        context->query = QUERY_NONE;
+        (void)snprintf(context->snapshot.arguments_error, sizeof context->snapshot.arguments_error,
+                       "Argument request rejected; use Read Args to retry.");
+        ++context->revision; return false;
+    }
+    ++context->revision; return true;
 }

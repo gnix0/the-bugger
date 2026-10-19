@@ -15,6 +15,10 @@ typedef struct { char values[TB_NATIVE_WORDS][TB_NATIVE_WORD_BYTES]; size_t coun
 /* Quoted whitespace/backslash parsing only; no expansions or shell execution. */
 bool tb_native_words(const char *input, TbNativeWords *words, char *error, size_t capacity);
 
+/* Linux adapter metadata only; excludes unreadable, unknown special and device
+ * mappings. No target reads are performed by this parser. */
+bool tb_native_memory_region(const char *row, TbMemoryRegion *region);
+
 typedef struct {
     bool attach;
     pid_t pid;

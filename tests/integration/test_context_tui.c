@@ -9,7 +9,7 @@ int main(int argc, char *argv[])
     TestTerminal term;
     char *const args[] = {argv[1], NULL};
     test_terminal_start_argv(&term, args, "xterm-256color", false);
-    test_terminal_expect(&term, "Native Linux");
+    test_terminal_expect(&term, "Linux application");
     test_terminal_send(&term, "\r");
     test_terminal_expect(&term, "Executable / ELF");
     test_terminal_send(&term, "\t\025"); test_terminal_send(&term, argv[2]);
@@ -18,13 +18,19 @@ int main(int argc, char *argv[])
     test_terminal_click(&term, "Call Stack");
     test_terminal_expect(&term, "Stop a running program");
     test_terminal_click(&term, "Continue F5");
-    test_terminal_expect(&term, "recursive(depth=0");
+    test_terminal_expect(&term, "recursive(depth=<read required>");
     int x, y;
-    CHECK(test_terminal_find(&term, "recursive(depth=0", &x, &y));
+    CHECK(test_terminal_find(&term, "recursive(depth=<read required>", &x, &y));
     const char *level_text = strchr(term.cells[y], '#'); CHECK(level_text);
     int level; CHECK(sscanf(level_text, "#%d", &level) == 1);
-    test_terminal_click(&term, "recursive(depth=0");
+    test_terminal_click(&term, "recursive(depth=<read required>");
     char selected[64]; (void)snprintf(selected, sizeof selected, "LIVE | T1 frame #%d | inspected caller", level);
+    test_terminal_expect(&term, selected);
+    test_terminal_click(&term, "Read Args");
+    test_terminal_expect(&term, "recursive(depth=0");
+    /* Restore row focus after clicking the footer control. */
+    test_terminal_click(&term, "recursive(depth=0");
+    test_terminal_expect(&term, "recursive(depth=<read required>");
     test_terminal_expect(&term, selected);
     /* Arrow navigation browses rows; Enter deliberately selects the caller. */
     test_terminal_send(&term, "\033OB\r");

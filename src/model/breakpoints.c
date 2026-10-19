@@ -162,6 +162,7 @@ bool tb_break_watch(TbBreakpoints *b, const char *expression, TbWatchMode mode)
     }
     return watch_insert(b, expression, mode);
 }
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters) -- Existing address/validated byte-width/watch-mode API; width and mode are checked independently.
 bool tb_break_watch_address(TbBreakpoints *b, uint64_t address, unsigned bytes, TbWatchMode mode)
 {
     const char *type = bytes == 1 ? "unsigned char" : bytes == 2 ? "unsigned short" : bytes == 4 ? "unsigned int" : bytes == 8 ? "unsigned long long" : NULL;

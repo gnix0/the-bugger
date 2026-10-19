@@ -157,7 +157,8 @@ $(BUILD_DIR)/test-native: $(BUILD_DIR)/tests/integration/test_native.o $(NATIVE_
 $(BUILD_DIR)/test-native-tui: $(BUILD_DIR)/tests/integration/test_native_tui.o $(BUILD_DIR)/tests/support/terminal.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
-test-native: all $(BUILD_DIR)/test-native $(BUILD_DIR)/test-native-tui $(BUILD_DIR)/test-context-native $(BUILD_DIR)/test-context-tui $(BUILD_DIR)/test-code-native $(BUILD_DIR)/test-code-tui fixtures
+test-native: all $(BUILD_DIR)/test-acceptance-native $(BUILD_DIR)/test-native $(BUILD_DIR)/test-native-tui $(BUILD_DIR)/test-context-native $(BUILD_DIR)/test-context-tui $(BUILD_DIR)/test-code-native $(BUILD_DIR)/test-code-tui fixtures
+	$(BUILD_DIR)/test-acceptance-native $(abspath $(BUILD_DIR)/variables-fixture) $(abspath $(BUILD_DIR)/variables-fixture-cpp)
 	$(BUILD_DIR)/test-native $(abspath $(BUILD_DIR)/debug-fixture) $(abspath $(BUILD_DIR)/debug-fixture-cpp)
 	$(BUILD_DIR)/test-native-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/debug-fixture)
 	$(BUILD_DIR)/test-context-native $(abspath $(BUILD_DIR)/context-fixture) $(abspath $(BUILD_DIR)/context-fixture-optimized) $(abspath $(BUILD_DIR)/context-fixture-stripped)
@@ -444,3 +445,18 @@ clean:
 -include $(BUILD_DIR)/tests/integration/test_code.d $(BUILD_DIR)/tests/integration/test_code_native.d $(BUILD_DIR)/tests/integration/test_code_tui.d
 -include $(BUILD_DIR)/tests/unit/test_images.d $(BUILD_DIR)/tests/integration/test_breakpoints.d
 -include $(BUILD_DIR)/tests/integration/test_break_native.d $(BUILD_DIR)/tests/integration/test_break_tui.d
+
+.PHONY: test-m14-model test-m14-native
+test-m14-model: $(BUILD_DIR)/test-context $(BUILD_DIR)/test-native-words $(BUILD_DIR)/fake-mi
+	$(BUILD_DIR)/test-context $(abspath $(BUILD_DIR)/fake-mi)
+	$(BUILD_DIR)/test-native-words
+
+$(BUILD_DIR)/test-acceptance-native: $(BUILD_DIR)/tests/integration/test_acceptance_native.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+test-m14-native: all $(BUILD_DIR)/test-acceptance-native $(BUILD_DIR)/test-context-native $(BUILD_DIR)/test-context-tui fixtures
+	$(BUILD_DIR)/test-acceptance-native $(abspath $(BUILD_DIR)/variables-fixture) $(abspath $(BUILD_DIR)/variables-fixture-cpp)
+	$(BUILD_DIR)/test-context-native $(abspath $(BUILD_DIR)/context-fixture) $(abspath $(BUILD_DIR)/context-fixture-optimized) $(abspath $(BUILD_DIR)/context-fixture-stripped)
+	$(BUILD_DIR)/test-context-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/context-fixture)
+
+-include $(BUILD_DIR)/tests/integration/test_acceptance_native.d

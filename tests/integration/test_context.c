@@ -43,6 +43,7 @@ static void run_case(const char *binary, const char *mode)
     CHECK(tb_gdb_start(gdb, binary, 1000)); ready(gdb); stop(gdb);
     for (int i = 0; i < 10; ++i) { pump(gdb); }
     CHECK(!tb_context_snapshot(context)->ready); /* Invisible views do no reads. */
+    CHECK(!tb_context_read_arguments(context));
     tb_context_visible(context, true, true);
     if (strcmp(mode, "context-stale") == 0) {
         uint64_t until = tb_gdb_now_ms() + 1500;
@@ -63,7 +64,40 @@ static void run_case(const char *binary, const char *mode)
     } else {
         CHECK(snapshot->frame_count == TB_CONTEXT_FRAMES && snapshot->more_frames);
         CHECK(strcmp(snapshot->frames[0].function, "main_0") == 0);
-        CHECK(strstr(snapshot->frames[1].arguments, "<optimized out>"));
+        CHECK(strstr(snapshot->frames[0].arguments, "depth=<read required>"));
+        CHECK(strstr(snapshot->frames[1].arguments, "depth=<read required>"));
+        CHECK(!snapshot->frames[1].arguments_read);
+        CHECK(tb_context_select_frame(context, 1)); fresh(gdb);
+        CHECK(tb_context_read_arguments(context));
+        CHECK(!tb_context_read_arguments(context)); /* No overlapping reads. */
+        if (strcmp(mode, "context-args-stale") == 0 || strcmp(mode, "context-args-resume") == 0) {
+            for (int i = 0; i < 20; ++i) { pump(gdb); }
+            if (strcmp(mode, "context-args-resume") == 0) {
+                command(gdb, "-run");
+                for (int i = 0; i < 20; ++i) { pump(gdb); }
+                command(gdb, "-ctx-release");
+                for (int i = 0; i < 20; ++i) { pump(gdb); }
+                CHECK(snapshot->stale && !snapshot->refreshing && !snapshot->frames[1].arguments_read);
+                stop(gdb); fresh(gdb);
+            } else { tb_context_refresh(context); command(gdb, "-ctx-release"); fresh(gdb); }
+            CHECK(!snapshot->frames[1].arguments_read);
+            CHECK(!strstr(snapshot->frames[1].arguments, "OBSOLETE"));
+        } else {
+            uint64_t until = tb_gdb_now_ms() + 2000;
+            while (!snapshot->frames[1].arguments_read && !*snapshot->arguments_error && tb_gdb_now_ms() < until) { pump(gdb); }
+            if (strcmp(mode, "context-args-error") == 0 || strcmp(mode, "context-args-missing") == 0) {
+                CHECK(strstr(snapshot->arguments_error, "unavailable"));
+                CHECK(!snapshot->frames[1].arguments_read);
+            } else {
+                CHECK(snapshot->frames[1].arguments_read);
+                CHECK(strstr(snapshot->frames[1].arguments, "<optimized out>"));
+                CHECK(!snapshot->frames[0].arguments_read);
+            }
+        }
+        tb_context_visible(context, false, false);
+        CHECK(!tb_context_read_arguments(context));
+        tb_context_visible(context, true, true); fresh(gdb);
+        CHECK(!snapshot->frames[1].arguments_read);
         CHECK(tb_context_page(context, 1)); fresh(gdb);
         CHECK(snapshot->first_frame == 32 && snapshot->frame_count == 8 && !snapshot->more_frames);
         CHECK(tb_context_select_frame(context, 37)); fresh(gdb); CHECK(snapshot->selected.level == 37);
@@ -93,6 +127,7 @@ static void run_case(const char *binary, const char *mode)
     command(gdb, "-run");
     for (int i = 0; i < 20; ++i) { pump(gdb); }
     CHECK(snapshot->stale && !snapshot->refreshing);
+    CHECK(!tb_context_read_arguments(context));
     CHECK(!tb_context_select_thread(context, "7") && !tb_context_select_frame(context, 0));
     tb_context_refresh(context);
     idle = completions;
@@ -122,8 +157,9 @@ int main(int argc, char *argv[])
     CHECK(argc == 2);
     run_case(argv[1], "context"); run_case(argv[1], "context-stale");
     run_case(argv[1], "context-unwind"); run_case(argv[1], "context-malformed");
+    run_case(argv[1], "context-args-stale"); run_case(argv[1], "context-args-resume"); run_case(argv[1], "context-args-error"); run_case(argv[1], "context-args-missing");
     run_case(argv[1], "context-selection-stale"); run_case(argv[1], "context-many");
     CHECK(unsetenv("TB_FAKE_MODE") == 0);
-    puts("PASS M06 neutral context, paging/arguments, rapid selection, stale replies, thread exit, unwind errors and bounded idle/running work");
+    puts("PASS M06 neutral context, names-only automatic args, selected-frame explicit reads/errors/stale denial, paging, rapid selection, stale replies, thread exit, unwind errors and bounded idle/running work");
     return 0;
 }

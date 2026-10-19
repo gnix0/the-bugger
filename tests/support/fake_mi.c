@@ -74,7 +74,8 @@ int main(int argc, char *argv[])
     char held[32] = {0};
     unsigned setup = 0;
     int selected_thread = 7, selected_frame = 0;
-    bool context_held = false, thread_exited = false;
+    bool context_held = false, thread_exited = false, arguments_held = false;
+    int held_argument_level = -1;
     bool bp_temporary = false; int bp_table = 0, bp_clean_attempts = 0;
     unsigned data_mode = 0; bool data_watch = false;
     char data_expression[512] = {0}, data_type[64] = "hw watchpoint";
@@ -351,14 +352,35 @@ int main(int argc, char *argv[])
             }
         } else if (strncmp(mode, "context", 7) == 0 && strncmp(command, "-stack-list-arguments ", 22) == 0) {
             int low = 0, high = 0;
-            if (sscanf(command + 22, "--no-frame-filters --simple-values %d %d", &low, &high) != 2) { free(line); return 12; }
-            (void)printf("%s^done,stack-args=[", token);
-            for (int level = low; level <= high && level < 40; ++level) {
-                (void)printf("%sframe={level=\"%d\",args=[{name=\"depth\",value=\"%s\"}]}", level == low ? "" : ",", level, level == 1 ? "<optimized out>" : "4");
+            bool values = sscanf(command + 22, "--no-frame-filters --simple-values %d %d", &low, &high) == 2;
+            if (!values && sscanf(command + 22, "--no-frame-filters --no-values %d %d", &low, &high) != 2) { free(line); return 12; }
+            /* Reject a value request for any frame other than the explicit
+             * selected frame; automatic page-wide evaluation is a test failure. */
+            if (values && (low != high || low != selected_frame)) { free(line); return 13; }
+            if (values && strcmp(mode, "context-args-missing") == 0) {
+                reply(token, "^done,stack-args=[]");
+            } else if (values && strcmp(mode, "context-args-error") == 0) {
+                reply(token, "^error,msg=\"Argument storage unavailable\"");
+            } else if (values && (strcmp(mode, "context-args-stale") == 0 || strcmp(mode, "context-args-resume") == 0) && !arguments_held) {
+                arguments_held = true; held_argument_level = low;
+                (void)snprintf(held, sizeof held, "%s", token);
+            } else {
+                (void)printf("%s^done,stack-args=[", token);
+                for (int level = low; level <= high && level < 40; ++level) {
+                    (void)printf("%sframe={level=\"%d\",args=[", level == low ? "" : ",", level);
+                    if (values) { (void)printf("{name=\"depth\",value=\"%s\"}", level == 1 ? "<optimized out>" : "4"); }
+                    else if (level % 2) { (void)printf("{name=\"depth\",value=\"UNSOLICITED\"}"); }
+                    else { (void)printf("name=\"depth\""); }
+                    (void)printf("]}");
+                }
+                puts("]");
             }
-            puts("]");
         } else if (strcmp(command, "-ctx-release\n") == 0) {
             reply(token, "^done");
+            if (*held && held_argument_level >= 0) {
+                (void)printf("%s^done,stack-args=[frame={level=\"%d\",args=[{name=\"depth\",value=\"OBSOLETE\"}]}]\n", held, held_argument_level);
+                *held = 0; held_argument_level = -1;
+            }
             if (*held) { reply(held, "^done,stack=[frame={level=\"0\",func=\"OBSOLETE\"}]"); *held = '\0'; }
         } else if (strcmp(command, "-ctx-exit\n") == 0) {
             thread_exited = true; selected_thread = 7; selected_frame = 0;

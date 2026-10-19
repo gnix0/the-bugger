@@ -30,7 +30,7 @@ typedef enum {
     CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
     TOOL, TAB, MENU, BODY, SHOW_VIEW, FOCUS_PANE, CANCEL_RESET, CONFIRM_RESET,
     MENU_SECTION, PANE_ACTION, DIVIDER, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR,
-    COMMAND_OPEN, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_PAGE,
+    COMMAND_OPEN, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_ARGUMENTS, CONTEXT_PAGE,
     CODE_ACTIONS, CODE_ACTION, CODE_PAGE, CODE_FILE_PICK, CODE_FILE_PAGE, HSCROLLBAR,
     BREAK_OPEN, BREAK_ACTION, REGISTER_REFRESH, REGISTER_FORMAT, MEMORY_ACTION, MEMORY_FIELD,
     VARIABLE_OPEN, VARIABLE_ACTION, DATA_WATCH_OPTION,
@@ -877,9 +877,12 @@ static void draw_context_pane(App *app, int index, TbRect rect)
     }
     tb_text(rect.y + 1, rect.x + 1, rect.w - 2, snapshot->stale ? TB_ORANGE : TB_CYAN, 0, header);
     button(app, rect.y + rect.h - 1, rect.x + 1, 9, " Refresh ", CONTEXT_REFRESH, 0, index);
-    if (stack && rect.w >= 36) {
-        button(app, rect.y + rect.h - 1, rect.x + 11, 9, " < Frames", CONTEXT_PAGE, -1, index);
-        button(app, rect.y + rect.h - 1, rect.x + 21, 9, " Frames >", CONTEXT_PAGE, 1, index);
+    if (stack && rect.w >= 23) {
+        button(app, rect.y + rect.h - 1, rect.x + 11, 11, " Read Args ", CONTEXT_ARGUMENTS, 0, index);
+    }
+    if (stack && rect.w >= 44) {
+        button(app, rect.y + rect.h - 1, rect.x + 23, 9, " < Frames", CONTEXT_PAGE, -1, index);
+        button(app, rect.y + rect.h - 1, rect.x + 33, 9, " Frames >", CONTEXT_PAGE, 1, index);
     }
     TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
     if (!snapshot->ready || snapshot->stale) {
@@ -908,8 +911,8 @@ static void draw_context_pane(App *app, int index, TbRect rect)
     }
     if (error) {
         tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_ORANGE, 0, error);
-    } else if (stack && rect.w >= 52) {
-        tb_text(rect.y + rect.h - 1, rect.x + 31, rect.w - 32, TB_MUTED, 0,
+    } else if (stack && rect.w >= 64) {
+        tb_text(rect.y + rect.h - 1, rect.x + 43, rect.w - 44, TB_MUTED, 0,
                 "> selected | * stopped | click / Enter");
     } else if (!stack && rect.w >= 34) {
         tb_text(rect.y + rect.h - 1, rect.x + 11, rect.w - 12, TB_MUTED, 0,
@@ -984,7 +987,7 @@ static void draw_native_pane(App *app, int index, TbRect rect)
         TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
         tb_registers_want(r, (size_t)scroll.offset, (size_t)scroll.visible);
         for (int i = 0; i < scroll.visible && i + scroll.offset < scroll.total; ++i) {
-            const TbRegister *row = tb_registers_row(r, (size_t)(i + scroll.offset)); char text[1400];
+            const TbRegister *row = tb_registers_row(r, (size_t)i + (size_t)scroll.offset); char text[1400];
             register_text(row, text, sizeof text);
             size_t offset = (size_t)app->horizontal[index][TB_REGISTERS]; if (offset > strlen(text)) { offset = strlen(text); }
             TbStyle style = stale || !row->fresh || !row->available ? TB_MUTED : row->changed ? TB_YELLOW : TB_GREEN;
@@ -1027,7 +1030,7 @@ static void draw_native_pane(App *app, int index, TbRect rect)
         tb_text(rect.y + 3, rect.x + 1, rect.w - 2, TB_MUTED, 0, "Address             Hex bytes                                        ASCII");
         TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
         for (int i = 0; i < scroll.visible && i + scroll.offset < scroll.total; ++i) {
-            char text[128]; tb_memory_line(memory, index, (size_t)(i + scroll.offset), text, sizeof text);
+            char text[128]; tb_memory_line(memory, index, (size_t)i + (size_t)scroll.offset, text, sizeof text);
             size_t offset = (size_t)app->horizontal[index][view]; if (offset > strlen(text)) { offset = strlen(text); }
             tb_text(rect.y + 4 + i, rect.x + 1, app->body_width[index], stale ? TB_MUTED : TB_CYAN, 0, text + offset);
             if (!stale) {
@@ -1765,10 +1768,11 @@ static void draw_profiles(App *app)
     int visible = LINES - 13; if (visible > 8) { visible = 8; } if (visible < 1) { visible = 1; }
     size_t count = app->page == PROFILE_LIST ? tb_profiles_count(app->profiles) : profile_item_count(app);
     if (app->profile_offset < 0 || (size_t)app->profile_offset >= count) { app->profile_offset = 0; }
-    for (int i = 0; i < visible && (size_t)(i + app->profile_offset) < count; ++i) {
+    for (int i = 0; i < visible && (size_t)i + (size_t)app->profile_offset < count; ++i) {
         int item = i + app->profile_offset; char label[1200];
         if (app->page == PROFILE_LIST) {
             const TbProfile *p = profile_list_at(app, (size_t)item);
+            if (!p) { continue; }
             bool recent = false;
             for (size_t j = 0; j < TB_PROFILE_RECENT; ++j) { const char *name = tb_profiles_recent(app->profiles, j); recent = recent || (name && strcmp(name, p->name) == 0); }
             (void)snprintf(label, sizeof label, "%s%s | %s%s", recent ? "Recent: " : "", p->name, session_names[p->kind], p->kind ? " | definition only" : "");
@@ -2096,7 +2100,7 @@ static void activate(App *app, Control control)
             if (!v->ready || tb_memory_stale(m, id) || row >= (v->data_size + 15) / 16 || row > (UINT64_MAX - v->address) / 16) {
                 status(app, "Read a current Memory range and select a row first."); break;
             }
-            char address[32]; (void)snprintf(address, sizeof address, "0x%llx", (unsigned long long)(v->address + row * 16));
+            char address[32]; (void)snprintf(address, sizeof address, "0x%llx", (unsigned long long)v->address + (unsigned long long)row * 16ULL);
             data_watch_open(app, address, true, v->grouping); break;
         }
         if (control.value == 0) {
@@ -2136,6 +2140,9 @@ static void activate(App *app, Control control)
     case CONTEXT_REFRESH:
         tb_context_refresh(tb_native_context(app->native));
         status(app, "Context refresh requested; reads wait until stopped."); break;
+    case CONTEXT_ARGUMENTS:
+        status(app, tb_context_read_arguments(tb_native_context(app->native)) ?
+               "Reading selected frame arguments on request." : "Select a fresh, stopped frame before reading arguments."); break;
     case CONTEXT_PAGE:
         status(app, tb_context_page(tb_native_context(app->native), control.value) ?
                "Loading stack page." : "No further stack page available; wait for stopped context.");
