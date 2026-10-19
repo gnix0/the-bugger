@@ -1,7 +1,8 @@
 # Using The Bugger
 
 The current development build supports native Linux and existing remote
-GDB-server sessions. OpenOCD management remains preview-only. The v0.1.0
+GDB-server sessions, plus reviewed OpenOCD startup and target actions. M16 is
+awaiting acceptance. The v0.1.0
 release and physical embedded compatibility have not been accepted.
 See [build and first session](../README.md#build-and-first-session) for prerequisites.
 
@@ -97,6 +98,43 @@ assuming a safe hardware state. Correct refused endpoints or incompatible symbol
 in the retained form, and reconnect. Actual hardware compatibility still requires
 [physical validation](testing.md#every-release-regression-matrix).
 
+## OpenOCD sessions
+
+Choose **Embedded target – OpenOCD**. In Board mode, use **Browse boards** and
+**Filter** to select an installed configuration, or enter a literal path. The
+selected board supplies its own dependencies; the frontend does not append an
+adapter/target pair. Advanced mode exposes separate **Browse adapter** and
+**Browse target** actions. Script discovery is metadata only, not a device-support
+promise. Add custom search directories and ordered configuration files through
+**Profile...**; an explicit script list overrides board/adapter fields.
+
+Enter the symbol ELF and target-compatible GDB (ARM defaults to
+`arm-none-eabi-gdb`), OpenOCD executable and endpoint. **Start OpenOCD → Yes**
+creates a managed local server. Managed endpoints use `localhost:port` or
+`127.0.0.1:port` and resolve to IPv4 loopback. Choose **No – existing server**
+for an external instance or another host/IPv6 endpoint. Existing servers are
+never terminated by the frontend.
+
+**Review session** shows the exact indexed argument vector, endpoint and ownership.
+Use Previous/Next argv when necessary; paths with spaces remain single arguments.
+Inspect the selected Tcl files: they and OpenOCD initialization can affect target
+state. The frontend adds no automatic flash, reset or resume command. Choose
+**Start session** or **Connect** deliberately. Missing tools/files, busy ports,
+probe/permission errors, early exits and startup timeouts retain actionable logs
+and configuration. A listener alone is not proof of a connected target.
+
+The live workspace identifies **LIVE OPENOCD** and retains shared inspectors.
+**Halt** deliberately stops the target. **Reset** requires confirmation and requests
+reset-and-halt; it never programs firmware. Unsupported operations and failure to
+verify fresh stopped state leave inspection unavailable rather than presenting
+stale target values as current. Physical correctness remains subject to M17.
+
+On close choose **Leave halted** or **Resume**. Only owned GDB/OpenOCD processes
+are cleaned up. Target disposition depends on backend scripts and hardware; an
+unconfirmed transition is reported. Signal cleanup uses the conservative halted
+policy where possible. Normal Memory/variables access policy still applies:
+OpenOCD/SVD readability does not authorize speculative peripheral reads.
+
 ## Code and execution context
 
 The single default tiled workspace shows Source, Disassembly and Registers above
@@ -104,8 +142,8 @@ Memory, Locals and Console. Each pane has tabs and a view chooser. The live
 workspace also includes Registers, Memory, Locals/Watches and Breakpoints;
 specialized unimplemented views are labelled unavailable. With `--demo`, views
 display the simulated Cortex-M4F reference,
-including sample source/assembly, values and execution actions. OpenOCD
-configuration still opens an explicit preview and launches no server.
+including sample source/assembly, values and execution actions. OpenOCD configuration starts tools only after explicit review. The `--demo`
+flow remains simulated.
 
 For a live context example, launch `./build/context-fixture`. It deliberately
 stops with two worker threads waiting while main is inside recursive calls.
@@ -348,7 +386,7 @@ arrays are literal, with no shell evaluation.
 Profiles exclude PID, environment overrides and runtime values; Attach requires
 a current PID. Workspace/tabs, Memory locations, watches and breakpoints are not
 restored yet (F01). Remote definitions retain endpoint/tool/protocol choices for reviewed connection.
-OpenOCD definitions retain script choices but execution remains a preview. Key fields accept function keys, Ctrl letters or `None`;
+OpenOCD profiles retain script choices and require explicit startup review. Key fields accept function keys, Ctrl letters or `None`;
 reserved/conflicting bindings are rejected and toolbar hints follow the profile.
 Terminal/tmux delivery still varies; mouse alternatives remain available.
 See the [format](architecture.md#profiles-and-source-restoration) and
@@ -366,7 +404,7 @@ See the [format](architecture.md#profiles-and-source-restoration) and
 | Step Out keeps running | Step Out returns from a function, not a loop. An infinite-looping function needs Pause. |
 | Function key is intercepted | Use the visible action or a profile remapping; terminal/tmux key delivery varies. |
 
-OpenOCD management, Flash programming, value editing, specialized peripheral/
+Flash programming, value editing, specialized peripheral/
 RTOS inspectors, trace and runtime analysis remain planned. Profile definitions
 do not make those features operational. Register groups currently have an honest
 ungrouped fallback. Log export contains retained history only; native program input

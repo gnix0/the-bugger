@@ -9,7 +9,7 @@ instructions are required to interpret the results.
 
 ## Current evidence boundary
 
-M00–M15 and the listed corrections are accepted; M16–M18 remain planned.
+M00–M16 and the listed corrections are accepted. M17–M18 remain planned.
 v0.1.0 is not accepted. M14 records passing GCC/Clang default/native/tmux suites,
 slow watchpoint recovery, full default/native ASan/UBSan with leak detection and
 full-project static analysis. These results do not establish physical embedded
@@ -17,8 +17,9 @@ compatibility or measured terminal input-to-redraw latency. M15 now records
 passing GCC/Clang default/native/remote/tmux regressions, full default/native/remote
 ASan/UBSan with leak detection and full-project static analysis. M15 is accepted
 through its implementation commit; individual manual outcomes were not separately
-reported. OpenOCD management and real
-STM32/Xtensa/RISC-V validation remain outstanding. QEMU
+reported. M16 records passing GCC/Clang regressions, sanitizer/leak checks and static
+analysis, including focused offline OpenOCD lifecycle coverage. Real
+STM32/Xtensa/RISC-V validation remains outstanding. QEMU
 coverage is supplementary and currently unverified.
 
 Log paths identify the original local artifacts, which are ignored/disposable;
@@ -50,7 +51,7 @@ restructure these records.
 | M13 | Basic profiles and key mappings | accepted | `4030df3fa41da5805cedf1310b8c8ee7694b3112` |
 | M14 | Native integration acceptance | accepted | `1dee59f33323d37af9739ce846f1a676ea56d2d5` |
 | M15 | Existing remote server | accepted | `75435199e498cc087941cd8a75d7232b65d4c720` |
-| M16 | OpenOCD wizard/lifecycle/actions | planned | — |
+| M16 | OpenOCD wizard/lifecycle/actions | accepted | `18e460ddd4cbc897409e2879c03ed0fc983212df` |
 | M17 | Real release-board acceptance | planned | — |
 | M18 | v0.1.0 release evidence/acceptance | planned | — |
 
@@ -476,3 +477,77 @@ compatibility is claimed; actual server evidence is limited to the documented
 localhost GDB/gdbserver setup. Configured ELF metadata does not verify runtime firmware identity or
 relocation; default remote region evidence is empty. Explicit bounded inspection
 remains available while automatic unknown/MMIO reads remain denied.
+
+
+## M16 — OpenOCD wizard, lifecycle and actions
+
+Status: **accepted** through implementation commit
+`18e460ddd4cbc897409e2879c03ed0fc983212df`. Commit/push was reported by the
+repository owner. Individual manual checklist outcomes were not separately
+reported. Physical-board compatibility remains M17.
+
+Implemented bounded installed-script browsing/filtering, reviewed literal argv,
+board versus adapter/target selection and ordered explicit scripts/search paths.
+The shared session manages only its own OpenOCD child, waits for its listener
+before GDB connection and retains logs for startup/USB/script/port failures.
+Explicit Reset/Halt flushes GDB register/frame caches and verifies a fresh stopped
+PC from structured metadata. Pending operations interlock execution. Errors leave
+inspection unavailable and target disposition unverified. Close offers halted or
+resume policy, with backend/script limitations and owned-only cleanup.
+
+Focused checks executed by the coding agent:
+
+| Check | Result / boundary |
+|---|---|
+| Strict C17 build and `make test-m16-model` | PASS; `build/m16-build.log`. Metadata catalog, board dependency exclusion, explicit argv/search order, literal paths, missing/duplicate configurations and external-server mode. |
+| `make test-m16-server test-m16-slow` | PASS; `build/m16-server-validation.log` records the successful lifecycle/timeout cases before the initial TUI failure. Authored fake server/MI peers, bounded output, process cleanup, startup timeout, action errors and close choices; no hardware evidence. |
+| Final `make test-m16-server test-m16-tui` | PASS; `build/m16-final-focused.log`. Final cache-flush/stop-verification failure cases, execution interlocks, unverified close disposition, real PTY filter/review/start/Reset/Halt/close/resize/signal paths. |
+| `make test-m16-openocd` | PASS; `build/m16-openocd-validation.log`. Actual installed OpenOCD processes ordered Tcl scripts/search paths containing spaces and deliberately fails before adapter initialization; no hardware or connected target is exercised. |
+| Focused clang-tidy on OpenOCD/session/controller/TUI | Initial findings corrected: explicit string comparison, duplicate endpoint branch, signed descriptor flags and guarded session-array indexing. Full-project result is recorded below. |
+
+The initial terminal test clicked filter-summary text instead of the matching
+script row. Screen evidence showed the actual row was present; the test now
+clicks the row's path, retaining selection and configuration assertions. A later
+endpoint-ownership assertion initially ran against a stale session object while
+source/tests were being finalized (`build/m16-gcc-validation.log`, assertion at
+`test_openocd_server.c:77`). Source/object timestamps confirmed the mismatch.
+Fresh rebuilding retained the assertion and passed; the finalized full matrix
+uses separate logs. No application assertion or memory-access protection was
+removed to obtain these passes.
+
+Known boundaries: generic catalog roots require explicit search paths for custom
+installations; managed servers use local IPv4, with arbitrary hosts/IPv6 available
+in existing-server mode. No automatic programming/reset/resume commands are added,
+but OpenOCD initialization and selected Tcl scripts can affect the target. A
+listener is not proof of target readiness. Physical reset/halt/disconnect behavior,
+RAM/Flash correctness and probe-loss recovery remain UNVERIFIED until M17's named
+board/probe/GDB/server checks. No automatic MMIO authorization is inferred.
+
+Regression validation executed by the coding agent on Linux 7.2.9-arch1-1
+x86-64, GCC 16.2.1, Clang 23.1.1, GDB/gdbserver 18.1, tmux 3.8 and OpenOCD
+0.12.0-01004-g9ea7f3d64-dirty:
+
+| Command / configuration | Result and local artifact |
+|---|---|
+| `make test test-native test-tmux test-m15-native test-m16-server test-m16-tui test-m16-slow test-m16-openocd` | PASS; `build/m16-gcc-final.log`. Includes native launch/attach, context, code, breakpoints/watchpoints, registers, Memory, variables, profiles and actual external gdbserver regressions. |
+| Same targets with `CC=clang CXX=clang++ BUILD_DIR=build/clang-m16` | PASS; `build/m16-clang-validation.log`. |
+| `test test-native test-m15-native test-m16-server test-m16-tui test-m16-slow test-m16-openocd` with `CC=clang CXX=clang++ BUILD_DIR=build/m16-sanitize CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined'`, `ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1` | PASS; `build/m16-sanitizer-validation.log`; no sanitizer/leak diagnostics. |
+| Final `make test-m16-server test-m16-tui test-m15-native` | PASS; `build/m16-final-correction.log`. Explicit Resume correction and rejected-resume failure/cleanup, with remote regressions retained. |
+| Final `test-m16-server test-m16-tui` using the Clang and sanitizer configurations above | PASS; `build/m16-clang-correction.log` and `build/m16-sanitizer-correction.log`. |
+| `make test-m12-slow` | PASS; `build/m16-watchpoint-recovery.log`; shared-controller recovery, uncertain ownership and blocked-cleanup regressions. |
+| `make analyze` | PASS across all 19 application translation units; `build/m16-final-correction.log`. No unsuppressed diagnostics under the repository analyzer configuration. |
+
+After the full matrices, protocol review of
+[OpenOCD's detach handler](https://openocd.org/doc/doxygen/html/gdb__server_8c_source.html)
+identified an incorrect assumption in the initial Resume implementation: detach
+acknowledgement alone does not request target execution. Resume now explicitly
+issues `monitor resume` before disconnect. The authored MI tests require that
+command, reject reliance on detach and cover resume errors. The final affected
+GCC/Clang/sanitizer suites above were rerun after this correction; the earlier full
+matrix logs describe the preceding revision. Physical disposition can still be
+affected by scripts and requires M17 verification.
+
+Documentation consistency checks passed: 10 Markdown files, 99 relative links,
+balanced fenced blocks, retained roadmap/requirement identifiers and
+`git diff --check`. Acceptance is established by the implementation commit;
+physical-board results remain UNVERIFIED.

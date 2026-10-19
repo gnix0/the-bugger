@@ -4,8 +4,8 @@
 
 The product is embedded-first, with shared target-neutral inspectors. Linux is
 the frontend host, not the universal target OS. Native and existing remote-server integration are accepted
-through M15;
-OpenOCD management and physical validation remain M16–M17. Known integration gaps are listed below and in the roadmap.
+through M15. M16 adds reviewed OpenOCD management, awaiting acceptance;
+physical validation remains M17. Known integration gaps are listed below and in the roadmap.
 
 `src/main.c` handles help/version and starts the terminal application.
 `src/tui/app.c` owns startup/configuration/review/workspace pages, keyboard
@@ -25,7 +25,7 @@ use the selected-context model. Code breakpoints and Run to Selected use the
 breakpoint model, which now also provides M12 hardware data watchpoints.
 CPU Registers, Memory and Locals/Watches use the inspection models described below. Other
 inspection views have explicit unavailable messages. Explicit --demo
-retains simulated presentation separately. OpenOCD management remains a preview.
+retains simulated presentation separately. OpenOCD management is implemented and awaiting M16 acceptance.
 Remote connections use the shared inspectors and preserve capability limitations.
 Profiles and key mappings retain a review step before connection.
 
@@ -131,6 +131,54 @@ acquired or killed. Disconnect evidence cannot establish physical target state.
 Protocol references: [MI target manipulation](https://www.sourceware.org/gdb/download/onlinedocs/gdb.html/GDB_002fMI-Target-Manipulation.html),
 [connection modes](https://www.sourceware.org/gdb/current/onlinedocs/gdb.html/Connecting.html)
 and [byte order](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Byte-Order.html).
+
+## OpenOCD setup and owned lifecycle
+
+`src/session/openocd.{h,c}` provides a bounded script catalog, immutable reviewed
+argument plan and nonblocking server process/log management. The catalog inspects
+installed `board`, `interface` and `target` paths from explicit search directories,
+`OPENOCD_SCRIPTS`, user OpenOCD locations and conventional system prefixes. It
+never evaluates Tcl, infers script dependencies or treats a filename as hardware
+compatibility evidence. Traversal, depth and catalog size are bounded; omitted
+entries remain available through manual paths. Custom installation prefixes can
+be supplied through profile search directories.
+
+Board mode emits one selected `-f`, without appending populated adapter/target
+fields. Advanced mode emits adapter then target. An explicit ordered script list
+overrides both modes. Search directories retain order, and all arguments are
+spawned literally without a shell. The review shows indexed arguments, resolved
+endpoint, GDB/symbol choices and ownership. Managed servers bind IPv4 loopback;
+remote hosts/IPv6 use existing-server mode. Tcl scripts and OpenOCD initialization
+may affect the target: symbol loading adds no programming/reset/resume commands,
+but cannot neutralize actions in deliberately selected configurations.
+
+The manager checks local port availability, spawns only the reviewed executable,
+closes unrelated child descriptors and captures stdout/stderr into bounded escaped
+logs. Readiness requires this child's matching GDB-listener message and continued
+liveness. Listening does not prove target readiness; structured GDB connection and
+metadata negotiation remain mandatory. Startup has a five-second deadline;
+owned-server stop sends TERM followed by a bounded KILL/reap fallback. GDB closes
+before owned OpenOCD. External servers never enter this ownership path. An exited
+or failed server invalidates the session rather than silently reconnecting to a
+possibly unrelated endpoint. Port checks cannot eliminate the concurrent-bind
+race; listener and connection failures remain explicit.
+
+Reset is an explicitly confirmed `monitor reset halt`; Halt is deliberate too.
+Running operations first wait for GDB's asynchronous stop. Monitor completion alone
+is insufficient: the session flushes GDB's register/frame cache and verifies a
+fresh stop using structured thread information. Stop/context generations and the
+original stop PC are updated only from backend evidence. Unconfirmed operations
+leave value inspection unavailable, with an explicit reconnect diagnostic.
+Disconnect offers Leave halted or Resume. The former requests Halt before
+connection release; the latter explicitly requests `monitor resume` before
+`-target-disconnect`. OpenOCD detach alone does not request execution. Backend/script-specific detach
+events can override physical disposition, and errors are not reported as success.
+No default region/MMIO authorization is inferred from OpenOCD or script selection.
+
+References: [OpenOCD startup and script search](https://openocd.org/doc/html/Running.html),
+[server configuration](https://openocd.org/doc/html/Server-Configuration.html),
+[OpenOCD detach handling](https://openocd.org/doc/doxygen/html/gdb__server_8c_source.html) and
+[GDB register/frame cache invalidation](https://sourceware.org/pipermail/gdb-patches/2020-November/173490.html).
 
 ## Tiled workspace
 
@@ -678,7 +726,7 @@ and [Setting Watchpoints, hardware limits and scope](https://www.sourceware.org/
 recent saved sessions, independent of curses, local process IDs or target values.
 The launcher loads into configuration for review; it never starts a tool merely
 because a profile was selected. Successfully initialized saved sessions enter recents. Remote profiles connect
-only after review; OpenOCD management remains planned for M16. Attach reload
+only after review; OpenOCD profiles now prepare reviewed M16 sessions. Attach reload
 leaves PID empty. Environment overrides are session-only.
 
 Storage is `$XDG_CONFIG_HOME/the-bugger/profiles.json`, falling back to
@@ -735,7 +783,7 @@ from native behavior. Authorization precedes dispatch, not rendering.
 | CPU registers | Bounded visible-register reads while stopped, through GDB register IDs. These are CPU/debugger registers, not an MMIO peripheral inspector. Remote discovery retains target-specific IDs and unavailable states; F34 peripheral reads need their own policy. |
 | Code / source | Source reads local files. Instruction fetches are bounded around selected code and validated executable-image ranges; explicit raw decoding is labelled. Address/symbol navigation is deliberate, uses a restricted address expression and never moves execution. |
 | Breakpoints / data watches | Listing is metadata. Creation, conditions, Run to Selected and hardware watches are deliberate operations with execution/ownership interlocks. Watchpoint installation may read watched storage; it does not authorize future variable/Memory reads. |
-| Console / profiles | Console and command files are deliberate GDB operations, not a sandbox. Profiles restore approved configuration/source mappings, not stale values or automatic arbitrary commands. Saved remote definitions require connection review; OpenOCD execution remains a preview. |
+| Console / profiles | Console and command files are deliberate GDB operations, not a sandbox. Profiles restore approved configuration/source mappings, not stale values or automatic arbitrary commands. Saved remote definitions require connection review; OpenOCD execution requires explicit startup review. |
 
 The [GDB stack command reference](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Stack-Manipulation.html)
 defines names-only and simple-value modes; [frame argument settings](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Print-Settings.html)
@@ -775,8 +823,8 @@ are late reviewed candidates; native correctness/maintenance remains continuous.
 ## Known limitations and integration gaps
 
 - Shared sessions isolate local PTY/pidfd/proc ownership from remote target IDs.
-  Existing-server mode never owns the server. M16 adds explicitly managed
-  OpenOCD lifecycle; that management is not implemented here.
+  Existing-server mode never owns the server. M16 adds explicitly managed OpenOCD lifecycle; physical target behavior
+  still needs M17 evidence.
 - The native code index uses process maps and mapped ELF images. Remote runtime image identity/relocation remain unverified; configured ELF
   metadata is not independent proof of the loaded firmware. Remote metadata
   queries supply width/units and preserve unknown byte order without guessing. Initial Memory uses octet addressing and at most 64-bit addresses.

@@ -28,8 +28,10 @@ Availability depends on GDB and the target's capabilities.
 
 Existing TCP GDB servers support reviewed `remote`/`extended-remote` connections
 and shared inspectors. M15 is accepted with passing native/remote/compiler/
-sanitizer/tmux checks. OpenOCD lifecycle management remains preview-only. Physical
-embedded compatibility and release acceptance are not complete. STM32
+sanitizer/tmux checks. M16 adds reviewed OpenOCD startup, installed-script browsing,
+owned lifecycle and explicit Reset/Halt/disconnect actions. M16 is accepted with
+recorded automated validation.
+Physical embedded compatibility and release acceptance are not complete. STM32
 NUCLEO-F446RE through GDB/OpenOCD is the first planned hardware validation target; ESP32/Xtensa and ESP32/RISC-V are also required release targets,
 not currently verified support claims. OpenOCD is optional, not universal.
 

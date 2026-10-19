@@ -10,6 +10,16 @@ target cases establish architecture coverage, not physical-board support.
 See [testing](../docs/testing.md) for procedures and prerequisites; execution
 records remain in the [validation records](../docs/validation.md).
 
+- `test-openocd` / `make test-m16-model`: metadata catalog and bounded literal
+  argument planning, board/advanced/explicit script ordering, search paths and
+  configuration errors. Included in `make test`.
+- `make test-m16-server test-m16-slow test-m16-tui`: authored server/MI peers,
+  owned lifecycle/failure/timeout, explicit target actions and stop reconciliation,
+  script-filter/review/live terminal flow, disconnect choices and signal cleanup.
+- `make test-m16-openocd`: actual installed OpenOCD, ordered Tcl files with spaces
+  and deliberate failure before adapter initialization; no hardware is exercised.
+  See [OpenOCD procedures](../docs/testing.md#openocd-configuration-and-lifecycle).
+
 - `test-remote` / `make test-m15-model`: validated TCP endpoints, remote IDs,
   ARM/endian/units/width metadata, known RAM/Flash region browsing, unknown-policy
   denial, refusal/timeout/cancel/disconnect failure and symbol incompatibility.

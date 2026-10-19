@@ -36,7 +36,7 @@ are recorded as limitations or failed runs, not silently skipped passes.
 | Deterministic models and PTY UI | `make test`, focused `test-mNN-model` targets | Authored MI, owned-file/profile and terminal behavior; no real target required |
 | Native GDB/API/TUI | `make test-native`, focused `test-mNN-native` | Actual Linux debugger/fixture behavior, not embedded support |
 | Real tmux forwarding | `make test-tmux` | Isolated server, click/drag/keys/resize; physical appearance remains manual |
-| Existing remote / OpenOCD | `make test-m15-model test-m15-native`; M16 planned | Actual server negotiation/ownership plus offline failure cases |
+| Existing remote / OpenOCD | `make test-m15-model test-m15-native`, `test-m16-*` below | Actual server negotiation/ownership plus offline failure cases |
 | Physical embedded | M17 and per-feature fixtures | Named board/probe/server/toolchain, capability and recovery evidence |
 
 The [suite catalog](../tests/README.md) lists individual binaries; fixture READMEs
@@ -133,6 +133,58 @@ make analyze
 These are required checks, not execution claims. Record actual results in the
 [validation register](validation.md#m15--existing-remote-server).
 
+## OpenOCD configuration and lifecycle
+
+Coverage: M16; FR-04/18/30. No hardware support follows from these offline checks.
+
+```sh
+make test-m16-model
+make test-m16-server test-m16-slow test-m16-tui
+make test-m16-openocd
+```
+
+The model suite uses authored temporary script metadata and installed catalog
+paths, with no Tcl evaluation or server launch. It checks board dependency
+exclusion, advanced and explicit ordering, literal arguments/search paths, missing
+and duplicate scripts and managed/external configuration. It is included in
+`make test`. Catalog results depend on installed files; custom search roots remain
+supported when a distribution or installation prefix differs.
+
+Server and terminal tests require localhost sockets, POSIX children and PTYs.
+`fake-openocd` and `fake-mi` are authored protocol peers, not actual target/server
+implementations. Cases include readiness, early/later exit, cancellation, flood
+fairness/escaping, ignored TERM/KILL/reaping, port collision, missing tools, target
+operations/errors, fresh stop/PC reconciliation and halted/resume disconnect.
+The slow target adds the real five-second startup deadline. The terminal suite
+checks browse/filter selection, argument review, explicit start, Reset confirmation,
+Halt, close policy, compact resize and signal cleanup. No board is accessed.
+
+`test-m16-openocd` requires an actual installed `openocd`. Two temporary Tcl files
+verify ordered processing through a search directory and filename containing
+spaces, then deliberately raise an error before adapter initialization. The test
+requires failure and cleanup, never listener readiness or a usable target. This
+is actual OpenOCD argument/error-path evidence, not hardware validation.
+
+Manual configuration review:
+
+1. Open Embedded target – OpenOCD and Browse boards. Filter for an installed board
+   (the reference is `st_nucleo_f4.cfg` where installed). Select it and review:
+   exactly that board `-f` must appear, without appended adapter/target scripts.
+2. Back out and choose Advanced. Select adapter and target, then review their
+   order. Add ordered custom scripts/search paths through Profile options; these
+   override board/adapter fields and remain inspectable as literal arguments.
+3. Test nonexistent scripts/tools and an occupied local port. Expect retained
+   fields and an actionable diagnostic. With no probe connected, inspect actual
+   OpenOCD probe failure logs; a listening port must not become target readiness.
+4. Choose Start OpenOCD → No. Review must identify an external server and no
+   owned process; choosing/loading a profile alone must launch nothing.
+5. Repeat keyboard/mouse navigation, filter, review pagination and compact resize
+   directly/in tmux. Existing native and remote suites must remain passing.
+6. With M17's named physical setup, confirm real Halt/reset-and-halt, fresh PC and
+   register display, no unsolicited programming, halt/resume disconnect choices,
+   owned cleanup, external-server survival, probe loss and recovery. Record actual
+   backend/script behavior; mark unavailable hardware UNVERIFIED.
+
 ## Profiles and action keys
 
 Coverage: M13; FR-01/06/14/28 and NFR-03/05/06/09/12.
@@ -171,7 +223,7 @@ Manual reproduction (use a temporary XDG directory to avoid personal profiles):
    restore; intended duplicate-basename source and breakpoint must resolve.
 5. Confirm Attach reload does not retain a PID and environment overrides are not
    saved. Remote definitions retain endpoint/protocol and require Review/Connect;
-   OpenOCD definitions retain script order but execution remains a preview.
+   OpenOCD definitions retain script order and require explicit startup review.
    Loading either definition must not launch servers or connect.
 6. Delete a profile: Cancel preserves it; Confirm removes it and its recent entry.
    In a disposable profile file, malformed JSON must show an error and preserve
@@ -459,8 +511,7 @@ Coverage: M07/M08; source/instruction mapping, navigation and non-mutating brows
     centered on both axes, pink title, right-aligned v0.1.0, subtle separators,
     three described choices and selected-row indicator. Click either a title or
     its description; both open that flow. Check arrows/Tab/Enter, Quit/Ctrl+Q,
-    140x44, a larger terminal and 48x18 compact presentation. OpenOCD remains
-    an explicit preview; existing-server connections require review; recent saved native profiles are available after M13. The workspace
+    140x44, a larger terminal and 48x18 compact presentation. OpenOCD and existing-server execution require explicit review; recent saved native profiles are available after M13. The workspace
     after launch must retain its existing layout/theme.
 11. Step instructions in Disassembly. Earlier instructions must remain browsable,
     with roughly four before the first PC where available. The viewport stays
@@ -656,8 +707,7 @@ ptrace sandbox. No global permission/sysctl setting is changed.
    denial without changing ptrace settings. Repeat the native mouse/keyboard
    workflow directly/in tmux with opt-in mouse support.
 9. Run `./build/the-bugger --demo` for the unchanged visual reference. It must
-   remain explicitly simulated and separate from live state. The OpenOCD flow
-   is still a preview; existing-server connections are tested separately.
+   remain explicitly simulated and separate from live state. OpenOCD and existing-server live flows are tested separately.
 
 Automated scope: actual C/C++ launch, argv/cwd/env fidelity, output/control-byte
 isolation, pause/continue, console errors, Save Log open/short-write failures,
