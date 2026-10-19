@@ -10,6 +10,16 @@ target cases establish architecture coverage, not physical-board support.
 See [testing](../docs/testing.md) for procedures and prerequisites; execution
 records remain in the [validation records](../docs/validation.md).
 
+- `test-remote` / `make test-m15-model`: validated TCP endpoints, remote IDs,
+  ARM/endian/units/width metadata, known RAM/Flash region browsing, unknown-policy
+  denial, refusal/timeout/cancel/disconnect failure and symbol incompatibility.
+  Included in `make test`; no real debugger/server required.
+- `test-remote-native` / `make test-m15-native`: actual external gdbserver,
+  explicit attach, bounded buffer read, both connection protocols, optional
+  symbols, reconnect/survival, server loss/refusal and live remote PTY UI/cleanup.
+  Requires GDB/gdbserver, localhost sockets and ptrace; separate from native-only
+  suites. See [remote procedures](../docs/testing.md#existing-remote-server-sessions).
+
 - `make test-m14-model`: names-only automatic Call Stack arguments, deliberate
   selected-frame values, errors/obsolete replies and strict native mapping policy.
 - `test-acceptance-native` / `make test-m14-native`: repeated integrated C/C++

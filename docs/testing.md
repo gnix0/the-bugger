@@ -36,7 +36,7 @@ are recorded as limitations or failed runs, not silently skipped passes.
 | Deterministic models and PTY UI | `make test`, focused `test-mNN-model` targets | Authored MI, owned-file/profile and terminal behavior; no real target required |
 | Native GDB/API/TUI | `make test-native`, focused `test-mNN-native` | Actual Linux debugger/fixture behavior, not embedded support |
 | Real tmux forwarding | `make test-tmux` | Isolated server, click/drag/keys/resize; physical appearance remains manual |
-| Remote and OpenOCD | M15/M16 tests when implemented | Actual server negotiation/ownership plus offline failure cases |
+| Existing remote / OpenOCD | `make test-m15-model test-m15-native`; M16 planned | Actual server negotiation/ownership plus offline failure cases |
 | Physical embedded | M17 and per-feature fixtures | Named board/probe/server/toolchain, capability and recovery evidence |
 
 The [suite catalog](../tests/README.md) lists individual binaries; fixture READMEs
@@ -65,6 +65,73 @@ Test terminal behavior directly and in tmux with opt-in mouse support. Record
 TERM/terminal/tmux versions and intercepted keys. Fixtures never rewrite existing
 tmux bindings or security settings. PTY screen parsing is an ASCII-label oracle,
 not a general terminal emulator or proof of UTF-8/physical visual fidelity.
+
+## Existing remote server sessions
+
+Coverage: M15; FR-05/16, shared context/inspection and external ownership.
+
+```sh
+make test-m15-model
+make test-m15-native
+```
+
+The model suite requires no server or ptrace. It covers TCP endpoint validation,
+opaque remote IDs, ARM/big-endian/unknown/non-octet metadata, target-width bounds,
+known ordinary RAM/Flash browsing, refusal/timeout/cancellation, incompatible
+symbols, dropped debugger transport and disconnect failure. Its peer rejects
+unexpected target evaluations, automatic variable requests and unapproved reads.
+
+The actual suite requires `gdb`, `gdbserver`, localhost sockets and ptrace. It
+starts a harness-owned fixture/server, attaches explicitly over extended-remote,
+reads a bounded known buffer, reconnects in both protocols with/without configured
+symbols and checks survival after stopped and running frontend disconnect. It also kills its own
+server to exercise loss/revoked reads and refused reconnect. The PTY portion
+checks remote configuration/review/live panes, resize, confirmed disconnect and
+terminal restoration. Server/fixture cleanup belongs to the test harness; this
+is not frontend ownership or physical embedded evidence. The remote suite is
+separate from `test-native` so native-only checks do not require gdbserver; model
+coverage is included in `make test`.
+
+Manual review with disposable Linux fixtures:
+
+1. Run `make all fixtures`, then in another terminal run
+   `gdbserver --once 127.0.0.1:3333 ./build/remote-fixture`. Choose Connect to GDB
+   server, endpoint `127.0.0.1:3333`, ELF `./build/remote-fixture` and `gdb`.
+   Review must identify an externally owned server and no programming action.
+2. Connect. Expect LIVE REMOTE and a stopped target identifier, not a local PID.
+   Use source/disassembly, registers, frames and Continue/Pause. No source mapping
+   is an explicit fallback when symbols are unavailable. Resize and switch tabs.
+3. Enter `&remote_buffer` in Memory and Go. Bytes/ASCII must match
+   `REMOTE bounded memory`. Deliberately read another range through Options;
+   unknown-region wheel browsing must not silently issue target reads.
+4. Close and confirm disconnect. The frontend must never send a local kill to
+   the target/server ID. `--once` can itself end the server on disconnect; for a
+   persistent-server survival/reconnect check use `gdbserver --multi` and explicit
+   Console `attach PID` to a separately started disposable remote fixture.
+5. Try a refused port, incorrect GDB path and incompatible symbol ELF; expect
+   retained inputs, actionable diagnostics and no local process cleanup against
+   remote IDs. Connect without a configured ELF and retain honest symbol limits.
+6. Stop the disposable server during the session; request a deliberate read if
+   needed for GDB to notice the broken link. Old snapshots must not become fresh,
+   and further Memory reads must be blocked until a new target is established.
+7. Repeat keyboard/mouse entry and exit in tmux with opt-in mouse support.
+   Cross-target RAM/Flash, target endian, real probe loss and server-specific
+   halt/resume behavior require M17's named physical setup; no board passes here.
+
+M15 regression commands (separate build directories):
+
+```sh
+make test test-native test-tmux test-m15-native
+make CC=clang CXX=clang++ BUILD_DIR=build/clang-m15 test test-native test-tmux test-m15-native
+ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 \
+  make CC=clang CXX=clang++ BUILD_DIR=build/m15-sanitize \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' test test-native test-m15-native
+make analyze
+```
+
+These are required checks, not execution claims. Record actual results in the
+[validation register](validation.md#m15--existing-remote-server).
 
 ## Profiles and action keys
 
@@ -103,8 +170,9 @@ Manual reproduction (use a temporary XDG directory to avoid personal profiles):
    save applied Source lookup settings and reopen. Execution waits for source
    restore; intended duplicate-basename source and breakpoint must resolve.
 5. Confirm Attach reload does not retain a PID and environment overrides are not
-   saved. OpenOCD/remote definitions retain script order/endpoint/protocol but still
-   show preview-only execution. Loading them must not launch servers or connect.
+   saved. Remote definitions retain endpoint/protocol and require Review/Connect;
+   OpenOCD definitions retain script order but execution remains a preview.
+   Loading either definition must not launch servers or connect.
 6. Delete a profile: Cancel preserves it; Confirm removes it and its recent entry.
    In a disposable profile file, malformed JSON must show an error and preserve
    that file. Restore valid contents and reload/restart; do not silently overwrite
@@ -391,8 +459,8 @@ Coverage: M07/M08; source/instruction mapping, navigation and non-mutating brows
     centered on both axes, pink title, right-aligned v0.1.0, subtle separators,
     three described choices and selected-row indicator. Click either a title or
     its description; both open that flow. Check arrows/Tab/Enter, Quit/Ctrl+Q,
-    140x44, a larger terminal and 48x18 compact presentation. Server flows remain
-    explicit previews; recent saved native profiles are available after M13. The workspace
+    140x44, a larger terminal and 48x18 compact presentation. OpenOCD remains
+    an explicit preview; existing-server connections require review; recent saved native profiles are available after M13. The workspace
     after launch must retain its existing layout/theme.
 11. Step instructions in Disassembly. Earlier instructions must remain browsable,
     with roughly four before the first PC where available. The viewport stays
@@ -469,8 +537,8 @@ Manual acceptance, directly and inside tmux:
    then interrupt/terminate the TUI. Check terminal restoration and owned-process
    cleanup. Preserve externally attached processes.
 
-Physical embedded compatibility and remote disconnect/reset recovery remain
-M15–M17 work; native tests do not establish those results.
+Physical embedded compatibility and managed reset recovery remain
+M16–M17 work; native tests do not establish those results.
 
 
 ## Call Stack and Threads
@@ -588,8 +656,8 @@ ptrace sandbox. No global permission/sysctl setting is changed.
    denial without changing ptrace settings. Repeat the native mouse/keyboard
    workflow directly/in tmux with opt-in mouse support.
 9. Run `./build/the-bugger --demo` for the unchanged visual reference. It must
-   remain explicitly simulated and separate from native state. Embedded/remote
-   flows are still previews.
+   remain explicitly simulated and separate from live state. The OpenOCD flow
+   is still a preview; existing-server connections are tested separately.
 
 Automated scope: actual C/C++ launch, argv/cwd/env fidelity, output/control-byte
 isolation, pause/continue, console errors, Save Log open/short-write failures,

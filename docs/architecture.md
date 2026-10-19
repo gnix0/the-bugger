@@ -3,9 +3,9 @@
 ## Overview
 
 The product is embedded-first, with shared target-neutral inspectors. Linux is
-the frontend host and the currently operational target adapter, not the universal
-target OS. Native integration is accepted through M14; remote/OpenOCD and
-physical embedded validation remain M15–M17. Known integration gaps are listed below and in the roadmap.
+the frontend host, not the universal target OS. Native and existing remote-server integration are accepted
+through M15;
+OpenOCD management and physical validation remain M16–M17. Known integration gaps are listed below and in the roadmap.
 
 `src/main.c` handles help/version and starts the terminal application.
 `src/tui/app.c` owns startup/configuration/review/workspace pages, keyboard
@@ -18,16 +18,16 @@ debugger-domain state and must be replaced by live data in real sessions.
 The build and tests are C17 with strict warnings; Make is the only build driver.
 C tests use POSIX pipes, processes and PTYs.  Application libraries are ncursesw and libelf (ELF metadata
 only; GDB performs instruction decoding) and json-c (versioned profiles).
-The MI parser/controller and native session module now serve real Linux
-launch/attach sessions through the TUI. Console/output and Continue/Pause are
+The MI parser/controller and shared session module serve native launch/attach
+and existing remote GDB-server sessions through the TUI. Console/output and Continue/Pause are
 live. Source/Disassembly and stepping use the code model; Call Stack and Threads
 use the selected-context model. Code breakpoints and Run to Selected use the
 breakpoint model, which now also provides M12 hardware data watchpoints.
 CPU Registers, Memory and Locals/Watches use the inspection models described below. Other
 inspection views have explicit unavailable messages. Explicit --demo
-retains simulated presentation separately. Embedded/remote remain previews;
-remote inspection and OpenOCD management await their own gates. M13 profiles
-and key mappings are implemented; connection definitions do not imply execution.
+retains simulated presentation separately. OpenOCD management remains a preview.
+Remote connections use the shared inspectors and preserve capability limitations.
+Profiles and key mappings retain a review step before connection.
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
 descriptors together, redrawing after input or session revisions. Idle waits are
@@ -79,11 +79,58 @@ flowchart LR
     Profiles[Profile storage] --> Session
 ```
 
-Models own snapshots; rendering consumes them. The native session routes events
+Models own snapshots; rendering consumes them. The shared session routes events
 and pumps models outside callbacks. Every pending value/result is scoped by
 session, stop and context generations; per-view revisions additionally protect
 local navigation. Bounded work and owned resources keep errors and output floods
 from starving terminal input. Demo samples never become live debugger state.
+
+## Shared native and remote sessions
+
+`src/session/session.c` owns `TbSession`: MI event routing, setup, model pumping,
+execution actions, logs and teardown. `session.h` describes local, `remote` and
+`extended-remote` configurations. `native.h` retains source aliases for existing
+native consumers; `native.c` holds the strict Linux mapping parser. Native PTY,
+pidfd and `/proc` work is conditional on the local session kind. Remote IDs are
+opaque display strings, never local PIDs or inputs to process signaling/maps.
+
+Remote configuration accepts a validated TCP endpoint, GDB executable and optional
+symbol ELF. It loads symbols without programming firmware, then uses structured
+`-target-select`. It does not launch/own a server or apply native PTY, process
+arguments, ASLR or shell settings. Both protocols share the stopped-context and
+inspector models. Extended mode may connect without an inferior; Continue does
+not silently start a local process. Console supports deliberate server-specific
+launch/attach commands. Source-profile restoration retains its execution interlock.
+
+Capabilities record connection state, architecture, address width, octet support,
+byte order, configured symbol image and unknown relocation status. Constant-only
+C expressions establish unsigned-char and pointer widths without evaluating a
+target variable. Unknown/non-octet or wider-than-64-bit addressing blocks byte
+Memory requests before dispatch. A known incompatible ELF width/order/machine
+fails setup. Unknown architecture is not fabricated. GDB's `auto` endian setting
+is not a resolved byte order: explicit ELF metadata can supply an order, otherwise
+Memory retains single-byte formatting until the user supplies one.
+
+Remote ordinary-memory evidence is empty by default. Readable target descriptions,
+ELF sections and a successful read do not prove side-effect-free RAM/Flash. An
+adapter may supply affirmative bounded ordinary-region evidence through
+`TbSessionConfig`; this is not currently a generic UI map editor. Without it,
+Memory Go/Refresh and explicit Previous/Next read actions remain available, while
+wheel/key browsing cannot silently cross unknown regions. Opening views causes
+no speculative memory scan. New remote inferiors revoke previous region evidence
+and re-query metadata. Typed inferior-exit notifications revoke reads and stop
+model pumping until a new inferior is established. Retained values remain stale.
+
+Close interrupts a running target once, waits for the asynchronous stop, then
+sends `-target-disconnect` and reaps only the frontend's owned GDB. Target
+halt/resume disposition is server-dependent. Refusal, timeout or unconfirmed
+disconnect is reported; uncertain cleanup aborts owned GDB without sending it a
+normal quit command that could terminate a remote inferior. No server PID is
+acquired or killed. Disconnect evidence cannot establish physical target state.
+
+Protocol references: [MI target manipulation](https://www.sourceware.org/gdb/download/onlinedocs/gdb.html/GDB_002fMI-Target-Manipulation.html),
+[connection modes](https://www.sourceware.org/gdb/current/onlinedocs/gdb.html/Connecting.html)
+and [byte order](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Byte-Order.html).
 
 ## Tiled workspace
 
@@ -242,7 +289,7 @@ and [interpreter options](https://sourceware.org/gdb/current/onlinedocs/gdb.html
 
 ## Native session and logs
 
-`src/session/native.{h,c}` owns sequential configuration/actions over the
+`src/session/session.{h,c}` owns sequential configuration/actions over the
 controller. Callbacks copy status and mark completions; requests are issued
 after callbacks return, respecting controller ownership/reentrancy rules.
 Startup validates a readable ELF/PID and directory, resolves the ELF before
@@ -522,15 +569,15 @@ Memory has no Linux `/proc`/PID dependency. `tb_memory_order` and
 ordinary memory only. `tb_memory_browse` validates the next complete bounded
 range, read completeness, overflow and current context before enqueueing. No
 region metadata grants nothing implicitly; explicit address/Refresh remains
-available. `session/native.c` reads ELF byte order and a bounded process-map
+available. `session/session.c` reads ELF byte order and a bounded process-map
 catalog after stops, excluding device/special-file mappings from ordinary-memory
 authorization. Missing metadata is an honest unknown state.
 
 Snapshots never exceed 1024 bytes; one backend request is active at a time.
 Addresses are at most 64 bits and units are 8-bit bytes for the initial supported
 targets. The metadata catalog holds at most 128 regions; omitted or unavailable
-regions require explicit Go. Unsupported wider/non-octet targets need M15
-capability diagnostics, not fabricated values. GDB memory reads may use heuristic
+regions require explicit Go. Unknown or unsupported wider/non-octet targets produce capability diagnostics,
+not fabricated values. GDB memory reads may use heuristic
 partial reads; the frontend preserves the exact reported bytes/validity rather
 than reconstructing inaccessible memory. Scalar address conversion suppresses
 character-pointer string printing. User calls/writes/casts remain rejected.
@@ -540,7 +587,7 @@ character-pointer string printing. User calls/writes/casts remain rejected.
 
 `src/model/variables.{h,c}` owns separate shared Locals/Watches trees; panes
 retain their own selection and scroll, but do not create independent watch lists.
-`session/native.c` routes events and drives the model without blocking the TUI.
+`session/session.c` routes events and drives the model without blocking the TUI.
 Local names come from `-stack-list-variables --no-values`; value inspection uses
 owned MI variable objects, not parsed CLI output or demo data.
 
@@ -576,10 +623,8 @@ obsolete replies. Resume/context changes retire owned roots, and collapse/paging
 prunes children; cleanup uses session scope while value requests use context
 scope. No automatic idle/running/hidden value polling is introduced.
 
-Remaining integration work belongs to existing gates: M14 audits other value
-producers (including Call Stack's `--simple-values` arguments, which are not
-read-free); M15 carries authorization/unknown-region policy into remote adapters
-before embedded automatic inspection. Target descriptions must not be treated
+Call Stack arguments are names-only until explicitly read; remote sessions
+retain unknown-region denial before automatic inspection. Target descriptions must not be treated
 as complete MMIO safety evidence. Without sufficient proof, explicit inspection
 remains the fallback. M17 validates real hardware; synthetic policy tests do not
 establish peripheral safety on a board.
@@ -612,7 +657,7 @@ Memory's action reviews the address of the selected cached row's first group
 and a 1/2/4/8-byte width. It requires current data and never watches an entire
 displayed block implicitly. Address forms generate fixed unsigned C lvalues;
 the initial target data-model assumptions require compatible C widths and octet
-addressing. M15's existing address-unit/capability audit must retain that limit.
+addressing. Remote capability handling retains that limit.
 Variable actions prefill root expressions; child display labels are not guessed
 into C paths, so qualified child expressions can be entered explicitly.
 The form cancels submission if its stopped context changed.
@@ -632,9 +677,9 @@ and [Setting Watchpoints, hardware limits and scope](https://www.sourceware.org/
 `session/profiles.{c,h}` owns bounded connection definitions, action keys and
 recent saved sessions, independent of curses, local process IDs or target values.
 The launcher loads into configuration for review; it never starts a tool merely
-because a profile was selected. Only a successfully initialized saved native
-session enters recents today. Remote/OpenOCD definitions remain inert until
-M15/M16. Attach reload leaves PID empty. Environment overrides are session-only.
+because a profile was selected. Successfully initialized saved sessions enter recents. Remote profiles connect
+only after review; OpenOCD management remains planned for M16. Attach reload
+leaves PID empty. Environment overrides are session-only.
 
 Storage is `$XDG_CONFIG_HOME/the-bugger/profiles.json`, falling back to
 `$HOME/.config/the-bugger/profiles.json` for missing/relative XDG configuration.
@@ -673,7 +718,7 @@ then mappings in saved order. Only successful settings enter published state.
 Native Continue/Step/Console are interlocked during restoration; close remains
 available. A failed setting aborts the queue visibly without retry spin.
 The TUI's source-settings save action captures applied settings, not pending ones.
-M15 must retain this ordering/interlock for remote sessions. See [profile validation](testing.md#profiles-and-action-keys) for reproducible checks.
+Remote sessions retain this ordering/interlock. See [profile validation](testing.md#profiles-and-action-keys) for reproducible checks.
 
 ## Value-producing request audit
 
@@ -687,17 +732,18 @@ from native behavior. Authorization precedes dispatch, not rendering.
 | Native frame printing | Session setup applies `print frame-arguments none` before loading/attaching. This suppresses implicit argument-value formatting in frame/stop output; an explicit Console command can change GDB settings. Remote setup must establish the same policy before connecting. |
 | Locals / Watches | Names-only discovery; creation, evaluation, formatting and child expansion require a deliberate operation or complete-footprint/ordinary-region proof. The native adapter supplies no automatic value authorization. No automatic pointer expansion. |
 | Memory | Go/Refresh are deliberate bounded reads. Browsing requires an established ordinary region; unknown/MMIO does not inherit permission from the previous location. Native mapping metadata is parsed with checked fields, overflow/order validation and complete records; device and unknown special mappings are excluded. |
-| CPU registers | Bounded visible-register reads while stopped, through GDB register IDs. These are CPU/debugger registers, not an MMIO peripheral inspector. M15 must validate target capabilities; F34 peripheral reads need their own policy. |
+| CPU registers | Bounded visible-register reads while stopped, through GDB register IDs. These are CPU/debugger registers, not an MMIO peripheral inspector. Remote discovery retains target-specific IDs and unavailable states; F34 peripheral reads need their own policy. |
 | Code / source | Source reads local files. Instruction fetches are bounded around selected code and validated executable-image ranges; explicit raw decoding is labelled. Address/symbol navigation is deliberate, uses a restricted address expression and never moves execution. |
 | Breakpoints / data watches | Listing is metadata. Creation, conditions, Run to Selected and hardware watches are deliberate operations with execution/ownership interlocks. Watchpoint installation may read watched storage; it does not authorize future variable/Memory reads. |
-| Console / profiles | Console and command files are deliberate GDB operations, not a sandbox. Profiles restore approved configuration/source mappings, not stale values or automatic arbitrary commands. Saved remote/OpenOCD definitions remain inert previews. |
+| Console / profiles | Console and command files are deliberate GDB operations, not a sandbox. Profiles restore approved configuration/source mappings, not stale values or automatic arbitrary commands. Saved remote definitions require connection review; OpenOCD execution remains a preview. |
 
 The [GDB stack command reference](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Stack-Manipulation.html)
 defines names-only and simple-value modes; [frame argument settings](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Print-Settings.html)
 define implicit frame formatting. GDB may access stack, unwind information and
 debug registers to report context or perform execution control. Disabling argument values does not eliminate those
-protocol/backend requirements. Remote memory-map/capability evidence, unsupported
-operations and target-specific debug access remain M15/M16 validation tasks.
+protocol/backend requirements. M15 records remote capability/read-policy tests.
+Server/probe-specific operations and physical target access still require
+M16/M17 validation.
 See [M14 checks](testing.md#native-integration-and-hardening) for reproducible
 coverage and the [validation register](validation.md) for recorded outcomes.
 
@@ -728,12 +774,12 @@ are late reviewed candidates; native correctness/maintenance remains continuous.
 
 ## Known limitations and integration gaps
 
-- Native Linux is the only operational session adapter. M15 must separate shared
-  actions/models from local PTY/pidfd/proc ownership and must never signal remote
-  target identifiers as local PIDs. M16 adds only explicitly owned OpenOCD lifecycle.
-- The native code index uses process maps and mapped ELF images. Remote image
-  identity, relocation, byte order, address units and region evidence remain M15
-  prerequisites. Initial Memory uses octet addressing and at most 64-bit addresses.
+- Shared sessions isolate local PTY/pidfd/proc ownership from remote target IDs.
+  Existing-server mode never owns the server. M16 adds explicitly managed
+  OpenOCD lifecycle; that management is not implemented here.
+- The native code index uses process maps and mapped ELF images. Remote runtime image identity/relocation remain unverified; configured ELF
+  metadata is not independent proof of the loaded firmware. Remote metadata
+  queries supply width/units and preserve unknown byte order without guessing. Initial Memory uses octet addressing and at most 64-bit addresses.
 - Call Stack argument discovery is names-only. Explicit argument reads and native
   frame-print suppression have M14 native/terminal automated coverage. Metadata
   and stack unwinding can still require
@@ -742,7 +788,8 @@ are late reviewed candidates; native correctness/maintenance remains continuous.
 - The native variable adapter cannot prove complete expression footprints, so
   values require deliberate operations. Target descriptions and SVD readability
   alone cannot establish that MMIO access is free of side effects.
-- Real remote, STM32, ESP32 and optional acquisition compatibility remain unverified.
+- Localhost GDB/gdbserver has focused automated coverage. Physical STM32,
+  ESP32 and optional acquisition compatibility remain unverified.
   See [hardware validation](testing.md#every-release-regression-matrix). Register
   groups have an ungrouped fallback; specialized views remain planned.
 

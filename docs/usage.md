@@ -1,7 +1,7 @@
 # Using The Bugger
 
-The current development build supports native Linux sessions. Remote/OpenOCD
-configuration can be saved but execution remains preview-only. The v0.1.0
+The current development build supports native Linux and existing remote
+GDB-server sessions. OpenOCD management remains preview-only. The v0.1.0
 release and physical embedded compatibility have not been accepted.
 See [build and first session](../README.md#build-and-first-session) for prerequisites.
 
@@ -67,6 +67,36 @@ follow output. **Save Log** creates a new private file containing retained text.
 Existing files are preserved; open/write failures retain the input for correction.
 Interactive program input and a full terminal emulator are not provided yet.
 
+## Existing remote GDB servers
+
+Choose **Connect to GDB server**, enter a TCP `host:port` endpoint (IPv6 uses
+`[address]:port`), optional symbol ELF and a GDB executable supporting the target.
+Use **Review session → Connect**. The protocol is `remote` by default; **Profile... → Remote protocol** can select `extended-remote` before connection. Connection can halt a target,
+depending on its server. Loading an ELF loads symbols, not firmware.
+
+An externally started server remains externally owned. The workspace shows
+**LIVE REMOTE** and the target's opaque identifier rather than a local PID.
+Stopped inspectors and controls are shared with native sessions. An extended
+connection without an inferior shows **Connected**; deliberately attach or launch
+using appropriate GDB Console commands. Continue does not launch a local process.
+No server administration, reset or flash action is implied by connection.
+
+Memory starts as the persistent inline inspector. Enter a known RAM/Flash address
+or supported expression and **Go** for a bounded read. Remote region safety is
+unknown by default, so wheel/key browsing requires affirmative ordinary-region
+evidence. Without it, use **Options → Previous range (read) / Next range (read)** or inline Go for each
+deliberate range. Unknown endian permits byte display; choose an order before
+multi-byte grouping. Unknown address units/width or unsupported widths block
+byte reads rather than using host assumptions. Target changes invalidate evidence.
+
+Close confirms disconnection from the existing server, never server termination.
+A running target is interrupted first; unconfirmed stopping is a bounded failure.
+The server determines whether the target resumes or remains halted. Unconfirmed
+disconnect/server loss is reported explicitly; inspect the server/target before
+assuming a safe hardware state. Correct refused endpoints or incompatible symbols
+in the retained form, and reconnect. Actual hardware compatibility still requires
+[physical validation](testing.md#every-release-regression-matrix).
+
 ## Code and execution context
 
 The single default tiled workspace shows Source, Disassembly and Registers above
@@ -74,7 +104,7 @@ Memory, Locals and Console. Each pane has tabs and a view chooser. The live
 workspace also includes Registers, Memory, Locals/Watches and Breakpoints;
 specialized unimplemented views are labelled unavailable. With `--demo`, views
 display the simulated Cortex-M4F reference,
-including sample source/assembly, values and execution actions. Embedded/remote
+including sample source/assembly, values and execution actions. OpenOCD
 configuration still opens an explicit preview and launches no server.
 
 For a live context example, launch `./build/context-fixture`. It deliberately
@@ -317,8 +347,8 @@ arrays are literal, with no shell evaluation.
 
 Profiles exclude PID, environment overrides and runtime values; Attach requires
 a current PID. Workspace/tabs, Memory locations, watches and breakpoints are not
-restored yet (F01). OpenOCD/remote definitions retain endpoint/tool/script choices
-but remain previews. Key fields accept function keys, Ctrl letters or `None`;
+restored yet (F01). Remote definitions retain endpoint/tool/protocol choices for reviewed connection.
+OpenOCD definitions retain script choices but execution remains a preview. Key fields accept function keys, Ctrl letters or `None`;
 reserved/conflicting bindings are rejected and toolbar hints follow the profile.
 Terminal/tmux delivery still varies; mouse alternatives remain available.
 See the [format](architecture.md#profiles-and-source-restoration) and
@@ -336,7 +366,7 @@ See the [format](architecture.md#profiles-and-source-restoration) and
 | Step Out keeps running | Step Out returns from a function, not a loop. An infinite-looping function needs Pause. |
 | Function key is intercepted | Use the visible action or a profile remapping; terminal/tmux key delivery varies. |
 
-Remote/OpenOCD execution, Flash programming, value editing, specialized peripheral/
+OpenOCD management, Flash programming, value editing, specialized peripheral/
 RTOS inspectors, trace and runtime analysis remain planned. Profile definitions
 do not make those features operational. Register groups currently have an honest
 ungrouped fallback. Log export contains retained history only; native program input

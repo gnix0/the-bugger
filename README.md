@@ -26,10 +26,11 @@ hardware-required data watchpoints, read-only registers/Memory/Locals/Watches,
 GDB Console, program output, Save Log, named profiles and action-key remapping.
 Availability depends on GDB and the target's capabilities.
 
-Remote-server and OpenOCD configuration definitions can be saved, but execution
-remains preview-only. Physical embedded compatibility and release acceptance are
-not complete. STM32 NUCLEO-F446RE through GDB/OpenOCD is the first planned hardware
-validation target; ESP32/Xtensa and ESP32/RISC-V are also required release targets,
+Existing TCP GDB servers support reviewed `remote`/`extended-remote` connections
+and shared inspectors. M15 is accepted with passing native/remote/compiler/
+sanitizer/tmux checks. OpenOCD lifecycle management remains preview-only. Physical
+embedded compatibility and release acceptance are not complete. STM32
+NUCLEO-F446RE through GDB/OpenOCD is the first planned hardware validation target; ESP32/Xtensa and ESP32/RISC-V are also required release targets,
 not currently verified support claims. OpenOCD is optional, not universal.
 
 `v0.1.0` is the release target, not a completed release. See the
@@ -41,7 +42,9 @@ not currently verified support claims. OpenOCD is optional, not universal.
 Build on Linux with GCC or Clang supporting C17, GNU Make, pkg-config, and the
 ncursesw, libelf and json-c development libraries/headers. Interactive use needs
 a TTY and usable TERM/terminfo. Native sessions require GDB and permitted ptrace;
-Linux pidfds support owned-inferior crash recovery. A C++ compiler is used only
+Linux pidfds support owned-inferior crash recovery. Remote sessions need a
+target-compatible GDB and an already running server; `gdbserver` is required only
+for the localhost integration fixture. A C++ compiler is used only
 for optional debug-target fixtures. Dependencies are external, not bundled.
 
 ```sh

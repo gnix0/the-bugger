@@ -9,12 +9,16 @@ instructions are required to interpret the results.
 
 ## Current evidence boundary
 
-M00–M14 and the listed corrections are accepted; M15–M18 remain planned.
+M00–M15 and the listed corrections are accepted; M16–M18 remain planned.
 v0.1.0 is not accepted. M14 records passing GCC/Clang default/native/tmux suites,
 slow watchpoint recovery, full default/native ASan/UBSan with leak detection and
 full-project static analysis. These results do not establish physical embedded
-compatibility or measured terminal input-to-redraw latency. Remote/OpenOCD
-execution and real STM32/Xtensa/RISC-V validation remain outstanding. QEMU
+compatibility or measured terminal input-to-redraw latency. M15 now records
+passing GCC/Clang default/native/remote/tmux regressions, full default/native/remote
+ASan/UBSan with leak detection and full-project static analysis. M15 is accepted
+through its implementation commit; individual manual outcomes were not separately
+reported. OpenOCD management and real
+STM32/Xtensa/RISC-V validation remain outstanding. QEMU
 coverage is supplementary and currently unverified.
 
 Log paths identify the original local artifacts, which are ignored/disposable;
@@ -45,13 +49,15 @@ restructure these records.
 | M12 | Hardware data watchpoints and cross-view actions | accepted | `f1dbb8a70033821e33e9a5506e23758d0723587d` |
 | M13 | Basic profiles and key mappings | accepted | `4030df3fa41da5805cedf1310b8c8ee7694b3112` |
 | M14 | Native integration acceptance | accepted | `1dee59f33323d37af9739ce846f1a676ea56d2d5` |
-| M15 | Existing remote server | planned | — |
+| M15 | Existing remote server | accepted | `75435199e498cc087941cd8a75d7232b65d4c720` |
 | M16 | OpenOCD wizard/lifecycle/actions | planned | — |
 | M17 | Real release-board acceptance | planned | — |
 | M18 | v0.1.0 release evidence/acceptance | planned | — |
 
 
 ### Full recorded commit identifiers
+
+- `75435199e498cc087941cd8a75d7232b65d4c720`
 
 - `1dee59f33323d37af9739ce846f1a676ea56d2d5`
 - `4030df3fa41da5805cedf1310b8c8ee7694b3112`
@@ -400,3 +406,73 @@ GDB CPU. Test host: Intel Core i5-8265U, Linux 7.2.9-arch1-1 x86-64, GCC 16.2.1,
 Clang 23.1.1, GDB 18.1 and tmux 3.8. The direct/tmux manual procedure remains
 available for reproduction; individual outcomes and terminal input-to-redraw
 measurements were not separately reported. Hardware limitations remain unchanged.
+
+
+## M15 — existing remote server
+
+Status: **accepted** through implementation commit
+`75435199e498cc087941cd8a75d7232b65d4c720` (`feat: connect to existing GDB servers`).
+The implementation was committed and pushed. Individual manual checklist outcomes
+were not separately reported; acceptance does not invent those results. OpenOCD
+management and physical embedded validation remain separate gates.
+
+Implemented shared `TbSession` with source-compatible native aliases, guarded
+local process ownership, reviewed remote/extended-remote TUI connections and
+explicit capability/unknown-region handling. Server IDs never become local PIDs.
+Metadata mismatch/refusal/timeout/uncertain disconnect closes only owned GDB.
+Remote inferior loss revokes Memory evidence and stops inspector pumping.
+
+Focused checks executed by the coding agent:
+
+| Command | Result and boundary |
+|---|---|
+| `make -s -j4 all build/test-remote-native build/test-remote build/test-memory build/fake-mi` | PASS strict build of changed application/model and harness paths. |
+| `make -s test-m15-model` | PASS endpoint/ID/ARM/big-endian/unknown/non-octet/width bounds, ordinary RAM/Flash browsing, refusal, timeout, cancellation, transport/disconnect failure and symbol-machine mismatch. Synthetic evidence only. |
+| `build/test-remote-native /home/gnix/developer/the-bugger/build/remote-fixture --tui /home/gnix/developer/the-bugger/build/the-bugger` | PASS actual localhost gdbserver: extended attach, bounded Memory, both protocol reconnects, optional configured symbols, server/fixture survival after stopped/running frontend close, server loss/revoked reads, refused reconnect, live TUI/review/resize/disconnect and terminal restoration. |
+| `build/test-native-words` | PASS actual native maps and structured words through retained source API. |
+| `build/test-memory build/fake-mi` | PASS existing bounded Memory policy/partial/stale/session-reset regressions. |
+| `clang-tidy src/session/session.c src/session/native.c src/model/memory.c src/gdb/controller.c` with repository analyzer/bugprone checks, warnings-as-errors and normal includes | PASS focused modules; not a full-project analyzer result. Only existing suppressions/system diagnostics excluded. |
+
+A final focused analyzer pass of `src/session/session.c` and `src/tui/app.c`
+also passed with the same checks after the running-close corrections.
+
+Corrections during focused validation: socket creation was unavailable in the
+restricted environment; actual localhost validation passed with the required
+socket/ptrace access. An initial harness context request was replaced with a
+visible context consumer because the code model owns the request flag; actual
+context assertions were retained. The live UI test exposed an obsolete review
+label, corrected in the application. Numeric Memory locations now undergo the
+same target-width bounds as expression results. A synthetic RAM/Flash response
+initially omitted MI's required end address; its malformed fixture was corrected
+without weakening parser validation. Running close initially failed because
+GDB rejects disconnect while running: production close now issues one interrupt
+and waits for the typed stop, with bounded failure rather than retrying forever.
+The strengthened test then exposed a harness process-group issue: isolated GDB
+protocol probes showed interrupt was acknowledged without a stop for a fixture
+sharing the harness group, while a separate group received the stop. The harness
+now launches children in separate process groups; disconnect and survival
+assertions remain intact and the final actual run passes.
+
+Quick documentation checks passed: local Markdown link targets, balanced code
+fences, retained M00–M18/F01–F47 identifiers and `git diff --check`.
+
+Full regression validation executed by the coding agent after the final fixes:
+
+| Command | Result / local artifact |
+|---|---|
+| `make test test-native test-tmux test-m15-native` | PASS, exit 0; `build/m15-gcc-validation.log`. Full default/native, isolated tmux and actual remote API/TUI suites. |
+| `make CC=clang CXX=clang++ BUILD_DIR=build/clang-m15 test test-native test-m15-native` | PASS, exit 0; `build/m15-clang-validation.log`. Separate strict Clang build and full default/native/remote regressions. |
+| `make CC=clang CXX=clang++ BUILD_DIR=build/clang-m15 test-tmux` | PASS, exit 0; `build/m15-clang-tmux.log`. |
+| `ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 make CC=clang CXX=clang++ BUILD_DIR=build/m15-sanitize CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test test-native test-m15-native` | PASS, exit 0; `build/m15-sanitizer-validation.log`. Full default/native/remote frontend and harness instrumentation with leak detection; target fixtures remain uninstrumented. No sanitizer failures reported. |
+| `make analyze` | PASS, exit 0; `build/m15-analysis.log`. All 18 application translation units, repository analyzer/bugprone checks and warnings-as-errors; existing NOLINT and non-user-code exclusions retained. |
+
+Test host/tools: Linux 7.2.9-arch1-1 x86-64, glibc 2.44, GCC 16.2.1,
+Clang 23.1.1, GDB/gdbserver 18.1 and tmux 3.8. No application/test fixes were
+needed during this full matrix. Earlier focused failures and corrections above
+remain part of the record. Automated success does not establish manual acceptance.
+
+Physical board evidence remains outstanding. No new physical hardware
+compatibility is claimed; actual server evidence is limited to the documented
+localhost GDB/gdbserver setup. Configured ELF metadata does not verify runtime firmware identity or
+relocation; default remote region evidence is empty. Explicit bounded inspection
+remains available while automatic unknown/MMIO reads remain denied.
