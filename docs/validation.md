@@ -9,7 +9,8 @@ instructions are required to interpret the results.
 
 ## Current evidence boundary
 
-M00–M17 and the listed corrections are accepted. M18 remains planned.
+M00–M17 and the listed corrections are accepted. M18 artifacts and final automated
+checks are prepared; manual/release acceptance remains pending.
 v0.1.0 is not accepted. M14 records passing GCC/Clang default/native/tmux suites,
 slow watchpoint recovery, full default/native ASan/UBSan with leak detection and
 full-project static analysis. These results do not establish physical embedded
@@ -54,7 +55,7 @@ restructure these records.
 | M15 | Existing remote server | accepted | `75435199e498cc087941cd8a75d7232b65d4c720` |
 | M16 | OpenOCD wizard/lifecycle/actions | accepted | `18e460ddd4cbc897409e2879c03ed0fc983212df` |
 | M17 | NUCLEO-F446RE and ESP32-S3 validation | accepted | `f568bd2482b2309e3534ebc8e197854ada37bf77` |
-| M18 | v0.1.0 release evidence/acceptance | planned | — |
+| M18 | v0.1.0 release evidence/acceptance | awaiting-user | — |
 
 
 ### Full recorded commit identifiers
@@ -650,3 +651,109 @@ externally; the frontend does not automatically verify flashed-image identity.
 No unlisted board, architecture, probe or acquisition feature gains a support
 claim from these results. Documentation finalization uses consistency checks;
 application suites were not rerun for the documentation-only commit.
+
+## M18 — Release preparation and requirements audit
+
+Status: **awaiting-user**. A Linux x86-64 host distribution and corresponding
+source archive are prepared; no release is published or tagged. Preparation-commit
+linkage is finalized after the approved combined preparation commit. Physical RISC-V
+acceptance is explicitly deferred for v0.1.0; the accepted release matrix is
+native Linux x86-64, NUCLEO-F446RE and ESP32-S3. This deferral does not establish
+RISC-V hardware compatibility or waive future release requirements.
+
+### Executed checks
+
+The coding agent ran these checks with authorization for M18. Host: Linux
+7.2.9-arch1-1 x86-64, glibc 2.44, GCC 16.2.1, Clang 23.1.1, GDB/gdbserver 18.1,
+tmux 3.8. Instrumented target fixtures remain excluded from sanitizer flags;
+frontend and harness leak detection stays enabled.
+
+| Command / check | Result / local artifact |
+|---|---|
+| `make BUILD_DIR=build/m18-gcc all test test-native test-tmux test-m15-native test-m16-server test-m16-tui test-m16-slow test-m16-openocd test-m12-slow` | PASS, exit 0; `build/m18/gcc.log`. Clean strict GCC build, full default/native/tmux, actual localhost remote and OpenOCD lifecycle/recovery checks. |
+| Same targets with `CC=clang CXX=clang++ BUILD_DIR=build/m18-clang` | PASS, exit 0; `build/m18/clang.log`. |
+| `test test-native test-m15-native test-m16-server test-m16-tui test-m16-slow test-m16-openocd test-m12-slow` with `CC=clang CXX=clang++ BUILD_DIR=build/m18-sanitize CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined'`, `ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1` | PASS, exit 0; `build/m18/sanitizers.log`. No sanitizer/leak failure reported. |
+| `make analyze` | PASS, exit 0; all 19 production translation units, no unsuppressed analyzer/bugprone diagnostics. `build/m18/analyze.log`. |
+| `make release` | PASS; isolated hardened build, packaged version/help checks outside the source tree. `build/m18/release-build.log`. |
+| Extract source archive outside the repository; `make all` and `make fixtures` in that directory | PASS; source build and fixture build require no original objects or Git metadata. `build/m18/source-archive-build.log`, `source-fixtures.log`. |
+| Existing `test-cli`, `test-tui`, `test-workspace`, `test-native-tui` and `test-code-tui` against the extracted binary from outside the repository, using source-archive fixtures | PASS, exit 0; actual PTY, native GDB and code-stepping workflows. `build/m18/packaged-smoke.log`. |
+| ELF/runtime inspection; archive checksum verification; invalid executable packaging | PASS; x86-64 PIE, non-executable stack, RELRO/BIND_NOW, resolved host libraries and rejected missing executable, wrong version and ARM firmware. `build/m18/elf-inspection.log`, `runtime-libraries.log`, `checksums.log`, `invalid-package.log`. |
+| System OpenOCD with an Espressif `OPENOCD_SCRIPTS` override and explicit `-s /usr/share/openocd/scripts` | PASS; resolves the matching system ST-LINK script without hardware access. `build/m18/script-root-check.log`. |
+
+Repeated packaging with unchanged inputs produced identical archive checksums
+(`build/m18/repeat-packaging.log`). Final process inspection found no remaining
+OpenOCD, GDB, GDBserver or test processes. Documentation link/fence/identifier and
+whitespace checks passed; release preparation did not change application code.
+
+The optimized executable uses FORTIFY, stack protection, PIE and full RELRO.
+Direct runtime dependencies are ncursesw, libelf, json-c and libc; distribution
+transitive dependencies and terminfo are still required. Executable GLIBC symbols
+extend through 2.38; the actual tested host is glibc 2.44. No older-distribution
+compatibility is inferred from symbol inspection. No third-party runtime, GDB,
+OpenOCD, vendor SDK or firmware binary is bundled.
+
+Artifacts are `build/dist/the-bugger-v0.1.0-linux-x86_64.tar.gz`, the corresponding
+`the-bugger-v0.1.0-source.tar.gz` and `SHA256SUMS`. The binary archive embeds the
+source archive's checksum and the GPLv3 license. Checksums are distributed with
+the artifacts rather than embedded in this source record, avoiding a circular
+source-archive identity. Rebuild after final source/documentation edits.
+
+### Functional requirement audit
+
+“Covered” identifies actual test evidence, not an unreported manual action or
+final release acceptance. Capability-specific hardware limits remain those in M17.
+
+| Requirements | Evidence / assessment |
+|---|---|
+| FR-01/06/13/17 | Covered by launcher, action keys, six-pane tabs/splits/resizing, monochrome/color and direct/tmux tests; physical appearance remains manual. |
+| FR-02/03 | Covered by actual native C/C++ launch, argv/cwd/env, permitted/denied attach and integrated native acceptance. |
+| FR-04/05/18/30 | Covered by catalog/filter/ordered-script tests, actual localhost remote API/TUI, managed/external server failure/ownership cases and M17 physical reset/disconnect checks. |
+| FR-07/08/10/15/21/22/28 | Covered by actual source/disassembly, discovered registers, frames/threads, both stepping modes, optimized/stripped and relocated sources, plus M17 ARM/Xtensa workflows. |
+| FR-09/20/26 | Covered by persistent inline Memory, independent views/drafts/settings, endian/grouping, partial/error reads and bounded region authorization; M17 verifies actual SRAM/Flash bytes. |
+| FR-11/23/24/25 | Covered by code/data breakpoint tests, conditions/counts, run-to cleanup and hardware policy. Native tests cover change/read/access; physical checks cover the supported watchpoint workflow, without claiming every mode on every target. |
+| FR-12/19/29 | Covered by actual Console, output isolation/flood, retained diagnostics, Save Log and file-write error tests. |
+| FR-14 | Covered by profile persistence, literal paths, atomic writes, conflicts/corruption, native reopen and reviewed inert/active connection settings. |
+| FR-27 | Covered by C/C++/optimized Locals/Watches, bounded lazy children, explicit reads, safe-footprint authorization before dispatch and stale-context tests. |
+| FR-31 | Covered for the approved v0.1.0 matrix by current native checks and accepted M17 physical evidence. Physical RISC-V acceptance remains deferred and UNVERIFIED. |
+
+### Non-functional requirement audit
+
+| Requirements | Assessment / limits |
+|---|---|
+| NFR-01/12 | Strict GCC/Clang C17 builds and independent source-archive build pass; build, runtime and packaging dependencies are documented. |
+| NFR-02 | GCC integrated acceptance measured 1001–1003 ms idle windows with 5.22–5.89 ms frontend CPU and maximum pump waits of 11–14 ms. Inspector revisions remained stable. This measures idle/pump behavior, not terminal input-to-redraw latency; the under-100-ms redraw target is not claimed as measured. |
+| NFR-03 | Repeated native lifecycle, timeout/EOF/flood/error, signal terminal restoration, isolated tmux, actual remote and ASan/UBSan/leak checks pass. Physical unplug/recovery remains a distinct unperformed hardware procedure. |
+| NFR-04 | MI corpus, splits/chunks, malformed/limit/mutation and allocation-failure tests pass. |
+| NFR-05/10/11 | Mouse/key workflows, compact/large resize, color fallbacks, labels/markers and isolated tmux pass automatically. Full visual/usability and physical-keyboard review remain manual acceptance. |
+| NFR-06 | Pre-dispatch value authorization, bounded unknown/MMIO behavior, literal argv/paths, no implicit frontend programming and external ownership assertions pass. Backend initialization can affect hardware, as documented. |
+| NFR-07 | Synthetic architecture/byte-order/unknown-metadata cases plus actual ARM/Xtensa evidence cover the shared design; no untested hardware compatibility is inferred. |
+| NFR-08 | Missing tools, server startup/action errors, disconnect, output bounds and retained diagnostics are covered. The manual STM32 setup exposed mismatched system OpenOCD/Espressif scripts; matching-root remedies are documented. |
+| NFR-09 | Existing parser/controller/session/model/TUI boundaries are preserved; packaging is isolated build infrastructure and introduces no application dependency. |
+
+The initial release artifact is host-specific and dynamically linked, not a
+universal Linux binary. Runtime firmware identity is not automatically verified
+by the frontend. Optional LED behavior, physical probe removal/recovery, exhaustive
+manual appearance and other boards remain outside the recorded passing evidence.
+Final manual/release acceptance and owner-controlled Git/publication remain pending.
+
+### CI and contribution finalization
+
+Added `.github/workflows/ci.yml` with Ubuntu 24.04 **Tests** and **Static analysis**
+jobs for pushes to `main`/`develop`, pull requests and manual dispatch. Tests use
+actual native GDB, localhost servers and PTY/tmux fixtures; OpenOCD coverage stops
+before adapter initialization. Hosted jobs do not replace physical acceptance.
+Actions are pinned, repository permissions are read-only, checkout credentials
+are not persisted, superseded runs are cancelled and logs are retained seven days.
+
+Local workflow validation passed: YAML parsing with duplicate-key checks,
+trigger/permission/action-pin assertions, Bash syntax for all four run blocks,
+and a dry run resolving the referenced Make targets. Markdown links/fences and
+whitespace checks passed. No hosted GitHub Actions execution is claimed before
+the workflow is pushed. Existing M18 suite results above are local results, not
+Ubuntu runner evidence; no application suites were rerun for YAML/doc changes.
+
+Contributor guidance now describes `develop` integration, stable `main`, feature,
+fix, release and hotfix branches, merge-commit traceability and CI review.
+The approved finalization sequence combines pending release preparation, CI,
+security policy and documentation in the first commit, followed by a separate
+owner-created release commit. Final release acceptance/publication is pending.

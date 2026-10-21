@@ -14,7 +14,8 @@ Native Linux debugging is a supported product capability as well as the practica
 development/validation focus through M14. This sequencing does not make Linux
 the product's primary target or permit weakening existing native functionality.
 ARM Cortex-M/OpenOCD is the initial embedded workflow; STM32 is the first physical
-acceptance target, followed by the specified ESP32 Xtensa/RISC-V release matrix.
+acceptance target, followed by the specified ESP32 release matrix. Physical
+RISC-V acceptance is deferred for v0.1.0 as specified below.
 Shared inspectors remain architecture-neutral; target/server capabilities must
 be explicit. No single probe, server or target operating system is universal.
 
@@ -25,7 +26,8 @@ early implementation supplies useful functionality and a repeatable foundation
 before probes/servers/hardware; it does not imply equal feature effort or parity.
 Substantial native-specific additions require a correctness need, important
 defect or explicitly approved requirement. An excellent native experience
-remains a v1.0.0 intention. M14–M18 and all v0.1.0 FR/NFR acceptance stay intact.
+remains a v1.0.0 intention. M14–M18 and v0.1.0 FR/NFR acceptance retain their
+scope except for the explicit physical RISC-V deferral below.
 The post-release roadmap places F22 flashing first in v0.4.x independently
 of text-channel readiness. Version targets express workflow objectives and
 dependencies, not dates.
@@ -95,7 +97,7 @@ native behavior, and hardware-specific claims require corresponding evidence.
 | FR-28 | MUST | Source-file/text/line and assembly address/symbol navigation, return to stopped context, source-path recovery | Relocated tree, duplicate basenames/spaces; correct source and breakpoint resolution |
 | FR-29 | MUST | Basic Save Log action | Export retained readable log, verify content and useful file-write errors |
 | FR-30 | MUST | Explicit embedded disconnect target-state choice where supported | Leave halted/resume and failure/capability diagnostics; external server survives |
-| FR-31 | MUST | Every-release native x86-64, STM32/ARM, ESP32/Xtensa and ESP32/RISC-V regression | Recorded real-board/core workflow evidence per release; QEMU ARM/RISC-V supplementary where available; no unrun PASS |
+| FR-31 | MUST | Every-release native x86-64, STM32/ARM, ESP32/Xtensa and ESP32/RISC-V regression, with physical RISC-V acceptance deferred for v0.1.0 | Recorded real-board/core workflow evidence for the release matrix below; QEMU supplementary where available; no unrun PASS |
 
 An existing view choice is not evidence of functionality unless its **data path is live**. Never declare a requirement complete on the basis of visual mock data alone.
 
@@ -129,7 +131,12 @@ Performance numbers are targets to measure, not grounds for hiding failures. The
 4. The startup menu and profiles are usable without writing raw OpenOCD/GDB CLI commands for the tested happy paths; all underlying choices remain inspectable/editable.
 5. `README.md` covers dependencies, build, invocation, native fixture test, OpenOCD setup for the F446RE, tmux mouse instructions, troubleshooting, limitations and a screenshot/terminal capture where feasible.
 6. [validation evidence](validation.md), `CHANGELOG.md`, tests and provenance notes are up to date.
-   The every-release architecture matrix includes native x86-64 and real STM32/ARM, ESP32/Xtensa and ESP32/RISC-V; QEMU adds coverage without substituting for boards. Target-specific features list their actual supported setups.
+   The v0.1.0 validated matrix is native Linux x86-64, NUCLEO-F446RE/ARM and
+   ESP32-S3/Xtensa. Physical RISC-V acceptance is explicitly deferred for this
+   release, remains UNVERIFIED, and supplies no hardware compatibility claim.
+   Later releases retain the full matrix unless separately reviewed. QEMU adds
+   coverage without substituting for boards. Target-specific features list
+   their actual supported setups.
 7. Final end-to-end validation and release authorization follow the [maintainer release procedure](maintaining.md#release-procedure). The release version is **`v0.1.0`**, without a prerelease suffix.
 
 

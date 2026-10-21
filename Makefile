@@ -574,3 +574,11 @@ $(BUILD_DIR)/test-board-tui: $(BUILD_DIR)/tests/integration/test_board_tui.o $(B
 
 .PHONY: test-m17-offline
 test-m17-offline: test-m17-fixture $(BUILD_DIR)/test-board $(BUILD_DIR)/test-board-tui
+
+# Linux x86-64 distribution; target GDB/OpenOCD and shared libraries stay external.
+RELEASE_CFLAGS ?= -O2 -g -fPIE -fstack-protector-strong
+RELEASE_LDFLAGS ?= -pie -Wl,-z,relro,-z,now
+.PHONY: release
+release:
+	$(MAKE) BUILD_DIR=$(BUILD_DIR)/release-build CPPFLAGS='$(CPPFLAGS) -D_FORTIFY_SOURCE=3' CFLAGS='$(RELEASE_CFLAGS)' LDFLAGS='$(RELEASE_LDFLAGS)' all
+	bash tools/package-release.sh $(BUILD_DIR)/release-build/the-bugger $(BUILD_DIR)/dist

@@ -49,7 +49,12 @@ implementation commit. Never suggest indiscriminate `git add .`; list paths.
 Exceptions remain explicit and scoped: P00 and the historical post-M08 pane-tab
 correction used combined documentation/code commits. The M10 completion required
 explicit manual approval before its implementation message. Those accepted
-exceptions do not replace the normal two-commit lifecycle for future gates.
+exceptions do not replace the normal two-commit lifecycle for future gates. M18
+finalization has an explicit exception: the pending release-preparation build
+changes, CI, security policy and documentation form one preparation commit on
+`develop`; a separate owner-created release commit follows. Record that actual
+preparation hash once available. Release publication/tagging remains a separate
+explicit owner action. This does not change future milestone gates.
 
 ## Evidence records
 
@@ -85,7 +90,8 @@ For every release, including patches:
 1. Audit all release-blocking FRs and assess every NFR. Resolve critical defects,
    unsafe defaults, terminal corruption, leaks and unusable interaction paths.
 2. Collect actual [release-matrix evidence](testing.md#every-release-regression-matrix)
-   for native x86-64, real STM32/ARM, ESP32/Xtensa and ESP32/RISC-V. QEMU ARM/RISC-V
+   for native x86-64, real STM32/ARM, ESP32/Xtensa and ESP32/RISC-V, applying
+   the explicit [v0.1.0 RISC-V deferral](requirements.md#release-acceptance). QEMU ARM/RISC-V
    adds coverage where available and never replaces boards. UNVERIFIED is not PASS.
 3. Record board/probe, firmware, GDB/server/toolchain versions, capability-specific
    exclusions, new-feature regression, reset/disconnect and cleanup behavior.
@@ -100,10 +106,47 @@ before implementation. Missing trace/power/counter support prompts scoped review
 or deferral, not invented compatibility or a blanket pre-v1 feature requirement.
 The owner has final say on release readiness.
 
-## CI planning
+## Linux x86-64 release artifacts
 
-No hosted workflow is configured. A future reviewed Linux CI setup can use GCC,
-Clang, Make, pkg-config, ncursesw/libelf/json-c development files, terminfo and
-clang-tidy with the documented checks. Native/tmux jobs need their actual runtime
-permissions. Upload failure logs; keep physical acceptance separately recorded.
-Do not label a board passed from a synthetic or hosted run.
+`make release` builds a separate optimized executable with PIE, stack protection,
+FORTIFY and full RELRO, then prepares these files under `build/dist/`:
+
+- `the-bugger-v0.1.0-linux-x86_64.tar.gz`: one host binary, GPLv3 license,
+  runtime instructions and build/dependency information.
+- `the-bugger-v0.1.0-source.tar.gz`: corresponding working-tree source and build
+  instructions, including packaging infrastructure.
+- `SHA256SUMS`: checksums for both archives. The binary archive also identifies
+  its matching source archive by checksum.
+
+Packaging additionally needs Bash, Git, GNU binutils, tar, gzip and coreutils.
+It uses tracked working-tree files plus the packaging script; review local edits
+before distributing. It never stages, commits, tags or publishes. Rebuild after
+final source/documentation changes so the archives describe the final contents.
+`SOURCE_DATE_EPOCH` controls archive timestamps; the default is zero. This does
+not assert reproducibility across different compilers or dependency versions.
+
+The executable is dynamically linked; shared libraries, terminfo, GDB and OpenOCD
+remain external. `BUILD-INFO.txt` records direct libraries, executable GLIBC
+symbol requirements and the actual build host. Older-distribution compatibility
+requires separate evidence. One Linux x86-64 frontend serves the supported target
+architectures; it is not a firmware image or a Windows distribution.
+
+Follow the [artifact checks](testing.md#release-artifacts-m18) before proposing
+release acceptance. A prepared archive is not an approved or published release.
+
+## Continuous integration
+
+[CI](../.github/workflows/ci.yml) runs on Ubuntu 24.04 for pushes to `main` and
+`develop`, all pull requests and manual dispatch. **Tests** runs the default,
+native, tmux, actual localhost remote and non-hardware OpenOCD suites.
+**Static analysis** runs `make analyze`. Each job has a timeout and retains logs
+for seven days even on failure; superseded runs on the same ref/PR are cancelled.
+Actions are pinned to commit IDs, checkout credentials are not persisted, and
+the workflow token has read-only repository contents permission. Untrusted PRs
+use `pull_request`, not a privileged `pull_request_target` job.
+
+Require **Tests** and **Static analysis** in branch protection after the first
+successful hosted run. Do not substitute local results for GitHub execution
+status. Hardware, sanitizer, slow-recovery and release-artifact checks retain
+separate evidence requirements. Updating the runner or action pins requires
+review; hosted test success does not establish physical compatibility.

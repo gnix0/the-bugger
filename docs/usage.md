@@ -109,6 +109,14 @@ adapter/target pair. Advanced mode exposes separate **Browse adapter** and
 promise. Add custom search directories and ordered configuration files through
 **Profile...**; an explicit script list overrides board/adapter fields.
 
+Use scripts matching the selected OpenOCD executable. In particular, an ESP-IDF
+shell may export `OPENOCD_SCRIPTS` for Espressif's build. When selecting system
+`/usr/bin/openocd`, launch with `env -u OPENOCD_SCRIPTS ./build/the-bugger` to use
+its own script installation. Alternatively, add `/usr/share/openocd/scripts`
+through **Profile... → OpenOCD search directories** when using that system
+installation; explicit search paths take precedence over the environment.
+Incompatible scripts can prevent target setup.
+
 Enter the symbol ELF and target-compatible GDB (ARM defaults to
 `arm-none-eabi-gdb`), OpenOCD executable and endpoint. **Start OpenOCD → Yes**
 creates a managed local server. Managed endpoints use `localhost:port` or
@@ -128,7 +136,8 @@ The live workspace identifies **LIVE OPENOCD** and retains shared inspectors.
 **Halt** deliberately stops the target. **Reset** requires confirmation and requests
 reset-and-halt; it never programs firmware. Unsupported operations and failure to
 verify fresh stopped state leave inspection unavailable rather than presenting
-stale target values as current. Physical correctness remains subject to M17.
+stale target values as current. Tested physical configurations and their limits
+are recorded in [M17 evidence](validation.md#m17--physical-board-validation).
 
 On close choose **Leave halted** or **Resume**. Only owned GDB/OpenOCD processes
 are cleaned up. Target disposition depends on backend scripts and hardware; an
