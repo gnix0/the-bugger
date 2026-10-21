@@ -175,9 +175,9 @@ static bool spawn_peer(TbGdb *gdb)
     if (failure == 0) { failure = posix_spawn_file_actions_adddup2(&actions, in[0], 0); }
     if (failure == 0) { failure = posix_spawn_file_actions_adddup2(&actions, out[1], 1); }
     if (failure == 0) { failure = posix_spawn_file_actions_adddup2(&actions, err[1], 2); }
-    for (size_t i = 0; failure == 0 && i < sizeof all / sizeof all[0]; ++i) {
-        failure = posix_spawn_file_actions_addclose(&actions, all[i]);
-    }
+    /* After installing stdio, isolate the child from every inherited endpoint,
+     * including descriptors opened by the process that launched this frontend. */
+    if (failure == 0) { failure = posix_spawn_file_actions_addclosefrom_np(&actions, 3); }
     sigset_t empty, defaults;
     (void)sigemptyset(&empty); (void)sigemptyset(&defaults);
     (void)sigaddset(&defaults, SIGPIPE); (void)sigaddset(&defaults, SIGINT);
