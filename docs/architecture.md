@@ -352,6 +352,16 @@ disables auto-load, pagination, confirmations and the inferior startup shell,
 and preserves normal ASLR. It does not edit host ptrace policy or user GDB files.
 Environment is session-only. The small quoted-word parser performs no expansions.
 
+Native launch requires GDB 17+ for literal argument preservation with the startup
+shell disabled. GDB 15/16 split the argument string on whitespace without
+recognizing quotes; spaces, empty arguments and quoting cannot be transported
+correctly through that backend path. GDB 17 uses quote-aware parsing in
+[`init_for_no_shell`](https://gnu.googlesource.com/binutils-gdb/+/refs/tags/gdb-17.1-release/gdb/nat/fork-inferior.c).
+The frontend retains shell-free launching; this native requirement does not
+establish a minimum version or compatibility claim for remote target toolchains.
+Configuration must select a supported debugger; startup does not currently probe
+the backend's no-shell argument parser.
+
 Launch loads symbols/executable, args/cwd/env and an owned output PTY, then reports
 Loaded. Continue starts the program; subsequent Continue resumes a stopped
 program. Pause uses MI interrupt. There is no automatic main breakpoint. Attach uses the selected PID and optional ELF, stops on

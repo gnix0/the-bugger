@@ -5,7 +5,8 @@
 Run from the repository root on Linux. Required build tools are a C17 compiler,
 GNU Make, pkg-config, ncursesw/libelf/json-c development files and usable terminfo.
 A C++ compiler builds debug-target fixtures only. Native tests additionally need
-GDB, Linux PTYs/pidfds and ptrace permission; tmux checks need tmux and a usable
+GDB 17+ for literal native launch arguments, Linux PTYs/pidfds and ptrace permission;
+tmux checks need tmux and a usable
 local socket. Tests use C without an external test framework.
 
 ```sh
@@ -49,12 +50,16 @@ for subsequent changes.
 
 ## Hosted CI
 
-[CI](../.github/workflows/ci.yml) defines Ubuntu 24.04 **Tests** and **Static
-analysis** jobs. It runs `make test test-native test-tmux test-m15-native
+[CI](../.github/workflows/ci.yml) defines **Tests** on Ubuntu 26.04 with GDB 17+
+and **Static analysis** on Ubuntu 24.04. They run
+`make test test-native test-tmux test-m15-native
  test-m16-server test-m16-tui test-m16-openocd` and `make analyze` respectively.
 GDB/ptrace, PTYs and localhost sockets must work on the runner. Failures stay
 failures; required assertions are not skipped to obtain green status. Test and
-analysis logs are retained as workflow artifacts for seven days.
+analysis logs are retained as workflow artifacts for seven days. Both jobs compile
+test code with `_FORTIFY_SOURCE=3`; the Ubuntu 24.04 job compiles every unit,
+integration and support C test source in addition to analysis. Local reproduction
+of fortified tests uses `CPPFLAGS=-D_FORTIFY_SOURCE=3` and a fresh `BUILD_DIR`.
 
 Triggers cover pushes to `main`/`develop`, pull requests and manual dispatch.
 There are no path filters that would leave required checks absent on docs-only
