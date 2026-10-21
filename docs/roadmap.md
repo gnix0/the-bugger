@@ -7,8 +7,9 @@ implemented features or hardware support claims. See [architecture](architecture
 ## Implementation status
 
 M00–M17 and the documented pane corrections are accepted. M17 physically validates
-NUCLEO-F446RE/ARM and ESP32-S3/Xtensa. M18 and F01–F47 remain planned; v0.1.0
-release acceptance and the complete every-release matrix remain outstanding.
+NUCLEO-F446RE/ARM and ESP32-S3/Xtensa. M18 release packaging and automated checks
+are prepared for review; F01–F47 remain planned. v0.1.0 release acceptance remains
+outstanding, with physical RISC-V acceptance explicitly deferred for this release.
 The latest accepted implementation is M17
 `f568bd2482b2309e3534ebc8e197854ada37bf77`. Acceptance records, observed hashes,
 failures and test evidence are in [validation records](validation.md).
@@ -37,7 +38,7 @@ M09's implementation hash is not recorded; acceptance alone does not supply it.
 | M15 | Existing remote server | accepted | `75435199e498cc087941cd8a75d7232b65d4c720` |
 | M16 | OpenOCD wizard/lifecycle/actions | accepted | `18e460ddd4cbc897409e2879c03ed0fc983212df` |
 | M17 | NUCLEO-F446RE and ESP32-S3 validation | accepted | `f568bd2482b2309e3534ebc8e197854ada37bf77` |
-| M18 | v0.1.0 release evidence/acceptance | planned | — |
+| M18 | v0.1.0 release evidence/acceptance | awaiting-user | — |
 | F01–F47 | Independent versioned future gates below | planned | — |
 
 
@@ -125,7 +126,8 @@ No additional feature family or milestone renumbering is introduced.
 
 ## Release validation
 
-Every release, including patches, requires native Linux x86-64 and real STM32/ARM,
+Except for the explicit [v0.1.0 RISC-V deferral](requirements.md#release-acceptance),
+every release, including patches, requires native Linux x86-64 and real STM32/ARM,
 ESP32/Xtensa and ESP32/RISC-V regression. QEMU ARM/RISC-V is supplementary, not
 a board substitute or a simulator feature. Capabilities are claimed only for
 actually tested setups; missing evidence is UNVERIFIED. See the

@@ -5,6 +5,24 @@ Embedded debugging drives feature priorities; native Linux remains a maintained,
 regression-tested capability. See the [roadmap](docs/roadmap.md) before proposing
 work. Planned features are not necessarily available in the current build.
 
+## Branches and pull requests
+
+`develop` is the integration branch and default target for contributions. `main`
+contains stable release history. Create `feature/<description>` or
+`fix/<description>` branches from `develop`, and open focused pull requests back
+to `develop`. Discuss scope before starting a new roadmap feature.
+
+Release branches start from `develop` and merge into both `main` and `develop`.
+Urgent `hotfix/<description>` branches start from `main` and merge into both.
+Use merge commits to retain implementation/documentation history and the hashes
+referenced by validation records. Do not squash those records into release merges.
+
+Explain the problem, behavior change, relevant tests and limitations in the pull
+request. Confirm that CI passes and address review conversations before merging.
+Hardware-specific changes require the appropriate physical evidence in addition
+to hosted checks. Reviewers should check capability handling, bounds, ownership
+and read authorization as well as the happy path.
+
 ## Build and test
 
 Build prerequisites and a first session are in [README](README.md#build-and-first-session).
@@ -22,6 +40,22 @@ git diff --check
 Use a separate `BUILD_DIR` for another compiler or instrumentation. GDB/ptrace,
 tmux and hardware prerequisites vary by suite; report unavailable checks rather
 than counting them as passed. C++ is permitted for debug-target fixtures only.
+
+## Continuous integration
+
+[GitHub Actions](.github/workflows/ci.yml) runs on pushes to `develop`/`main`, pull
+requests and manual dispatch. The Ubuntu 24.04 jobs are:
+
+- **Tests**: `make test test-native test-tmux test-m15-native
+  test-m16-server test-m16-tui test-m16-openocd`.
+- **Static analysis**: `make analyze`, with analyzer/bugprone warnings treated as errors.
+
+The test job installs GDB/gdbserver, tmux, OpenOCD and the build dependencies.
+Its OpenOCD check deliberately stops before hardware initialization; hosted jobs
+never establish physical board compatibility. Logs are retained for seven days,
+including failed runs. Sanitizers, slow recovery checks, release packaging and
+physical tests remain part of their documented milestone/release validation;
+they are not implied by a green basic CI run.
 
 ## Code and design conventions
 
@@ -68,12 +102,18 @@ gaps and plans. Keep execution records in the evidence register and agent instru
 out of public technical references. Link to the canonical description instead of
 copying it into several documents. Never invent test results or commit hashes.
 
+## Security reports
+
+Report vulnerabilities privately using the [security policy](SECURITY.md).
+Use public issues for ordinary bugs; keep exploit details and sensitive target
+data out of public reports and pull requests before coordinated disclosure.
+
 ## Change review
 
 Work is divided into the existing M/F gates. Coordinate scope before starting;
 do not combine unrelated gates. Proposed Conventional Commit titles are at most
 50 characters, followed by a body explaining behavior, validation and limitations.
-Implementation and documentation are separate commits under the
-[maintainer workflow](docs/maintaining.md). Maintainers control repository Git
-operations and acceptance; this guide does not authorize automatic commits,
-pushes, tags or releases. Coding agents also follow the local `AGENTS.md`.
+Implementation and documentation follow the
+[maintainer workflow](docs/maintaining.md), including explicitly approved exceptions.
+Maintainers control merges, acceptance, tags and publication. A passing CI run
+does not itself approve a milestone or authorize a release.
