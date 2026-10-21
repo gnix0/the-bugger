@@ -136,8 +136,9 @@ release acceptance. A prepared archive is not an approved or published release.
 
 ## Continuous integration
 
-[CI](../.github/workflows/ci.yml) runs for pushes to `main` and
-`develop`, all pull requests and manual dispatch. **Tests** runs the default,
+[CI](../.github/workflows/ci.yml) runs for all pull requests and manual dispatch.
+Automatic push runs are disabled to avoid duplicate PR/push checks.
+**Tests** runs the default,
 native, tmux, actual localhost remote and non-hardware OpenOCD suites on Ubuntu
 26.04 with GDB 17+. **Static analysis** runs `make analyze` and fortified
 compilation of all C test sources on Ubuntu 24.04. Each job has a timeout and retains logs

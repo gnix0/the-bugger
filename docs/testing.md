@@ -61,7 +61,8 @@ test code with `_FORTIFY_SOURCE=3`; the Ubuntu 24.04 job compiles every unit,
 integration and support C test source in addition to analysis. Local reproduction
 of fortified tests uses `CPPFLAGS=-D_FORTIFY_SOURCE=3` and a fresh `BUILD_DIR`.
 
-Triggers cover pushes to `main`/`develop`, pull requests and manual dispatch.
+Triggers cover pull requests and manual dispatch. Automatic push runs are
+disabled, so each PR update schedules one Tests job and one Static analysis job.
 There are no path filters that would leave required checks absent on docs-only
 pull requests. Hardware access, sanitizers, slow-recovery cases and artifact
 packaging remain separately documented checks. No hardware claim follows from

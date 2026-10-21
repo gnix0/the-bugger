@@ -117,7 +117,7 @@ make test-tmux
 ```
 
 [CI](.github/workflows/ci.yml) runs tests and static analysis on pull requests and
-pushes to `develop`/`main`; see [contributor guidance](CONTRIBUTING.md#continuous-integration).
+manual dispatch; see [contributor guidance](CONTRIBUTING.md#continuous-integration).
 These checks have different prerequisites and evidence boundaries. See
 [testing](docs/testing.md#commands-and-prerequisites) for focused suites,
 compiler/sanitizer/static-analysis checks and hardware validation. `build/` is

@@ -43,8 +43,9 @@ than counting them as passed. C++ is permitted for debug-target fixtures only.
 
 ## Continuous integration
 
-[GitHub Actions](.github/workflows/ci.yml) runs on pushes to `develop`/`main`, pull
-requests and manual dispatch. The jobs are:
+[GitHub Actions](.github/workflows/ci.yml) runs on pull requests and manual
+dispatch. Automatic push runs are disabled to avoid duplicate checks for the
+same pull request update. The jobs are:
 
 - **Tests** (Ubuntu 26.04, GDB 17+): `make test test-native test-tmux test-m15-native
   test-m16-server test-m16-tui test-m16-openocd`.
