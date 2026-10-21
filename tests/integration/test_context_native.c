@@ -58,18 +58,23 @@ static void run(const char *fixture, bool symbols, bool deep)
     for (size_t i = 0; i < s->frame_count; ++i) { CHECK(!s->frames[i].arguments_read); }
     if (symbols) {
         size_t argument_frame = 0;
-        /* Optimized Clang omits recursive's formal parameters entirely in
-         * DWARF. Exercise a frame whose argument names GDB actually reports
-         * (tail_bridge in that build), retaining the required depth assertion. */
-        while (argument_frame < s->frame_count && !strstr(s->frames[argument_frame].arguments, "depth=<read required>")) { ++argument_frame; }
+        /* Optimizers can omit both recursive's and tail_bridge's formal
+         * parameters. Keep depth mandatory for the unoptimized deep fixture;
+         * otherwise use main's reported argc if depth is absent in raw MI. */
+        const char *required = "depth=<read required>", *name = "depth=";
+        while (argument_frame < s->frame_count && !strstr(s->frames[argument_frame].arguments, required)) { ++argument_frame; }
+        if (argument_frame == s->frame_count && !deep) {
+            required = "argc=<read required>"; name = "argc="; argument_frame = 0;
+            while (argument_frame < s->frame_count && !strstr(s->frames[argument_frame].arguments, required)) { ++argument_frame; }
+        }
         CHECK(argument_frame < s->frame_count);
-        CHECK(strstr(s->frames[argument_frame].arguments, "depth=<read required>"));
+        CHECK(strstr(s->frames[argument_frame].arguments, required));
         CHECK(tb_context_select_frame(context, s->frames[argument_frame].level)); fresh(native);
         CHECK(tb_context_read_arguments(context));
         uint64_t argument_deadline = tb_gdb_now_ms() + 5000;
         while (!s->frames[argument_frame].arguments_read && !*s->arguments_error && tb_gdb_now_ms() < argument_deadline) { tb_native_pump(native, 5); }
         CHECK(s->frames[argument_frame].arguments_read);
-        CHECK(strstr(s->frames[argument_frame].arguments, "depth="));
+        CHECK(strstr(s->frames[argument_frame].arguments, name));
         CHECK(!strstr(s->frames[argument_frame].arguments, "<read required>"));
         tb_context_refresh(context); fresh(native);
         CHECK(!s->frames[argument_frame].arguments_read);

@@ -5,7 +5,8 @@
 Run from the repository root on Linux. Required build tools are a C17 compiler,
 GNU Make, pkg-config, ncursesw/libelf/json-c development files and usable terminfo.
 A C++ compiler builds debug-target fixtures only. Native tests additionally need
-GDB, Linux PTYs/pidfds and ptrace permission; tmux checks need tmux and a usable
+GDB 17+ for literal native launch arguments, Linux PTYs/pidfds and ptrace permission;
+tmux checks need tmux and a usable
 local socket. Tests use C without an external test framework.
 
 ```sh
@@ -46,6 +47,26 @@ checks and exact evidence are in the [ledger](validation.md). Store logs
 under ignored `build/`; record durable result summaries separately. M14 includes
 a full-project analyzer pass; focused checks alone never establish that result
 for subsequent changes.
+
+## Hosted CI
+
+[CI](../.github/workflows/ci.yml) defines **Tests** on Ubuntu 26.04 with GDB 17+
+and **Static analysis** on Ubuntu 24.04. They run
+`make test test-native test-tmux test-m15-native
+ test-m16-server test-m16-tui test-m16-openocd` and `make analyze` respectively.
+GDB/ptrace, PTYs and localhost sockets must work on the runner. Failures stay
+failures; required assertions are not skipped to obtain green status. Test and
+analysis logs are retained as workflow artifacts for seven days. Both jobs compile
+test code with `_FORTIFY_SOURCE=3`; the Ubuntu 24.04 job compiles every unit,
+integration and support C test source in addition to analysis. Local reproduction
+of fortified tests uses `CPPFLAGS=-D_FORTIFY_SOURCE=3` and a fresh `BUILD_DIR`.
+
+Triggers cover pull requests and manual dispatch. Automatic push runs are
+disabled, so each PR update schedules one Tests job and one Static analysis job.
+There are no path filters that would leave required checks absent on docs-only
+pull requests. Hardware access, sanitizers, slow-recovery cases and artifact
+packaging remain separately documented checks. No hardware claim follows from
+hosted OpenOCD tests that terminate before adapter initialization.
 
 ## Validation strategy
 
@@ -1035,12 +1056,48 @@ Manual review on each named board:
 Actual execution evidence is in [validation records](validation.md#m17--physical-board-validation).
 Unperformed manual steps are not implied by automated terminal checks.
 
-For every release, also exercise the same applicable core workflow on the ESP32 validation/Xtensa and ESP32/RISC-V boards through the appropriate GDB/server. Native x86-64 is always retested. Exact board/probe details are recorded with actual evidence, not required during planning. QEMU ARM/RISC-V guest/native tests are supplementary when available. This is validation coverage, not an in-product simulator or a promise that hardware-specific features work on every target. See the [release matrix](#every-release-regression-matrix).
+Subject to the explicit v0.1.0 physical RISC-V deferral, exercise the same applicable core workflow on the ESP32 validation/Xtensa and ESP32/RISC-V boards through the appropriate GDB/server. Native x86-64 is always retested. Exact board/probe details are recorded with actual evidence, not required during planning. QEMU ARM/RISC-V guest/native tests are supplementary when available. This is validation coverage, not an in-product simulator or a promise that hardware-specific features work on every target. See the [release matrix](#every-release-regression-matrix).
 
+
+## Release artifacts (M18)
+
+Prepare the Linux x86-64 host distribution from a reviewed checkout:
+
+```sh
+make release
+(cd build/dist && sha256sum --check SHA256SUMS)
+```
+
+The [packaging procedure](maintaining.md#linux-x86-64-release-artifacts) describes
+contents, extra packaging tools and dynamic-library boundaries. Verify both
+archives outside the development tree:
+
+1. Extract the binary archive into a temporary directory outside the repository.
+   Run `./the-bugger --version`, `--help`, and interactive `--demo` there.
+   Check launcher/workspace, input, terminal restoration and tmux behavior.
+2. Run the existing CLI/PTY/workspace tests against the extracted executable,
+   using absolute paths. Native, remote and model matrices remain separate;
+   launcher success alone is not a live-debugging test.
+3. Extract the source archive elsewhere and follow `make` from its own directory.
+   It must build without files or generated objects from the original checkout.
+   Compare the source-built and packaged version output.
+4. Inspect ELF architecture, PIE, non-executable stack, RELRO/now flags and dynamic
+   libraries with binutils/`ldd` on this trusted build. Record actual host and
+   GLIBC symbol requirements, without claiming universal Linux compatibility.
+5. Verify checksums, GPLv3 license, matching source identity, instructions and
+   source completeness. Verify invalid packaging inputs fail. Preserve any
+   unperformed hardware/manual acceptance checks as outstanding evidence.
+
+An ESP-IDF shell can export `OPENOCD_SCRIPTS` for Espressif's installation. With
+`/usr/bin/openocd`, clear an incompatible override before launching:
+`env -u OPENOCD_SCRIPTS ./build/the-bugger`. The executable and scripts must match;
+a listening socket does not establish successful target examination.
 
 ## Every-release regression matrix
 
-Before every release (including patches), record actual commands, results and
+Apply the explicit [v0.1.0 physical RISC-V deferral](requirements.md#release-acceptance);
+it does not turn unverified hardware into supported hardware. Before every other
+release (including patches), record actual commands, results and
 release acceptance for the minimum matrix below. Exact ESP/probe setup is not a
 P00 prerequisite; fill it in when conducting the tests. Tool/server paths stay
 editable; OpenOCD is not a requirement for every architecture.
@@ -1048,9 +1105,9 @@ editable; OpenOCD is not a requirement for every architecture.
 | Environment | Minimum evidence | Current live evidence |
 |---|---|---|
 | Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | M05–M14 accepted; GCC/Clang native and tmux regressions plus full default/native sanitizers passed at M14. Per-release evidence and release acceptance remain required |
-| STM32 / ARM | NUCLEO-F446RE fixture via GDB/OpenOCD; halt/step/break/watch, real code/register/RAM/variables, reset/disconnect/cleanup | UNVERIFIED |
-| ESP32 / Xtensa | Validation board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED |
-| ESP32 / RISC-V | Validation board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED |
+| STM32 / ARM | NUCLEO-F446RE fixture via GDB/OpenOCD; halt/step/break/watch, real code/register/RAM/variables, reset/disconnect/cleanup | M17 physical core/API/TUI/tmux PASS; exact setup and exclusions in validation records |
+| ESP32 / Xtensa | Validation board via appropriate GDB/server; applicable core workflow and cleanup | M17 ESP32-S3 physical core/API/TUI/tmux PASS; other boards require evidence |
+| ESP32 / RISC-V | Validation board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED; physical acceptance deferred for v0.1.0, no hardware support claim |
 | QEMU ARM / RISC-V | Supplementary reproducible native/guest runs where available | UNVERIFIED; not a physical-board substitute |
 
 For each release, capture the actual setup/version, relevant fixture/source

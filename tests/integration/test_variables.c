@@ -140,7 +140,9 @@ int main(int argc, char **argv)
     CHECK(tb_variables_read(variables, TB_VARIABLE_WATCHES, invalid)); drain(gdb);
     CHECK(strstr(tb_variables_error(variables, TB_VARIABLE_WATCHES), "Unknown symbol"));
     command(gdb, "-variable-stats", 998); before = reads; before_children = children;
+    CHECK(tb_variables_row(variables, TB_VARIABLE_WATCHES, 0)->fresh);
     command(gdb, "-run", 999); CHECK(tb_variables_stale(variables, TB_VARIABLE_WATCHES));
+    CHECK(!tb_variables_row(variables, TB_VARIABLE_WATCHES, 0)->fresh);
     CHECK(!tb_variables_read(variables, TB_VARIABLE_WATCHES, 0));
     command(gdb, "-stop", 999); command(gdb, "-variable-stats", 998);
     CHECK(reads == before && children == before_children && deletes > 0); /* no new-stop authorization inherited */

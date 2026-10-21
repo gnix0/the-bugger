@@ -35,8 +35,9 @@ and **ESP32-S3** through native USB/JTAG, with the
 [recorded GDB/OpenOCD configurations](docs/validation.md#m17--physical-board-validation).
 These results cover the tested workflows, not all boards, probes or architectures.
 OpenOCD is optional, not universal; broader compatibility needs separate evidence.
+Physical RISC-V acceptance is deferred for v0.1.0 and is not a hardware support claim.
 
-`v0.1.0` is the release target, not a completed release. See the
+`v0.1.0` covers the capabilities and validation scope described here. See the
 [roadmap status](docs/roadmap.md#implementation-status) and
 [recorded validation evidence](docs/validation.md).
 
@@ -44,7 +45,8 @@ OpenOCD is optional, not universal; broader compatibility needs separate evidenc
 
 Build on Linux with GCC or Clang supporting C17, GNU Make, pkg-config, and the
 ncursesw, libelf and json-c development libraries/headers. Interactive use needs
-a TTY and usable TERM/terminfo. Native sessions require GDB and permitted ptrace;
+a TTY and usable TERM/terminfo. Native launch requires GDB 17 or newer to preserve
+literal arguments without a startup shell, plus permitted ptrace;
 Linux pidfds support owned-inferior crash recovery. Remote sessions need a
 target-compatible GDB and an already running server; `gdbserver` is required only
 for the localhost integration fixture. A C++ compiler is used only
@@ -81,11 +83,22 @@ reads when automatic access safety cannot be established.
 It does not connect to hardware. In tmux, mouse support requires the opt-in
 `set -g mouse on`; the application does not alter tmux configuration or bindings.
 
+## Linux x86-64 distribution
+
+`make release` prepares the host-binary archive, corresponding source archive
+and `SHA256SUMS` in `build/dist/`. Extract the binary archive and run
+`./the-bugger` from a terminal. GDB/OpenOCD and the shared runtime libraries remain
+external; `BUILD-INFO.txt` lists the actual build host and dependency requirements.
+This build does not promise compatibility with every Linux distribution.
+See [artifact validation](docs/testing.md#release-artifacts-m18) and
+[release procedures](docs/maintaining.md#linux-x86-64-release-artifacts).
+Prepared artifacts do not establish release acceptance or publication.
+
 ## Documentation
 
 | Audience | Start here |
 |---|---|
-| Users | [Usage and configuration](docs/usage.md), including profiles, controls and limitations |
+| Users | [Usage and configuration](docs/usage.md), including profiles, controls and limitations; [security policy](SECURITY.md) |
 | Contributors | [Contributing](CONTRIBUTING.md), [architecture](docs/architecture.md), [testing](docs/testing.md) and [suite catalog](tests/README.md) |
 | Product and design | [Requirements](docs/requirements.md), [roadmap](docs/roadmap.md), [interface specification](docs/requirements.md#interface-constraints) |
 | Maintainers | [Maintenance/release procedures](docs/maintaining.md) and [validation records](docs/validation.md) |
@@ -103,7 +116,9 @@ make test-native
 make test-tmux
 ```
 
-These have different prerequisites and evidence boundaries. See
+[CI](.github/workflows/ci.yml) runs tests and static analysis on pull requests and
+manual dispatch; see [contributor guidance](CONTRIBUTING.md#continuous-integration).
+These checks have different prerequisites and evidence boundaries. See
 [testing](docs/testing.md#commands-and-prerequisites) for focused suites,
 compiler/sanitizer/static-analysis checks and hardware validation. `build/` is
 ignored/disposable; use a fresh `BUILD_DIR` for different compilers or flags.

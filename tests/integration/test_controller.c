@@ -332,12 +332,17 @@ static void interruptions(const char *peer)
 
 static void resources(const char *peer)
 {
+    /* The launching shell/runner can leave non-CLOEXEC descriptors open.
+     * They must remain usable here but must never reach the debugger child. */
+    int inherited = open("/dev/null", O_RDONLY);
+    CHECK(inherited >= 3 && (fcntl(inherited, F_GETFD) & FD_CLOEXEC) == 0);
     /* An unrelated child must remain alive/unreaped after controller cleanup. */
     pid_t external = fork(); CHECK(external >= 0);
     if (external == 0) { for (;;) { pause(); } }
     for (int i = 0; i < 12; ++i) {
         Observer observer = create(); start(&observer, peer, "inherited-fd"); destroy(&observer);
     }
+    CHECK(fcntl(inherited, F_GETFD) >= 0 && close(inherited) == 0);
     CHECK(kill(external, 0) == 0);
     CHECK(kill(external, SIGTERM) == 0 && waitpid(external, NULL, 0) == external);
     /* Resource exhaustion must clean every partially created endpoint. */

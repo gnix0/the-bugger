@@ -1,8 +1,23 @@
 # Changelog
 
-## Unreleased — target 0.1.0
+## [0.1.0] - 2026-10-20
 
 ### Added
+
+- Basic GitHub Actions test and static-analysis jobs for `main`/`develop`, pull
+  requests and manual dispatch, with pinned actions and retained logs.
+- Security disclosure policy and contributor guidance for Gitflow branches,
+  pull requests, CI boundaries and coordinated vulnerability reporting.
+
+- Linux x86-64 release packaging with a hardened host executable, corresponding
+  source archive, runtime/build information and SHA-256 checksums. GDB, OpenOCD
+  and shared libraries remain external; preparation does not publish a release.
+- Existing remote/extended-remote connections and reviewed OpenOCD startup,
+  script selection, owned lifecycle, explicit Reset/Halt and disconnect policy.
+- Physical NUCLEO-F446RE and ESP32-S3 fixtures and session/TUI/tmux validation.
+  Reset verification requires an actual current thread/frame and numeric PC.
+  Physical RISC-V acceptance is deferred for v0.1.0; no unverified hardware
+  compatibility is claimed.
 
 - User and contributor guides, tracked product requirements, a status-oriented
   roadmap and separate maintenance/release procedures. Milestone
@@ -13,7 +28,7 @@
   before starting tools; confirm replacement/deletion. Persist ordered arguments,
   scripts and source settings with bounded private atomic writes, corrupt-file
   preservation and stale-writer detection. Restore source settings asynchronously
-  before execution. Remote/OpenOCD definitions remain preview-only.
+  before execution. Remote/OpenOCD connection execution is provided by the later session work.
 - Profile model/source-restore/native/TUI regressions, including relocated-source
   breakpoint resolution, remapped execution and successful-session recents.
 - Embedded-first post-v0.1.0 sequencing, retaining F01–F47 IDs and
@@ -125,6 +140,13 @@
 
 ### Fixed
 
+- Close unrelated inherited descriptors in the GDB child while preserving parent
+  descriptors and independently owned processes.
+- Invalidate variable freshness immediately after resume/context changes even
+  while a request is pending, retaining object identities for stale-reply cleanup.
+- Check Memory/tmux stderr redirection under fortified compilation. Validate
+  optimized argument reads against reported GDB metadata and find ELF gaps with
+  bounded scrolling across different linker layouts.
 - Watchpoint TUI test targets intended lower panes, inline Memory address input
   and footer actions across redraws; wait for current Memory data without
   weakening application read/watchpoint safety checks.
@@ -155,5 +177,8 @@
 
 Native launch/control/console, context, code inspection, code/data breakpoints,
 Registers, Memory, scoped Locals/Watches and basic profiles/action keys are live.
-Remote/OpenOCD execution, other specialized inspectors, hardware acceptance and
-release readiness remain incomplete.
+Remote/OpenOCD sessions and the named STM32/S3 physical workflows are live.
+Native launch requires GDB 17+ to preserve literal arguments with shell startup
+disabled. CI exercises Ubuntu 26.04/GDB 17+ runtime behavior and Ubuntu 24.04
+static analysis/fortified test compilation. Specialized inspectors remain planned;
+broader compatibility requires its own evidence.

@@ -505,8 +505,21 @@ static void invalidate(TbVariables *v, const TbContextSnapshot *s)
 }
 void tb_variables_pump(TbVariables *v)
 {
-    if (v->waiting) { return; }
     TbGdbState state = tb_gdb_state(v->gdb);
+    /* Pending replies must not keep an old sample marked fresh after resume
+     * or a context change. Keep object identities until completion so stale
+     * create replies can still be retired correctly. */
+    if (state == TB_GDB_RUNNING || !same(v->generation, tb_gdb_generation(v->gdb))) {
+        bool changed = false;
+        for (int j = 0; j < TB_VARIABLE_VIEWS; ++j) {
+            for (int i = 0; i < TB_VARIABLE_NODES; ++i) {
+                TbVariable *row = &v->trees[j].nodes[i].row;
+                if (row->fresh) { row->fresh = false; changed = true; }
+            }
+        }
+        if (changed) { ++v->revision; }
+    }
+    if (v->waiting) { return; }
     if (state == TB_GDB_RUNNING || !same(v->generation, tb_gdb_generation(v->gdb))) {
         for (size_t i = 0; i < v->owned_count; ++i) { v->owned[i].retired = true; }
         for (int j = 0; j < TB_VARIABLE_VIEWS; ++j) {
