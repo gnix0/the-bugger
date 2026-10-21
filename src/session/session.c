@@ -136,7 +136,11 @@ bool tb_session_words(const char *input, TbSessionWords *words, char *error, siz
         char quote = 0; size_t used = 0;
         while (input[at] != '\0' && (quote != 0 || !isspace((unsigned char)input[at]))) {
             char c = input[at++];
-            if ((c == '\'' || c == '"') && (quote == 0 || quote == c)) { quote = quote == 0 ? c : 0; continue; }
+            if ((c == '\'' || c == '"') && (quote == 0 || quote == c)) {
+                if (quote == 0) { quote = c; }
+                else { quote = '\0'; }
+                continue;
+            }
             if (c == '\\' && quote != '\'') {
                 if (input[at] == '\0') { (void)snprintf(error, capacity, "Trailing backslash in arguments."); return false; }
                 c = input[at++];
