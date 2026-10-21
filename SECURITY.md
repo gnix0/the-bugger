@@ -121,7 +121,7 @@ analysis. See [testing procedures](docs/testing.md) for commands and prerequisit
 [architecture](docs/architecture.md) for access/ownership invariants, and
 [validation records](docs/validation.md) for checks actually performed.
 [CI](.github/workflows/ci.yml) defines tests and static analysis for pull requests
-and pushes to `main`/`develop`; other branches need a pull request or manual run.
+and manual dispatch. Automatic push runs are disabled.
 This is not an independent security audit, security certification or proof of
 complete vulnerability coverage.
 
