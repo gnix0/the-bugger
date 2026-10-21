@@ -44,13 +44,15 @@ than counting them as passed. C++ is permitted for debug-target fixtures only.
 ## Continuous integration
 
 [GitHub Actions](.github/workflows/ci.yml) runs on pushes to `develop`/`main`, pull
-requests and manual dispatch. The Ubuntu 24.04 jobs are:
+requests and manual dispatch. The jobs are:
 
-- **Tests**: `make test test-native test-tmux test-m15-native
+- **Tests** (Ubuntu 26.04, GDB 17+): `make test test-native test-tmux test-m15-native
   test-m16-server test-m16-tui test-m16-openocd`.
-- **Static analysis**: `make analyze`, with analyzer/bugprone warnings treated as errors.
+- **Static analysis** (Ubuntu 24.04): `make analyze`, with analyzer/bugprone warnings
+  treated as errors, plus compilation of all C test sources with fortification.
 
 The test job installs GDB/gdbserver, tmux, OpenOCD and the build dependencies.
+Test compilation explicitly enables `_FORTIFY_SOURCE=3`.
 Its OpenOCD check deliberately stops before hardware initialization; hosted jobs
 never establish physical board compatibility. Logs are retained for seven days,
 including failed runs. Sanitizers, slow recovery checks, release packaging and

@@ -51,7 +51,9 @@ cat > "$work/$name/RUNNING.txt" <<'TEXT'
 The Bugger — Linux x86-64
 
 Run ./the-bugger from a real terminal; --help and --version work without a TTY.
-Use --demo for the simulated workspace. Live sessions require a compatible GDB.
+Use --demo for the simulated workspace. Native launch requires GDB 17 or newer
+for literal arguments without a startup shell; remote sessions require a
+target-compatible GDB.
 OpenOCD is an optional external tool for supported embedded connections.
 Install the runtime libraries listed in BUILD-INFO.txt, their dependencies, and
 terminfo for your terminal. This dynamically linked build is tested on the

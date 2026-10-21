@@ -45,7 +45,8 @@ Physical RISC-V acceptance is deferred for v0.1.0 and is not a hardware support 
 
 Build on Linux with GCC or Clang supporting C17, GNU Make, pkg-config, and the
 ncursesw, libelf and json-c development libraries/headers. Interactive use needs
-a TTY and usable TERM/terminfo. Native sessions require GDB and permitted ptrace;
+a TTY and usable TERM/terminfo. Native launch requires GDB 17 or newer to preserve
+literal arguments without a startup shell, plus permitted ptrace;
 Linux pidfds support owned-inferior crash recovery. Remote sessions need a
 target-compatible GDB and an already running server; `gdbserver` is required only
 for the localhost integration fixture. A C++ compiler is used only

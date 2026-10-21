@@ -757,3 +757,71 @@ fix, release and hotfix branches, merge-commit traceability and CI review.
 The approved finalization sequence combines pending release preparation, CI,
 security policy and documentation in the first commit, followed by a separate
 owner-created release commit. Final release acceptance/publication is pending.
+
+### CI failure reproduction and toolchain correction
+
+Initial hosted CI exposed three failures missed by workflow-only validation:
+the quote parser's promoted conditional assignment triggered clang-tidy 18;
+unrelated inherited descriptors reached the debugger child; and fortified GCC
+rejected an ignored `freopen` result in Memory's tmux cleanup. The descriptor
+failure was reproduced with a deliberately inherited non-CLOEXEC descriptor,
+fixed in production spawning and covered by a regression that retains the
+parent's descriptor and unrelated-child checks. Memory cleanup now checks the
+redirection result. No analyzer checks or application assertions were disabled.
+
+An isolated Ubuntu 24.04 run then exposed a separate native backend limitation:
+GDB 15 splits a quoted argument containing spaces into separate literal pieces
+when startup-with-shell is off. Upstream GDB 15.1/16.3 source has this whitespace
+split; GDB 17.1 uses quote-aware parsing. Native launch therefore requires GDB 17+
+to satisfy the existing literal-argument guarantee without enabling a shell.
+The original native failure remains a failure, not evidence of compatibility.
+
+The revised runtime job uses Ubuntu 26.04/GDB 17+; analysis remains on Ubuntu
+24.04. Fortification is explicit, and the analysis job also compiles every C
+test source. The Ubuntu runtime also exposed delayed variable freshness
+invalidation: a pending request could leave old rows marked fresh after resume.
+The production model now clears freshness before waiting for completion while
+retaining object identities for correct stale-create cleanup. A deterministic
+resume assertion failed before the correction and passed afterward; the native
+freshness assertion remains intact. M11 model/native/TUI checks passed under
+ASan/UBSan after the correction.
+
+The optimized context fixture exposed a separate harness assumption. Direct
+GDB MI reported no arguments for optimized `recursive` or `tail_bridge`, but
+reported `argc`/`argv` for `main`. The explicit argument-read test now uses
+reported `argc` only when optimized `depth` is absent; unoptimized deep-stack
+validation still requires `depth`, and explicit-read/reset assertions remain.
+The code-view test also assumed three scroll batches reached the first ELF gap.
+Ubuntu's CET/PLT layout required additional scrolling. Its replacement uses a
+bounded search while retaining the mandatory gap marker, menu roundtrip and
+viewport assertions; the actual section layout was checked before changing it.
+
+Final agent-run verification:
+
+- Arch/GCC 16: before the freshness correction, the complete configured suite
+  with `_FORTIFY_SOURCE=3` passed,
+  as did the real Memory/tmux path and compilation of all 56 C test sources.
+- Ubuntu 24.04: `make test`, clang-tidy 18 across all 19 production files,
+  fortified compilation of all 56 C test sources, Memory/tmux and the remaining
+  tmux/remote/OpenOCD targets passed. Full native acceptance on its GDB 15 did not.
+  Analysis and all-source compilation passed again on the final code.
+- Ubuntu 26.04/GCC 15.2/GDB 17.1, unprivileged runner: the final uninterrupted
+  `make test test-native test-tmux test-m15-native test-m16-server test-m16-tui
+  test-m16-openocd` run with `CPPFLAGS=-D_FORTIFY_SOURCE=3` passed, followed by
+  `TB_MEMORY_TEST_TMUX=1 build/test-memory-tui` with its binary/fixture paths.
+  Both commands exited zero: 83 PASS reports, zero failure markers.
+- ASan/UBSan with leak detection: M11 model/native/TUI and M14 integrated
+  acceptance/context/TUI targets passed after the corrections.
+- Workflow shell syntax, package-script syntax, Markdown fences/local targets
+  and `git diff --check` passed. Final process inspection found no remaining
+  GDB, gdbserver, OpenOCD or checked harness processes.
+
+Local logs are retained under ignored `build/ci-local/`: `ubuntu26-tests.log`,
+`ubuntu24-analysis.log`, `variables-sanitizers.log` and `context-sanitizers.log`.
+The same directory retains original fortification/native/context/gap failures,
+the freshness regression before/after results and direct GDB MI evidence.
+
+Ubuntu environments use official base archives with verified published SHA256
+checksums, isolated filesystems and the host kernel; they are not GitHub-hosted
+runners or physical-board evidence. Revised hosted confirmation and final release
+acceptance remain pending.

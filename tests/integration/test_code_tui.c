@@ -279,7 +279,10 @@ static void wheel_up_listing(const char *binary, const char *fixture)
     rows = 0;
     for (int row = y + 2; row < y + 15; ++row) { if (strstr(term.cells[row] + x - 2, "0x")) { ++rows; } }
     CHECK(rows >= 8);
-    for (int position = 0; position < 3; ++position) {
+    /* CET/PLT layout varies with the host linker. Reach the actual section gap
+     * within a bounded search instead of assuming three batches reach it. */
+    for (int position = 0; position < 12 &&
+         (position < 3 || !test_terminal_find(&term, "bytes not decoded", NULL, NULL)); ++position) {
         for (int repeat = 0; repeat < 12; ++repeat) { mouse_at(&term, 64, x + 3, y + 3, false); }
         until = now() + 350; while (now() < until) { test_terminal_pump(&term, 10); }
         disassembly_menu_roundtrip(&term);

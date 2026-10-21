@@ -13,7 +13,7 @@ static void tmux_cleanup(void)
 {
     pid_t child = fork();
     if (child == 0) {
-        (void)freopen("/dev/null", "w", stderr);
+        if (freopen("/dev/null", "w", stderr) == NULL) { _exit(127); }
         execlp("tmux", "tmux", "-L", tmux_socket, "kill-server", (char *)NULL); _exit(127);
     }
     if (child > 0) { while (waitpid(child, NULL, 0) < 0 && errno == EINTR) { } }
