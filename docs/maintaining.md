@@ -136,10 +136,11 @@ release acceptance. A prepared archive is not an approved or published release.
 
 ## Continuous integration
 
-[CI](../.github/workflows/ci.yml) runs on Ubuntu 24.04 for pushes to `main` and
+[CI](../.github/workflows/ci.yml) runs for pushes to `main` and
 `develop`, all pull requests and manual dispatch. **Tests** runs the default,
-native, tmux, actual localhost remote and non-hardware OpenOCD suites.
-**Static analysis** runs `make analyze`. Each job has a timeout and retains logs
+native, tmux, actual localhost remote and non-hardware OpenOCD suites on Ubuntu
+26.04 with GDB 17+. **Static analysis** runs `make analyze` and fortified
+compilation of all C test sources on Ubuntu 24.04. Each job has a timeout and retains logs
 for seven days even on failure; superseded runs on the same ref/PR are cancelled.
 Actions are pinned to commit IDs, checkout credentials are not persisted, and
 the workflow token has read-only repository contents permission. Untrusted PRs
