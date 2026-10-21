@@ -655,8 +655,10 @@ application suites were not rerun for the documentation-only commit.
 ## M18 — Release preparation and requirements audit
 
 Status: **awaiting-user**. A Linux x86-64 host distribution and corresponding
-source archive are prepared; no release is published or tagged. Preparation-commit
-linkage is finalized after the approved combined preparation commit. Physical RISC-V
+source archive are prepared; no release is published or tagged. The integrated
+preparation revision on `develop` is
+`ad606dc6d7af7a3384401fb97e7c328ea1d8b62b`, including the CI corrections below.
+Physical RISC-V
 acceptance is explicitly deferred for v0.1.0; the accepted release matrix is
 native Linux x86-64, NUCLEO-F446RE and ESP32-S3. This deferral does not establish
 RISC-V hardware compatibility or waive future release requirements.
@@ -825,3 +827,18 @@ Ubuntu environments use official base archives with verified published SHA256
 checksums, isolated filesystems and the host kernel; they are not GitHub-hosted
 runners or physical-board evidence. Revised hosted confirmation and final release
 acceptance remain pending.
+
+### Final distribution preparation
+
+The repository owner reported `make release` passing on the integrated `develop`
+revision above: the hardened executable built, reported `the-bugger 0.1.0`, and
+the packaging command prepared `build/dist/`. These generated archives are
+ignored distribution outputs; they are uploaded as release assets rather than
+committed to Git. A clean working tree after packaging is expected.
+
+The release documentation identifies v0.1.0 in the changelog and links the actual
+preparation revision. Final owner release acceptance, hosted confirmation and
+tag/publication remain separate from successful packaging. The agent refreshed
+the archives after the tracked release notes and verified their SHA-256 checksums.
+The source archive contains those final tracked notes. Later content changes
+require another `make release` before publication.

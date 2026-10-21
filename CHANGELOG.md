@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — target 0.1.0
+## [0.1.0] - 2026-10-20
 
 ### Added
 
@@ -140,6 +140,13 @@
 
 ### Fixed
 
+- Close unrelated inherited descriptors in the GDB child while preserving parent
+  descriptors and independently owned processes.
+- Invalidate variable freshness immediately after resume/context changes even
+  while a request is pending, retaining object identities for stale-reply cleanup.
+- Check Memory/tmux stderr redirection under fortified compilation. Validate
+  optimized argument reads against reported GDB metadata and find ELF gaps with
+  bounded scrolling across different linker layouts.
 - Watchpoint TUI test targets intended lower panes, inline Memory address input
   and footer actions across redraws; wait for current Memory data without
   weakening application read/watchpoint safety checks.
@@ -171,5 +178,7 @@
 Native launch/control/console, context, code inspection, code/data breakpoints,
 Registers, Memory, scoped Locals/Watches and basic profiles/action keys are live.
 Remote/OpenOCD sessions and the named STM32/S3 physical workflows are live.
-Specialized inspectors remain planned; broader compatibility and final release
-acceptance require their own evidence.
+Native launch requires GDB 17+ to preserve literal arguments with shell startup
+disabled. CI exercises Ubuntu 26.04/GDB 17+ runtime behavior and Ubuntu 24.04
+static analysis/fortified test compilation. Specialized inspectors remain planned;
+broader compatibility requires its own evidence.

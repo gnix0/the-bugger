@@ -37,7 +37,7 @@ These results cover the tested workflows, not all boards, probes or architecture
 OpenOCD is optional, not universal; broader compatibility needs separate evidence.
 Physical RISC-V acceptance is deferred for v0.1.0 and is not a hardware support claim.
 
-`v0.1.0` is the release target, not a completed release. See the
+`v0.1.0` covers the capabilities and validation scope described here. See the
 [roadmap status](docs/roadmap.md#implementation-status) and
 [recorded validation evidence](docs/validation.md).
 
