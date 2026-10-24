@@ -12,9 +12,11 @@ form the recorded first-release evidence. v0.1.0 was published on 2026-10-20,
 as reported by the maintainer; physical RISC-V acceptance remains explicitly
 deferred for that release. F19 built-in themes is accepted as early post-release
 work through the reported implementation commit. Always-on h/j/k/l navigation is
-an additional shared UI change awaiting acceptance, not a new gate or Vim mode.
-Source fullscreen is another shared UI addition awaiting acceptance: a temporary
+an accepted, unreleased shared UI change, not a new gate or Vim mode.
+Source fullscreen is another accepted, unreleased shared UI addition: a temporary
 rendering override with retained tiles, not an F06 organization redesign.
+Spatial control navigation and deliberate content focus are shared UI work
+awaiting acceptance; they do not add a roadmap gate or change F06 scope.
 Other F gates remain planned.
 The integrated release-preparation revision is
 `ad606dc6d7af7a3384401fb97e7c328ea1d8b62b`. Acceptance records, observed hashes,

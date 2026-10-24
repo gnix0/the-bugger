@@ -50,6 +50,68 @@ static void click(const char *label)
 {
     test_terminal_click(&arrows, label); test_terminal_click(&motions, label); same();
 }
+static void selected(const char *label)
+{
+    int x, y; CHECK(test_terminal_find(&motions, label, &x, &y));
+    if (!motions.inverse[y][x]) { fprintf(stderr, "Expected focus %s after action %u\n", label, action); }
+    CHECK(motions.inverse[y][x]);
+}
+static void mouse_at(int x, int y)
+{
+    char input[64];
+    (void)snprintf(input, sizeof input, "\033[<0;%d;%dM", x + 1, y + 1);
+    both(input);
+    (void)snprintf(input, sizeof input, "\033[<0;%d;%dm", x + 1, y + 1);
+    both(input);
+}
+static void spatial(void)
+{
+    selected("Continue");
+    keys("\033OD", "h"); selected("Continue"); /* No edge wrap. */
+    keys("\033OC", "l"); selected("Pause");
+    keys("\033OD", "h"); selected("Continue");
+    keys("\033OB", "j");
+    int x, y; CHECK(test_terminal_find(&motions, "Pause", &x, &y));
+    CHECK(!motions.inverse[y][x]); /* Down leaves the toolbar row. */
+    keys("\033OA", "k"); selected("Continue");
+    for (int i = 0; i < 8; ++i) { keys("\033OC", "l"); }
+    selected("Quit"); keys("\033OC", "l"); selected("Quit");
+    for (int i = 0; i < 8; ++i) { keys("\033OD", "h"); }
+    selected("Continue");
+    /* Tab never acquires a content body or scrollbar, even through a full cycle. */
+    for (int i = 0; i < 80; ++i) {
+        both("\t"); CHECK(!test_terminal_find(&motions, "CONTENT FOCUS", NULL, NULL));
+    }
+    /* A deliberate content click gives arrows to that pane, with an explicit indicator. */
+    CHECK(test_terminal_find(&motions, "Source", &x, &y));
+    mouse_at(x + 12, y + 3); test_terminal_expect(&motions, "CONTENT FOCUS");
+    keys("\033OB", "j"); keys("\033OA", "k");
+    both("\033"); CHECK(!test_terminal_find(&motions, "CONTENT FOCUS", NULL, NULL));
+    mouse_at(x + 12, y + 3); test_terminal_expect(&motions, "CONTENT FOCUS");
+    mouse_at(0, motions.rows - 1); CHECK(!test_terminal_find(&motions, "CONTENT FOCUS", NULL, NULL));
+    mouse_at(x + 12, y + 3); test_terminal_expect(&motions, "CONTENT FOCUS");
+    click("Pause"); CHECK(!test_terminal_find(&motions, "CONTENT FOCUS", NULL, NULL));
+}
+static void fullscreen_focus(void)
+{
+    click("..."); click("Pane actions"); click("Fullscreen Source");
+    test_terminal_expect(&motions, "Source | fullscreen");
+    for (int i = 0; i < 8; ++i) { keys("\033OC", "l"); }
+    selected("Quit"); keys("\033OC", "l"); selected("Quit");
+    keys("\033OD", "h"); selected("Session");
+    both("\t"); selected("Quit"); both("\t"); selected("[ Restore ]");
+    both("\t"); selected("Continue"); /* No hidden panes/body/dividers. */
+    for (int i = 0; i < 8; ++i) { keys("\033OC", "l"); }
+    int x, y; CHECK(test_terminal_find(&motions, "Source | fullscreen", &x, &y));
+    mouse_at(x + 15, y + 3); test_terminal_expect(&motions, "CONTENT FOCUS");
+    keys("\033OB", "j"); both("\033");
+    test_terminal_expect(&motions, "Source | fullscreen"); selected("Quit");
+    test_terminal_resize(&arrows, 18, 48); test_terminal_resize(&motions, 18, 48); same();
+    selected("Quit");
+    test_terminal_resize(&arrows, 54, 166); test_terminal_resize(&motions, 54, 166); same();
+    selected("Quit");
+    both("\033"); test_terminal_expect(&motions, "Disassembly");
+}
 int main(int argc, char **argv)
 {
     CHECK(argc == 2 && atexit(cleanup) == 0);
@@ -75,9 +137,11 @@ int main(int argc, char **argv)
     both("\r\t\t\t\t\t\r"); test_terminal_expect(&motions, "Review session preview");
     keys("\033OB", "j"); keys("\033OA", "k"); both("\r");
     test_terminal_expect(&motions, "DEMO | Paused");
+    spatial();
     for (int i = 0; i < 9; ++i) { both("\t"); }
     keys("\033OC", "l"); keys("\033OD", "h");
     both("\t\t\t"); keys("\033OB", "j"); keys("\033OA", "k");
+    fullscreen_focus();
     /* Resize controls and confirmations share the same navigation dispatch. */
     click("..."); click("Pane actions"); click("Resize dividers");
     keys("\033OC", "l"); keys("\033OD", "h"); both("\t");
@@ -89,6 +153,6 @@ int main(int argc, char **argv)
     test_terminal_stop(&arrows, 0); active[0] = false;
     test_terminal_stop(&motions, 0); active[1] = false;
     CHECK(rmdir(root) == 0);
-    puts("PASS always-on hjkl matches arrows: launcher, toggles, themes, tabs, bodies, resize, confirmation, compact; text remains literal");
+    puts("PASS spatial controls, toolbar edges, control-only Tab, explicit content/escape/outside clicks, fullscreen and resize focus; hjkl matches arrows and fields stay literal");
     return EXIT_SUCCESS;
 }

@@ -16,7 +16,8 @@ records remain in the [validation records](../docs/validation.md).
   stepping and owned-session cleanup, and is included in `make test-native`.
   See [fullscreen procedures](../docs/testing.md#source-fullscreen).
 
-- `make test-navigation`: compares arrow-key and always-on h/j/k/l behavior
+- `make test-navigation`: verifies spatial controls, deliberate content focus,
+  fullscreen/resize focus retention and arrow-key versus always-on h/j/k/l behavior
   through real demo PTYs, including menus, tabs/bodies, resize, confirmations,
   compact rendering and literal field editing. Included in `make test`; no
   debugger required. See [navigation procedures](../docs/testing.md#letter-key-navigation).

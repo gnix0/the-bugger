@@ -232,7 +232,8 @@ int main(int argc, char *argv[])
     test_terminal_resize(&term, 18, 80);
     test_terminal_expect(&term, "2 Asm");
     test_terminal_click(&term, "Disassembly");
-    test_terminal_send(&term, "\t\t\t\033OB"); /* focus body, move down */
+    test_terminal_click(&term, "08000438"); /* Deliberately focus the visible body. */
+    test_terminal_send(&term, "\033OB");
     test_terminal_expect(&term, "0800043A");
     CHECK(!test_terminal_find(&term, "0800042A  B5 10", NULL, NULL));
     test_terminal_stop(&term, 0);

@@ -227,6 +227,12 @@ Locals/Watches, memory and CPU-register editing are targeted for **v0.2.0**. Ded
 - `q` closes/backs out of the current screen outside text fields; in the workspace it leaves the session for the launcher after confirmation. At the launcher it does not exit. `Ctrl+Q` quits from any screen, retaining active-session confirmation. Text fields accept a literal `q`; Escape backs out while editing. Footers distinguish these actions.
 - Standard desired shortcuts: `F5` continue, `F9` breakpoint, `F10` next/step over, `F11` step into, `Shift+F11` step out **where the terminal reports it**. Provide clickable alternatives and allow remapping if tmux/terminal intercepts or collapses special keys.
 - Startup-menu selection, text fields, dialogs, confirmation prompts and view changes must all be operable by clicks plus straightforward arrow/Tab/Enter/Escape navigation.
+- Workspace arrow navigation follows visible control geometry: Left/Right stay
+  in the visual row, Up/Down prefer aligned controls, and directions do not wrap.
+  Tab/Shift+Tab traverse controls only. Enter activates focused tabs/buttons.
+  Content/scrollbar clicks explicitly acquire pane navigation; Escape/Tab or a
+  control/outside-pane click returns to controls. Content focus must be visible
+  in color and monochrome, and hidden fullscreen controls are excluded.
 - Lowercase `h`/`j`/`k`/`l` act as Left/Down/Up/Right by default on navigation controls, including tabs, scrolling and divider resizing. Editable fields retain ordinary character entry; no enable switch, modal editing, counts or other Vim commands are introduced.
 - Terminal/multiplexer constraints are real: test mouse click, scroll, drag/resize and function keys in tmux with mouse enabled; avoid assuming a browser-level right click or perfect function-key support in every terminal. Use explicit `...` menus if context clicks aren't reliably conveyed.
 - Do not overwrite user bindings for tmux. If tmux requires `set -g mouse on`, document it as an opt-in prerequisite.
