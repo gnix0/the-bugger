@@ -42,6 +42,7 @@ int main(int argc, char *argv[])
     const char *mode = getenv("TB_FAKE_MODE");
     if (mode == NULL) { mode = "normal"; }
     unsigned register_value = 16; bool register_error = false, register_malformed = false;
+    bool register_stop_held = false;
     unsigned memory_mode = 0;
     char variable_name[64] = {0}; unsigned variable_reads = 0, variable_children = 0, variable_deletes = 0;
     unsigned variable_mode = 0;
@@ -448,6 +449,11 @@ int main(int argc, char *argv[])
         } else if (strcmp(command, "-release\n") == 0) {
             reply(token, "^done,order=\"second-first\"");
             if (held[0] != '\0') { reply(held, "^done,order=\"held\""); held[0] = '\0'; }
+        } else if (strncmp(mode, "context-registers", 17) == 0 && strcmp(command, "-stop-held\n") == 0) {
+            register_stop_held = true; reply(token, "^done");
+        } else if (strncmp(mode, "context-registers", 17) == 0 && strcmp(command, "-release-stop\n") == 0 && register_stop_held) {
+            register_stop_held = false; reply(token, "^done");
+            puts("*stopped,reason=\"breakpoint-hit\",thread-id=\"1\"");
         } else if (strcmp(command, "-stop\n") == 0) {
             reply(token, "^done"); puts("*stopped,reason=\"breakpoint-hit\",thread-id=\"1\"");
         } else if (strcmp(command, "-run\n") == 0) {

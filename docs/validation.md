@@ -1122,6 +1122,19 @@ The same check reproduced on the unchanged `HEAD` CLI harness. This optional
 harness analysis is not a passed check; no suppression or harness behavior change
 was introduced. The canonical `make analyze` scope is production sources.
 
+The first hosted v0.1.1 default-suite run failed at
+`tests/integration/test_registers.c:83`: the hidden-register baseline check saw
+`changed` after a fake stop. The test had treated the stop command's `^done`
+reply as completion, although the fake peer emits `*stopped` separately. It could
+make Registers visible before the stop event reached the model. The test now
+waits for the controller's new stopped generation before revealing Registers;
+the fake peer can hold that event after acknowledging the command to exercise
+the ordering explicitly. The register model and its change-marker assertion are
+unchanged. Agent-run `make -s test-m09-model`, a separate fortified
+`make -s BUILD_DIR=build/ci-register CPPFLAGS=-D_FORTIFY_SOURCE=3 test-m09-model`,
+and `make -s test-controller` passed. The failed hosted run remains a failure;
+broader post-fix CI evidence is pending.
+
 Artifacts to attach after final release acceptance:
 
 - `build/dist/the-bugger-v0.1.1-linux-x86_64.tar.gz`
