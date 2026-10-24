@@ -470,6 +470,15 @@ tail. GDB console input is a deliberate single command carried by
 `-interpreter-exec console`; embedded record delimiters are rejected and managed
 interpreter/async changes have an explicit diagnostic.
 
+The Console's inline Command field and Send control occupy a dedicated row below
+the log, separate from the output viewport/scrollbars and Save Log action. Drafts
+and edit cursors are bounded and pane-local, retained across view changes and
+resize, and cleared on new sessions or split-pane reuse. Enter/Send dispatches
+through the unchanged session API and clears the draft only after acceptance;
+rejected requests preserve it. Escape releases field focus without sending.
+Text editing takes precedence over navigation/action bindings; the final refresh
+places the caret in the field after drawing the workspace chrome.
+
 Save Log flushes pending fragments and exports the bounded readable history.
 It creates a new file with O_EXCL and mode 0600, preserving existing files and
 reporting open/short-write/close failures. It exports retained text, not a profile,

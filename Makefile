@@ -164,6 +164,7 @@ test-native: all $(BUILD_DIR)/test-acceptance-native $(BUILD_DIR)/test-native $(
 	$(BUILD_DIR)/test-acceptance-native $(abspath $(BUILD_DIR)/variables-fixture) $(abspath $(BUILD_DIR)/variables-fixture-cpp)
 	$(BUILD_DIR)/test-native $(abspath $(BUILD_DIR)/debug-fixture) $(abspath $(BUILD_DIR)/debug-fixture-cpp)
 	$(BUILD_DIR)/test-native-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/debug-fixture)
+	TB_CONSOLE_TEST_TMUX=1 $(BUILD_DIR)/test-native-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/debug-fixture)
 	$(BUILD_DIR)/test-context-native $(abspath $(BUILD_DIR)/context-fixture) $(abspath $(BUILD_DIR)/context-fixture-optimized) $(abspath $(BUILD_DIR)/context-fixture-stripped)
 	$(BUILD_DIR)/test-context-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/context-fixture)
 	$(BUILD_DIR)/test-code-native $(abspath $(BUILD_DIR)/code-fixture) $(abspath $(BUILD_DIR)/code-fixture-optimized) $(abspath $(BUILD_DIR)/code-fixture-stripped) $(abspath $(BUILD_DIR)/code-fixture-cpp) $(abspath $(BUILD_DIR)/code-fixture-relocated) $(abspath tests/fixtures/native/relocated)

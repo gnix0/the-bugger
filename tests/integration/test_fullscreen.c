@@ -97,7 +97,7 @@ static void native(const char *binary, const char *fixture)
     test_terminal_start_argv(&term, args, "xterm-256color", false); active = true;
     test_terminal_resize(&term, 44, 160); test_terminal_expect(&term, "Linux application"); keys("\r\t\025");
     test_terminal_send(&term, fixture); click("Review session"); click("Start native");
-    test_terminal_expect(&term, "LIVE | Loaded"); click("Command"); test_terminal_expect(&term, "GDB console command"); keys("start\r");
+    test_terminal_expect(&term, "LIVE | Loaded"); click("Command"); test_terminal_expect(&term, "LIVE | GDB / program log"); keys("start\r");
     test_terminal_expect(&term, "code_counter = 1");
     for (int i = 0; i < 40 && !source_line(); ++i) { settle(); }
     int before = source_line(); CHECK(before > 0);

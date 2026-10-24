@@ -24,6 +24,8 @@ Multi-file Source tabs are an implemented shared UI enhancement awaiting user
 review. They do not add a roadmap gate or change the embedded-first priorities.
 Ctrl+direction transfer of content focus is another shared UI enhancement
 implemented for review, using the existing pane geometry and navigation rules.
+Inline GDB command entry below Console output is implemented for review as a
+shared UI refinement; serial acquisition remains the separate planned F13 gate.
 The integrated v0.1.0 release-preparation revision is
 `ad606dc6d7af7a3384401fb97e7c328ea1d8b62b`. Acceptance records, observed hashes,
 failures and test evidence are in [validation records](validation.md).
