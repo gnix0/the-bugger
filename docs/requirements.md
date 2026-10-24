@@ -55,7 +55,7 @@ The intended session workflow is:
 5. Debug normally with **function keys, mouse clicks, and visible toolbar actions**.
 6. Exit cleanly; return later to a saved session profile.
 
-Do not add Vim modes, Vim-motion-first interaction, editor emulation, floating windows, or a mandatory IDE/project generation step. Standard terminal text editing for input fields is fine; navigation must not require Vim knowledge.
+Do not add Vim modes, Vim-motion-first interaction, editor emulation, floating windows, or a mandatory IDE/project generation step. Always-on lowercase `h`/`j`/`k`/`l` are additional Left/Down/Up/Right aliases outside text fields, not a mode or a prerequisite for navigation. Text fields keep these letters literal; standard arrows, mouse and visible actions remain available.
 
 
 ## Functional requirements — v0.1.0
@@ -221,6 +221,7 @@ Locals/Watches, memory and CPU-register editing are targeted for **v0.2.0**. Ded
 - `q` closes/backs out of the current screen outside text fields; in the workspace it leaves the session for the launcher after confirmation. At the launcher it does not exit. `Ctrl+Q` quits from any screen, retaining active-session confirmation. Text fields accept a literal `q`; Escape backs out while editing. Footers distinguish these actions.
 - Standard desired shortcuts: `F5` continue, `F9` breakpoint, `F10` next/step over, `F11` step into, `Shift+F11` step out **where the terminal reports it**. Provide clickable alternatives and allow remapping if tmux/terminal intercepts or collapses special keys.
 - Startup-menu selection, text fields, dialogs, confirmation prompts and view changes must all be operable by clicks plus straightforward arrow/Tab/Enter/Escape navigation.
+- Lowercase `h`/`j`/`k`/`l` act as Left/Down/Up/Right by default on navigation controls, including tabs, scrolling and divider resizing. Editable fields retain ordinary character entry; no enable switch, modal editing, counts or other Vim commands are introduced.
 - Terminal/multiplexer constraints are real: test mouse click, scroll, drag/resize and function keys in tmux with mouse enabled; avoid assuming a browser-level right click or perfect function-key support in every terminal. Use explicit `...` menus if context clicks aren't reliably conveyed.
 - Do not overwrite user bindings for tmux. If tmux requires `set -g mouse on`, document it as an opt-in prerequisite.
 - Source focus selects source F10/F11; Disassembly focus selects instruction F10/F11. Clicking toolbar/inspection panes preserves the last code-pane mode, visibly indicated. Both execution highlights use GDB PC/frame/source mappings; one source line can remain highlighted over several instructions. Browsing never moves PC. Optimized/inlined/tail-call behavior and unavailable values follow GDB; do not reconstruct missing semantics or fabricate precision.

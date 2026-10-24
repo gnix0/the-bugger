@@ -11,7 +11,9 @@ NUCLEO-F446RE/ARM and ESP32-S3/Xtensa. M18 release packaging and automated check
 form the recorded first-release evidence. v0.1.0 was published on 2026-10-20,
 as reported by the maintainer; physical RISC-V acceptance remains explicitly
 deferred for that release. F19 built-in themes is accepted as early post-release
-work through the reported implementation commit. Other F gates remain planned.
+work through the reported implementation commit. Always-on h/j/k/l navigation is
+an additional shared UI change awaiting acceptance, not a new gate or Vim mode.
+Other F gates remain planned.
 The integrated release-preparation revision is
 `ad606dc6d7af7a3384401fb97e7c328ea1d8b62b`. Acceptance records, observed hashes,
 failures and test evidence are in [validation records](validation.md).

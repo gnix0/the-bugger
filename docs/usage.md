@@ -316,7 +316,12 @@ decoding. See the [M08 checklist](testing.md#disassembly-browsing-and-code-break
 
 The active tab moves to the left. Mouse activation leaves inactive tabs in their
 normal style; keyboard focus follows the active tab. Use clicks or Tab/Shift+Tab,
-arrows and Enter. In fields use Left/Right, Home/End, Backspace/Delete and Ctrl+U.
+arrows and Enter. Lowercase `h`/`j`/`k`/`l` are always-on aliases for
+Left/Down/Up/Right outside text fields. They follow the focused control: menu
+selection, tab switching, body scrolling, theme/variant cycling and divider
+resizing behave just like arrows. No setting or editing mode is required.
+In fields, these letters type normally; use actual Left/Right, Home/End,
+Backspace/Delete and Ctrl+U for text editing.
 Escape goes back; `q` closes/backs out outside text fields and keeps the launcher
 open. **Quit** or `Ctrl+Q` exits the application, confirming active-session closure.
 Function keys have visible alternatives. Reset remains unavailable in live

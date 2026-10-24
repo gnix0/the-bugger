@@ -598,3 +598,13 @@ test-themes: all $(BUILD_DIR)/test-preferences $(BUILD_DIR)/test-render $(BUILD_
 test: test-themes
 
 -include $(BUILD_DIR)/tests/unit/test_preferences.d $(BUILD_DIR)/tests/integration/test_themes_tui.d
+
+$(BUILD_DIR)/test-navigation: $(BUILD_DIR)/tests/integration/test_navigation.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-navigation
+test-navigation: all $(BUILD_DIR)/test-navigation
+	$(BUILD_DIR)/test-navigation $(abspath $(BINARY))
+
+test: test-navigation
+-include $(BUILD_DIR)/tests/integration/test_navigation.d

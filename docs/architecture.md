@@ -34,7 +34,11 @@ The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
 descriptors together, redrawing after input or session revisions. Idle waits are
 100 ms without a session, bounded to 25 ms with one. Raw input preserves function keys and Ctrl+Q;
 Ctrl+C and SIGINT/SIGTERM/SIGHUP leave through normal cleanup. Module-owned globals are limited to a signal-safe exit flag and the screen's
-color-enabled flag and selected palette index. Mouse and keyboard share action dispatch and rendered hit regions.
+color-enabled flag and selected palette index. Mouse and keyboard share action dispatch and rendered hit regions. Lowercase
+h/j/k/l first receive ordinary text-field handling; outside editable fields they
+are normalized to Left/Down/Up/Right before existing navigation dispatch. Divider
+resize mode uses those aliases directly. File-filter edits still reset paging.
+No parallel motion engine, modal state or new target operations are introduced.
 
 Theme roles separate workspace, panel, raised header, notice and footer
 surfaces. Selected-row variants retain semantic foreground colors. Direct-color
