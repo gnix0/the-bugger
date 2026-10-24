@@ -1224,6 +1224,38 @@ Unperformed manual steps are not implied by automated terminal checks.
 Subject to the explicit v0.1.0 physical RISC-V deferral, exercise the same applicable core workflow on the ESP32 validation/Xtensa and ESP32/RISC-V boards through the appropriate GDB/server. Native x86-64 is always retested. Exact board/probe details are recorded with actual evidence, not required during planning. QEMU ARM/RISC-V guest/native tests are supplementary when available. This is validation coverage, not an in-product simulator or a promise that hardware-specific features work on every target. See the [release matrix](#every-release-regression-matrix).
 
 
+### Embedded startup debugging check
+
+This is a procedure for additional evidence, not a newly recorded M17 pass.
+Use the [startup walkthrough](usage.md#debugging-embedded-startup-code) with an
+already-programmed disposable fixture and matching ELF. Record board/core, reset
+wiring, probe, GDB/OpenOCD versions, scripts/arguments and firmware identity.
+
+1. Connect without automatic programming/reset/resume. Deliberately confirm
+   Reset-and-halt; record its fresh numeric PC and disassembly. On the STM32
+   fixture, compare that PC with `Reset_Handler` in `startup.S`. Record whether
+   it stopped before the first instruction or only later in startup. A server
+   listening, a reset acknowledgement or a breakpoint later in startup is not
+   evidence of first-instruction capture.
+2. Where reset catch is supported and configured, step instructions through the
+   actual startup code. For the STM32 fixture, follow `.data` copying and `.bss`
+   clearing into `main`; check PC progression and explicit safe SRAM reads against
+   linker symbols and ELF contents. Do not treat pre-initialization values as
+   initialized C objects or read peripheral ranges speculatively.
+3. Set a hardware breakpoint at the firmware's application entry, Continue and
+   verify the actual stop. Remove the test breakpoint. Repeat reset-and-halt to
+   distinguish repeatable early capture from an ordinary attach after startup.
+   Cover Source navigation with assembly line information and instruction-only
+   stepping when symbols/line information are absent.
+4. For ESP32 and other backends, identify the actual ROM/bootloader/application
+   boundary and available symbols. Record the earliest verified stop and stages
+   already executed; do not apply Cortex-M reset-vector assumptions to them.
+   If the backend cannot halt early enough, record that limit explicitly.
+5. Close with the intended target disposition, confirm owned-process cleanup and
+   external-server survival, and retain the session/server logs. Reset-catch or
+   connect-under-reset setup changes need separate reviewed configuration; no
+   generic startup-debugging check may silently add flash or reset scripts.
+
 ## Release artifacts (M18)
 
 Prepare the Linux x86-64 host distribution from a reviewed checkout:
@@ -1304,7 +1336,8 @@ QEMU run or successful native test substitutes for the named physical check.
 | F03–F05, v0.2.0 | Write authorization before dispatch, widths/endian, partial failures/read-only/context changes, no collateral writes. | Disposable RAM/CPU-register fixtures on STM32 and applicable ESP32 setups via tested GDB/server. MMIO writes require deliberate documented safe access; Flash remains F22. |
 | F11/F34/F35, v0.3.x | Register/description variants, malformed SVD/inheritance/arrays/access modes, side-effect-policy denial before reads; fault combinations/corrupt exception frames. | NUCLEO-F446RE/GDB/OpenOCD for safe peripheral inspection and injected Cortex-M faults; check metadata against actual device/firmware. ESP32 metadata only with tested descriptions/backends; Cortex-M fault decoder unavailable there. |
 | F07–F09/F12, v0.3.x | Bounded symbol/duplicate-name queries, no automatic unknown reads, relocation/import validation, exclude personal/runtime state. | Reopen/share an actual embedded setup and inspect intended symbols without programming/resetting on load; existing release boards/tools suffice. |
-| F13–F16/F18, v0.4.x | Stream fragmentation/loss/routing, clocks, bounds, file errors and reconnect/ownership. | Each channel needs suitable firmware plus actual UART endpoint, RTT-capable backend, semihosting configuration or SWO/ITM-capable core/probe/server. Do not assume every board/probe supports every channel. |
+| F13, v0.4.0 | PTY RX/TX, line endings/echo, configuration failures, fragmented/control bytes, queue/history bounds, backpressure, unplug/reconnect and ownership. | Known firmware output and command/response through a named UART/USB-serial endpoint; verify framing/flow control and reset-line behavior actually claimed. See the F13 procedure below. |
+| F14–F16/F18, v0.4.x | Stream fragmentation/loss/routing, clocks, bounds, file errors and reconnect/ownership. | Each channel needs suitable firmware plus an RTT-capable backend, semihosting configuration or SWO/ITM-capable core/probe/server. Do not assume every board/probe supports every channel. |
 | F22, v0.4.x before text-channel integrations | Programming sequence/confirmation/timeout/cancel/error/reset policy; no dependency on UART/RTT/semihosting/SWO. | Expendable firmware on each claimed programming backend; program/verify and test recovery on approved validation boards using established M16/M17 tools. Preserve independent attach and untouched unrelated memory. |
 | F20/F21, v0.5.x | Bounded region-safe search, export and diff identity; no broad unknown/MMIO scan. | Known RAM/Flash fixture ranges on tested release boards; verify exact bytes, gaps and snapshot identity without collateral access. |
 | F31/F33/F23/F24/F26, v0.6.x | Kernel version/port layouts, corrupt lists, image overlap/relocation, task-ID lifetime, unsupported stops/logpoint intrusion. | One named RTOS/version/port per supported setup and a bootloader/application fixture where images are claimed. Probe/server must expose valid task/context/stop operations. |
@@ -1321,3 +1354,45 @@ candidates; do not create new native suites for unapproved implementation.
 F47 requires actual supported-workflow evidence and critical-defect resolution,
 not unsupported hardware-dependent feature counts. Absent equipment is an
 UNVERIFIED dependency for technical rescoping, not PASS or silent feature removal.
+
+### F13 serial-console acceptance (planned)
+
+No serial implementation or pass is implied by this checklist. Apply it to the
+[F13 contract](roadmap.md#f13--uartserial-console-planned) at its implementation
+gate, preserving F06/F22 ordering and the separate F18 logging scope.
+
+1. **Automated endpoint tests:** use controlled PTY pairs to verify exact RX/TX
+   bytes, none/LF/CR/CRLF sending and local echo. Test empty input, long and
+   unterminated lines, split encodings, invalid bytes, NUL and terminal escape
+   sequences. Navigation, GDB commands and serial sends must remain isolated;
+   input focus changes must not send a draft accidentally.
+2. **Bounded operation:** force partial writes, interrupted/would-block I/O,
+   sustained RX floods and a peer that stops reading TX. Assert finite queues,
+   retained history and per-pump work; cancellation, redraw and GDB operations
+   remain responsive. Verify visible truncation/drop reporting and distinguish
+   host-accepted bytes from firmware acknowledgement. A disconnected peer must
+   not cause a retry spin, stale replay or descriptor leak.
+3. **Configuration/lifecycle:** cover invalid paths/settings, permissions, busy
+   ports, connection cancellation and cleanup. Use controlled transport failures
+   for errors a PTY cannot reproduce. Verify supported settings are applied and
+   restored where possible, failures remain visible, and reconnect revalidates
+   identity without selecting another device or replaying queued commands.
+4. **Physical RX and TX:** record board, firmware/build, UART pins/voltage or USB
+   CDC interface, adapter/driver, device identity and all connection settings.
+   Use sequence-numbered output plus a known echo/command-response fixture to
+   compare actual received and sent data. Exercise every advertised framing and
+   flow-control mode with suitable wiring; unsupported modes stay explicit.
+5. **Physical coexistence/recovery:** capture output before and during ordinary
+   debugging, including target running, halted and resumed; halt may stop the
+   producer but must not disable host reception. Connect serial before a deliberate
+   target reset and verify boot output/history, identifying any USB re-enumeration
+   gap instead of claiming complete capture. Observe DTR/RTS/reset/boot effects
+   on connect, disconnect and application exit. Unplug/replug during RX and TX,
+   test changed device identity and retry deliberately. Verify no implicit reset,
+   flash or commands are requested, and document any driver-induced transitions.
+6. **Evidence and UI review:** test ordinary/compact navigation and Source
+   fullscreen while serial traffic continues, plus
+   direct/tmux terminal cleanup under traffic. Retain bounded output samples,
+   settings, loss/recovery observations and logs. PTYs cannot prove electrical
+   framing, flow-control wiring or reset-line behavior; physical results apply
+   only to named configurations, not every MCU/probe or serial adapter.

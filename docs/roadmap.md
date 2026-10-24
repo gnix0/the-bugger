@@ -243,7 +243,7 @@ the native/STM32/Xtensa/RISC-V regression gate.
 | F10 / v0.8.x | Specialized STL using GDB facilities after F06 and core embedded inspectors; no frontend Python dependency or unconditional printer/child reads. | Printers available/absent, limits/errors/toolchains. | Inspect containers with usable raw fallback. |
 | F11 / v0.3.x | Custom CPU-register groups/status-bit display after F06; metadata-backed interpretation with raw fallback; shared persistence through F01. | Persistence/missing names/metadata/formats/context. | Build useful group and inspect flags without hardcoding canonical register sets. |
 | F12 / v0.3.x | Shareable profile import/export after F01; relative paths, shared/personal separation, explicit prelaunch review; no mandatory project or shell snippets. | Relocation/validation/conflicts/excluded personal/session-only data. | Share between checkouts without personal workspace/history. |
-| F13 / v0.4.0 | UART/serial text after F06 and explicit endpoint ownership/configuration; no inferred universal probe channel. | Fragmentation/disconnect/configuration/bounds. | Real endpoint I/O without TUI corruption. |
+| F13 / v0.4.0 | [Interactive UART/serial console](#f13--uartserial-console-planned) after F06: deliberate RX/TX endpoint configuration and ownership; no inferred universal probe channel. | PTY routing/framing policy, bounded nonblocking I/O, line controls, loss, disconnect and cleanup. | Real firmware output and command/response, debugger coexistence and documented reset-line behavior. |
 | F14 / v0.4.0 | RTT text through a verified backend after F06; capability/source validation before channel UI; no universal OpenOCD assumption. | Channels/configuration/reconnect/overflow/malformed streams. | Read/write supported real-firmware channels. |
 | F15 / v0.4.0 | Explicit semihosting setup/text after F06; verified server routing and deliberate intrusion/timing policy. | Setup failures/routing/cleanup. | Known firmware output with documented intrusion/timing. |
 | F16 / v0.4.0 | SWO/ITM text acquisition/decoder after F06 and verified core/probe/server/clock setup; no full instruction-trace claim. | Corpus/fragmentation/overflow/clock errors. | Known text captured on verified hardware. |
@@ -278,6 +278,59 @@ the native/STM32/Xtensa/RISC-V regression gate.
 | F45 / v0.9.7–v0.9.9 | Dedicated embedded multicore context/coordinated execution after explicit per-core address-space/action/stop ownership; validated backend first. | Core IDs/isolation/stop policies/failures. | Real multicore execution scope matches intent. |
 | F46 / v0.9.7–v0.9.9 | Multiple inferiors after context isolation and a justified embedded workflow; native-only expansion needs explicit renewed approval, not a pre-v1 parity goal. | Create/exit/address spaces/focus/ownership. | Multiple supported inferiors without mixed data. |
 | F47 / v1.0.0 | Stability/compatibility/documentation acceptance for supported embedded workflows and maintained native debugging; no last-minute feature family or parity quota. | Full regression/support matrix/critical-defect audit. | Supported workflows and release quality satisfy release acceptance. |
+
+### F13 — UART/serial console (planned)
+
+F13 is a bidirectional text console for a deliberately selected local Linux serial
+TTY, not just a firmware-output viewer. It remains planned for v0.4.0 after F06's
+organization decision; F22 flashing retains its earlier priority. UART requires a
+real endpoint and appropriate firmware/wiring, not merely a connected debug probe.
+Concrete controls and defaults are reviewed at implementation; acceptance requires:
+
+- **Connection and configuration:** select/review the device path and identity,
+  baud rate, data bits, parity, stop bits and flow control. Reject unsupported
+  settings visibly rather than silently substituting them. Connect/Disconnect
+  are explicit; saved settings, if provided, do not open a port automatically.
+  Missing, permission-denied and busy endpoints have actionable diagnostics.
+  Request exclusive access where supported, without claiming detection of every
+  competing reader or terminating another program.
+- **Reset-line behavior:** review DTR/RTS and close/hangup policy before opening;
+  these lines can connect to board reset/boot circuitry. No implicit reset pulse,
+  BREAK, flashing or startup command. Driver/device transitions on open or close
+  may still affect hardware: disclose and physically test the supported setup
+  rather than promise universally reset-free connections.
+- **Useful input/output:** receive firmware text and deliberately send text with
+  selectable none/LF/CR/CRLF endings and explicit local-echo behavior. Label the
+  serial source, received text, transmitted text and connection status separately
+  from GDB commands/output. Navigation shortcuts never transmit bytes; serial
+  input never becomes a GDB command. Distinguish queued/accepted-by-host output
+  from a firmware acknowledgement; report interrupted or partial transmission.
+- **Responsiveness and display:** bounded nonblocking RX/TX work, queues, line
+  sizes and retained history; handle fragmented/no-newline streams, partial
+  writes and backpressure without blocking the TUI or debugger. Define encoding,
+  CR/LF and control-byte handling, including split multibyte sequences and invalid
+  input; received terminal escapes cannot execute terminal controls. Expose
+  retention truncation, known drops and unknown loss honestly. Reception is
+  independent of the debugger's running/stopped state, although halted firmware
+  may naturally stop producing UART output. Allow connection before a deliberate
+  target reset to capture boot messages; retain history across target resets and
+  identify gaps if a USB serial device disappears during reboot.
+- **Lifecycle and recovery:** disconnect, unplug/replug and write failures leave
+  clear state and responsive controls. Reconnection revalidates endpoint identity
+  with explicit user approval if it changed; never silently attach to another
+  device reusing a path. Do not replay pending input after reconnect. Restore
+  original TTY settings where possible, report cleanup failures and release only
+  owned resources; closing a serial connection must not close an external server.
+- **Evidence:** automated PTY tests plus a named physical UART/USB-serial setup
+  prove both RX and TX, line-ending behavior, flood handling, disconnect/recovery
+  and coexistence with GDB. Record supported framing/flow-control and observed
+  reset-line behavior; a PTY alone cannot validate these electrical properties.
+  See the [planned acceptance checks](testing.md#f13-serial-console-acceptance-planned).
+
+F13 includes bounded on-screen history; shared search/filter/continuous recording
+remains F18. RTT, semihosting and SWO remain independent F14–F16 backends. Native
+inferior input remains F17. A full terminal emulator, binary file transfer and
+automatic remote serial bridging are outside this console's scope.
 
 The built-in F19 theme set is delivered; custom themes, future workspace design
 and acquisition backends receive scoped design review at their gates; unresolved
