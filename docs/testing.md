@@ -22,7 +22,11 @@ git diff --check
 
 Use a fresh `BUILD_DIR` when changing compilers/flags. `make clean` removes ignored
 `build/` artifacts. Strict C17 warnings include `-Wall -Wextra -Wpedantic -Werror`,
-format, shadow and prototype checks. Sanitizer targets instrument the frontend
+format, shadow and prototype checks. Project-owned ESP-IDF fixture sources also
+explicitly use `-Wall -Wextra -Werror`, with private category overrides for SDK
+warning-as-error exceptions; SDK components keep their own policy. See the
+[fixture build instructions](../tests/fixtures/embedded/README.md#esp32-s3).
+Sanitizer targets instrument the frontend
 and C harnesses; targets debugged by GDB stay uninstrumented because LeakSanitizer
 cannot operate in a deliberately ptraced target. Sanitizers run with leak checking;
 no suppression or disabled check turns an environment failure into PASS.

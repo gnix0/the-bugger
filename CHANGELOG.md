@@ -18,6 +18,11 @@
 
 ### Changed
 
+- ESP-IDF fixture sources explicitly enforce `-Wall -Wextra -Werror`, overriding
+  inherited warning-as-error exceptions for the authored component while leaving
+  SDK components unchanged. Native, test, release and STM32 builds were already
+  strict.
+
 - Catppuccin Macchiato is the default when no valid appearance preference exists;
   Monokai Pro remains selectable. The six-pane workspace and target behavior
   are unchanged.

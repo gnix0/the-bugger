@@ -64,6 +64,11 @@ they are not implied by a green basic CI run.
 
 ## Code and design conventions
 
+- Builds of project-owned code must include `-Wall` and `-Werror`; fix emitted
+  warnings before committing rather than bypassing the policy. This includes
+  application, tests and embedded fixtures. SDK/vendor components retain their
+  own policy; project-owned ESP sources override inherited warning-as-error
+  exceptions privately on their component.
 - Keep application and harness code C17 with the repository's strict warnings.
   Use existing Make/ncursesw/POSIX interfaces; introduce modules only when needed.
 - Preserve explicit ownership, bounded buffers/queues/work and nonblocking input.
