@@ -22,7 +22,10 @@ SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/them
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
-.PHONY: all test test-native fixtures test-mi test-controller test-gdb-startup controller-demo mi-demo test-tmux sanitize sanitize-native analyze clean check-deps
+.PHONY: all test test-ci test-native fixtures test-mi test-controller test-gdb-startup controller-demo mi-demo test-tmux sanitize sanitize-native analyze clean check-deps
+
+# Shared host regression list for local preflight and the CI Tests job.
+test-ci: test test-native test-tmux test-m15-native test-m16-server test-m16-tui test-m16-openocd
 
 all: $(BINARY)
 

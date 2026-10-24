@@ -42,6 +42,9 @@ git diff --check
 Use a separate `BUILD_DIR` for another compiler or instrumentation. GDB/ptrace,
 tmux and hardware prerequisites vary by suite; report unavailable checks rather
 than counting them as passed. C++ is permitted for debug-target fixtures only.
+Before submitting code, tests or build changes, run the complete fortified
+[`test-ci` baseline](docs/testing.md#hosted-ci) in an unused build directory and
+retain its log. Focused tests support iteration but do not replace that baseline.
 
 ## Continuous integration
 
@@ -49,8 +52,8 @@ than counting them as passed. C++ is permitted for debug-target fixtures only.
 dispatch. Automatic push runs are disabled to avoid duplicate checks for the
 same pull request update. The jobs are:
 
-- **Tests** (Ubuntu 26.04, GDB 17+): `make test test-native test-tmux test-m15-native
-  test-m16-server test-m16-tui test-m16-openocd`.
+- **Tests** (Ubuntu 26.04, GDB 17+): `make test-ci`, sharing the default, native,
+  tmux, localhost remote and offline OpenOCD suites with local preflight.
 - **Static analysis** (Ubuntu 24.04): `make analyze`, with analyzer/bugprone warnings
   treated as errors, plus compilation of all C test sources with fortification.
 

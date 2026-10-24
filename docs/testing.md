@@ -55,15 +55,33 @@ for subsequent changes.
 ## Hosted CI
 
 [CI](../.github/workflows/ci.yml) defines **Tests** on Ubuntu 26.04 with GDB 17+
-and **Static analysis** on Ubuntu 24.04. They run
-`make test test-native test-tmux test-m15-native
- test-m16-server test-m16-tui test-m16-openocd` and `make analyze` respectively.
+and **Static analysis** on Ubuntu 24.04. They run `make test-ci` and `make analyze`
+respectively. `test-ci` shares the complete host target list between local
+preflight and CI: `test test-native test-tmux test-m15-native test-m16-server
+test-m16-tui test-m16-openocd`.
 GDB/ptrace, PTYs and localhost sockets must work on the runner. Failures stay
 failures; required assertions are not skipped to obtain green status. Test and
 analysis logs are retained as workflow artifacts for seven days. Both jobs compile
 test code with `_FORTIFY_SOURCE=3`; the Ubuntu 24.04 job compiles every unit,
 integration and support C test source in addition to analysis. Local reproduction
 of fortified tests uses `CPPFLAGS=-D_FORTIFY_SOURCE=3` and a fresh `BUILD_DIR`.
+
+Before a code/test/build handoff, use an unused build directory and run the
+complete Tests baseline, retaining the full output and exit status:
+
+```sh
+set -o pipefail
+TERM=xterm-256color make BUILD_DIR=build/ci-preflight CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci \
+  2>&1 | tee /tmp/the-bugger-ci-preflight.log
+```
+
+Choose another directory if `build/ci-preflight` already exists. This includes
+native GDB, localhost servers, tmux and offline OpenOCD checks; it does not program
+hardware. Record missing prerequisites or host restrictions as blocked checks.
+Repeat the relevant checks after fixes, then complete the baseline; report the
+actual local OS/tool versions separately from hosted Ubuntu results. For input
+changes, preserve existing Enter, Backspace, field, frame/thread-selection and
+terminal-restoration assertions as well as tests of the new shortcut.
 
 Triggers cover pull requests and manual dispatch. Automatic push runs are
 disabled, so each PR update schedules one Tests job and one Static analysis job.
