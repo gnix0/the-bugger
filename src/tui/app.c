@@ -3343,6 +3343,8 @@ int tb_tui_run(bool demo)
         apply_theme(&app, app.preferences.palette);
         /* Raw input also disables XON/XOFF, so Ctrl+Q reaches the application. */
         (void)raw();
+        /* Keep Enter (CR) distinct from Ctrl+J (LF) in get_wch as well as termios. */
+        (void)nonl();
         (void)noecho();
         (void)keypad(stdscr, TRUE);
         (void)define_key("\033[1;5D", CONTENT_LEFT);

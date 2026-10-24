@@ -67,6 +67,8 @@ mode when Source or Disassembly receives focus. ncurses decodes the standard
 Legacy Ctrl+H/J/K/L bytes are intercepted only during workspace content focus,
 before text editing or Enter dispatch; terminfo-decoded Backspace also acts as
 Ctrl+H there. Outside content focus, existing handling applies.
+Startup explicitly calls `nonl()` after `raw()` so curses preserves Enter's
+carriage return separately from Ctrl+J's line feed, including in `get_wch`.
 
 Theme roles separate workspace, panel, raised header, notice and footer
 surfaces. Selected-row variants retain semantic foreground colors. Direct-color
