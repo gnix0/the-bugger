@@ -14,8 +14,10 @@ to `develop`. Discuss scope before starting a new roadmap feature.
 
 Release branches start from `develop` and merge into both `main` and `develop`.
 Urgent `hotfix/<description>` branches start from `main` and merge into both.
-Use merge commits to retain implementation/documentation history and the hashes
-referenced by validation records. Do not squash those records into release merges.
+Preserve existing implementation references when merging; do not rewrite commits
+already referenced by validation records. Exact release revisions are recorded
+with release evidence rather than requiring a separate documentation commit for
+every feature.
 
 Explain the problem, behavior change, relevant tests and limitations in the pull
 request. Confirm that CI passes and address review conversations before merging.
@@ -62,6 +64,11 @@ they are not implied by a green basic CI run.
 
 ## Code and design conventions
 
+- Builds of project-owned code must include `-Wall` and `-Werror`; fix emitted
+  warnings before committing rather than bypassing the policy. This includes
+  application, tests and embedded fixtures. SDK/vendor components retain their
+  own policy; project-owned ESP sources override inherited warning-as-error
+  exceptions privately on their component.
 - Keep application and harness code C17 with the repository's strict warnings.
   Use existing Make/ncursesw/POSIX interfaces; introduce modules only when needed.
 - Preserve explicit ownership, bounded buffers/queues/work and nonblocking input.
@@ -74,8 +81,8 @@ they are not implied by a green basic CI run.
 - Memory/value inspection must satisfy the [pre-dispatch access policy](docs/architecture.md#locals-and-watches).
   Calls/assignment filters alone are not safety proofs. No implicit flash, reset,
   writes, peripheral polling or termination of external servers.
-- Preserve the [interface specification](docs/requirements.md#interface-constraints): Monokai Pro,
-  default six tiles, tabs, dynamic splits, mouse and keyboard access, no presets
+- Preserve the [interface specification](docs/requirements.md#interface-constraints): semantic theme roles,
+  Catppuccin Macchiato default, six tiles, tabs, dynamic splits, mouse and keyboard access, no presets
   or floating windows. Prototype samples never count as live functionality.
 - Keep changes small and reviewable. Avoid unrelated formatting or framework
   changes. Shared changes retain native regression coverage; target-specific
@@ -116,7 +123,10 @@ data out of public reports and pull requests before coordinated disclosure.
 Work is divided into the existing M/F gates. Coordinate scope before starting;
 do not combine unrelated gates. Proposed Conventional Commit titles are at most
 50 characters, followed by a body explaining behavior, validation and limitations.
-Implementation and documentation follow the
-[maintainer workflow](docs/maintaining.md), including explicitly approved exceptions.
+Routine commits include relevant implementation, tests and documentation together.
+Separate documentation follow-ups remain useful when the code is already committed.
+The [maintainer workflow](docs/maintaining.md#commit-organization-and-traceability)
+records exact implementation hashes at release or when an investigation needs
+revision-level evidence; existing historical references are preserved.
 Maintainers control merges, acceptance, tags and publication. A passing CI run
 does not itself approve a milestone or authorize a release.

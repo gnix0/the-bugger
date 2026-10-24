@@ -22,7 +22,11 @@ git diff --check
 
 Use a fresh `BUILD_DIR` when changing compilers/flags. `make clean` removes ignored
 `build/` artifacts. Strict C17 warnings include `-Wall -Wextra -Wpedantic -Werror`,
-format, shadow and prototype checks. Sanitizer targets instrument the frontend
+format, shadow and prototype checks. Project-owned ESP-IDF fixture sources also
+explicitly use `-Wall -Wextra -Werror`, with private category overrides for SDK
+warning-as-error exceptions; SDK components keep their own policy. See the
+[fixture build instructions](../tests/fixtures/embedded/README.md#esp32-s3).
+Sanitizer targets instrument the frontend
 and C harnesses; targets debugged by GDB stay uninstrumented because LeakSanitizer
 cannot operate in a deliberately ptraced target. Sanitizers run with leak checking;
 no suppression or disabled check turns an environment failure into PASS.
@@ -86,6 +90,130 @@ Test terminal behavior directly and in tmux with opt-in mouse support. Record
 TERM/terminal/tmux versions and intercepted keys. Fixtures never rewrite existing
 tmux bindings or security settings. PTY screen parsing is an ASCII-label oracle,
 not a general terminal emulator or proof of UTF-8/physical visual fidelity.
+
+## Source fullscreen
+
+```sh
+make test-fullscreen
+make test-fullscreen-native
+```
+
+The first focused PTY test needs no debugger and is included in `make test`. It
+checks Source-only content with header/footer, nested split and resized-divider
+restoration, hidden hit regions, pane-switch suppression, compact resizing and
+mouse/keyboard/Escape exit. The native target is included in `make test-native`;
+it needs GDB 17+, ptrace/pidfd support and the ordinary code fixture. It enters
+through live Source Actions, checks that toggling preserves the stopped source
+line, steps with F10, restores the workspace and closes the owned session.
+
+Manual review:
+
+1. Stop a debug session and resize/split panes. In Source choose **Actions →
+   Fullscreen Source**, or **... → Pane actions → Fullscreen Source**. Source
+   fills the work area; only its controls and application header/footer remain.
+2. Scroll, use h/j/k/l and step from Source. Normal source/PC markers and toolbar
+   actions must remain usable; clicking an old divider position or pressing a
+   pane-switch shortcut must not activate hidden panes.
+3. Resize small and large. Restore with the visible button, Tab/Enter or Escape:
+   the original split/tab structure and proportions return. Repeat directly and
+   through tmux; retain existing input and terminal restoration checks.
+
+These shared UI tests do not replace the physical release matrix or imply new
+board support.
+
+## Spatial control and content navigation
+
+`make test-navigation` compares arrows/hjkl and checks geometry, toolbar edges,
+control-only Tab traversal, content entry/exit, fullscreen focus recovery and
+identity retention across compact resizing. `make test-fullscreen` and the
+workspace PTY checks retain layout/restoration coverage. These require no target.
+Live per-view checks remain necessary for horizontal scrolling and context rows.
+
+1. Open a session: Continue is selected. Right/l selects Pause; Left/h returns.
+   Down/j moves below the toolbar. At a row edge, focus remains reachable.
+2. Traverse controls with Tab/Shift+Tab. Content, scrollbar tracks, dividers and
+   hidden panes are never selected. Focus a neighboring tab with arrows and use
+   Enter to activate it; verify promotion retains focus on that tab.
+3. Click Source content and use arrows/hjkl/Page keys to browse. Expect the header
+   `*` and CONTENT FOCUS help. Escape returns to the previous visible control.
+   Repeat with Disassembly, Console and selectable context/variable rows.
+4. Reenter content, then click a toolbar control or blank space outside the pane.
+   Arrow navigation returns to controls; wheel scrolling alone does not acquire
+   content focus. Type literal hjkl into configuration and Memory fields.
+5. Enter Source fullscreen, navigate past Quit and back, and cycle Tab. Restore
+   remains reachable and focus never enters a hidden pane. With content active,
+   the first Escape leaves content and the second restores the tiled workspace.
+6. Resize compact/large, split panes and repeat in color, NO_COLOR and tmux.
+   Focus follows visible control identity; viewports and PC remain independent.
+
+## Letter-key navigation
+
+```sh
+make test-navigation
+```
+
+This focused PTY test is included in `make test`; it needs no GDB or hardware.
+Two demo sessions compare screen text and inverse selection after real arrow
+sequences versus h/j/k/l. Cases cover the launcher, boolean controls, literal
+field editing, theme/variant selection, workspace tabs and bodies, divider
+resizing, confirmation controls and compact resize. The harness waits through
+Escape recognition and drains redraws before comparing; a partial screen is
+not a completed frame.
+
+Manual review: navigate menus with h/j/k/l, focus a tab using h/l and activate
+it with Enter,
+scroll a focused body with j/k and resize a divider using the matching axis.
+Type `hjkl` into a configuration or Memory address field: the characters must
+remain literal. Actual arrows, Tab, mouse and function keys must still work.
+Only these four lowercase aliases are provided; there are no Vim modes or
+additional motions. Full native/tmux or hardware evidence requires separate runs.
+
+## Themes and configuration
+
+Coverage: F19; shared TUI/persistence behavior. No GDB, probe or target is required.
+
+```sh
+make test-themes
+make test-m13-tui
+```
+
+`test-themes` builds the frontend and runs `test-preferences`, `test-render` and
+`test-themes-tui`; it is also included in `make test`. Terminfo must provide
+`xterm-direct`, `xterm-256color`, `xterm` and `vt100`. The profile regression
+additionally builds its ordinary native fixture but does not start GDB unless
+using the separate native target.
+
+Automated checks cover all 37 palettes and their identifiers, RGB text contrast
+of at least 4.5:1 and muted/accent contrast of at least 3:1 against catalog
+surfaces, direct/256/8-color/monochrome pairs, semantic source/register rendering,
+execution-only highlighting and scrollbars. Preference tests cover default,
+private atomic persistence, stale writers, invalid schema/variants, mismatched
+families and preservation of invalid files. PTY checks exercise centered Config,
+dependent variants, every preview, cancellation without writes, save/restart,
+mouse/keyboard controls and compact 48×18 monochrome rendering. These numerical
+and screen-label checks do not establish physical visual quality or new hardware
+compatibility.
+
+Manual review:
+
+1. Start `./build/the-bugger` with no existing appearance preference (use a
+   temporary `XDG_CONFIG_HOME` to preserve personal settings). Open **Config →
+   Themes**: expect centered menus and Catppuccin / macchiato.
+2. Change Theme and Variant with keyboard and mouse. Each family exposes only
+   its listed variants. Preview dark and light choices: sample data is labeled
+   simulated; semantic highlights and text remain legible.
+3. Back out of Preview: the saved colors return and the draft remains in Themes.
+   Back to Config, reopen Themes: the unsaved draft is discarded. No preference
+   file is created by previewing alone.
+4. Save a choice: expect Config and a success message. Restart: the saved choice
+   returns. Open **Config → Profiles** and load a configuration for review;
+   appearance changes must not launch a session or alter profile contents.
+5. Repeat directly and in tmux with mouse forwarding enabled; inspect each
+   variant, compact/large resizing, monochrome selection indicators and an
+   actual stopped debugging workspace. Record terminal/TERM/tmux details.
+
+Existing native/remote and physical-board evidence remains separate. This gate's
+recorded focused checks do not imply a full regression/sanitizer or hardware run.
 
 ## Existing remote server sessions
 
@@ -235,7 +363,7 @@ Manual reproduction (use a temporary XDG directory to avoid personal profiles):
    ordered build→local mappings; choose Action keys and remap Continue to F6.
    Try duplicate F6 for another action and reserved Ctrl+Q: errors retain input.
    Save again and verify replacement requires confirmation.
-3. Return to launcher, choose **Profiles**, load that name. Configuration is
+3. Return to launcher, choose **Config → Profiles**, load that name. Configuration is
    shown for review; no GDB or inferior starts on selection. Review/Start native,
    use Console `start`, then the remapped action or clickable toolbar. The
    successful saved session becomes recent. Close normally and reopen the profile.
@@ -529,7 +657,7 @@ Coverage: M07/M08; source/instruction mapping, navigation and non-mutating brows
    fit: the corresponding bar disappears. Shrink it again and verify clamped,
    usable bars without covering content or footer actions. Repeat in tmux.
 10. Relaunch without arguments and inspect the startup card:
-    centered on both axes, pink title, right-aligned v0.1.0, subtle separators,
+    centered on both axes, theme-accented title, right-aligned version, subtle separators,
     three described choices and selected-row indicator. Click either a title or
     its description; both open that flow. Check arrows/Tab/Enter, Quit/Ctrl+Q,
     140x44, a larger terminal and 48x18 compact presentation. OpenOCD and existing-server execution require explicit review; recent saved native profiles are available after M13. The workspace
@@ -967,8 +1095,8 @@ screen reader handles cursor save/restore around ncurses scrolling regions.
    Each old tab immediately becomes inactive. Click Call Stack, press Enter:
    it must stay active rather than activating Disassembly at the old control index.
 4. From that active tab, press Tab to focus the next tab. Keyboard focus is
-   visible. Enter activates it; Left/Right still switch tabs and keep focus on
-   the promoted tab. Existing view content/scroll, splits and resizing still work.
+   visible. Enter activates it; Left/Right focus neighboring controls, with Enter
+   activating a tab and keeping focus on the promoted tab. Existing view content/scroll, splits and resizing still work.
 5. Repeat with `NO_COLOR=1 ./build/the-bugger --demo` and inside tmux with
    opt-in mouse support. Monochrome active tabs retain their selection marker;
    inactive tabs have no stale marker after mouse activation. Quit cleanly.

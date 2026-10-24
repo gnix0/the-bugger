@@ -16,52 +16,70 @@ broad deliverable require review before implementation; do not silently widen wo
 1. Implement only the authorized scope and run the permitted relevant checks.
 2. Deliver behavior changes/exclusions, exact test commands and results, artifact
    locations, limitations and a numbered manual checklist with expected results.
-3. Include exact implementation staging paths and a proposed Conventional Commit
-   message: title at most 50 characters plus a detailed body. The message does
-   not itself imply acceptance. Revise it if manual feedback leads to fixes.
+3. Include exact staging paths and one proposed Conventional Commit message:
+   title at most 50 characters plus a detailed body. Include source, tests and
+   relevant documentation together for routine work. The message does not imply
+   acceptance; revise it after fixes.
 4. Stop for manual validation. Fix reported issues and repeat relevant validation.
 5. Explicit acceptance is required. Simple positive feedback without issues also
    means acceptance and continuation authorization unless stated otherwise;
    questions/instructions are not acceptance. Silence or automated success is not.
-6. The repository owner stages, commits and pushes implementation changes. An
-   observed owner-created implementation commit establishes acceptance; do not
+6. The repository owner stages, commits and pushes the reviewed work. An
+   owner-reported or observed implementation commit establishes acceptance; do not
    demand a duplicate approval or leave the gate awaiting approval afterward.
-7. Finalize separate documentation with the real implementation hash and confirmed
-   evidence. Deliver documentation staging paths/message; the owner commits/pushes
-   it. Continue only after the relevant commit/push gate and authorization.
+7. Continue only after the relevant commit/push gate and authorization. If code
+   was already committed, deliver any remaining documentation as a focused
+   follow-up rather than rewriting the implementation commit.
 
 Never independently commit, push, tag, force-push, rebase or merge unless explicitly
 requested. Do not bypass Git gates through implicit positive feedback. Conversely,
 do not repeatedly ask for confirmation or inspect Git state after a clear report
-of completion. Read an actual implementation hash once when required for the
-documentation record; do not invent it, substitute a placeholder or run redundant
-remote checks. Documentation-only changes do not require application tests unless
-a changed technical claim creates a concrete verification need.
+of completion. Read an actual hash once when release evidence or a specific
+investigation requires it; do not invent hashes, substitute placeholders or run
+redundant remote checks. Documentation-only changes do not require application
+tests unless a changed technical claim creates a concrete verification need.
 
-## Implementation and documentation commits
+## Commit organization and traceability
 
-The implementation commit contains source, tests, build configuration and related
-implementation files. The documentation commit contains requirements, architecture,
-roadmap, README/changelog and evidence updates referencing that implementation.
-Prepare documentation as work progresses; finalize hashes/results only after the
-implementation commit. Never suggest indiscriminate `git add .`; list paths.
+Routine feature and fix commits include their source, tests, build changes and
+relevant requirements, architecture, usage, changelog and validation updates.
+A mandatory implementation/documentation split is no longer required merely to
+obtain the implementation hash. Separate commits remain appropriate for substantial
+independent documentation work, already-committed code, or an explicitly requested
+review boundary. Never suggest indiscriminate `git add .`; list exact paths.
 
-Exceptions remain explicit and scoped: P00 and the historical post-M08 pane-tab
-correction used combined documentation/code commits. The M10 completion required
-explicit manual approval before its implementation message. Those accepted
-exceptions do not replace the normal two-commit lifecycle for future gates. M18
-finalization has an explicit exception: the pending release-preparation build
-changes, CI, security policy and documentation form one preparation commit on
-`develop`; a separate owner-created release commit follows. Record that actual
-preparation hash once available. Release publication/tagging remains a separate
-explicit owner action. This does not change future milestone gates.
+Record implementation hashes when assembling release evidence, and earlier only
+when a regression, security finding or other investigation needs an exact revision.
+Routine gate records identify scope, acceptance and executed checks without a
+mandatory SHA. At release, associate the release tag/commit with its cumulative
+changelog, actual test results, artifact checksums and relevant implementation
+references. Resolve those references from real Git history; do not create a commit
+solely to make its own hash available to documentation.
+
+Existing hashes, test failures and acceptance records remain intact. Earlier
+milestones used the former two-commit process, with recorded scoped exceptions;
+those historical facts are not instructions for future work.
+
+## Release recommendation at delivery
+
+After the proposed commit message, assess the cumulative changes since the latest
+public release, including intervening commits, current work and `CHANGELOG.md`.
+A completed task does not automatically justify a release. If none is warranted,
+add the line **No release needed yet.**
+
+When a release is warranted, recommend a version and explain why, provide a
+publication-ready title and description, and give sequential preparation and
+publication steps through the protected-branch workflow. Identify outstanding
+checks or acceptance conditions before publication. Release guidance is not
+permission to publish, tag, merge or push; those actions remain owner-controlled.
 
 ## Evidence records
 
 Use states `planned`, `implemented`, `automated-verified`, `awaiting-user` and
-`accepted`. Only manual acceptance or an observed owner-created milestone commit
+`accepted`. Only manual acceptance or an owner-reported/observed milestone commit
 permits `accepted`. Record command, result, relevant artifact, who ran it, tool/
-environment limitations, physical setup when applicable and the observed SHA.
+environment limitations and physical setup when applicable. Record exact revisions
+for releases and investigations as described above.
 The roadmap shows concise current status; the validation records preserves detailed
 evidence and corrections. Do not rewrite a failure into PASS or infer board
 compatibility from native/corpus tests. Ignored `build/` logs are local artifacts;
@@ -80,10 +98,10 @@ authorization. No check is passed merely because a command was supplied.
 
 ## Release procedure
 
-The target is v0.1.0, with MAJOR.MINOR.PATCH versions and no prerelease suffix.
-Keep the M14 native integration gate intact, then complete M15 remote, M16 OpenOCD,
-M17 physical boards and M18 release evidence. Future gates retain their own scope;
-release preparation does not absorb deferred features.
+v0.1.0 is the first public release. Use MAJOR.MINOR.PATCH versioning and assess
+later versions from actual changes and the roadmap's planning targets. Its
+M14–M18 evidence remains the baseline; future gates retain their own scope.
+Release preparation does not absorb deferred features.
 
 For every release, including patches:
 
@@ -98,6 +116,8 @@ For every release, including patches:
    Missing hardware/support requires owner resolution before release acceptance.
 4. Review requirements, compatibility, limitations, clean-checkout instructions,
    changelog, provenance/license status and the validation evidence summary.
+   Record the actual release tag/commit, relevant implementation revisions and
+   artifact checksums without upgrading unrun checks to PASS.
 5. Obtain explicit final owner release acceptance and authorization before
    recommending a release commit/tag. Do not create or publish it automatically.
 
@@ -108,12 +128,14 @@ The owner has final say on release readiness.
 
 ## Linux x86-64 release artifacts
 
+The version comes from `include/the_bugger/version.h`.
 `make release` builds a separate optimized executable with PIE, stack protection,
 FORTIFY and full RELRO, then prepares these files under `build/dist/`:
 
-- `the-bugger-v0.1.0-linux-x86_64.tar.gz`: one host binary, GPLv3 license,
-  runtime instructions and build/dependency information.
-- `the-bugger-v0.1.0-source.tar.gz`: corresponding working-tree source and build
+- `the-bugger-v<version>-linux-x86_64.tar.gz`: one host binary, GPLv3 license,
+  runtime instructions and build/dependency information. Builds containing F19
+  also include `THIRD_PARTY_NOTICES` for the adapted theme palettes.
+- `the-bugger-v<version>-source.tar.gz`: corresponding working-tree source and build
   instructions, including packaging infrastructure.
 - `SHA256SUMS`: checksums for both archives. The binary archive also identifies
   its matching source archive by checksum.

@@ -1,6 +1,7 @@
 #include "render.h"
 #include "../support/check.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,6 +9,22 @@
 static int pair_at(int y, int x)
 {
     return PAIR_NUMBER(mvinch(y, x));
+}
+
+static double luminance(unsigned rgb)
+{
+    double result = 0;
+    const double weights[] = {0.2126, 0.7152, 0.0722};
+    for (int i = 0; i < 3; ++i) {
+        double value = (double)((rgb >> (unsigned)(16 - i * 8)) & 255U) / 255.0;
+        result += weights[i] * (value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4));
+    }
+    return result;
+}
+static double contrast(unsigned foreground, unsigned background)
+{
+    double fg = luminance(foreground), bg = luminance(background);
+    return fg > bg ? (fg + 0.05) / (bg + 0.05) : (bg + 0.05) / (fg + 0.05);
 }
 
 int main(void)
@@ -26,6 +43,30 @@ int main(void)
     SCREEN *screen = newterm("xterm-direct", output, input);
     CHECK(screen != NULL);
     CHECK(resizeterm(44, 140) == OK);
+    CHECK(strcmp(tb_theme_palette(tb_theme_current())->variant, "macchiato") == 0);
+    CHECK(strcmp(tb_theme_init(), "truecolor") == 0);
+    int default_fg, default_bg;
+    CHECK(extended_pair_content(TB_PANEL, &default_fg, &default_bg) == OK);
+    CHECK(default_fg == 0xcad3f5 && default_bg == 0x24273a);
+    CHECK(tb_theme_count() == 37 && tb_theme_family_count() == 7);
+    for (size_t i = 0; i < tb_theme_count(); ++i) {
+        const TbPalette *palette = tb_theme_palette(i);
+        CHECK(tb_theme_find(palette->family, palette->variant) == i);
+        for (int surface = 0; surface < 4; ++surface) {
+            CHECK(contrast(palette->colors[5], palette->colors[surface]) >= 4.5);
+            for (int role = 6; role < 13; ++role) { CHECK(contrast(palette->colors[role], palette->colors[surface]) >= 3.0); }
+        }
+        CHECK(tb_theme_select(i) && strcmp(tb_theme_init(), "truecolor") == 0);
+        for (int pair_id = 1; pair_id < 2 * TB_COLOR_COUNT; ++pair_id) {
+            if (pair_id == TB_COLOR_COUNT) { continue; } /* No style uses selected pair zero. */
+            CHECK(extended_pair_content(pair_id, &default_fg, &default_bg) == OK);
+            CHECK(default_fg >= 0 && default_fg <= 0xffffff && default_bg >= 0 && default_bg <= 0xffffff);
+            CHECK(default_fg != default_bg);
+        }
+    }
+    CHECK(!tb_theme_select(tb_theme_count()));
+    CHECK(tb_theme_find("unknown", "unknown") == tb_theme_count());
+    CHECK(tb_theme_select(tb_theme_find("monokai-pro", "pro")));
     CHECK(strcmp(tb_theme_init(), "truecolor") == 0);
     int fg, bg;
     CHECK(extended_pair_content(TB_WORKSPACE, &fg, &bg) == OK && bg == 0x221f22);
@@ -74,6 +115,26 @@ int main(void)
     (void)endwin();
     delscreen(screen);
     CHECK(fclose(input) == 0 && fclose(output) == 0);
-    puts("PASS render palette, execution-only highlight, scrollbar and monochrome tab marker");
+    const char *const terminals[] = {"xterm-256color", "xterm", "vt100"};
+    CHECK(unsetenv("NO_COLOR") == 0);
+    for (size_t terminal = 0; terminal < sizeof terminals / sizeof terminals[0]; ++terminal) {
+        input = tmpfile(); output = tmpfile(); CHECK(input && output);
+        screen = newterm(terminals[terminal], output, input); CHECK(screen);
+        for (size_t i = 0; i < tb_theme_count(); ++i) {
+            CHECK(tb_theme_select(i));
+            CHECK(strcmp(tb_theme_init(), terminal == 0 ? "256-color" : terminal == 1 ? "8-color" : "monochrome") == 0);
+            if (terminal < 2) {
+                for (int pair_id = 1; pair_id < 2 * TB_COLOR_COUNT; ++pair_id) {
+                    if (pair_id == TB_COLOR_COUNT) { continue; }
+                    CHECK(extended_pair_content(pair_id, &fg, &bg) == OK);
+                    CHECK(fg >= 0 && fg < COLORS && bg >= 0 && bg < COLORS);
+                    if (fg == bg) { fprintf(stderr, "%s %s/%s pair %d fg %d bg %d\n", terminals[terminal], tb_theme_palette(i)->family, tb_theme_palette(i)->variant, pair_id, fg, bg); }
+                    CHECK(fg != bg);
+                }
+            }
+        }
+        (void)endwin(); delscreen(screen); CHECK(fclose(input) == 0 && fclose(output) == 0);
+    }
+    puts("PASS 37 palettes, contrast, direct/256/8-color/monochrome, execution highlight and scrollbar");
     return EXIT_SUCCESS;
 }

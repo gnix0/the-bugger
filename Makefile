@@ -18,7 +18,7 @@ JSON_CFLAGS := $(shell $(PKG_CONFIG) --cflags json-c 2>/dev/null)
 PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session -Isrc/model $(NCURSES_CFLAGS) $(ELF_CFLAGS) $(JSON_CFLAGS)
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/session.c src/session/openocd.c src/session/profiles.c src/model/context.c src/model/code.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
+SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/session.c src/session/openocd.c src/session/profiles.c src/model/context.c src/model/code.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -48,7 +48,7 @@ $(BUILD_DIR)/test-tui: $(BUILD_DIR)/tests/integration/test_tui.o $(BUILD_DIR)/te
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/test-render: $(BUILD_DIR)/tests/unit/test_render.o $(BUILD_DIR)/src/tui/render.o $(BUILD_DIR)/src/tui/theme.o $(BUILD_DIR)/src/tui/demo.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(NCURSES_LIBS) $(ELF_LIBS) $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(NCURSES_LIBS) $(ELF_LIBS) -lm $(LDLIBS)
 
 $(BUILD_DIR)/test-layout: $(BUILD_DIR)/tests/unit/test_layout.o $(BUILD_DIR)/src/layout/layout.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
@@ -582,3 +582,42 @@ RELEASE_LDFLAGS ?= -pie -Wl,-z,relro,-z,now
 release:
 	$(MAKE) BUILD_DIR=$(BUILD_DIR)/release-build CPPFLAGS='$(CPPFLAGS) -D_FORTIFY_SOURCE=3' CFLAGS='$(RELEASE_CFLAGS)' LDFLAGS='$(RELEASE_LDFLAGS)' all
 	bash tools/package-release.sh $(BUILD_DIR)/release-build/the-bugger $(BUILD_DIR)/dist
+
+$(BUILD_DIR)/test-preferences: $(BUILD_DIR)/tests/unit/test_preferences.o $(BUILD_DIR)/src/tui/preferences.o $(BUILD_DIR)/src/tui/theme.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(NCURSES_LIBS) $(JSON_LIBS) $(LDLIBS)
+
+$(BUILD_DIR)/test-themes-tui: $(BUILD_DIR)/tests/integration/test_themes_tui.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-themes
+test-themes: all $(BUILD_DIR)/test-preferences $(BUILD_DIR)/test-render $(BUILD_DIR)/test-themes-tui
+	$(BUILD_DIR)/test-preferences
+	$(BUILD_DIR)/test-render
+	$(BUILD_DIR)/test-themes-tui $(abspath $(BINARY))
+
+test: test-themes
+
+-include $(BUILD_DIR)/tests/unit/test_preferences.d $(BUILD_DIR)/tests/integration/test_themes_tui.d
+
+$(BUILD_DIR)/test-navigation: $(BUILD_DIR)/tests/integration/test_navigation.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-navigation
+test-navigation: all $(BUILD_DIR)/test-navigation
+	$(BUILD_DIR)/test-navigation $(abspath $(BINARY))
+
+test: test-navigation
+-include $(BUILD_DIR)/tests/integration/test_navigation.d
+
+$(BUILD_DIR)/test-fullscreen: $(BUILD_DIR)/tests/integration/test_fullscreen.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-fullscreen test-fullscreen-native
+test-fullscreen: all $(BUILD_DIR)/test-fullscreen
+	$(BUILD_DIR)/test-fullscreen $(abspath $(BINARY))
+test-fullscreen-native: all $(BUILD_DIR)/test-fullscreen $(BUILD_DIR)/code-fixture
+	$(BUILD_DIR)/test-fullscreen $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/code-fixture)
+
+test: test-fullscreen
+test-native: test-fullscreen-native
+-include $(BUILD_DIR)/tests/integration/test_fullscreen.d

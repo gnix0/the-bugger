@@ -10,7 +10,7 @@
 
 A terminal-native GDB frontend written in C17 for embedded firmware development.
 It combines source, disassembly, registers, memory, variables and debugger output
-in a configurable tiled workspace with a Monokai Pro visual identity.
+in a configurable tiled workspace with semantic theme colors.
 
 The Bugger is **embedded-first, not embedded-only**. Native Linux debugging is a
 supported capability and the repeatable foundation for the current development
@@ -26,6 +26,14 @@ hardware-required data watchpoints, read-only registers/Memory/Locals/Watches,
 GDB Console, program output, Save Log, named profiles and action-key remapping.
 Availability depends on GDB and the target's capabilities.
 
+v0.1.1 adds **Config → Themes** with seven built-in families and 37 variants,
+preview and saved appearance preferences.
+**Catppuccin Macchiato** is the default; Monokai Pro remains available.
+[Theme controls and variants](docs/usage.md#configuration-and-themes) describe
+what is included. Shared UI additions also include
+[Source fullscreen and spatial keyboard navigation](docs/usage.md#workspace-controls).
+These features extend the original v0.1.0 workspace.
+
 Existing TCP GDB servers support reviewed `remote`/`extended-remote` connections
 and shared inspectors. OpenOCD support includes reviewed startup, installed-script
 browsing, owned lifecycle and explicit Reset/Halt/disconnect actions.
@@ -37,7 +45,7 @@ These results cover the tested workflows, not all boards, probes or architecture
 OpenOCD is optional, not universal; broader compatibility needs separate evidence.
 Physical RISC-V acceptance is deferred for v0.1.0 and is not a hardware support claim.
 
-`v0.1.0` covers the capabilities and validation scope described here. See the
+This checkout targets **v0.1.1**. Its release validation status is recorded in the
 [roadmap status](docs/roadmap.md#implementation-status) and
 [recorded validation evidence](docs/validation.md).
 
@@ -73,6 +81,10 @@ as a shell argument. Ordinary Continue starts the loaded program without an
 automatic main breakpoint.
 
 Click Source for source stepping or Disassembly for instruction stepping.
+Lowercase h/j/k/l are arrow-key aliases
+outside text fields; no setting or modal editing is required.
+[Source fullscreen](docs/usage.md#source-fullscreen) expands a Source pane while
+retaining the toolbar/status bars and restores the existing tiled workspace.
 Defaults are F5 Continue, F10 Over, F11 Into, Shift+F11 Out and F9 Breakpoint;
 clickable actions remain available when a terminal intercepts keys. Outside
 fields, `q` closes/backs out; `Ctrl+Q` quits, confirming active-session closure.
@@ -98,7 +110,7 @@ Prepared artifacts do not establish release acceptance or publication.
 
 | Audience | Start here |
 |---|---|
-| Users | [Usage and configuration](docs/usage.md), including profiles, controls and limitations; [security policy](SECURITY.md) |
+| Users | [Usage and configuration](docs/usage.md), including themes, profiles, controls and limitations; [security policy](SECURITY.md) |
 | Contributors | [Contributing](CONTRIBUTING.md), [architecture](docs/architecture.md), [testing](docs/testing.md) and [suite catalog](tests/README.md) |
 | Product and design | [Requirements](docs/requirements.md), [roadmap](docs/roadmap.md), [interface specification](docs/requirements.md#interface-constraints) |
 | Maintainers | [Maintenance/release procedures](docs/maintaining.md) and [validation records](docs/validation.md) |

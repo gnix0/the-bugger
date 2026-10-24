@@ -1,5 +1,48 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.1.1] - 2026-10-24
+
+### Added
+
+- Temporary Source fullscreen through Source Actions or pane actions, keeping
+  the application header/footer visible. Restore, Escape or q returns to the
+  retained tiled workspace; resizing, tabs and splits are preserved.
+- Focused demo/native fullscreen checks for input isolation, restoration and
+  actual source stepping.
+
+- Always-on lowercase h/j/k/l navigation matching Left/Down/Up/Right outside
+  text fields. Existing arrows, mouse and function keys remain available;
+  typed letters stay literal in fields, with no Vim editing modes.
+
+- Centered Config menu with Profiles and Themes, seven built-in theme families
+  and 37 variants. Separate Theme/Variant rows, temporary simulated preview,
+  Back cancellation and atomic saved appearance preferences.
+- Upstream palette revisions and MIT notices in `THIRD_PARTY_NOTICES`, included
+  in the binary distribution. No Neovim or Lua dependency.
+- Palette/contrast/fallback, preference and terminal interaction coverage;
+  profile-management tests now enter through Config.
+
+### Changed
+
+- Spatial arrow/hjkl control navigation, stable focus across redraws, and
+  control-only Tab traversal. Tabs activate with Enter; content scrolling starts
+  through a deliberate body/scrollbar click and Escape returns to controls.
+  Fullscreen excludes hidden focus targets and preserves a reachable Restore.
+
+- ESP-IDF fixture sources explicitly enforce `-Wall -Wextra -Werror`, overriding
+  inherited warning-as-error exceptions for the authored component while leaving
+  SDK components unchanged. Native, test, release and STM32 builds were already
+  strict.
+
+- Catppuccin Macchiato is the default when no valid appearance preference exists;
+  Monokai Pro remains selectable. The six-pane workspace and target behavior
+  are unchanged.
+- Routine contributions combine implementation, tests and relevant documentation.
+  Exact implementation hashes are recorded at release or when an investigation
+  requires them; historical evidence and owner-controlled Git operations remain.
+
 ## [0.1.0] - 2026-10-20
 
 ### Added

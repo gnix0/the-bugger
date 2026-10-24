@@ -4,7 +4,8 @@ The current development build supports native Linux and existing remote
 GDB-server sessions, plus reviewed OpenOCD startup and target actions. Physical
 validation covers NUCLEO-F446RE and ESP32-S3 with the
 [recorded configurations](validation.md#m17--physical-board-validation).
-The v0.1.0 release is not yet accepted.
+This guide describes v0.1.1, including themes, Source fullscreen and spatial
+keyboard navigation added since the first public release, v0.1.0.
 See [build and first session](../README.md#build-and-first-session) for prerequisites.
 
 ## Native Linux sessions
@@ -13,8 +14,8 @@ Choose **Linux application**, configure **Launch** or **Attach**, then choose
 **Review session** and **Start native**. Inputs remain available after errors.
 The launcher centers its session card horizontally and vertically, with readable
 descriptions and whole-row click targets. Arrow/Tab/Enter navigation and a compact
-presentation keep all three choices accessible on smaller terminals. Monokai Pro
-colors, simple terminal icons and text indicators need no additional assets.
+presentation keep all three choices accessible on smaller terminals. Theme colors,
+simple terminal icons and text indicators need no additional assets.
 
 Launch accepts an executable ELF, arguments, working directory, optional
 `NAME=value` environment entries and GDB executable. Arguments/environment use
@@ -311,11 +312,52 @@ set condition `value == 3`, and Continue to stop inside the function. Browse
 `m08_long` to inspect a long instruction range or `m08_zeros` for explicit raw
 decoding. See the [M08 checklist](testing.md#disassembly-browsing-and-code-breakpoints).
 
+## Source fullscreen
+
+In a live Source pane, choose **Actions → Fullscreen Source**. Alternatively,
+use that pane's **... → Pane actions → Fullscreen Source**; the pane-actions
+entry also works in the demo. The option appears only for an active Source view.
+
+Source fills the workspace area while the top toolbar/session header and bottom
+status/help bars stay visible. Other panes, inactive tabs, compact pane selectors
+and divider controls are hidden. Source scrolling, search/navigation, breakpoint
+controls and source stepping retain their normal behavior. Hidden inspectors
+follow the existing visibility policy rather than starting background reads.
+
+Choose **Restore** in the Source header, press Escape or `q` at control focus,
+or choose **Actions → Restore tiled workspace** to leave fullscreen. Tab/Enter
+can activate Restore without a mouse. The prior split tree, proportions and tab
+membership are retained, including nested panes and terminal resizing. Pane-switch
+shortcuts are inactive while fullscreen so they cannot select a hidden view.
+Menus and text-entry pages keep their existing Back/Escape behavior; return to
+the workspace before restoring it. `Ctrl+Q` retains normal session-close handling.
+
+This is temporary per-session presentation state, not a saved layout or a terminal
+emulator fullscreen setting. Returning to the launcher clears it.
+
 ## Workspace controls
 
 The active tab moves to the left. Mouse activation leaves inactive tabs in their
-normal style; keyboard focus follows the active tab. Use clicks or Tab/Shift+Tab,
-arrows and Enter. In fields use Left/Right, Home/End, Backspace/Delete and Ctrl+U.
+normal style; keyboard focus follows the active tab. Arrows move focus in the
+corresponding visual direction; Enter activates the selected control. Left/Right
+move within a visual row, and Up/Down prefer aligned controls above/below.
+Directional movement stops at an edge; it does not wrap. Continue → Pause uses
+Right, not Down. Tab/Shift+Tab cycle controls in a stable sequence, excluding
+content bodies, scrollbars, dividers and hidden panes.
+Lowercase `h`/`j`/`k`/`l` are always-on aliases for
+Left/Down/Up/Right outside text fields. They follow the focused control: menu
+selection, tab focus, body scrolling, theme/variant cycling and divider
+resizing behave just like arrows. No setting or editing mode is required.
+In fields, these letters type normally; use actual Left/Right, Home/End,
+Backspace/Delete and Ctrl+U for text editing.
+Click a pane's content or scrollbar to give it arrow/hjkl scrolling or row
+navigation. A `*` in its header and **CONTENT FOCUS** in the help bar identify
+this state, including in monochrome. Escape (or Tab) returns to the last visible
+control, falling back to Continue if necessary. Clicking a control or empty space
+outside the pane also leaves content focus. Wheel scrolling does not acquire
+keyboard focus. In fullscreen, the first Escape leaves content; the next restores
+the tiles. Field editing and divider resizing retain their own key behavior.
+
 Escape goes back; `q` closes/backs out outside text fields and keeps the launcher
 open. **Quit** or `Ctrl+Q` exits the application, confirming active-session closure.
 Function keys have visible alternatives. Reset remains unavailable in live
@@ -344,8 +386,8 @@ Smaller terminals show a focused pane with controls to reach every retained pane
 Below 48x18 a resize message preserves state. Tabs, splits and proportions survive
 shrinking and return when space permits.
 
-Monokai Pro uses consistent panel, header, tab and footer surfaces. Direct-color
-terminfo enables the exact palette; otherwise 256/8-color or monochrome is used.
+All built-in themes use consistent panel, header, tab and footer roles. Direct-color
+terminfo enables the adapted RGB palette; otherwise 256/8-color or monochrome is used.
 Standalone Alacritty advertising truecolor uses `alacritty-direct` when installed.
 `NO_COLOR=1 ./build/the-bugger` forces monochrome. Use a TERM entry supported by
 your terminal; the application does not alter terminal palettes or tmux settings.
@@ -378,11 +420,53 @@ polling. Take care when deliberately inspecting memory-mapped peripherals.
 See the [Locals/Watches walkthrough](testing.md#locals-and-watches)
 for a reproducible fixture and expected observations.
 
+## Configuration and themes
+
+Choose **Config** on the launcher, then **Themes** or **Profiles**. Both the
+configuration menu and theme selector are centered horizontally and vertically.
+The demo launcher also offers Themes; its Profiles option remains unavailable.
+
+With no valid saved preference, the default is **Catppuccin / macchiato**.
+Select the Theme row, then use Left/Right, Enter or clicks to cycle themes.
+The Variant row lists only variants belonging to the selected theme; changing
+families resets that row to the family's initial variant (Macchiato for Catppuccin).
+
+| Theme | Variants |
+|---|---|
+| Catppuccin | latte, frappe, macchiato, mocha |
+| Everforest | dark/light × medium, hard, soft |
+| Tokyo Night | night, storm, moon, day |
+| Rose Pine | main, moon, dawn |
+| Nightfox | nightfox, dayfox, dawnfox, duskfox, nordfox, terafox, carbonfox |
+| Gruvbox Material | dark/light × medium, hard, soft; material foreground |
+| Monokai Pro | pro, classic, machine, octagon, ristretto, spectrum, light |
+
+**Preview** temporarily applies the draft to a simulated workspace. It does not
+start a debugger, read a target or save preferences. **Back** or Escape returns
+from preview to Themes and restores the saved palette; the draft remains available
+there. Back from Themes discards it and returns to Config. **Save** applies and
+persists the draft, then returns to Config. Restarting restores the saved choice.
+In `--demo`, an explicit theme Save also persists appearance preferences.
+
+Preferences use version-1 JSON in
+`$XDG_CONFIG_HOME/the-bugger/preferences.json`, or
+`$HOME/.config/the-bugger/preferences.json` when XDG configuration is absent or
+relative. Saves use private atomic replacement and reject stale concurrent
+writers. Invalid, unsupported or inaccessible files fall back to Macchiato with
+a visible error and block saving; repair the file and restart. They are not
+silently overwritten. A stale writer must restart before saving.
+
+The palettes are adapted to semantic roles, with contrast adjustments where
+needed; 8-color/monochrome terminals cannot reproduce all palette differences.
+No Neovim or Lua installation is needed. Upstream revisions and licenses are in
+[THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES). Custom palette files remain planned
+under F44.
+
 ## Profiles and action keys
 
 Use **Save profile** in configuration and **Profile...** for source directories,
 ordered path mappings and action keys. Replacing an existing name and deleting
-a profile require confirmation. Launcher **Profiles** loads a configuration for
+a profile require confirmation. Launcher **Config → Profiles** loads a configuration for
 review; selection alone does not launch tools. Successful saved native sessions
 appear in recents. Source settings restore before execution; errors remain visible.
 

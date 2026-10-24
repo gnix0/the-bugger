@@ -55,7 +55,7 @@ The intended session workflow is:
 5. Debug normally with **function keys, mouse clicks, and visible toolbar actions**.
 6. Exit cleanly; return later to a saved session profile.
 
-Do not add Vim modes, Vim-motion-first interaction, editor emulation, floating windows, or a mandatory IDE/project generation step. Standard terminal text editing for input fields is fine; navigation must not require Vim knowledge.
+Do not add Vim modes, Vim-motion-first interaction, editor emulation, floating windows, or a mandatory IDE/project generation step. Always-on lowercase `h`/`j`/`k`/`l` are additional Left/Down/Up/Right aliases outside text fields, not a mode or a prerequisite for navigation. Text fields keep these letters literal; standard arrows, mouse and visible actions remain available.
 
 
 ## Functional requirements — v0.1.0
@@ -153,12 +153,22 @@ Do **not** allow these features to delay the release:
 
 ### Visual identity
 
-- **Monokai Pro standard** as the visual starting point; prioritize contrast and readability.
-- Suggested palette: background `#221f22`, panel `#2d2a2e`, raised surface `#353236`, border `#49454b`, foreground `#fcfcfa`, muted `#939293`, pink `#ff6188`, green `#a9dc76`, orange `#fc9867`, yellow `#ffd866`, purple `#ab9df2`, cyan `#78dce8`.
+- The original v0.1.0 visual reference uses **Monokai Pro**. F19 adds selectable
+  themes and makes **Catppuccin Macchiato** the development-build default when no
+  valid preference exists. Preserve the tiled interface and semantic roles.
+- Retained Monokai Pro palette: background `#221f22`, panel `#2d2a2e`, raised surface `#353236`, border `#49454b`, foreground `#fcfcfa`, muted `#939293`, pink `#ff6188`, green `#a9dc76`, orange `#fc9867`, yellow `#ffd866`, purple `#ab9df2`, cyan `#78dce8`.
 - Use colors semantically and consistently: current execution line, breakpoints, selected row, changed registers/variables, running/halted/error statuses, assembly mnemonics, addresses, and C/C++ source syntax.
 - Provide a **256-color fallback** if truecolor is unavailable, with legible monochrome/minimal-color behavior rather than invisible text. No need to vendor proprietary Monokai assets.
 - Compact borders, understated tabs, a persistent status bar, and visible toolbar/action hints. Keep it fast and restrained rather than decorative.
-- Monokai Pro remains the default. Selection among 6–8 tested community-favorite themes is targeted around v0.5.0 or earlier; user-defined themes near v1.0.0. Neither changes the v0.1.0 visual reference.
+- F19 provides seven built-in themes and 37 variants through centered
+  **Config → Themes** controls: a Theme row, a dependent Variant row, Back,
+  Preview and Save. Preview uses simulated data and never saves or reads a
+  target; Back cancels and restores the saved palette. Save persists the choice
+  and returns to Config. Profiles remains available through Config.
+- Appearance preferences are global, separate from connection profiles. Preserve
+  corrupt/unsupported files and detect stale writers. Colors must retain legible
+  fallback and non-color indicators. User-defined themes remain F44; this does
+  not change the historical v0.1.0 visual reference or add layout presets.
 
 ### Default workspace
 
@@ -181,6 +191,12 @@ Other characteristics already accepted:
 - When the terminal becomes too small, maintain a usable focused view with accessible tabs or a controlled compact mode. Never write outside the terminal, crash, or silently discard pane state.
 - The retired prototype used simulated example addresses, register contents, log entries and step behavior. The shipped debugger must clearly distinguish live data from demo/mock data.
 - A post-v0.1.0 workspace organization **decision gate** is planned for v0.2.1, before the v0.3.x view expansion. Evaluate pages and other navigation then; pages are an idea, not an approved layout or permission to redesign the current workspace now.
+
+- Source supports a temporary fullscreen rendering toggle while retaining the
+  application toolbar/session header and status/help footer. Restore must retain
+  the tiled split tree, pane proportions and tabs across terminal resizing.
+  Hidden panes cannot receive focus or divider hit tests. Existing visibility,
+  stale-state and read-authorization rules still apply. This is not a layout preset.
 
 ### View inventory
 
@@ -211,6 +227,13 @@ Locals/Watches, memory and CPU-register editing are targeted for **v0.2.0**. Ded
 - `q` closes/backs out of the current screen outside text fields; in the workspace it leaves the session for the launcher after confirmation. At the launcher it does not exit. `Ctrl+Q` quits from any screen, retaining active-session confirmation. Text fields accept a literal `q`; Escape backs out while editing. Footers distinguish these actions.
 - Standard desired shortcuts: `F5` continue, `F9` breakpoint, `F10` next/step over, `F11` step into, `Shift+F11` step out **where the terminal reports it**. Provide clickable alternatives and allow remapping if tmux/terminal intercepts or collapses special keys.
 - Startup-menu selection, text fields, dialogs, confirmation prompts and view changes must all be operable by clicks plus straightforward arrow/Tab/Enter/Escape navigation.
+- Workspace arrow navigation follows visible control geometry: Left/Right stay
+  in the visual row, Up/Down prefer aligned controls, and directions do not wrap.
+  Tab/Shift+Tab traverse controls only. Enter activates focused tabs/buttons.
+  Content/scrollbar clicks explicitly acquire pane navigation; Escape/Tab or a
+  control/outside-pane click returns to controls. Content focus must be visible
+  in color and monochrome, and hidden fullscreen controls are excluded.
+- Lowercase `h`/`j`/`k`/`l` act as Left/Down/Up/Right by default on navigation controls, including tabs, scrolling and divider resizing. Editable fields retain ordinary character entry; no enable switch, modal editing, counts or other Vim commands are introduced.
 - Terminal/multiplexer constraints are real: test mouse click, scroll, drag/resize and function keys in tmux with mouse enabled; avoid assuming a browser-level right click or perfect function-key support in every terminal. Use explicit `...` menus if context clicks aren't reliably conveyed.
 - Do not overwrite user bindings for tmux. If tmux requires `set -g mouse on`, document it as an opt-in prerequisite.
 - Source focus selects source F10/F11; Disassembly focus selects instruction F10/F11. Clicking toolbar/inspection panes preserves the last code-pane mode, visibly indicated. Both execution highlights use GDB PC/frame/source mappings; one source line can remain highlighted over several instructions. Browsing never moves PC. Optimized/inlined/tail-call behavior and unavailable values follow GDB; do not reconstruct missing semantics or fabricate precision.
@@ -221,7 +244,7 @@ Locals/Watches, memory and CPU-register editing are targeted for **v0.2.0**. Ded
 ### Launcher
 
 The launcher uses a larger card
-centered horizontally and vertically, Monokai Pro title/version and subtle rules,
+centered horizontally and vertically, theme-aware title/version and subtle rules,
 three full-row choices with terminal-friendly icons, descriptions and chevrons,
 and recent-session information below. The selected row has a clear surface and
 non-color indicator. Adapt spacing for small terminals; preserve all mouse and

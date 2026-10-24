@@ -8,14 +8,24 @@ implemented features or hardware support claims. See [architecture](architecture
 
 M00–M17 and the documented pane corrections are accepted. M17 physically validates
 NUCLEO-F446RE/ARM and ESP32-S3/Xtensa. M18 release packaging and automated checks
-are automated-verified and prepared for final review; F01–F47 remain planned. v0.1.0 release acceptance remains
-outstanding, with physical RISC-V acceptance explicitly deferred for this release.
-The integrated release-preparation revision is
+form the recorded first-release evidence. v0.1.0 was published on 2026-10-20,
+as reported by the maintainer; physical RISC-V acceptance remains explicitly
+deferred for that release. F19 built-in themes is accepted as early post-release
+work through the reported implementation commit. Always-on h/j/k/l navigation is
+an accepted, unreleased shared UI change, not a new gate or Vim mode.
+Source fullscreen is another accepted, unreleased shared UI addition: a temporary
+rendering override with retained tiles, not an F06 organization redesign.
+Spatial control navigation and deliberate content focus are accepted through
+implementation commit `53b1e5a`; they do not add a roadmap gate or change F06
+scope. These shared UI additions and F19 are included in v0.1.1 preparation.
+Release validation remains separate; v0.1.1 publication is not yet recorded.
+Other F gates remain planned.
+The integrated v0.1.0 release-preparation revision is
 `ad606dc6d7af7a3384401fb97e7c328ea1d8b62b`. Acceptance records, observed hashes,
 failures and test evidence are in [validation records](validation.md).
 M09's implementation hash is not recorded; acceptance alone does not supply it.
 
-| Milestone | Deliverable | State | Commit SHA |
+| Milestone | Deliverable | State | Commit / release reference |
 |---|---|---|---|
 | M00 | Repository foundation | accepted | `0f5d05b` |
 | M01 | Launcher and DEMO workspace | accepted | `60df655` |
@@ -38,8 +48,9 @@ M09's implementation hash is not recorded; acceptance alone does not supply it.
 | M15 | Existing remote server | accepted | `75435199e498cc087941cd8a75d7232b65d4c720` |
 | M16 | OpenOCD wizard/lifecycle/actions | accepted | `18e460ddd4cbc897409e2879c03ed0fc983212df` |
 | M17 | NUCLEO-F446RE and ESP32-S3 validation | accepted | `f568bd2482b2309e3534ebc8e197854ada37bf77` |
-| M18 | v0.1.0 release evidence/acceptance | automated-verified; final acceptance pending | `ad606dc6d7af7a3384401fb97e7c328ea1d8b62b` (preparation) |
-| F01–F47 | Independent versioned future gates below | planned | — |
+| M18 | v0.1.0 release evidence/acceptance | accepted; published | v0.1.0; `ad606dc6d7af7a3384401fb97e7c328ea1d8b62b` (preparation) |
+| F19 | Config, built-in themes and variants | accepted; v0.1.1 preparation | [Recorded checks](validation.md#f19--themes-and-configuration) |
+| F01–F18, F20–F47 | Independent versioned future gates below | planned | — |
 
 
 ## Development priorities
@@ -51,8 +62,8 @@ substantial native-specific additions require a correctness need, important defe
 or explicitly approved requirement. Native usability remains important without
 requiring equal development effort or feature parity.
 
-The target release remains v0.1.0. M14–M18 preserve full native acceptance, remote
-connections, OpenOCD lifecycle, physical-board acceptance and release evidence.
+The released v0.1.0 baseline retains M14–M18 native acceptance, remote connections,
+OpenOCD lifecycle, physical-board acceptance and release evidence.
 No post-release capability expands that baseline. Version targets express intended
 ordering, not dates or compatibility guarantees. F22 leads v0.4.x independently
 of text-channel readiness.
@@ -64,7 +75,7 @@ automated checks and manual conditions below. Technical prerequisites and releas
 family ordering are separate from completion status. The [requirements](requirements.md)
 define FR/NFR obligations; [testing](testing.md) supplies reproducible procedures
 and hardware evidence boundaries. The [maintainer process](maintaining.md) defines
-review, acceptance and the separate implementation/documentation commits.
+review, acceptance, combined routine commits and release-level revision records.
 
 Every implementation gate retains NFR-01/03/05/06/08/09/10/11/12: strict C builds,
 ownership/cleanup, responsiveness, mouse/keyboard usability, readable diagnostics,
@@ -157,7 +168,7 @@ remains available throughout development and after the flashing feature ships.
 | v0.2.0 → v0.2.1 | F03/F04/F05 deliberate variable/RAM/CPU-register editing, then F06 decide how to organize growing information. | Preserve editing and organization targets; F06 precedes new inspectors. Pages/presets are not approved here. |
 | v0.3.x | F11 register metadata/groups, F34 peripherals/SVD, F35 Cortex-M fault diagnosis; F07→F08 symbols/statics, F09 Quick Watch and F12 shareable setups as supporting gates. | Bring F34/F35 forward from v0.9.1; defer specialized STL F10. Supporting gates need not ship together. |
 | v0.4.0–v0.4.x | F22 deliberate firmware Load/Flash first; independent F13/F14/F15/F16 UART/RTT/semihosting/SWO text as backends become ready, then F18 shared log tools. | Flashing moves from v0.5.x ahead of text integrations; RTT/SWO readiness cannot delay it. Native PTY input F17 moves later. |
-| v0.5.x | F20/F21 memory search/export/comparison. F19 themes remains around v0.5.0 or earlier as a separate shared UI gate. | Memory tools move from v0.6.x; themes do not block firmware correctness. |
+| v0.5.x | F20/F21 memory search/export/comparison. F19 themes was delivered early after v0.1.0 and is accepted and included in v0.1.1 preparation. | Memory tools move from v0.6.x; themes do not block firmware correctness. |
 | v0.6.x | F31 version-specific RTOS inspection, F33 bootloader/application images, F23 task/thread stops where IDs are backend-usable; F24 supported event catchpoints and F26 logpoints. | RTOS moves from v0.8.x, images from v0.9.0; stopping tools serve these workflows. Images do not require RTOS. |
 | v0.7.x | F29 non-halting values, F41 supported counters, F32 plots from proven F13–F16/F29 sources. F27 software watchpoints and F28 execution overrides remain opt-in gates. | Bring monitoring/counters forward; no universal capability or hidden halt/resume. |
 | v0.8.x | F30 safe Auto and F10 backend STL presentation. | Shared convenience follows embedded diagnosis. |
@@ -234,7 +245,7 @@ the native/STM32/Xtensa/RISC-V regression gate.
 | F16 / v0.4.0 | SWO/ITM text acquisition/decoder after F06 and verified core/probe/server/clock setup; no full instruction-trace claim. | Corpus/fragmentation/overflow/clock errors. | Known text captured on verified hardware. |
 | F17 / v0.9.8+ review | Basic native PTY line input, pending renewed priority approval; no full terminal emulator, not a default pre-v1 commitment. | Echo/lines/EOF/exit/input focus. | Answer fixture prompts without sending input to GDB. |
 | F18 / v0.4.x | Shared log find/filter/continuous recording after validated text sources; independent of native input F17. | Retention/filter/file failures/flood/lifecycle. | Find/filter/record responsively. |
-| F19 / v0.5.0 or earlier | Choose 6–8 tested community-favorite themes; Monokai Pro default. | Role/color fallbacks/contrast/non-color signals/persistence. | Inspect every theme in terminal/tmux and restore selection. |
+| F19 / v0.1.1 preparation; accepted (original target v0.5.0 or earlier) | Seven built-in themes / 37 variants; Catppuccin Macchiato default; centered Config → Themes with dependent variants, Back/Preview/Save and retained Profiles. | Role/color fallbacks, contrast, non-color signals, atomic preferences, all-variant PTY preview and profile regression. | Inspect each variant directly/in tmux and restore selection; see [procedures](testing.md#themes-and-configuration) and [evidence](validation.md#f19--themes-and-configuration). |
 | F20 / v0.5.x | Bounded memory search using M15 region policy; explicit ranges, no automatic unknown/MMIO scans. | Patterns/limits/gaps/cancel/latency. | Find fixture bytes and cancel large search responsively. |
 | F21 / v0.5.x | Memory export/snapshot comparison after M10/M15 region policy; exact deliberate ranges, no implied full address-space capture. | File failure/identity/gaps/diffs/storage bounds. | Save range and correctly identify changed bytes. |
 | F22 / v0.4.x | Deliberate firmware Load/Flash after M16/M17 lifecycle and capability evidence; confirmation/progress/verification/recovery/reset policy, no auto programming on attach. | Download events/interruption/failures/sequencing. | Program/verify real fixture, preserving independent attach workflow. |
@@ -264,7 +275,8 @@ the native/STM32/Xtensa/RISC-V regression gate.
 | F46 / v0.9.7–v0.9.9 | Multiple inferiors after context isolation and a justified embedded workflow; native-only expansion needs explicit renewed approval, not a pre-v1 parity goal. | Create/exit/address spaces/focus/ownership. | Multiple supported inferiors without mixed data. |
 | F47 / v1.0.0 | Stability/compatibility/documentation acceptance for supported embedded workflows and maintained native debugging; no last-minute feature family or parity quota. | Full regression/support matrix/critical-defect audit. | Supported workflows and release quality satisfy release acceptance. |
 
-The theme set, future workspace design and acquisition backends receive scoped
-design review at their gates; unresolved choices are not implementation requirements. Core dumps/reverse debugging, a full native
+The built-in F19 theme set is delivered; custom themes, future workspace design
+and acquisition backends receive scoped design review at their gates; unresolved
+choices are not implementation requirements. Core dumps/reverse debugging, a full native
 terminal emulator, IDE/toolchain integration and marketplaces are not added by
 this roadmap. Additional architecture/platform claims need actual validation.

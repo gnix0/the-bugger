@@ -73,6 +73,13 @@ FreeRTOS task delay between cycles. It does not configure LEDs, Wi-Fi, external
 pins or debugging eFuses. SDK startup still initializes normal platform resources.
 An application task is not a CPU core or necessarily a GDB thread.
 
+The authored ESP component explicitly enables `-Wall -Wextra -Werror` and restores
+errors for the SDK's unused-function, unused-variable, unused-but-set-variable,
+deprecated-declarations and extra-warning exceptions. These private options apply
+to `main.c` and the shared `workload.c`; third-party SDK components retain their
+own warning policy. Native and STM32 builds already enforce `-Wall -Werror`
+through the root Makefile, including release and sanitizer configurations.
+
 Activate the installed ESP-IDF environment and build the selected target
 from the repository root. The build tree and sdkconfig file stay in `build/`:
 

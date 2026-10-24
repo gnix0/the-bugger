@@ -9,9 +9,15 @@ instructions are required to interpret the results.
 
 ## Current evidence boundary
 
-M00–M17 and the listed corrections are accepted. M18 artifacts and final automated
-checks are prepared; manual/release acceptance remains pending.
-v0.1.0 is not accepted. M14 records passing GCC/Clang default/native/tmux suites,
+M00–M18 and the listed corrections form the first-release baseline. The maintainer
+reported v0.1.0 published on 2026-10-20. Historical preparation entries below retain
+their original pending states and test boundaries; publication does not supply
+missing individual manual outcomes or new hardware evidence. F19 is accepted
+through the maintainer-reported implementation commit. F19 and the accepted
+shared navigation/fullscreen work are included in v0.1.1 preparation; publication
+and fresh release-matrix validation are not implied by implementation acceptance.
+
+M14 records passing GCC/Clang default/native/tmux suites,
 slow watchpoint recovery, full default/native ASan/UBSan with leak detection and
 full-project static analysis. These results do not establish physical embedded
 compatibility or measured terminal input-to-redraw latency. M15 now records
@@ -32,7 +38,7 @@ restructure these records.
 
 ## Implementation references and acceptance
 
-| Milestone | Deliverable | State | Commit SHA |
+| Milestone | Deliverable | State | Commit / release reference |
 |---|---|---|---|
 | M00 | Repository foundation | accepted | `0f5d05b` |
 | M01 | Launcher and DEMO workspace | accepted | `60df655` |
@@ -55,7 +61,8 @@ restructure these records.
 | M15 | Existing remote server | accepted | `75435199e498cc087941cd8a75d7232b65d4c720` |
 | M16 | OpenOCD wizard/lifecycle/actions | accepted | `18e460ddd4cbc897409e2879c03ed0fc983212df` |
 | M17 | NUCLEO-F446RE and ESP32-S3 validation | accepted | `f568bd2482b2309e3534ebc8e197854ada37bf77` |
-| M18 | v0.1.0 release evidence/acceptance | awaiting-user | — |
+| M18 | v0.1.0 release evidence/acceptance | accepted; published | v0.1.0; preparation revision recorded below |
+| F19 | Themes, variants and Config | accepted; unreleased | [Focused checks](#f19--themes-and-configuration); implementation committed per maintainer report |
 
 
 ### Full recorded commit identifiers
@@ -842,3 +849,313 @@ tag/publication remain separate from successful packaging. The agent refreshed
 the archives after the tracked release notes and verified their SHA-256 checksums.
 The source archive contains those final tracked notes. Later content changes
 require another `make release` before publication.
+
+
+## F19 — Themes and configuration
+
+Accepted through the maintainer's reported feature commit. This post-v0.1.0 work
+is unreleased. Under the updated [revision-recording policy](maintaining.md#commit-organization-and-traceability),
+its exact implementation reference is recorded with the next release evidence;
+no placeholder hash is assigned here. Acceptance does not imply separately
+reported manual visual checks.
+
+Scope: centered Config → Profiles/Themes, seven built-in families and 37 variants,
+Catppuccin Macchiato default, dependent variant controls, simulated temporary
+preview, Back cancellation and private atomic global preferences. Monokai Pro
+remains selectable. Upstream revisions/licenses are retained in
+`THIRD_PARTY_NOTICES`, also included in binary packaging. Custom themes and
+workspace redesign remain outside F19.
+
+Agent-run implementation checks:
+
+| Check | Recorded result |
+|---|---|
+| Strict `make -j2 all build/test-preferences build/test-render build/test-themes-tui` builds | PASS |
+| `build/test-preferences` | PASS: default, persistence, private atomic writes, stale writers, invalid schema and file preservation |
+| `build/test-render` | PASS: 37 palettes, RGB contrast, direct/256/8-color/monochrome, execution highlight and scrollbar |
+| `build/test-themes-tui "$PWD/build/the-bugger"` | PASS: centered menus, all variants, dependent selection, mouse/keyboard, Back/Save/restart, no preview persistence and 48×18 monochrome |
+| `build/test-profiles-tui "$PWD/build/the-bugger" "$PWD/build/debug-fixture"` | PASS: existing profile-management regression through Config → Profiles; non-native invocation |
+| Focused clang-tidy with repository analyzer/bugprone checks and warnings as errors | PASS after correction; `theme.c`, `preferences.c` and `app.c` |
+| `_FORTIFY_SOURCE=3`, strict warnings and `-fsyntax-only` for changed production/test C files | PASS |
+| `bash -n tools/package-release.sh`; `git diff --check` | PASS |
+
+Checks exposed a real 256-color collision between a Gruvbox light variant's border
+and selected surface; the renderer now falls back to contrasting text color.
+The analyzer also flagged a nullable catalog lookup; internal access now uses
+the module's validated selected index. Two PTY failures were harness assumptions:
+vt100 has no mouse support, and resizing resets focus to the first control. The
+harness uses actual keyboard navigation and the existing resize-focus behavior;
+application assertions and fallback checks remain intact.
+
+Local artifacts: `build/the-bugger`, `build/test-preferences`, `build/test-render`,
+`build/test-themes-tui`; temporary logs included `/tmp/tb-theme-final-build.log`,
+`/tmp/tb-theme-analysis-final.log` and `/tmp/tb-theme-app-analysis-final.log`.
+These are disposable local paths, not durable CI artifacts.
+
+Full default/native/tmux regression suites, sanitizer/compiler matrices,
+GitHub-hosted CI, physical hardware and manual all-variant terminal/tmux visual
+acceptance were not run or separately reported for F19. Prior release evidence
+is not a substitute. The [manual procedure](testing.md#themes-and-configuration)
+remains reproducible without treating unreported observations as PASS.
+
+## Always-on h/j/k/l navigation
+
+Accepted through the subsequent implementation commit; unreleased. This shared
+UI addition normalizes the
+four lowercase letters to Left/Down/Up/Right outside editable fields, retaining
+the actual arrow dispatch for controls, scrolling, tab changes and resizing.
+Text fields consume literal characters first, including file-filter page reset.
+No modes, extra Vim commands, target operations or configuration switch are added.
+
+Agent-run checks:
+
+- Strict `make -j2 all build/test-navigation`: PASS.
+- `build/test-navigation "$PWD/build/the-bugger"`: PASS. Paired real demo PTYs
+  compare text and inverse selection for launcher, toggles, literal fields,
+  themes/variants, workspace tabs/bodies, divider resizing, confirmations and
+  compact rendering. A first harness comparison sampled incomplete redraws;
+  it now waits through Escape recognition and drains output for a bounded
+  interval before comparing. Application assertions were retained.
+- `_FORTIFY_SOURCE=3`, strict warnings and `-fsyntax-only` on `src/tui/app.c`
+  and `tests/integration/test_navigation.c`: PASS.
+- Documentation local-link/code-fence checks and `git diff --check`: PASS.
+
+Artifacts: `build/test-navigation`, `/tmp/tb-navigation-build.log` and
+`/tmp/tb-navigation-test-build.log`. Full native/tmux, sanitizer/static-analysis
+matrices, physical hardware and manual acceptance were not run for this change.
+The [manual steps](testing.md#letter-key-navigation) remain to be reviewed.
+
+
+## ESP fixture warning policy
+
+Accepted through the subsequent implementation commit; unreleased. The root
+Makefile already applies `-Wall`
+and `-Werror` to frontend/tests, native C/C++ fixtures, STM32 firmware, release
+and sanitizer builds. Only the authored ESP-IDF component needed an explicit
+policy: private `-Wall -Wextra -Werror` plus error-category overrides for inherited
+unused-function, unused-variable, unused-but-set-variable,
+deprecated-declarations and extra-warning exceptions. SDK components are unchanged.
+
+Agent-run focused verification:
+
+- Isolated CMake configure including the actual component file: PASS. Target
+  options contain the strict flags; an unrelated target receives none. This
+  checks component scoping, not a full ESP-IDF reconfiguration.
+- Actual installed Xtensa/ESP32-S3 and RISC-V/ESP32-C6 compilers, using each cached
+  ESP-IDF compile command plus the component options: PASS, both `main.c` and
+  shared `workload.c` compiled to temporary objects with no emitted warnings.
+- Deliberate unused-function, unused-variable, unused-but-set-variable and
+  deprecation probes: each compiler accepted the inherited downgraded warning
+  but rejected it with the component policy. An enabled extra-warning probe also
+  fails under the strict policy; that particular diagnostic was already an error
+  under the inherited policy. An initial probe incorrectly assumed otherwise;
+  the expectation was corrected without weakening the component policy.
+- Documentation local-link/code-fence checks and `git diff --check`: PASS.
+
+Temporary artifacts are under `/tmp/tb-warning-policy-probe/`; configure and
+result logs are `/tmp/tb-warning-policy-cmake.log` and
+`/tmp/tb-warning-policy-results.log`. These are disposable local checks, not new
+tracked test infrastructure. No full SDK rebuild, linking, programming, hardware
+connection or application regression suite was run. C6 cross-compilation is not
+physical RISC-V acceptance.
+
+## Source fullscreen rendering
+
+Accepted through the subsequent implementation commit; unreleased. Source Actions and the Source pane-actions
+menu can temporarily expand Source into the workspace area, retaining the global
+header/footer. Restore, workspace Escape/q and keyboard activation return to the
+existing split tree and tabs. Hidden pane selectors, tabs and divider hit regions
+are inactive. This does not implement saved layouts or expand F06.
+
+Agent-run focused checks:
+
+- Strict `make -j2 all build/test-fullscreen build/code-fixture` build and final
+  rebuild: PASS, with the existing `-Wall -Wextra -Wpedantic -Werror` policy.
+- `build/test-fullscreen "$PWD/build/the-bugger"`: PASS, including Source-only
+  rendering, toolbar/footer retention, resized/nested split restoration,
+  keyboard/mouse/Escape restoration, hidden-divider input and compact resize.
+- `build/test-fullscreen "$PWD/build/the-bugger" "$PWD/build/code-fixture"`:
+  PASS with installed GDB 18.1 outside the sandbox. Live Source Actions entry
+  preserves the stopped source line, F10 advances source, restoration retains
+  that stopped context and confirmed session close cleans up the owned fixture.
+- Fortified strict `-fsyntax-only` checks on `app.c` and `test_fullscreen.c`: PASS.
+- Focused clang-tidy on `app.c`, with repository checks/warnings as errors: PASS.
+  The analyzer initially flagged padding from the additional state field; placing
+  it next to render rectangles in an existing alignment gap resolved it without
+  suppressing warnings or rearranging unrelated state.
+- Documentation local links/anchors/fences and `git diff --check`: PASS.
+
+The initial native sandbox run could not start the inferior/pidfd path and failed;
+it is not a passed native run. The permitted unsandboxed focused rerun passed.
+An initial demo harness counted the footer's ellipsis as a pane menu; counting
+only the workspace area corrected the oracle without weakening the required
+seven-pane restoration or zero-menu fullscreen assertions.
+
+Local artifacts: `/tmp/tb-fullscreen-final-build.log`,
+`/tmp/tb-fullscreen-demo.log`, `/tmp/tb-fullscreen-native.log`,
+`/tmp/tb-fullscreen-analysis-final.log` and `build/test-fullscreen`.
+Full default/native/tmux suites, sanitizer/compiler matrices, physical hardware
+and manual visual acceptance were not run for this change. Follow the
+[manual fullscreen procedure](testing.md#source-fullscreen); focused native
+success does not establish embedded hardware compatibility.
+
+
+## Spatial control navigation
+
+Accepted through implementation commit `53b1e5a`; included in v0.1.1 preparation.
+Arrow/hjkl navigation uses rendered rectangles
+and stable control identities. Horizontal movement stays within a visual row;
+vertical movement prefers alignment, and directions do not wrap. Tab/Shift+Tab
+exclude content, scrollbars, dividers and hidden panes. Tabs activate with Enter.
+Body/scrollbar clicks explicitly acquire content navigation; Escape/Tab or an
+outside-pane/control click returns to controls. Fullscreen restoration and
+per-view navigation retain their existing behavior. No target-read authorization,
+layout structure, protocol or dependency changes are included.
+
+Agent-run focused checks:
+
+- Strict build with the repository warning-as-error policy: PASS.
+- Paired `build/test-navigation` PTYs: PASS for toolbar directions/edges,
+  control-only traversal, deliberate content focus, Escape/outside/control-click
+  exit, fullscreen Quit/Restore reachability, compact resize identity and literal
+  text entry; hjkl and arrow screens/selection agree.
+- `build/test-workspace`, `build/test-tui`, `build/test-fullscreen`: PASS,
+  retaining tab promotion, real scrolling, split/divider/compact rendering,
+  terminal restoration and fullscreen behavior.
+- Focused live `build/test-fullscreen` with `build/code-fixture`, and
+  `build/test-memory-tui` with `build/memory-fixture`: PASS outside the sandbox,
+  using owned GDB fixtures. Fullscreen source stepping and Memory inline editing,
+  explicit scrolling, independent views, errors and cleanup remain functional.
+- Focused clang-tidy on app/navigation test and fortified strict syntax checks
+  on all five changed C files: PASS.
+- Full `make analyze`: PASS with the repository analyzer/bugprone checks and
+  warnings as errors. Reported suppressed system-header/existing NOLINT counts
+  are not new application warnings.
+
+The first broad run stopped in the Themes PTY test: it assumed resize reset
+focus to Theme. Preserving Variant correctly made the old three-Tab sequence
+activate Save. The test now asserts retained Variant focus and uses two Tabs to
+reach Preview; `make test-themes` passes. Existing tab-switching/body tests were
+updated to the explicit Enter/content-click interaction while retaining their
+view, scroll and safety assertions. The new paired-click generator initially
+sent press/release together; separating them with settled frames, matching the
+existing terminal helper, fixed its input simulation. Early directional checks
+also exposed a diagonal horizontal focus jump; restricting horizontal movement
+to the visual row resolved that application behavior.
+
+Final agent-run regression, explicitly authorized for this task:
+
+```sh
+make test test-native test-tmux test-m15-native test-m16-server test-m16-tui test-m16-openocd
+make analyze
+```
+
+Both commands completed with exit status 0 on the local Linux host. The runtime
+command ran outside the sandbox for owned GDB fixtures, localhost servers and
+isolated tmux sockets. It covers the default/model/PTY suites, native acceptance
+and live inspectors, real tmux workspace, actual localhost GDB-server integration,
+authored OpenOCD lifecycle/TUI exchanges and actual OpenOCD script loading stopped
+before hardware initialization. Existing safety and cleanup assertions passed.
+Fortified syntax, documentation relative file links/code fences and
+`git diff --check` also passed. No commit, tag, push or publication was performed.
+
+Final logs: `/tmp/spatial-regression-final.log`,
+`/tmp/spatial-analyze-all.log`, `/tmp/spatial-analysis-final2.log`,
+`/tmp/spatial-fortify.log` and `/tmp/spatial-themes-fortify.log`.
+The initial broad-run failure remains in `/tmp/spatial-regression.log`.
+These logs are disposable local artifacts; this section preserves the results.
+Hardware and sanitizer/compiler matrices were not run for this task and remain
+separate release checks. These host tests do not establish new board compatibility.
+Manual review follows the
+[spatial navigation procedure](testing.md#spatial-control-and-content-navigation).
+
+
+## v0.1.1 release preparation
+
+Status: **awaiting-user**. The checkout targets `0.1.1`; the changelog entry is
+prepared for 2026-10-24. No v0.1.1 tag, published release or final release acceptance
+is recorded. The earlier v0.1.0 publication and physical-validation boundaries
+remain historical evidence rather than fresh v0.1.1 hardware results.
+
+Included implementation references, observed in local history:
+
+| Change | Implementation reference |
+|---|---|
+| F19 themes and variants | `9079203` |
+| Theme documentation and routine commit organization | `e21cc36` |
+| Always-on h/j/k/l | `079d3f1` |
+| Strict authored ESP fixture warnings | `0dcae74` |
+| Source fullscreen | `f3eb663` |
+| Spatial controls and deliberate content focus | `53b1e5a` |
+
+Release preparation changes only the version, version-dependent tests and
+release documentation. CLI and launcher tests now derive their expected version
+and label width from the shared version header. The stale version-header link
+now points to this register. Previously recorded broad runtime/static-analysis
+results for `53b1e5a` remain in the spatial-navigation section above; they are
+not relabeled as newly executed release checks.
+
+Agent-run preparation checks:
+
+- `make -j2 all build/test-cli build/test-tui`, CLI and launcher/terminal tests:
+  PASS with the existing strict C17 warning-as-error policy; version is `0.1.1`.
+- `make release`: PASS. The hardened Linux x86-64 executable and matching source
+  archives are prepared under `build/dist/`; nothing is published automatically.
+- SHA-256 verification, extracted binary `--version`/`--help`, GPLv3 license,
+  adapted-palette notices and matching embedded source-archive hash: PASS.
+- Extracted executable CLI, launcher/terminal, navigation and fullscreen PTY
+  checks from outside the repository: PASS. A clean `make -j2` from the extracted
+  source archive also passed and reported the same version.
+- ELF x86-64, PIE, non-executable GNU stack, GNU RELRO and BIND_NOW checks: PASS.
+  Host: Linux 7.2.9-arch1-1 x86_64, GCC 16.2.1, glibc 2.44. The executable records
+  GLIBC symbol requirements through GLIBC_2.38; dependency compatibility on other
+  distributions remains unverified. `BUILD-INFO.txt` retains dependency details.
+- Missing-executable, invalid `SOURCE_DATE_EPOCH` and executable/source-version
+  mismatch packaging cases: rejected as expected.
+- Fortified strict syntax checks on both changed test files: PASS.
+- Documentation relative file links/code fences and `git diff --check`: PASS.
+  The final source archive matches all 153 tracked files in the checkout.
+
+An additional analyzer invocation on the CLI/TUI test sources flagged the CLI
+harness's intentional `execv` of its caller-selected test binary as a taint sink.
+The same check reproduced on the unchanged `HEAD` CLI harness. This optional
+harness analysis is not a passed check; no suppression or harness behavior change
+was introduced. The canonical `make analyze` scope is production sources.
+
+The first hosted v0.1.1 default-suite run failed at
+`tests/integration/test_registers.c:83`: the hidden-register baseline check saw
+`changed` after a fake stop. The test had treated the stop command's `^done`
+reply as completion, although the fake peer emits `*stopped` separately. It could
+make Registers visible before the stop event reached the model. The test now
+waits for the controller's new stopped generation before revealing Registers;
+the fake peer can hold that event after acknowledging the command to exercise
+the ordering explicitly. The register model and its change-marker assertion are
+unchanged. Agent-run `make -s test-m09-model`, a separate fortified
+`make -s BUILD_DIR=build/ci-register CPPFLAGS=-D_FORTIFY_SOURCE=3 test-m09-model`,
+and `make -s test-controller` passed. The failed hosted run remains a failure;
+broader post-fix CI evidence is pending.
+
+Artifacts to attach after final release acceptance:
+
+- `build/dist/the-bugger-v0.1.1-linux-x86_64.tar.gz`
+- `build/dist/the-bugger-v0.1.1-source.tar.gz`
+- `build/dist/SHA256SUMS`
+
+The source hash is embedded in the binary archive's `BUILD-INFO.txt`; the external
+checksum asset records both final archive hashes. Rebuild after any subsequent
+source/documentation edits. Private, ignored `AGENTS.md` is excluded from the
+source archive. Older v0.1.0 archives may coexist in the output directory and are
+not v0.1.1 assets.
+
+Current local artifacts include `/tmp/v011-build.log`, `/tmp/v011-package.log`,
+`/tmp/v011-artifacts.log`, `/tmp/v011-packaged-ui.log`,
+`/tmp/v011-package-negative.log`, `/tmp/v011-fortify.log`,
+`/tmp/v011-focused-analysis.log` and `/tmp/v011-analysis-baseline.log`.
+The extracted build/check directories are disposable local artifacts.
+
+The fresh host compiler/sanitizer/full-regression matrix is pending explicit run
+authorization/results. Fresh physical STM32/ARM, ESP32/Xtensa and ESP32/RISC-V
+release validation, manual review and final release acceptance remain pending.
+The v0.1.0 RISC-V deferral does not authorize a v0.1.1 waiver. Follow the
+[every-release matrix](testing.md#every-release-regression-matrix); do not infer
+hardware PASS from the host or packaging checks above.

@@ -1,5 +1,6 @@
 #include "../support/terminal.h"
 #include "../support/check.h"
+#include "the_bugger/version.h"
 
 #include <signal.h>
 #include <string.h>
@@ -24,9 +25,9 @@ static void launcher_centered(TestTerminal *term)
     test_terminal_expect(term, "Start a debugging session");
     int x, y, vx, vy;
     CHECK(test_terminal_find(term, "THE BUGGER", &x, &y));
-    CHECK(test_terminal_find(term, "v0.1.0", &vx, &vy));
+    CHECK(test_terminal_find(term, "v" THE_BUGGER_VERSION, &vx, &vy));
     CHECK(y == vy && !test_terminal_find(term, "-beta", NULL, NULL));
-    int left = x - 2, right = vx + 6 + 2;
+    int left = x - 2, right = vx + (int)strlen("v" THE_BUGGER_VERSION) + 2;
     CHECK(abs(left + right - term->cols) <= 1);
     CHECK(abs(2 * (y - 1) + 23 - (term->rows - 2)) <= 1);
 }
@@ -100,7 +101,7 @@ int main(int argc, char *argv[])
     for (int i = 0; i < 10; ++i) { test_terminal_send(&term, "\t"); }
     test_terminal_send(&term, "\r");
     test_terminal_expect(&term, "NOT IMPLEMENTED");
-    test_terminal_send(&term, "\033OD");
+    test_terminal_send(&term, "\033OC\r");
     test_terminal_expect(&term, "main.c | Cortex-M4F sample");
     /* Focus follows the promoted Source tab; skip Symbols to reach its menu. */
     test_terminal_send(&term, "\t\t\r");

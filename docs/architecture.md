@@ -18,7 +18,7 @@ debugger-domain state and must be replaced by live data in real sessions.
 
 The build and tests are C17 with strict warnings; Make is the only build driver.
 C tests use POSIX pipes, processes and PTYs.  Application libraries are ncursesw and libelf (ELF metadata
-only; GDB performs instruction decoding) and json-c (versioned profiles).
+only; GDB performs instruction decoding) and json-c (versioned profiles and appearance preferences).
 The MI parser/controller and shared session module serve native launch/attach
 and existing remote GDB-server sessions through the TUI. Console/output and Continue/Pause are
 live. Source/Disassembly and stepping use the code model; Call Stack and Threads
@@ -33,9 +33,28 @@ Profiles and key mappings retain a review step before connection.
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
 descriptors together, redrawing after input or session revisions. Idle waits are
 100 ms without a session, bounded to 25 ms with one. Raw input preserves function keys and Ctrl+Q;
-Ctrl+C and SIGINT/SIGTERM/SIGHUP leave through normal cleanup. Two module-owned
-globals are documented: a signal-safe exit flag and the screen's color-enabled
-flag. Mouse and keyboard share action dispatch and rendered hit regions.
+Ctrl+C and SIGINT/SIGTERM/SIGHUP leave through normal cleanup. Module-owned globals are limited to a signal-safe exit flag and the screen's
+color-enabled flag and selected palette index. Mouse and keyboard share action dispatch and rendered hit regions. Lowercase
+h/j/k/l first receive ordinary text-field handling; outside editable fields they
+are normalized to Left/Down/Up/Right before existing navigation dispatch. Divider
+resize mode uses those aliases directly. File-filter edits still reset paging.
+No Vim editing mode or new target operations are introduced.
+
+Controls retain `(kind, value, pane)` identities across redraws; rectangles are
+rebuilt from the existing layout. Directional navigation scans at most 1,024
+rendered controls, excludes content/scrollbars/dividers, and prefers aligned
+candidates before forward distance and perpendicular offset. Left/Right stay
+within a visual row. Directions do not wrap; Tab/Shift+Tab retain sequential
+control traversal. Scrollable menus/forms reveal adjacent items before painting
+focus. No second layout tree or cached focus graph is maintained.
+
+Content focus is separate from the last control identity. Only a deliberate body
+or scrollbar click acquires it; arrows then use that view's existing navigation.
+Escape/Tab or a click outside the pane returns to controls. A header `*` and
+CONTENT FOCUS help text identify it without relying on color. Resizing and
+fullscreen redraws preserve identity when visible, otherwise fall back to a
+visible control. Opening a page resets content focus; value-read actions do not
+implicitly acquire it.
 
 Theme roles separate workspace, panel, raised header, notice and footer
 surfaces. Selected-row variants retain semantic foreground colors. Direct-color
@@ -48,9 +67,9 @@ The workspace preserves per-view scroll/selection and tabs through compact
 rendering, with interactive split-tree geometry, dragging and closing as
 described below.
 
-Tab activation promotes the active tab to the left. On tab activation, focus moves
-to that pane's first tab control, which will represent the promoted tab on the
-next paint. Mouse input suppresses the additional inverse keyboard-focus marker;
+Tab activation promotes the active tab to the left. Focus follows its identity
+as rendering promotes it to the first position. Mouse input suppresses the
+additional inverse keyboard-focus marker;
 keyboard input restores it. This prevents the old numeric control index from
 highlighting/activating a different tab after reordering. The active-tab theme
 and monochrome selection indicator remain intact.
@@ -62,6 +81,58 @@ No image assets, new dependency, animation or background work is needed. It keep
 native-vs-preview availability, profile review and q/Ctrl+Q policy
 explicit; session configuration and the debugging workspace are unchanged.
 
+
+## Source fullscreen rendering
+
+`App.fullscreen_source` is a temporary pane identifier, or -1 for ordinary tiled
+rendering. The Source Actions and Source pane-actions entries share one toggle;
+Restore and workspace Escape/q leave it. Entry selects Source stepping without
+moving execution. Leaving for the launcher clears the override.
+
+While fullscreen, `draw_workspace` keeps the normal application chrome but gives
+only that Source pane the available workspace rectangle. The layout module is
+not rearranged: its split tree, ratios and pane membership stay intact. Hidden
+render rectangles are zero-sized, so the existing code/context/register/variable/
+memory visibility APIs hide their inspectors. They retain their normal pending
+reply and stale-generation handling. Restoring recomputes normal rectangles for
+the current terminal size from the original tree.
+
+The fullscreen header exposes Restore instead of tab switches and the pane menu.
+Divider rendering/hit tests and pane-switch shortcuts are disabled while the
+override is active; retained geometry cannot create invisible click targets.
+Source navigation, scrollbars and normal execution controls use their existing
+paths. No saved layout, new session backend or target-access policy is introduced.
+
+## Theme selection and preferences
+
+`src/tui/theme.{h,c}` defines the built-in palette catalog, stable family/variant
+identifiers and semantic curses pairs. Catppuccin Macchiato is the default;
+All seven families, including Monokai Pro, remain selectable. The
+37 palettes use shared workspace/panel/raised/selection surfaces and semantic
+foregrounds. Muted/accent colors are adjusted toward text where required for
+contrast. RGB roles map to direct color, nearest xterm 256-color entries, or
+existing 8-color/monochrome fallbacks. If quantization merges a foreground with
+its background, the text color supplies a contrasting fallback.
+
+`app.c` owns Config, Themes and theme-preview page state. A draft palette is
+separate from the saved choice. Changing a family chooses a valid variant;
+preview reinitializes curses pairs and requests a full repaint. Preview renders
+an independent `TbDemo`/`TbLayout`, never the live session or inspection models.
+Back restores the saved palette; Save returns to Config only after persistence
+succeeds. Theme operations do not modify workspace geometry or session profiles.
+
+`src/tui/preferences.{h,c}` owns global version-1 `preferences.json`, independently
+of `profiles.json`. It stores theme/variant identifiers, not runtime color data
+or debugger state. Reads require an owned regular non-symlink file of at most
+1 KiB and validate the schema and known family/variant pair. Invalid files are
+preserved, Macchiato is used and writes are blocked until correction/restart.
+Saves use an advisory lock, stale-file identity checks, a private 0600 temporary
+file, fsync and atomic rename. A post-rename directory-sync error is reported as
+uncertain crash durability, not as a rolled-back save.
+
+The catalog adapts the referenced upstream palettes; it does not embed Neovim or
+execute Lua. [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES) retains exact upstream
+revisions and MIT notices and accompanies the binary distribution.
 
 ## Data flow and invariants
 
@@ -399,9 +470,10 @@ child is reaped by the controller; the kernel/adopting parent reaps an inferior
 orphaned by a debugger crash.
 
 `--demo` is an explicit visual-reference path. Bare invocation uses the native
-launcher; unimplemented server flows remain labelled previews. Live tabs/layout
-reuse presentation state only, not sample debugger values. The workspace has no presets, floating windows or editor modes; pages and
-additional themes remain separate planned gates.
+launcher with implemented remote/OpenOCD choices. Live tabs/layout reuse
+presentation state only, not sample debugger values. The workspace has no presets,
+floating windows or editor modes. Workspace organization remains F06; custom
+themes remain F44. F19's built-in themes affect presentation only.
 
 ## Selected context, Call Stack and Threads
 

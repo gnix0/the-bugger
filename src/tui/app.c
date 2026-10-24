@@ -3,6 +3,7 @@
 #include "demo.h"
 #include "render.h"
 #include "theme.h"
+#include "preferences.h"
 #include "session.h"
 #include "profiles.h"
 
@@ -22,12 +23,12 @@
 enum { MAX_CONTROLS = 1024, FIELD_SIZE = 256, FORM_FIELDS = 9 };
 typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
                COMMAND_INPUT, SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT, DATA_WATCH_INPUT,
-               PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM, SCRIPT_LIST, SCRIPT_FILTER } Page;
+               CONFIG_MENU, THEMES, THEME_PREVIEW, PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM, SCRIPT_LIST, SCRIPT_FILTER } Page;
 typedef enum { CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_ADDRESS, CODE_STOPPED,
                CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_DIRECTORY_ADD, CODE_RULE_FROM,
-               CODE_RULE_TO, CODE_SETTINGS_CLEAR, CODE_RAW, CODE_RUN_TO } CodeAction;
+               CODE_RULE_TO, CODE_SETTINGS_CLEAR, CODE_RAW, CODE_RUN_TO, CODE_FULLSCREEN } CodeAction;
 typedef enum {
-    CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
+    CONFIG_OPEN, THEME_ACTION, CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
     TOOL, TAB, MENU, BODY, SHOW_VIEW, FOCUS_PANE, CANCEL_RESET, CONFIRM_RESET,
     MENU_SECTION, PANE_ACTION, DIVIDER, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR,
     COMMAND_OPEN, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_ARGUMENTS, CONTEXT_PAGE,
@@ -65,9 +66,14 @@ typedef struct {
     int drag, resize_divider;
     int scroll_drag_pane, scroll_drag_grab;
     bool scroll_drag_horizontal;
+    Control last_control;
     Control controls[MAX_CONTROLS];
     TbRect panes[TB_MAX_PANES];
+    int content_pane; /* -1 navigates controls; a pane ID navigates its content. */
+    int fullscreen_source; /* -1 keeps the ordinary tiled rendering. */
     const char *colors;
+    TbPreferences preferences;
+    size_t theme_draft;
     char status[160];
     TbSession *debugger;
     bool demo_mode, live, leave_session, exit_after_close;
@@ -86,7 +92,6 @@ typedef struct {
     int execution_pane, break_pane, break_action, memory_pane, variable_pane;
     bool break_hardware;
     bool memory_length_input;
-    bool variable_focus;
     char memory_input_error[192];
     wchar_t memory_input[TB_MAX_PANES][FIELD_SIZE];
     size_t memory_cursor[TB_MAX_PANES];
@@ -141,6 +146,9 @@ static void status(App *app, const char *message)
 static void page(App *app, Page next)
 {
     app->page = next;
+    app->count = 0;
+    app->content_pane = -1;
+    if (next == LAUNCHER) { app->fullscreen_source = -1; }
     app->focus = 0;
     app->cursor = 0;
     app->form_scroll = 0;
@@ -266,7 +274,7 @@ static void draw_header(const App *app, const char *subtitle)
             "Native Linux | launch or attach through GDB");
     tb_text(LINES - 2, 1, COLS - 2, TB_YELLOW, 0, app->status);
     tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0,
-            "Tab / arrows / Enter | q / Esc back (outside text fields) | Ctrl+Q quit app");
+            "Tab / arrows / hjkl / Enter | q / Esc back (outside text fields) | Ctrl+Q quit app");
 }
 
 static void draw_launcher(App *app)
@@ -313,13 +321,94 @@ static void draw_launcher(App *app)
     tb_text(rule + 2, left + 2, width - 4, TB_MUTED, 0, app->demo_mode ?
             "DEMO / VISUAL REFERENCE - no debugger connected" : "Native Linux | Server flows remain previews");
     int actions = top + height - 1;
-    if (!app->demo_mode) { button(app, actions, left + 2, 14, "[ Profiles ]", PROFILE_OPEN, 0, 0); }
+    button(app, actions, left + 2, 12, "[ Config ]", CONFIG_OPEN, 0, 0);
     if (app->previewed) {
-        button(app, actions, left + 2, 22, "[ Return to preview ]", BACK, 0, 0);
+        button(app, actions, left + 15, width - 28, "[ Return to preview ]", BACK, 0, 0);
     }
     button(app, actions, left + width - 11, 9, "[ Quit ]", QUIT, 0, 0);
     tb_text(LINES - 2, 1, COLS - 2, TB_YELLOW, 0, app->status);
-    tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0, "Tab / arrows / Enter or click | Ctrl+Q quit app");
+    tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0, "Tab / arrows / hjkl / Enter or click | Ctrl+Q quit app");
+}
+
+/* Global presentation preferences never participate in debugger/session state. */
+static void apply_theme(App *app, size_t palette)
+{
+    (void)tb_theme_select(palette);
+    app->colors = tb_theme_init();
+    (void)clearok(stdscr, TRUE);
+}
+
+static size_t theme_family(size_t palette)
+{
+    const TbPalette *selected = tb_theme_palette(palette);
+    for (size_t i = 0; i < tb_theme_family_count(); ++i) {
+        if (strcmp(selected->family, tb_theme_family(i)) == 0) { return i; }
+    }
+    return 0;
+}
+
+static void theme_cycle(App *app, bool family, int direction)
+{
+    size_t current = app->theme_draft;
+    if (family) {
+        size_t next = (theme_family(current) + tb_theme_family_count() + (direction < 0 ? tb_theme_family_count() - 1 : 1)) % tb_theme_family_count();
+        const char *name = tb_theme_family(next);
+        for (size_t i = 0; i < tb_theme_count(); ++i) {
+            if (strcmp(tb_theme_palette(i)->family, name) == 0) { app->theme_draft = i; break; }
+        }
+        if (strcmp(name, "catppuccin") == 0) { app->theme_draft = tb_theme_find(name, "macchiato"); }
+    } else {
+        const char *name = tb_theme_palette(current)->family;
+        for (size_t step = 1; step <= tb_theme_count(); ++step) {
+            size_t i = (current + (direction < 0 ? tb_theme_count() - step : step)) % tb_theme_count();
+            if (strcmp(tb_theme_palette(i)->family, name) == 0) { app->theme_draft = i; break; }
+        }
+    }
+}
+
+static void draw_config(App *app)
+{
+    bool themes = app->page == THEMES;
+    int width = COLS > 80 ? 72 : COLS - 8, height = themes ? 14 : 12;
+    int left = (COLS - width) / 2, top = (LINES - 2 - height) / 2;
+    tb_fill((TbRect){left, top, width, height}, TB_PANEL);
+    tb_text(top + 1, left + 2, width - 4, TB_PINK, A_BOLD, themes ? "Themes" : "Configuration");
+    tb_style(TB_BORDER, 0); (void)mvhline(top + 3, left + 2, ACS_HLINE, width - 4);
+    if (themes) {
+        char label[128];
+        (void)snprintf(label, sizeof label, "Theme       < %s >", tb_theme_name(theme_family(app->theme_draft)));
+        button(app, top + 5, left + 2, width - 4, label, THEME_ACTION, 1, 0);
+        (void)snprintf(label, sizeof label, "Variant     < %s >", tb_theme_palette(app->theme_draft)->variant);
+        button(app, top + 7, left + 2, width - 4, label, THEME_ACTION, 2, 0);
+        tb_text(top + 9, left + 2, width - 4, TB_MUTED, 0, "Left/Right or Enter changes selection. Preview before saving.");
+        button(app, top + 12, left + 2, 10, "[ Back ]", BACK, 0, 0);
+        button(app, top + 12, left + 14, 13, "[ Preview ]", THEME_ACTION, 3, 0);
+        button(app, top + 12, left + width - 11, 9, "[ Save ]", THEME_ACTION, 4, 0);
+    } else {
+        if (!app->demo_mode) { button(app, top + 5, left + 2, width - 4, "Profiles", PROFILE_OPEN, 0, 0); }
+        button(app, top + 7, left + 2, width - 4, "Themes", THEME_ACTION, 0, 0);
+        button(app, top + 10, left + 2, 10, "[ Back ]", BACK, 0, 0);
+    }
+    tb_text(LINES - 2, 1, COLS - 2, TB_YELLOW, 0, app->status);
+    tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0, "Tab / arrows / hjkl / Enter or click | Esc back | Ctrl+Q quit app");
+}
+
+static void draw_theme_preview(App *app)
+{
+    TbDemo sample; TbLayout layout;
+    tb_demo_init(&sample); tb_layout_init(&layout);
+    char label[128];
+    (void)snprintf(label, sizeof label, "THEME PREVIEW | %s / %s | simulated data", tb_theme_name(theme_family(app->theme_draft)), tb_theme_palette(app->theme_draft)->variant);
+    tb_text(0, 1, COLS - 2, TB_BRAND, A_BOLD, label);
+    tb_text(1, 1, COLS - 2, TB_MUTED, 0, "No debugger connected. Preview does not save your selection.");
+    (void)tb_layout_arrange(&layout, (TbRect){1, 3, COLS - 2, LINES - 6}, 0);
+    for (int i = 0; i < layout.count; ++i) {
+        int pane = layout.order[i]; TbRect rect = layout.panes[pane];
+        tb_fill(rect, TB_PANEL);
+        tb_text(rect.y, rect.x, rect.w, TB_ACTIVE_TAB, A_BOLD | A_UNDERLINE, tb_view_names[sample.panes[pane].tabs[0]]);
+        if (rect.h > 1) { tb_render_demo(&sample, pane, (TbRect){rect.x, rect.y + 1, rect.w, rect.h - 1}); }
+    }
+    button(app, LINES - 2, 1, 12, "[ Back ]", BACK, 0, 0);
 }
 
 static void draw_form(App *app, bool review)
@@ -431,9 +520,9 @@ static void draw_menu(App *app, int pane, TbRect rect)
         return;
     }
     const char *const actions[] = {
-        "Split right", "Split below", "Close selected tab", "Close split pane", "Resize dividers"
+        "Split right", "Split below", "Close selected tab", "Close split pane", "Resize dividers", "Fullscreen Source"
     };
-    int count = app->menu_actions ? 5 : TB_VIEW_COUNT;
+    int count = app->menu_actions ? (app->demo.panes[pane].tabs[app->demo.panes[pane].active] == TB_SOURCE ? 6 : 5) : TB_VIEW_COUNT;
     int selected = app->focus - start_control;
     int scroll = selected >= 0 && selected < count ? selected / height * height : 0;
     for (int i = 0; i < count; ++i) {
@@ -1116,7 +1205,7 @@ static void draw_pane(App *app, int pane_index, TbRect rect)
     tb_fill((TbRect){rect.x, rect.y, rect.w, 1}, TB_SURFACE);
     int x = rect.x + 1;
     /* Active tab is always visible; additional tabs use the remaining width. */
-    for (int pass = 0; pass < pane->count; ++pass) {
+    for (int pass = 0; app->fullscreen_source < 0 && pass < pane->count; ++pass) {
         int tab = (pane->active + pass) % pane->count;
         char label[64];
         (void)snprintf(label, sizeof label, " %s ",
@@ -1138,8 +1227,11 @@ static void draw_pane(App *app, int pane_index, TbRect rect)
         x += width;
     }
     tb_text(rect.y, rect.x, 1, TB_ACTIVE_TAB, A_BOLD,
-            pane_index == app->demo.pane ? ">" : " ");
-    button(app, rect.y, rect.x + rect.w - 5, 4, "...", MENU, 0, pane_index);
+            app->content_pane == pane_index ? "*" : pane_index == app->demo.pane ? ">" : " ");
+    if (app->fullscreen_source == pane_index) {
+        tb_text(rect.y, rect.x + 1, rect.w - 16, TB_ACTIVE_TAB, A_BOLD, "Source | fullscreen");
+        button(app, rect.y, rect.x + rect.w - 14, 13, "[ Restore ]", CODE_ACTION, CODE_FULLSCREEN, pane_index);
+    } else { button(app, rect.y, rect.x + rect.w - 5, 4, "...", MENU, 0, pane_index); }
     if (app->menu == pane_index) {
         draw_menu(app, pane_index, rect);
     } else {
@@ -1201,8 +1293,22 @@ static void draw_workspace(App *app)
             app->live ? tb_session_state_name(app->debugger) : app->demo.running ? "Running / stale" : "Paused (demo)");
     ++y;
     TbRect area = {1, y + 1, COLS - 2, LINES - y - 3};
-    bool tiled = tb_layout_arrange(&app->layout, area, app->demo.pane);
-    memcpy(app->panes, app->layout.panes, sizeof app->panes);
+    if (app->fullscreen_source >= 0 &&
+        (!tb_layout_has_pane(&app->layout, app->fullscreen_source) ||
+         app->demo.panes[app->fullscreen_source].tabs[app->demo.panes[app->fullscreen_source].active] != TB_SOURCE)) {
+        app->fullscreen_source = -1;
+    }
+    bool fullscreen = app->fullscreen_source >= 0;
+    bool tiled = true;
+    if (fullscreen) {
+        /* Keep the split tree and ratios intact; only rendered rectangles change. */
+        memset(app->panes, 0, sizeof app->panes);
+        app->demo.pane = app->fullscreen_source;
+        app->panes[app->fullscreen_source] = area;
+    } else {
+        tiled = tb_layout_arrange(&app->layout, area, app->demo.pane);
+        memcpy(app->panes, app->layout.panes, sizeof app->panes);
+    }
     if (app->live) {
         bool threads = false, frames = false, registers = false, locals = false, watches = false;
         for (int i = 0; i < app->layout.count; ++i) {
@@ -1255,7 +1361,7 @@ static void draw_workspace(App *app)
         int pane = app->layout.order[i];
         draw_pane(app, pane, app->panes[pane]);
     }
-    for (int i = 0; i < app->layout.divider_count; ++i) {
+    for (int i = 0; !fullscreen && i < app->layout.divider_count; ++i) {
         TbDivider divider = app->layout.dividers[i];
         int control = add_control(app, divider.rect, DIVIDER, i, 0);
         if (app->resizing && app->resize_divider == i) { app->focus = control; }
@@ -1288,6 +1394,8 @@ static void draw_workspace(App *app)
     tb_fill((TbRect){0, LINES - 2, COLS, 2}, TB_CHROME);
     tb_text(LINES - 2, 1, COLS - 2, TB_CHROME, 0, footer);
     tb_text(LINES - 1, 1, COLS - 2, TB_CHROME, 0,
+            app->content_pane >= 0 ? "CONTENT FOCUS | arrows / hjkl scroll or select | Esc: controls | Ctrl+Q quit app" :
+            fullscreen ? "Source fullscreen | Esc / q or Restore: tiled workspace | Ctrl+Q quit app" :
             app->resizing ? "Resize: Tab selects divider | arrows move | Enter / Esc finish" :
             app->live ? "Console: Command / Save Log | q close session | Ctrl+Q quit app" :
             "DEMO | ... pane actions | drag dividers | q launcher | Ctrl+Q quit app");
@@ -1298,19 +1406,19 @@ static bool field_utf8(const wchar_t *value, char *target, size_t capacity);
 static const char *const code_labels[] = {
     "Choose source file", "Find in current file", "Go to line", "Go to address / symbol",
     "Return to stopped context", "Toggle mixed source/assembly", "Source lookup settings",
-    "Add source directory", "Mapping: build prefix", "Mapping: local prefix", "Clear source overrides", "Decode bytes (raw inspection)", "Run to Selected"
+    "Add source directory", "Mapping: build prefix", "Mapping: local prefix", "Clear source overrides", "Decode bytes (raw inspection)", "Run to Selected", "Fullscreen Source"
 };
 
 static void draw_code_menu(App *app)
 {
     draw_header(app, "Code view actions");
     bool source = app->demo.panes[app->code_pane].tabs[app->demo.panes[app->code_pane].active] == TB_SOURCE;
-    const CodeAction source_actions[] = {CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_STOPPED, CODE_SOURCE_SETTINGS, CODE_RUN_TO};
+    const CodeAction source_actions[] = {CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_STOPPED, CODE_SOURCE_SETTINGS, CODE_RUN_TO, CODE_FULLSCREEN};
     const CodeAction asm_actions[] = {CODE_ADDRESS, CODE_STOPPED, CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_RAW, CODE_RUN_TO};
-    int count = 6;
+    int count = source ? 7 : 6;
     for (int i = 0; i < count; ++i) {
         CodeAction action = source ? source_actions[i] : asm_actions[i];
-        button(app, 5 + i, 3, COLS - 6, code_labels[action], CODE_ACTION, action, app->code_pane);
+        button(app, 5 + i, 3, COLS - 6, action == CODE_FULLSCREEN && app->fullscreen_source >= 0 ? "Restore tiled workspace" : code_labels[action], CODE_ACTION, action, app->code_pane);
     }
     tb_text(LINES - 5, 3, COLS - 6, TB_MUTED, 0, "Browsing never moves execution. Left/Right scroll long code lines.");
     button(app, LINES - 4, 3, 12, "[ Back ]", BACK, 0, 0);
@@ -1526,6 +1634,10 @@ static void draw_page(App *app)
         tb_text(4, 0, COLS, TB_PANEL, 0, "State retained. Ctrl+Q quits.");
     } else if (app->page == LAUNCHER) {
         draw_launcher(app);
+    } else if (app->page == CONFIG_MENU || app->page == THEMES) {
+        draw_config(app);
+    } else if (app->page == THEME_PREVIEW) {
+        draw_theme_preview(app);
     } else if (app->page == CONFIGURE || app->page == REVIEW) {
         draw_form(app, app->page == REVIEW);
     } else if (app->page == SCRIPT_LIST) { draw_scripts(app);
@@ -1571,30 +1683,96 @@ static void draw_page(App *app)
     }
 }
 
+/* Rectangles are rebuilt by rendering; identities survive scrollbar and tab changes. */
+static bool same_control(Control a, Control b)
+{
+    return a.kind == b.kind && a.value == b.value && a.pane == b.pane;
+}
+
+static bool navigable(Control control)
+{
+    return control.rect.w > 0 && control.rect.h > 0 &&
+           control.kind != BODY && control.kind != SCROLLBAR &&
+           control.kind != HSCROLLBAR && control.kind != DIVIDER;
+}
+
+static void leave_content(App *app)
+{
+    app->content_pane = -1;
+    app->focus = 0;
+    for (int i = 0; i < app->count; ++i) {
+        if (navigable(app->controls[i]) && same_control(app->controls[i], app->last_control)) {
+            app->focus = i; break;
+        }
+    }
+}
+
 static void draw(App *app)
 {
-    Control previous = app->focus >= 0 && app->focus < app->count ? app->controls[app->focus] : (Control){0};
-    if (app->variable_focus && app->page == WORKSPACE) {
-        previous = (Control){.kind = BODY, .pane = app->variable_pane}; app->variable_focus = false;
-    }
-    bool retain_body = app->page == WORKSPACE && (previous.kind == BODY || previous.kind == SCROLLBAR || previous.kind == HSCROLLBAR || previous.kind == MEMORY_FIELD);
+    bool retain = app->count > 0 && !app->menu_focus && !app->resizing;
+    Control previous = retain ? app->controls[app->focus] : (Control){0};
     draw_page(app);
-    /* Live source availability can add/remove an earlier pane's scrollbar.
-     * Preserve the focused body by identity rather than its old array index. */
-    if (retain_body) {
-        for (int i = 0; i < app->count; ++i) {
-            if (app->controls[i].kind == previous.kind && app->controls[i].pane == previous.pane &&
-                app->controls[i].value == previous.value) {
-                if (app->focus != i) { app->focus = i; draw_page(app); }
-                break;
+    int next = -1;
+    for (int i = 0; i < app->count; ++i) {
+        Control c = app->controls[i];
+        if (app->content_pane >= 0) {
+            if (c.kind == BODY && c.pane == app->content_pane) { next = i; break; }
+        } else if (retain && navigable(c) && same_control(c, previous)) { next = i; break; }
+    }
+    if (app->count && !app->resizing) {
+        if (next < 0) {
+            app->content_pane = -1;
+            next = navigable(app->controls[app->focus]) ? app->focus : 0;
+            if (!navigable(app->controls[next])) {
+                for (int i = 0; i < app->count; ++i) {
+                    if (navigable(app->controls[i])) { next = i; break; }
+                }
             }
+        }
+        if (next != app->focus) { app->focus = next; draw_page(app); }
+        if (app->content_pane < 0 && navigable(app->controls[app->focus])) {
+            app->last_control = app->controls[app->focus];
         }
     }
     (void)refresh();
 }
 
+/* At most MAX_CONTROLS candidates: no second layout tree or cached graph. */
+static void spatial_focus(App *app, int key)
+{
+    TbRect from = app->controls[app->focus].rect;
+    bool horizontal = key == KEY_LEFT || key == KEY_RIGHT;
+    bool forward = key == KEY_RIGHT || key == KEY_DOWN;
+    int best = app->focus, best_gap = INT_MAX, best_distance = INT_MAX, best_offset = INT_MAX;
+    for (int i = 0; i < app->count; ++i) {
+        Control c = app->controls[i];
+        if (!navigable(c)) { continue; }
+        TbRect to = c.rect;
+        int primary = horizontal ? to.x * 2 + to.w - (from.x * 2 + from.w) :
+                                   to.y * 2 + to.h - (from.y * 2 + from.h);
+        int distance = forward ? primary : -primary;
+        if (distance <= 0) { continue; }
+        /* Same-row controls are never above/below each other, even if widths differ. */
+        if (horizontal ? to.x < from.x + from.w && from.x < to.x + to.w :
+                         to.y < from.y + from.h && from.y < to.y + to.h) { continue; }
+        int start = horizontal ? from.y : from.x, end = start + (horizontal ? from.h : from.w);
+        int other = horizontal ? to.y : to.x, other_end = other + (horizontal ? to.h : to.w);
+        int gap = other >= end ? other - end + 1 : start >= other_end ? start - other_end + 1 : 0;
+        if (horizontal && gap > 0) { continue; }
+        int offset = abs((other + other_end) - (start + end));
+        /* Prefer the same visual row/column, then the closest forward control. */
+        if (gap < best_gap || (gap == best_gap && (distance < best_distance ||
+            (distance == best_distance && offset < best_offset)))) {
+            best = i; best_gap = gap; best_distance = distance; best_offset = offset;
+        }
+    }
+    app->focus = best;
+    app->cursor = 0;
+}
+
 static void cycle_pane(App *app, int direction)
 {
+    if (app->fullscreen_source >= 0) { return; }
     for (int i = 0; i < app->layout.count; ++i) {
         if (app->layout.order[i] == app->demo.pane) {
             int next = (i + direction + app->layout.count) % app->layout.count;
@@ -1607,8 +1785,21 @@ static void cycle_pane(App *app, int direction)
     }
 }
 
+static void toggle_source_fullscreen(App *app, int pane)
+{
+    if (!tb_layout_has_pane(&app->layout, pane) ||
+        app->demo.panes[pane].tabs[app->demo.panes[pane].active] != TB_SOURCE) { return; }
+    app->fullscreen_source = app->fullscreen_source >= 0 ? -1 : pane;
+    app->demo.pane = pane;
+    code_focus(app, pane);
+    page(app, WORKSPACE);
+    status(app, app->fullscreen_source >= 0 ?
+           "Source fullscreen; Escape or Restore returns to the tiled workspace." : "Tiled workspace restored.");
+}
+
 static void pane_action(App *app, int action, int pane)
 {
+    if (action == 5) { toggle_source_fullscreen(app, pane); return; }
     app->menu = -1;
     app->focus = 0;
     if (action < 2) {
@@ -2042,6 +2233,17 @@ static void request_leave(App *app, bool quit)
 static void activate(App *app, Control control)
 {
     switch (control.kind) {
+    case CONFIG_OPEN: page(app, CONFIG_MENU); break;
+    case THEME_ACTION:
+        if (control.value == 0) { app->theme_draft = app->preferences.palette; page(app, THEMES); }
+        else if (control.value == 1 || control.value == 2) { theme_cycle(app, control.value == 1, 1); }
+        else if (control.value == 3) { apply_theme(app, app->theme_draft); page(app, THEME_PREVIEW); }
+        else if (control.value == 4) {
+            if (tb_preferences_save(&app->preferences, app->theme_draft)) {
+                apply_theme(app, app->preferences.palette); status(app, *app->preferences.error ? app->preferences.error : "Theme saved."); page(app, CONFIG_MENU);
+            } else { status(app, app->preferences.error); }
+        }
+        break;
     case REVIEW_PAGE: app->review_offset += control.value; if (app->review_offset < 0) { app->review_offset = 0; } break;
     case SCRIPT_OPEN:
         if (!app->catalog) { app->catalog = malloc(sizeof *app->catalog); }
@@ -2082,7 +2284,10 @@ static void activate(App *app, Control control)
         page(app, WORKSPACE);
         break;
     case BACK:
-        if (app->page == PROFILE_LIST) { page(app, LAUNCHER); break; }
+        if (app->page == THEME_PREVIEW) { apply_theme(app, app->preferences.palette); page(app, THEMES); break; }
+        if (app->page == THEMES) { apply_theme(app, app->preferences.palette); page(app, CONFIG_MENU); break; }
+        if (app->page == CONFIG_MENU) { page(app, LAUNCHER); break; }
+        if (app->page == PROFILE_LIST) { page(app, CONFIG_MENU); break; }
         if (app->page == PROFILE_OPTIONS || app->page == PROFILE_CONFIRM) {
             if (app->page == PROFILE_CONFIRM && app->profile_replacing) { memcpy(app->profile->name, app->profile_original_name, sizeof app->profile->name); }
             page(app, app->profile_return); break;
@@ -2141,10 +2346,10 @@ static void activate(App *app, Control control)
         app->demo.panes[control.pane].active = control.value;
         code_focus(app, control.pane);
         app->menu = -1;
-        /* The activated tab moves first. Its previous control index may now
-         * belong to an inactive tab, so keep focus at this pane's first tab. */
+        /* Keep the activated tab's identity while rendering promotes it. */
         for (int i = 0; i < app->count; ++i) {
-            if (app->controls[i].kind == TAB && app->controls[i].pane == control.pane) {
+            if (app->controls[i].kind == TAB && app->controls[i].pane == control.pane &&
+                app->controls[i].value == control.value) {
                 app->focus = i;
                 break;
             }
@@ -2208,7 +2413,7 @@ static void activate(App *app, Control control)
                     view == TB_LOCALS ? tb_variables_names(v) : tb_variables_remove(v, row);
         status(app, okay ? "Explicit variable operation requested; unknown storage is not automatically refreshed." :
                "Select a fresh stopped row, or wait for the current request. Read before expanding/formatting; paging needs children.");
-        if (okay) { page(app, WORKSPACE); app->variable_focus = true; } break;
+        if (okay) { page(app, WORKSPACE); } break;
     }
     case MEMORY_ACTION: {
         TbMemory *m = tb_session_memory(app->debugger); int id = control.pane;
@@ -2302,6 +2507,7 @@ static void activate(App *app, Control control)
     case CODE_ACTIONS:
         app->code_pane = control.pane; code_focus(app, control.pane); page(app, CODE_MENU); break;
     case CODE_ACTION: {
+        if (control.value == CODE_FULLSCREEN) { toggle_source_fullscreen(app, control.pane); break; }
         TbCode *code = tb_session_code(app->debugger);
         app->code_pane = control.pane; app->code_action = (CodeAction)control.value;
         if (app->code_action == CODE_CHOOSE_FILE) {
@@ -2385,7 +2591,7 @@ static void activate(App *app, Control control)
                 }
                 int height = app->body_height[app->variable_pane]; if (height < 1) { height = 1; }
                 pane->scroll[TB_WATCHES] = pane->row[TB_WATCHES] >= height ? pane->row[TB_WATCHES] - height + 1 : 0;
-                page(app, WORKSPACE); app->variable_focus = true;
+                page(app, WORKSPACE);
             }
             break;
         }
@@ -2565,6 +2771,10 @@ static void mouse_event(App *app)
         return;
     }
     app->keyboard_focus = false;
+    if ((event.bstate & (BUTTON1_PRESSED | BUTTON1_CLICKED)) && app->content_pane >= 0 &&
+        !tb_rect_contains(app->panes[app->content_pane], event.x, event.y)) {
+        leave_content(app);
+    }
     if (app->page == WORKSPACE && app->scroll_drag_pane >= 0) {
         int pane_index = app->scroll_drag_pane;
         TbDemoPane *pane = &app->demo.panes[pane_index];
@@ -2599,7 +2809,7 @@ static void mouse_event(App *app)
         }
         return;
     }
-    if (app->page == WORKSPACE && (event.bstate & BUTTON1_PRESSED)) {
+    if (app->page == WORKSPACE && app->fullscreen_source < 0 && (event.bstate & BUTTON1_PRESSED)) {
         int divider = tb_layout_divider_at(&app->layout, event.x, event.y);
         if (divider >= 0) {
             app->drag = divider;
@@ -2622,7 +2832,7 @@ static void mouse_event(App *app)
             for (int i = 0; i < app->count; ++i) {
                 if (app->controls[i].kind == SHOW_VIEW || app->controls[i].kind == PANE_ACTION) {
                     int selected = app->focus + direction;
-                    int count = app->menu_actions ? 5 : TB_VIEW_COUNT;
+                    int count = app->menu_actions ? (app->demo.panes[app->menu].tabs[app->demo.panes[app->menu].active] == TB_SOURCE ? 6 : 5) : TB_VIEW_COUNT;
                     if (selected >= i && selected < i + count) { app->focus = selected; }
                     return;
                 }
@@ -2649,12 +2859,19 @@ static void mouse_event(App *app)
         if (!(event.bstate & (BUTTON1_PRESSED | BUTTON1_CLICKED))) {
             return;
         }
+        bool content = control.kind == BODY || control.kind == SCROLLBAR || control.kind == HSCROLLBAR;
+        if (content) { app->content_pane = control.pane; }
+        else { app->content_pane = -1; }
         app->focus = i;
         app->cursor = 0;
         bool input_page = editing_page(app);
         bool text_field = control.kind == FIELD && (input_page ||
                           !((app->session < 2 && control.value == 0) ||
                             (app->session == 1 && control.value == 8)));
+        if (app->page == THEMES && control.kind == THEME_ACTION &&
+            (control.value == 1 || control.value == 2) && event.x == control.rect.x + 12) {
+            theme_cycle(app, control.value == 1, -1); return;
+        }
         if (control.kind == MEMORY_FIELD) {
             app->demo.pane = control.pane;
             app->memory_cursor[control.pane] = wcslen(app->memory_input[control.pane]);
@@ -2719,7 +2936,6 @@ static void key_event(App *app, wint_t key, bool special)
         app->drag = -1;
         app->scroll_drag_pane = -1;
         app->resizing = false;
-        app->focus = 0;
         (void)clearok(stdscr, TRUE);
         return;
     }
@@ -2730,6 +2946,15 @@ static void key_event(App *app, wint_t key, bool special)
     }
     app->keyboard_focus = true;
     Control control = app->controls[app->focus];
+    if (!special && (key == 'h' || key == 'j' || key == 'k' || key == 'l')) {
+        /* Text input takes precedence; elsewhere reuse the actual arrow path. */
+        if (!app->resizing && edit_field(app, control, key, false)) {
+            if (app->page == CODE_FILES) { app->file_page = 0; }
+            return;
+        }
+        key = key == 'h' ? KEY_LEFT : key == 'j' ? KEY_DOWN : key == 'k' ? KEY_UP : KEY_RIGHT;
+        special = true;
+    }
     if (!special && key == 'q') {
         if (edit_field(app, control, key, false)) { return; }
         key = 27; /* Close/back; Ctrl+Q is the application-wide quit action. */
@@ -2765,15 +2990,24 @@ static void key_event(App *app, wint_t key, bool special)
         if (next >= 0 && next < count) { app->form_scroll = next; }
         return;
     }
+    if (special && app->page == THEMES && control.kind == THEME_ACTION &&
+        (control.value == 1 || control.value == 2) && (key == KEY_LEFT || key == KEY_RIGHT)) {
+        theme_cycle(app, control.value == 1, key == KEY_LEFT ? -1 : 1); return;
+    }
     if (!special && key == 27) {
-        if (app->page == PROFILE_LIST || app->page == PROFILE_OPTIONS || app->page == PROFILE_ITEMS || app->page == PROFILE_TEXT || app->page == PROFILE_CONFIRM) {
+        if (app->content_pane >= 0) { leave_content(app); return; }
+        if (app->page == WORKSPACE && control.kind == MEMORY_FIELD) {
+            app->focus = 0; /* End inline editing without acquiring content or closing the session. */
+            return;
+        }
+        if (app->page == WORKSPACE && app->fullscreen_source >= 0) {
+            toggle_source_fullscreen(app, app->fullscreen_source); return;
+        }
+        if (app->page == CONFIG_MENU || app->page == THEMES || app->page == THEME_PREVIEW) {
             activate(app, (Control){.kind = BACK}); return;
         }
-        if (control.kind == MEMORY_FIELD && app->page == WORKSPACE && app->menu < 0) {
-            for (int i = 0; i < app->count; ++i) {
-                if (app->controls[i].kind == BODY && app->controls[i].pane == control.pane) { app->focus = i; break; }
-            }
-            return;
+        if (app->page == PROFILE_LIST || app->page == PROFILE_OPTIONS || app->page == PROFILE_ITEMS || app->page == PROFILE_TEXT || app->page == PROFILE_CONFIRM) {
+            activate(app, (Control){.kind = BACK}); return;
         }
         if (app->menu >= 0) {
             app->menu = -1;
@@ -2794,7 +3028,15 @@ static void key_event(App *app, wint_t key, bool special)
         return;
     }
     if ((!special && key == '\t') || (special && key == KEY_BTAB)) {
-        app->focus = (app->focus + (key == KEY_BTAB ? app->count - 1 : 1)) % app->count;
+        if (app->content_pane >= 0) { leave_content(app); return; }
+        int direction = special && key == KEY_BTAB ? -1 : 1;
+        for (int step = 1; step <= app->count; ++step) {
+            int next = (app->focus + direction * step + app->count) % app->count;
+            if (navigable(app->controls[next]) ||
+                (app->page == CONFIGURE && app->controls[next].kind == FIELD)) {
+                app->focus = next; break;
+            }
+        }
         app->cursor = 0;
         return;
     }
@@ -2809,7 +3051,8 @@ static void key_event(App *app, wint_t key, bool special)
     if (control.kind == MEMORY_FIELD && ((!special && (key == '\n' || key == '\r')) || (special && key == KEY_ENTER))) {
         activate(app, (Control){.kind = MEMORY_ACTION, .value = 0, .pane = control.pane}); return;
     }
-    if (!special && app->page == WORKSPACE && key >= '1' && key <= '9') {
+    if (!special && app->page == WORKSPACE && app->fullscreen_source < 0 && key >= '1' && key <= '9') {
+        if (app->content_pane >= 0) { leave_content(app); }
         int pane = (int)(key - '1');
         if (tb_layout_has_pane(&app->layout, pane)) { app->demo.pane = pane; }
         code_focus(app, app->demo.pane);
@@ -2817,6 +3060,7 @@ static void key_event(App *app, wint_t key, bool special)
         return;
     }
     if (!special && app->page == WORKSPACE && (key == '[' || key == ']')) {
+        if (app->content_pane >= 0) { leave_content(app); }
         cycle_pane(app, key == ']' ? 1 : -1);
         return;
     }
@@ -2870,23 +3114,25 @@ static void key_event(App *app, wint_t key, bool special)
                         key == KEY_PPAGE ? -5 : 5);
             return;
         }
-        if (control.kind == TAB && (key == KEY_LEFT || key == KEY_RIGHT)) {
-            TbDemoPane *pane = &app->demo.panes[control.pane];
-            int next = (pane->active + (key == KEY_RIGHT ? 1 : pane->count - 1)) % pane->count;
-            activate(app, (Control){.kind = TAB, .value = next, .pane = control.pane});
-            return;
-        }
     }
     if (special && (key == KEY_UP || key == KEY_LEFT || key == KEY_DOWN || key == KEY_RIGHT)) {
-        bool previous = key == KEY_UP || key == KEY_LEFT;
-        app->focus = (app->focus + (previous ? app->count - 1 : 1)) % app->count;
-        app->cursor = 0;
+        if (((app->menu >= 0 && (control.kind == SHOW_VIEW || control.kind == PANE_ACTION)) ||
+             (app->page == CONFIGURE && control.kind == FIELD)) &&
+            (key == KEY_UP || key == KEY_DOWN)) {
+            /* Scroll an adjacent menu item into view before the next paint. */
+            int next = app->focus + (key == KEY_DOWN ? 1 : -1);
+            if (next >= 0 && next < app->count && app->controls[next].kind == control.kind &&
+                app->controls[next].pane == control.pane) { app->focus = next; }
+            else { spatial_focus(app, (int)key); }
+        } else { spatial_focus(app, (int)key); }
     }
 }
 
 static void initialize(App *app, bool demo)
 {
     memset(app, 0, sizeof *app);
+    app->fullscreen_source = -1;
+    app->content_pane = -1;
     app->demo_mode = demo;
     app->profiles = tb_profiles_create(); app->profile = calloc(1, sizeof *app->profile);
     if (!app->profiles || !app->profile) { app->quit = true; }
@@ -2911,7 +3157,7 @@ static void initialize(App *app, bool demo)
         }
         app->forms[form].start_server = true;
     }
-    status(app, demo ? "DEMO only. Nothing is launched, connected or saved." :
+    status(app, demo ? "DEMO only. No debugger connected; Config saves appearance preferences." :
                       "Choose native launch/attach, an OpenOCD setup or an existing GDB server.");
     if (!demo && app->profiles && !tb_profiles_load(app->profiles)) { status(app, tb_profiles_error(app->profiles)); }
 }
@@ -2954,7 +3200,8 @@ int tb_tui_run(bool demo)
     } else {
         App app;
         initialize(&app, demo);
-        app.colors = tb_theme_init();
+        if (!tb_preferences_load(&app.preferences)) { status(&app, app.preferences.error); }
+        apply_theme(&app, app.preferences.palette);
         /* Raw input also disables XON/XOFF, so Ctrl+Q reaches the application. */
         (void)raw();
         (void)noecho();
