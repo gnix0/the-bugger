@@ -4,7 +4,8 @@ The current development build supports native Linux and existing remote
 GDB-server sessions, plus reviewed OpenOCD startup and target actions. Physical
 validation covers NUCLEO-F446RE and ESP32-S3 with the
 [recorded configurations](validation.md#m17--physical-board-validation).
-The v0.1.0 release is not yet accepted.
+v0.1.0 is the first public release; the theme configuration below is a post-release
+development feature, not a claim about the v0.1.0 binary.
 See [build and first session](../README.md#build-and-first-session) for prerequisites.
 
 ## Native Linux sessions
@@ -13,8 +14,8 @@ Choose **Linux application**, configure **Launch** or **Attach**, then choose
 **Review session** and **Start native**. Inputs remain available after errors.
 The launcher centers its session card horizontally and vertically, with readable
 descriptions and whole-row click targets. Arrow/Tab/Enter navigation and a compact
-presentation keep all three choices accessible on smaller terminals. Monokai Pro
-colors, simple terminal icons and text indicators need no additional assets.
+presentation keep all three choices accessible on smaller terminals. Theme colors,
+simple terminal icons and text indicators need no additional assets.
 
 Launch accepts an executable ELF, arguments, working directory, optional
 `NAME=value` environment entries and GDB executable. Arguments/environment use
@@ -344,8 +345,8 @@ Smaller terminals show a focused pane with controls to reach every retained pane
 Below 48x18 a resize message preserves state. Tabs, splits and proportions survive
 shrinking and return when space permits.
 
-Monokai Pro uses consistent panel, header, tab and footer surfaces. Direct-color
-terminfo enables the exact palette; otherwise 256/8-color or monochrome is used.
+All built-in themes use consistent panel, header, tab and footer roles. Direct-color
+terminfo enables the adapted RGB palette; otherwise 256/8-color or monochrome is used.
 Standalone Alacritty advertising truecolor uses `alacritty-direct` when installed.
 `NO_COLOR=1 ./build/the-bugger` forces monochrome. Use a TERM entry supported by
 your terminal; the application does not alter terminal palettes or tmux settings.
@@ -378,11 +379,53 @@ polling. Take care when deliberately inspecting memory-mapped peripherals.
 See the [Locals/Watches walkthrough](testing.md#locals-and-watches)
 for a reproducible fixture and expected observations.
 
+## Configuration and themes
+
+Choose **Config** on the launcher, then **Themes** or **Profiles**. Both the
+configuration menu and theme selector are centered horizontally and vertically.
+The demo launcher also offers Themes; its Profiles option remains unavailable.
+
+With no valid saved preference, the default is **Catppuccin / macchiato**.
+Select the Theme row, then use Left/Right, Enter or clicks to cycle themes.
+The Variant row lists only variants belonging to the selected theme; changing
+families resets that row to the family's initial variant (Macchiato for Catppuccin).
+
+| Theme | Variants |
+|---|---|
+| Catppuccin | latte, frappe, macchiato, mocha |
+| Everforest | dark/light × medium, hard, soft |
+| Tokyo Night | night, storm, moon, day |
+| Rose Pine | main, moon, dawn |
+| Nightfox | nightfox, dayfox, dawnfox, duskfox, nordfox, terafox, carbonfox |
+| Gruvbox Material | dark/light × medium, hard, soft; material foreground |
+| Monokai Pro | pro, classic, machine, octagon, ristretto, spectrum, light |
+
+**Preview** temporarily applies the draft to a simulated workspace. It does not
+start a debugger, read a target or save preferences. **Back** or Escape returns
+from preview to Themes and restores the saved palette; the draft remains available
+there. Back from Themes discards it and returns to Config. **Save** applies and
+persists the draft, then returns to Config. Restarting restores the saved choice.
+In `--demo`, an explicit theme Save also persists appearance preferences.
+
+Preferences use version-1 JSON in
+`$XDG_CONFIG_HOME/the-bugger/preferences.json`, or
+`$HOME/.config/the-bugger/preferences.json` when XDG configuration is absent or
+relative. Saves use private atomic replacement and reject stale concurrent
+writers. Invalid, unsupported or inaccessible files fall back to Macchiato with
+a visible error and block saving; repair the file and restart. They are not
+silently overwritten. A stale writer must restart before saving.
+
+The palettes are adapted to semantic roles, with contrast adjustments where
+needed; 8-color/monochrome terminals cannot reproduce all palette differences.
+No Neovim or Lua installation is needed. Upstream revisions and licenses are in
+[THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES). Custom palette files remain planned
+under F44.
+
 ## Profiles and action keys
 
 Use **Save profile** in configuration and **Profile...** for source directories,
 ordered path mappings and action keys. Replacing an existing name and deleting
-a profile require confirmation. Launcher **Profiles** loads a configuration for
+a profile require confirmation. Launcher **Config → Profiles** loads a configuration for
 review; selection alone does not launch tools. Successful saved native sessions
 appear in recents. Source settings restore before execution; errors remain visible.
 

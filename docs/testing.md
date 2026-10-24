@@ -87,6 +87,53 @@ TERM/terminal/tmux versions and intercepted keys. Fixtures never rewrite existin
 tmux bindings or security settings. PTY screen parsing is an ASCII-label oracle,
 not a general terminal emulator or proof of UTF-8/physical visual fidelity.
 
+## Themes and configuration
+
+Coverage: F19; shared TUI/persistence behavior. No GDB, probe or target is required.
+
+```sh
+make test-themes
+make test-m13-tui
+```
+
+`test-themes` builds the frontend and runs `test-preferences`, `test-render` and
+`test-themes-tui`; it is also included in `make test`. Terminfo must provide
+`xterm-direct`, `xterm-256color`, `xterm` and `vt100`. The profile regression
+additionally builds its ordinary native fixture but does not start GDB unless
+using the separate native target.
+
+Automated checks cover all 37 palettes and their identifiers, RGB text contrast
+of at least 4.5:1 and muted/accent contrast of at least 3:1 against catalog
+surfaces, direct/256/8-color/monochrome pairs, semantic source/register rendering,
+execution-only highlighting and scrollbars. Preference tests cover default,
+private atomic persistence, stale writers, invalid schema/variants, mismatched
+families and preservation of invalid files. PTY checks exercise centered Config,
+dependent variants, every preview, cancellation without writes, save/restart,
+mouse/keyboard controls and compact 48×18 monochrome rendering. These numerical
+and screen-label checks do not establish physical visual quality or new hardware
+compatibility.
+
+Manual review:
+
+1. Start `./build/the-bugger` with no existing appearance preference (use a
+   temporary `XDG_CONFIG_HOME` to preserve personal settings). Open **Config →
+   Themes**: expect centered menus and Catppuccin / macchiato.
+2. Change Theme and Variant with keyboard and mouse. Each family exposes only
+   its listed variants. Preview dark and light choices: sample data is labeled
+   simulated; semantic highlights and text remain legible.
+3. Back out of Preview: the saved colors return and the draft remains in Themes.
+   Back to Config, reopen Themes: the unsaved draft is discarded. No preference
+   file is created by previewing alone.
+4. Save a choice: expect Config and a success message. Restart: the saved choice
+   returns. Open **Config → Profiles** and load a configuration for review;
+   appearance changes must not launch a session or alter profile contents.
+5. Repeat directly and in tmux with mouse forwarding enabled; inspect each
+   variant, compact/large resizing, monochrome selection indicators and an
+   actual stopped debugging workspace. Record terminal/TERM/tmux details.
+
+Existing native/remote and physical-board evidence remains separate. This gate's
+recorded focused checks do not imply a full regression/sanitizer or hardware run.
+
 ## Existing remote server sessions
 
 Coverage: M15; FR-05/16, shared context/inspection and external ownership.
@@ -235,7 +282,7 @@ Manual reproduction (use a temporary XDG directory to avoid personal profiles):
    ordered build→local mappings; choose Action keys and remap Continue to F6.
    Try duplicate F6 for another action and reserved Ctrl+Q: errors retain input.
    Save again and verify replacement requires confirmation.
-3. Return to launcher, choose **Profiles**, load that name. Configuration is
+3. Return to launcher, choose **Config → Profiles**, load that name. Configuration is
    shown for review; no GDB or inferior starts on selection. Review/Start native,
    use Console `start`, then the remapped action or clickable toolbar. The
    successful saved session becomes recent. Close normally and reopen the profile.
@@ -529,7 +576,7 @@ Coverage: M07/M08; source/instruction mapping, navigation and non-mutating brows
    fit: the corresponding bar disappears. Shrink it again and verify clamped,
    usable bars without covering content or footer actions. Repeat in tmux.
 10. Relaunch without arguments and inspect the startup card:
-    centered on both axes, pink title, right-aligned v0.1.0, subtle separators,
+    centered on both axes, theme-accented title, right-aligned version, subtle separators,
     three described choices and selected-row indicator. Click either a title or
     its description; both open that flow. Check arrows/Tab/Enter, Quit/Ctrl+Q,
     140x44, a larger terminal and 48x18 compact presentation. OpenOCD and existing-server execution require explicit review; recent saved native profiles are available after M13. The workspace
