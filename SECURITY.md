@@ -35,10 +35,9 @@ or proposed fix is not required to report a credible issue.
 
 ## Supported versions and updates
 
-During preparation of v0.1.0, reports against the current `main` branch are welcome.
-Once stable releases are available, security fixes focus on the latest stable
-release and current development branch. Older releases have no guaranteed
-backports; include the affected version even if it is old.
+Security fixes focus on the latest stable release and current development
+branch. Reports against the current `main` branch are also welcome. Older
+releases have no guaranteed backports; include the affected version even if it is old.
 
 Maintainers assess impact, investigate reproduction and coordinate fixes and
 public disclosure with the reporter. Priority considers host code execution,

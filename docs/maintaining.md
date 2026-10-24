@@ -128,13 +128,14 @@ The owner has final say on release readiness.
 
 ## Linux x86-64 release artifacts
 
+The version comes from `include/the_bugger/version.h`.
 `make release` builds a separate optimized executable with PIE, stack protection,
 FORTIFY and full RELRO, then prepares these files under `build/dist/`:
 
-- `the-bugger-v0.1.0-linux-x86_64.tar.gz`: one host binary, GPLv3 license,
+- `the-bugger-v<version>-linux-x86_64.tar.gz`: one host binary, GPLv3 license,
   runtime instructions and build/dependency information. Builds containing F19
   also include `THIRD_PARTY_NOTICES` for the adapted theme palettes.
-- `the-bugger-v0.1.0-source.tar.gz`: corresponding working-tree source and build
+- `the-bugger-v<version>-source.tar.gz`: corresponding working-tree source and build
   instructions, including packaging infrastructure.
 - `SHA256SUMS`: checksums for both archives. The binary archive also identifies
   its matching source archive by checksum.
