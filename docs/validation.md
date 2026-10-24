@@ -921,3 +921,36 @@ Artifacts: `build/test-navigation`, `/tmp/tb-navigation-build.log` and
 `/tmp/tb-navigation-test-build.log`. Full native/tmux, sanitizer/static-analysis
 matrices, physical hardware and manual acceptance were not run for this change.
 The [manual steps](testing.md#letter-key-navigation) remain to be reviewed.
+
+
+## ESP fixture warning policy
+
+Implemented; awaiting user acceptance. The root Makefile already applies `-Wall`
+and `-Werror` to frontend/tests, native C/C++ fixtures, STM32 firmware, release
+and sanitizer builds. Only the authored ESP-IDF component needed an explicit
+policy: private `-Wall -Wextra -Werror` plus error-category overrides for inherited
+unused-function, unused-variable, unused-but-set-variable,
+deprecated-declarations and extra-warning exceptions. SDK components are unchanged.
+
+Agent-run focused verification:
+
+- Isolated CMake configure including the actual component file: PASS. Target
+  options contain the strict flags; an unrelated target receives none. This
+  checks component scoping, not a full ESP-IDF reconfiguration.
+- Actual installed Xtensa/ESP32-S3 and RISC-V/ESP32-C6 compilers, using each cached
+  ESP-IDF compile command plus the component options: PASS, both `main.c` and
+  shared `workload.c` compiled to temporary objects with no emitted warnings.
+- Deliberate unused-function, unused-variable, unused-but-set-variable and
+  deprecation probes: each compiler accepted the inherited downgraded warning
+  but rejected it with the component policy. An enabled extra-warning probe also
+  fails under the strict policy; that particular diagnostic was already an error
+  under the inherited policy. An initial probe incorrectly assumed otherwise;
+  the expectation was corrected without weakening the component policy.
+- Documentation local-link/code-fence checks and `git diff --check`: PASS.
+
+Temporary artifacts are under `/tmp/tb-warning-policy-probe/`; configure and
+result logs are `/tmp/tb-warning-policy-cmake.log` and
+`/tmp/tb-warning-policy-results.log`. These are disposable local checks, not new
+tracked test infrastructure. No full SDK rebuild, linking, programming, hardware
+connection or application regression suite was run. C6 cross-compilation is not
+physical RISC-V acceptance.
