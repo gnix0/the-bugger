@@ -24,6 +24,14 @@ static void command(TbGdb *gdb, const char *op)
     while (replies == before && tb_gdb_now_ms() < end) { pump(gdb); }
     CHECK(replies > before);
 }
+static void stopped(TbGdb *gdb, uint64_t previous_stop)
+{
+    uint64_t end = tb_gdb_now_ms() + 2000;
+    while ((tb_gdb_state(gdb) != TB_GDB_STOPPED || tb_gdb_generation(gdb).stop == previous_stop) &&
+           tb_gdb_now_ms() < end) { pump(gdb); }
+    CHECK(tb_gdb_state(gdb) == TB_GDB_STOPPED);
+    CHECK(tb_gdb_generation(gdb).stop != previous_stop);
+}
 static void ready(TbGdb *gdb)
 {
     uint64_t end = tb_gdb_now_ms() + 3000;
@@ -43,7 +51,8 @@ static void run(const char *peer, const char *mode)
     while (tb_gdb_state(gdb) != TB_GDB_READY && tb_gdb_now_ms() < end) { pump(gdb); }
     CHECK(tb_gdb_state(gdb) == TB_GDB_READY);
     tb_registers_visible(registers, true); tb_context_visible(context, false, true);
-    command(gdb, "-stop"); ready(gdb);
+    uint64_t previous_stop = tb_gdb_generation(gdb).stop;
+    command(gdb, "-stop"); stopped(gdb, previous_stop); ready(gdb);
     const TbRegister *row = tb_registers_row(registers, 0);
     CHECK(row->number == 0 && row->available && !row->changed && strcmp(row->value, "0x10") == 0);
     if (strstr(mode, "bounds")) { CHECK(tb_registers_count(registers) == TB_REGISTERS_MAX && tb_registers_limited(registers)); }
@@ -57,7 +66,9 @@ static void run(const char *peer, const char *mode)
     unsigned before = replies; for (int i = 0; i < 12; ++i) { pump(gdb); } CHECK(replies == before);
     command(gdb, "-register-change"); command(gdb, "-run"); CHECK(tb_registers_stale(registers));
     before = replies; for (int i = 0; i < 12; ++i) { pump(gdb); } CHECK(replies == before);
-    command(gdb, "-stop"); ready(gdb); CHECK(row->changed && strcmp(row->value, "0x20") == 0);
+    previous_stop = tb_gdb_generation(gdb).stop;
+    command(gdb, "-stop"); stopped(gdb, previous_stop); ready(gdb);
+    CHECK(row->changed && strcmp(row->value, "0x20") == 0);
     tb_registers_format(registers, TB_REG_DECIMAL); tb_registers_pump(registers);
     tb_registers_format(registers, TB_REG_HEX); ready(gdb);
     CHECK(strcmp(row->value, "0x20") == 0 && row->changed); /* obsolete format reply rejected */
@@ -79,7 +90,12 @@ static void run(const char *peer, const char *mode)
     command(gdb, "-register-malformed"); tb_registers_refresh(registers); ready(gdb);
     tb_registers_visible(registers, false); tb_registers_refresh(registers);
     before = replies; for (int i = 0; i < 12; ++i) { pump(gdb); } CHECK(replies == before);
-    command(gdb, "-register-change"); command(gdb, "-run"); command(gdb, "-stop");
+    command(gdb, "-register-change"); command(gdb, "-run");
+    previous_stop = tb_gdb_generation(gdb).stop;
+    /* Acknowledgement alone must not end the hidden interval: the stop is async. */
+    command(gdb, "-stop-held");
+    CHECK(tb_gdb_state(gdb) == TB_GDB_RUNNING && tb_gdb_generation(gdb).stop == previous_stop);
+    command(gdb, "-release-stop"); stopped(gdb, previous_stop);
     tb_registers_visible(registers, true); ready(gdb); CHECK(!row->changed);
     CHECK(tb_context_select_thread(context, "42")); ready(gdb); CHECK(!row->changed);
     tb_gdb_close(gdb); end = tb_gdb_now_ms() + 3000;
