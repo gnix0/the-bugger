@@ -1192,3 +1192,25 @@ Agent-run focused checks on 2026-10-24:
 The broader default/native/tmux and static-analysis matrices were not run for
 this gate. Manual multi-file use, compact tab cycling and acceptance remain
 pending.
+
+### CI correction — source catalog ordering
+
+The hosted Ubuntu 26.04 / GDB 17.1 run for PR #19, merge revision `e6fcf0a`,
+passed the default suite and then failed the native suite at
+`test_code_native.c:185`. The preceding assertions verified the correct contents
+for each opened file. The new tab assertion incorrectly assumed that GDB listed
+`left/duplicate.c` before `right/duplicate.c`, assigning those identities to tab
+1 and tab 2. The local run had used that order; the hosted run did not.
+
+The test now finds each source by full path, records its actual tab, and runs
+the relocated-source workflow with both explicit opening orders. Content,
+full-path identity, stop retention, source mapping, breakpoint and close
+assertions remain. Application code is unchanged by this correction.
+
+Agent-run `make -s BUILD_DIR=build/ci-source-order CPPFLAGS=-D_FORTIFY_SOURCE=3
+build/ci-source-order/test-code-native` passed with strict warnings. Running that
+binary with the six fixture/source arguments recorded above passed outside the
+sandbox, including left-first and right-first tab opening. `git diff --check`
+also passed. The failed hosted run remains failed; native checks after this
+failure, tmux and the remaining integration targets were not reached. A new
+hosted run is pending.
