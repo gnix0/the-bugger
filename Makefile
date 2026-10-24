@@ -608,3 +608,16 @@ test-navigation: all $(BUILD_DIR)/test-navigation
 
 test: test-navigation
 -include $(BUILD_DIR)/tests/integration/test_navigation.d
+
+$(BUILD_DIR)/test-fullscreen: $(BUILD_DIR)/tests/integration/test_fullscreen.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-fullscreen test-fullscreen-native
+test-fullscreen: all $(BUILD_DIR)/test-fullscreen
+	$(BUILD_DIR)/test-fullscreen $(abspath $(BINARY))
+test-fullscreen-native: all $(BUILD_DIR)/test-fullscreen $(BUILD_DIR)/code-fixture
+	$(BUILD_DIR)/test-fullscreen $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/code-fixture)
+
+test: test-fullscreen
+test-native: test-fullscreen-native
+-include $(BUILD_DIR)/tests/integration/test_fullscreen.d

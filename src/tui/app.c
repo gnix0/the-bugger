@@ -26,7 +26,7 @@ typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
                CONFIG_MENU, THEMES, THEME_PREVIEW, PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM, SCRIPT_LIST, SCRIPT_FILTER } Page;
 typedef enum { CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_ADDRESS, CODE_STOPPED,
                CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_DIRECTORY_ADD, CODE_RULE_FROM,
-               CODE_RULE_TO, CODE_SETTINGS_CLEAR, CODE_RAW, CODE_RUN_TO } CodeAction;
+               CODE_RULE_TO, CODE_SETTINGS_CLEAR, CODE_RAW, CODE_RUN_TO, CODE_FULLSCREEN } CodeAction;
 typedef enum {
     CONFIG_OPEN, THEME_ACTION, CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
     TOOL, TAB, MENU, BODY, SHOW_VIEW, FOCUS_PANE, CANCEL_RESET, CONFIRM_RESET,
@@ -68,6 +68,7 @@ typedef struct {
     bool scroll_drag_horizontal;
     Control controls[MAX_CONTROLS];
     TbRect panes[TB_MAX_PANES];
+    int fullscreen_source; /* -1 keeps the ordinary tiled rendering. */
     const char *colors;
     TbPreferences preferences;
     size_t theme_draft;
@@ -144,6 +145,7 @@ static void status(App *app, const char *message)
 static void page(App *app, Page next)
 {
     app->page = next;
+    if (next == LAUNCHER) { app->fullscreen_source = -1; }
     app->focus = 0;
     app->cursor = 0;
     app->form_scroll = 0;
@@ -515,9 +517,9 @@ static void draw_menu(App *app, int pane, TbRect rect)
         return;
     }
     const char *const actions[] = {
-        "Split right", "Split below", "Close selected tab", "Close split pane", "Resize dividers"
+        "Split right", "Split below", "Close selected tab", "Close split pane", "Resize dividers", "Fullscreen Source"
     };
-    int count = app->menu_actions ? 5 : TB_VIEW_COUNT;
+    int count = app->menu_actions ? (app->demo.panes[pane].tabs[app->demo.panes[pane].active] == TB_SOURCE ? 6 : 5) : TB_VIEW_COUNT;
     int selected = app->focus - start_control;
     int scroll = selected >= 0 && selected < count ? selected / height * height : 0;
     for (int i = 0; i < count; ++i) {
@@ -1200,7 +1202,7 @@ static void draw_pane(App *app, int pane_index, TbRect rect)
     tb_fill((TbRect){rect.x, rect.y, rect.w, 1}, TB_SURFACE);
     int x = rect.x + 1;
     /* Active tab is always visible; additional tabs use the remaining width. */
-    for (int pass = 0; pass < pane->count; ++pass) {
+    for (int pass = 0; app->fullscreen_source < 0 && pass < pane->count; ++pass) {
         int tab = (pane->active + pass) % pane->count;
         char label[64];
         (void)snprintf(label, sizeof label, " %s ",
@@ -1223,7 +1225,10 @@ static void draw_pane(App *app, int pane_index, TbRect rect)
     }
     tb_text(rect.y, rect.x, 1, TB_ACTIVE_TAB, A_BOLD,
             pane_index == app->demo.pane ? ">" : " ");
-    button(app, rect.y, rect.x + rect.w - 5, 4, "...", MENU, 0, pane_index);
+    if (app->fullscreen_source == pane_index) {
+        tb_text(rect.y, rect.x + 1, rect.w - 16, TB_ACTIVE_TAB, A_BOLD, "Source | fullscreen");
+        button(app, rect.y, rect.x + rect.w - 14, 13, "[ Restore ]", CODE_ACTION, CODE_FULLSCREEN, pane_index);
+    } else { button(app, rect.y, rect.x + rect.w - 5, 4, "...", MENU, 0, pane_index); }
     if (app->menu == pane_index) {
         draw_menu(app, pane_index, rect);
     } else {
@@ -1285,8 +1290,22 @@ static void draw_workspace(App *app)
             app->live ? tb_session_state_name(app->debugger) : app->demo.running ? "Running / stale" : "Paused (demo)");
     ++y;
     TbRect area = {1, y + 1, COLS - 2, LINES - y - 3};
-    bool tiled = tb_layout_arrange(&app->layout, area, app->demo.pane);
-    memcpy(app->panes, app->layout.panes, sizeof app->panes);
+    if (app->fullscreen_source >= 0 &&
+        (!tb_layout_has_pane(&app->layout, app->fullscreen_source) ||
+         app->demo.panes[app->fullscreen_source].tabs[app->demo.panes[app->fullscreen_source].active] != TB_SOURCE)) {
+        app->fullscreen_source = -1;
+    }
+    bool fullscreen = app->fullscreen_source >= 0;
+    bool tiled = true;
+    if (fullscreen) {
+        /* Keep the split tree and ratios intact; only rendered rectangles change. */
+        memset(app->panes, 0, sizeof app->panes);
+        app->demo.pane = app->fullscreen_source;
+        app->panes[app->fullscreen_source] = area;
+    } else {
+        tiled = tb_layout_arrange(&app->layout, area, app->demo.pane);
+        memcpy(app->panes, app->layout.panes, sizeof app->panes);
+    }
     if (app->live) {
         bool threads = false, frames = false, registers = false, locals = false, watches = false;
         for (int i = 0; i < app->layout.count; ++i) {
@@ -1339,7 +1358,7 @@ static void draw_workspace(App *app)
         int pane = app->layout.order[i];
         draw_pane(app, pane, app->panes[pane]);
     }
-    for (int i = 0; i < app->layout.divider_count; ++i) {
+    for (int i = 0; !fullscreen && i < app->layout.divider_count; ++i) {
         TbDivider divider = app->layout.dividers[i];
         int control = add_control(app, divider.rect, DIVIDER, i, 0);
         if (app->resizing && app->resize_divider == i) { app->focus = control; }
@@ -1372,6 +1391,7 @@ static void draw_workspace(App *app)
     tb_fill((TbRect){0, LINES - 2, COLS, 2}, TB_CHROME);
     tb_text(LINES - 2, 1, COLS - 2, TB_CHROME, 0, footer);
     tb_text(LINES - 1, 1, COLS - 2, TB_CHROME, 0,
+            fullscreen ? "Source fullscreen | Esc / q or Restore: tiled workspace | Ctrl+Q quit app" :
             app->resizing ? "Resize: Tab selects divider | arrows move | Enter / Esc finish" :
             app->live ? "Console: Command / Save Log | q close session | Ctrl+Q quit app" :
             "DEMO | ... pane actions | drag dividers | q launcher | Ctrl+Q quit app");
@@ -1382,19 +1402,19 @@ static bool field_utf8(const wchar_t *value, char *target, size_t capacity);
 static const char *const code_labels[] = {
     "Choose source file", "Find in current file", "Go to line", "Go to address / symbol",
     "Return to stopped context", "Toggle mixed source/assembly", "Source lookup settings",
-    "Add source directory", "Mapping: build prefix", "Mapping: local prefix", "Clear source overrides", "Decode bytes (raw inspection)", "Run to Selected"
+    "Add source directory", "Mapping: build prefix", "Mapping: local prefix", "Clear source overrides", "Decode bytes (raw inspection)", "Run to Selected", "Fullscreen Source"
 };
 
 static void draw_code_menu(App *app)
 {
     draw_header(app, "Code view actions");
     bool source = app->demo.panes[app->code_pane].tabs[app->demo.panes[app->code_pane].active] == TB_SOURCE;
-    const CodeAction source_actions[] = {CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_STOPPED, CODE_SOURCE_SETTINGS, CODE_RUN_TO};
+    const CodeAction source_actions[] = {CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_STOPPED, CODE_SOURCE_SETTINGS, CODE_RUN_TO, CODE_FULLSCREEN};
     const CodeAction asm_actions[] = {CODE_ADDRESS, CODE_STOPPED, CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_RAW, CODE_RUN_TO};
-    int count = 6;
+    int count = source ? 7 : 6;
     for (int i = 0; i < count; ++i) {
         CodeAction action = source ? source_actions[i] : asm_actions[i];
-        button(app, 5 + i, 3, COLS - 6, code_labels[action], CODE_ACTION, action, app->code_pane);
+        button(app, 5 + i, 3, COLS - 6, action == CODE_FULLSCREEN && app->fullscreen_source >= 0 ? "Restore tiled workspace" : code_labels[action], CODE_ACTION, action, app->code_pane);
     }
     tb_text(LINES - 5, 3, COLS - 6, TB_MUTED, 0, "Browsing never moves execution. Left/Right scroll long code lines.");
     button(app, LINES - 4, 3, 12, "[ Back ]", BACK, 0, 0);
@@ -1683,6 +1703,7 @@ static void draw(App *app)
 
 static void cycle_pane(App *app, int direction)
 {
+    if (app->fullscreen_source >= 0) { return; }
     for (int i = 0; i < app->layout.count; ++i) {
         if (app->layout.order[i] == app->demo.pane) {
             int next = (i + direction + app->layout.count) % app->layout.count;
@@ -1695,8 +1716,21 @@ static void cycle_pane(App *app, int direction)
     }
 }
 
+static void toggle_source_fullscreen(App *app, int pane)
+{
+    if (!tb_layout_has_pane(&app->layout, pane) ||
+        app->demo.panes[pane].tabs[app->demo.panes[pane].active] != TB_SOURCE) { return; }
+    app->fullscreen_source = app->fullscreen_source >= 0 ? -1 : pane;
+    app->demo.pane = pane;
+    code_focus(app, pane);
+    page(app, WORKSPACE);
+    status(app, app->fullscreen_source >= 0 ?
+           "Source fullscreen; Escape or Restore returns to the tiled workspace." : "Tiled workspace restored.");
+}
+
 static void pane_action(App *app, int action, int pane)
 {
+    if (action == 5) { toggle_source_fullscreen(app, pane); return; }
     app->menu = -1;
     app->focus = 0;
     if (action < 2) {
@@ -2404,6 +2438,7 @@ static void activate(App *app, Control control)
     case CODE_ACTIONS:
         app->code_pane = control.pane; code_focus(app, control.pane); page(app, CODE_MENU); break;
     case CODE_ACTION: {
+        if (control.value == CODE_FULLSCREEN) { toggle_source_fullscreen(app, control.pane); break; }
         TbCode *code = tb_session_code(app->debugger);
         app->code_pane = control.pane; app->code_action = (CodeAction)control.value;
         if (app->code_action == CODE_CHOOSE_FILE) {
@@ -2701,7 +2736,7 @@ static void mouse_event(App *app)
         }
         return;
     }
-    if (app->page == WORKSPACE && (event.bstate & BUTTON1_PRESSED)) {
+    if (app->page == WORKSPACE && app->fullscreen_source < 0 && (event.bstate & BUTTON1_PRESSED)) {
         int divider = tb_layout_divider_at(&app->layout, event.x, event.y);
         if (divider >= 0) {
             app->drag = divider;
@@ -2724,7 +2759,7 @@ static void mouse_event(App *app)
             for (int i = 0; i < app->count; ++i) {
                 if (app->controls[i].kind == SHOW_VIEW || app->controls[i].kind == PANE_ACTION) {
                     int selected = app->focus + direction;
-                    int count = app->menu_actions ? 5 : TB_VIEW_COUNT;
+                    int count = app->menu_actions ? (app->demo.panes[app->menu].tabs[app->demo.panes[app->menu].active] == TB_SOURCE ? 6 : 5) : TB_VIEW_COUNT;
                     if (selected >= i && selected < i + count) { app->focus = selected; }
                     return;
                 }
@@ -2885,6 +2920,9 @@ static void key_event(App *app, wint_t key, bool special)
         theme_cycle(app, control.value == 1, key == KEY_LEFT ? -1 : 1); return;
     }
     if (!special && key == 27) {
+        if (app->page == WORKSPACE && app->fullscreen_source >= 0) {
+            toggle_source_fullscreen(app, app->fullscreen_source); return;
+        }
         if (app->page == CONFIG_MENU || app->page == THEMES || app->page == THEME_PREVIEW) {
             activate(app, (Control){.kind = BACK}); return;
         }
@@ -2931,7 +2969,7 @@ static void key_event(App *app, wint_t key, bool special)
     if (control.kind == MEMORY_FIELD && ((!special && (key == '\n' || key == '\r')) || (special && key == KEY_ENTER))) {
         activate(app, (Control){.kind = MEMORY_ACTION, .value = 0, .pane = control.pane}); return;
     }
-    if (!special && app->page == WORKSPACE && key >= '1' && key <= '9') {
+    if (!special && app->page == WORKSPACE && app->fullscreen_source < 0 && key >= '1' && key <= '9') {
         int pane = (int)(key - '1');
         if (tb_layout_has_pane(&app->layout, pane)) { app->demo.pane = pane; }
         code_focus(app, app->demo.pane);
@@ -3009,6 +3047,7 @@ static void key_event(App *app, wint_t key, bool special)
 static void initialize(App *app, bool demo)
 {
     memset(app, 0, sizeof *app);
+    app->fullscreen_source = -1;
     app->demo_mode = demo;
     app->profiles = tb_profiles_create(); app->profile = calloc(1, sizeof *app->profile);
     if (!app->profiles || !app->profile) { app->quit = true; }

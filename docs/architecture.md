@@ -66,6 +66,27 @@ native-vs-preview availability, profile review and q/Ctrl+Q policy
 explicit; session configuration and the debugging workspace are unchanged.
 
 
+## Source fullscreen rendering
+
+`App.fullscreen_source` is a temporary pane identifier, or -1 for ordinary tiled
+rendering. The Source Actions and Source pane-actions entries share one toggle;
+Restore and workspace Escape/q leave it. Entry selects Source stepping without
+moving execution. Leaving for the launcher clears the override.
+
+While fullscreen, `draw_workspace` keeps the normal application chrome but gives
+only that Source pane the available workspace rectangle. The layout module is
+not rearranged: its split tree, ratios and pane membership stay intact. Hidden
+render rectangles are zero-sized, so the existing code/context/register/variable/
+memory visibility APIs hide their inspectors. They retain their normal pending
+reply and stale-generation handling. Restoring recomputes normal rectangles for
+the current terminal size from the original tree.
+
+The fullscreen header exposes Restore instead of tab switches and the pane menu.
+Divider rendering/hit tests and pane-switch shortcuts are disabled while the
+override is active; retained geometry cannot create invisible click targets.
+Source navigation, scrollbars and normal execution controls use their existing
+paths. No saved layout, new session backend or target-access policy is introduced.
+
 ## Theme selection and preferences
 
 `src/tui/theme.{h,c}` defines the built-in palette catalog, stable family/variant

@@ -10,6 +10,12 @@ target cases establish architecture coverage, not physical-board support.
 See [testing](../docs/testing.md) for procedures and prerequisites; execution
 records remain in the [validation records](../docs/validation.md).
 
+- `make test-fullscreen`: Source-only fullscreen PTY checks, retained header/footer,
+  split/resize restoration, hidden input regions and compact/keyboard behavior;
+  included in `make test`. `make test-fullscreen-native` adds actual GDB source
+  stepping and owned-session cleanup, and is included in `make test-native`.
+  See [fullscreen procedures](../docs/testing.md#source-fullscreen).
+
 - `make test-navigation`: compares arrow-key and always-on h/j/k/l behavior
   through real demo PTYs, including menus, tabs/bodies, resize, confirmations,
   compact rendering and literal field editing. Included in `make test`; no

@@ -81,6 +81,8 @@ automatic main breakpoint.
 Click Source for source stepping or Disassembly for instruction stepping.
 The development build also accepts lowercase h/j/k/l as arrow-key aliases
 outside text fields; no setting or modal editing is required.
+[Source fullscreen](docs/usage.md#source-fullscreen) expands a Source pane while
+retaining the toolbar/status bars and restores the existing tiled workspace.
 Defaults are F5 Continue, F10 Over, F11 Into, Shift+F11 Out and F9 Breakpoint;
 clickable actions remain available when a terminal intercepts keys. Outside
 fields, `q` closes/backs out; `Ctrl+Q` quits, confirming active-session closure.

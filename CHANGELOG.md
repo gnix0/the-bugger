@@ -4,6 +4,12 @@
 
 ### Added
 
+- Temporary Source fullscreen through Source Actions or pane actions, keeping
+  the application header/footer visible. Restore, Escape or q returns to the
+  retained tiled workspace; resizing, tabs and splits are preserved.
+- Focused demo/native fullscreen checks for input isolation, restoration and
+  actual source stepping.
+
 - Always-on lowercase h/j/k/l navigation matching Left/Down/Up/Right outside
   text fields. Existing arrows, mouse and function keys remain available;
   typed letters stay literal in fields, with no Vim editing modes.
