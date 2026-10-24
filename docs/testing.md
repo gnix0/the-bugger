@@ -838,6 +838,15 @@ state. The peer is not hardware evidence; the VT reader is not visual acceptance
 
 ## Native launch, attach and cleanup
 
+The native TUI runner includes inline Console command-entry checks with real
+GDB. `make test-native` also runs its focused Console checks through an isolated
+tmux server. To repeat only that tmux case after building the native runner and
+fixture (substitute your build directory if different):
+
+```sh
+TB_CONSOLE_TEST_TMUX=1 build/test-native-tui "$PWD/build/the-bugger" "$PWD/build/debug-fixture"
+```
+
 Run `make fixtures` and `make test-native` first. These separate real-GDB tests
 require native GDB, a C++ compiler for the target fixture, Linux PTYs/pidfds and
 ptrace permission. Default `make test` remains deterministic and board/GDB-free.
@@ -860,10 +869,18 @@ ptrace sandbox. No global permission/sysctl setting is changed.
    arguments: escape/OSC bytes must appear as text, not terminal commands. Do
    not use that test-only flag for a standalone fixture. Attached stdout is
    deliberately different: it stays with that process's existing terminal.
-3. Click Pause. Expect an actual GDB stop and Stopped. In Console choose Command,
+3. Click Pause. Expect an actual GDB stop and Stopped. In Console focus the inline Command field,
    enter `info program`, Send. Try `this-command-does-not-exist` and verify a
    readable error with a usable session. Then `echo console-ok\n` should work.
    Input uses ordinary arrows/Home/End/Delete/Backspace/Ctrl+U and Tab/Enter.
+   Verify that output and the other panes remain visible during entry. Send
+   `set mi-async off`: the frontend must reject it and retain the draft. Clear
+   with Ctrl+U, send `echo hjklq123[]\n` with Send, and verify literal output and
+   an empty field. Type an unsent draft, Escape, switch tabs/open and cancel Save
+   Log, then resize to compact and back: the draft must survive. A second Console
+   pane must have an independent draft. Tab must reach the field; Home/End should
+   keep the visible caret and long draft aligned. Repeat with a live log flood
+   and inside tmux; scrolling output must not move the command field.
 4. Choose Save Log and enter a new writable path. Expect success, retained
    readable log text and mode 0600. Repeat that existing path and try an invalid
    directory: expect errors with input retained and no overwrite. Pick a new
@@ -880,7 +897,8 @@ ptrace sandbox. No global permission/sysctl setting is changed.
    workspace it asks to close the session and returns to the launcher after
    confirmation. In a confirmation, `q` cancels. At the launcher it stays open.
    `Ctrl+Q` quits the application, asking before closing an active session.
-   Commands and filenames containing `q` remain editable; Escape cancels input.
+   Commands and filenames containing `q` remain editable; Escape leaves inline
+   command editing with its draft retained, or cancels a separate input dialog.
    The footer must make the distinction visible.
 7. In a second terminal run `./build/debug-fixture --allow-attach` and note its
    printed PID. In the launcher select Attach, enter that PID, optionally choose

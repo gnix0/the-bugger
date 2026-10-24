@@ -4,6 +4,9 @@
 
 ### Added
 
+- Console now has an inline GDB Command field below its output with Enter/Send,
+  pane-local retained drafts and direct keyboard editing, keeping the workspace
+  visible while entering commands. Save Log remains available separately.
 - Ctrl+arrow and Ctrl+h/j/k/l shortcuts move content focus spatially between
   visible panes, preserving viewports and stopping at layout edges.
 - Source panes can keep several GDB-known files open as session-local tabs.

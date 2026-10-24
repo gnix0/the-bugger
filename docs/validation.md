@@ -1290,3 +1290,66 @@ host results, not a replacement for the pending Ubuntu 26.04 / GDB 17.1 hosted
 rerun. Workflow target-list equivalence, relative documentation file links and
 `git diff --check` also passed. The archive's analysis log was not inspected;
 fresh sanitizer/compiler/hardware matrices were not run for this correction.
+
+## Inline GDB Console command entry
+
+Implemented for owner review on 2026-10-24; acceptance and physical-board manual
+checks are not implied. The separate command screen is replaced by a bounded
+pane-local field below Console output, with Enter/Send, retained rejected drafts,
+Escape to leave editing and unchanged deliberate GDB/MI dispatch. Save Log keeps
+its destination dialog. Output scrollbars exclude the new input row.
+
+Agent-run focused native and code TUI checks passed with real GDB, including
+actual command output/errors, Source/Disassembly PC assertions, horizontal log
+scrolling, keyboard-only access, pane-local drafts and compact resizing. The
+new focused Console case also passed through an isolated real tmux server using
+its default Escape forwarding delay. `make test-native` now includes that case.
+Logs: `build/console-inline-focus-native.log`, `build/console-inline-code.log`
+and `build/console-inline-tmux-synchronized.log`.
+
+The first complete baseline failed an existing code-stepping assertion because
+the test pressed F10 while the new command field still had editing focus. The
+test now explicitly selects Source before stepping; its original PC assertion
+is preserved and passes. The initial baseline log remains
+`build/ci-console-inline-tests.log`. Early focused checks also exposed harness
+assumptions: field focus was initially checked through reverse-video styling
+instead of the actual caret, and the tmux test used a pre-existing Loaded label
+as an Escape acknowledgement. The tests now inspect the caret and await actual
+field departure without changing tmux's Escape delay. Initial focused logs are
+retained under `build/console-inline-*-initial.log` and
+`build/console-inline-tmux-debug.log`. A sandboxed native run could not launch
+the inferior; real-GDB verification ran outside that sandbox without changing
+host ptrace settings.
+
+All 60 unit/integration/support C sources compiled successfully with
+`CPPFLAGS=-D_FORTIFY_SOURCE=3` and the project's warning-as-error flags in
+`build/console-inline-compilation`; the complete compiler log is
+`build/console-inline-test-compilation.log`. This includes the physical-board
+TUI runner's updated inline-entry expectation, but does not execute hardware.
+
+Final complete baseline command (fresh build directory):
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/ci-console-inline-final CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci \
+  > build/ci-console-inline-final-tests.log 2>&1
+```
+
+Final baseline outcome: **PASS, exit 0**. Default, native, tmux, localhost remote
+and owned-server/TUI/offline OpenOCD checks completed, including both inline
+Console modes and the original code-stepping assertions. The exact source/test/Makefile diff and base
+revision are retained in `build/ci-console-inline-final-tree.patch` and
+`build/ci-console-inline-final-base.txt`. Local environment: Linux
+7.2.9-arch1-1 x86-64, GCC 16.2.1, GDB 18.1, tmux 3.8 and ncursesw
+6.6.20251230. Local results do not establish hosted Ubuntu success. No fresh
+physical hardware, sanitizer/compiler matrix or static-analysis run is claimed.
+The final host process audit found no remaining GDB, OpenOCD or frontend processes.
+The tested source/build snapshot comparison, relative documentation file-link
+checks and `git diff --check` passed.
+
+Handoff correction: the isolated test build initially left the usual
+`build/the-bugger` executable stale, so the owner still saw the old Command page.
+Agent rebuilt it with `make all` (exit 0), then reran the native TUI runner against
+that exact default executable (exit 0), including inline entry and cleanup.
+Logs: `build/console-inline-default-build.log` and
+`build/console-inline-default-native.log`. Restart the application to use the
+rebuilt executable; an already-running process retains its previous code.

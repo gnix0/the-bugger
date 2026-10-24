@@ -123,7 +123,7 @@ static void scrolling(TestTerminal *term)
     mouse_at(term, 0, track_x, track_y, true);
     test_terminal_expect(term, "CODE_FIND_MARKER");
     horizontal_drag(term, "Actions", 46, false);
-    test_terminal_click(term, "Command"); test_terminal_expect(term, "GDB console command");
+    test_terminal_click(term, "Command"); test_terminal_expect(term, "LIVE | GDB / program log");
     input(term, "echo HORIZONTAL_BEGIN_abcdefghijklmnopqrstuvwxyz_abcdefghijklmnopqrstuvwxyz_abcdefghijklmnopqrstuvwxyz_abcdefghijklmnopqrstuvwxyz_HORIZONTAL_END\\n");
     test_terminal_expect(term, "HORIZONTAL_BEGIN");
     CHECK(!test_terminal_find(term, "HORIZONTAL_END", NULL, NULL));
@@ -244,7 +244,7 @@ static void direct_start(const char *binary, const char *fixture)
     /* These code-pane headers are the contract before the first stop.
      * Other inspectors may correctly report stale/unread register data;
      * searching the entire workspace for STALE confuses their lifecycles. */
-    test_terminal_click(&term, "Command"); test_terminal_expect(&term, "GDB console command"); input(&term, "start");
+    test_terminal_click(&term, "Command"); test_terminal_expect(&term, "LIVE | GDB / program log"); input(&term, "start");
     test_terminal_expect(&term, "LIVE | C/C++ | code.c");
     test_terminal_expect(&term, "LIVE | assembly | code.c");
     CHECK(source_pc_line(&term) > 0 && assembly_pc(&term) != 0);
@@ -262,7 +262,7 @@ static void wheel_up_listing(const char *binary, const char *fixture)
     test_terminal_expect(&term, "Executable / ELF"); test_terminal_send(&term, "\t\025"); test_terminal_send(&term, fixture);
     test_terminal_click(&term, "Review session"); test_terminal_click(&term, "Start native");
     test_terminal_expect(&term, "LIVE | Loaded");
-    test_terminal_click(&term, "Command"); test_terminal_expect(&term, "GDB console command"); input(&term, "start");
+    test_terminal_click(&term, "Command"); test_terminal_expect(&term, "LIVE | GDB / program log"); input(&term, "start");
     test_terminal_expect(&term, "LIVE | assembly | session.c");
     unsigned long long pc = assembly_pc(&term); CHECK(pc);
     test_terminal_click(&term, "Disassembly");
@@ -330,10 +330,11 @@ int main(int argc, char *argv[])
     input(&term, "code.c"); test_terminal_click(&term, "tests/fixtures/native/code.c");
     test_terminal_expect(&term, "#define _POSIX_C_SOURCE");
     CHECK(assembly_pc(&term) == 0); /* Browsing a loaded ELF invents no PC. */
-    test_terminal_click(&term, "Command"); test_terminal_expect(&term, "GDB console command"); input(&term, "start");
+    test_terminal_click(&term, "Command"); test_terminal_expect(&term, "LIVE | GDB / program log"); input(&term, "start");
     long long first_stop = now() + 5000;
     while (!source_pc_line(&term) && now() < first_stop) { test_terminal_pump(&term, 50); }
     CHECK(source_pc_line(&term) == 13 || source_pc_line(&term) == 14);
+    test_terminal_click(&term, "Source"); /* Leave inline editing before a step binding. */
     if (source_pc_line(&term) == 13) { test_terminal_send(&term, "\033[21~"); }
     source_pc(&term, "code_counter = 1");
     test_terminal_expect(&term, "source stepping");

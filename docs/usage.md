@@ -26,8 +26,8 @@ an empty argument and literal metacharacters. An environment entry such as
 Environment overrides are session-only.
 
 The session starts **Loaded**. Click **Continue** or press **F5** to run; click
-**Pause** to interrupt. State and PID come from GDB. In Console, **Command** opens
-a clearly labelled GDB command field; **Send** executes through MI. Errors leave
+**Pause** to interrupt. State and PID come from GDB. Console has an inline
+**Command** field below its output; **Enter** or **Send** executes through MI. Errors leave
 the session usable. Source/Disassembly and Registers show actual stopped context;
 Memory uses the inline inspector described below; Locals/Watches expose scoped
 values through deliberate reads and lazy expansion, without substituting samples.
@@ -69,6 +69,17 @@ Control and non-ASCII bytes are escaped before display. Console retains up to
 follow output. **Save Log** creates a new private file containing retained text.
 Existing files are preserved; open/write failures retain the input for correction.
 Interactive program input and a full terminal emulator are not provided yet.
+Click the Command field or reach it with Tab to type a GDB command without
+leaving the workspace. Arrows/Home/End/Delete/Backspace and Ctrl+U edit the draft;
+h/j/k/l, `q` and digits remain literal text. Enter or Send submits one command.
+The field clears only when the session accepts it for dispatch; a rejected
+submission retains the draft, while a later GDB error appears in the log.
+Escape leaves the field without sending or discarding the draft. Each Console
+pane retains its own draft across tab changes, dialogs and terminal resizing;
+new sessions and reused split panes start empty. Leave the field before using
+execution key bindings, or click the toolbar action directly. Save Log remains a separate
+file-destination dialog. Command history and multiline command editing are not
+added by this change.
 The current Console sends commands to GDB; it is not a UART terminal. A separate
 interactive serial console is [planned as F13](roadmap.md#f13--uartserial-console-planned).
 

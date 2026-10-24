@@ -77,8 +77,9 @@ make fixtures
 ```
 
 Choose **Linux application → Launch**, enter `./build/code-fixture`, then
-**Review session → Start native**. In **Console → Command**, enter `start` to
-ask GDB to stop at main. The fixture runs under GDB; do not pass `start` to it
+**Review session → Start native**. In Console's inline **Command** field, enter
+`start`, then press Enter or click Send to ask GDB to stop at main.
+The fixture runs under GDB; do not pass `start` to it
 as a shell argument. Ordinary Continue starts the loaded program without an
 automatic main breakpoint.
 
