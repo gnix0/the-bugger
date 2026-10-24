@@ -88,13 +88,19 @@ technical documents so its capabilities and links match the final result.
 
 ## Test execution policy for coding agents
 
-Run only quick focused checks directly. Before lengthy suites, stress runs,
-sanitizer/compiler matrices or other slow verification, provide exact commands
-and wait for owner-run results unless explicit permission covers that run.
-Distinguish agent-run and owner-run evidence. General implementation permission
-is not permission for lengthy tests. M10 completion, M11 corrections and the
-final M13 regression exception were limited to those tasks; none is standing
-authorization. No check is passed merely because a command was supplied.
+Focused checks support development; the complete hosted Tests target list is
+shared through `make test-ci`. Code/test/build handoffs include a fresh fortified
+run of that baseline, with command, tool versions and log location recorded.
+Existing input and terminal tests remain necessary when adding shortcuts; new
+shortcut tests alone do not establish compatibility with frame selection, text
+entry or terminal restoration. Local host results do not establish Ubuntu runner
+success. See the [reproduction command](testing.md#hosted-ci).
+
+Current agent execution authorization is governed by `AGENTS.md` and explicit
+user instructions. Additional stress runs, sanitizer/compiler matrices, physical
+hardware and other checks outside the normal host baseline retain their separate
+authorization requirements. Distinguish agent-run and owner-run evidence; no
+check is passed merely because a command was supplied.
 
 ## Release procedure
 

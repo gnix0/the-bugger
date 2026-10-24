@@ -10,6 +10,11 @@
   Current follows the selected frame; file tabs retain their source across
   stops. Each tab keeps its viewport, and narrow panes can cycle through tabs.
 
+### Fixed
+
+- Keep Enter separate from Ctrl+J during content focus so keyboard selection
+  in Call Stack, Threads and other views continues to work.
+
 ## [0.1.1] - 2026-10-24
 
 ### Added

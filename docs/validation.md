@@ -1248,3 +1248,45 @@ Agent-run focused checks:
 Full default/native/remote/tmux, sanitizer/compiler matrices and fresh physical
 checks were not run for this change. Manual terminal/multiplexer key forwarding
 and user acceptance remain pending; no new hardware compatibility is implied.
+
+### CI correction — Enter versus Ctrl+J
+
+The Tests log in `logs_108737438474.zip` records hosted merge revision
+`6f461b3` failing `test-context-tui` while expecting `LIVE | T1 frame #4`.
+After Down+Enter in Call Stack, content focus moved to Locals and the selected
+frame remained #3. The same failure reproduced locally with the unchanged
+Call Stack test. This was an application regression: curses translated Enter's
+carriage return into line feed, which the new content shortcut treated as Ctrl+J.
+
+Startup now explicitly calls `nonl()` after `raw()` to keep those inputs distinct.
+The existing Call Stack frame-selection assertion remains unchanged and passed
+after the fix. The navigation regression additionally checks that Enter retains
+Registers content focus while Ctrl+J transfers it down to Console.
+
+The shared `make test-ci` target contains the exact previous hosted Tests target
+list; workflow triggers, job count and the analysis job remain unchanged.
+Local code/test/build preflight now requires this complete baseline in a fresh
+fortified build directory rather than only selected focused tests.
+
+Agent-run verification of the uncommitted fix based on
+`f591e631f2e85dc3c79c4a9a9e0240fbbba1a5ce`:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/ci-content-enter CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci \
+  > build/ci-content-enter-tests.log 2>&1
+```
+
+Result: **PASS, exit 0**, from a previously nonexistent build directory. The
+complete default, native, tmux, real localhost remote, OpenOCD server/TUI and
+offline real-OpenOCD target list completed. This includes the original Call Stack
+keyboard-selection test, the explicit Enter/Ctrl+J navigation regression, both
+duplicate-source opening orders and terminal/signal restoration. No GDB/OpenOCD
+processes remained after completion. The full local log is
+`build/ci-content-enter-tests.log`.
+
+Local environment: Linux 7.2.9-arch1-1 x86_64, GCC 16.2.1, GDB 18.1, tmux 3.8,
+ncursesw 6.6.20251230 and OpenOCD 0.12.0-01004-g9ea7f3d64-dirty. These are local
+host results, not a replacement for the pending Ubuntu 26.04 / GDB 17.1 hosted
+rerun. Workflow target-list equivalence, relative documentation file links and
+`git diff --check` also passed. The archive's analysis log was not inspected;
+fresh sanitizer/compiler/hardware matrices were not run for this correction.

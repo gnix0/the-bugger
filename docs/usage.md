@@ -376,6 +376,7 @@ rendering exclude hidden panes. Escape still returns to the previous control.
 The terminal must forward Ctrl+arrow sequences. Traditional terminals encode
 Ctrl+H as Backspace and Ctrl+J as line feed, so those bytes move between panes
 only during content focus; text fields keep their existing editing behavior.
+Enter's carriage return remains a separate activation key.
 
 Escape goes back; `q` closes/backs out outside text fields and keeps the launcher
 open. **Quit** or `Ctrl+Q` exits the application, confirming active-session closure.

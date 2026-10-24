@@ -120,6 +120,7 @@ static void content_hopping(void)
     keys("\033[1;5C", "\014"); content_selected("Disassembly");
     keys("\033[1;5C", "\014"); content_selected("Registers");
     keys("\033[1;5C", "\014"); content_selected("Registers");
+    both("\r"); content_selected("Registers"); /* Enter must not become Ctrl+J. */
     keys("\033[1;5B", "\012"); content_selected("Console");
     keys("\033[1;5B", "\012"); content_selected("Console");
     keys("\033[1;5D", "\010"); content_selected("Locals");
