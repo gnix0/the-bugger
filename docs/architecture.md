@@ -18,7 +18,7 @@ debugger-domain state and must be replaced by live data in real sessions.
 
 The build and tests are C17 with strict warnings; Make is the only build driver.
 C tests use POSIX pipes, processes and PTYs.  Application libraries are ncursesw and libelf (ELF metadata
-only; GDB performs instruction decoding) and json-c (versioned profiles).
+only; GDB performs instruction decoding) and json-c (versioned profiles and appearance preferences).
 The MI parser/controller and shared session module serve native launch/attach
 and existing remote GDB-server sessions through the TUI. Console/output and Continue/Pause are
 live. Source/Disassembly and stepping use the code model; Call Stack and Threads
@@ -33,9 +33,8 @@ Profiles and key mappings retain a review step before connection.
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
 descriptors together, redrawing after input or session revisions. Idle waits are
 100 ms without a session, bounded to 25 ms with one. Raw input preserves function keys and Ctrl+Q;
-Ctrl+C and SIGINT/SIGTERM/SIGHUP leave through normal cleanup. Two module-owned
-globals are documented: a signal-safe exit flag and the screen's color-enabled
-flag. Mouse and keyboard share action dispatch and rendered hit regions.
+Ctrl+C and SIGINT/SIGTERM/SIGHUP leave through normal cleanup. Module-owned globals are limited to a signal-safe exit flag and the screen's
+color-enabled flag and selected palette index. Mouse and keyboard share action dispatch and rendered hit regions.
 
 Theme roles separate workspace, panel, raised header, notice and footer
 surfaces. Selected-row variants retain semantic foreground colors. Direct-color
@@ -62,6 +61,37 @@ No image assets, new dependency, animation or background work is needed. It keep
 native-vs-preview availability, profile review and q/Ctrl+Q policy
 explicit; session configuration and the debugging workspace are unchanged.
 
+
+## Theme selection and preferences
+
+`src/tui/theme.{h,c}` defines the built-in palette catalog, stable family/variant
+identifiers and semantic curses pairs. Catppuccin Macchiato is the default;
+All seven families, including Monokai Pro, remain selectable. The
+37 palettes use shared workspace/panel/raised/selection surfaces and semantic
+foregrounds. Muted/accent colors are adjusted toward text where required for
+contrast. RGB roles map to direct color, nearest xterm 256-color entries, or
+existing 8-color/monochrome fallbacks. If quantization merges a foreground with
+its background, the text color supplies a contrasting fallback.
+
+`app.c` owns Config, Themes and theme-preview page state. A draft palette is
+separate from the saved choice. Changing a family chooses a valid variant;
+preview reinitializes curses pairs and requests a full repaint. Preview renders
+an independent `TbDemo`/`TbLayout`, never the live session or inspection models.
+Back restores the saved palette; Save returns to Config only after persistence
+succeeds. Theme operations do not modify workspace geometry or session profiles.
+
+`src/tui/preferences.{h,c}` owns global version-1 `preferences.json`, independently
+of `profiles.json`. It stores theme/variant identifiers, not runtime color data
+or debugger state. Reads require an owned regular non-symlink file of at most
+1 KiB and validate the schema and known family/variant pair. Invalid files are
+preserved, Macchiato is used and writes are blocked until correction/restart.
+Saves use an advisory lock, stale-file identity checks, a private 0600 temporary
+file, fsync and atomic rename. A post-rename directory-sync error is reported as
+uncertain crash durability, not as a rolled-back save.
+
+The catalog adapts the referenced upstream palettes; it does not embed Neovim or
+execute Lua. [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES) retains exact upstream
+revisions and MIT notices and accompanies the binary distribution.
 
 ## Data flow and invariants
 
@@ -399,9 +429,10 @@ child is reaped by the controller; the kernel/adopting parent reaps an inferior
 orphaned by a debugger crash.
 
 `--demo` is an explicit visual-reference path. Bare invocation uses the native
-launcher; unimplemented server flows remain labelled previews. Live tabs/layout
-reuse presentation state only, not sample debugger values. The workspace has no presets, floating windows or editor modes; pages and
-additional themes remain separate planned gates.
+launcher with implemented remote/OpenOCD choices. Live tabs/layout reuse
+presentation state only, not sample debugger values. The workspace has no presets,
+floating windows or editor modes. Workspace organization remains F06; custom
+themes remain F44. F19's built-in themes affect presentation only.
 
 ## Selected context, Call Stack and Threads
 

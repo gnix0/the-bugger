@@ -153,12 +153,22 @@ Do **not** allow these features to delay the release:
 
 ### Visual identity
 
-- **Monokai Pro standard** as the visual starting point; prioritize contrast and readability.
-- Suggested palette: background `#221f22`, panel `#2d2a2e`, raised surface `#353236`, border `#49454b`, foreground `#fcfcfa`, muted `#939293`, pink `#ff6188`, green `#a9dc76`, orange `#fc9867`, yellow `#ffd866`, purple `#ab9df2`, cyan `#78dce8`.
+- The original v0.1.0 visual reference uses **Monokai Pro**. F19 adds selectable
+  themes and makes **Catppuccin Macchiato** the development-build default when no
+  valid preference exists. Preserve the tiled interface and semantic roles.
+- Retained Monokai Pro palette: background `#221f22`, panel `#2d2a2e`, raised surface `#353236`, border `#49454b`, foreground `#fcfcfa`, muted `#939293`, pink `#ff6188`, green `#a9dc76`, orange `#fc9867`, yellow `#ffd866`, purple `#ab9df2`, cyan `#78dce8`.
 - Use colors semantically and consistently: current execution line, breakpoints, selected row, changed registers/variables, running/halted/error statuses, assembly mnemonics, addresses, and C/C++ source syntax.
 - Provide a **256-color fallback** if truecolor is unavailable, with legible monochrome/minimal-color behavior rather than invisible text. No need to vendor proprietary Monokai assets.
 - Compact borders, understated tabs, a persistent status bar, and visible toolbar/action hints. Keep it fast and restrained rather than decorative.
-- Monokai Pro remains the default. Selection among 6–8 tested community-favorite themes is targeted around v0.5.0 or earlier; user-defined themes near v1.0.0. Neither changes the v0.1.0 visual reference.
+- F19 provides seven built-in themes and 37 variants through centered
+  **Config → Themes** controls: a Theme row, a dependent Variant row, Back,
+  Preview and Save. Preview uses simulated data and never saves or reads a
+  target; Back cancels and restores the saved palette. Save persists the choice
+  and returns to Config. Profiles remains available through Config.
+- Appearance preferences are global, separate from connection profiles. Preserve
+  corrupt/unsupported files and detect stale writers. Colors must retain legible
+  fallback and non-color indicators. User-defined themes remain F44; this does
+  not change the historical v0.1.0 visual reference or add layout presets.
 
 ### Default workspace
 
@@ -221,7 +231,7 @@ Locals/Watches, memory and CPU-register editing are targeted for **v0.2.0**. Ded
 ### Launcher
 
 The launcher uses a larger card
-centered horizontally and vertically, Monokai Pro title/version and subtle rules,
+centered horizontally and vertically, theme-aware title/version and subtle rules,
 three full-row choices with terminal-friendly icons, descriptions and chevrons,
 and recent-session information below. The selected row has a clear surface and
 non-color indicator. Adapt spacing for small terminals; preserve all mouse and

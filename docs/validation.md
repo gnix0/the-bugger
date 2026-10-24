@@ -9,9 +9,13 @@ instructions are required to interpret the results.
 
 ## Current evidence boundary
 
-M00–M17 and the listed corrections are accepted. M18 artifacts and final automated
-checks are prepared; manual/release acceptance remains pending.
-v0.1.0 is not accepted. M14 records passing GCC/Clang default/native/tmux suites,
+M00–M18 and the listed corrections form the first-release baseline. The maintainer
+reported v0.1.0 published on 2026-10-20. Historical preparation entries below retain
+their original pending states and test boundaries; publication does not supply
+missing individual manual outcomes or new hardware evidence. F19 is accepted
+through the maintainer-reported implementation commit and remains unreleased.
+
+M14 records passing GCC/Clang default/native/tmux suites,
 slow watchpoint recovery, full default/native ASan/UBSan with leak detection and
 full-project static analysis. These results do not establish physical embedded
 compatibility or measured terminal input-to-redraw latency. M15 now records
@@ -32,7 +36,7 @@ restructure these records.
 
 ## Implementation references and acceptance
 
-| Milestone | Deliverable | State | Commit SHA |
+| Milestone | Deliverable | State | Commit / release reference |
 |---|---|---|---|
 | M00 | Repository foundation | accepted | `0f5d05b` |
 | M01 | Launcher and DEMO workspace | accepted | `60df655` |
@@ -55,7 +59,8 @@ restructure these records.
 | M15 | Existing remote server | accepted | `75435199e498cc087941cd8a75d7232b65d4c720` |
 | M16 | OpenOCD wizard/lifecycle/actions | accepted | `18e460ddd4cbc897409e2879c03ed0fc983212df` |
 | M17 | NUCLEO-F446RE and ESP32-S3 validation | accepted | `f568bd2482b2309e3534ebc8e197854ada37bf77` |
-| M18 | v0.1.0 release evidence/acceptance | awaiting-user | — |
+| M18 | v0.1.0 release evidence/acceptance | accepted; published | v0.1.0; preparation revision recorded below |
+| F19 | Themes, variants and Config | accepted; unreleased | [Focused checks](#f19--themes-and-configuration); implementation committed per maintainer report |
 
 
 ### Full recorded commit identifiers
@@ -842,3 +847,51 @@ tag/publication remain separate from successful packaging. The agent refreshed
 the archives after the tracked release notes and verified their SHA-256 checksums.
 The source archive contains those final tracked notes. Later content changes
 require another `make release` before publication.
+
+
+## F19 — Themes and configuration
+
+Accepted through the maintainer's reported feature commit. This post-v0.1.0 work
+is unreleased. Under the updated [revision-recording policy](maintaining.md#commit-organization-and-traceability),
+its exact implementation reference is recorded with the next release evidence;
+no placeholder hash is assigned here. Acceptance does not imply separately
+reported manual visual checks.
+
+Scope: centered Config → Profiles/Themes, seven built-in families and 37 variants,
+Catppuccin Macchiato default, dependent variant controls, simulated temporary
+preview, Back cancellation and private atomic global preferences. Monokai Pro
+remains selectable. Upstream revisions/licenses are retained in
+`THIRD_PARTY_NOTICES`, also included in binary packaging. Custom themes and
+workspace redesign remain outside F19.
+
+Agent-run implementation checks:
+
+| Check | Recorded result |
+|---|---|
+| Strict `make -j2 all build/test-preferences build/test-render build/test-themes-tui` builds | PASS |
+| `build/test-preferences` | PASS: default, persistence, private atomic writes, stale writers, invalid schema and file preservation |
+| `build/test-render` | PASS: 37 palettes, RGB contrast, direct/256/8-color/monochrome, execution highlight and scrollbar |
+| `build/test-themes-tui "$PWD/build/the-bugger"` | PASS: centered menus, all variants, dependent selection, mouse/keyboard, Back/Save/restart, no preview persistence and 48×18 monochrome |
+| `build/test-profiles-tui "$PWD/build/the-bugger" "$PWD/build/debug-fixture"` | PASS: existing profile-management regression through Config → Profiles; non-native invocation |
+| Focused clang-tidy with repository analyzer/bugprone checks and warnings as errors | PASS after correction; `theme.c`, `preferences.c` and `app.c` |
+| `_FORTIFY_SOURCE=3`, strict warnings and `-fsyntax-only` for changed production/test C files | PASS |
+| `bash -n tools/package-release.sh`; `git diff --check` | PASS |
+
+Checks exposed a real 256-color collision between a Gruvbox light variant's border
+and selected surface; the renderer now falls back to contrasting text color.
+The analyzer also flagged a nullable catalog lookup; internal access now uses
+the module's validated selected index. Two PTY failures were harness assumptions:
+vt100 has no mouse support, and resizing resets focus to the first control. The
+harness uses actual keyboard navigation and the existing resize-focus behavior;
+application assertions and fallback checks remain intact.
+
+Local artifacts: `build/the-bugger`, `build/test-preferences`, `build/test-render`,
+`build/test-themes-tui`; temporary logs included `/tmp/tb-theme-final-build.log`,
+`/tmp/tb-theme-analysis-final.log` and `/tmp/tb-theme-app-analysis-final.log`.
+These are disposable local paths, not durable CI artifacts.
+
+Full default/native/tmux regression suites, sanitizer/compiler matrices,
+GitHub-hosted CI, physical hardware and manual all-variant terminal/tmux visual
+acceptance were not run or separately reported for F19. Prior release evidence
+is not a substitute. The [manual procedure](testing.md#themes-and-configuration)
+remains reproducible without treating unreported observations as PASS.

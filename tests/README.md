@@ -10,6 +10,13 @@ target cases establish architecture coverage, not physical-board support.
 See [testing](../docs/testing.md) for procedures and prerequisites; execution
 records remain in the [validation records](../docs/validation.md).
 
+- `make test-themes`: global appearance preferences, all 37 theme palettes and
+  a Config/Themes PTY flow; included in `make test`. `test-preferences` checks
+  defaults, private atomic saves, stale writers and invalid-file preservation.
+  `test-render` checks contrast and direct/256/8-color/monochrome fallbacks.
+  `test-themes-tui` checks every preview, dependent variants, Back/Save/restart,
+  keyboard/mouse and compact rendering. See the [theme procedure](../docs/testing.md#themes-and-configuration).
+
 - `make test-m17-offline`: optional ARM cross-build, ELF vectors/SRAM/stack/DWARF
   checks and actual ARM GDB offline source/disassembly lookup; builds the opt-in
   hardware runners. No connection or programming occurs.
@@ -296,9 +303,10 @@ for native milestone acceptance. ptrace/pidfd/LeakSanitizer restrictions are
 reported as failures, not silently skipped or disabled. The fixture's optional
 per-process attach permission does not modify Yama or system configuration.
 
-`unit/test_render.c` checks direct-color palette pairs, semantic source/register
-colors, full-width selected rows and the monochrome active-tab indicator using
-an ncurses screen backed by temporary files. It needs `xterm-direct` terminfo,
+`unit/test_render.c` checks all 37 adapted palettes, contrast, direct/256/8-color
+and monochrome pairs, semantic source/register colors, selected rows and the
+monochrome active-tab indicator using temporary-file ncurses screens. It needs
+`xterm-direct`, `xterm-256color`, `xterm` and `vt100` terminfo,
 as does the existing PTY color test. Visual acceptance remains manual.
 The standalone Alacritty capability-selection case additionally requires the
 installed `alacritty` and `alacritty-direct` terminfo entries.

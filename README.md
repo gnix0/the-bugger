@@ -10,7 +10,7 @@
 
 A terminal-native GDB frontend written in C17 for embedded firmware development.
 It combines source, disassembly, registers, memory, variables and debugger output
-in a configurable tiled workspace with a Monokai Pro visual identity.
+in a configurable tiled workspace with semantic theme colors.
 
 The Bugger is **embedded-first, not embedded-only**. Native Linux debugging is a
 supported capability and the repeatable foundation for the current development
@@ -25,6 +25,12 @@ and mixed disassembly, threads/frames, code breakpoints and Run to Selected,
 hardware-required data watchpoints, read-only registers/Memory/Locals/Watches,
 GDB Console, program output, Save Log, named profiles and action-key remapping.
 Availability depends on GDB and the target's capabilities.
+
+The post-v0.1.0 development build adds **Config → Themes** with seven built-in
+families and 37 variants, preview and saved appearance preferences.
+**Catppuccin Macchiato** is the default; Monokai Pro remains available.
+[Theme controls and variants](docs/usage.md#configuration-and-themes) describe
+what is included. This feature is not part of the published v0.1.0 binary.
 
 Existing TCP GDB servers support reviewed `remote`/`extended-remote` connections
 and shared inspectors. OpenOCD support includes reviewed startup, installed-script
@@ -98,7 +104,7 @@ Prepared artifacts do not establish release acceptance or publication.
 
 | Audience | Start here |
 |---|---|
-| Users | [Usage and configuration](docs/usage.md), including profiles, controls and limitations; [security policy](SECURITY.md) |
+| Users | [Usage and configuration](docs/usage.md), including themes, profiles, controls and limitations; [security policy](SECURITY.md) |
 | Contributors | [Contributing](CONTRIBUTING.md), [architecture](docs/architecture.md), [testing](docs/testing.md) and [suite catalog](tests/README.md) |
 | Product and design | [Requirements](docs/requirements.md), [roadmap](docs/roadmap.md), [interface specification](docs/requirements.md#interface-constraints) |
 | Maintainers | [Maintenance/release procedures](docs/maintaining.md) and [validation records](docs/validation.md) |
