@@ -136,7 +136,7 @@ static void copy_file(const char *source, const char *destination)
     while ((count = read(input, bytes, sizeof bytes)) > 0) { CHECK(write(output, bytes, (size_t)count) == count); }
     CHECK(count == 0 && close(input) == 0 && close(output) == 0);
 }
-static void relocated(const char *fixture, const char *sources)
+static void relocated(const char *fixture, const char *sources, bool right_first)
 {
     char directory[] = "/tmp/the bugger 'moved' \"quoted\" $()-XXXXXX"; CHECK(mkdtemp(directory));
     char left[512], right[512], from[1024], target[1024];
@@ -162,11 +162,24 @@ static void relocated(const char *fixture, const char *sources)
     CHECK(tb_code_rule_count(code) == 1); code_ready(native, revision);
     CHECK(v->line_count > 0 && strstr(v->path, directory));
     int matches = 0;
-    for (size_t i = 0; i < tb_code_file_count(code); ++i) {
+    size_t left_tab = 0, right_tab = 0;
+    size_t file_count = tb_code_file_count(code);
+    size_t files[2] = {file_count, file_count};
+    for (size_t i = 0; i < file_count; ++i) {
         const TbCodeFile *file = tb_code_file(code, i);
-        if (!strstr(file->file, "duplicate.c")) { continue; }
+        if (strstr(file->full, "/left/duplicate.c")) { files[0] = i; }
+        if (strstr(file->full, "/right/duplicate.c")) { files[1] = i; }
+    }
+    CHECK(files[0] < file_count && files[1] < file_count && files[0] != files[1]);
+    for (size_t step_index = 0; step_index < 2; ++step_index) {
+        size_t i = files[right_first ? 1 - step_index : step_index];
+        const TbCodeFile *file = tb_code_file(code, i);
         CHECK(strstr(file->full, directory)); CHECK(tb_code_open(code, 0, i));
-        CHECK(tb_code_find(code, 0, strstr(file->full, "/left/") ? "LEFT_SOURCE_MARKER" : "RIGHT_SOURCE_MARKER", 0) >= 0); ++matches;
+        bool is_left = strstr(file->full, "/left/") != NULL;
+        CHECK(is_left || strstr(file->full, "/right/"));
+        if (is_left) { left_tab = tb_code_tab_active(code, 0); }
+        else { right_tab = tb_code_tab_active(code, 0); }
+        CHECK(tb_code_find(code, 0, is_left ? "LEFT_SOURCE_MARKER" : "RIGHT_SOURCE_MARKER", 0) >= 0); ++matches;
         TbBreakpoints *breaks = tb_native_breakpoints(native);
         until = tb_gdb_now_ms() + 5000;
         while (!tb_break_ready(breaks) && tb_gdb_now_ms() < until) { tb_native_pump(native, 5); }
@@ -180,10 +193,12 @@ static void relocated(const char *fixture, const char *sources)
         CHECK(tb_break_ready(breaks) && tb_break_count(breaks) == 0);
     }
     CHECK(matches == 2);
+    CHECK(left_tab && right_tab && left_tab != right_tab);
     CHECK(tb_code_tab_count(code, 0) == 3 && tb_code_tab_active(code, 0) == 2);
-    CHECK(strcmp(tb_code_tab_file(code, 0, 1)->full, tb_code_tab_file(code, 0, 2)->full) != 0);
-    CHECK(tb_code_tab_select(code, 0, 1) && tb_code_find(code, 0, "LEFT_SOURCE_MARKER", 0) >= 0);
-    CHECK(tb_code_tab_select(code, 0, 2) && tb_code_find(code, 0, "RIGHT_SOURCE_MARKER", 0) >= 0);
+    CHECK(strstr(tb_code_tab_file(code, 0, left_tab)->full, "/left/duplicate.c"));
+    CHECK(strstr(tb_code_tab_file(code, 0, right_tab)->full, "/right/duplicate.c"));
+    CHECK(tb_code_tab_select(code, 0, left_tab) && tb_code_find(code, 0, "LEFT_SOURCE_MARKER", 0) >= 0);
+    CHECK(tb_code_tab_select(code, 0, right_tab) && tb_code_find(code, 0, "RIGHT_SOURCE_MARKER", 0) >= 0);
     TbBreakpoints *breaks = tb_native_breakpoints(native);
     uint64_t before_stop = tb_context_snapshot(tb_native_context(native))->generation.stop;
     uint64_t before_code = v->assembly_revision;
@@ -193,7 +208,7 @@ static void relocated(const char *fixture, const char *sources)
             tb_native_state(native) != TB_NATIVE_STOPPED) && tb_gdb_now_ms() < until) { tb_native_pump(native, 5); }
     code_ready(native, before_code);
     CHECK(tb_context_snapshot(tb_native_context(native))->selected.line == 3);
-    CHECK(tb_code_tab_active(code, 0) == 2 && !v->source_follow && tb_code_find(code, 0, "RIGHT_SOURCE_MARKER", 0) >= 0);
+    CHECK(tb_code_tab_active(code, 0) == right_tab && !v->source_follow && tb_code_find(code, 0, "RIGHT_SOURCE_MARKER", 0) >= 0);
     CHECK(tb_code_tab_select(code, 0, 0) && v->source_follow);
     CHECK(tb_code_tab_select(code, 0, 1) && tb_code_tab_close(code, 0, 1));
     CHECK(tb_code_tab_count(code, 0) == 2 && tb_code_tab_active(code, 0) == 0);
@@ -220,11 +235,13 @@ static void relocated(const char *fixture, const char *sources)
     close_session(native);
     for (size_t i = 0; i < 3; ++i) { (void)snprintf(target, sizeof target, "%s/%s", directory, names[i]); CHECK(unlink(target) == 0); }
     CHECK(rmdir(left) == 0 && rmdir(right) == 0 && rmdir(directory) == 0);
-    puts("PASS M07 GDB source recovery with spaces/quotes/shell characters, ordered mapping replacement/clear and distinct duplicate basenames");
+    puts(right_first ? "PASS M07 duplicate-basename tabs opened right-first, source recovery and mapping lifecycle" :
+                       "PASS M07 duplicate-basename tabs opened left-first, source recovery and mapping lifecycle");
 }
 int main(int argc, char *argv[])
 {
     CHECK(argc == 7);
-    ordinary(argv[1]); degraded(argv[2], false); degraded(argv[3], true); cpp(argv[4]); relocated(argv[5], argv[6]);
+    ordinary(argv[1]); degraded(argv[2], false); degraded(argv[3], true); cpp(argv[4]);
+    relocated(argv[5], argv[6], false); relocated(argv[5], argv[6], true);
     return 0;
 }
