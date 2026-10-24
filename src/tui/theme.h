@@ -2,6 +2,24 @@
 #define THE_BUGGER_THEME_H
 
 #include <curses.h>
+#include <stddef.h>
+
+/* Workspace, panel, raised, selection, border, text, muted and six accents. */
+typedef struct {
+    const char *family, *variant;
+    bool light;
+    unsigned colors[13];
+} TbPalette;
+size_t tb_theme_count(void);
+size_t tb_theme_family_count(void);
+const char *tb_theme_family(size_t family);
+const char *tb_theme_name(size_t family);
+const TbPalette *tb_theme_palette(size_t index);
+size_t tb_theme_current(void);
+/* Select without touching curses; tb_theme_init applies the selected palette. */
+bool tb_theme_select(size_t index);
+/* Unknown names return tb_theme_count(). */
+size_t tb_theme_find(const char *family, const char *variant);
 
 typedef enum {
     TB_PANEL = 1, TB_SURFACE, TB_MUTED, TB_PINK, TB_GREEN, TB_ORANGE,
