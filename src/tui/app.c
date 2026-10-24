@@ -269,7 +269,7 @@ static void draw_header(const App *app, const char *subtitle)
             "Native Linux | launch or attach through GDB");
     tb_text(LINES - 2, 1, COLS - 2, TB_YELLOW, 0, app->status);
     tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0,
-            "Tab / arrows / Enter | q / Esc back (outside text fields) | Ctrl+Q quit app");
+            "Tab / arrows / hjkl / Enter | q / Esc back (outside text fields) | Ctrl+Q quit app");
 }
 
 static void draw_launcher(App *app)
@@ -322,7 +322,7 @@ static void draw_launcher(App *app)
     }
     button(app, actions, left + width - 11, 9, "[ Quit ]", QUIT, 0, 0);
     tb_text(LINES - 2, 1, COLS - 2, TB_YELLOW, 0, app->status);
-    tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0, "Tab / arrows / Enter or click | Ctrl+Q quit app");
+    tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0, "Tab / arrows / hjkl / Enter or click | Ctrl+Q quit app");
 }
 
 /* Global presentation preferences never participate in debugger/session state. */
@@ -385,7 +385,7 @@ static void draw_config(App *app)
         button(app, top + 10, left + 2, 10, "[ Back ]", BACK, 0, 0);
     }
     tb_text(LINES - 2, 1, COLS - 2, TB_YELLOW, 0, app->status);
-    tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0, "Tab / arrows / Enter or click | Esc back | Ctrl+Q quit app");
+    tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0, "Tab / arrows / hjkl / Enter or click | Esc back | Ctrl+Q quit app");
 }
 
 static void draw_theme_preview(App *app)
@@ -2836,6 +2836,15 @@ static void key_event(App *app, wint_t key, bool special)
     }
     app->keyboard_focus = true;
     Control control = app->controls[app->focus];
+    if (!special && (key == 'h' || key == 'j' || key == 'k' || key == 'l')) {
+        /* Text input takes precedence; elsewhere reuse the actual arrow path. */
+        if (!app->resizing && edit_field(app, control, key, false)) {
+            if (app->page == CODE_FILES) { app->file_page = 0; }
+            return;
+        }
+        key = key == 'h' ? KEY_LEFT : key == 'j' ? KEY_DOWN : key == 'k' ? KEY_UP : KEY_RIGHT;
+        special = true;
+    }
     if (!special && key == 'q') {
         if (edit_field(app, control, key, false)) { return; }
         key = 27; /* Close/back; Ctrl+Q is the application-wide quit action. */

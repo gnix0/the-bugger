@@ -10,6 +10,11 @@ target cases establish architecture coverage, not physical-board support.
 See [testing](../docs/testing.md) for procedures and prerequisites; execution
 records remain in the [validation records](../docs/validation.md).
 
+- `make test-navigation`: compares arrow-key and always-on h/j/k/l behavior
+  through real demo PTYs, including menus, tabs/bodies, resize, confirmations,
+  compact rendering and literal field editing. Included in `make test`; no
+  debugger required. See [navigation procedures](../docs/testing.md#letter-key-navigation).
+
 - `make test-themes`: global appearance preferences, all 37 theme palettes and
   a Config/Themes PTY flow; included in `make test`. `test-preferences` checks
   defaults, private atomic saves, stale writers and invalid-file preservation.

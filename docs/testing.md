@@ -87,6 +87,27 @@ TERM/terminal/tmux versions and intercepted keys. Fixtures never rewrite existin
 tmux bindings or security settings. PTY screen parsing is an ASCII-label oracle,
 not a general terminal emulator or proof of UTF-8/physical visual fidelity.
 
+## Letter-key navigation
+
+```sh
+make test-navigation
+```
+
+This focused PTY test is included in `make test`; it needs no GDB or hardware.
+Two demo sessions compare screen text and inverse selection after real arrow
+sequences versus h/j/k/l. Cases cover the launcher, boolean controls, literal
+field editing, theme/variant selection, workspace tabs and bodies, divider
+resizing, confirmation controls and compact resize. The harness waits through
+Escape recognition and drains redraws before comparing; a partial screen is
+not a completed frame.
+
+Manual review: navigate menus with h/j/k/l, switch a focused tab using h/l,
+scroll a focused body with j/k and resize a divider using the matching axis.
+Type `hjkl` into a configuration or Memory address field: the characters must
+remain literal. Actual arrows, Tab, mouse and function keys must still work.
+Only these four lowercase aliases are provided; there are no Vim modes or
+additional motions. Full native/tmux or hardware evidence requires separate runs.
+
 ## Themes and configuration
 
 Coverage: F19; shared TUI/persistence behavior. No GDB, probe or target is required.

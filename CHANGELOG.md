@@ -4,6 +4,10 @@
 
 ### Added
 
+- Always-on lowercase h/j/k/l navigation matching Left/Down/Up/Right outside
+  text fields. Existing arrows, mouse and function keys remain available;
+  typed letters stay literal in fields, with no Vim editing modes.
+
 - Centered Config menu with Profiles and Themes, seven built-in theme families
   and 37 variants. Separate Theme/Variant rows, temporary simulated preview,
   Back cancellation and atomic saved appearance preferences.

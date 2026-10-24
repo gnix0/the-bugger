@@ -895,3 +895,29 @@ GitHub-hosted CI, physical hardware and manual all-variant terminal/tmux visual
 acceptance were not run or separately reported for F19. Prior release evidence
 is not a substitute. The [manual procedure](testing.md#themes-and-configuration)
 remains reproducible without treating unreported observations as PASS.
+
+## Always-on h/j/k/l navigation
+
+Implemented; awaiting user acceptance. This shared UI addition normalizes the
+four lowercase letters to Left/Down/Up/Right outside editable fields, retaining
+the actual arrow dispatch for controls, scrolling, tab changes and resizing.
+Text fields consume literal characters first, including file-filter page reset.
+No modes, extra Vim commands, target operations or configuration switch are added.
+
+Agent-run checks:
+
+- Strict `make -j2 all build/test-navigation`: PASS.
+- `build/test-navigation "$PWD/build/the-bugger"`: PASS. Paired real demo PTYs
+  compare text and inverse selection for launcher, toggles, literal fields,
+  themes/variants, workspace tabs/bodies, divider resizing, confirmations and
+  compact rendering. A first harness comparison sampled incomplete redraws;
+  it now waits through Escape recognition and drains output for a bounded
+  interval before comparing. Application assertions were retained.
+- `_FORTIFY_SOURCE=3`, strict warnings and `-fsyntax-only` on `src/tui/app.c`
+  and `tests/integration/test_navigation.c`: PASS.
+- Documentation local-link/code-fence checks and `git diff --check`: PASS.
+
+Artifacts: `build/test-navigation`, `/tmp/tb-navigation-build.log` and
+`/tmp/tb-navigation-test-build.log`. Full native/tmux, sanitizer/static-analysis
+matrices, physical hardware and manual acceptance were not run for this change.
+The [manual steps](testing.md#letter-key-navigation) remain to be reviewed.
