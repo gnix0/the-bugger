@@ -605,6 +605,9 @@ Coverage: M07/M08; source/instruction mapping, navigation and non-mutating brows
    `code.c` and select its full path. Source is browsable before execution, with
    no invented execution marker. Disassembly explains that no stopped context
    exists. Escape returns from menus; fields accept ordinary text including q.
+   Switch between **Current** and the opened file tab: Current is empty before
+   execution, while the chosen file remains browsable. Reopening the same file
+   selects its existing tab.
 2. Console **Command** → type `start` → click **Send** (Enter also submits).
    Loaded / PID not started means GDB has not run the target; empty code panes
    say **Awaiting stop**, not STALE. Expect main's actual GDB line
@@ -643,6 +646,11 @@ Coverage: M07/M08; source/instruction mapping, navigation and non-mutating brows
    overrides also report successful GDB application or a useful error. Settings
    can be saved through M13 profiles. Directory order is newest first; mappings show
    GDB's first-match order (replacing a prefix moves that rule to the end).
+   With both duplicate files open, switch tabs and verify their distinct markers.
+   Continue to a different stopped file: the opened tab stays on its selected
+   source, while **Current** follows the new frame. Scroll each tab separately,
+   close one with **x**, and check the other and Current remain available. In a
+   narrow pane use **<**/**>** to reach a tab that does not fit on the strip.
 8. Repeat `start` with `code-fixture-optimized`; mappings may skip/repeat lines.
    For `code-fixture-stripped` use Console `starti`: assembly/instruction steps
    remain usable, with explicit missing-source/symbol states. Resize, split an

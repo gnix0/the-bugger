@@ -538,6 +538,11 @@ remain distinct from inspected caller markers. No compiler semantics are inferre
 
 `-file-list-exec-source-files` supplies a bounded file catalog, including before
 execution. Exact file/fullname identities preserve spaces and duplicate basenames.
+Each Source pane keeps a session-local Current tab and at most seven opened
+GDB-known file tabs. Current follows the selected frame; file tabs retain their
+identity across stops. Switching reloads only the active file, while the TUI
+retains each tab's viewport. Closing a pane or resetting a session clears its
+tabs. Catalog refresh does not turn an ambiguous basename into a different file.
 Source reads accept regular files only, bounded to 1 MiB / 32,768 lines per pane;
 text find and line navigation operate on this local cache. Rendering escapes
 terminal controls/non-ASCII bytes and shares the demo's C/C++ lexical colors.

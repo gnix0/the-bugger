@@ -17,9 +17,10 @@ static void source_pc(TestTerminal *term, const char *text)
     long long until = now() + 5000;
     while (!found && now() < until) {
         test_terminal_pump(term, 50);
-        int x, y;
-        if (test_terminal_find(term, text, &x, &y)) {
-            for (int i = 0; i < x && i < 8; ++i) { if (term->cells[y][i] == '>') { found = true; } }
+        for (int y = 0; y < term->rows && !found; ++y) {
+            const char *at = strstr(term->cells[y], text);
+            if (!at || at - term->cells[y] >= 48) { continue; }
+            for (int i = 0; i < 8; ++i) { if (term->cells[y][i] == '>') { found = true; } }
         }
     }
     if (!found) {
@@ -315,6 +316,18 @@ int main(int argc, char *argv[])
     actions(&term, true); test_terminal_click(&term, "Choose source file");
     test_terminal_expect(&term, "GDB source files"); input(&term, "code.c");
     test_terminal_click(&term, "tests/fixtures/native/code.c");
+    test_terminal_expect(&term, "#define _POSIX_C_SOURCE");
+    test_terminal_expect(&term, "nativ/code.c");
+    test_terminal_click(&term, "Current");
+    test_terminal_expect(&term, "Stop a program to inspect live code.");
+    test_terminal_click(&term, "nativ/code.c");
+    test_terminal_expect(&term, "#define _POSIX_C_SOURCE");
+    int tab_x, tab_y; CHECK(test_terminal_find(&term, "nativ/code.c", &tab_x, &tab_y));
+    mouse_at(&term, 0, tab_x + 17, tab_y, false);
+    mouse_at(&term, 0, tab_x + 17, tab_y, true);
+    test_terminal_expect(&term, "Stop a program to inspect live code.");
+    test_terminal_click(&term, "+ File"); test_terminal_expect(&term, "GDB source files");
+    input(&term, "code.c"); test_terminal_click(&term, "tests/fixtures/native/code.c");
     test_terminal_expect(&term, "#define _POSIX_C_SOURCE");
     CHECK(assembly_pc(&term) == 0); /* Browsing a loaded ELF invents no PC. */
     test_terminal_click(&term, "Command"); test_terminal_expect(&term, "GDB console command"); input(&term, "start");
