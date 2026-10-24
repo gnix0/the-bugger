@@ -337,6 +337,16 @@ int main(int argc, char *argv[])
     if (source_pc_line(&term) == 13) { test_terminal_send(&term, "\033[21~"); }
     source_pc(&term, "code_counter = 1");
     test_terminal_expect(&term, "source stepping");
+    int source_x, source_y; CHECK(test_terminal_find(&term, "Source", &source_x, &source_y));
+    unsigned long long before_focus = assembly_pc(&term); CHECK(before_focus);
+    mouse_at(&term, 0, source_x + 12, source_y + 3, false);
+    mouse_at(&term, 0, source_x + 12, source_y + 3, true);
+    test_terminal_expect(&term, "CONTENT FOCUS");
+    test_terminal_send(&term, "\033[1;5C"); test_terminal_expect(&term, "instruction stepping");
+    CHECK(assembly_pc(&term) == before_focus);
+    test_terminal_send(&term, "\010"); test_terminal_expect(&term, "source stepping");
+    CHECK(assembly_pc(&term) == before_focus);
+    test_terminal_send(&term, "\033");
     test_terminal_send(&term, "\033[21~"); source_pc(&term, "code_counter += 2");
     test_terminal_click(&term, "Disassembly"); test_terminal_expect(&term, "instruction stepping");
     test_terminal_click(&term, "Locals"); test_terminal_expect(&term, "instruction stepping");

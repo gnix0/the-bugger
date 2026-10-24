@@ -21,6 +21,8 @@
 #include <wctype.h>
 
 enum { MAX_CONTROLS = 1024, FIELD_SIZE = 256, FORM_FIELDS = 9 };
+/* Application key codes, separate from ncurses' standard/extended keys. */
+enum { CONTENT_LEFT = 0x1000, CONTENT_DOWN, CONTENT_UP, CONTENT_RIGHT };
 typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
                COMMAND_INPUT, SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT, DATA_WATCH_INPUT,
                CONFIG_MENU, THEMES, THEME_PREVIEW, PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM, SCRIPT_LIST, SCRIPT_FILTER } Page;
@@ -1454,7 +1456,7 @@ static void draw_workspace(App *app)
     tb_fill((TbRect){0, LINES - 2, COLS, 2}, TB_CHROME);
     tb_text(LINES - 2, 1, COLS - 2, TB_CHROME, 0, footer);
     tb_text(LINES - 1, 1, COLS - 2, TB_CHROME, 0,
-            app->content_pane >= 0 ? "CONTENT FOCUS | arrows / hjkl scroll or select | Esc: controls | Ctrl+Q quit app" :
+            app->content_pane >= 0 ? "CONTENT FOCUS | Ctrl+arrows/hjkl: pane | Esc: controls | arrows/hjkl: browse | Ctrl+Q quit app" :
             fullscreen ? "Source fullscreen | Esc / q or Restore: tiled workspace | Ctrl+Q quit app" :
             app->resizing ? "Resize: Tab selects divider | arrows move | Enter / Esc finish" :
             app->live ? "Console: Command / Save Log | q close session | Ctrl+Q quit app" :
@@ -1797,17 +1799,17 @@ static void draw(App *app)
     (void)refresh();
 }
 
-/* At most MAX_CONTROLS candidates: no second layout tree or cached graph. */
-static void spatial_focus(App *app, int key)
+/* At most MAX_CONTROLS candidates: use rendered geometry for controls and panes. */
+static int spatial_target(const App *app, int key, bool content)
 {
-    TbRect from = app->controls[app->focus].rect;
+    TbRect from = content ? app->panes[app->content_pane] : app->controls[app->focus].rect;
     bool horizontal = key == KEY_LEFT || key == KEY_RIGHT;
     bool forward = key == KEY_RIGHT || key == KEY_DOWN;
     int best = app->focus, best_gap = INT_MAX, best_distance = INT_MAX, best_offset = INT_MAX;
     for (int i = 0; i < app->count; ++i) {
         Control c = app->controls[i];
-        if (!navigable(c)) { continue; }
-        TbRect to = c.rect;
+        if (content ? c.kind != BODY || c.rect.w <= 0 || c.rect.h <= 0 : !navigable(c)) { continue; }
+        TbRect to = content ? app->panes[c.pane] : c.rect;
         int primary = horizontal ? to.x * 2 + to.w - (from.x * 2 + from.w) :
                                    to.y * 2 + to.h - (from.y * 2 + from.h);
         int distance = forward ? primary : -primary;
@@ -1818,7 +1820,7 @@ static void spatial_focus(App *app, int key)
         int start = horizontal ? from.y : from.x, end = start + (horizontal ? from.h : from.w);
         int other = horizontal ? to.y : to.x, other_end = other + (horizontal ? to.h : to.w);
         int gap = other >= end ? other - end + 1 : start >= other_end ? start - other_end + 1 : 0;
-        if (horizontal && gap > 0) { continue; }
+        if ((content || horizontal) && gap > 0) { continue; }
         int offset = abs((other + other_end) - (start + end));
         /* Prefer the same visual row/column, then the closest forward control. */
         if (gap < best_gap || (gap == best_gap && (distance < best_distance ||
@@ -1826,8 +1828,44 @@ static void spatial_focus(App *app, int key)
             best = i; best_gap = gap; best_distance = distance; best_offset = offset;
         }
     }
-    app->focus = best;
+    return best;
+}
+
+static void spatial_focus(App *app, int key)
+{
+    app->focus = spatial_target(app, key, false);
     app->cursor = 0;
+}
+
+static void spatial_content(App *app, int key)
+{
+    int next = spatial_target(app, key, true);
+    if (app->controls[next].kind != BODY) { return; }
+    app->focus = next;
+    app->content_pane = app->demo.pane = app->controls[next].pane;
+    code_focus(app, app->content_pane);
+}
+
+static int content_direction(wint_t key, bool special)
+{
+    if (special) {
+        switch (key) {
+        case KEY_BACKSPACE: /* Some terminfo entries decode Ctrl+H as this key. */
+        case CONTENT_LEFT: return KEY_LEFT;
+        case CONTENT_DOWN: return KEY_DOWN;
+        case CONTENT_UP: return KEY_UP;
+        case CONTENT_RIGHT: return KEY_RIGHT;
+        default: return 0;
+        }
+    }
+    /* Legacy terminals encode Ctrl+H/J as Backspace/LF. Only content consumes them. */
+    switch (key) {
+    case 8: return KEY_LEFT;
+    case 10: return KEY_DOWN;
+    case 11: return KEY_UP;
+    case 12: return KEY_RIGHT;
+    default: return 0;
+    }
 }
 
 static void cycle_pane(App *app, int direction)
@@ -3041,6 +3079,12 @@ static void key_event(App *app, wint_t key, bool special)
     }
     app->keyboard_focus = true;
     Control control = app->controls[app->focus];
+    int pane_direction = content_direction(key, special);
+    if (pane_direction && app->page == WORKSPACE && app->content_pane >= 0 &&
+        app->menu < 0 && !app->resizing) {
+        spatial_content(app, pane_direction);
+        return;
+    }
     if (!special && (key == 'h' || key == 'j' || key == 'k' || key == 'l')) {
         /* Text input takes precedence; elsewhere reuse the actual arrow path. */
         if (!app->resizing && edit_field(app, control, key, false)) {
@@ -3301,6 +3345,10 @@ int tb_tui_run(bool demo)
         (void)raw();
         (void)noecho();
         (void)keypad(stdscr, TRUE);
+        (void)define_key("\033[1;5D", CONTENT_LEFT);
+        (void)define_key("\033[1;5B", CONTENT_DOWN);
+        (void)define_key("\033[1;5A", CONTENT_UP);
+        (void)define_key("\033[1;5C", CONTENT_RIGHT);
         (void)set_escdelay(25);
         (void)mouseinterval(0);
         mmask_t supported = mousemask(BUTTON1_PRESSED | BUTTON1_RELEASED |

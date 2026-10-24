@@ -367,6 +367,16 @@ outside the pane also leaves content focus. Wheel scrolling does not acquire
 keyboard focus. In fullscreen, the first Escape leaves content; the next restores
 the tiles. Field editing and divider resizing retain their own key behavior.
 
+During **CONTENT FOCUS**, **Ctrl+h/j/k/l** and **Ctrl+Left/Down/Up/Right**
+move content focus to the neighboring pane in that direction. Movement uses the
+visible pane geometry, including nested splits, preserves viewports and stops
+at layout edges. The destination keeps its active view tab; Source/Disassembly
+focus also selects the corresponding stepping mode. Fullscreen and compact
+rendering exclude hidden panes. Escape still returns to the previous control.
+The terminal must forward Ctrl+arrow sequences. Traditional terminals encode
+Ctrl+H as Backspace and Ctrl+J as line feed, so those bytes move between panes
+only during content focus; text fields keep their existing editing behavior.
+
 Escape goes back; `q` closes/backs out outside text fields and keeps the launcher
 open. **Quit** or `Ctrl+Q` exits the application, confirming active-session closure.
 Function keys have visible alternatives. Reset remains unavailable in live
