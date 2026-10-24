@@ -69,6 +69,8 @@ Control and non-ASCII bytes are escaped before display. Console retains up to
 follow output. **Save Log** creates a new private file containing retained text.
 Existing files are preserved; open/write failures retain the input for correction.
 Interactive program input and a full terminal emulator are not provided yet.
+The current Console sends commands to GDB; it is not a UART terminal. A separate
+interactive serial console is [planned as F13](roadmap.md#f13--uartserial-console-planned).
 
 ## Existing remote GDB servers
 
@@ -145,6 +147,48 @@ are cleaned up. Target disposition depends on backend scripts and hardware; an
 unconfirmed transition is reported. Signal cleanup uses the conservative halted
 policy where possible. Normal Memory/variables access policy still applies:
 OpenOCD/SVD readability does not authorize speculative peripheral reads.
+
+### Debugging embedded startup code
+
+Startup code can be debugged with the existing source/instruction stepping and
+breakpoint controls when the target/backend can halt early enough. Attaching to
+running firmware does not rewind initialization. Loading an ELF supplies symbols;
+it does not program that firmware onto the board.
+
+1. Use already-programmed firmware, its matching debug ELF and sources, a
+   target-compatible GDB and the correct board/probe configuration. Review any
+   server scripts that run during connection or reset.
+2. In an OpenOCD session, use **Halt** if running, then deliberately confirm
+   **Reset** for reset-and-halt. Wait for a fresh **Stopped** state and inspect
+   the actual PC in Registers and Disassembly before assuming where execution
+   stopped. For other GDB servers, use that server's documented reset/halt
+   procedure through deliberate Console commands; monitor commands are not
+   portable between servers.
+3. On Cortex-M firmware, the reset entry is commonly `Reset_Handler`. If the PC
+   is there, open the matching startup assembly through Source **+ File** and
+   select Disassembly for instruction stepping. Step Into/Over use instruction
+   stepping there; Source stepping needs usable line information. The included
+   STM32 fixture's `startup.S` copies `.data`, clears `.bss`, then calls `main`.
+4. To finish initialization, deliberately set a breakpoint at the desired later
+   entry, for example Console `hbreak main`, then Continue. Hardware breakpoints
+   depend on backend support and available slots. Use the actual firmware's
+   symbols: ESP SDK application entry may be `app_main`, and earlier ROM or
+   bootloader execution may require other symbols or assembly-only inspection.
+
+Stopping before the first startup instruction depends on the core, reset wiring,
+probe and server configuration. A later startup breakpoint is not proof that no
+earlier instructions ran. If reset-and-halt has already passed the code of
+interest, review backend-specific reset catch or connect-under-reset support;
+moving PC backwards does not restore the initial hardware/runtime state.
+[OpenOCD's reset configuration guide](https://openocd.org/doc/html/Reset-Configuration.html)
+explains these target-specific constraints.
+
+Before runtime initialization completes, globals may not have their initialized
+values, and locals or stack unwinding may be unavailable. Normal explicit-read
+and peripheral-access rules still apply. The
+[startup acceptance procedure](testing.md#embedded-startup-debugging-check)
+defines how to verify a particular setup; existing M17 results do not establish
+first-instruction startup coverage on every board.
 
 ## Code and execution context
 

@@ -250,6 +250,9 @@ possibly unrelated endpoint. Port checks cannot eliminate the concurrent-bind
 race; listener and connection failures remain explicit.
 
 Reset is an explicitly confirmed `monitor reset halt`; Halt is deliberate too.
+This provides an entry to startup debugging, not a universal guarantee of halting
+before the first reset instruction. Core/probe/reset wiring and server scripts
+determine that capability; inspect the verified PC and document reset-catch limits.
 Running operations first wait for GDB's asynchronous stop. Monitor completion alone
 is insufficient: the session flushes GDB's register/frame cache and verifies a
 fresh stop using structured thread information. Explicit monitor-operation
@@ -919,6 +922,17 @@ Shared UI/models and fixes continue to benefit native debugging. These extension
 | RTOS/images | F31 bounds version/port-specific kernel readers; F33 owns image identities/relocations. Task IDs, core IDs and GDB threads/inferiors are distinct unless a verified backend maps them. |
 | Acquisition/analysis | F13–F16/F29/F37/F40/F41 establish source capabilities and loss/time semantics before plots, timelines, profiling or coverage consume data. Reject unsupported paths honestly. |
 | Presentation/persistence | F06 approves organization before more inspectors; F01/F12 evolve schemas and reviewed configuration. No presets, floating views or auto-executed shared setup. |
+
+F13's planned local serial transport owns its TTY descriptor, configuration and
+bounded RX/TX queues separately from GDB, inferior PTYs and application terminal
+input. Nonblocking transport work must fit the existing event loop; a GDB stop
+does not itself suspend serial reception or authorize transmission. A remote GDB
+endpoint does not imply a serial endpoint on that host. Connection settings,
+modem-line/hangup behavior and cleanup need explicit review; Linux
+[termios](https://man7.org/linux/man-pages/man3/termios.3.html) includes input/output
+translations and line-control settings that must not silently change the intended
+stream. The [F13 acceptance contract](roadmap.md#f13--uartserial-console-planned)
+defines the planned behavior; no serial transport is implemented yet.
 
 Necessary vendor-specific tooling belongs in the smallest relevant adapter and
 its compatibility tests. Do not require proprietary IDEs/SDKs or vendor protocols

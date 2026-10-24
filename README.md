@@ -37,6 +37,8 @@ These features extend the original v0.1.0 workspace.
 Existing TCP GDB servers support reviewed `remote`/`extended-remote` connections
 and shared inspectors. OpenOCD support includes reviewed startup, installed-script
 browsing, owned lifecycle and explicit Reset/Halt/disconnect actions.
+[Embedded startup debugging](docs/usage.md#debugging-embedded-startup-code)
+covers stopping before `main`, instruction stepping and reset-catch limitations.
 
 Physical hardware validation covers **STM32 NUCLEO-F446RE** through onboard ST-LINK
 and **ESP32-S3** through native USB/JTAG, with the
