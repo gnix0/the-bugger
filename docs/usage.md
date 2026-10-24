@@ -312,6 +312,29 @@ set condition `value == 3`, and Continue to stop inside the function. Browse
 `m08_long` to inspect a long instruction range or `m08_zeros` for explicit raw
 decoding. See the [M08 checklist](testing.md#disassembly-browsing-and-code-breakpoints).
 
+## Source fullscreen
+
+In a live Source pane, choose **Actions → Fullscreen Source**. Alternatively,
+use that pane's **... → Pane actions → Fullscreen Source**; the pane-actions
+entry also works in the demo. The option appears only for an active Source view.
+
+Source fills the workspace area while the top toolbar/session header and bottom
+status/help bars stay visible. Other panes, inactive tabs, compact pane selectors
+and divider controls are hidden. Source scrolling, search/navigation, breakpoint
+controls and source stepping retain their normal behavior. Hidden inspectors
+follow the existing visibility policy rather than starting background reads.
+
+Choose **Restore** in the Source header, press Escape or `q` outside text fields,
+or choose **Actions → Restore tiled workspace** to leave fullscreen. Tab/Enter
+can activate Restore without a mouse. The prior split tree, proportions and tab
+membership are retained, including nested panes and terminal resizing. Pane-switch
+shortcuts are inactive while fullscreen so they cannot select a hidden view.
+Menus and text-entry pages keep their existing Back/Escape behavior; return to
+the workspace before restoring it. `Ctrl+Q` retains normal session-close handling.
+
+This is temporary per-session presentation state, not a saved layout or a terminal
+emulator fullscreen setting. Returning to the launcher clears it.
+
 ## Workspace controls
 
 The active tab moves to the left. Mouse activation leaves inactive tabs in their

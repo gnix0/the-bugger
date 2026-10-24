@@ -91,6 +91,36 @@ TERM/terminal/tmux versions and intercepted keys. Fixtures never rewrite existin
 tmux bindings or security settings. PTY screen parsing is an ASCII-label oracle,
 not a general terminal emulator or proof of UTF-8/physical visual fidelity.
 
+## Source fullscreen
+
+```sh
+make test-fullscreen
+make test-fullscreen-native
+```
+
+The first focused PTY test needs no debugger and is included in `make test`. It
+checks Source-only content with header/footer, nested split and resized-divider
+restoration, hidden hit regions, pane-switch suppression, compact resizing and
+mouse/keyboard/Escape exit. The native target is included in `make test-native`;
+it needs GDB 17+, ptrace/pidfd support and the ordinary code fixture. It enters
+through live Source Actions, checks that toggling preserves the stopped source
+line, steps with F10, restores the workspace and closes the owned session.
+
+Manual review:
+
+1. Stop a debug session and resize/split panes. In Source choose **Actions →
+   Fullscreen Source**, or **... → Pane actions → Fullscreen Source**. Source
+   fills the work area; only its controls and application header/footer remain.
+2. Scroll, use h/j/k/l and step from Source. Normal source/PC markers and toolbar
+   actions must remain usable; clicking an old divider position or pressing a
+   pane-switch shortcut must not activate hidden panes.
+3. Resize small and large. Restore with the visible button, Tab/Enter or Escape:
+   the original split/tab structure and proportions return. Repeat directly and
+   through tmux; retain existing input and terminal restoration checks.
+
+These shared UI tests do not replace the physical release matrix or imply new
+board support.
+
 ## Letter-key navigation
 
 ```sh

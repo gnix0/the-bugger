@@ -13,6 +13,8 @@ as reported by the maintainer; physical RISC-V acceptance remains explicitly
 deferred for that release. F19 built-in themes is accepted as early post-release
 work through the reported implementation commit. Always-on h/j/k/l navigation is
 an additional shared UI change awaiting acceptance, not a new gate or Vim mode.
+Source fullscreen is another shared UI addition awaiting acceptance: a temporary
+rendering override with retained tiles, not an F06 organization redesign.
 Other F gates remain planned.
 The integrated release-preparation revision is
 `ad606dc6d7af7a3384401fb97e7c328ea1d8b62b`. Acceptance records, observed hashes,

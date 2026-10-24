@@ -192,6 +192,12 @@ Other characteristics already accepted:
 - The retired prototype used simulated example addresses, register contents, log entries and step behavior. The shipped debugger must clearly distinguish live data from demo/mock data.
 - A post-v0.1.0 workspace organization **decision gate** is planned for v0.2.1, before the v0.3.x view expansion. Evaluate pages and other navigation then; pages are an idea, not an approved layout or permission to redesign the current workspace now.
 
+- Source supports a temporary fullscreen rendering toggle while retaining the
+  application toolbar/session header and status/help footer. Restore must retain
+  the tiled split tree, pane proportions and tabs across terminal resizing.
+  Hidden panes cannot receive focus or divider hit tests. Existing visibility,
+  stale-state and read-authorization rules still apply. This is not a layout preset.
+
 ### View inventory
 
 **Functional by v0.1.0** (underlying data must be live, not fabricated):

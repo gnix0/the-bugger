@@ -954,3 +954,43 @@ result logs are `/tmp/tb-warning-policy-cmake.log` and
 tracked test infrastructure. No full SDK rebuild, linking, programming, hardware
 connection or application regression suite was run. C6 cross-compilation is not
 physical RISC-V acceptance.
+
+## Source fullscreen rendering
+
+Implemented; awaiting user acceptance. Source Actions and the Source pane-actions
+menu can temporarily expand Source into the workspace area, retaining the global
+header/footer. Restore, workspace Escape/q and keyboard activation return to the
+existing split tree and tabs. Hidden pane selectors, tabs and divider hit regions
+are inactive. This does not implement saved layouts or expand F06.
+
+Agent-run focused checks:
+
+- Strict `make -j2 all build/test-fullscreen build/code-fixture` build and final
+  rebuild: PASS, with the existing `-Wall -Wextra -Wpedantic -Werror` policy.
+- `build/test-fullscreen "$PWD/build/the-bugger"`: PASS, including Source-only
+  rendering, toolbar/footer retention, resized/nested split restoration,
+  keyboard/mouse/Escape restoration, hidden-divider input and compact resize.
+- `build/test-fullscreen "$PWD/build/the-bugger" "$PWD/build/code-fixture"`:
+  PASS with installed GDB 18.1 outside the sandbox. Live Source Actions entry
+  preserves the stopped source line, F10 advances source, restoration retains
+  that stopped context and confirmed session close cleans up the owned fixture.
+- Fortified strict `-fsyntax-only` checks on `app.c` and `test_fullscreen.c`: PASS.
+- Focused clang-tidy on `app.c`, with repository checks/warnings as errors: PASS.
+  The analyzer initially flagged padding from the additional state field; placing
+  it next to render rectangles in an existing alignment gap resolved it without
+  suppressing warnings or rearranging unrelated state.
+- Documentation local links/anchors/fences and `git diff --check`: PASS.
+
+The initial native sandbox run could not start the inferior/pidfd path and failed;
+it is not a passed native run. The permitted unsandboxed focused rerun passed.
+An initial demo harness counted the footer's ellipsis as a pane menu; counting
+only the workspace area corrected the oracle without weakening the required
+seven-pane restoration or zero-menu fullscreen assertions.
+
+Local artifacts: `/tmp/tb-fullscreen-final-build.log`,
+`/tmp/tb-fullscreen-demo.log`, `/tmp/tb-fullscreen-native.log`,
+`/tmp/tb-fullscreen-analysis-final.log` and `build/test-fullscreen`.
+Full default/native/tmux suites, sanitizer/compiler matrices, physical hardware
+and manual visual acceptance were not run for this change. Follow the
+[manual fullscreen procedure](testing.md#source-fullscreen); focused native
+success does not establish embedded hardware compatibility.
