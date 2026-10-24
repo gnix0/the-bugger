@@ -13,7 +13,9 @@ M00–M18 and the listed corrections form the first-release baseline. The mainta
 reported v0.1.0 published on 2026-10-20. Historical preparation entries below retain
 their original pending states and test boundaries; publication does not supply
 missing individual manual outcomes or new hardware evidence. F19 is accepted
-through the maintainer-reported implementation commit and remains unreleased.
+through the maintainer-reported implementation commit. F19 and the accepted
+shared navigation/fullscreen work are included in v0.1.1 preparation; publication
+and fresh release-matrix validation are not implied by implementation acceptance.
 
 M14 records passing GCC/Clang default/native/tmux suites,
 slow watchpoint recovery, full default/native ASan/UBSan with leak detection and
@@ -1000,7 +1002,8 @@ success does not establish embedded hardware compatibility.
 
 ## Spatial control navigation
 
-Implemented; **awaiting-user**. Arrow/hjkl navigation uses rendered rectangles
+Accepted through implementation commit `53b1e5a`; included in v0.1.1 preparation.
+Arrow/hjkl navigation uses rendered rectangles
 and stable control identities. Horizontal movement stays within a visual row;
 vertical movement prefers alignment, and directions do not wrap. Tab/Shift+Tab
 exclude content, scrollbars, dividers and hidden panes. Tabs activate with Enter.
@@ -1065,3 +1068,81 @@ Hardware and sanitizer/compiler matrices were not run for this task and remain
 separate release checks. These host tests do not establish new board compatibility.
 Manual review follows the
 [spatial navigation procedure](testing.md#spatial-control-and-content-navigation).
+
+
+## v0.1.1 release preparation
+
+Status: **awaiting-user**. The checkout targets `0.1.1`; the changelog entry is
+prepared for 2026-10-24. No v0.1.1 tag, published release or final release acceptance
+is recorded. The earlier v0.1.0 publication and physical-validation boundaries
+remain historical evidence rather than fresh v0.1.1 hardware results.
+
+Included implementation references, observed in local history:
+
+| Change | Implementation reference |
+|---|---|
+| F19 themes and variants | `9079203` |
+| Theme documentation and routine commit organization | `e21cc36` |
+| Always-on h/j/k/l | `079d3f1` |
+| Strict authored ESP fixture warnings | `0dcae74` |
+| Source fullscreen | `f3eb663` |
+| Spatial controls and deliberate content focus | `53b1e5a` |
+
+Release preparation changes only the version, version-dependent tests and
+release documentation. CLI and launcher tests now derive their expected version
+and label width from the shared version header. The stale version-header link
+now points to this register. Previously recorded broad runtime/static-analysis
+results for `53b1e5a` remain in the spatial-navigation section above; they are
+not relabeled as newly executed release checks.
+
+Agent-run preparation checks:
+
+- `make -j2 all build/test-cli build/test-tui`, CLI and launcher/terminal tests:
+  PASS with the existing strict C17 warning-as-error policy; version is `0.1.1`.
+- `make release`: PASS. The hardened Linux x86-64 executable and matching source
+  archives are prepared under `build/dist/`; nothing is published automatically.
+- SHA-256 verification, extracted binary `--version`/`--help`, GPLv3 license,
+  adapted-palette notices and matching embedded source-archive hash: PASS.
+- Extracted executable CLI, launcher/terminal, navigation and fullscreen PTY
+  checks from outside the repository: PASS. A clean `make -j2` from the extracted
+  source archive also passed and reported the same version.
+- ELF x86-64, PIE, non-executable GNU stack, GNU RELRO and BIND_NOW checks: PASS.
+  Host: Linux 7.2.9-arch1-1 x86_64, GCC 16.2.1, glibc 2.44. The executable records
+  GLIBC symbol requirements through GLIBC_2.38; dependency compatibility on other
+  distributions remains unverified. `BUILD-INFO.txt` retains dependency details.
+- Missing-executable, invalid `SOURCE_DATE_EPOCH` and executable/source-version
+  mismatch packaging cases: rejected as expected.
+- Fortified strict syntax checks on both changed test files: PASS.
+- Documentation relative file links/code fences and `git diff --check`: PASS.
+  The final source archive matches all 153 tracked files in the checkout.
+
+An additional analyzer invocation on the CLI/TUI test sources flagged the CLI
+harness's intentional `execv` of its caller-selected test binary as a taint sink.
+The same check reproduced on the unchanged `HEAD` CLI harness. This optional
+harness analysis is not a passed check; no suppression or harness behavior change
+was introduced. The canonical `make analyze` scope is production sources.
+
+Artifacts to attach after final release acceptance:
+
+- `build/dist/the-bugger-v0.1.1-linux-x86_64.tar.gz`
+- `build/dist/the-bugger-v0.1.1-source.tar.gz`
+- `build/dist/SHA256SUMS`
+
+The source hash is embedded in the binary archive's `BUILD-INFO.txt`; the external
+checksum asset records both final archive hashes. Rebuild after any subsequent
+source/documentation edits. Private, ignored `AGENTS.md` is excluded from the
+source archive. Older v0.1.0 archives may coexist in the output directory and are
+not v0.1.1 assets.
+
+Current local artifacts include `/tmp/v011-build.log`, `/tmp/v011-package.log`,
+`/tmp/v011-artifacts.log`, `/tmp/v011-packaged-ui.log`,
+`/tmp/v011-package-negative.log`, `/tmp/v011-fortify.log`,
+`/tmp/v011-focused-analysis.log` and `/tmp/v011-analysis-baseline.log`.
+The extracted build/check directories are disposable local artifacts.
+
+The fresh host compiler/sanitizer/full-regression matrix is pending explicit run
+authorization/results. Fresh physical STM32/ARM, ESP32/Xtensa and ESP32/RISC-V
+release validation, manual review and final release acceptance remain pending.
+The v0.1.0 RISC-V deferral does not authorize a v0.1.1 waiver. Follow the
+[every-release matrix](testing.md#every-release-regression-matrix); do not infer
+hardware PASS from the host or packaging checks above.

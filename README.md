@@ -26,13 +26,13 @@ hardware-required data watchpoints, read-only registers/Memory/Locals/Watches,
 GDB Console, program output, Save Log, named profiles and action-key remapping.
 Availability depends on GDB and the target's capabilities.
 
-The post-v0.1.0 development build adds **Config → Themes** with seven built-in
-families and 37 variants, preview and saved appearance preferences.
+v0.1.1 adds **Config → Themes** with seven built-in families and 37 variants,
+preview and saved appearance preferences.
 **Catppuccin Macchiato** is the default; Monokai Pro remains available.
 [Theme controls and variants](docs/usage.md#configuration-and-themes) describe
 what is included. Shared UI additions also include
 [Source fullscreen and spatial keyboard navigation](docs/usage.md#workspace-controls).
-These additions are not part of the published v0.1.0 binary.
+These features extend the original v0.1.0 workspace.
 
 Existing TCP GDB servers support reviewed `remote`/`extended-remote` connections
 and shared inspectors. OpenOCD support includes reviewed startup, installed-script
@@ -45,7 +45,7 @@ These results cover the tested workflows, not all boards, probes or architecture
 OpenOCD is optional, not universal; broader compatibility needs separate evidence.
 Physical RISC-V acceptance is deferred for v0.1.0 and is not a hardware support claim.
 
-`v0.1.0` covers the capabilities and validation scope described here. See the
+This checkout targets **v0.1.1**. Its release validation status is recorded in the
 [roadmap status](docs/roadmap.md#implementation-status) and
 [recorded validation evidence](docs/validation.md).
 
@@ -81,7 +81,7 @@ as a shell argument. Ordinary Continue starts the loaded program without an
 automatic main breakpoint.
 
 Click Source for source stepping or Disassembly for instruction stepping.
-The development build also accepts lowercase h/j/k/l as arrow-key aliases
+Lowercase h/j/k/l are arrow-key aliases
 outside text fields; no setting or modal editing is required.
 [Source fullscreen](docs/usage.md#source-fullscreen) expands a Source pane while
 retaining the toolbar/status bars and restores the existing tiled workspace.
