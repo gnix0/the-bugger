@@ -32,7 +32,7 @@ typedef enum {
     TOOL, TAB, MENU, BODY, SHOW_VIEW, FOCUS_PANE, CANCEL_RESET, CONFIRM_RESET,
     MENU_SECTION, PANE_ACTION, DIVIDER, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR,
     COMMAND_OPEN, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_ARGUMENTS, CONTEXT_PAGE,
-    CODE_ACTIONS, CODE_ACTION, CODE_PAGE, CODE_FILE_PICK, CODE_FILE_PAGE, HSCROLLBAR,
+    CODE_ACTIONS, CODE_ACTION, CODE_PAGE, CODE_FILE_PICK, CODE_FILE_PAGE, CODE_SOURCE_TAB, CODE_SOURCE_CLOSE, CODE_SOURCE_CYCLE, HSCROLLBAR,
     BREAK_OPEN, BREAK_ACTION, REGISTER_REFRESH, REGISTER_FORMAT, MEMORY_ACTION, MEMORY_FIELD,
     VARIABLE_OPEN, VARIABLE_ACTION, DATA_WATCH_OPTION,
     PROFILE_OPEN, PROFILE_PICK, PROFILE_ACTION, PROFILE_ITEM, SCRIPT_OPEN, SCRIPT_PICK, SCRIPT_ACTION, REVIEW_PAGE, CLOSE_POLICY
@@ -86,6 +86,7 @@ typedef struct {
     CodeAction code_action;
     char rule_from[FIELD_SIZE * 4];
     uint64_t source_revision[TB_MAX_PANES], assembly_revision[TB_MAX_PANES];
+    struct { int scroll, row, horizontal; uint64_t stop, context; } source_tabs[TB_MAX_PANES][TB_CODE_TABS];
     bool assembly_tail[TB_MAX_PANES];
     char assembly_previous[TB_MAX_PANES][48];
     int assembly_scroll_up[TB_MAX_PANES];
@@ -684,7 +685,63 @@ static int body_top(const App *app, int pane)
 {
     const TbDemoPane *p = &app->demo.panes[pane];
     TbView view = p->tabs[p->active];
+    if (app->live && view == TB_SOURCE && tb_code_tab_count(tb_session_code(app->debugger), pane) > 1) { return 3; }
     return app->live && view == TB_MEMORY ? 4 : app->live && (view == TB_LOCALS || view == TB_WATCHES) ? 3 : 2;
+}
+
+static void source_tab_save(App *app, int pane)
+{
+    size_t tab = tb_code_tab_active(tb_session_code(app->debugger), pane);
+    if (tab >= TB_CODE_TABS) { return; }
+    app->source_tabs[pane][tab].scroll = app->demo.panes[pane].scroll[TB_SOURCE];
+    app->source_tabs[pane][tab].row = app->demo.panes[pane].row[TB_SOURCE];
+    app->source_tabs[pane][tab].horizontal = app->horizontal[pane][TB_SOURCE];
+    if (tab == 0) {
+        const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
+        app->source_tabs[pane][0].stop = context->generation.stop;
+        app->source_tabs[pane][0].context = context->generation.context;
+    }
+}
+static void source_tab_restore(App *app, int pane)
+{
+    size_t tab = tb_code_tab_active(tb_session_code(app->debugger), pane);
+    if (tab >= TB_CODE_TABS) { return; }
+    app->demo.panes[pane].scroll[TB_SOURCE] = app->source_tabs[pane][tab].scroll;
+    app->demo.panes[pane].row[TB_SOURCE] = app->source_tabs[pane][tab].row;
+    app->horizontal[pane][TB_SOURCE] = app->source_tabs[pane][tab].horizontal;
+    const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
+    bool changed = tab == 0 && (app->source_tabs[pane][0].stop != context->generation.stop ||
+                                app->source_tabs[pane][0].context != context->generation.context);
+    app->source_revision[pane] = changed ? 0 : tb_code_view(tb_session_code(app->debugger), pane)->source_revision;
+}
+static void source_tab_strip(App *app, TbCode *code, int pane, TbRect rect)
+{
+    size_t count = tb_code_tab_count(code, pane), active = tb_code_tab_active(code, pane);
+    if (count <= 1 || rect.w < 12) { return; }
+    int y = rect.y + 2, x = rect.x + 1, end = rect.x + rect.w - 1;
+    button(app, y, x, 10, active == 0 ? "[Current] " : " Current  ", CODE_SOURCE_TAB, 0, pane); x += 10;
+    for (size_t step = 0; step < count; ++step) {
+        size_t tab = step == 0 && active > 0 ? active : step;
+        if (tab == 0 || (step > 0 && tab == active)) { continue; }
+        if (x + 18 + (tab == active ? 3 : 0) > end - 7) { break; }
+        const TbCodeFile *file = tb_code_tab_file(code, pane, tab);
+        const char *path = file && *file->full ? file->full : file ? file->file : "";
+        const char *name = strrchr(path, '/'); name = name ? name + 1 : path;
+        char raw_label[24], label[64];
+        if (name != path) {
+            const char *parent_end = name - 1, *parent = parent_end;
+            while (parent > path && parent[-1] != '/') { --parent; }
+            (void)snprintf(raw_label, sizeof raw_label, "%c%.*s/%.10s", tab == active ? '[' : ' ',
+                           (int)(parent_end - parent) > 5 ? 5 : (int)(parent_end - parent), parent, name);
+        } else { (void)snprintf(raw_label, sizeof raw_label, "%c%.16s", tab == active ? '[' : ' ', name); }
+        tb_code_safe(label, sizeof label, raw_label, strlen(raw_label));
+        button(app, y, x, 18, label, CODE_SOURCE_TAB, (int)tab, pane); x += 18;
+        if (tab == active) { button(app, y, x, 3, "x  ", CODE_SOURCE_CLOSE, (int)tab, pane); x += 3; }
+    }
+    if (end - x >= 7) {
+        button(app, y, end - 7, 3, "<", CODE_SOURCE_CYCLE, -1, pane);
+        button(app, y, end - 4, 3, ">", CODE_SOURCE_CYCLE, 1, pane);
+    }
 }
 
 static void prepare_scrollbars(App *app, int index, TbRect rect)
@@ -809,6 +866,7 @@ static void draw_code_pane(App *app, int index, TbRect rect)
     const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
     TbDemoPane *pane = &app->demo.panes[index];
     bool source = pane->tabs[pane->active] == TB_SOURCE;
+    int content_y = rect.y + body_top(app, index);
     bool stale = view->stale || context->stale;
     bool loaded = tb_session_state(app->debugger) == TB_SESSION_READY;
     bool empty = source ? !view->line_count : !view->instruction_count;
@@ -820,6 +878,7 @@ static void draw_code_pane(App *app, int index, TbRect rect)
                    context->selected.level > 0 ? "caller | " : "",
                    source ? "C/C++" : view->mixed && view->mixed_available ? "mixed" : "assembly", label);
     tb_text(rect.y + 1, rect.x + 1, rect.w - 2, stale ? TB_ORANGE : TB_MUTED, 0, header);
+    if (source) { source_tab_strip(app, code, index, rect); }
     TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
     uint64_t *seen = source ? &app->source_revision[index] : &app->assembly_revision[index];
     uint64_t revision = source ? view->source_revision : view->assembly_revision;
@@ -860,7 +919,7 @@ static void draw_code_pane(App *app, int index, TbRect rect)
                 const TbInstruction *previous = &view->instructions[i - 1];
                 unsigned long long bytes = (unsigned long long)(instruction->numeric - previous->numeric - previous->bytes);
                 (void)snprintf(gap, sizeof gap, "... %llu bytes not decoded", bytes);
-                tb_text(rect.y + 2 + output_row++, rect.x + 4, app->body_width[index] - 3, TB_MUTED, 0, gap);
+                tb_text(content_y + output_row++, rect.x + 4, app->body_width[index] - 3, TB_MUTED, 0, gap);
             }
             ++flat_row;
         }
@@ -872,7 +931,7 @@ static void draw_code_pane(App *app, int index, TbRect rect)
                 char summary[1200]; mixed_summary(app, index, instruction, summary, sizeof summary);
                 size_t offset = (size_t)app->horizontal[index][TB_DISASSEMBLY];
                 if (offset > strlen(summary) - 2) { offset = strlen(summary) - 2; }
-                tb_text(rect.y + 2 + output_row++, rect.x + 4, app->body_width[index] - 3, TB_CYAN, 0, summary + 2 + offset);
+                tb_text(content_y + output_row++, rect.x + 4, app->body_width[index] - 3, TB_CYAN, 0, summary + 2 + offset);
             }
             ++flat_row;
         }
@@ -894,7 +953,7 @@ static void draw_code_pane(App *app, int index, TbRect rect)
         bool inspected = selected && (!stopped || context->selected.level > 0 || strcmp(context->selected_thread, context->stopped_thread) != 0);
         bool highlighted = stopped || inspected;
         TbStyle style = highlighted ? tb_selected_style(stopped ? TB_YELLOW : TB_CYAN) : TB_PANEL;
-        if (highlighted) { tb_fill((TbRect){rect.x + 1, rect.y + 2 + output_row, rect.w - 2, 1}, style); }
+        if (highlighted) { tb_fill((TbRect){rect.x + 1, content_y + output_row, rect.w - 2, 1}, style); }
         char gutter[24];
         (void)snprintf(gutter, sizeof gutter, "%c%c%5zu ", source ? ' ' : stopped ? '>' : inspected ? '~' : ' ',
                        source ? stopped ? '>' : inspected ? '~' : ' ' : ' ', source ? i + 1 : i);
@@ -903,20 +962,20 @@ static void draw_code_pane(App *app, int index, TbRect rect)
                                             source ? (unsigned)i + 1 : 0, source ? NULL : instruction->address);
         if (bp) { gutter[0] = bp->enabled ? 'o' : '-'; }
         int gutter_width = source ? 8 : 3;
-        tb_text(rect.y + 2 + output_row, rect.x + 1, gutter_width, highlighted ? style : TB_MUTED, 0, gutter);
-        if (bp) { tb_text(rect.y + 2 + output_row, rect.x + 1, 1, TB_PINK, 0, bp->enabled ? "o" : "-"); }
+        tb_text(content_y + output_row, rect.x + 1, gutter_width, highlighted ? style : TB_MUTED, 0, gutter);
+        if (bp) { tb_text(content_y + output_row, rect.x + 1, 1, TB_PINK, 0, bp->enabled ? "o" : "-"); }
         size_t offset = (size_t)app->horizontal[index][source ? TB_SOURCE : TB_DISASSEMBLY];
         if (offset > strlen(text)) { offset = strlen(text); }
-        if (source) { tb_render_source_text(rect.y + 2 + output_row, rect.x + 1 + gutter_width, app->body_width[index] - gutter_width, text + offset, highlighted); }
+        if (source) { tb_render_source_text(content_y + output_row, rect.x + 1 + gutter_width, app->body_width[index] - gutter_width, text + offset, highlighted); }
         else {
-            tb_text(rect.y + 2 + output_row, rect.x + 4, app->body_width[index] - 3, style, 0, text + offset);
-            if (!offset) { tb_text(rect.y + 2 + output_row, rect.x + 4, 18, highlighted ? tb_selected_style(TB_PURPLE) : TB_PURPLE, 0, instruction->address); }
+            tb_text(content_y + output_row, rect.x + 4, app->body_width[index] - 3, style, 0, text + offset);
+            if (!offset) { tb_text(content_y + output_row, rect.x + 4, 18, highlighted ? tb_selected_style(TB_PURPLE) : TB_PURPLE, 0, instruction->address); }
         }
         ++output_row;
     }
     if (!total) {
         const char *error = source ? view->source_error : view->assembly_error;
-        tb_text(rect.y + 3, rect.x + 2, rect.w - 4, TB_ORANGE, 0,
+        tb_text(content_y + 1, rect.x + 2, rect.w - 4, TB_ORANGE, 0,
                 *error ? error : "Stop a program to inspect live code.");
     }
     const char *notice = source ? "" : tb_code_assembly_notice(code, index, visible_first, visible_end > visible_first ? visible_end - visible_first : 0);
@@ -929,8 +988,9 @@ static void draw_code_pane(App *app, int index, TbRect rect)
     button(app, rect.y + rect.h - 1, rect.x + 1, 9, " Actions ", CODE_ACTIONS, 0, index);
     if (source) {
         button(app, rect.y + rect.h - 1, rect.x + 11, 9, " Stopped ", CODE_ACTION, CODE_STOPPED, index);
-        if (view->truncated) { tb_text(rect.y + rect.h - 1, rect.x + 21, rect.w - 22, TB_ORANGE, 0, "bounded preview"); }
-        else { tb_text(rect.y + rect.h - 1, rect.x + 21, rect.w - 22, TB_MUTED, 0, "> PC | ~ frame"); }
+        if (rect.w > 36) { button(app, rect.y + rect.h - 1, rect.x + 21, 8, " + File ", CODE_ACTION, CODE_CHOOSE_FILE, index); }
+        if (view->truncated) { tb_text(rect.y + rect.h - 1, rect.x + 30, rect.w - 31, TB_ORANGE, 0, "bounded preview"); }
+        else { tb_text(rect.y + rect.h - 1, rect.x + 30, rect.w - 31, TB_MUTED, 0, "> PC | ~ frame"); }
     } else {
         button(app, rect.y + rect.h - 1, rect.x + 11, 7, view->mixed ? " Mixed+" : " Mixed ", CODE_ACTION, CODE_MIXED, index);
         button(app, rect.y + rect.h - 1, rect.x + 19, 3, " < ", CODE_PAGE, -1, index);
@@ -1813,6 +1873,8 @@ static void pane_action(App *app, int action, int pane)
         }
         memset(&app->demo.panes[added], 0, sizeof app->demo.panes[added]);
         memset(app->horizontal[added], 0, sizeof app->horizontal[added]);
+        memset(app->source_tabs[added], 0, sizeof app->source_tabs[added]);
+        if (app->live) { tb_code_tab_reset(tb_session_code(app->debugger), added); }
         app->memory_input[added][0] = 0; app->memory_cursor[added] = 0;
         if (app->live) { tb_memory_clear(tb_session_memory(app->debugger), added); }
         app->demo.pane = added;
@@ -1827,6 +1889,8 @@ static void pane_action(App *app, int action, int pane)
             status(app, "Only nested split panes can close. Keep the six workspace tiles.");
         } else {
             memset(&app->demo.panes[pane], 0, sizeof app->demo.panes[pane]);
+            memset(app->source_tabs[pane], 0, sizeof app->source_tabs[pane]);
+            if (app->live) { tb_code_tab_reset(tb_session_code(app->debugger), pane); }
             if (app->live) { tb_memory_clear(tb_session_memory(app->debugger), pane); }
             app->demo.pane = survivor;
             status(app, "Split pane closed; sibling expanded.");
@@ -2212,6 +2276,8 @@ static bool start_session(App *app)
     (void)tb_code_restore_settings(tb_session_code(app->debugger), directories, app->profile->directory_count, rules, app->profile->rule_count);
     app->recent_pending = *app->profile->name && tb_profiles_find(app->profiles, app->profile->name);
     memset(app->memory_input, 0, sizeof app->memory_input); memset(app->memory_cursor, 0, sizeof app->memory_cursor);
+    memset(app->source_tabs, 0, sizeof app->source_tabs);
+    memset(app->source_revision, 0, sizeof app->source_revision);
     app->live = true; app->previewed = true;
     for (int i = 0; i < TB_MAX_PANES; ++i) { app->follow_log[i] = true; }
     status(app, tb_session_message(app->debugger));
@@ -2515,6 +2581,9 @@ static void activate(App *app, Control control)
         } else if (app->code_action == CODE_SOURCE_SETTINGS) {
             app->file_page = 0; page(app, SOURCE_SETTINGS);
         } else if (app->code_action == CODE_STOPPED) {
+            source_tab_save(app, control.pane);
+            (void)tb_code_tab_select(code, control.pane, 0);
+            source_tab_restore(app, control.pane);
             status(app, tb_code_stopped(code) ? "Returning to stopped context; execution unchanged." : tb_code_message(code)); page(app, WORKSPACE);
         } else if (app->code_action == CODE_RUN_TO) {
             char location[8192]; const TbBreakpoint *existing = NULL;
@@ -2548,11 +2617,37 @@ static void activate(App *app, Control control)
         app->focus = 0; break;
     }
     case CODE_FILE_PICK:
+        source_tab_save(app, control.pane);
         if (tb_code_open(tb_session_code(app->debugger), control.pane, (size_t)control.value)) {
-            app->demo.panes[control.pane].scroll[TB_SOURCE] = app->demo.panes[control.pane].row[TB_SOURCE] = 0;
+            source_tab_restore(app, control.pane);
             status(app, tb_code_message(tb_session_code(app->debugger))); page(app, WORKSPACE);
+        } else { status(app, tb_code_message(tb_session_code(app->debugger))); }
+        break;
+    case CODE_SOURCE_TAB:
+    case CODE_SOURCE_CYCLE: {
+        TbCode *code = tb_session_code(app->debugger);
+        size_t count = tb_code_tab_count(code, control.pane);
+        size_t current = tb_code_tab_active(code, control.pane);
+        size_t tab = control.kind == CODE_SOURCE_TAB ? (size_t)control.value :
+                     (current + count + (control.value < 0 ? count - 1 : 1)) % count;
+        source_tab_save(app, control.pane);
+        if (tb_code_tab_select(code, control.pane, tab)) { source_tab_restore(app, control.pane); code_focus(app, control.pane); }
+        break;
+    }
+    case CODE_SOURCE_CLOSE: {
+        TbCode *code = tb_session_code(app->debugger);
+        size_t tab = (size_t)control.value;
+        source_tab_save(app, control.pane);
+        if (tb_code_tab_close(code, control.pane, tab)) {
+            if (tab + 1 < TB_CODE_TABS) {
+                memmove(&app->source_tabs[control.pane][tab], &app->source_tabs[control.pane][tab + 1],
+                        (TB_CODE_TABS - tab - 1) * sizeof app->source_tabs[0][0]);
+            }
+            memset(&app->source_tabs[control.pane][TB_CODE_TABS - 1], 0, sizeof app->source_tabs[0][0]);
+            source_tab_restore(app, control.pane);
         }
         break;
+    }
     case INPUT_SUBMIT: {
         char input[FIELD_SIZE * 4];
         bool command = app->page == COMMAND_INPUT;

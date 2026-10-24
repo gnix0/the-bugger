@@ -5,7 +5,7 @@
 
 enum { TB_CODE_VIEWS = 32, TB_CODE_FILES = 256, TB_CODE_INSNS = 128,
        TB_CODE_SOURCE_BYTES = 1024 * 1024, TB_CODE_LINES = 32768,
-       TB_CODE_PATH = 4096, TB_CODE_RULES = 8 };
+       TB_CODE_PATH = 4096, TB_CODE_RULES = 8, TB_CODE_TABS = 8 };
 typedef struct { char file[TB_CODE_PATH], full[TB_CODE_PATH]; } TbCodeFile;
 typedef struct { char from[TB_CODE_PATH], to[TB_CODE_PATH]; } TbSourceRule;
 typedef struct {
@@ -43,6 +43,13 @@ const TbCodeFile *tb_code_file(const TbCode *code, size_t index);
 bool tb_code_files_limited(const TbCode *code);
 void tb_code_request_files(TbCode *code);
 bool tb_code_open(TbCode *code, int view, size_t file);
+/* Tab zero follows the selected frame; other tabs retain GDB-known files. */
+size_t tb_code_tab_count(const TbCode *code, int view);
+size_t tb_code_tab_active(const TbCode *code, int view);
+const TbCodeFile *tb_code_tab_file(const TbCode *code, int view, size_t tab);
+bool tb_code_tab_select(TbCode *code, int view, size_t tab);
+bool tb_code_tab_close(TbCode *code, int view, size_t tab);
+void tb_code_tab_reset(TbCode *code, int view);
 bool tb_code_source_line(const TbCode *code, int view, size_t line, char *out, size_t capacity);
 int tb_code_find(const TbCode *code, int view, const char *needle, int after);
 bool tb_code_address(TbCode *code, int view, const char *address_or_symbol);

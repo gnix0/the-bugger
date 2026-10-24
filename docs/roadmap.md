@@ -20,6 +20,8 @@ implementation commit `53b1e5a`; they do not add a roadmap gate or change F06
 scope. These shared UI additions and F19 are included in v0.1.1 preparation.
 Release validation remains separate; v0.1.1 publication is not yet recorded.
 Other F gates remain planned.
+Multi-file Source tabs are an implemented shared UI enhancement awaiting user
+review. They do not add a roadmap gate or change the embedded-first priorities.
 The integrated v0.1.0 release-preparation revision is
 `ad606dc6d7af7a3384401fb97e7c328ea1d8b62b`. Acceptance records, observed hashes,
 failures and test evidence are in [validation records](validation.md).

@@ -180,6 +180,10 @@ static void relocated(const char *fixture, const char *sources)
         CHECK(tb_break_ready(breaks) && tb_break_count(breaks) == 0);
     }
     CHECK(matches == 2);
+    CHECK(tb_code_tab_count(code, 0) == 3 && tb_code_tab_active(code, 0) == 2);
+    CHECK(strcmp(tb_code_tab_file(code, 0, 1)->full, tb_code_tab_file(code, 0, 2)->full) != 0);
+    CHECK(tb_code_tab_select(code, 0, 1) && tb_code_find(code, 0, "LEFT_SOURCE_MARKER", 0) >= 0);
+    CHECK(tb_code_tab_select(code, 0, 2) && tb_code_find(code, 0, "RIGHT_SOURCE_MARKER", 0) >= 0);
     TbBreakpoints *breaks = tb_native_breakpoints(native);
     uint64_t before_stop = tb_context_snapshot(tb_native_context(native))->generation.stop;
     uint64_t before_code = v->assembly_revision;
@@ -189,6 +193,10 @@ static void relocated(const char *fixture, const char *sources)
             tb_native_state(native) != TB_NATIVE_STOPPED) && tb_gdb_now_ms() < until) { tb_native_pump(native, 5); }
     code_ready(native, before_code);
     CHECK(tb_context_snapshot(tb_native_context(native))->selected.line == 3);
+    CHECK(tb_code_tab_active(code, 0) == 2 && !v->source_follow && tb_code_find(code, 0, "RIGHT_SOURCE_MARKER", 0) >= 0);
+    CHECK(tb_code_tab_select(code, 0, 0) && v->source_follow);
+    CHECK(tb_code_tab_select(code, 0, 1) && tb_code_tab_close(code, 0, 1));
+    CHECK(tb_code_tab_count(code, 0) == 2 && tb_code_tab_active(code, 0) == 0);
     until = tb_gdb_now_ms() + 5000;
     while (!tb_break_ready(breaks) && tb_gdb_now_ms() < until) { tb_native_pump(native, 5); }
     CHECK(tb_break_ready(breaks) && tb_break_count(breaks) == 0);

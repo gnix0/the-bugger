@@ -195,6 +195,15 @@ instructions; optimized mappings are reported as GDB supplies them.
 Code views use `>` for actual stopped execution and `~` for inspected caller
 context. Browsing never changes PC. Source **Actions** offers GDB-known file
 filtering, current-file find, line navigation and source lookup settings.
+Use **+ File** (or **Actions → Choose source file**) to open a GDB-known file in
+the active Source pane. The **Current** file tab follows the selected stopped
+frame; opened file tabs stay on their chosen file as execution moves. Click a
+file tab to switch, **x** beside the active file to close it, or **<**/**>** to
+cycle when the pane is narrow. Each Source pane can hold up to seven opened
+files plus Current, with independent scroll and horizontal positions. Selecting
+an already open file returns to its tab. The tabs are session-local and only
+the active file's bounded local text is loaded. Opening a file does not run the
+target or change the selected frame.
 Disassembly offers hexadecimal address/simple-symbol navigation and **Mixed**
 source/assembly, with an assembly fallback when source is unavailable. x86-64
 assembly uses AT&T syntax. **Stopped** returns to the original stopped thread
