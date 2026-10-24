@@ -35,6 +35,8 @@ typedef struct {
     size_t scan_count;
     unsigned scan_steps;
     char file_key[TB_CODE_PATH];
+    TbCodeFile tabs[TB_CODE_TABS - 1];
+    size_t tab_count, tab_active;
 } View;
 struct TbCode {
     TbGdb *gdb; TbContext *context;
@@ -155,6 +157,7 @@ void tb_code_reset(TbCode *code)
     for (int i = 0; i < TB_CODE_VIEWS; ++i) {
         code->views[i].data.source_follow = code->views[i].data.assembly_follow = true;
         code->views[i].data.stale = true;
+        code->views[i].tab_count = 1;
         code->views[i].source_dirty = code->views[i].assembly_dirty = true;
     }
 }
@@ -276,12 +279,67 @@ bool tb_code_open(TbCode *code, int id, size_t file)
 {
     if (!valid_view(id) || file >= code->file_count) { return false; }
     View *view = &code->views[id];
-    const char *path = *code->files[file].full ? code->files[file].full : code->files[file].file;
+    const TbCodeFile *chosen = &code->files[file];
+    const char *path = *chosen->full ? chosen->full : chosen->file;
+    size_t tab = 1;
+    for (; tab < view->tab_count; ++tab) {
+        const TbCodeFile *opened = &view->tabs[tab - 1];
+        if (strcmp(opened->file, chosen->file) == 0 && strcmp(opened->full, chosen->full) == 0) { break; }
+    }
+    if (tab == view->tab_count) {
+        if (view->tab_count == TB_CODE_TABS) { message(code, "Source tab limit reached; close a file tab first."); return false; }
+        view->tabs[tab - 1] = *chosen; ++view->tab_count;
+    }
+    view->tab_active = tab;
     (void)snprintf(view->data.path, sizeof view->data.path, "%s", path);
-    memmove(view->file_key, code->files[file].file, sizeof view->file_key);
+    memmove(view->file_key, chosen->file, sizeof view->file_key);
     view->data.source_follow = false; view->source_dirty = true;
     source_load(view); ++code->revision;
     message(code, *view->data.source_error ? view->data.source_error : "Source opened; execution unchanged."); return true;
+}
+size_t tb_code_tab_count(const TbCode *code, int id) { return valid_view(id) ? code->views[id].tab_count : 0; }
+size_t tb_code_tab_active(const TbCode *code, int id) { return valid_view(id) ? code->views[id].tab_active : 0; }
+const TbCodeFile *tb_code_tab_file(const TbCode *code, int id, size_t tab)
+{
+    return valid_view(id) && tab > 0 && tab < code->views[id].tab_count ? &code->views[id].tabs[tab - 1] : NULL;
+}
+bool tb_code_tab_select(TbCode *code, int id, size_t tab)
+{
+    if (!valid_view(id) || tab >= code->views[id].tab_count) { return false; }
+    View *view = &code->views[id];
+    if (view->tab_active == tab) { return true; }
+    view->tab_active = tab;
+    view->data.source_follow = tab == 0;
+    if (!tab) {
+        const TbContextSnapshot *context = tb_context_snapshot(code->context);
+        (void)snprintf(view->data.path, sizeof view->data.path, "%s", context->ready ? context->selected.path : "");
+        view->file_key[0] = '\0';
+    } else {
+        const TbCodeFile *file = &view->tabs[tab - 1];
+        (void)snprintf(view->data.path, sizeof view->data.path, "%s", *file->full ? file->full : file->file);
+        memmove(view->file_key, file->file, sizeof view->file_key);
+    }
+    view->source_dirty = true; source_load(view); ++code->revision;
+    return true;
+}
+bool tb_code_tab_close(TbCode *code, int id, size_t tab)
+{
+    if (!valid_view(id) || !tab || tab >= code->views[id].tab_count) { return false; }
+    View *view = &code->views[id];
+    if (tab == view->tab_active && !tb_code_tab_select(code, id, tab == 1 ? 0 : tab - 1)) { return false; }
+    if (tab + 1 < view->tab_count) {
+        memmove(&view->tabs[tab - 1], &view->tabs[tab], (view->tab_count - tab - 1) * sizeof view->tabs[0]);
+    }
+    --view->tab_count;
+    if (view->tab_active > tab) { --view->tab_active; }
+    ++code->revision; return true;
+}
+void tb_code_tab_reset(TbCode *code, int id)
+{
+    if (!valid_view(id)) { return; }
+    View *view = &code->views[id]; view->tab_count = 1; view->tab_active = 0;
+    view->data.source_follow = true; view->file_key[0] = '\0';
+    view->source_dirty = true; ++code->revision;
 }
 static void assembly_parse(View *view, const TbMiValue *list, const char *path, int line)
 {
@@ -353,6 +411,7 @@ static void files_parse(TbCode *code, const TbMiRecord *record)
         }
         if (found == 1 && *code->files[index].full) {
             memmove(view->data.path, code->files[index].full, sizeof view->data.path);
+            memmove(view->tabs[view->tab_active - 1].full, code->files[index].full, TB_CODE_PATH);
             view->source_dirty = true;
         }
     }
@@ -646,7 +705,7 @@ void tb_code_pump(TbCode *code)
     (void)snprintf(code->selected_address, sizeof code->selected_address, "%s", context->selected.address);
     for (int i = 0; i < TB_CODE_VIEWS; ++i) {
         View *view = &code->views[i];
-        if (changed) { cancel_precontext(view); view->raw = false; view->data.source_follow = view->data.assembly_follow = true; }
+        if (changed) { cancel_precontext(view); view->raw = false; view->data.source_follow = view->tab_active == 0; view->data.assembly_follow = true; }
         if (changed || !generation_equal(view->generation, context->generation)) {
             view->generation = context->generation; view->source_dirty = view->assembly_dirty = true;
         }
@@ -730,7 +789,7 @@ void tb_code_return(TbCode *code, int id)
     if (!valid_view(id)) { return; }
     View *view = &code->views[id]; cancel_precontext(view);
     view->raw = false;
-    view->data.source_follow = view->data.assembly_follow = true;
+    view->data.source_follow = view->tab_active == 0; view->data.assembly_follow = true;
     view->source_dirty = view->assembly_dirty = true; view->data.stale = true;
     ++view->version; ++code->revision;
 }

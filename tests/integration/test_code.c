@@ -101,8 +101,23 @@ static void run(const char *peer, const char *mode)
     revision = view->assembly_revision; CHECK(tb_code_address(code, 0, "0x0")); ready(gdb, revision);
     CHECK(view->anchor == 0 && view->instruction_count && view->instructions[0].numeric == 0);
     CHECK(tb_code_open(code, 0, 1) && *view->source_error && view->line_count == 0);
+    command(gdb, "-stop");
+    for (int i = 0; i < 40; ++i) { pump(gdb); }
+    CHECK(tb_code_tab_active(code, 0) == 1 && !view->source_follow && strstr(view->path, "/not/here/duplicate.c"));
     CHECK(tb_code_open(code, 0, 2) && strstr(view->source_error, "not resolved by GDB") && view->line_count == 0);
     CHECK(tb_code_open(code, 0, 0) && view->line_count == 3);
+    CHECK(tb_code_tab_count(code, 0) == 4 && tb_code_tab_active(code, 0) == 3);
+    CHECK(tb_code_open(code, 0, 0) && tb_code_tab_count(code, 0) == 4);
+    CHECK(tb_code_tab_file(code, 0, 1) && strcmp(tb_code_tab_file(code, 0, 1)->file, "duplicate.c") == 0);
+    CHECK(!tb_code_tab_select(code, 0, 4) && !tb_code_tab_close(code, 0, 0));
+    CHECK(tb_code_tab_select(code, 0, 1) && strstr(view->path, "/not/here/duplicate.c"));
+    CHECK(tb_code_tab_select(code, 0, 3) && view->line_count == 3);
+    command(gdb, "-stop");
+    for (int i = 0; i < 40; ++i) { pump(gdb); }
+    CHECK(tb_code_tab_active(code, 0) == 3 && !view->source_follow && view->line_count == 3);
+    CHECK(tb_code_tab_close(code, 0, 2) && tb_code_tab_count(code, 0) == 3 && tb_code_tab_active(code, 0) == 2);
+    CHECK(tb_code_tab_select(code, 0, 0) && view->source_follow && view->line_count == 3);
+    CHECK(tb_code_tab_close(code, 0, 2) && tb_code_tab_close(code, 0, 1) && tb_code_tab_count(code, 0) == 1);
     CHECK(!tb_code_open(code, 0, 9999));
     for (int i = 0; i < 20; ++i) { pump(gdb); }
     unsigned idle = completions;
@@ -121,7 +136,7 @@ static void run(const char *peer, const char *mode)
     tb_gdb_close(gdb); until = tb_gdb_now_ms() + 2000;
     while (tb_gdb_state(gdb) != TB_GDB_DISCONNECTED && tb_gdb_now_ms() < until) { pump(gdb); }
     CHECK(tb_gdb_state(gdb) == TB_GDB_DISCONNECTED);
-    tb_code_reset(code); CHECK(tb_code_file_count(code) == 0 && tb_code_view(code, 0)->line_count == 0);
+    tb_code_reset(code); CHECK(tb_code_file_count(code) == 0 && tb_code_view(code, 0)->line_count == 0 && tb_code_tab_count(code, 0) == 1);
     tb_code_destroy(code); tb_context_destroy(context); CHECK(tb_gdb_destroy(gdb)); code = NULL; context = NULL;
     CHECK(unlink(path) == 0);
 }

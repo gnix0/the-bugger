@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- Source panes can keep several GDB-known files open as session-local tabs.
+  Current follows the selected frame; file tabs retain their source across
+  stops. Each tab keeps its viewport, and narrow panes can cycle through tabs.
+
 ## [0.1.1] - 2026-10-24
 
 ### Added

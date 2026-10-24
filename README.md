@@ -81,6 +81,8 @@ as a shell argument. Ordinary Continue starts the loaded program without an
 automatic main breakpoint.
 
 Click Source for source stepping or Disassembly for instruction stepping.
+Source **+ File** opens another GDB-known source file in a pane-local tab;
+**Current** follows the stopped frame while opened files remain available.
 Lowercase h/j/k/l are arrow-key aliases
 outside text fields; no setting or modal editing is required.
 [Source fullscreen](docs/usage.md#source-fullscreen) expands a Source pane while

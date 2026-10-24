@@ -1159,3 +1159,36 @@ release validation, manual review and final release acceptance remain pending.
 The v0.1.0 RISC-V deferral does not authorize a v0.1.1 waiver. Follow the
 [every-release matrix](testing.md#every-release-regression-matrix); do not infer
 hardware PASS from the host or packaging checks above.
+
+## Multi-file Source tabs
+
+State: **automated-verified; awaiting-user**. This shared Source UI addition is
+unreleased and does not establish new target compatibility. Each Source pane can
+retain a Current tab and up to seven GDB-known files. Opened tabs remain pinned
+across stops; the active file is read through the existing bounded local source
+loader. Full path identity distinguishes duplicate basenames.
+
+Agent-run focused checks on 2026-10-24:
+
+- `make -s all build/test-code` and `build/test-code "$PWD/build/fake-mi"`:
+  PASS, including pinned-file stop retention, duplicate-open selection, close,
+  reset and invalid-tab handling.
+- `build/test-code-native "$PWD/build/code-fixture" "$PWD/build/code-fixture-optimized" "$PWD/build/code-fixture-stripped" "$PWD/build/code-fixture-cpp" "$PWD/build/code-fixture-relocated" "$PWD/tests/fixtures/native/relocated"`:
+  PASS outside the sandbox with real GDB, including two duplicate-basename files,
+  tab selection, a later stop and closing a tab.
+- `build/test-code-tui "$PWD/build/the-bugger" "$PWD/build/code-fixture" "$PWD/build/debug-fixture"`:
+  PASS outside the sandbox with real GDB. The Source TUI check also switches,
+  closes and reopens Current/file tabs before execution. An earlier sandbox
+  invocation could not start its ptraced inferior. An initial outside-sandbox
+  run found a TUI helper that selected a disassembly text match before the
+  Source marker after the new tab row shifted layout. The helper now checks
+  the Source gutter, and
+  the rerun passed.
+- `build/test-navigation "$PWD/build/the-bugger"`: PASS for shared spatial
+  controls and explicit content focus. `make -s all build/test-code-tui
+  build/test-navigation`, a final `make -s all build/test-code`, and
+  `git diff --check`: PASS with strict warnings.
+
+The broader default/native/tmux and static-analysis matrices were not run for
+this gate. Manual multi-file use, compact tab cycling and acceptance remain
+pending.
