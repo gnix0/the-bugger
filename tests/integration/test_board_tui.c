@@ -29,7 +29,7 @@ static void start(TestTerminal *t, const char *binary)
 }
 static void console(TestTerminal *t, const char *command)
 {
-    test_terminal_click(t, "Command"); test_terminal_expect(t, "GDB console command");
+    test_terminal_click(t, "Command"); test_terminal_expect(t, "LIVE | GDB / program log");
     test_terminal_send(t, "\025"); test_terminal_send(t, command); test_terminal_send(t, "\r");
 }
 static unsigned long long pc(const TestTerminal *t)

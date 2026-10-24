@@ -24,7 +24,7 @@ enum { MAX_CONTROLS = 1024, FIELD_SIZE = 256, FORM_FIELDS = 9 };
 /* Application key codes, separate from ncurses' standard/extended keys. */
 enum { CONTENT_LEFT = 0x1000, CONTENT_DOWN, CONTENT_UP, CONTENT_RIGHT };
 typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
-               COMMAND_INPUT, SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT, DATA_WATCH_INPUT,
+               SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT, DATA_WATCH_INPUT,
                CONFIG_MENU, THEMES, THEME_PREVIEW, PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM, SCRIPT_LIST, SCRIPT_FILTER } Page;
 typedef enum { CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_ADDRESS, CODE_STOPPED,
                CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_DIRECTORY_ADD, CODE_RULE_FROM,
@@ -33,7 +33,7 @@ typedef enum {
     CONFIG_OPEN, THEME_ACTION, CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
     TOOL, TAB, MENU, BODY, SHOW_VIEW, FOCUS_PANE, CANCEL_RESET, CONFIRM_RESET,
     MENU_SECTION, PANE_ACTION, DIVIDER, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR,
-    COMMAND_OPEN, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_ARGUMENTS, CONTEXT_PAGE,
+    COMMAND_FIELD, COMMAND_SEND, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_ARGUMENTS, CONTEXT_PAGE,
     CODE_ACTIONS, CODE_ACTION, CODE_PAGE, CODE_FILE_PICK, CODE_FILE_PAGE, CODE_SOURCE_TAB, CODE_SOURCE_CLOSE, CODE_SOURCE_CYCLE, HSCROLLBAR,
     BREAK_OPEN, BREAK_ACTION, REGISTER_REFRESH, REGISTER_FORMAT, MEMORY_ACTION, MEMORY_FIELD,
     VARIABLE_OPEN, VARIABLE_ACTION, DATA_WATCH_OPTION,
@@ -98,6 +98,9 @@ typedef struct {
     char memory_input_error[192];
     wchar_t memory_input[TB_MAX_PANES][FIELD_SIZE];
     size_t memory_cursor[TB_MAX_PANES];
+    wchar_t command_input[TB_MAX_PANES][FIELD_SIZE];
+    size_t command_cursor[TB_MAX_PANES];
+    int command_caret_x, command_caret_y;
     char break_id[32];
     TbWatchMode watch_mode;
     bool watch_address;
@@ -126,7 +129,7 @@ static bool prepare_server(App *app);
 
 static bool editing_page(const App *app)
 {
-    return app->page == SCRIPT_FILTER || app->page == COMMAND_INPUT || app->page == SAVE_INPUT || app->page == CODE_INPUT || app->page == CODE_FILES || app->page == BREAK_INPUT || app->page == MEMORY_INPUT || app->page == WATCH_INPUT || app->page == DATA_WATCH_INPUT || app->page == PROFILE_TEXT;
+    return app->page == SCRIPT_FILTER || app->page == SAVE_INPUT || app->page == CODE_INPUT || app->page == CODE_FILES || app->page == BREAK_INPUT || app->page == MEMORY_INPUT || app->page == WATCH_INPUT || app->page == DATA_WATCH_INPUT || app->page == PROFILE_TEXT;
 }
 
 /* Signal handler communicates only through this flag; cleanup runs normally. */
@@ -751,7 +754,7 @@ static void prepare_scrollbars(App *app, int index, TbRect rect)
     TbDemoPane *pane = &app->demo.panes[index]; TbView view = pane->tabs[pane->active];
     int width = native_content_width(app, index), gutter = code_gutter(view);
     int visible = rect.w - 2 - gutter;
-    int height = rect.h - body_top(app, index) - 1 - (width > visible ? 1 : 0);
+    int height = rect.h - body_top(app, index) - 1 - (view == TB_CONSOLE ? 1 : 0) - (width > visible ? 1 : 0);
     app->body_width[index] = rect.w - 2;
     app->body_height[index] = height;
     app->horizontal_scroll[index] = axis_scroll(width, visible, app->horizontal[index][view]);
@@ -771,7 +774,7 @@ static void draw_scrollbars(App *app, int index, TbRect rect)
     }
     TbScroll horizontal = app->horizontal_scroll[index];
     if (horizontal.maximum > 0) {
-        int x = rect.x + 1 + code_gutter(view), y = rect.y + rect.h - 2;
+        int x = rect.x + 1 + code_gutter(view), y = rect.y + rect.h - 2 - (view == TB_CONSOLE ? 1 : 0);
         for (int col = 0; col < horizontal.visible; ++col) {
             bool thumb = col >= horizontal.thumb_start && col < horizontal.thumb_start + horizontal.thumb_size;
             tb_text(y, x + col, 1, thumb ? TB_CYAN : TB_MUTED, 0, thumb ? "=" : "-");
@@ -1249,8 +1252,25 @@ static void draw_native_pane(App *app, int index, TbRect rect)
             if (offset > strlen(text)) { offset = strlen(text); }
             tb_text(rect.y + 2 + i, rect.x + 1, app->body_width[index], TB_PANEL, 0, text + offset);
         }
-        button(app, rect.y + rect.h - 1, rect.x + 1, 9, " Command ", COMMAND_OPEN, 0, index);
-        button(app, rect.y + rect.h - 1, rect.x + 11, rect.w < 22 ? rect.w - 12 : 10, " Save Log ", SAVE_OPEN, 0, index);
+        int y = rect.y + rect.h - 2, label = rect.w >= 25 ? 8 : 1;
+        int field_x = rect.x + label, field_width = rect.w - label - 6;
+        int field = add_control(app, (TbRect){rect.x + 1, y, rect.w - 7, 1}, COMMAND_FIELD, 0, index);
+        bool focused = field == app->focus;
+        tb_text(y, rect.x + 1, label - 1, TB_CYAN, 0, "Command");
+        tb_fill((TbRect){field_x, y, field_width, 1}, focused ? TB_SELECTED : TB_SURFACE);
+        size_t cursor = app->command_cursor[index], start = 0; int cells = 0;
+        for (size_t p = cursor; p > 0; --p) {
+            int width = wcwidth(app->command_input[index][p - 1]); cells += width > 0 ? width : 1;
+            if (cells >= field_width) { start = p; break; }
+        }
+        wide_text(y, field_x, field_width, app->command_input[index], start, focused);
+        button(app, y, rect.x + rect.w - 5, 4, "Send", COMMAND_SEND, 0, index);
+        if (focused) {
+            int x = field_x;
+            for (size_t p = start; p < cursor; ++p) { int width = wcwidth(app->command_input[index][p]); x += width > 0 ? width : 1; }
+            app->command_caret_x = x; app->command_caret_y = y;
+        }
+        button(app, rect.y + rect.h - 1, rect.x + 1, rect.w - 2 < 10 ? rect.w - 2 : 10, " Save Log ", SAVE_OPEN, 0, index);
     } else {
         tb_text(rect.y + 3, rect.x + 2, rect.w - 4, TB_MUTED, 0, "Live view not implemented yet.");
         tb_text(rect.y + 4, rect.x + 2, rect.w - 4, TB_MUTED, 0, "Use Console for GDB commands.");
@@ -1459,7 +1479,7 @@ static void draw_workspace(App *app)
             app->content_pane >= 0 ? "CONTENT FOCUS | Ctrl+arrows/hjkl: pane | Esc: controls | arrows/hjkl: browse | Ctrl+Q quit app" :
             fullscreen ? "Source fullscreen | Esc / q or Restore: tiled workspace | Ctrl+Q quit app" :
             app->resizing ? "Resize: Tab selects divider | arrows move | Enter / Esc finish" :
-            app->live ? "Console: Command / Save Log | q close session | Ctrl+Q quit app" :
+            app->live ? "Console: Command + Enter / Send | Save Log | Ctrl+Q quit app" :
             "DEMO | ... pane actions | drag dividers | q launcher | Ctrl+Q quit app");
 }
 
@@ -1564,7 +1584,6 @@ static void data_watch_open(App *app, const char *expression, bool address, unsi
 static void draw_input(App *app)
 {
     bool profile_text = app->page == PROFILE_TEXT;
-    bool command = app->page == COMMAND_INPUT;
     bool code = app->page == CODE_INPUT;
     bool bp = app->page == BREAK_INPUT;
     bool memory = app->page == MEMORY_INPUT;
@@ -1572,14 +1591,13 @@ static void draw_input(App *app)
     bool data_watch = app->page == DATA_WATCH_INPUT;
     bool memory_length = memory && app->memory_length_input;
     const char *bp_label = app->break_action == 0 ? "Add code breakpoint" : app->break_action == 3 ? "Breakpoint condition (empty clears)" : "Breakpoint ignore count";
-    draw_header(app, data_watch ? "Add hardware data watchpoint" : watch ? "Add watch expression" : memory_length ? "Memory byte count" : memory ? "Read memory" : bp ? bp_label : code ? code_labels[app->code_action] : command ? "GDB console command" : "Save retained log");
+    draw_header(app, data_watch ? "Add hardware data watchpoint" : watch ? "Add watch expression" : memory_length ? "Memory byte count" : memory ? "Read memory" : bp ? bp_label : code ? code_labels[app->code_action] : "Save retained log");
     if (profile_text) { draw_header(app, "Profile field"); }
     if (app->page == SCRIPT_FILTER) { draw_header(app, "Filter installed scripts"); }
     tb_text(5, 3, COLS - 6, TB_CYAN, A_BOLD,
-            data_watch ? (app->watch_address ? "Exact numeric address (0x...); width selected below" : "Expression to watch; qualified child paths may be entered explicitly") : watch ? "Expression: name, member, constant index or simple offset" : memory_length ? "Bytes per range: 1 to 1024" : memory ? "Address / pointer expression (for example &buffer or $sp)" : bp ? bp_label : code ? code_labels[app->code_action] : command ? "Explicit GDB command (through MI)" : "New log destination (existing files are preserved)");
+            data_watch ? (app->watch_address ? "Exact numeric address (0x...); width selected below" : "Expression to watch; qualified child paths may be entered explicitly") : watch ? "Expression: name, member, constant index or simple offset" : memory_length ? "Bytes per range: 1 to 1024" : memory ? "Address / pointer expression (for example &buffer or $sp)" : bp ? bp_label : code ? code_labels[app->code_action] : "New log destination (existing files are preserved)");
     tb_text(7, 3, COLS - 6, TB_MUTED, 0,
             data_watch ? "Create deliberately: GDB may read watched storage. Hardware required; no software fallback." : watch ? "Adding does not read memory. Select Read afterward; calls/mutations are rejected." : bp ? "Location: function, file:line or *0xADDRESS. Changes are validated by GDB." : code ? "Enter literal text/path. Navigation never changes execution. Esc cancels." :
-            command ? "Commands are deliberate operations through GDB/MI." :
             "Saves bounded retained history with control bytes escaped; mode 0600.");
     if (memory) {
         char summary[160]; (void)snprintf(summary, sizeof summary, "Read exactly %u bytes; no calls/writes/casts. MMIO reads can have side effects. Esc cancels.", tb_memory_view(tb_session_memory(app->debugger), app->memory_pane)->length);
@@ -1606,7 +1624,7 @@ static void draw_input(App *app)
     }
     wide_text(9, 3, COLS - 6, app->input, start, index == app->focus);
     if (memory && *app->memory_input_error) { tb_text(11, 3, COLS - 6, TB_ORANGE, 0, app->memory_input_error); }
-    button(app, 12, 3, 14, profile_text || app->page == SCRIPT_FILTER ? "[ Apply ]" : data_watch ? "[ Create ]" : watch ? "[ Add ]" : memory_length ? "[ Apply ]" : memory ? "[ Read ]" : bp || code ? "[ Apply ]" : command ? "[ Send ]" : "[ Save Log ]", INPUT_SUBMIT, 0, 0);
+    button(app, 12, 3, 14, profile_text || app->page == SCRIPT_FILTER ? "[ Apply ]" : data_watch ? "[ Create ]" : watch ? "[ Add ]" : memory_length ? "[ Apply ]" : memory ? "[ Read ]" : bp || code ? "[ Apply ]" : "[ Save Log ]", INPUT_SUBMIT, 0, 0);
     button(app, 12, 19, 12, "[ Cancel ]", BACK, 0, 0);
     if (data_watch) {
         char label[96]; (void)snprintf(label, sizeof label, "Mode: %s", tb_break_watch_mode(app->watch_mode));
@@ -1687,6 +1705,7 @@ static void draw_break_menu(App *app)
 static void draw_page(App *app)
 {
     app->count = 0;
+    app->command_caret_y = -1;
     (void)curs_set(0);
     (void)leaveok(stdscr, TRUE);
     tb_fill((TbRect){0, 0, COLS, LINES}, TB_WORKSPACE);
@@ -1795,6 +1814,10 @@ static void draw(App *app)
         if (app->content_pane < 0 && navigable(app->controls[app->focus])) {
             app->last_control = app->controls[app->focus];
         }
+    }
+    if (app->command_caret_y >= 0) {
+        (void)curs_set(1); (void)leaveok(stdscr, FALSE);
+        (void)move(app->command_caret_y, app->command_caret_x);
     }
     (void)refresh();
 }
@@ -1914,6 +1937,7 @@ static void pane_action(App *app, int action, int pane)
         memset(app->source_tabs[added], 0, sizeof app->source_tabs[added]);
         if (app->live) { tb_code_tab_reset(tb_session_code(app->debugger), added); }
         app->memory_input[added][0] = 0; app->memory_cursor[added] = 0;
+        app->command_input[added][0] = 0; app->command_cursor[added] = 0;
         if (app->live) { tb_memory_clear(tb_session_memory(app->debugger), added); }
         app->demo.pane = added;
         tb_demo_view(&app->demo, TB_DISASSEMBLY);
@@ -2314,6 +2338,7 @@ static bool start_session(App *app)
     (void)tb_code_restore_settings(tb_session_code(app->debugger), directories, app->profile->directory_count, rules, app->profile->rule_count);
     app->recent_pending = *app->profile->name && tb_profiles_find(app->profiles, app->profile->name);
     memset(app->memory_input, 0, sizeof app->memory_input); memset(app->memory_cursor, 0, sizeof app->memory_cursor);
+    memset(app->command_input, 0, sizeof app->command_input); memset(app->command_cursor, 0, sizeof app->command_cursor);
     memset(app->source_tabs, 0, sizeof app->source_tabs);
     memset(app->source_revision, 0, sizeof app->source_revision);
     app->live = true; app->previewed = true;
@@ -2492,7 +2517,7 @@ static void activate(App *app, Control control)
         app->menu_focus = true;
         break;
     case PANE_ACTION: pane_action(app, control.value, control.pane); break;
-    case MEMORY_FIELD: break;
+    case MEMORY_FIELD: case COMMAND_FIELD: break;
     case VARIABLE_OPEN:
         app->variable_pane = control.pane; page(app, VARIABLE_MENU); break;
     case DATA_WATCH_OPTION:
@@ -2586,9 +2611,22 @@ static void activate(App *app, Control control)
         app->resize_divider = control.value;
         break;
     case CANCEL_RESET: page(app, WORKSPACE); break;
-    case COMMAND_OPEN: case SAVE_OPEN:
+    case COMMAND_SEND: {
+        char command[FIELD_SIZE * 4]; int id = control.pane;
+        if (!field_utf8(app->command_input[id], command, sizeof command)) {
+            status(app, "Invalid text encoding."); break;
+        }
+        bool okay = tb_session_console(app->debugger, command);
+        status(app, okay ? "GDB command queued." : tb_session_message(app->debugger));
+        if (okay) { app->command_input[id][0] = 0; app->command_cursor[id] = 0; }
+        for (int i = 0; i < app->count; ++i) {
+            if (app->controls[i].kind == COMMAND_FIELD && app->controls[i].pane == id) { app->focus = i; break; }
+        }
+        break;
+    }
+    case SAVE_OPEN:
         app->input[0] = L'\0';
-        page(app, control.kind == COMMAND_OPEN ? COMMAND_INPUT : SAVE_INPUT);
+        page(app, SAVE_INPUT);
         break;
     case BREAK_OPEN:
         app->break_pane = control.pane; page(app, BREAK_MENU); break;
@@ -2688,7 +2726,6 @@ static void activate(App *app, Control control)
     }
     case INPUT_SUBMIT: {
         char input[FIELD_SIZE * 4];
-        bool command = app->page == COMMAND_INPUT;
         if (!field_utf8(app->input, input, sizeof input)) { status(app, "Invalid text encoding."); break; }
         if (app->page == SCRIPT_FILTER) { (void)snprintf(app->script_filter, sizeof app->script_filter, "%.*s", (int)sizeof app->script_filter - 1, input); app->script_offset = 0; page(app, SCRIPT_LIST); break; }
         if (app->page == PROFILE_TEXT) { profile_text_submit(app, input); break; }
@@ -2783,8 +2820,8 @@ static void activate(App *app, Control control)
             if (okay) { page(app, WORKSPACE); }
             break;
         }
-        bool okay = command ? tb_session_console(app->debugger, input) : tb_session_save_log(app->debugger, input);
-        status(app, okay ? (command ? "GDB command queued." : tb_session_message(app->debugger)) : tb_session_message(app->debugger));
+        bool okay = tb_session_save_log(app->debugger, input);
+        status(app, tb_session_message(app->debugger));
         if (okay) { page(app, WORKSPACE); }
         break;
     }
@@ -2805,10 +2842,11 @@ static bool edit_field(App *app, Control control, wint_t key, bool special)
 {
     bool input_page = editing_page(app);
     bool memory_field = app->page == WORKSPACE && control.kind == MEMORY_FIELD;
-    if (!memory_field && (control.kind != FIELD || (app->page != CONFIGURE && !input_page))) {
+    bool command_field = app->page == WORKSPACE && control.kind == COMMAND_FIELD;
+    if (!memory_field && !command_field && (control.kind != FIELD || (app->page != CONFIGURE && !input_page))) {
         return false;
     }
-    if (!memory_field && !input_page && ((app->session < 2 && control.value == 0) ||
+    if (!memory_field && !command_field && !input_page && ((app->session < 2 && control.value == 0) ||
         (app->session == 1 && control.value == 8))) {
         if (key == KEY_LEFT || key == KEY_RIGHT || key == ' ') {
             activate(app, control);
@@ -2816,8 +2854,9 @@ static bool edit_field(App *app, Control control, wint_t key, bool special)
         }
         return false;
     }
-    wchar_t *value = memory_field ? app->memory_input[control.pane] : input_page ? app->input : app->forms[app->session].values[control.value];
+    wchar_t *value = command_field ? app->command_input[control.pane] : memory_field ? app->memory_input[control.pane] : input_page ? app->input : app->forms[app->session].values[control.value];
     if (memory_field) { app->cursor = app->memory_cursor[control.pane]; }
+    if (command_field) { app->cursor = app->command_cursor[control.pane]; }
     size_t length = wcslen(value);
     if (app->cursor > length) {
         app->cursor = length;
@@ -2853,6 +2892,7 @@ static bool edit_field(App *app, Control control, wint_t key, bool special)
         return false;
     }
     if (memory_field) { app->memory_cursor[control.pane] = app->cursor; }
+    if (command_field) { app->command_cursor[control.pane] = app->cursor; }
     return true;
 }
 
@@ -3005,7 +3045,10 @@ static void mouse_event(App *app)
             (control.value == 1 || control.value == 2) && event.x == control.rect.x + 12) {
             theme_cycle(app, control.value == 1, -1); return;
         }
-        if (control.kind == MEMORY_FIELD) {
+        if (control.kind == COMMAND_FIELD) {
+            app->demo.pane = control.pane;
+            app->command_cursor[control.pane] = wcslen(app->command_input[control.pane]);
+        } else if (control.kind == MEMORY_FIELD) {
             app->demo.pane = control.pane;
             app->memory_cursor[control.pane] = wcslen(app->memory_input[control.pane]);
         } else if (text_field) {
@@ -3135,7 +3178,7 @@ static void key_event(App *app, wint_t key, bool special)
     }
     if (!special && key == 27) {
         if (app->content_pane >= 0) { leave_content(app); return; }
-        if (app->page == WORKSPACE && control.kind == MEMORY_FIELD) {
+        if (app->page == WORKSPACE && (control.kind == MEMORY_FIELD || control.kind == COMMAND_FIELD)) {
             app->focus = 0; /* End inline editing without acquiring content or closing the session. */
             return;
         }
@@ -3190,6 +3233,9 @@ static void key_event(App *app, wint_t key, bool special)
     if (control.kind == MEMORY_FIELD && ((!special && (key == '\n' || key == '\r')) || (special && key == KEY_ENTER))) {
         activate(app, (Control){.kind = MEMORY_ACTION, .value = 0, .pane = control.pane}); return;
     }
+    if (control.kind == COMMAND_FIELD && ((!special && (key == '\n' || key == '\r')) || (special && key == KEY_ENTER))) {
+        activate(app, (Control){.kind = COMMAND_SEND, .pane = control.pane}); return;
+    }
     if (!special && app->page == WORKSPACE && app->fullscreen_source < 0 && key >= '1' && key <= '9') {
         if (app->content_pane >= 0) { leave_content(app); }
         int pane = (int)(key - '1');
@@ -3214,7 +3260,7 @@ static void key_event(App *app, wint_t key, bool special)
         activate(app, control);
         return;
     }
-    if (app->page == WORKSPACE && app->menu < 0 && control.kind != MEMORY_FIELD) {
+    if (app->page == WORKSPACE && app->menu < 0 && control.kind != MEMORY_FIELD && control.kind != COMMAND_FIELD) {
         for (int i = 0; i < TB_PROFILE_ACTIONS; ++i) {
             int binding = app->profile->keys[i];
             if (binding && ((special && binding > 0 && (int)key == KEY_F(binding)) ||
