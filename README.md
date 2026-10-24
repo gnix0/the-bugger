@@ -85,6 +85,7 @@ Source **+ File** opens another GDB-known source file in a pane-local tab;
 **Current** follows the stopped frame while opened files remain available.
 Lowercase h/j/k/l are arrow-key aliases
 outside text fields; no setting or modal editing is required.
+During CONTENT FOCUS, Ctrl+arrows or Ctrl+h/j/k/l move between neighboring panes.
 [Source fullscreen](docs/usage.md#source-fullscreen) expands a Source pane while
 retaining the toolbar/status bars and restores the existing tiled workspace.
 Defaults are F5 Continue, F10 Over, F11 Into, Shift+F11 Out and F9 Breakpoint;

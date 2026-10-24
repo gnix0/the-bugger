@@ -56,6 +56,18 @@ fullscreen redraws preserve identity when visible, otherwise fall back to a
 visible control. Opening a page resets content focus; value-read actions do not
 implicitly acquire it.
 
+While content is focused, Ctrl+arrows and Ctrl+h/j/k/l transfer focus between
+rendered BODY controls using the panes' outer rectangles. The shared directional
+scoring requires perpendicular overlap for pane movement, prefers nearby aligned
+panes and does not wrap. Only visible bodies participate, including nested splits;
+fullscreen/compact rendering cannot focus a hidden pane. Transfer preserves
+viewports, active view tabs and the last control identity, updating the execution
+mode when Source or Disassembly receives focus. ncurses decodes the standard
+`CSI 1;5 A/B/C/D` Ctrl+arrow sequences through application key definitions.
+Legacy Ctrl+H/J/K/L bytes are intercepted only during workspace content focus,
+before text editing or Enter dispatch; terminfo-decoded Backspace also acts as
+Ctrl+H there. Outside content focus, existing handling applies.
+
 Theme roles separate workspace, panel, raised header, notice and footer
 surfaces. Selected-row variants retain semantic foreground colors. Direct-color
 terminfo supplies exact RGB values; a matching Alacritty direct entry can be
