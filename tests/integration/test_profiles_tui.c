@@ -35,7 +35,7 @@ static void input(const char *text)
 static void start(const char *binary)
 {
     char *const arguments[] = {(char *)binary, NULL}; test_terminal_start_argv(&term, arguments, "xterm-256color", false); active = true;
-    test_terminal_resize(&term, 44, 160); test_terminal_expect(&term, "[ Profiles ]");
+    test_terminal_resize(&term, 44, 160); test_terminal_expect(&term, "[ Config ]");
 }
 static void stop(void) { test_terminal_stop(&term, 0); active = false; }
 static void save(const char *name, bool replace)
@@ -59,7 +59,7 @@ int main(int argc, char **argv)
     click("Source mappings"); click("Add entry"); input("/old build"); input(root); back(); back();
     save("native saved", true);
     click("[ Delete ]"); test_terminal_expect(&term, "Delete profile:"); back();
-    stop(); start(argv[1]); click("[ Profiles ]"); click("native saved");
+    stop(); start(argv[1]); click("[ Config ]"); click("Profiles"); click("native saved");
     test_terminal_expect(&term, "two words"); CHECK(test_terminal_find(&term, "$HOME;$(false)", NULL, NULL));
     if (argc == 4) {
         click("Review session"); click("Start native"); test_terminal_expect(&term, "LIVE | Loaded");
@@ -72,10 +72,10 @@ int main(int argc, char **argv)
         click("Close session"); test_terminal_expect(&term, "Recent: native saved");
         stop(); start(argv[1]); click("Recent: native saved"); test_terminal_expect(&term, "Executable / ELF");
     }
-    back(); click("[ Profiles ]"); click("New OpenOCD"); click("Profile...");
+    back(); click("[ Config ]"); click("Profiles"); click("New OpenOCD"); click("Profile...");
     click("Ordered OpenOCD scripts"); click("Add entry"); input("board/first with spaces.cfg");
     click("Add entry"); input("custom/second.cfg"); back(); back(); save("board definition", false);
-    back(); click("[ Profiles ]"); click("New remote"); click("Profile...");
+    back(); click("[ Config ]"); click("Profiles"); click("New remote"); click("Profile...");
     click("Remote protocol: remote"); back(); save("remote definition", false);
     stop();
     TbProfiles *store = tb_profiles_create(); CHECK(store && tb_profiles_load(store));
@@ -87,7 +87,7 @@ int main(int argc, char **argv)
     CHECK(strcmp(board->scripts.values[0], "board/first with spaces.cfg") == 0 && strcmp(board->scripts.values[1], "custom/second.cfg") == 0);
     const TbProfile *remote = tb_profiles_find(store, "remote definition"); CHECK(remote && remote->kind == 2 && strcmp(remote->protocol, "extended-remote") == 0);
     if (argc == 4) { CHECK(strcmp(tb_profiles_recent(store, 0), "native saved") == 0); }
-    start(argv[1]); click("[ Profiles ]"); click("native saved"); click("[ Delete ]"); click("[ Confirm ]"); stop();
+    start(argv[1]); click("[ Config ]"); click("Profiles"); click("native saved"); click("[ Delete ]"); click("[ Confirm ]"); stop();
     CHECK(tb_profiles_load(store) && tb_profiles_count(store) == 2 && !tb_profiles_find(store, "native saved"));
     const char *path = tb_profiles_path(store); CHECK(unlink(path) == 0);
     char directory[512], lock[512]; (void)snprintf(directory, sizeof directory, "%s/the-bugger", root); (void)snprintf(lock, sizeof lock, "%s/the-bugger/.lock", root);

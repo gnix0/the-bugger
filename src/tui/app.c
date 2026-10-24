@@ -3,6 +3,7 @@
 #include "demo.h"
 #include "render.h"
 #include "theme.h"
+#include "preferences.h"
 #include "session.h"
 #include "profiles.h"
 
@@ -22,12 +23,12 @@
 enum { MAX_CONTROLS = 1024, FIELD_SIZE = 256, FORM_FIELDS = 9 };
 typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
                COMMAND_INPUT, SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT, DATA_WATCH_INPUT,
-               PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM, SCRIPT_LIST, SCRIPT_FILTER } Page;
+               CONFIG_MENU, THEMES, THEME_PREVIEW, PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM, SCRIPT_LIST, SCRIPT_FILTER } Page;
 typedef enum { CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_ADDRESS, CODE_STOPPED,
                CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_DIRECTORY_ADD, CODE_RULE_FROM,
                CODE_RULE_TO, CODE_SETTINGS_CLEAR, CODE_RAW, CODE_RUN_TO } CodeAction;
 typedef enum {
-    CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
+    CONFIG_OPEN, THEME_ACTION, CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
     TOOL, TAB, MENU, BODY, SHOW_VIEW, FOCUS_PANE, CANCEL_RESET, CONFIRM_RESET,
     MENU_SECTION, PANE_ACTION, DIVIDER, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR,
     COMMAND_OPEN, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_ARGUMENTS, CONTEXT_PAGE,
@@ -68,6 +69,8 @@ typedef struct {
     Control controls[MAX_CONTROLS];
     TbRect panes[TB_MAX_PANES];
     const char *colors;
+    TbPreferences preferences;
+    size_t theme_draft;
     char status[160];
     TbSession *debugger;
     bool demo_mode, live, leave_session, exit_after_close;
@@ -313,13 +316,94 @@ static void draw_launcher(App *app)
     tb_text(rule + 2, left + 2, width - 4, TB_MUTED, 0, app->demo_mode ?
             "DEMO / VISUAL REFERENCE - no debugger connected" : "Native Linux | Server flows remain previews");
     int actions = top + height - 1;
-    if (!app->demo_mode) { button(app, actions, left + 2, 14, "[ Profiles ]", PROFILE_OPEN, 0, 0); }
+    button(app, actions, left + 2, 12, "[ Config ]", CONFIG_OPEN, 0, 0);
     if (app->previewed) {
-        button(app, actions, left + 2, 22, "[ Return to preview ]", BACK, 0, 0);
+        button(app, actions, left + 15, width - 28, "[ Return to preview ]", BACK, 0, 0);
     }
     button(app, actions, left + width - 11, 9, "[ Quit ]", QUIT, 0, 0);
     tb_text(LINES - 2, 1, COLS - 2, TB_YELLOW, 0, app->status);
     tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0, "Tab / arrows / Enter or click | Ctrl+Q quit app");
+}
+
+/* Global presentation preferences never participate in debugger/session state. */
+static void apply_theme(App *app, size_t palette)
+{
+    (void)tb_theme_select(palette);
+    app->colors = tb_theme_init();
+    (void)clearok(stdscr, TRUE);
+}
+
+static size_t theme_family(size_t palette)
+{
+    const TbPalette *selected = tb_theme_palette(palette);
+    for (size_t i = 0; i < tb_theme_family_count(); ++i) {
+        if (strcmp(selected->family, tb_theme_family(i)) == 0) { return i; }
+    }
+    return 0;
+}
+
+static void theme_cycle(App *app, bool family, int direction)
+{
+    size_t current = app->theme_draft;
+    if (family) {
+        size_t next = (theme_family(current) + tb_theme_family_count() + (direction < 0 ? tb_theme_family_count() - 1 : 1)) % tb_theme_family_count();
+        const char *name = tb_theme_family(next);
+        for (size_t i = 0; i < tb_theme_count(); ++i) {
+            if (strcmp(tb_theme_palette(i)->family, name) == 0) { app->theme_draft = i; break; }
+        }
+        if (strcmp(name, "catppuccin") == 0) { app->theme_draft = tb_theme_find(name, "macchiato"); }
+    } else {
+        const char *name = tb_theme_palette(current)->family;
+        for (size_t step = 1; step <= tb_theme_count(); ++step) {
+            size_t i = (current + (direction < 0 ? tb_theme_count() - step : step)) % tb_theme_count();
+            if (strcmp(tb_theme_palette(i)->family, name) == 0) { app->theme_draft = i; break; }
+        }
+    }
+}
+
+static void draw_config(App *app)
+{
+    bool themes = app->page == THEMES;
+    int width = COLS > 80 ? 72 : COLS - 8, height = themes ? 14 : 12;
+    int left = (COLS - width) / 2, top = (LINES - 2 - height) / 2;
+    tb_fill((TbRect){left, top, width, height}, TB_PANEL);
+    tb_text(top + 1, left + 2, width - 4, TB_PINK, A_BOLD, themes ? "Themes" : "Configuration");
+    tb_style(TB_BORDER, 0); (void)mvhline(top + 3, left + 2, ACS_HLINE, width - 4);
+    if (themes) {
+        char label[128];
+        (void)snprintf(label, sizeof label, "Theme       < %s >", tb_theme_name(theme_family(app->theme_draft)));
+        button(app, top + 5, left + 2, width - 4, label, THEME_ACTION, 1, 0);
+        (void)snprintf(label, sizeof label, "Variant     < %s >", tb_theme_palette(app->theme_draft)->variant);
+        button(app, top + 7, left + 2, width - 4, label, THEME_ACTION, 2, 0);
+        tb_text(top + 9, left + 2, width - 4, TB_MUTED, 0, "Left/Right or Enter changes selection. Preview before saving.");
+        button(app, top + 12, left + 2, 10, "[ Back ]", BACK, 0, 0);
+        button(app, top + 12, left + 14, 13, "[ Preview ]", THEME_ACTION, 3, 0);
+        button(app, top + 12, left + width - 11, 9, "[ Save ]", THEME_ACTION, 4, 0);
+    } else {
+        if (!app->demo_mode) { button(app, top + 5, left + 2, width - 4, "Profiles", PROFILE_OPEN, 0, 0); }
+        button(app, top + 7, left + 2, width - 4, "Themes", THEME_ACTION, 0, 0);
+        button(app, top + 10, left + 2, 10, "[ Back ]", BACK, 0, 0);
+    }
+    tb_text(LINES - 2, 1, COLS - 2, TB_YELLOW, 0, app->status);
+    tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0, "Tab / arrows / Enter or click | Esc back | Ctrl+Q quit app");
+}
+
+static void draw_theme_preview(App *app)
+{
+    TbDemo sample; TbLayout layout;
+    tb_demo_init(&sample); tb_layout_init(&layout);
+    char label[128];
+    (void)snprintf(label, sizeof label, "THEME PREVIEW | %s / %s | simulated data", tb_theme_name(theme_family(app->theme_draft)), tb_theme_palette(app->theme_draft)->variant);
+    tb_text(0, 1, COLS - 2, TB_BRAND, A_BOLD, label);
+    tb_text(1, 1, COLS - 2, TB_MUTED, 0, "No debugger connected. Preview does not save your selection.");
+    (void)tb_layout_arrange(&layout, (TbRect){1, 3, COLS - 2, LINES - 6}, 0);
+    for (int i = 0; i < layout.count; ++i) {
+        int pane = layout.order[i]; TbRect rect = layout.panes[pane];
+        tb_fill(rect, TB_PANEL);
+        tb_text(rect.y, rect.x, rect.w, TB_ACTIVE_TAB, A_BOLD | A_UNDERLINE, tb_view_names[sample.panes[pane].tabs[0]]);
+        if (rect.h > 1) { tb_render_demo(&sample, pane, (TbRect){rect.x, rect.y + 1, rect.w, rect.h - 1}); }
+    }
+    button(app, LINES - 2, 1, 12, "[ Back ]", BACK, 0, 0);
 }
 
 static void draw_form(App *app, bool review)
@@ -1526,6 +1610,10 @@ static void draw_page(App *app)
         tb_text(4, 0, COLS, TB_PANEL, 0, "State retained. Ctrl+Q quits.");
     } else if (app->page == LAUNCHER) {
         draw_launcher(app);
+    } else if (app->page == CONFIG_MENU || app->page == THEMES) {
+        draw_config(app);
+    } else if (app->page == THEME_PREVIEW) {
+        draw_theme_preview(app);
     } else if (app->page == CONFIGURE || app->page == REVIEW) {
         draw_form(app, app->page == REVIEW);
     } else if (app->page == SCRIPT_LIST) { draw_scripts(app);
@@ -2042,6 +2130,17 @@ static void request_leave(App *app, bool quit)
 static void activate(App *app, Control control)
 {
     switch (control.kind) {
+    case CONFIG_OPEN: page(app, CONFIG_MENU); break;
+    case THEME_ACTION:
+        if (control.value == 0) { app->theme_draft = app->preferences.palette; page(app, THEMES); }
+        else if (control.value == 1 || control.value == 2) { theme_cycle(app, control.value == 1, 1); }
+        else if (control.value == 3) { apply_theme(app, app->theme_draft); page(app, THEME_PREVIEW); }
+        else if (control.value == 4) {
+            if (tb_preferences_save(&app->preferences, app->theme_draft)) {
+                apply_theme(app, app->preferences.palette); status(app, *app->preferences.error ? app->preferences.error : "Theme saved."); page(app, CONFIG_MENU);
+            } else { status(app, app->preferences.error); }
+        }
+        break;
     case REVIEW_PAGE: app->review_offset += control.value; if (app->review_offset < 0) { app->review_offset = 0; } break;
     case SCRIPT_OPEN:
         if (!app->catalog) { app->catalog = malloc(sizeof *app->catalog); }
@@ -2082,7 +2181,10 @@ static void activate(App *app, Control control)
         page(app, WORKSPACE);
         break;
     case BACK:
-        if (app->page == PROFILE_LIST) { page(app, LAUNCHER); break; }
+        if (app->page == THEME_PREVIEW) { apply_theme(app, app->preferences.palette); page(app, THEMES); break; }
+        if (app->page == THEMES) { apply_theme(app, app->preferences.palette); page(app, CONFIG_MENU); break; }
+        if (app->page == CONFIG_MENU) { page(app, LAUNCHER); break; }
+        if (app->page == PROFILE_LIST) { page(app, CONFIG_MENU); break; }
         if (app->page == PROFILE_OPTIONS || app->page == PROFILE_CONFIRM) {
             if (app->page == PROFILE_CONFIRM && app->profile_replacing) { memcpy(app->profile->name, app->profile_original_name, sizeof app->profile->name); }
             page(app, app->profile_return); break;
@@ -2655,6 +2757,10 @@ static void mouse_event(App *app)
         bool text_field = control.kind == FIELD && (input_page ||
                           !((app->session < 2 && control.value == 0) ||
                             (app->session == 1 && control.value == 8)));
+        if (app->page == THEMES && control.kind == THEME_ACTION &&
+            (control.value == 1 || control.value == 2) && event.x == control.rect.x + 12) {
+            theme_cycle(app, control.value == 1, -1); return;
+        }
         if (control.kind == MEMORY_FIELD) {
             app->demo.pane = control.pane;
             app->memory_cursor[control.pane] = wcslen(app->memory_input[control.pane]);
@@ -2765,7 +2871,14 @@ static void key_event(App *app, wint_t key, bool special)
         if (next >= 0 && next < count) { app->form_scroll = next; }
         return;
     }
+    if (special && app->page == THEMES && control.kind == THEME_ACTION &&
+        (control.value == 1 || control.value == 2) && (key == KEY_LEFT || key == KEY_RIGHT)) {
+        theme_cycle(app, control.value == 1, key == KEY_LEFT ? -1 : 1); return;
+    }
     if (!special && key == 27) {
+        if (app->page == CONFIG_MENU || app->page == THEMES || app->page == THEME_PREVIEW) {
+            activate(app, (Control){.kind = BACK}); return;
+        }
         if (app->page == PROFILE_LIST || app->page == PROFILE_OPTIONS || app->page == PROFILE_ITEMS || app->page == PROFILE_TEXT || app->page == PROFILE_CONFIRM) {
             activate(app, (Control){.kind = BACK}); return;
         }
@@ -2911,7 +3024,7 @@ static void initialize(App *app, bool demo)
         }
         app->forms[form].start_server = true;
     }
-    status(app, demo ? "DEMO only. Nothing is launched, connected or saved." :
+    status(app, demo ? "DEMO only. No debugger connected; Config saves appearance preferences." :
                       "Choose native launch/attach, an OpenOCD setup or an existing GDB server.");
     if (!demo && app->profiles && !tb_profiles_load(app->profiles)) { status(app, tb_profiles_error(app->profiles)); }
 }
@@ -2954,7 +3067,8 @@ int tb_tui_run(bool demo)
     } else {
         App app;
         initialize(&app, demo);
-        app.colors = tb_theme_init();
+        if (!tb_preferences_load(&app.preferences)) { status(&app, app.preferences.error); }
+        apply_theme(&app, app.preferences.palette);
         /* Raw input also disables XON/XOFF, so Ctrl+Q reaches the application. */
         (void)raw();
         (void)noecho();

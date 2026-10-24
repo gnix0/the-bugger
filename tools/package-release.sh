@@ -27,6 +27,7 @@ mkdir -- "$work/$name"
 install -m 755 -- "$binary" "$work/$name/the-bugger"
 strip --strip-debug -- "$work/$name/the-bugger"
 install -m 644 LICENSE "$work/$name/LICENSE"
+install -m 644 THIRD_PARTY_NOTICES "$work/$name/THIRD_PARTY_NOTICES"
 # Include new packaging infrastructure before its implementation commit, too.
 git ls-files -z > "$work/files"
 printf 'tools/package-release.sh\0' >> "$work/files"
