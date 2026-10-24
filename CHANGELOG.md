@@ -24,6 +24,11 @@
 
 ### Changed
 
+- Spatial arrow/hjkl control navigation, stable focus across redraws, and
+  control-only Tab traversal. Tabs activate with Enter; content scrolling starts
+  through a deliberate body/scrollbar click and Escape returns to controls.
+  Fullscreen excludes hidden focus targets and preserves a reachable Restore.
+
 - ESP-IDF fixture sources explicitly enforce `-Wall -Wextra -Werror`, overriding
   inherited warning-as-error exceptions for the authored component while leaving
   SDK components unchanged. Native, test, release and STM32 builds were already

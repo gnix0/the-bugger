@@ -30,7 +30,9 @@ The post-v0.1.0 development build adds **Config → Themes** with seven built-in
 families and 37 variants, preview and saved appearance preferences.
 **Catppuccin Macchiato** is the default; Monokai Pro remains available.
 [Theme controls and variants](docs/usage.md#configuration-and-themes) describe
-what is included. This feature is not part of the published v0.1.0 binary.
+what is included. Shared UI additions also include
+[Source fullscreen and spatial keyboard navigation](docs/usage.md#workspace-controls).
+These additions are not part of the published v0.1.0 binary.
 
 Existing TCP GDB servers support reviewed `remote`/`extended-remote` connections
 and shared inspectors. OpenOCD support includes reviewed startup, installed-script

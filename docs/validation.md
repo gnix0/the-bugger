@@ -898,7 +898,8 @@ remains reproducible without treating unreported observations as PASS.
 
 ## Always-on h/j/k/l navigation
 
-Implemented; awaiting user acceptance. This shared UI addition normalizes the
+Accepted through the subsequent implementation commit; unreleased. This shared
+UI addition normalizes the
 four lowercase letters to Left/Down/Up/Right outside editable fields, retaining
 the actual arrow dispatch for controls, scrolling, tab changes and resizing.
 Text fields consume literal characters first, including file-filter page reset.
@@ -925,7 +926,8 @@ The [manual steps](testing.md#letter-key-navigation) remain to be reviewed.
 
 ## ESP fixture warning policy
 
-Implemented; awaiting user acceptance. The root Makefile already applies `-Wall`
+Accepted through the subsequent implementation commit; unreleased. The root
+Makefile already applies `-Wall`
 and `-Werror` to frontend/tests, native C/C++ fixtures, STM32 firmware, release
 and sanitizer builds. Only the authored ESP-IDF component needed an explicit
 policy: private `-Wall -Wextra -Werror` plus error-category overrides for inherited
@@ -957,7 +959,7 @@ physical RISC-V acceptance.
 
 ## Source fullscreen rendering
 
-Implemented; awaiting user acceptance. Source Actions and the Source pane-actions
+Accepted through the subsequent implementation commit; unreleased. Source Actions and the Source pane-actions
 menu can temporarily expand Source into the workspace area, retaining the global
 header/footer. Restore, workspace Escape/q and keyboard activation return to the
 existing split tree and tabs. Hidden pane selectors, tabs and divider hit regions
@@ -994,3 +996,72 @@ Full default/native/tmux suites, sanitizer/compiler matrices, physical hardware
 and manual visual acceptance were not run for this change. Follow the
 [manual fullscreen procedure](testing.md#source-fullscreen); focused native
 success does not establish embedded hardware compatibility.
+
+
+## Spatial control navigation
+
+Implemented; **awaiting-user**. Arrow/hjkl navigation uses rendered rectangles
+and stable control identities. Horizontal movement stays within a visual row;
+vertical movement prefers alignment, and directions do not wrap. Tab/Shift+Tab
+exclude content, scrollbars, dividers and hidden panes. Tabs activate with Enter.
+Body/scrollbar clicks explicitly acquire content navigation; Escape/Tab or an
+outside-pane/control click returns to controls. Fullscreen restoration and
+per-view navigation retain their existing behavior. No target-read authorization,
+layout structure, protocol or dependency changes are included.
+
+Agent-run focused checks:
+
+- Strict build with the repository warning-as-error policy: PASS.
+- Paired `build/test-navigation` PTYs: PASS for toolbar directions/edges,
+  control-only traversal, deliberate content focus, Escape/outside/control-click
+  exit, fullscreen Quit/Restore reachability, compact resize identity and literal
+  text entry; hjkl and arrow screens/selection agree.
+- `build/test-workspace`, `build/test-tui`, `build/test-fullscreen`: PASS,
+  retaining tab promotion, real scrolling, split/divider/compact rendering,
+  terminal restoration and fullscreen behavior.
+- Focused live `build/test-fullscreen` with `build/code-fixture`, and
+  `build/test-memory-tui` with `build/memory-fixture`: PASS outside the sandbox,
+  using owned GDB fixtures. Fullscreen source stepping and Memory inline editing,
+  explicit scrolling, independent views, errors and cleanup remain functional.
+- Focused clang-tidy on app/navigation test and fortified strict syntax checks
+  on all five changed C files: PASS.
+- Full `make analyze`: PASS with the repository analyzer/bugprone checks and
+  warnings as errors. Reported suppressed system-header/existing NOLINT counts
+  are not new application warnings.
+
+The first broad run stopped in the Themes PTY test: it assumed resize reset
+focus to Theme. Preserving Variant correctly made the old three-Tab sequence
+activate Save. The test now asserts retained Variant focus and uses two Tabs to
+reach Preview; `make test-themes` passes. Existing tab-switching/body tests were
+updated to the explicit Enter/content-click interaction while retaining their
+view, scroll and safety assertions. The new paired-click generator initially
+sent press/release together; separating them with settled frames, matching the
+existing terminal helper, fixed its input simulation. Early directional checks
+also exposed a diagonal horizontal focus jump; restricting horizontal movement
+to the visual row resolved that application behavior.
+
+Final agent-run regression, explicitly authorized for this task:
+
+```sh
+make test test-native test-tmux test-m15-native test-m16-server test-m16-tui test-m16-openocd
+make analyze
+```
+
+Both commands completed with exit status 0 on the local Linux host. The runtime
+command ran outside the sandbox for owned GDB fixtures, localhost servers and
+isolated tmux sockets. It covers the default/model/PTY suites, native acceptance
+and live inspectors, real tmux workspace, actual localhost GDB-server integration,
+authored OpenOCD lifecycle/TUI exchanges and actual OpenOCD script loading stopped
+before hardware initialization. Existing safety and cleanup assertions passed.
+Fortified syntax, documentation relative file links/code fences and
+`git diff --check` also passed. No commit, tag, push or publication was performed.
+
+Final logs: `/tmp/spatial-regression-final.log`,
+`/tmp/spatial-analyze-all.log`, `/tmp/spatial-analysis-final2.log`,
+`/tmp/spatial-fortify.log` and `/tmp/spatial-themes-fortify.log`.
+The initial broad-run failure remains in `/tmp/spatial-regression.log`.
+These logs are disposable local artifacts; this section preserves the results.
+Hardware and sanitizer/compiler matrices were not run for this task and remain
+separate release checks. These host tests do not establish new board compatibility.
+Manual review follows the
+[spatial navigation procedure](testing.md#spatial-control-and-content-navigation).

@@ -324,7 +324,7 @@ and divider controls are hidden. Source scrolling, search/navigation, breakpoint
 controls and source stepping retain their normal behavior. Hidden inspectors
 follow the existing visibility policy rather than starting background reads.
 
-Choose **Restore** in the Source header, press Escape or `q` outside text fields,
+Choose **Restore** in the Source header, press Escape or `q` at control focus,
 or choose **Actions → Restore tiled workspace** to leave fullscreen. Tab/Enter
 can activate Restore without a mouse. The prior split tree, proportions and tab
 membership are retained, including nested panes and terminal resizing. Pane-switch
@@ -338,13 +338,26 @@ emulator fullscreen setting. Returning to the launcher clears it.
 ## Workspace controls
 
 The active tab moves to the left. Mouse activation leaves inactive tabs in their
-normal style; keyboard focus follows the active tab. Use clicks or Tab/Shift+Tab,
-arrows and Enter. Lowercase `h`/`j`/`k`/`l` are always-on aliases for
+normal style; keyboard focus follows the active tab. Arrows move focus in the
+corresponding visual direction; Enter activates the selected control. Left/Right
+move within a visual row, and Up/Down prefer aligned controls above/below.
+Directional movement stops at an edge; it does not wrap. Continue → Pause uses
+Right, not Down. Tab/Shift+Tab cycle controls in a stable sequence, excluding
+content bodies, scrollbars, dividers and hidden panes.
+Lowercase `h`/`j`/`k`/`l` are always-on aliases for
 Left/Down/Up/Right outside text fields. They follow the focused control: menu
-selection, tab switching, body scrolling, theme/variant cycling and divider
+selection, tab focus, body scrolling, theme/variant cycling and divider
 resizing behave just like arrows. No setting or editing mode is required.
 In fields, these letters type normally; use actual Left/Right, Home/End,
 Backspace/Delete and Ctrl+U for text editing.
+Click a pane's content or scrollbar to give it arrow/hjkl scrolling or row
+navigation. A `*` in its header and **CONTENT FOCUS** in the help bar identify
+this state, including in monochrome. Escape (or Tab) returns to the last visible
+control, falling back to Continue if necessary. Clicking a control or empty space
+outside the pane also leaves content focus. Wheel scrolling does not acquire
+keyboard focus. In fullscreen, the first Escape leaves content; the next restores
+the tiles. Field editing and divider resizing retain their own key behavior.
+
 Escape goes back; `q` closes/backs out outside text fields and keeps the launcher
 open. **Quit** or `Ctrl+Q` exits the application, confirming active-session closure.
 Function keys have visible alternatives. Reset remains unavailable in live

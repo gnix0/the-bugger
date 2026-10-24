@@ -38,7 +38,23 @@ color-enabled flag and selected palette index. Mouse and keyboard share action d
 h/j/k/l first receive ordinary text-field handling; outside editable fields they
 are normalized to Left/Down/Up/Right before existing navigation dispatch. Divider
 resize mode uses those aliases directly. File-filter edits still reset paging.
-No parallel motion engine, modal state or new target operations are introduced.
+No Vim editing mode or new target operations are introduced.
+
+Controls retain `(kind, value, pane)` identities across redraws; rectangles are
+rebuilt from the existing layout. Directional navigation scans at most 1,024
+rendered controls, excludes content/scrollbars/dividers, and prefers aligned
+candidates before forward distance and perpendicular offset. Left/Right stay
+within a visual row. Directions do not wrap; Tab/Shift+Tab retain sequential
+control traversal. Scrollable menus/forms reveal adjacent items before painting
+focus. No second layout tree or cached focus graph is maintained.
+
+Content focus is separate from the last control identity. Only a deliberate body
+or scrollbar click acquires it; arrows then use that view's existing navigation.
+Escape/Tab or a click outside the pane returns to controls. A header `*` and
+CONTENT FOCUS help text identify it without relying on color. Resizing and
+fullscreen redraws preserve identity when visible, otherwise fall back to a
+visible control. Opening a page resets content focus; value-read actions do not
+implicitly acquire it.
 
 Theme roles separate workspace, panel, raised header, notice and footer
 surfaces. Selected-row variants retain semantic foreground colors. Direct-color
@@ -51,9 +67,9 @@ The workspace preserves per-view scroll/selection and tabs through compact
 rendering, with interactive split-tree geometry, dragging and closing as
 described below.
 
-Tab activation promotes the active tab to the left. On tab activation, focus moves
-to that pane's first tab control, which will represent the promoted tab on the
-next paint. Mouse input suppresses the additional inverse keyboard-focus marker;
+Tab activation promotes the active tab to the left. Focus follows its identity
+as rendering promotes it to the first position. Mouse input suppresses the
+additional inverse keyboard-focus marker;
 keyboard input restores it. This prevents the old numeric control index from
 highlighting/activating a different tab after reordering. The active-tab theme
 and monochrome selection indicator remain intact.

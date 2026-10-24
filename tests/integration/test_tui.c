@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
     for (int i = 0; i < 10; ++i) { test_terminal_send(&term, "\t"); }
     test_terminal_send(&term, "\r");
     test_terminal_expect(&term, "NOT IMPLEMENTED");
-    test_terminal_send(&term, "\033OD");
+    test_terminal_send(&term, "\033OC\r");
     test_terminal_expect(&term, "main.c | Cortex-M4F sample");
     /* Focus follows the promoted Source tab; skip Symbols to reach its menu. */
     test_terminal_send(&term, "\t\t\r");

@@ -66,7 +66,10 @@ int main(int argc, char **argv)
     test_terminal_send(&term, "\033OD"); test_terminal_expect(&term, "< Monokai Pro >");
     test_terminal_send(&term, "\t\033OD"); test_terminal_expect(&term, "< light >");
     test_terminal_resize(&term, 18, 48); test_terminal_expect(&term, "Variant");
-    test_terminal_send(&term, "\t\t\t\r"); test_terminal_expect(&term, "THEME PREVIEW"); back();
+    /* Resize retains Variant focus; Back then Preview are the next two controls. */
+    int variant_x, variant_y; CHECK(test_terminal_find(&term, "Variant", &variant_x, &variant_y));
+    CHECK(term.inverse[variant_y][variant_x]);
+    test_terminal_send(&term, "\t\t\r"); test_terminal_expect(&term, "THEME PREVIEW"); back();
     test_terminal_stop(&term, 0); active = false;
     CHECK(unlink(path) == 0);
     (void)snprintf(path, sizeof path, "%s/the-bugger/.preferences.lock", root); CHECK(unlink(path) == 0);

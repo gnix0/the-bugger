@@ -121,6 +121,31 @@ Manual review:
 These shared UI tests do not replace the physical release matrix or imply new
 board support.
 
+## Spatial control and content navigation
+
+`make test-navigation` compares arrows/hjkl and checks geometry, toolbar edges,
+control-only Tab traversal, content entry/exit, fullscreen focus recovery and
+identity retention across compact resizing. `make test-fullscreen` and the
+workspace PTY checks retain layout/restoration coverage. These require no target.
+Live per-view checks remain necessary for horizontal scrolling and context rows.
+
+1. Open a session: Continue is selected. Right/l selects Pause; Left/h returns.
+   Down/j moves below the toolbar. At a row edge, focus remains reachable.
+2. Traverse controls with Tab/Shift+Tab. Content, scrollbar tracks, dividers and
+   hidden panes are never selected. Focus a neighboring tab with arrows and use
+   Enter to activate it; verify promotion retains focus on that tab.
+3. Click Source content and use arrows/hjkl/Page keys to browse. Expect the header
+   `*` and CONTENT FOCUS help. Escape returns to the previous visible control.
+   Repeat with Disassembly, Console and selectable context/variable rows.
+4. Reenter content, then click a toolbar control or blank space outside the pane.
+   Arrow navigation returns to controls; wheel scrolling alone does not acquire
+   content focus. Type literal hjkl into configuration and Memory fields.
+5. Enter Source fullscreen, navigate past Quit and back, and cycle Tab. Restore
+   remains reachable and focus never enters a hidden pane. With content active,
+   the first Escape leaves content and the second restores the tiled workspace.
+6. Resize compact/large, split panes and repeat in color, NO_COLOR and tmux.
+   Focus follows visible control identity; viewports and PC remain independent.
+
 ## Letter-key navigation
 
 ```sh
@@ -135,7 +160,8 @@ resizing, confirmation controls and compact resize. The harness waits through
 Escape recognition and drains redraws before comparing; a partial screen is
 not a completed frame.
 
-Manual review: navigate menus with h/j/k/l, switch a focused tab using h/l,
+Manual review: navigate menus with h/j/k/l, focus a tab using h/l and activate
+it with Enter,
 scroll a focused body with j/k and resize a divider using the matching axis.
 Type `hjkl` into a configuration or Memory address field: the characters must
 remain literal. Actual arrows, Tab, mouse and function keys must still work.
@@ -1069,8 +1095,8 @@ screen reader handles cursor save/restore around ncurses scrolling regions.
    Each old tab immediately becomes inactive. Click Call Stack, press Enter:
    it must stay active rather than activating Disassembly at the old control index.
 4. From that active tab, press Tab to focus the next tab. Keyboard focus is
-   visible. Enter activates it; Left/Right still switch tabs and keep focus on
-   the promoted tab. Existing view content/scroll, splits and resizing still work.
+   visible. Enter activates it; Left/Right focus neighboring controls, with Enter
+   activating a tab and keeping focus on the promoted tab. Existing view content/scroll, splits and resizing still work.
 5. Repeat with `NO_COLOR=1 ./build/the-bugger --demo` and inside tmux with
    opt-in mouse support. Monochrome active tabs retain their selection marker;
    inactive tabs have no stale marker after mouse activation. Quit cleanly.

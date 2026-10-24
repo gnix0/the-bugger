@@ -66,8 +66,10 @@ typedef struct {
     int drag, resize_divider;
     int scroll_drag_pane, scroll_drag_grab;
     bool scroll_drag_horizontal;
+    Control last_control;
     Control controls[MAX_CONTROLS];
     TbRect panes[TB_MAX_PANES];
+    int content_pane; /* -1 navigates controls; a pane ID navigates its content. */
     int fullscreen_source; /* -1 keeps the ordinary tiled rendering. */
     const char *colors;
     TbPreferences preferences;
@@ -90,7 +92,6 @@ typedef struct {
     int execution_pane, break_pane, break_action, memory_pane, variable_pane;
     bool break_hardware;
     bool memory_length_input;
-    bool variable_focus;
     char memory_input_error[192];
     wchar_t memory_input[TB_MAX_PANES][FIELD_SIZE];
     size_t memory_cursor[TB_MAX_PANES];
@@ -145,6 +146,8 @@ static void status(App *app, const char *message)
 static void page(App *app, Page next)
 {
     app->page = next;
+    app->count = 0;
+    app->content_pane = -1;
     if (next == LAUNCHER) { app->fullscreen_source = -1; }
     app->focus = 0;
     app->cursor = 0;
@@ -1224,7 +1227,7 @@ static void draw_pane(App *app, int pane_index, TbRect rect)
         x += width;
     }
     tb_text(rect.y, rect.x, 1, TB_ACTIVE_TAB, A_BOLD,
-            pane_index == app->demo.pane ? ">" : " ");
+            app->content_pane == pane_index ? "*" : pane_index == app->demo.pane ? ">" : " ");
     if (app->fullscreen_source == pane_index) {
         tb_text(rect.y, rect.x + 1, rect.w - 16, TB_ACTIVE_TAB, A_BOLD, "Source | fullscreen");
         button(app, rect.y, rect.x + rect.w - 14, 13, "[ Restore ]", CODE_ACTION, CODE_FULLSCREEN, pane_index);
@@ -1391,6 +1394,7 @@ static void draw_workspace(App *app)
     tb_fill((TbRect){0, LINES - 2, COLS, 2}, TB_CHROME);
     tb_text(LINES - 2, 1, COLS - 2, TB_CHROME, 0, footer);
     tb_text(LINES - 1, 1, COLS - 2, TB_CHROME, 0,
+            app->content_pane >= 0 ? "CONTENT FOCUS | arrows / hjkl scroll or select | Esc: controls | Ctrl+Q quit app" :
             fullscreen ? "Source fullscreen | Esc / q or Restore: tiled workspace | Ctrl+Q quit app" :
             app->resizing ? "Resize: Tab selects divider | arrows move | Enter / Esc finish" :
             app->live ? "Console: Command / Save Log | q close session | Ctrl+Q quit app" :
@@ -1679,26 +1683,91 @@ static void draw_page(App *app)
     }
 }
 
+/* Rectangles are rebuilt by rendering; identities survive scrollbar and tab changes. */
+static bool same_control(Control a, Control b)
+{
+    return a.kind == b.kind && a.value == b.value && a.pane == b.pane;
+}
+
+static bool navigable(Control control)
+{
+    return control.rect.w > 0 && control.rect.h > 0 &&
+           control.kind != BODY && control.kind != SCROLLBAR &&
+           control.kind != HSCROLLBAR && control.kind != DIVIDER;
+}
+
+static void leave_content(App *app)
+{
+    app->content_pane = -1;
+    app->focus = 0;
+    for (int i = 0; i < app->count; ++i) {
+        if (navigable(app->controls[i]) && same_control(app->controls[i], app->last_control)) {
+            app->focus = i; break;
+        }
+    }
+}
+
 static void draw(App *app)
 {
-    Control previous = app->focus >= 0 && app->focus < app->count ? app->controls[app->focus] : (Control){0};
-    if (app->variable_focus && app->page == WORKSPACE) {
-        previous = (Control){.kind = BODY, .pane = app->variable_pane}; app->variable_focus = false;
-    }
-    bool retain_body = app->page == WORKSPACE && (previous.kind == BODY || previous.kind == SCROLLBAR || previous.kind == HSCROLLBAR || previous.kind == MEMORY_FIELD);
+    bool retain = app->count > 0 && !app->menu_focus && !app->resizing;
+    Control previous = retain ? app->controls[app->focus] : (Control){0};
     draw_page(app);
-    /* Live source availability can add/remove an earlier pane's scrollbar.
-     * Preserve the focused body by identity rather than its old array index. */
-    if (retain_body) {
-        for (int i = 0; i < app->count; ++i) {
-            if (app->controls[i].kind == previous.kind && app->controls[i].pane == previous.pane &&
-                app->controls[i].value == previous.value) {
-                if (app->focus != i) { app->focus = i; draw_page(app); }
-                break;
+    int next = -1;
+    for (int i = 0; i < app->count; ++i) {
+        Control c = app->controls[i];
+        if (app->content_pane >= 0) {
+            if (c.kind == BODY && c.pane == app->content_pane) { next = i; break; }
+        } else if (retain && navigable(c) && same_control(c, previous)) { next = i; break; }
+    }
+    if (app->count && !app->resizing) {
+        if (next < 0) {
+            app->content_pane = -1;
+            next = navigable(app->controls[app->focus]) ? app->focus : 0;
+            if (!navigable(app->controls[next])) {
+                for (int i = 0; i < app->count; ++i) {
+                    if (navigable(app->controls[i])) { next = i; break; }
+                }
             }
+        }
+        if (next != app->focus) { app->focus = next; draw_page(app); }
+        if (app->content_pane < 0 && navigable(app->controls[app->focus])) {
+            app->last_control = app->controls[app->focus];
         }
     }
     (void)refresh();
+}
+
+/* At most MAX_CONTROLS candidates: no second layout tree or cached graph. */
+static void spatial_focus(App *app, int key)
+{
+    TbRect from = app->controls[app->focus].rect;
+    bool horizontal = key == KEY_LEFT || key == KEY_RIGHT;
+    bool forward = key == KEY_RIGHT || key == KEY_DOWN;
+    int best = app->focus, best_gap = INT_MAX, best_distance = INT_MAX, best_offset = INT_MAX;
+    for (int i = 0; i < app->count; ++i) {
+        Control c = app->controls[i];
+        if (!navigable(c)) { continue; }
+        TbRect to = c.rect;
+        int primary = horizontal ? to.x * 2 + to.w - (from.x * 2 + from.w) :
+                                   to.y * 2 + to.h - (from.y * 2 + from.h);
+        int distance = forward ? primary : -primary;
+        if (distance <= 0) { continue; }
+        /* Same-row controls are never above/below each other, even if widths differ. */
+        if (horizontal ? to.x < from.x + from.w && from.x < to.x + to.w :
+                         to.y < from.y + from.h && from.y < to.y + to.h) { continue; }
+        int start = horizontal ? from.y : from.x, end = start + (horizontal ? from.h : from.w);
+        int other = horizontal ? to.y : to.x, other_end = other + (horizontal ? to.h : to.w);
+        int gap = other >= end ? other - end + 1 : start >= other_end ? start - other_end + 1 : 0;
+        if (horizontal && gap > 0) { continue; }
+        int offset = abs((other + other_end) - (start + end));
+        /* Prefer the same visual row/column, then the closest forward control. */
+        if (gap < best_gap || (gap == best_gap && (distance < best_distance ||
+            (distance == best_distance && offset < best_offset)))) {
+            best = i; best_gap = gap; best_distance = distance; best_offset = offset;
+        }
+    }
+    app->focus = best;
+    app->cursor = 0;
 }
 
 static void cycle_pane(App *app, int direction)
@@ -2277,10 +2346,10 @@ static void activate(App *app, Control control)
         app->demo.panes[control.pane].active = control.value;
         code_focus(app, control.pane);
         app->menu = -1;
-        /* The activated tab moves first. Its previous control index may now
-         * belong to an inactive tab, so keep focus at this pane's first tab. */
+        /* Keep the activated tab's identity while rendering promotes it. */
         for (int i = 0; i < app->count; ++i) {
-            if (app->controls[i].kind == TAB && app->controls[i].pane == control.pane) {
+            if (app->controls[i].kind == TAB && app->controls[i].pane == control.pane &&
+                app->controls[i].value == control.value) {
                 app->focus = i;
                 break;
             }
@@ -2344,7 +2413,7 @@ static void activate(App *app, Control control)
                     view == TB_LOCALS ? tb_variables_names(v) : tb_variables_remove(v, row);
         status(app, okay ? "Explicit variable operation requested; unknown storage is not automatically refreshed." :
                "Select a fresh stopped row, or wait for the current request. Read before expanding/formatting; paging needs children.");
-        if (okay) { page(app, WORKSPACE); app->variable_focus = true; } break;
+        if (okay) { page(app, WORKSPACE); } break;
     }
     case MEMORY_ACTION: {
         TbMemory *m = tb_session_memory(app->debugger); int id = control.pane;
@@ -2522,7 +2591,7 @@ static void activate(App *app, Control control)
                 }
                 int height = app->body_height[app->variable_pane]; if (height < 1) { height = 1; }
                 pane->scroll[TB_WATCHES] = pane->row[TB_WATCHES] >= height ? pane->row[TB_WATCHES] - height + 1 : 0;
-                page(app, WORKSPACE); app->variable_focus = true;
+                page(app, WORKSPACE);
             }
             break;
         }
@@ -2702,6 +2771,10 @@ static void mouse_event(App *app)
         return;
     }
     app->keyboard_focus = false;
+    if ((event.bstate & (BUTTON1_PRESSED | BUTTON1_CLICKED)) && app->content_pane >= 0 &&
+        !tb_rect_contains(app->panes[app->content_pane], event.x, event.y)) {
+        leave_content(app);
+    }
     if (app->page == WORKSPACE && app->scroll_drag_pane >= 0) {
         int pane_index = app->scroll_drag_pane;
         TbDemoPane *pane = &app->demo.panes[pane_index];
@@ -2786,6 +2859,9 @@ static void mouse_event(App *app)
         if (!(event.bstate & (BUTTON1_PRESSED | BUTTON1_CLICKED))) {
             return;
         }
+        bool content = control.kind == BODY || control.kind == SCROLLBAR || control.kind == HSCROLLBAR;
+        if (content) { app->content_pane = control.pane; }
+        else { app->content_pane = -1; }
         app->focus = i;
         app->cursor = 0;
         bool input_page = editing_page(app);
@@ -2860,7 +2936,6 @@ static void key_event(App *app, wint_t key, bool special)
         app->drag = -1;
         app->scroll_drag_pane = -1;
         app->resizing = false;
-        app->focus = 0;
         (void)clearok(stdscr, TRUE);
         return;
     }
@@ -2920,6 +2995,11 @@ static void key_event(App *app, wint_t key, bool special)
         theme_cycle(app, control.value == 1, key == KEY_LEFT ? -1 : 1); return;
     }
     if (!special && key == 27) {
+        if (app->content_pane >= 0) { leave_content(app); return; }
+        if (app->page == WORKSPACE && control.kind == MEMORY_FIELD) {
+            app->focus = 0; /* End inline editing without acquiring content or closing the session. */
+            return;
+        }
         if (app->page == WORKSPACE && app->fullscreen_source >= 0) {
             toggle_source_fullscreen(app, app->fullscreen_source); return;
         }
@@ -2928,12 +3008,6 @@ static void key_event(App *app, wint_t key, bool special)
         }
         if (app->page == PROFILE_LIST || app->page == PROFILE_OPTIONS || app->page == PROFILE_ITEMS || app->page == PROFILE_TEXT || app->page == PROFILE_CONFIRM) {
             activate(app, (Control){.kind = BACK}); return;
-        }
-        if (control.kind == MEMORY_FIELD && app->page == WORKSPACE && app->menu < 0) {
-            for (int i = 0; i < app->count; ++i) {
-                if (app->controls[i].kind == BODY && app->controls[i].pane == control.pane) { app->focus = i; break; }
-            }
-            return;
         }
         if (app->menu >= 0) {
             app->menu = -1;
@@ -2954,7 +3028,15 @@ static void key_event(App *app, wint_t key, bool special)
         return;
     }
     if ((!special && key == '\t') || (special && key == KEY_BTAB)) {
-        app->focus = (app->focus + (key == KEY_BTAB ? app->count - 1 : 1)) % app->count;
+        if (app->content_pane >= 0) { leave_content(app); return; }
+        int direction = special && key == KEY_BTAB ? -1 : 1;
+        for (int step = 1; step <= app->count; ++step) {
+            int next = (app->focus + direction * step + app->count) % app->count;
+            if (navigable(app->controls[next]) ||
+                (app->page == CONFIGURE && app->controls[next].kind == FIELD)) {
+                app->focus = next; break;
+            }
+        }
         app->cursor = 0;
         return;
     }
@@ -2970,6 +3052,7 @@ static void key_event(App *app, wint_t key, bool special)
         activate(app, (Control){.kind = MEMORY_ACTION, .value = 0, .pane = control.pane}); return;
     }
     if (!special && app->page == WORKSPACE && app->fullscreen_source < 0 && key >= '1' && key <= '9') {
+        if (app->content_pane >= 0) { leave_content(app); }
         int pane = (int)(key - '1');
         if (tb_layout_has_pane(&app->layout, pane)) { app->demo.pane = pane; }
         code_focus(app, app->demo.pane);
@@ -2977,6 +3060,7 @@ static void key_event(App *app, wint_t key, bool special)
         return;
     }
     if (!special && app->page == WORKSPACE && (key == '[' || key == ']')) {
+        if (app->content_pane >= 0) { leave_content(app); }
         cycle_pane(app, key == ']' ? 1 : -1);
         return;
     }
@@ -3030,17 +3114,17 @@ static void key_event(App *app, wint_t key, bool special)
                         key == KEY_PPAGE ? -5 : 5);
             return;
         }
-        if (control.kind == TAB && (key == KEY_LEFT || key == KEY_RIGHT)) {
-            TbDemoPane *pane = &app->demo.panes[control.pane];
-            int next = (pane->active + (key == KEY_RIGHT ? 1 : pane->count - 1)) % pane->count;
-            activate(app, (Control){.kind = TAB, .value = next, .pane = control.pane});
-            return;
-        }
     }
     if (special && (key == KEY_UP || key == KEY_LEFT || key == KEY_DOWN || key == KEY_RIGHT)) {
-        bool previous = key == KEY_UP || key == KEY_LEFT;
-        app->focus = (app->focus + (previous ? app->count - 1 : 1)) % app->count;
-        app->cursor = 0;
+        if (((app->menu >= 0 && (control.kind == SHOW_VIEW || control.kind == PANE_ACTION)) ||
+             (app->page == CONFIGURE && control.kind == FIELD)) &&
+            (key == KEY_UP || key == KEY_DOWN)) {
+            /* Scroll an adjacent menu item into view before the next paint. */
+            int next = app->focus + (key == KEY_DOWN ? 1 : -1);
+            if (next >= 0 && next < app->count && app->controls[next].kind == control.kind &&
+                app->controls[next].pane == control.pane) { app->focus = next; }
+            else { spatial_focus(app, (int)key); }
+        } else { spatial_focus(app, (int)key); }
     }
 }
 
@@ -3048,6 +3132,7 @@ static void initialize(App *app, bool demo)
 {
     memset(app, 0, sizeof *app);
     app->fullscreen_source = -1;
+    app->content_pane = -1;
     app->demo_mode = demo;
     app->profiles = tb_profiles_create(); app->profile = calloc(1, sizeof *app->profile);
     if (!app->profiles || !app->profile) { app->quit = true; }
