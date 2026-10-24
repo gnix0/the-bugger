@@ -125,7 +125,10 @@ board support.
 
 `make test-navigation` compares arrows/hjkl and checks geometry, toolbar edges,
 control-only Tab traversal, content entry/exit, fullscreen focus recovery and
-identity retention across compact resizing. `make test-fullscreen` and the
+identity retention across compact resizing. It also compares Ctrl+arrow and
+Ctrl+hjkl pane transfers across the six-pane layout and a nested split, with
+edge stopping, viewport retention and fullscreen isolation.
+`make test-fullscreen` and the
 workspace PTY checks retain layout/restoration coverage. These require no target.
 Live per-view checks remain necessary for horizontal scrolling and context rows.
 
@@ -137,6 +140,11 @@ Live per-view checks remain necessary for horizontal scrolling and context rows.
 3. Click Source content and use arrows/hjkl/Page keys to browse. Expect the header
    `*` and CONTENT FOCUS help. Escape returns to the previous visible control.
    Repeat with Disassembly, Console and selectable context/variable rows.
+   While content remains focused, use Ctrl+arrows and Ctrl+h/j/k/l to move to
+   neighboring panes. The `*` follows visible geometry; ordinary arrows/hjkl
+   still browse the destination. Existing scroll positions and active view tabs
+   remain intact. Moving beyond an edge keeps the same pane, and Source versus
+   Disassembly focus selects source versus instruction stepping without moving PC.
 4. Reenter content, then click a toolbar control or blank space outside the pane.
    Arrow navigation returns to controls; wheel scrolling alone does not acquire
    content focus. Type literal hjkl into configuration and Memory fields.
@@ -145,6 +153,9 @@ Live per-view checks remain necessary for horizontal scrolling and context rows.
    the first Escape leaves content and the second restores the tiled workspace.
 6. Resize compact/large, split panes and repeat in color, NO_COLOR and tmux.
    Focus follows visible control identity; viewports and PC remain independent.
+   Repeat Ctrl+direction transfer with nested splits. In fullscreen or compact
+   rendering, hidden panes must remain unreachable. Check Backspace and Enter in
+   text fields: legacy Ctrl+H/J bytes act as pane movement only in content focus.
 
 ## Letter-key navigation
 

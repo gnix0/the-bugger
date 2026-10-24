@@ -4,6 +4,8 @@
 
 ### Added
 
+- Ctrl+arrow and Ctrl+h/j/k/l shortcuts move content focus spatially between
+  visible panes, preserving viewports and stopping at layout edges.
 - Source panes can keep several GDB-known files open as session-local tabs.
   Current follows the selected frame; file tabs retain their source across
   stops. Each tab keeps its viewport, and narrow panes can cycle through tabs.

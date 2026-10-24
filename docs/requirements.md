@@ -233,6 +233,8 @@ Locals/Watches, memory and CPU-register editing are targeted for **v0.2.0**. Ded
   Content/scrollbar clicks explicitly acquire pane navigation; Escape/Tab or a
   control/outside-pane click returns to controls. Content focus must be visible
   in color and monochrome, and hidden fullscreen controls are excluded.
+  While content is focused, Ctrl+arrows or Ctrl+h/j/k/l transfer that focus to a
+  spatially neighboring visible pane, preserving viewports and stopping at edges.
 - Lowercase `h`/`j`/`k`/`l` act as Left/Down/Up/Right by default on navigation controls, including tabs, scrolling and divider resizing. Editable fields retain ordinary character entry; no enable switch, modal editing, counts or other Vim commands are introduced.
 - Terminal/multiplexer constraints are real: test mouse click, scroll, drag/resize and function keys in tmux with mouse enabled; avoid assuming a browser-level right click or perfect function-key support in every terminal. Use explicit `...` menus if context clicks aren't reliably conveyed.
 - Do not overwrite user bindings for tmux. If tmux requires `set -g mouse on`, document it as an opt-in prerequisite.

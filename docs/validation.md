@@ -1214,3 +1214,37 @@ sandbox, including left-first and right-first tab opening. `git diff --check`
 also passed. The failed hosted run remains failed; native checks after this
 failure, tmux and the remaining integration targets were not reached. A new
 hosted run is pending.
+
+## Spatial content-focus transfer
+
+State: **automated-verified; awaiting-user**. Ctrl+arrows and Ctrl+h/j/k/l
+transfer existing content focus to a visible neighboring pane using the rendered
+layout. The transfer preserves active view tabs, viewports and the last control
+identity. Directions stop at edges; compact/fullscreen rendering excludes hidden
+panes. Source/Disassembly transfers update stepping mode without moving execution.
+Legacy Ctrl+H/J input overlaps Backspace/line feed; those bytes are treated as
+pane movement only while workspace content focus is active.
+
+Agent-run focused checks:
+
+- `make -s all build/test-navigation build/test-code-tui build/test-fullscreen`:
+  PASS with the existing C17 warning-as-error policy.
+- Final `make -s test-navigation`: PASS for Ctrl+arrow/Ctrl+hjkl equivalence,
+  decoded Backspace, all four directions, edge stopping, nested split selection,
+  retained viewports, Escape recovery, literal field editing and fullscreen/
+  compact isolation. Local output: `build/content-focus-navigation.log`.
+- `build/test-fullscreen "$PWD/build/the-bugger"`: PASS for demo rendering,
+  restoration, splits/resizing and hidden hit regions.
+- `build/test-code-tui "$PWD/build/the-bugger" "$PWD/build/code-fixture" "$PWD/build/debug-fixture"`:
+  PASS outside the sandbox with real GDB, including Source → Disassembly → Source
+  content transfer, corresponding stepping modes and unchanged PC.
+- Focused `clang-tidy src/tui/app.c` with the `make analyze` analyzer/bugprone
+  checks and warnings-as-errors: PASS; no unsuppressed diagnostics. Local output:
+  `build/content-focus-analysis.log`.
+- Fortified strict `cc -fsyntax-only` on `src/tui/app.c`,
+  `tests/integration/test_navigation.c` and `tests/integration/test_code_tui.c`:
+  PASS. `git diff --check`: PASS.
+
+Full default/native/remote/tmux, sanitizer/compiler matrices and fresh physical
+checks were not run for this change. Manual terminal/multiplexer key forwarding
+and user acceptance remain pending; no new hardware compatibility is implied.
