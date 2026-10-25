@@ -345,7 +345,7 @@ int main(int argc, char *argv[])
     test_terminal_expect(&term, "CONTENT FOCUS");
     test_terminal_send(&term, "\033[1;5C"); test_terminal_expect(&term, "instruction stepping");
     CHECK(assembly_pc(&term) == before_focus);
-    test_terminal_send(&term, "\010"); test_terminal_expect(&term, "source stepping");
+    test_terminal_send(&term, "\033[1;5D"); test_terminal_expect(&term, "source stepping");
     CHECK(assembly_pc(&term) == before_focus);
     test_terminal_send(&term, "\033");
     test_terminal_send(&term, "\033[21~"); source_pc(&term, "code_counter += 2");

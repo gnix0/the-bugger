@@ -1,3 +1,4 @@
+#include "editor.h"
 #include "the_bugger/tui.h"
 #include "the_bugger/version.h"
 #include "demo.h"
@@ -78,6 +79,9 @@ typedef struct {
     size_t theme_draft;
     int key_draft[TB_BIND_COUNT], key_selected, key_capture, key_scroll, key_confirm;
     int key_history[128][TB_BIND_COUNT], key_history_count;
+    bool vim_draft, vim_history[128], field_insert, field_tracking;
+    Control field_identity;
+    Page field_page;
     char status[160];
     TbSession *debugger;
     bool demo_mode, live, leave_session, exit_after_close;
@@ -153,6 +157,7 @@ static void status(App *app, const char *message)
 
 static void page(App *app, Page next)
 {
+    app->field_tracking = app->field_insert = false;
     app->page = next;
     app->count = 0;
     app->content_pane = -1;
@@ -404,25 +409,27 @@ static void draw_config(App *app)
 
 static bool keybind_dirty(const App *app)
 {
-    return memcmp(app->key_draft, app->preferences.keys, sizeof app->key_draft) != 0;
+    return app->vim_draft != app->preferences.vim || memcmp(app->key_draft, app->preferences.keys, sizeof app->key_draft) != 0;
 }
 static bool keybind_factory(const App *app)
 {
     int keys[TB_BIND_COUNT]; tb_keybind_defaults(keys);
-    return memcmp(app->key_draft, keys, sizeof keys) == 0;
+    return !app->vim_draft && memcmp(app->key_draft, keys, sizeof keys) == 0;
 }
 static void keybind_remember(App *app)
 {
     if (app->key_history_count == 128) {
         memmove(app->key_history, app->key_history + 1, sizeof app->key_history[0] * 127);
+        memmove(app->vim_history, app->vim_history + 1, sizeof app->vim_history[0] * 127);
         --app->key_history_count;
     }
+    app->vim_history[app->key_history_count] = app->vim_draft;
     memcpy(app->key_history[app->key_history_count++], app->key_draft, sizeof app->key_draft);
 }
 static int keybind_rows(void)
 {
     int total = COLS >= 112 ? 15 : TB_BIND_COUNT;
-    int rows = (LINES - (COLS < 64 ? 14 : 12)) / 3;
+    int rows = (LINES - (COLS < 64 ? 15 : 13)) / 3;
     return rows < 1 ? 1 : rows < total ? rows : total;
 }
 static void keybind_select(App *app, int action)
@@ -493,7 +500,7 @@ static void draw_keybinds(App *app)
     if (local < app->key_scroll) { app->key_scroll = local; }
     if (local >= app->key_scroll + rows) { app->key_scroll = local - rows + 1; }
     int width = dual ? 80 : (COLS > 60 ? 56 : COLS - 4);
-    int height = rows * 3 + (compact ? 12 : 10);
+    int height = rows * 3 + (compact ? 13 : 11);
     int left = (COLS - width) / 2, top = (LINES - 2 - height) / 2;
     tb_fill((TbRect){left, top, width, height}, TB_PANEL);
     tb_text(top + 1, left + 2, width - 4, TB_PINK, A_BOLD, "Keybinds");
@@ -503,10 +510,10 @@ static void draw_keybinds(App *app)
     for (int table = 0; table < (dual ? 2 : 1); ++table) {
         int x = left + (width - tables_width) / 2 + table * (table_width + 4), key_width = 12;
         int key_x = x + table_width - key_width;
-        tb_text(top + 4, x, table_width - key_width, TB_CYAN, A_BOLD, "Action");
-        tb_text(top + 4, key_x + 1, key_width - 2, TB_CYAN, A_BOLD, "Key");
+        tb_text(top + 5, x, table_width - key_width, TB_CYAN, A_BOLD, "Action");
+        tb_text(top + 5, key_x + 1, key_width - 2, TB_CYAN, A_BOLD, "Key");
         for (int row = 0; row < rows; ++row) {
-            int action = table * 15 + app->key_scroll + row, y = top + 6 + row * 3;
+            int action = table * 15 + app->key_scroll + row, y = top + 7 + row * 3;
             if (action < 0 || action >= TB_BIND_COUNT) { continue; }
             int index = add_control(app, (TbRect){key_x, y - 1, key_width, 3}, KEY_ACTION, 1, action);
             bool capture = app->key_capture == action;
@@ -530,6 +537,8 @@ static void draw_keybinds(App *app)
             "[ Restore Defaults ]", 3, !keybind_factory(app));
     keybind_button(app, (TbRect){left + width - 10, buttons_y + (compact ? 2 : 0), 8, 1},
             "[ Save ]", 4, keybind_dirty(app));
+    button(app, top + 3, left + 2, width - 4,
+            app->vim_draft ? "Vim-like input   [ On ]" : "Vim-like input   [ Off ]", KEY_ACTION, 8, 0);
     char progress[128];
     (void)snprintf(progress, sizeof progress, "Rows %d-%d/%d | capture: orange | edited: cyan | PgUp/PgDn / wheel", app->key_scroll + 1, app->key_scroll + rows, total);
     tb_text(LINES - 2, 1, COLS - 2, TB_MUTED, 0, app->key_capture >= 0 || *app->status ? app->status : progress);
@@ -1930,6 +1939,77 @@ static void leave_content(App *app)
     }
 }
 
+static bool text_control(const App *app, Control control)
+{
+    return control.kind == MEMORY_FIELD || control.kind == COMMAND_FIELD ||
+           (control.kind == FIELD && (editing_page(app) ||
+            (app->page == CONFIGURE && !((app->session < 2 && control.value == 0) ||
+             (app->session == 1 && control.value == 8)))));
+}
+
+static wchar_t *editable_value(App *app, Control control, size_t **cursor)
+{
+    *cursor = &app->cursor;
+    if (control.kind == MEMORY_FIELD) { *cursor = &app->memory_cursor[control.pane]; return app->memory_input[control.pane]; }
+    if (control.kind == COMMAND_FIELD) { *cursor = &app->command_cursor[control.pane]; return app->command_input[control.pane]; }
+    return editing_page(app) ? app->input : app->forms[app->session].values[control.value];
+}
+
+static void sync_field(App *app)
+{
+    if (!app->count || !app->preferences.vim || !text_control(app, app->controls[app->focus])) {
+        app->field_tracking = app->field_insert = false; return;
+    }
+    Control control = app->controls[app->focus];
+    if (!app->field_tracking || app->field_page != app->page || !same_control(control, app->field_identity)) {
+        app->field_insert = false;
+        app->field_identity = control; app->field_page = app->page; app->field_tracking = true;
+    }
+}
+
+static void draw_vim_fields(App *app)
+{
+    if (!app->preferences.vim) { return; }
+    for (int i = 0; i < app->count; ++i) {
+        Control control = app->controls[i];
+        if (!text_control(app, control) || control.rect.w <= 0 || control.rect.h <= 0) { continue; }
+        TbRect rect = control.rect;
+        if (control.kind == COMMAND_FIELD) {
+            int label = app->panes[control.pane].w >= 25 ? 8 : 1;
+            rect.x += label - 1; rect.w -= label - 1;
+        }
+        bool focused = i == app->focus;
+        size_t *cursor; wchar_t *value = editable_value(app, control, &cursor);
+        size_t idle_cursor = 0; if (!focused) { cursor = &idle_cursor; }
+        size_t length = wcslen(value);
+        if (*cursor > length) { *cursor = length; }
+        if (focused && !app->field_insert && length && *cursor == length) { --*cursor; }
+        if (rect.w < 4) { continue; }
+        size_t start = 0; int cells = 0;
+        for (size_t at = *cursor; at; --at) {
+            int width = wcwidth(value[at - 1]); cells += width > 0 ? width : 1;
+            if (cells >= rect.w - 3) { start = at; break; }
+        }
+        tb_fill(rect, TB_SURFACE);
+        TbStyle edge = !focused ? TB_BORDER : app->field_insert ? TB_GREEN : TB_CYAN;
+        tb_text(rect.y, rect.x, 1, edge, focused ? A_BOLD : 0, "|");
+        tb_text(rect.y, rect.x + rect.w - 1, 1, edge, focused ? A_BOLD : 0, "|");
+        wide_text(rect.y, rect.x + 1, rect.w - 2, value, start, false);
+        if (focused) {
+            app->command_caret_x = rect.x + 1; app->command_caret_y = rect.y;
+            for (size_t at = start; at < *cursor; ++at) {
+                int width = wcwidth(value[at]); app->command_caret_x += width > 0 ? width : 1;
+            }
+        }
+    }
+    if (app->field_tracking) {
+        tb_fill((TbRect){0, LINES - 1, COLS, 1}, TB_SURFACE);
+        tb_text(LINES - 1, 1, COLS - 2, app->field_insert ? TB_GREEN : TB_CYAN, A_BOLD,
+                app->field_insert ? "VIM INSERT | Esc Normal | Enter submit | Tab next field" :
+                "VIM NORMAL | i/a/I/A insert | h/l 0/$ w/b/e move | x delete | Esc back");
+    }
+}
+
 static void draw(App *app)
 {
     bool retain = app->count > 0 && !app->menu_focus && !app->resizing;
@@ -1957,8 +2037,9 @@ static void draw(App *app)
             app->last_control = app->controls[app->focus];
         }
     }
+    sync_field(app); draw_vim_fields(app);
     if (app->command_caret_y >= 0) {
-        (void)curs_set(1); (void)leaveok(stdscr, FALSE);
+        (void)curs_set(app->field_tracking && !app->field_insert ? 2 : 1); (void)leaveok(stdscr, FALSE);
         (void)move(app->command_caret_y, app->command_caret_x);
     }
     (void)refresh();
@@ -2493,6 +2574,7 @@ static void activate(App *app, Control control)
     case CONFIG_OPEN: page(app, CONFIG_MENU); break;
     case KEY_ACTION:
         if (control.value == 0) {
+            app->vim_draft = app->preferences.vim;
             memcpy(app->key_draft, app->preferences.keys, sizeof app->key_draft);
             app->key_selected = app->key_scroll = app->key_confirm = app->key_history_count = 0;
             app->key_capture = -1; status(app, ""); page(app, KEYBINDS);
@@ -2502,12 +2584,13 @@ static void activate(App *app, Control control)
         } else if (control.value == 2 && app->key_history_count > 0) {
             app->key_capture = -1;
             memcpy(app->key_draft, app->key_history[--app->key_history_count], sizeof app->key_draft);
+            app->vim_draft = app->vim_history[app->key_history_count];
             status(app, "Last change undone. Only Save persists.");
         } else if (control.value == 3 && !keybind_factory(app)) {
             app->key_capture = -1; app->key_confirm = 2; app->count = 0; app->focus = 0;
         } else if (control.value == 4 && keybind_dirty(app)) {
             app->key_capture = -1;
-            if (tb_preferences_save_keys(&app->preferences, app->key_draft)) {
+            if (tb_preferences_save_input(&app->preferences, app->key_draft, app->vim_draft)) {
                 status(app, *app->preferences.error ? app->preferences.error : "Keybinds saved."); page(app, CONFIG_MENU);
             } else { status(app, app->preferences.error); }
         } else if (control.value == 5) {
@@ -2515,10 +2598,17 @@ static void activate(App *app, Control control)
         } else if (control.value == 6 && app->key_confirm) {
             int confirm = app->key_confirm; app->key_confirm = 0;
             if (confirm == 2) {
-                keybind_remember(app); tb_keybind_defaults(app->key_draft);
+                keybind_remember(app); tb_keybind_defaults(app->key_draft); app->vim_draft = false;
                 status(app, "Defaults restored in draft. Only Save persists."); keybind_select(app, app->key_selected);
             } else if (confirm == 3) { app->quit = true; }
             else { page(app, CONFIG_MENU); }
+        } else if (control.value == 8) {
+            int keys[TB_BIND_COUNT]; memcpy(keys, app->key_draft, sizeof keys);
+            if (tb_keybind_vim(keys, !app->vim_draft)) {
+                keybind_remember(app); memcpy(app->key_draft, keys, sizeof keys);
+                app->vim_draft = !app->vim_draft;
+                status(app, "Vim-like input changed in draft. Only Save persists.");
+            } else { status(app, "Vim aliases conflict with custom keys. Clear conflicting assignments first."); }
         } else if (control.value == 7) {
             app->key_capture = -1;
             if (keybind_dirty(app)) { app->key_confirm = 1; app->count = 0; app->focus = 0; }
@@ -3301,10 +3391,30 @@ static void key_event(App *app, wint_t key, bool special)
         spatial_content(app, pane_direction);
         return;
     }
-    bool text_entry = control.kind == MEMORY_FIELD || control.kind == COMMAND_FIELD ||
-                      (control.kind == FIELD && (editing_page(app) ||
-                       (app->page == CONFIGURE && !((app->session < 2 && control.value == 0) ||
-                        (app->session == 1 && control.value == 8)))));
+    sync_field(app);
+    bool text_entry = text_control(app, control);
+    if (text_entry && app->preferences.vim) {
+        size_t *cursor; wchar_t *value = editable_value(app, control, &cursor);
+        if (!special && key == 27 && app->field_insert) {
+            app->field_insert = false; if (*cursor) { --*cursor; } return;
+        }
+        bool submit = (!special && (key == '\n' || key == '\r' || key == '\t' || key == 27)) ||
+                      (special && (key == KEY_ENTER || key == KEY_BTAB));
+        if (!app->field_insert && !submit) {
+            if ((special && (key == KEY_UP || key == KEY_DOWN)) || (!special && (key == 'j' || key == 'k'))) {
+                app->focus = spatial_target(app, key == KEY_UP || key == 'k' ? KEY_UP : KEY_DOWN, false);
+            } else {
+                wint_t command = key;
+                if (special) {
+                    command = key == KEY_LEFT ? 'h' : key == KEY_RIGHT ? 'l' : key == KEY_HOME ? '0' :
+                              key == KEY_END ? '$' : key == KEY_DC ? 'x' : 0;
+                }
+                app->field_insert = tb_editor_normal(value, cursor, command);
+                if (app->page == CODE_FILES) { app->file_page = 0; }
+            }
+            return;
+        }
+    }
     if (!text_entry) {
         const int arrows[] = {KEY_LEFT, KEY_DOWN, KEY_UP, KEY_RIGHT};
         for (int i = 0; i < 4; ++i) {

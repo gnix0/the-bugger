@@ -14,6 +14,7 @@
 
 static TestTerminal term;
 static bool active;
+static const char *vim_stage = "not started";
 static int selected;
 static char tmux_socket[80], tmux_config[] = "/tmp/the-bugger-keybinds-tmux-XXXXXX";
 static void tmux_cleanup(void)
@@ -29,6 +30,7 @@ static void tmux_cleanup(void)
 static void cleanup(void)
 {
     if (!active) { return; }
+    fprintf(stderr, "Keybind test cleanup at Vim stage: %s\n", vim_stage);
     pid_t result = waitpid(term.child, NULL, WNOHANG);
     if (result == 0) { (void)kill(term.child, SIGTERM); while (waitpid(term.child, NULL, 0) < 0 && errno == EINTR) { } }
 }
@@ -178,6 +180,74 @@ static void native_bindings(const char *binary, const char *fixture)
     puts("PASS global shortcuts after shared profile load, real Continue/Pause, content-pane transfer and protected Console input");
 }
 
+static void leave_vim_field(void)
+{
+    test_terminal_send(&term, "\033");
+    for (int i = 0; i < 800 && (test_terminal_find(&term, "VIM NORMAL", NULL, NULL) ||
+         test_terminal_find(&term, "VIM INSERT", NULL, NULL)); ++i) { test_terminal_pump(&term, 5); }
+    CHECK(!test_terminal_find(&term, "VIM NORMAL", NULL, NULL));
+    CHECK(!test_terminal_find(&term, "VIM INSERT", NULL, NULL));
+    test_terminal_expect(&term, "LIVE | Stopped");
+}
+
+static void vim_input(const char *binary, const char *fixture)
+{
+    start(binary, "xterm-256color"); open_keys();
+    test_terminal_expect(&term, "Vim-like input   [ Off ]");
+    click("Vim-like input"); test_terminal_expect(&term, "Vim-like input   [ On ]");
+    click("[ Undo ]"); test_terminal_expect(&term, "Vim-like input   [ Off ]");
+    inactive("[ Save ]");
+    click("Vim-like input"); click("[ Back ]"); test_terminal_expect(&term, "Unsaved keybind changes");
+    click("[ Cancel ]"); click("[ Save ]"); test_terminal_expect(&term, "Keybinds saved.");
+    click("[ Back ]"); test_terminal_send(&term, "\r\t");
+    test_terminal_expect(&term, "VIM NORMAL");
+    test_terminal_send(&term, "i\025alpha beta"); test_terminal_expect(&term, "VIM INSERT");
+    test_terminal_expect(&term, "alpha beta");
+    test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
+    test_terminal_send(&term, "0wxiX"); test_terminal_expect(&term, "alpha Xeta");
+    test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
+    test_terminal_send(&term, "Aqhjkl"); test_terminal_expect(&term, "alpha Xetaqhjkl");
+    test_terminal_send(&term, "\t"); test_terminal_expect(&term, "VIM NORMAL");
+    test_terminal_send(&term, "i\025literal"); test_terminal_expect(&term, "literal");
+    test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
+    test_terminal_resize(&term, 18, 48); test_terminal_expect(&term, "VIM NORMAL");
+    test_terminal_resize(&term, 54, 166); test_terminal_expect(&term, "VIM NORMAL");
+    test_terminal_send(&term, "\033"); test_terminal_expect(&term, "[ Config ]");
+    stop();
+    if (fixture) {
+        start(binary, "mono"); click("[ Config ]"); click("Profiles"); click("Shared connection");
+        click("Review session"); click("Start native"); test_terminal_expect(&term, "LIVE | Loaded");
+        vim_stage = "native Command focus";
+        click("Command"); test_terminal_expect(&term, "VIM NORMAL");
+        test_terminal_send(&term, "iecho modal_hjklq[]123\\n"); test_terminal_expect(&term, "VIM INSERT");
+        test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
+        test_terminal_send(&term, "\r"); test_terminal_expect(&term, "[gdb] modal_hjklq[]123");
+        test_terminal_expect(&term, "VIM NORMAL");
+        vim_stage = "native start command";
+        test_terminal_send(&term, "istart\r"); test_terminal_expect(&term, "VIM INSERT");
+        test_terminal_expect(&term, "LIVE | Stopped");
+        test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
+        leave_vim_field();
+        int x, y; CHECK(test_terminal_find(&term, "Address", &x, &y));
+        vim_stage = "Memory focus";
+        mouse_at(x + 10, y); test_terminal_expect(&term, "VIM NORMAL");
+        vim_stage = "Memory Insert";
+        test_terminal_send(&term, "i\025&fixture_counter"); test_terminal_expect(&term, "VIM INSERT");
+        vim_stage = "Memory Escape to Normal";
+        /* A mode change itself never dispatches the draft memory read. */
+        test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
+        leave_vim_field();
+        vim_stage = "Save Log focus";
+        click("Save Log"); test_terminal_expect(&term, "VIM NORMAL");
+        test_terminal_send(&term, "i\025/tmp/not-written-vim-test"); test_terminal_expect(&term, "VIM INSERT");
+        test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
+        test_terminal_send(&term, "\033"); test_terminal_expect(&term, "LIVE | Stopped");
+        test_terminal_send(&term, "\021"); test_terminal_expect(&term, "Close native session?");
+        click("Close session"); stop();
+    }
+    puts("PASS opt-in Vim toggle/undo/save/reload, Normal entry, literal Insert, editing, focus/resize, inline fields and Escape/submit cleanup");
+}
+
 int main(int argc, char **argv)
 {
     CHECK((argc == 2 || argc == 3) && atexit(cleanup) == 0);
@@ -225,6 +295,7 @@ int main(int argc, char **argv)
     bind_action(TB_BIND_LEFT, "a"); bind_action(TB_BIND_DOWN, "s");
     bind_action(TB_BIND_UP, "w"); bind_action(TB_BIND_RIGHT, "d");
     bind_action(TB_BIND_CONTENT_RIGHT, "Ctrl+F");
+    bind_action(TB_BIND_CONTENT_LEFT, "Ctrl+H");
     bind_action(TB_BIND_NEXT_PANE, "n"); bind_action(TB_BIND_PANE_1 + 2, "r");
     bind_action(TB_BIND_BACK, "b"); bind_action(TB_BIND_NEXT_CONTROL, "Ctrl+N");
     click("[ Save ]"); test_terminal_expect(&term, "Keybinds saved."); stop();
@@ -266,8 +337,10 @@ int main(int argc, char **argv)
     test_terminal_resize(&term, 60, 140); open_keys();
     click("[ Restore Defaults ]"); click("[ Restore Defaults ]");
     click("[ Save ]"); test_terminal_expect(&term, "Keybinds saved."); stop();
-    CHECK(tb_preferences_load(&prefs) && prefs.keys[TB_BIND_CONTINUE] == 5 && prefs.keys[TB_BIND_UP] == 256 + 'k');
+    CHECK(tb_preferences_load(&prefs) && prefs.keys[TB_BIND_CONTINUE] == 5 && prefs.keys[TB_BIND_UP] == 0);
     CHECK(prefs.palette == tb_theme_find("rose-pine", "dawn"));
+    vim_input(argv[1], argc == 3 ? argv[2] : NULL);
+    CHECK(tb_preferences_load(&prefs) && prefs.vim);
     char path[4096]; CHECK(unlink(prefs.path) == 0);
     if (argc == 3) {
         (void)snprintf(path, sizeof path, "%s/profiles.json", prefs.directory); CHECK(unlink(path) == 0);

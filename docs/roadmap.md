@@ -11,8 +11,9 @@ NUCLEO-F446RE/ARM and ESP32-S3/Xtensa. M18 release packaging and automated check
 form the recorded first-release evidence. v0.1.0 was published on 2026-10-20,
 as reported by the maintainer; physical RISC-V acceptance remains explicitly
 deferred for that release. F19 built-in themes is accepted as early post-release
-work through the reported implementation commit. Always-on h/j/k/l navigation is
-an accepted, unreleased shared UI change, not a new gate or Vim mode.
+work through the reported implementation commit. The original always-on h/j/k/l navigation shipped with v0.1.1. Its opt-in
+replacement and limited single-line Normal/Insert editing are implemented for
+review as a shared UI refinement, not a new roadmap gate.
 Source fullscreen is another accepted, unreleased shared UI addition: a temporary
 rendering override with retained tiles, not an F06 organization redesign.
 Spatial control navigation and deliberate content focus are accepted through
@@ -26,7 +27,7 @@ Ctrl+direction transfer of content focus is another shared UI enhancement
 implemented for review, using the existing pane geometry and navigation rules.
 Inline GDB command entry below Console output is implemented for review as a
 shared UI refinement; serial acquisition remains the separate planned F13 gate.
-Config → Keybinds is implemented for review as a shared UI enhancement, with
+Config → Keybinds is accepted through the owner-reported merged implementation, with
 responsive direct-capture tables, undo/confirmation and personal bindings stored
 with themes and excluded from
 connection profiles. Legacy profile bindings are ignored; subsequent writes use

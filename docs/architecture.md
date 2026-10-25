@@ -35,10 +35,23 @@ descriptors together, redrawing after input or session revisions. Idle waits are
 100 ms without a session, bounded to 25 ms with one. Raw input preserves function keys and Ctrl+Q;
 Ctrl+C and SIGINT/SIGTERM/SIGHUP leave through normal cleanup. Module-owned globals are limited to a signal-safe exit flag and the screen's
 color-enabled flag and selected palette index. Mouse and keyboard share action dispatch and rendered hit regions. Lowercase
-h/j/k/l first receive ordinary text-field handling; outside editable fields they
-are normalized to Left/Down/Up/Right before existing navigation dispatch. Divider
-resize mode uses those aliases directly. File-filter edits still reset paging.
-No Vim editing mode or new target operations are introduced.
+navigation aliases are dispatched outside editable fields. Vim-like input is a separate
+personal boolean, disabled by default. Its toggle fills unassigned direction slots
+atomically, rejects conflicts and preserves custom assignments; disabling removes
+only stock aliases in their corresponding slots. Legacy preference files without
+this boolean lose only those old stock aliases on load, without a write. Theme
+and key saves preserve the boolean; profiles remain independent.
+
+Focused text fields retain `(page, kind, value, pane)` identity. Newly acquired
+fields start Normal; Insert is retained only while that field remains focused.
+`src/tui/editor.c` implements bounded single-line Normal commands, with no target
+operations. Insert delegates to existing field editing. Capture precedes modal
+handling; fixed quit/signal cleanup stays available. Enter submits through existing
+explicit actions in either mode. Field-edge colors, cursor shape where supported,
+and a textual footer communicate the mode, including monochrome terminals.
+Rendering uses the same field buffers and Unicode cell widths, with bounded
+horizontal viewports; nonfocused fields never mutate the focused cursor.
+File-filter edits still reset paging.
 
 Controls retain `(kind, value, pane)` identities across redraws; rectangles are
 rebuilt from the existing layout. Directional navigation scans at most 1,024
@@ -56,7 +69,7 @@ fullscreen redraws preserve identity when visible, otherwise fall back to a
 visible control. Opening a page resets content focus; value-read actions do not
 implicitly acquire it.
 
-While content is focused, Ctrl+arrows and Ctrl+h/j/k/l transfer focus between
+While content is focused, Ctrl+arrows and optional Ctrl+h/j/k/l aliases transfer focus between
 rendered BODY controls using the panes' outer rectangles. The shared directional
 scoring requires perpendicular overlap for pane movement, prefers nearby aligned
 panes and does not wrap. Only visible bodies participate, including nested splits;
@@ -137,7 +150,8 @@ succeeds. Theme operations do not modify workspace geometry or session profiles.
 
 `src/tui/preferences.{h,c}` owns global version-1 `preferences.json`, independently
 of `profiles.json`. It stores theme/variant identifiers and an optional 30-integer
-`keys` array, not runtime color data or debugger state. A theme-only file loads
+`keys` array and optional `vim` boolean, not runtime color data or debugger state.
+A missing boolean defaults false; saves include it. A theme-only file loads
 factory bindings. `tui/keybinds.{h,c}` defines the action catalog, defaults,
 key names/encoding, reserved-key/duplicate validation and curses matching;
 it has no profile dependency. Encoding is 0 for None, 1–24 for function keys,

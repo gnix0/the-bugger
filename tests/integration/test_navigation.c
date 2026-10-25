@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- Standard POSIX feature selection. */
 #include "../support/terminal.h"
+#include "preferences.h"
 #include "../support/check.h"
 #include <errno.h>
 #include <signal.h>
@@ -177,6 +178,9 @@ int main(int argc, char **argv)
     char root[] = "/tmp/the-bugger-navigation-XXXXXX"; CHECK(mkdtemp(root));
     CHECK(setenv("XDG_CONFIG_HOME", root, 1) == 0);
     CHECK(setenv("TB_TEST_CONFIG_HOME", root, 1) == 0);
+    TbPreferences prefs; CHECK(tb_preferences_load(&prefs));
+    CHECK(tb_keybind_vim(prefs.keys, true));
+    CHECK(tb_preferences_save_input(&prefs, prefs.keys, true));
     test_terminal_start(&arrows, argv[1], "xterm-256color", true); active[0] = true;
     test_terminal_start(&motions, argv[1], "xterm-256color", true); active[1] = true;
     test_terminal_expect(&arrows, "Start a debugging session");
@@ -186,11 +190,11 @@ int main(int argc, char **argv)
     test_terminal_expect(&motions, "Configure session");
     /* Boolean controls follow arrows too; actual text fields keep all letters. */
     keys("\033OD", "h"); keys("\033OC", "l");
-    both("\t\025hjkl"); test_terminal_expect(&motions, "hjkl");
+    both("\ti\025hjkl"); test_terminal_expect(&motions, "hjkl");
     both("\010X"); test_terminal_expect(&motions, "hjkX"); /* Ctrl+H still edits fields. */
     both("\010l"); test_terminal_expect(&motions, "hjkl");
     both("\033ODh\033OCjkl"); test_terminal_expect(&motions, "hjkhljkl");
-    both("\033");
+    both("\033"); test_terminal_expect(&motions, "VIM NORMAL"); both("\033");
     click("[ Config ]"); click("Themes");
     keys("\033OC", "l"); keys("\033OD", "h");
     both("\t"); keys("\033OC", "l"); keys("\033OD", "h");
@@ -223,7 +227,9 @@ int main(int argc, char **argv)
     both("\033");
     test_terminal_stop(&arrows, 0); active[0] = false;
     test_terminal_stop(&motions, 0); active[1] = false;
-    CHECK(rmdir(root) == 0);
+    CHECK(unlink(prefs.path) == 0);
+    char lock[4096]; (void)snprintf(lock, sizeof lock, "%s/.preferences.lock", prefs.directory);
+    CHECK(unlink(lock) == 0 && rmdir(prefs.directory) == 0 && rmdir(root) == 0);
     puts("PASS spatial controls and Ctrl+arrow/hjkl content transfers, nested splits, edges, retained viewports, fullscreen/compact isolation, focus recovery and literal fields");
     return EXIT_SUCCESS;
 }
