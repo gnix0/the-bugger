@@ -12,20 +12,23 @@ form the recorded first-release evidence. v0.1.0 was published on 2026-10-20,
 as reported by the maintainer; physical RISC-V acceptance remains explicitly
 deferred for that release. F19 built-in themes is accepted as early post-release
 work through the reported implementation commit. The original always-on h/j/k/l navigation shipped with v0.1.1. Its opt-in
-replacement and limited single-line Normal/Insert editing are implemented for
-review as a shared UI refinement, not a new roadmap gate.
+replacement and limited single-line Normal/Insert editing are accepted through
+the owner-committed implementation as a shared UI refinement, not a new gate.
 Source fullscreen is another accepted, unreleased shared UI addition: a temporary
 rendering override with retained tiles, not an F06 organization redesign.
 Spatial control navigation and deliberate content focus are accepted through
 implementation commit `53b1e5a`; they do not add a roadmap gate or change F06
 scope. These shared UI additions and F19 are included in v0.1.1 preparation.
-Release validation remains separate; v0.1.1 publication is not yet recorded.
+v0.1.1 publication was reported by the owner. The current checkout prepares
+v0.1.2, collecting the Source tabs, content-pane transfers, inline Console,
+terminal-size warning, personal Keybinds, opt-in Vim input and tmux RGB correction.
+Host and artifact evidence is recorded separately from outstanding physical
+release validation; preparation is not publication or release acceptance.
 Other F gates remain planned.
-Multi-file Source tabs are an implemented shared UI enhancement awaiting user
-review. They do not add a roadmap gate or change the embedded-first priorities.
+Multi-file Source tabs are an accepted shared UI enhancement. They do not add a roadmap gate or change the embedded-first priorities.
 Ctrl+direction transfer of content focus is another shared UI enhancement
-implemented for review, using the existing pane geometry and navigation rules.
-Inline GDB command entry below Console output is implemented for review as a
+accepted, using the existing pane geometry and navigation rules.
+Inline GDB command entry below Console output is accepted as a
 shared UI refinement; serial acquisition remains the separate planned F13 gate.
 Config → Keybinds is accepted through the owner-reported merged implementation, with
 responsive direct-capture tables, undo/confirmation and personal bindings stored

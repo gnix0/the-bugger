@@ -136,7 +136,16 @@ The owner has final say on release readiness.
 
 The version comes from `include/the_bugger/version.h`.
 `make release` builds a separate optimized executable with PIE, stack protection,
-FORTIFY and full RELRO, then prepares these files under `build/dist/`:
+FORTIFY and full RELRO, then prepares these files under `build/dist/v<version>/` by default.
+`RELEASE_DIST_DIR` overrides the destination without changing archive formats:
+
+```sh
+make release
+# Optional alternate output directory:
+make RELEASE_DIST_DIR=/path/to/output release
+```
+
+Each version directory contains:
 
 - `the-bugger-v<version>-linux-x86_64.tar.gz`: one host binary, GPLv3 license,
   runtime instructions and build/dependency information. Builds containing F19
