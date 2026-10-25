@@ -363,7 +363,48 @@ Manual configuration review:
    owned cleanup, external-server survival, probe loss and recovery. Record actual
    backend/script behavior; mark unavailable hardware UNVERIFIED.
 
-## Profiles and action keys
+## Personal keybinds
+
+```sh
+make test-keybinds test-themes test-m13-model
+make all fixtures build/test-keybinds-tui
+build/test-keybinds-tui "$PWD/build/the-bugger" "$PWD/build/debug-fixture"
+TB_KEYBINDS_TEST_TMUX=1 build/test-keybinds-tui "$PWD/build/the-bugger" "$PWD/build/debug-fixture"
+```
+
+The first command checks parsing/defaults/reserved/conflicting keys, global
+persistence, compatibility and editor interactions. The latter two require GDB,
+ptrace and (for the second) tmux; they exercise remapped Continue/Pause, literal
+Console input and spatial content transfer after loading a connection profile.
+They are included in `test`/`test-native` and therefore `test-ci`.
+
+1. Open Config → Keybinds. At ≥112 columns expect two Action/Key tables;
+   at 111 columns expect one. Scroll or use Tab/Home/End/Page Up/Down to reach
+   all 30 actions; repeat at 48×18 without inaccessible bottom controls.
+2. Click Continue's Key cell or press Enter on it. Its old value disappears;
+   only its border has capture emphasis. Press F11: a conflict keeps capture
+   active. Ctrl+Q is reserved during capture, not a quit request. Escape restores
+   the previous value. Capture F6: its edited border differs from capture.
+3. Undo restores F5. With no history, click Undo: no screen/status/file change.
+   Save is inert with no differences; Restore Defaults is inert at factory keys.
+   Capture a binding and Delete to clear it; Undo must recover that binding.
+4. Edit again. Back/Escape/configured Back and Ctrl+Q ask before discarding;
+   Cancel retains the draft, confirmation discards it. Restore Defaults similarly
+   asks before changing the draft, remains unsaved and can be undone.
+5. Save F6 and restart. Load any connection profile: Continue still shows F6.
+   Change theme: bindings remain. Test remapped navigation and content transfer,
+   fixed arrows/Ctrl+arrows and literal aliases in Console/Memory fields.
+6. Repeat direct capture, inactive buttons, confirmations and resize while
+   capturing with NO_COLOR and through tmux. Only Save changes preferences.
+   Connection profiles contain no keys, including after saving a legacy store.
+
+The terminal screen reader recognizes single-cell UTF-8 box-drawing borders
+forwarded by tmux, retaining their positions and attributes for border assertions.
+The terminal harness isolates preferences in a temporary config directory by
+default. Tests intentionally exercising persistence opt into their owned fixture
+with `TB_TEST_CONFIG_HOME`; they do not use the developer's personal settings.
+
+## Profiles and source settings
 
 Coverage: M13; FR-01/06/14/28 and NFR-03/05/06/09/12.
 
@@ -374,11 +415,11 @@ make test-m13-native
 ```
 
 Model tests cover all connection kinds, literal ordered argv/scripts/paths,
-XDG fallback, strict/corrupt schema, limits, reserved/conflicting keys, private
+XDG fallback, strict/corrupt schema, limits, ignored legacy keys, key-free writes, private
 atomic writes, lock/write/stale-writer failures, recents/deletion and source
 restore sequencing. File-only TUI tests use an isolated XDG directory and start
 no target. Native tests require GDB/ptrace: restored relocated sources, duplicate
-basenames, breakpoint resolution, interlock and remapped execution. Both are in
+basenames, breakpoint resolution and execution interlock. Both are in
 the full `make test`/`make test-native` path as appropriate.
 
 Manual reproduction (use a temporary XDG directory to avoid personal profiles):
@@ -389,12 +430,11 @@ Manual reproduction (use a temporary XDG directory to avoid personal profiles):
    the application does not clean user profile storage. Choose Linux application,
    set `build/code-fixture`, and enter literal quoted arguments with spaces.
 2. **Save profile**, name it, then **Profile...**. Add source directories and
-   ordered build→local mappings; choose Action keys and remap Continue to F6.
-   Try duplicate F6 for another action and reserved Ctrl+Q: errors retain input.
+   ordered build→local mappings; personal keybinds have no profile editor.
    Save again and verify replacement requires confirmation.
 3. Return to launcher, choose **Config → Profiles**, load that name. Configuration is
    shown for review; no GDB or inferior starts on selection. Review/Start native,
-   use Console `start`, then the remapped action or clickable toolbar. The
+   use Console `start`, then Continue or its clickable toolbar action. The
    successful saved session becomes recent. Close normally and reopen the profile.
 4. For moved sources use the existing relocated fixture/mapping procedure below;
    save applied Source lookup settings and reopen. Execution waits for source
@@ -407,9 +447,9 @@ Manual reproduction (use a temporary XDG directory to avoid personal profiles):
    In a disposable profile file, malformed JSON must show an error and preserve
    that file. Restore valid contents and reload/restart; do not silently overwrite
    corrupt data. Storage/concurrent-writer failures have deterministic model tests.
-7. Repeat keyboard/mouse navigation, remapped key delivery and profile reopen
+7. Repeat keyboard/mouse navigation and profile reopen
    directly and in tmux; inspect compact/monochrome controls. Never rewrite user
-   tmux bindings. A terminal that intercepts F6 still has clickable actions.
+   tmux bindings. A terminal that intercepts function keys still has clickable actions.
 
 No remote/hardware compatibility follows this checklist. Persisted definitions
 are not permissions to perform target operations; M15/M16 must test their actual

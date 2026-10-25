@@ -5,7 +5,7 @@
 
 enum { TB_PROFILES = 16, TB_PROFILE_NAME = 64, TB_PROFILE_PATH = 1024,
        TB_PROFILE_WORDS = 32, TB_PROFILE_WORD = 512, TB_PROFILE_SOURCES = 8,
-       TB_PROFILE_ACTIONS = 7, TB_PROFILE_RECENT = 8 };
+       TB_PROFILE_RECENT = 8 };
 typedef struct { size_t count; char values[TB_PROFILE_WORDS][TB_PROFILE_WORD]; } TbProfileWords;
 typedef struct { char from[TB_PROFILE_PATH], to[TB_PROFILE_PATH]; } TbProfileRule;
 typedef struct {
@@ -18,16 +18,10 @@ typedef struct {
     TbProfileWords arguments, scripts, search;
     char directories[TB_PROFILE_SOURCES][TB_PROFILE_PATH]; size_t directory_count;
     TbProfileRule rules[TB_PROFILE_SOURCES]; size_t rule_count;
-    /* Positive = F1..F24; negative = Ctrl+A..Z; zero = unbound. */
-    int keys[TB_PROFILE_ACTIONS];
 } TbProfile;
 typedef struct TbProfiles TbProfiles;
 void tb_profile_defaults(TbProfile *profile, int kind);
 bool tb_profile_valid(const TbProfile *profile);
-const char *tb_profile_action(size_t action);
-bool tb_profile_key_valid(int key);
-void tb_profile_key_name(int key, char *text, size_t size);
-bool tb_profile_key_parse(const char *text, int *key);
 TbProfiles *tb_profiles_create(void);
 void tb_profiles_destroy(TbProfiles *profiles);
 bool tb_profiles_load(TbProfiles *profiles);

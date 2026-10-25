@@ -1395,3 +1395,205 @@ sanitizer/compiler matrix or static-analysis run is claimed.
 The final host audit found no remaining GDB, OpenOCD or frontend processes.
 The tested source snapshot, relative documentation file links and
 `git diff --check` also passed.
+
+## Personal Keybinds configuration
+
+Implemented for owner review on 2026-10-25; **AWAITING USER ACCEPTANCE**.
+Config → Keybinds edits 30 personal debugger/navigation actions with staged
+validation, Back cancellation, Defaults and Save. Bindings share global
+`preferences.json` with themes, preserving each other on writes. Connection
+profiles contain no bindings and cannot override them. Legacy version-1 profile
+keys are ignored; subsequent writes (including recents) use key-free version 2.
+Older apps requiring version 1 cannot read those new stores. Terminal interception
+still varies; fixed arrows/Ctrl+arrows, Tab/Shift+Tab, Escape and Ctrl+Q remain.
+
+Agent-run focused checks passed: key parsing/matching/defaults; duplicate/reserved
+keys; preference persistence, corrupt-file preservation and stale writers;
+legacy-profile compatibility and key-free writes; centered editor, draft
+save/cancel/defaults, compact/monochrome, literal fields and theme independence;
+profile loading with global shortcuts; real GDB Continue/Pause, Console input
+and content-pane transfer, directly and through an isolated real tmux server.
+Existing Themes, navigation and native profile checks also passed. Artifacts:
+`build/keybinds-unit-final.log`, `build/keybinds-themes.log`,
+`build/keybinds-native-final.log`, `build/keybinds-tmux-final.log`.
+
+Development failures are retained, not counted as passes. Initial mouse editor
+checks exposed press/release queue ordering in the new harness; separating the
+events with the existing terminal helper's settling behavior fixed the harness.
+The first native run passed its debugger assertions but its later keyboard
+traversal overlooked the newly created recent-profile row; the fixture now
+accounts for that row. Logs: `build/keybinds-focused.log`,
+`build/keybinds-native.log`. An initial attempted tmux run used the older harness
+binary because compilation had not finished; only the rebuilt run with the
+explicit real-tmux PASS marker in `build/keybinds-tmux-final.log` is tmux evidence.
+
+The authorized static-analysis command initially failed on a parser increment
+inside a condition and adjacent action/key parameters. The parser now advances
+separately; the domain-validated index/key interface has a documented targeted
+analyzer suppression. Final `make BUILD_DIR=build/keybinds-analysis analyze`
+passed, exit 0; initial/final logs are `build/keybinds-analysis.log` and
+`build/keybinds-analysis-final.log`. All C unit/integration/support sources also
+compiled with `_FORTIFY_SOURCE=3` and strict warnings, exit 0, in the fresh
+`build/keybinds-test-compilation` directory; log:
+`build/keybinds-test-compilation.log`.
+
+The complete ordinary host baseline uses a fresh directory:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/ci-keybinds CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci \
+  > build/ci-keybinds-tests.log 2>&1
+```
+
+Baseline result: **PASS, exit 0**. The shared CI target includes default,
+native, real tmux, localhost remote, owned-server/TUI and offline OpenOCD suites,
+plus the new editor/model and direct/tmux native keybind checks. Terminal fixtures
+use isolated personal preferences; persistence tests explicitly opt into owned
+fixtures through `TB_TEST_CONFIG_HOME`, never developer settings.
+
+The source/test/build SHA-256 manifest is `build/keybinds-tested-tree.json`;
+base revision and tracked diff are `build/keybinds-base.txt` and
+`build/keybinds-tree.patch`. The manifest includes new untracked source/test
+files. Environment: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1,
+tmux 3.8, ncursesw 6.6.20251230 and clang-tidy 23.1.3; complete versions:
+`build/keybinds-environment.log`. GDB runs outside the ptrace sandbox.
+The normal `build/the-bugger` was rebuilt (`build/keybinds-default-build.log`).
+Local results do not establish hosted Ubuntu success, physical-board acceptance
+or sanitizer/compiler-matrix coverage; none of those additional runs is claimed.
+
+Final process audit found no remaining GDB, OpenOCD or frontend processes
+(`build/keybinds-process-audit.log`). The unchanged source/test/build manifest,
+relative documentation file links and `git diff --check` passed. Final delivery
+file hashes, including documentation, are in `build/keybinds-delivery-tree.json`.
+The isolated fortified test-compilation command was:
+
+```sh
+sources=(tests/unit/*.c tests/integration/*.c tests/support/*.c)
+objects=("${sources[@]/%.c/.o}")
+objects=("${objects[@]/#/build/keybinds-test-compilation/}")
+make BUILD_DIR=build/keybinds-test-compilation CPPFLAGS=-D_FORTIFY_SOURCE=3 "${objects[@]}"
+```
+
+## Keybinds tables and direct capture revision
+
+The initial selector/text-entry design above was not accepted. The owner requested
+this replacement on 2026-10-25; status remains **AWAITING USER ACCEPTANCE**.
+Config → Keybinds now shows Action/Key tables, side by side at ≥112 columns and
+one scrollable table below that threshold. Key cells capture actual keypresses,
+blank the old value and emphasize only the capture border. Draft differences
+retain a distinct border. Undo reverses individual edits or a confirmed restore
+of defaults. Restore Defaults and discard/quit with unsaved changes require
+confirmation; only Save persists. Inactive buttons have no focus/hit rectangles
+or action side effects. Personal preferences and profile separation are unchanged.
+
+The expanded agent-run focused table test passed in
+`build/keybinds-table-focused-5.log`. It checks border-only capture emphasis,
+Escape cancellation, Delete clearing, reserved/conflicting keys, keyboard Enter
+capture, inactive screen/file no-ops, undo, all warning/cancel/confirm paths,
+save/reload, theme independence, every binding category and literal fields.
+It covers resize while capturing, the 111/112-column transition, all 30 rows,
+scroll/navigation and 48×18/monochrome behavior.
+
+Initial focused failures remain in `build/keybinds-table-focused.log` through
+`build/keybinds-table-focused-3.log`: the new harness used the wrong application-mode
+Home sequence, matched warning prose instead of the bracketed confirmation button,
+and needed bounded mouse/input settling. The next run passed. Adding capture-resize
+coverage then exposed a partial-frame timing assumption in the test
+(`build/keybinds-table-focused-final.log`); the harness now waits for the table
+headers and footer after resize, preserving the capture assertions.
+
+Static analysis initially reported possible negative/oversized table indices
+(`build/keybinds-table-analysis.log`). Row counts, selected actions and array
+accesses now have explicit bounds. The final authorized command
+`make BUILD_DIR=build/keybinds-table-analysis analyze` passed, exit 0; log:
+`build/keybinds-table-analysis-final.log`. All C unit/integration/support sources
+also compiled with `_FORTIFY_SOURCE=3` and strict warnings in the initially fresh
+`build/keybinds-table-test-compilation` directory. The final harness edit was
+recompiled afterward; logs: `build/keybinds-table-test-compilation.log` and
+`build/keybinds-table-test-compilation-final.log`, both exit 0.
+
+Complete ordinary host baseline, using an initially nonexistent directory:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/ci-keybinds-table CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci \
+  > build/ci-keybinds-table-tests.log 2>&1
+```
+
+This initial baseline passed the direct/native flow but stopped on the tmux
+capture-border assertion, exit 2. The diagnostic byte stream in
+`build/keybinds-table-tmux-diagnostic.log` proves that tmux forwards UTF-8
+box-drawing characters with the reverse attribute present. The ASCII-only test
+screen reader dropped those bytes, losing both their positions and attributes.
+The reader now decodes single-cell box drawing while retaining border emphasis;
+no application assertion was removed. The focused direct and real-tmux/native
+checks then passed in `build/keybinds-table-direct-final.log` and
+`build/keybinds-table-tmux-final.log`, including the unchanged border assertion.
+All C test sources were recompiled after the reader/header change, exit 0;
+`build/keybinds-table-reader-compilation.log`.
+
+The last resize-wait harness edit preceded its compilation in that initial run;
+the corresponding object timestamp and final source manifest were checked. The source/test/build SHA-256 manifest is
+`build/keybinds-table-tested-tree.json`. Environment is unchanged from the
+personal-keybind record above; these are local host results, not hosted Ubuntu,
+physical-board or sanitizer/compiler-matrix evidence. The normal
+`build/the-bugger` was rebuilt; log: `build/keybinds-table-build-5.log`.
+
+Final complete baseline, with another initially nonexistent build directory:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/ci-keybinds-table-final CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci \
+  > build/ci-keybinds-table-final-tests.log 2>&1
+```
+
+Final baseline result: **PASS, exit 0**. Its frozen source/test/build hashes
+are `build/keybinds-table-final-tested-tree.json`. This run includes the UTF-8
+screen-reader correction throughout the shared input/terminal suites.
+
+The final baseline includes default/native, direct and real-tmux keybind capture,
+context/source navigation, terminal restoration, localhost remote, owned-server
+and offline OpenOCD checks. The final process audit found no remaining GDB,
+OpenOCD or frontend processes (`build/keybinds-table-process-audit.log`).
+The frozen source manifest, relative documentation file links and
+`git diff --check` passed. Final delivery hashes, including documentation and new
+files, are `build/keybinds-table-delivery-tree.json`. No hosted Ubuntu,
+physical-board or additional sanitizer/compiler-matrix result is claimed.
+
+## Keybind column spacing and header padding
+
+Manual review requested tighter horizontal spacing and a small additional gap
+below the instructions. Implemented for review: fixed compact 34-column tables
+with a 22-column action area and 12-column key cells, centered within narrower
+menu cards. Long additional-key suffixes were removed from row labels without
+changing their behavior. The 112-column two-table threshold is unchanged.
+One blank line now separates the instructions and table headings; row capacity
+accounts for that padding at the 48×18 minimum.
+
+Agent-run focused capture/table tests passed, exit 0, after rebuilding the normal
+`build/the-bugger`; logs: `build/keybinds-spacing-padding-build.log` and
+`build/keybinds-spacing-padding-focused.log`. This preserves capture, borders,
+undo, inactive-button no-ops, confirmations, all rows, responsive transitions,
+persistence and literal fields. The earlier column-only focused check also
+passed (`build/keybinds-spacing-focused.log`) before the requested padding was
+added; it is not the final revision's evidence.
+
+Fresh final ordinary host baseline:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/ci-keybinds-spacing-padding CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci \
+  > build/ci-keybinds-spacing-padding-tests.log 2>&1
+```
+
+Baseline result: **PASS, exit 0**. Frozen source/test/build hashes:
+`build/keybinds-spacing-padding-tested-tree.json`. The host environment and
+local-vs-hosted/hardware limitations are unchanged from the records above.
+Status remains **AWAITING USER ACCEPTANCE**; no Git mutations were performed.
+
+The final spacing/padding static-analysis command
+`make BUILD_DIR=build/keybinds-spacing-padding-analysis analyze` passed, exit 0;
+log: `build/keybinds-spacing-padding-analysis.log`. The earlier column-only
+analysis also passed but predates the requested header padding; it is not the
+final static-analysis record.
+
+Final audit found no remaining GDB, OpenOCD or frontend processes; log:
+`build/keybinds-spacing-padding-process-audit.log`. The tested source manifest,
+local documentation links and `git diff --check` passed. Final delivery file
+hashes are `build/keybinds-spacing-padding-delivery-tree.json`.

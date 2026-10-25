@@ -36,6 +36,7 @@ int main(int argc, char **argv)
     CHECK(argc == 2 && atexit(cleanup) == 0);
     char root[] = "/tmp/the-bugger-themes-tui-XXXXXX"; CHECK(mkdtemp(root));
     CHECK(setenv("XDG_CONFIG_HOME", root, 1) == 0);
+    CHECK(setenv("TB_TEST_CONFIG_HOME", root, 1) == 0);
     start(argv[1], "xterm-256color", false); open_themes();
     test_terminal_expect(&term, "< Catppuccin >"); test_terminal_expect(&term, "< macchiato >");
     click("Variant"); test_terminal_expect(&term, "< mocha >");

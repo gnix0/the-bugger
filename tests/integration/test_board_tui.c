@@ -44,6 +44,7 @@ int main(int argc, char **argv)
     CHECK(argc == 5);
     char settings[] = "/tmp/tb-m17-settings-XXXXXX"; CHECK(mkdtemp(settings));
     CHECK(setenv("XDG_CONFIG_HOME", settings, 1) == 0);
+    CHECK(setenv("TB_TEST_CONFIG_HOME", settings, 1) == 0);
     TestTerminal t; start(&t, argv[1]); test_terminal_resize(&t, 55, 200);
     test_terminal_click(&t, "Embedded target"); test_terminal_expect(&t, "Board script");
     test_terminal_send(&t, "\t\t\025"); test_terminal_send(&t, argv[4]);

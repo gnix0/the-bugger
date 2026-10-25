@@ -28,7 +28,7 @@ CPU Registers, Memory and Locals/Watches use the inspection models described bel
 inspection views have explicit unavailable messages. Explicit --demo
 retains simulated presentation separately. OpenOCD management is implemented and accepted at M16.
 Remote connections use the shared inspectors and preserve capability limitations.
-Profiles and key mappings retain a review step before connection.
+Profiles retain a review step before connection. Keybinds are separate personal preferences.
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
 descriptors together, redrawing after input or session revisions. Idle waits are
@@ -136,10 +136,25 @@ Back restores the saved palette; Save returns to Config only after persistence
 succeeds. Theme operations do not modify workspace geometry or session profiles.
 
 `src/tui/preferences.{h,c}` owns global version-1 `preferences.json`, independently
-of `profiles.json`. It stores theme/variant identifiers, not runtime color data
-or debugger state. Reads require an owned regular non-symlink file of at most
-1 KiB and validate the schema and known family/variant pair. Invalid files are
-preserved, Macchiato is used and writes are blocked until correction/restart.
+of `profiles.json`. It stores theme/variant identifiers and an optional 30-integer
+`keys` array, not runtime color data or debugger state. A theme-only file loads
+factory bindings. `tui/keybinds.{h,c}` defines the action catalog, defaults,
+key names/encoding, reserved-key/duplicate validation and curses matching;
+it has no profile dependency. Encoding is 0 for None, 1–24 for function keys,
+-1 through -26 for Ctrl letters and 256 plus printable ASCII for plain keys.
+`app.c` renders centered Action/Key tables (two at ≥112 columns, otherwise one)
+with a bounded row viewport. Capture intercepts actual keys before global
+shortcuts; Escape cancels and Delete clears. Capture blanks the value and styles
+only its border; draft differences retain a distinct border. A bounded 128-entry
+snapshot history supports atomic Undo, including Restore Defaults. Discard and
+restore confirmations keep the draft untouched until confirmation. Inactive
+buttons register no hit/focus rectangles and activation guards prevent side
+effects. Only successful Save changes persisted/application bindings. Runtime
+aliases remain outside text fields, with fixed navigation/exit fallbacks.
+Theme and binding saves preserve each other, with the same stale-writer guard.
+Reads require an owned regular non-symlink file of at most 1 KiB and validate
+the schema, known family/variant pair and complete key map. Invalid files are
+preserved, Macchiato/factory bindings are used and writes are blocked until correction/restart.
 Saves use an advisory lock, stale-file identity checks, a private 0600 temporary
 file, fsync and atomic rename. A post-rename directory-sync error is reported as
 uncertain crash durability, not as a rolled-back save.
@@ -841,7 +856,7 @@ and [Setting Watchpoints, hardware limits and scope](https://www.sourceware.org/
 
 ## Profiles and source restoration
 
-`session/profiles.{c,h}` owns bounded connection definitions, action keys and
+`session/profiles.{c,h}` owns bounded connection definitions and
 recent saved sessions, independent of curses, local process IDs or target values.
 The launcher loads into configuration for review; it never starts a tool merely
 because a profile was selected. Successfully initialized saved sessions enter recents. Remote profiles connect
@@ -850,10 +865,14 @@ leaves PID empty. Environment overrides are session-only.
 
 Storage is `$XDG_CONFIG_HOME/the-bugger/profiles.json`, falling back to
 `$HOME/.config/the-bugger/profiles.json` for missing/relative XDG configuration.
-Loading absent data creates nothing. json-c parses a strict version-1 UTF-8
-schema, at most 1 MiB, 16 profiles and 8 recent names. Root fields are `version`,
+Loading absent data creates nothing. json-c reads version-1 or version-2 UTF-8
+JSON and writes version 2, at most 1 MiB, 16 profiles and 8 recent names.
+Root fields are `version`,
 `profiles` and `recent`. Every profile requires the following fields; unknown
-fields/types/versions and duplicate names or conflicting bindings are rejected.
+fields/types/versions and duplicate names are rejected. Version-1 `keys` fields
+are accepted only for compatibility, ignored and omitted on the next store write.
+Profiles never read or modify personal bindings. Older apps requiring version 1
+cannot read newly written version-2 stores.
 
 | Fields | Representation |
 |---|---|
@@ -862,13 +881,10 @@ fields/types/versions and duplicate names or conflicting bindings are rejected.
 | `executable`, `directory`, `gdb`, `openocd`, `endpoint`, `board`, `adapter`, `target`, `protocol` | Literal strings; protocol `remote` or `extended-remote` |
 | `arguments`, `scripts`, `search` | Ordered string arrays, at most 32 elements of at most 511 bytes |
 | `directories`, `mappings` | Up to 8 source directories and 8 ordered `{from,to}` path substitutions |
-| `keys` | Seven strings in Continue/Pause/Over/Into/Out/Breakpoint/Reset order: function key, Ctrl letter or `None` |
 
 Names hold up to 63 bytes; paths/source prefixes up to 1023, endpoint up to 255.
-F13–F24 display as Shift+F1–F12; terminal delivery still varies. Reserved
-Ctrl+C/H/I/J/M/Q/S/Z and conflicting actions are rejected; mouse alternatives
-remain. JSON quoting is not shell execution; arguments/scripts remain arrays.
-The format deliberately excludes PID, environment overrides, geometry/tabs,
+JSON quoting is not shell execution; arguments/scripts remain arrays.
+The format deliberately excludes personal keys/themes, PID, environment overrides, geometry/tabs,
 watch/breakpoint definitions, region grants, values and temporary backend state.
 F01 and F12 own later restoration/sharing and schema evolution.
 
@@ -885,7 +901,7 @@ then mappings in saved order. Only successful settings enter published state.
 Native Continue/Step/Console are interlocked during restoration; close remains
 available. A failed setting aborts the queue visibly without retry spin.
 The TUI's source-settings save action captures applied settings, not pending ones.
-Remote sessions retain this ordering/interlock. See [profile validation](testing.md#profiles-and-action-keys) for reproducible checks.
+Remote sessions retain this ordering/interlock. See [profile validation](testing.md#profiles-and-source-settings) for reproducible checks.
 
 ## Value-producing request audit
 
