@@ -582,12 +582,14 @@ $(BUILD_DIR)/test-board-tui: $(BUILD_DIR)/tests/integration/test_board_tui.o $(B
 test-m17-offline: test-m17-fixture $(BUILD_DIR)/test-board $(BUILD_DIR)/test-board-tui
 
 # Linux x86-64 distribution; target GDB/OpenOCD and shared libraries stay external.
+RELEASE_VERSION := $(shell sed -n 's/.*THE_BUGGER_VERSION "\([0-9.]*\)"/\1/p' include/the_bugger/version.h)
+RELEASE_DIST_DIR ?= $(BUILD_DIR)/dist/v$(RELEASE_VERSION)
 RELEASE_CFLAGS ?= -O2 -g -fPIE -fstack-protector-strong
 RELEASE_LDFLAGS ?= -pie -Wl,-z,relro,-z,now
 .PHONY: release
 release:
 	$(MAKE) BUILD_DIR=$(BUILD_DIR)/release-build CPPFLAGS='$(CPPFLAGS) -D_FORTIFY_SOURCE=3' CFLAGS='$(RELEASE_CFLAGS)' LDFLAGS='$(RELEASE_LDFLAGS)' all
-	bash tools/package-release.sh $(BUILD_DIR)/release-build/the-bugger $(BUILD_DIR)/dist
+	bash tools/package-release.sh $(BUILD_DIR)/release-build/the-bugger $(RELEASE_DIST_DIR)
 
 $(BUILD_DIR)/test-preferences: $(BUILD_DIR)/tests/unit/test_preferences.o $(BUILD_DIR)/src/tui/preferences.o $(BUILD_DIR)/src/tui/theme.o $(BUILD_DIR)/src/tui/keybinds.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(NCURSES_LIBS) $(JSON_LIBS) $(LDLIBS)

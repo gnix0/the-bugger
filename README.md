@@ -29,12 +29,12 @@ Availability depends on GDB and the target's capabilities.
 v0.1.1 adds **Config → Themes** with seven built-in families and 37 variants,
 preview and saved appearance preferences.
 **Catppuccin Macchiato** is the default; Monokai Pro remains available.
-The development build preserves exact theme colors inside RGB-advertising tmux
+v0.1.2 preserves exact theme colors inside RGB-advertising tmux
 sessions, with 256-color and monochrome fallbacks.
 [Theme controls and variants](docs/usage.md#configuration-and-themes) describe
 what is included. Shared UI additions also include
 [Source fullscreen and spatial keyboard navigation](docs/usage.md#workspace-controls).
-These features extend the original v0.1.0 workspace. The development build also
+These features extend the original v0.1.0 workspace. v0.1.2 also
 provides [Config → Keybinds](docs/usage.md#personal-keybinds) for debugger and
 workspace/navigation shortcuts. Bindings are personal preferences alongside
 themes; connection profiles never carry or override them.
@@ -54,7 +54,7 @@ These results cover the tested workflows, not all boards, probes or architecture
 OpenOCD is optional, not universal; broader compatibility needs separate evidence.
 Physical RISC-V acceptance is deferred for v0.1.0 and is not a hardware support claim.
 
-This checkout targets **v0.1.1**. Its release validation status is recorded in the
+This checkout targets **v0.1.2**. Its release validation status is recorded in the
 [roadmap status](docs/roadmap.md#implementation-status) and
 [recorded validation evidence](docs/validation.md).
 
@@ -111,7 +111,8 @@ It does not connect to hardware. In tmux, mouse support requires the opt-in
 ## Linux x86-64 distribution
 
 `make release` prepares the host-binary archive, corresponding source archive
-and `SHA256SUMS` in `build/dist/`. Extract the binary archive and run
+and `SHA256SUMS` in `build/dist/v0.1.2/`. Other versions use their own
+version directory; `RELEASE_DIST_DIR` can override the destination. Extract the binary archive and run
 `./the-bugger` from a terminal. GDB/OpenOCD and the shared runtime libraries remain
 external; `BUILD-INFO.txt` lists the actual build host and dependency requirements.
 This build does not promise compatibility with every Linux distribution.

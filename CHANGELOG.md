@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-25
+
 ### Added
 
 - Optional Vim-like input in Config → Keybinds, with Normal/Insert field modes,
