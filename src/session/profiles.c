@@ -40,42 +40,6 @@ static bool clean(const char *text, size_t size, bool empty)
     }
     return true;
 }
-const char *tb_profile_action(size_t action)
-{
-    static const char *const names[] = {"Continue", "Pause", "Step over", "Step into", "Step out", "Breakpoint", "Reset"};
-    return action < TB_PROFILE_ACTIONS ? names[action] : "Unknown";
-}
-bool tb_profile_key_valid(int key)
-{
-    if (key >= 0 && key <= 24) { return true; }
-    if (key > -1 || key < -26) { return false; }
-    return key != -3 && key != -8 && key != -9 && key != -10 && key != -13 &&
-           key != -17 && key != -19 && key != -26;
-}
-void tb_profile_key_name(int key, char *text, size_t size)
-{
-    if (!tb_profile_key_valid(key)) { (void)snprintf(text, size, "Invalid"); }
-    else if (key == 0) { (void)snprintf(text, size, "None"); }
-    else if (key < 0) { (void)snprintf(text, size, "Ctrl+%c", 'A' - key - 1); }
-    else if (key > 12) { (void)snprintf(text, size, "Shift+F%d", key - 12); }
-    else { (void)snprintf(text, size, "F%d", key); }
-}
-bool tb_profile_key_parse(const char *text, int *key)
-{
-    if (strcmp(text, "None") == 0) { *key = 0; return true; }
-    if (strlen(text) == 6 && strncmp(text, "Ctrl+", 5) == 0 && text[5] >= 'A' && text[5] <= 'Z') {
-        *key = -(text[5] - 'A' + 1); return tb_profile_key_valid(*key);
-    }
-    bool shift = strncmp(text, "Shift+", 6) == 0;
-    const char *p = text + (shift ? 6 : 0);
-    if (*p != 'F') { return false; }
-    ++p;
-    if (!*p || strlen(p) > 2) { return false; }
-    int value = 0;
-    for (; *p; ++p) { if (*p < '0' || *p > '9') { return false; } value = value * 10 + *p - '0'; }
-    if (value < 1 || value > (shift ? 12 : 24)) { return false; }
-    *key = value + (shift ? 12 : 0); return true;
-}
 void tb_profile_defaults(TbProfile *p, int kind)
 {
     memset(p, 0, sizeof *p); p->kind = kind; p->start_server = true;
@@ -83,7 +47,6 @@ void tb_profile_defaults(TbProfile *p, int kind)
     (void)snprintf(p->openocd, sizeof p->openocd, "openocd");
     (void)snprintf(p->endpoint, sizeof p->endpoint, "localhost:3333");
     (void)snprintf(p->protocol, sizeof p->protocol, "remote");
-    const int keys[] = {5, 0, 10, 11, 23, 9, 0}; memcpy(p->keys, keys, sizeof keys);
 }
 static bool words_valid(const TbProfileWords *words)
 {
@@ -109,10 +72,6 @@ bool tb_profile_valid(const TbProfile *p)
     for (size_t i = 0; i < p->rule_count; ++i) {
         if (!clean(p->rules[i].from, TB_PROFILE_PATH, false) || !clean(p->rules[i].to, TB_PROFILE_PATH, false)) { return false; }
         for (size_t j = 0; j < i; ++j) { if (strcmp(p->rules[i].from, p->rules[j].from) == 0) { return false; } }
-    }
-    for (size_t i = 0; i < TB_PROFILE_ACTIONS; ++i) {
-        if (!tb_profile_key_valid(p->keys[i])) { return false; }
-        for (size_t j = 0; p->keys[i] && j < i; ++j) { if (p->keys[i] == p->keys[j]) { return false; } }
     }
     return true;
 }
@@ -142,7 +101,7 @@ const char *tb_profiles_recent(const TbProfiles *p, size_t i) { return i < p->re
 const char *tb_profiles_error(const TbProfiles *p) { return p->error; }
 const char *tb_profiles_path(const TbProfiles *p) { return p->path; }
 
-/* A small strict schema: no implicit conversions or silently discarded fields. */
+/* A strict schema; obsolete v1 personal keys are explicitly ignored on read. */
 static json_object *member(json_object *object, const char *name, enum json_type type)
 {
     json_object *value = NULL;
@@ -191,7 +150,10 @@ static json_object *array_make(const TbProfileWords *words)
 static const char *const profile_fields[] = {"name", "kind", "attach", "start_server", "adapter_target", "executable", "directory", "gdb", "openocd", "endpoint", "board", "adapter", "target", "protocol", "arguments", "scripts", "search", "directories", "mappings", "keys"};
 static bool profile_get(json_object *o, TbProfile *p)
 {
-    if (!fields(o, profile_fields, sizeof profile_fields / sizeof profile_fields[0])) { return false; }
+    /* Legacy v1 profile keys are accepted only for reading and never applied. */
+    json_object *legacy = NULL;
+    size_t count = sizeof profile_fields / sizeof profile_fields[0];
+    if (!fields(o, profile_fields, json_object_object_get_ex(o, "keys", &legacy) ? count : count - 1)) { return false; }
     json_object *kind = member(o, "kind", json_type_int);
     if (!kind || json_object_get_int64(kind) < 0 || json_object_get_int64(kind) > 2) { return false; }
     p->kind = json_object_get_int(kind);
@@ -205,8 +167,8 @@ static bool profile_get(json_object *o, TbProfile *p)
     const size_t sizes[] = {sizeof p->name, sizeof p->executable, sizeof p->directory, sizeof p->gdb, sizeof p->openocd, sizeof p->endpoint, sizeof p->board, sizeof p->adapter, sizeof p->target, sizeof p->protocol};
     for (size_t i = 0; i < 10; ++i) { if (!string_get(o, names[i], strings[i], sizes[i])) { return false; } }
     if (!array_get(o, "arguments", &p->arguments) || !array_get(o, "scripts", &p->scripts) || !array_get(o, "search", &p->search)) { return false; }
-    json_object *dirs = member(o, "directories", json_type_array), *maps = member(o, "mappings", json_type_array), *keys = member(o, "keys", json_type_array);
-    if (!dirs || !maps || !keys || json_object_array_length(dirs) > TB_PROFILE_SOURCES || json_object_array_length(maps) > TB_PROFILE_SOURCES || json_object_array_length(keys) != TB_PROFILE_ACTIONS) { return false; }
+    json_object *dirs = member(o, "directories", json_type_array), *maps = member(o, "mappings", json_type_array);
+    if (!dirs || !maps || json_object_array_length(dirs) > TB_PROFILE_SOURCES || json_object_array_length(maps) > TB_PROFILE_SOURCES) { return false; }
     p->directory_count = json_object_array_length(dirs); p->rule_count = json_object_array_length(maps);
     for (size_t i = 0; i < p->directory_count; ++i) {
         json_object *v = json_object_array_get_idx(dirs, i);
@@ -217,11 +179,6 @@ static bool profile_get(json_object *o, TbProfile *p)
     for (size_t i = 0; i < p->rule_count; ++i) {
         static const char *const names_map[] = {"from", "to"}; json_object *v = json_object_array_get_idx(maps, i);
         if (!fields(v, names_map, 2) || !string_get(v, "from", p->rules[i].from, TB_PROFILE_PATH) || !string_get(v, "to", p->rules[i].to, TB_PROFILE_PATH)) { return false; }
-    }
-    for (size_t i = 0; i < TB_PROFILE_ACTIONS; ++i) {
-        json_object *v = json_object_array_get_idx(keys, i);
-        if (!json_object_is_type(v, json_type_string) || strlen(json_object_get_string(v)) != (size_t)json_object_get_string_len(v) ||
-            !tb_profile_key_parse(json_object_get_string(v), &p->keys[i])) { return false; }
     }
     return tb_profile_valid(p);
 }
@@ -239,22 +196,17 @@ static json_object *profile_make(const TbProfile *p)
     const char *strings[] = {p->executable, p->directory, p->gdb, p->openocd, p->endpoint, p->board, p->adapter, p->target, p->protocol};
     for (size_t i = 0; ok && i < 9; ++i) { ok = add(o, profile_fields[5 + i], json_object_new_string(strings[i])); }
     ok = ok && add(o, "arguments", array_make(&p->arguments)) && add(o, "scripts", array_make(&p->scripts)) && add(o, "search", array_make(&p->search));
-    json_object *dirs = json_object_new_array(), *maps = json_object_new_array(), *keys = json_object_new_array();
-    if (!dirs || !maps || !keys) { ok = false; }
+    json_object *dirs = json_object_new_array(), *maps = json_object_new_array();
+    if (!dirs || !maps) { ok = false; }
     for (size_t i = 0; ok && i < p->directory_count; ++i) { json_object *v = json_object_new_string(p->directories[i]); if (!v || json_object_array_add(dirs, v) != 0) { json_object_put(v); ok = false; } }
     for (size_t i = 0; ok && i < p->rule_count; ++i) {
         json_object *v = json_object_new_object();
         if (!v || !add(v, "from", json_object_new_string(p->rules[i].from)) || !add(v, "to", json_object_new_string(p->rules[i].to)) || json_object_array_add(maps, v) != 0) { json_object_put(v); ok = false; }
     }
-    for (size_t i = 0; ok && i < TB_PROFILE_ACTIONS; ++i) {
-        char text[24]; tb_profile_key_name(p->keys[i], text, sizeof text); json_object *v = json_object_new_string(text);
-        if (!v || json_object_array_add(keys, v) != 0) { json_object_put(v); ok = false; }
-    }
-    if (!ok) { json_object_put(dirs); json_object_put(maps); json_object_put(keys); json_object_put(o); return NULL; }
+    if (!ok) { json_object_put(dirs); json_object_put(maps); json_object_put(o); return NULL; }
     /* Ownership transfers even if a subsequent field fails. */
-    if (!add(o, "directories", dirs)) { json_object_put(maps); json_object_put(keys); json_object_put(o); return NULL; }
-    if (!add(o, "mappings", maps)) { json_object_put(keys); json_object_put(o); return NULL; }
-    if (!add(o, "keys", keys)) { json_object_put(o); return NULL; }
+    if (!add(o, "directories", dirs)) { json_object_put(maps); json_object_put(o); return NULL; }
+    if (!add(o, "mappings", maps)) { json_object_put(o); return NULL; }
     return o;
 }
 bool tb_profiles_load(TbProfiles *p)
@@ -284,7 +236,7 @@ bool tb_profiles_load(TbProfiles *p)
     json_object *version = ok ? member(root, "version", json_type_int) : NULL;
     json_object *items = ok ? member(root, "profiles", json_type_array) : NULL;
     json_object *recent = ok ? member(root, "recent", json_type_array) : NULL;
-    ok = ok && fields(root, names, 3) && version && json_object_get_int64(version) == 1 && items && recent &&
+    ok = ok && fields(root, names, 3) && version && (json_object_get_int64(version) == 1 || json_object_get_int64(version) == 2) && items && recent &&
          json_object_array_length(items) <= TB_PROFILES && json_object_array_length(recent) <= TB_PROFILE_RECENT;
     TbProfiles *next = ok ? calloc(1, sizeof *next) : NULL; ok = ok && next;
     if (ok) {
@@ -350,7 +302,7 @@ static bool save(TbProfiles *p)
     for (size_t i = 0; ok && i < p->recent_count; ++i) {
         json_object *v = json_object_new_string(p->recent[i]); if (!v || json_object_array_add(recent, v) != 0) { json_object_put(v); ok = false; }
     }
-    if (ok) { ok = add(root, "version", json_object_new_int(1)); }
+    if (ok) { ok = add(root, "version", json_object_new_int(2)); }
     if (ok) { ok = add(root, "profiles", items); items = NULL; }
     if (ok) { ok = add(root, "recent", recent); recent = NULL; }
     json_object_put(items); json_object_put(recent);
@@ -386,7 +338,7 @@ static bool transaction(TbProfiles *p, TbProfiles *next)
 }
 bool tb_profiles_put(TbProfiles *p, const TbProfile *profile, bool replace)
 {
-    if (!tb_profile_valid(profile)) { return fail(p, "Invalid profile fields, bounds or conflicting/reserved key bindings."); }
+    if (!tb_profile_valid(profile)) { return fail(p, "Invalid profile fields or bounds."); }
     size_t index = 0; while (index < p->count && strcmp(p->items[index].name, profile->name) != 0) { ++index; }
     if (index < p->count && !replace) { return fail(p, "A profile already has that name; confirm replacement."); }
     if (index == TB_PROFILES) { return fail(p, "At most 16 named profiles are supported."); }

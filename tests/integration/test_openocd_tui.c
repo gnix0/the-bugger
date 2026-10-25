@@ -40,6 +40,7 @@ int main(int argc, char **argv)
     (void)snprintf(script, sizeof script, "%s/board/selected-m16.cfg", root);
     int fd = open(script, O_CREAT | O_WRONLY | O_EXCL, 0600); CHECK(fd >= 0 && close(fd) == 0);
     CHECK(setenv("OPENOCD_SCRIPTS", root, 1) == 0 && setenv("XDG_CONFIG_HOME", root, 1) == 0);
+    CHECK(setenv("TB_TEST_CONFIG_HOME", root, 1) == 0);
     CHECK(setenv("TB_FAKE_MODE", "remote-openocd", 1) == 0 && setenv("TB_FAKE_OPENOCD", "ready", 1) == 0);
     configure(argv[1], argv[2], argv[3]);
     test_terminal_resize(&term, 18, 80); test_terminal_expect(&term, "Review OpenOCD session");

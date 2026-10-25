@@ -8,7 +8,7 @@
 
 enum { TEST_ROWS = 64, TEST_COLS = 200, TEST_OUTPUT = 262144 };
 
-/* Small test-only VT screen reader for the ASCII labels emitted by ncurses. */
+/* Test-only VT reader for ASCII labels and single-cell UTF-8 box drawing. */
 typedef struct {
     pid_t child;
     int master, slave, rows, cols, x, y, escape;
@@ -17,6 +17,7 @@ typedef struct {
     struct termios original;
     char cells[TEST_ROWS][TEST_COLS + 1];
     bool reverse, inverse[TEST_ROWS][TEST_COLS];
+    unsigned utf8_value, utf8_remaining;
     char sequence[128];
     size_t sequence_length;
     char output[TEST_OUTPUT];

@@ -25,12 +25,12 @@ enum { MAX_CONTROLS = 1024, FIELD_SIZE = 256, FORM_FIELDS = 9 };
 enum { CONTENT_LEFT = 0x1000, CONTENT_DOWN, CONTENT_UP, CONTENT_RIGHT };
 typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
                SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT, DATA_WATCH_INPUT,
-               CONFIG_MENU, THEMES, THEME_PREVIEW, PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM, SCRIPT_LIST, SCRIPT_FILTER } Page;
+               CONFIG_MENU, THEMES, THEME_PREVIEW, KEYBINDS, PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM, SCRIPT_LIST, SCRIPT_FILTER } Page;
 typedef enum { CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_ADDRESS, CODE_STOPPED,
                CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_DIRECTORY_ADD, CODE_RULE_FROM,
                CODE_RULE_TO, CODE_SETTINGS_CLEAR, CODE_RAW, CODE_RUN_TO, CODE_FULLSCREEN } CodeAction;
 typedef enum {
-    CONFIG_OPEN, THEME_ACTION, CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
+    CONFIG_OPEN, THEME_ACTION, KEY_ACTION, CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
     TOOL, TAB, MENU, BODY, SHOW_VIEW, FOCUS_PANE, CANCEL_RESET, CONFIRM_RESET,
     MENU_SECTION, PANE_ACTION, DIVIDER, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR,
     COMMAND_FIELD, COMMAND_SEND, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_ARGUMENTS, CONTEXT_PAGE,
@@ -76,6 +76,8 @@ typedef struct {
     const char *colors;
     TbPreferences preferences;
     size_t theme_draft;
+    int key_draft[TB_BIND_COUNT], key_selected, key_capture, key_scroll, key_confirm;
+    int key_history[128][TB_BIND_COUNT], key_history_count;
     char status[160];
     TbSession *debugger;
     bool demo_mode, live, leave_session, exit_after_close;
@@ -280,7 +282,7 @@ static void draw_header(const App *app, const char *subtitle)
             "Native Linux | launch or attach through GDB");
     tb_text(LINES - 2, 1, COLS - 2, TB_YELLOW, 0, app->status);
     tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0,
-            "Tab / arrows / hjkl / Enter | q / Esc back (outside text fields) | Ctrl+Q quit app");
+            "Tab / arrows / Enter | Esc back (outside text fields) | Ctrl+Q quit app");
 }
 
 static void draw_launcher(App *app)
@@ -333,7 +335,7 @@ static void draw_launcher(App *app)
     }
     button(app, actions, left + width - 11, 9, "[ Quit ]", QUIT, 0, 0);
     tb_text(LINES - 2, 1, COLS - 2, TB_YELLOW, 0, app->status);
-    tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0, "Tab / arrows / hjkl / Enter or click | Ctrl+Q quit app");
+    tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0, "Tab / arrows / Enter or click | Ctrl+Q quit app");
 }
 
 /* Global presentation preferences never participate in debugger/session state. */
@@ -375,7 +377,7 @@ static void theme_cycle(App *app, bool family, int direction)
 static void draw_config(App *app)
 {
     bool themes = app->page == THEMES;
-    int width = COLS > 80 ? 72 : COLS - 8, height = themes ? 14 : 12;
+    int width = COLS > 80 ? 72 : COLS - 8, height = 14;
     int left = (COLS - width) / 2, top = (LINES - 2 - height) / 2;
     tb_fill((TbRect){left, top, width, height}, TB_PANEL);
     tb_text(top + 1, left + 2, width - 4, TB_PINK, A_BOLD, themes ? "Themes" : "Configuration");
@@ -393,10 +395,145 @@ static void draw_config(App *app)
     } else {
         if (!app->demo_mode) { button(app, top + 5, left + 2, width - 4, "Profiles", PROFILE_OPEN, 0, 0); }
         button(app, top + 7, left + 2, width - 4, "Themes", THEME_ACTION, 0, 0);
-        button(app, top + 10, left + 2, 10, "[ Back ]", BACK, 0, 0);
+        button(app, top + 9, left + 2, width - 4, "Keybinds", KEY_ACTION, 0, 0);
+        button(app, top + 12, left + 2, 10, "[ Back ]", BACK, 0, 0);
     }
     tb_text(LINES - 2, 1, COLS - 2, TB_YELLOW, 0, app->status);
-    tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0, "Tab / arrows / hjkl / Enter or click | Esc back | Ctrl+Q quit app");
+    tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0, "Tab / arrows / Enter or click | Esc back | Ctrl+Q quit app");
+}
+
+static bool keybind_dirty(const App *app)
+{
+    return memcmp(app->key_draft, app->preferences.keys, sizeof app->key_draft) != 0;
+}
+static bool keybind_factory(const App *app)
+{
+    int keys[TB_BIND_COUNT]; tb_keybind_defaults(keys);
+    return memcmp(app->key_draft, keys, sizeof keys) == 0;
+}
+static void keybind_remember(App *app)
+{
+    if (app->key_history_count == 128) {
+        memmove(app->key_history, app->key_history + 1, sizeof app->key_history[0] * 127);
+        --app->key_history_count;
+    }
+    memcpy(app->key_history[app->key_history_count++], app->key_draft, sizeof app->key_draft);
+}
+static int keybind_rows(void)
+{
+    int total = COLS >= 112 ? 15 : TB_BIND_COUNT;
+    int rows = (LINES - (COLS < 64 ? 14 : 12)) / 3;
+    return rows < 1 ? 1 : rows < total ? rows : total;
+}
+static void keybind_select(App *app, int action)
+{
+    if (action < 0 || action >= TB_BIND_COUNT) { return; }
+    int rows = keybind_rows(), local = COLS >= 112 ? action % 15 : action;
+    if (local < app->key_scroll) { app->key_scroll = local; }
+    if (local >= app->key_scroll + rows) { app->key_scroll = local - rows + 1; }
+    app->key_selected = action;
+    app->count = 0; /* Rebuild focus for rows entering the viewport. */
+    app->focus = (COLS >= 112 ? action / 15 * rows : 0) + local - app->key_scroll;
+}
+static void keybind_capture(App *app, wint_t input, bool special)
+{
+    if (!special && input == 27) {
+        app->key_capture = -1; status(app, "Capture cancelled."); return;
+    }
+    int key = INT_MAX;
+    if (special && input == KEY_DC) { key = 0; }
+    else if (special && input == KEY_BACKSPACE) { key = -8; }
+    else if (special) {
+        for (int i = 1; i <= 24; ++i) { if ((int)input == KEY_F(i)) { key = i; break; } }
+    } else if (input >= 1 && input <= 26) { key = -(int)input; }
+    else if (input >= 33 && input <= 126) { key = 256 + (int)input; }
+    if (!tb_keybind_allowed((size_t)app->key_capture, key)) {
+        status(app, "Key unavailable or reserved. Press another key; Esc cancels, Delete clears."); return;
+    }
+    for (int i = 0; key && i < TB_BIND_COUNT; ++i) {
+        if (i != app->key_capture && app->key_draft[i] == key) {
+            char message[160]; (void)snprintf(message, sizeof message, "Already assigned to %s. Clear it first.", tb_keybind_action((size_t)i));
+            status(app, message); return;
+        }
+    }
+    if (app->key_draft[app->key_capture] != key) {
+        keybind_remember(app); app->key_draft[app->key_capture] = key;
+    }
+    app->key_capture = -1;
+    status(app, "Binding captured. Save to apply your changes.");
+}
+static void keybind_button(App *app, TbRect rect, const char *label, int action, bool enabled)
+{
+    if (enabled) { button(app, rect.y, rect.x, rect.w, label, KEY_ACTION, action, 0); }
+    else { tb_text(rect.y, rect.x, rect.w, TB_MUTED, A_DIM, label); }
+}
+static void draw_keybinds(App *app)
+{
+    if (app->key_confirm) {
+        int width = COLS > 76 ? 72 : COLS - 4, height = 10;
+        int left = (COLS - width) / 2, top = (LINES - 2 - height) / 2;
+        tb_fill((TbRect){left, top, width, height}, TB_PANEL);
+        tb_text(top + 1, left + 2, width - 4, TB_ORANGE, A_BOLD,
+                app->key_confirm == 2 ? "Restore default keybinds?" : "Unsaved keybind changes");
+        tb_text(top + 3, left + 2, width - 4, TB_PANEL, 0,
+                app->key_confirm == 2 ? "Replace your draft with the factory bindings?" : "Discard changes that have not been saved?");
+        tb_text(top + 4, left + 2, width - 4, TB_MUTED, 0,
+                app->key_confirm == 2 ? "Only Save persists this change. Undo can reverse it." : "Cancel keeps your draft for further editing.");
+        button(app, top + 7, left + 2, 12, "[ Cancel ]", KEY_ACTION, 5, 0);
+        button(app, top + 7, left + width - 25, 23,
+                app->key_confirm == 2 ? "[ Restore Defaults ]" : app->key_confirm == 3 ? "[ Discard and quit ]" : "[ Discard changes ]", KEY_ACTION, 6, 0);
+        return;
+    }
+    bool dual = COLS >= 112, compact = COLS < 64;
+    int rows = keybind_rows(), total = dual ? 15 : TB_BIND_COUNT;
+    if (app->key_scroll > total - rows) { app->key_scroll = total - rows; }
+    if (app->key_scroll < 0) { app->key_scroll = 0; }
+    if (app->key_selected < 0 || app->key_selected >= TB_BIND_COUNT) { app->key_selected = 0; }
+    int local = dual ? app->key_selected % 15 : app->key_selected;
+    if (local < app->key_scroll) { app->key_scroll = local; }
+    if (local >= app->key_scroll + rows) { app->key_scroll = local - rows + 1; }
+    int width = dual ? 80 : (COLS > 60 ? 56 : COLS - 4);
+    int height = rows * 3 + (compact ? 12 : 10);
+    int left = (COLS - width) / 2, top = (LINES - 2 - height) / 2;
+    tb_fill((TbRect){left, top, width, height}, TB_PANEL);
+    tb_text(top + 1, left + 2, width - 4, TB_PINK, A_BOLD, "Keybinds");
+    tb_text(top + 2, left + 2, width - 4, app->key_capture >= 0 ? TB_ORANGE : TB_MUTED, 0,
+            app->key_capture >= 0 ? "Press a key | Esc cancels | Delete clears" : "Click a Key cell or press Enter to capture");
+    int table_width = 34, tables_width = dual ? table_width * 2 + 4 : table_width;
+    for (int table = 0; table < (dual ? 2 : 1); ++table) {
+        int x = left + (width - tables_width) / 2 + table * (table_width + 4), key_width = 12;
+        int key_x = x + table_width - key_width;
+        tb_text(top + 4, x, table_width - key_width, TB_CYAN, A_BOLD, "Action");
+        tb_text(top + 4, key_x + 1, key_width - 2, TB_CYAN, A_BOLD, "Key");
+        for (int row = 0; row < rows; ++row) {
+            int action = table * 15 + app->key_scroll + row, y = top + 6 + row * 3;
+            if (action < 0 || action >= TB_BIND_COUNT) { continue; }
+            int index = add_control(app, (TbRect){key_x, y - 1, key_width, 3}, KEY_ACTION, 1, action);
+            bool capture = app->key_capture == action;
+            bool changed = app->key_draft[action] != app->preferences.keys[action];
+            TbStyle border = capture ? TB_ORANGE : changed ? TB_CYAN : index == app->focus ? TB_PINK : TB_BORDER;
+            tb_text(y, x, table_width - key_width - 1, TB_PANEL, 0, tb_keybind_action((size_t)action));
+            tb_style(border, capture ? A_BOLD | A_REVERSE : (changed ? A_BOLD : 0) | (index == app->focus ? A_UNDERLINE : 0));
+            (void)mvhline(y - 1, key_x, ACS_HLINE, key_width);
+            (void)mvhline(y + 1, key_x, ACS_HLINE, key_width);
+            (void)mvaddch(y - 1, key_x, ACS_ULCORNER); (void)mvaddch(y - 1, key_x + key_width - 1, ACS_URCORNER);
+            (void)mvaddch(y + 1, key_x, ACS_LLCORNER); (void)mvaddch(y + 1, key_x + key_width - 1, ACS_LRCORNER);
+            (void)mvaddch(y, key_x, ACS_VLINE); (void)mvaddch(y, key_x + key_width - 1, ACS_VLINE);
+            char name[24]; tb_keybind_name(app->key_draft[action], name, sizeof name);
+            tb_text(y, key_x + 1, key_width - 2, TB_PANEL, 0, capture ? "" : name);
+        }
+    }
+    int buttons_y = top + height - (compact ? 4 : 3);
+    keybind_button(app, (TbRect){left + 2, buttons_y, 8, 1}, "[ Back ]", 7, true);
+    keybind_button(app, (TbRect){left + 12, buttons_y, 8, 1}, "[ Undo ]", 2, app->key_history_count > 0);
+    keybind_button(app, (TbRect){compact ? left + 2 : left + 22, buttons_y + (compact ? 2 : 0), 20, 1},
+            "[ Restore Defaults ]", 3, !keybind_factory(app));
+    keybind_button(app, (TbRect){left + width - 10, buttons_y + (compact ? 2 : 0), 8, 1},
+            "[ Save ]", 4, keybind_dirty(app));
+    char progress[128];
+    (void)snprintf(progress, sizeof progress, "Rows %d-%d/%d | capture: orange | edited: cyan | PgUp/PgDn / wheel", app->key_scroll + 1, app->key_scroll + rows, total);
+    tb_text(LINES - 2, 1, COLS - 2, TB_MUTED, 0, app->key_capture >= 0 || *app->status ? app->status : progress);
+    tb_text(LINES - 1, 1, COLS - 2, TB_MUTED, 0, "Personal keybinds | Only Save persists | Esc back | Ctrl+Q quit");
 }
 
 static void draw_theme_preview(App *app)
@@ -1340,8 +1477,8 @@ static void draw_workspace(App *app)
     const char *const short_names[] = {"Continue", app->live && app->session == 1 ? "Halt" : "Pause", "Over", "Into", "Out", "BP", "Reset"};
     char actions[7][64];
     for (int i = 0; i < 7; ++i) {
-        char key[24]; tb_profile_key_name(app->profile->keys[i], key, sizeof key);
-        (void)snprintf(actions[i], sizeof actions[i], app->profile->keys[i] ? " %s %s " : " %s%s ", short_names[i], app->profile->keys[i] ? key : "");
+        char key[24]; tb_keybind_name(app->preferences.keys[i], key, sizeof key);
+        (void)snprintf(actions[i], sizeof actions[i], app->preferences.keys[i] ? " %s %s " : " %s%s ", short_names[i], app->preferences.keys[i] ? key : "");
     }
     int y = COLS >= 124 ? 0 : 1, x = COLS >= 124 ? 14 : 1;
     for (int i = 0; i < 7; ++i) {
@@ -1476,11 +1613,11 @@ static void draw_workspace(App *app)
     tb_fill((TbRect){0, LINES - 2, COLS, 2}, TB_CHROME);
     tb_text(LINES - 2, 1, COLS - 2, TB_CHROME, 0, footer);
     tb_text(LINES - 1, 1, COLS - 2, TB_CHROME, 0,
-            app->content_pane >= 0 ? "CONTENT FOCUS | Ctrl+arrows/hjkl: pane | Esc: controls | arrows/hjkl: browse | Ctrl+Q quit app" :
-            fullscreen ? "Source fullscreen | Esc / q or Restore: tiled workspace | Ctrl+Q quit app" :
+            app->content_pane >= 0 ? "CONTENT FOCUS | Ctrl+arrows: pane | Esc: controls | arrows / custom keys: browse | Ctrl+Q quit app" :
+            fullscreen ? "Source fullscreen | Esc or Restore: tiled workspace | Ctrl+Q quit app" :
             app->resizing ? "Resize: Tab selects divider | arrows move | Enter / Esc finish" :
             app->live ? "Console: Command + Enter / Send | Save Log | Ctrl+Q quit app" :
-            "DEMO | ... pane actions | drag dividers | q launcher | Ctrl+Q quit app");
+            "DEMO | ... pane actions | drag dividers | Esc launcher | Ctrl+Q quit app");
 }
 
 static bool field_utf8(const wchar_t *value, char *target, size_t capacity);
@@ -1604,10 +1741,10 @@ static void draw_input(App *app)
         tb_text(7, 3, COLS - 6, TB_MUTED, 0, memory_length ? "Changes the requested range only; no target read. Use Address or Refresh afterward." : summary);
     }
     if (profile_text) {
-        static const char *const labels[] = {"Profile name", "Source directory (highest priority first)", "Build prefix to replace", "Local replacement prefix", "Ordered OpenOCD config path", "OpenOCD search directory", "Action binding: F1..F24, Shift+F1..F12, Ctrl+B, or None"};
+        static const char *const labels[] = {"Profile name", "Source directory (highest priority first)", "Build prefix to replace", "Local replacement prefix", "Ordered OpenOCD config path", "OpenOCD search directory"};
         tb_fill((TbRect){2, 5, COLS - 4, 3}, TB_WORKSPACE);
         tb_text(5, 3, COLS - 6, TB_CYAN, A_BOLD, labels[app->profile_text]);
-        tb_text(7, 3, COLS - 6, TB_MUTED, 0, "Paths and arguments are data; saving never launches tools. Reserved/conflicting bindings are rejected.");
+        tb_text(7, 3, COLS - 6, TB_MUTED, 0, "Paths and arguments are data; saving never launches tools.");
     }
     if (app->page == SCRIPT_FILTER) {
         tb_text(5, 3, COLS - 6, TB_CYAN, A_BOLD, "Match filename or exact installed path (empty shows all)");
@@ -1718,6 +1855,8 @@ static void draw_page(App *app)
         tb_text(4, 0, COLS, TB_PANEL, 0, "State retained. Ctrl+Q quits.");
     } else if (app->page == LAUNCHER) {
         draw_launcher(app);
+    } else if (app->page == KEYBINDS) {
+        draw_keybinds(app);
     } else if (app->page == CONFIG_MENU || app->page == THEMES) {
         draw_config(app);
     } else if (app->page == THEME_PREVIEW) {
@@ -1872,26 +2011,22 @@ static void spatial_content(App *app, int key)
     code_focus(app, app->content_pane);
 }
 
-static int content_direction(wint_t key, bool special)
+static int content_direction(const App *app, wint_t key, bool special)
 {
     if (special) {
         switch (key) {
-        case KEY_BACKSPACE: /* Some terminfo entries decode Ctrl+H as this key. */
         case CONTENT_LEFT: return KEY_LEFT;
         case CONTENT_DOWN: return KEY_DOWN;
         case CONTENT_UP: return KEY_UP;
         case CONTENT_RIGHT: return KEY_RIGHT;
-        default: return 0;
+        default: break;
         }
     }
-    /* Legacy terminals encode Ctrl+H/J as Backspace/LF. Only content consumes them. */
-    switch (key) {
-    case 8: return KEY_LEFT;
-    case 10: return KEY_DOWN;
-    case 11: return KEY_UP;
-    case 12: return KEY_RIGHT;
-    default: return 0;
+    const int arrows[] = {KEY_LEFT, KEY_DOWN, KEY_UP, KEY_RIGHT};
+    for (int i = 0; i < 4; ++i) {
+        if (tb_keybind_matches(app->preferences.keys[TB_BIND_CONTENT_LEFT + i], key, special)) { return arrows[i]; }
     }
+    return 0;
 }
 
 static void cycle_pane(App *app, int direction)
@@ -2065,7 +2200,7 @@ static bool profile_capture(App *app)
 static size_t profile_item_count(const App *app)
 {
     return app->profile_group == 0 ? app->profile->directory_count : app->profile_group == 1 ? app->profile->rule_count :
-           app->profile_group == 2 ? app->profile->scripts.count : app->profile_group == 3 ? app->profile->search.count : TB_PROFILE_ACTIONS;
+           app->profile_group == 2 ? app->profile->scripts.count : app->profile_group == 3 ? app->profile->search.count : 0;
 }
 static const char *profile_item_text(const App *app, size_t index)
 {
@@ -2107,9 +2242,9 @@ static void draw_profiles(App *app)
         button(app, 9, 21, 14, "[ Cancel ]", BACK, 0, 0); return;
     }
     if (app->page == PROFILE_OPTIONS) {
-        const char *const labels[] = {"Source directories", "Source mappings", "Ordered OpenOCD scripts", "OpenOCD search directories", "Action keys"};
+        const char *const labels[] = {"Source directories", "Source mappings", "Ordered OpenOCD scripts", "OpenOCD search directories"};
         int row = 5;
-        for (int i = 0; i < 5; ++i) {
+        for (int i = 0; i < 4; ++i) {
             if ((i == 2 || i == 3) && app->profile->kind != 1) { continue; }
             button(app, row++, 3, COLS - 6, labels[i], PROFILE_ACTION, 10 + i, 0);
         }
@@ -2133,9 +2268,6 @@ static void draw_profiles(App *app)
             bool recent = false;
             for (size_t j = 0; j < TB_PROFILE_RECENT; ++j) { const char *name = tb_profiles_recent(app->profiles, j); recent = recent || (name && strcmp(name, p->name) == 0); }
             (void)snprintf(label, sizeof label, "%s%s | %s%s", recent ? "Recent: " : "", p->name, session_names[p->kind], "");
-        } else if (app->profile_group == 4) {
-            char key[24]; tb_profile_key_name(app->profile->keys[item], key, sizeof key);
-            (void)snprintf(label, sizeof label, "%s: %s", tb_profile_action((size_t)item), key);
         } else { (void)snprintf(label, sizeof label, "%s%d: %.1023s", item == app->profile_selected ? "> " : "", item + 1, profile_item_text(app, (size_t)item)); }
         button(app, 5 + i, 3, COLS - 6, label, app->page == PROFILE_LIST ? PROFILE_PICK : PROFILE_ITEM, item, 0);
     }
@@ -2175,14 +2307,11 @@ static void profile_activate(App *app, Control control)
         (void)profile_load(app, p);
     } else if (control.kind == PROFILE_ITEM) {
         app->profile_selected = control.value;
-        if (app->profile_group == 4) {
-            char key[24]; tb_profile_key_name(app->profile->keys[control.value], key, sizeof key); profile_edit(app, 6, key);
-        }
     } else {
         int action = control.value;
         if (action == 0) { status(app, tb_profiles_load(app->profiles) ? "Profile file reloaded." : tb_profiles_error(app->profiles)); }
         else if (action == 1) { app->profile_offset += control.pane; }
-        else if (action >= 10 && action <= 14) { app->profile_group = action - 10; app->profile_selected = app->profile_offset = 0; page(app, PROFILE_ITEMS); }
+        else if (action >= 10 && action <= 13) { app->profile_group = action - 10; app->profile_selected = app->profile_offset = 0; page(app, PROFILE_ITEMS); }
         else if (action == 23) { (void)snprintf(app->profile->protocol, sizeof app->profile->protocol, "%s", strcmp(app->profile->protocol, "remote") == 0 ? "extended-remote" : "remote"); }
         else if (action == 30) {
             bool ok = app->profile_replacing ? tb_profiles_put(app->profiles, app->profile, true) : tb_profiles_remove(app->profiles, app->profile->name);
@@ -2210,19 +2339,12 @@ static void profile_text_submit(App *app, const char *input)
     if (app->profile_text == 0) {
         if (!*input || strlen(input) >= sizeof p->name) { status(app, "Use a nonempty profile name shorter than 64 bytes."); return; }
         (void)snprintf(p->name, sizeof p->name, "%s", input);
-        if (!tb_profile_valid(p)) { status(app, "Invalid fields, duplicate source prefixes, or conflicting/reserved keys."); return; }
+        if (!tb_profile_valid(p)) { status(app, "Invalid profile fields or duplicate source prefixes."); return; }
         if (tb_profiles_find(app->profiles, p->name)) { app->profile_replacing = true; page(app, PROFILE_CONFIRM); }
         else { profile_finish(app, tb_profiles_put(app->profiles, p, false)); }
         return;
     }
-    if (app->profile_text == 6) {
-        int key;
-        if (!tb_profile_key_parse(input, &key)) { status(app, "Unsupported/reserved binding. Use F1..F24, Shift+F1..F12, a permitted Ctrl key or None."); return; }
-        for (size_t i = 0; key && i < TB_PROFILE_ACTIONS; ++i) {
-            if (i != index && p->keys[i] == key) { status(app, "That binding already belongs to another action. Unbind it first."); return; }
-        }
-        p->keys[index] = key;
-    } else {
+    {
         size_t limit = app->profile_text >= 4 ? TB_PROFILE_WORD : TB_PROFILE_PATH;
         if (!*input || strlen(input) >= limit) { status(app, "Entry is empty or exceeds its field limit."); return; }
         if (app->profile_text == 2) {
@@ -2352,6 +2474,9 @@ static bool start_session(App *app)
 
 static void request_leave(App *app, bool quit)
 {
+    if (app->page == KEYBINDS && keybind_dirty(app)) {
+        app->key_capture = -1; app->key_confirm = quit ? 3 : 1; app->count = 0; app->focus = 0; return;
+    }
     if (app->live && tb_session_active(app->debugger)) {
         app->exit_after_close = quit; app->close_resume = false;
         page(app, CLOSE_CONFIRM);
@@ -2366,6 +2491,40 @@ static void activate(App *app, Control control)
 {
     switch (control.kind) {
     case CONFIG_OPEN: page(app, CONFIG_MENU); break;
+    case KEY_ACTION:
+        if (control.value == 0) {
+            memcpy(app->key_draft, app->preferences.keys, sizeof app->key_draft);
+            app->key_selected = app->key_scroll = app->key_confirm = app->key_history_count = 0;
+            app->key_capture = -1; status(app, ""); page(app, KEYBINDS);
+        } else if (control.value == 1) {
+            app->key_selected = app->key_capture = control.pane;
+            status(app, "Press a key. Esc cancels capture; Delete clears the binding.");
+        } else if (control.value == 2 && app->key_history_count > 0) {
+            app->key_capture = -1;
+            memcpy(app->key_draft, app->key_history[--app->key_history_count], sizeof app->key_draft);
+            status(app, "Last change undone. Only Save persists.");
+        } else if (control.value == 3 && !keybind_factory(app)) {
+            app->key_capture = -1; app->key_confirm = 2; app->count = 0; app->focus = 0;
+        } else if (control.value == 4 && keybind_dirty(app)) {
+            app->key_capture = -1;
+            if (tb_preferences_save_keys(&app->preferences, app->key_draft)) {
+                status(app, *app->preferences.error ? app->preferences.error : "Keybinds saved."); page(app, CONFIG_MENU);
+            } else { status(app, app->preferences.error); }
+        } else if (control.value == 5) {
+            app->key_confirm = 0; keybind_select(app, app->key_selected);
+        } else if (control.value == 6 && app->key_confirm) {
+            int confirm = app->key_confirm; app->key_confirm = 0;
+            if (confirm == 2) {
+                keybind_remember(app); tb_keybind_defaults(app->key_draft);
+                status(app, "Defaults restored in draft. Only Save persists."); keybind_select(app, app->key_selected);
+            } else if (confirm == 3) { app->quit = true; }
+            else { page(app, CONFIG_MENU); }
+        } else if (control.value == 7) {
+            app->key_capture = -1;
+            if (keybind_dirty(app)) { app->key_confirm = 1; app->count = 0; app->focus = 0; }
+            else { page(app, CONFIG_MENU); }
+        }
+        break;
     case THEME_ACTION:
         if (control.value == 0) { app->theme_draft = app->preferences.palette; page(app, THEMES); }
         else if (control.value == 1 || control.value == 2) { theme_cycle(app, control.value == 1, 1); }
@@ -2416,6 +2575,7 @@ static void activate(App *app, Control control)
         page(app, WORKSPACE);
         break;
     case BACK:
+        if (app->page == KEYBINDS) { activate(app, (Control){.kind = KEY_ACTION, .value = app->key_confirm ? 5 : 7}); break; }
         if (app->page == THEME_PREVIEW) { apply_theme(app, app->preferences.palette); page(app, THEMES); break; }
         if (app->page == THEMES) { apply_theme(app, app->preferences.palette); page(app, CONFIG_MENU); break; }
         if (app->page == CONFIG_MENU) { page(app, LAUNCHER); break; }
@@ -2997,6 +3157,11 @@ static void mouse_event(App *app)
     }
     if (event.bstate & (BUTTON4_PRESSED | BUTTON5_PRESSED)) {
         int direction = event.bstate & BUTTON4_PRESSED ? -1 : 1;
+        if (app->page == KEYBINDS && !app->key_confirm && app->key_capture < 0) {
+            int target = app->key_selected + direction * 3;
+            if (target < 0) { target = 0; } if (target >= TB_BIND_COUNT) { target = TB_BIND_COUNT - 1; }
+            keybind_select(app, target); return;
+        }
         if (app->page == REVIEW) {
             Field list[FORM_FIELDS];
             int count = fields(app, list);
@@ -3103,7 +3268,12 @@ static void mouse_event(App *app)
 
 static void key_event(App *app, wint_t key, bool special)
 {
+    if (app->page == KEYBINDS && app->key_capture >= 0 &&
+        !(special && (key == KEY_MOUSE || key == KEY_RESIZE))) {
+        keybind_capture(app, key, special); return;
+    }
     if (!special && key == 3) {
+        if (app->page == KEYBINDS && keybind_dirty(app)) { request_leave(app, true); return; }
         interrupted = SIGINT;
         return;
     }
@@ -3125,24 +3295,25 @@ static void key_event(App *app, wint_t key, bool special)
     }
     app->keyboard_focus = true;
     Control control = app->controls[app->focus];
-    int pane_direction = content_direction(key, special);
+    int pane_direction = content_direction(app, key, special);
     if (pane_direction && app->page == WORKSPACE && app->content_pane >= 0 &&
         app->menu < 0 && !app->resizing) {
         spatial_content(app, pane_direction);
         return;
     }
-    if (!special && (key == 'h' || key == 'j' || key == 'k' || key == 'l')) {
-        /* Text input takes precedence; elsewhere reuse the actual arrow path. */
-        if (!app->resizing && edit_field(app, control, key, false)) {
-            if (app->page == CODE_FILES) { app->file_page = 0; }
-            return;
+    bool text_entry = control.kind == MEMORY_FIELD || control.kind == COMMAND_FIELD ||
+                      (control.kind == FIELD && (editing_page(app) ||
+                       (app->page == CONFIGURE && !((app->session < 2 && control.value == 0) ||
+                        (app->session == 1 && control.value == 8)))));
+    if (!text_entry) {
+        const int arrows[] = {KEY_LEFT, KEY_DOWN, KEY_UP, KEY_RIGHT};
+        for (int i = 0; i < 4; ++i) {
+            if (tb_keybind_matches(app->preferences.keys[TB_BIND_LEFT + i], key, special)) {
+                key = (wint_t)arrows[i]; special = true; break;
+            }
         }
-        key = key == 'h' ? KEY_LEFT : key == 'j' ? KEY_DOWN : key == 'k' ? KEY_UP : KEY_RIGHT;
-        special = true;
-    }
-    if (!special && key == 'q') {
-        if (edit_field(app, control, key, false)) { return; }
-        key = 27; /* Close/back; Ctrl+Q is the application-wide quit action. */
+        if (tb_keybind_matches(app->preferences.keys[TB_BIND_BACK], key, special)) { key = 27; special = false; }
+        if (tb_keybind_matches(app->preferences.keys[TB_BIND_QUIT], key, special)) { request_leave(app, true); return; }
     }
     if (app->resizing) {
         if ((!special && (key == 27 || key == '\n' || key == '\r')) ||
@@ -3175,6 +3346,31 @@ static void key_event(App *app, wint_t key, bool special)
         if (next >= 0 && next < count) { app->form_scroll = next; }
         return;
     }
+    if (app->page == KEYBINDS && !app->key_confirm && control.kind == KEY_ACTION) {
+        bool previous = (special && key == KEY_BTAB) || tb_keybind_matches(app->preferences.keys[TB_BIND_PREVIOUS_CONTROL], key, special);
+        bool next = (!special && key == '\t') || tb_keybind_matches(app->preferences.keys[TB_BIND_NEXT_CONTROL], key, special);
+        if (control.value == 7 && previous) { keybind_select(app, TB_BIND_COUNT - 1); return; }
+        if (control.value == 1) {
+            int action = control.pane, target = action;
+            app->key_selected = action;
+            if (next && action + 1 < TB_BIND_COUNT) { target = action + 1; }
+            else if (previous && action > 0) { target = action - 1; }
+            else if (special) {
+                int local = COLS >= 112 ? action % 15 : action, total = COLS >= 112 ? 15 : TB_BIND_COUNT;
+                if (key == KEY_UP && local > 0) { target = action - 1; }
+                else if (key == KEY_DOWN && local + 1 < total) { target = action + 1; }
+                else if (key == KEY_LEFT && COLS >= 112 && action >= 15) { target = action - 15; }
+                else if (key == KEY_RIGHT && COLS >= 112 && action < 15) { target = action + 15; }
+                else if (key == KEY_HOME) { target = 0; }
+                else if (key == KEY_END) { target = TB_BIND_COUNT - 1; }
+                else if (key == KEY_PPAGE || key == KEY_NPAGE) {
+                    target = action + (key == KEY_PPAGE ? -keybind_rows() : keybind_rows());
+                    if (target < 0) { target = 0; } if (target >= TB_BIND_COUNT) { target = TB_BIND_COUNT - 1; }
+                }
+            }
+            if (target != action) { keybind_select(app, target); return; }
+        }
+    }
     if (special && app->page == THEMES && control.kind == THEME_ACTION &&
         (control.value == 1 || control.value == 2) && (key == KEY_LEFT || key == KEY_RIGHT)) {
         theme_cycle(app, control.value == 1, key == KEY_LEFT ? -1 : 1); return;
@@ -3188,7 +3384,7 @@ static void key_event(App *app, wint_t key, bool special)
         if (app->page == WORKSPACE && app->fullscreen_source >= 0) {
             toggle_source_fullscreen(app, app->fullscreen_source); return;
         }
-        if (app->page == CONFIG_MENU || app->page == THEMES || app->page == THEME_PREVIEW) {
+        if (app->page == CONFIG_MENU || app->page == THEMES || app->page == THEME_PREVIEW || app->page == KEYBINDS) {
             activate(app, (Control){.kind = BACK}); return;
         }
         if (app->page == PROFILE_LIST || app->page == PROFILE_OPTIONS || app->page == PROFILE_ITEMS || app->page == PROFILE_TEXT || app->page == PROFILE_CONFIRM) {
@@ -3212,9 +3408,11 @@ static void key_event(App *app, wint_t key, bool special)
         }
         return;
     }
-    if ((!special && key == '\t') || (special && key == KEY_BTAB)) {
+    if ((!special && key == '\t') || (special && key == KEY_BTAB) ||
+        (!text_entry && (tb_keybind_matches(app->preferences.keys[TB_BIND_NEXT_CONTROL], key, special) ||
+                        tb_keybind_matches(app->preferences.keys[TB_BIND_PREVIOUS_CONTROL], key, special)))) {
         if (app->content_pane >= 0) { leave_content(app); return; }
-        int direction = special && key == KEY_BTAB ? -1 : 1;
+        int direction = (special && key == KEY_BTAB) || tb_keybind_matches(app->preferences.keys[TB_BIND_PREVIOUS_CONTROL], key, special) ? -1 : 1;
         for (int step = 1; step <= app->count; ++step) {
             int next = (app->focus + direction * step + app->count) % app->count;
             if (navigable(app->controls[next]) ||
@@ -3239,18 +3437,18 @@ static void key_event(App *app, wint_t key, bool special)
     if (control.kind == COMMAND_FIELD && ((!special && (key == '\n' || key == '\r')) || (special && key == KEY_ENTER))) {
         activate(app, (Control){.kind = COMMAND_SEND, .pane = control.pane}); return;
     }
-    if (!special && app->page == WORKSPACE && app->fullscreen_source < 0 && key >= '1' && key <= '9') {
-        if (app->content_pane >= 0) { leave_content(app); }
-        int pane = (int)(key - '1');
-        if (tb_layout_has_pane(&app->layout, pane)) { app->demo.pane = pane; }
-        code_focus(app, app->demo.pane);
-        app->menu = -1;
-        return;
-    }
-    if (!special && app->page == WORKSPACE && (key == '[' || key == ']')) {
-        if (app->content_pane >= 0) { leave_content(app); }
-        cycle_pane(app, key == ']' ? 1 : -1);
-        return;
+    if (!text_entry && app->page == WORKSPACE && app->fullscreen_source < 0) {
+        for (int i = 0; i < 9; ++i) {
+            if (!tb_keybind_matches(app->preferences.keys[TB_BIND_PANE_1 + i], key, special)) { continue; }
+            if (app->content_pane >= 0) { leave_content(app); }
+            if (tb_layout_has_pane(&app->layout, i)) { app->demo.pane = i; }
+            code_focus(app, app->demo.pane); app->menu = -1; return;
+        }
+        if (tb_keybind_matches(app->preferences.keys[TB_BIND_PREVIOUS_PANE], key, special) ||
+            tb_keybind_matches(app->preferences.keys[TB_BIND_NEXT_PANE], key, special)) {
+            if (app->content_pane >= 0) { leave_content(app); }
+            cycle_pane(app, tb_keybind_matches(app->preferences.keys[TB_BIND_PREVIOUS_PANE], key, special) ? -1 : 1); return;
+        }
     }
     if ((!special && (key == '\n' || key == '\r' || key == ' ')) ||
         (special && key == KEY_ENTER)) {
@@ -3263,11 +3461,10 @@ static void key_event(App *app, wint_t key, bool special)
         activate(app, control);
         return;
     }
-    if (app->page == WORKSPACE && app->menu < 0 && control.kind != MEMORY_FIELD && control.kind != COMMAND_FIELD) {
-        for (int i = 0; i < TB_PROFILE_ACTIONS; ++i) {
-            int binding = app->profile->keys[i];
-            if (binding && ((special && binding > 0 && (int)key == KEY_F(binding)) ||
-                            (!special && binding < 0 && (int)key == -binding))) {
+    if (app->page == WORKSPACE && app->menu < 0 && !text_entry) {
+        for (int i = 0; i < TB_BIND_LEFT; ++i) {
+            int binding = app->preferences.keys[i];
+            if (tb_keybind_matches(binding, key, special)) {
                 activate(app, (Control){.kind = TOOL, .value = i});
                 return;
             }
@@ -3345,7 +3542,7 @@ static void initialize(App *app, bool demo)
         }
         app->forms[form].start_server = true;
     }
-    status(app, demo ? "DEMO only. No debugger connected; Config saves appearance preferences." :
+    status(app, demo ? "DEMO only. No debugger connected; Config saves personal preferences." :
                       "Choose native launch/attach, an OpenOCD setup or an existing GDB server.");
     if (!demo && app->profiles && !tb_profiles_load(app->profiles)) { status(app, tb_profiles_error(app->profiles)); }
 }

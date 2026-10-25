@@ -18,7 +18,7 @@ JSON_CFLAGS := $(shell $(PKG_CONFIG) --cflags json-c 2>/dev/null)
 PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session -Isrc/model $(NCURSES_CFLAGS) $(ELF_CFLAGS) $(JSON_CFLAGS)
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/session.c src/session/openocd.c src/session/profiles.c src/model/context.c src/model/code.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
+SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/session.c src/session/openocd.c src/session/profiles.c src/model/context.c src/model/code.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -165,6 +165,8 @@ test-native: all $(BUILD_DIR)/test-acceptance-native $(BUILD_DIR)/test-native $(
 	$(BUILD_DIR)/test-native $(abspath $(BUILD_DIR)/debug-fixture) $(abspath $(BUILD_DIR)/debug-fixture-cpp)
 	$(BUILD_DIR)/test-native-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/debug-fixture)
 	TB_CONSOLE_TEST_TMUX=1 $(BUILD_DIR)/test-native-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/debug-fixture)
+	$(BUILD_DIR)/test-keybinds-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/debug-fixture)
+	TB_KEYBINDS_TEST_TMUX=1 $(BUILD_DIR)/test-keybinds-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/debug-fixture)
 	$(BUILD_DIR)/test-context-native $(abspath $(BUILD_DIR)/context-fixture) $(abspath $(BUILD_DIR)/context-fixture-optimized) $(abspath $(BUILD_DIR)/context-fixture-stripped)
 	$(BUILD_DIR)/test-context-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/context-fixture)
 	$(BUILD_DIR)/test-code-native $(abspath $(BUILD_DIR)/code-fixture) $(abspath $(BUILD_DIR)/code-fixture-optimized) $(abspath $(BUILD_DIR)/code-fixture-stripped) $(abspath $(BUILD_DIR)/code-fixture-cpp) $(abspath $(BUILD_DIR)/code-fixture-relocated) $(abspath tests/fixtures/native/relocated)
@@ -587,7 +589,7 @@ release:
 	$(MAKE) BUILD_DIR=$(BUILD_DIR)/release-build CPPFLAGS='$(CPPFLAGS) -D_FORTIFY_SOURCE=3' CFLAGS='$(RELEASE_CFLAGS)' LDFLAGS='$(RELEASE_LDFLAGS)' all
 	bash tools/package-release.sh $(BUILD_DIR)/release-build/the-bugger $(BUILD_DIR)/dist
 
-$(BUILD_DIR)/test-preferences: $(BUILD_DIR)/tests/unit/test_preferences.o $(BUILD_DIR)/src/tui/preferences.o $(BUILD_DIR)/src/tui/theme.o
+$(BUILD_DIR)/test-preferences: $(BUILD_DIR)/tests/unit/test_preferences.o $(BUILD_DIR)/src/tui/preferences.o $(BUILD_DIR)/src/tui/theme.o $(BUILD_DIR)/src/tui/keybinds.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(NCURSES_LIBS) $(JSON_LIBS) $(LDLIBS)
 
 $(BUILD_DIR)/test-themes-tui: $(BUILD_DIR)/tests/integration/test_themes_tui.o $(BUILD_DIR)/tests/support/terminal.o
@@ -600,6 +602,22 @@ test-themes: all $(BUILD_DIR)/test-preferences $(BUILD_DIR)/test-render $(BUILD_
 	$(BUILD_DIR)/test-themes-tui $(abspath $(BINARY))
 
 test: test-themes
+
+$(BUILD_DIR)/test-keybinds: $(BUILD_DIR)/tests/unit/test_keybinds.o $(BUILD_DIR)/src/tui/keybinds.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-keybinds
+$(BUILD_DIR)/test-keybinds-tui: $(BUILD_DIR)/tests/integration/test_keybinds_tui.o $(BUILD_DIR)/tests/support/terminal.o $(BUILD_DIR)/src/tui/preferences.o $(BUILD_DIR)/src/tui/keybinds.o $(BUILD_DIR)/src/tui/theme.o $(BUILD_DIR)/src/session/profiles.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(NCURSES_LIBS) $(JSON_LIBS) $(LDLIBS)
+
+test-keybinds: all $(BUILD_DIR)/test-keybinds $(BUILD_DIR)/test-keybinds-tui
+	$(BUILD_DIR)/test-keybinds
+	$(BUILD_DIR)/test-keybinds-tui $(abspath $(BINARY))
+
+test: test-keybinds
+test-native: $(BUILD_DIR)/test-keybinds-tui
+
+-include $(BUILD_DIR)/tests/unit/test_keybinds.d $(BUILD_DIR)/tests/integration/test_keybinds_tui.d $(BUILD_DIR)/src/tui/keybinds.d
 
 -include $(BUILD_DIR)/tests/unit/test_preferences.d $(BUILD_DIR)/tests/integration/test_themes_tui.d
 

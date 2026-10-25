@@ -4,6 +4,12 @@
 
 ### Added
 
+- Config → Keybinds for personal debugger and workspace/navigation shortcuts,
+  compact responsive Action/Key tables and direct keypress capture. Capture and edited
+  cells have distinct border emphasis. Undo, confirmed Restore Defaults/discard,
+  inert dimmed buttons and explicit Save keep changes under user control.
+  Fixed navigation/exit fallbacks and literal text-field editing remain available.
+
 - Console now has an inline GDB Command field below its output with Enter/Send,
   pane-local retained drafts and direct keyboard editing, keeping the workspace
   visible while entering commands. Save Log remains available separately.
@@ -12,6 +18,12 @@
 - Source panes can keep several GDB-known files open as session-local tabs.
   Current follows the selected frame; file tabs retain their source across
   stops. Each tab keeps its viewport, and narrow panes can cycle through tabs.
+
+### Changed
+
+- Connection profiles exclude personal keybinds. Version-1 stores remain readable;
+  legacy keys are ignored and omitted when writing the key-free version-2 format.
+  Newly written stores require an updated app.
 
 ### Fixed
 

@@ -19,12 +19,13 @@ bool tb_preferences_load(TbPreferences *p)
 {
     memset(p, 0, sizeof *p);
     p->palette = tb_theme_find("catppuccin", "macchiato");
+    tb_keybind_defaults(p->keys);
     const char *base = getenv("XDG_CONFIG_HOME"), *home = getenv("HOME");
     int length = -1;
     if (base && *base == '/') { length = snprintf(p->directory, sizeof p->directory, "%s/the-bugger", base); }
     else if (home && *home == '/') { length = snprintf(p->directory, sizeof p->directory, "%s/.config/the-bugger", home); }
     if (length < 0 || (size_t)length >= sizeof p->directory) {
-        p->blocked = true; return fail(p, "An absolute XDG_CONFIG_HOME or HOME is required to save themes.");
+        p->blocked = true; return fail(p, "An absolute XDG_CONFIG_HOME or HOME is required to save preferences.");
     }
     (void)snprintf(p->path, sizeof p->path, "%s/preferences.json", p->directory);
     int fd = open(p->path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
@@ -46,8 +47,10 @@ bool tb_preferences_load(TbPreferences *p)
     json_tokener *parser = json_tokener_new();
     if (parser) { json_tokener_set_flags(parser, JSON_TOKENER_STRICT | JSON_TOKENER_VALIDATE_UTF8); }
     json_object *root = ok && parser ? json_tokener_parse_ex(parser, text, (int)used + 1) : NULL;
-    json_object *version = NULL, *theme = NULL, *variant = NULL;
-    ok = root && json_object_is_type(root, json_type_object) && json_object_object_length(root) == 3 &&
+    json_object *version = NULL, *theme = NULL, *variant = NULL, *bindings = NULL;
+    int keys[TB_BIND_COUNT]; tb_keybind_defaults(keys);
+    ok = root && json_object_is_type(root, json_type_object) &&
+         (json_object_object_length(root) == 3 || (json_object_object_length(root) == 4 && json_object_object_get_ex(root, "keys", &bindings) && bindings)) &&
          json_object_object_get_ex(root, "version", &version) && json_object_is_type(version, json_type_int) && json_object_get_int(version) == 1 &&
          json_object_object_get_ex(root, "theme", &theme) && json_object_is_type(theme, json_type_string) &&
          json_object_object_get_ex(root, "variant", &variant) && json_object_is_type(variant, json_type_string);
@@ -58,9 +61,19 @@ bool tb_preferences_load(TbPreferences *p)
         if (ok) { palette = tb_theme_find(family, name); }
         ok = palette < tb_theme_count();
     }
+    if (ok && bindings) {
+        ok = json_object_is_type(bindings, json_type_array) && json_object_array_length(bindings) == TB_BIND_COUNT;
+        for (size_t i = 0; ok && i < TB_BIND_COUNT; ++i) {
+            json_object *entry = json_object_array_get_idx(bindings, i);
+            int64_t key = json_object_get_int64(entry);
+            ok = json_object_is_type(entry, json_type_int) && key >= -26 && key <= 382;
+            if (ok) { keys[i] = (int)key; }
+        }
+        ok = ok && tb_keybinds_valid(keys);
+    }
     json_object_put(root); if (parser) { json_tokener_free(parser); }
-    if (!ok) { p->blocked = true; return fail(p, "Invalid/unsupported theme preferences; using Catppuccin Macchiato. File preserved."); }
-    p->palette = palette; p->stamp = info; p->existed = true; return true;
+    if (!ok) { p->blocked = true; return fail(p, "Invalid/unsupported preferences; using defaults. File preserved."); }
+    p->palette = palette; memcpy(p->keys, keys, sizeof keys); p->stamp = info; p->existed = true; return true;
 }
 
 static bool mkdirs(const char *path)
@@ -86,23 +99,30 @@ static bool unchanged(const TbPreferences *p)
            info.st_mtim.tv_sec == p->stamp.st_mtim.tv_sec && info.st_mtim.tv_nsec == p->stamp.st_mtim.tv_nsec;
 }
 
-bool tb_preferences_save(TbPreferences *p, size_t palette)
+static bool save(TbPreferences *p, size_t palette, const int keys[TB_BIND_COUNT])
 {
     const TbPalette *selected = tb_theme_palette(palette);
-    if (!selected || p->blocked || !*p->path) { return fail(p, "Theme saving blocked; correct preferences.json and restart first."); }
+    if (!tb_keybinds_valid(keys)) { return fail(p, "Reserved or conflicting keybinds; preferences unchanged."); }
+    if (!selected || p->blocked || !*p->path) { return fail(p, "Saving blocked; correct preferences.json and restart first."); }
     p->error[0] = 0;
-    if (!mkdirs(p->directory)) { return fail(p, "Cannot create theme preference directory."); }
+    if (!mkdirs(p->directory)) { return fail(p, "Cannot create preference directory."); }
     int dir = open(p->directory, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
-    if (dir < 0) { return fail(p, "Cannot open theme preference directory."); }
+    if (dir < 0) { return fail(p, "Cannot open preference directory."); }
     int lock = openat(dir, ".preferences.lock", O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK, 0600);
     struct stat info;
     if (lock < 0 || fstat(lock, &info) != 0 || !S_ISREG(info.st_mode) || info.st_uid != getuid() || flock(lock, LOCK_EX | LOCK_NB) != 0) {
-        if (lock >= 0) { (void)close(lock); } (void)close(dir); return fail(p, "Theme preferences are locked or inaccessible.");
+        if (lock >= 0) { (void)close(lock); } (void)close(dir); return fail(p, "Preferences are locked or inaccessible.");
     }
     bool ok = unchanged(p);
-    if (!ok) { (void)fail(p, "Theme preferences changed in another instance; restart before saving."); }
-    char text[160], temporary[4096];
-    int length = snprintf(text, sizeof text, "{\"version\":1,\"theme\":\"%s\",\"variant\":\"%s\"}\n", selected->family, selected->variant);
+    if (!ok) { (void)fail(p, "Preferences changed in another instance; restart before saving."); }
+    char text[512], temporary[4096], bindings[256] = {0}; size_t at = 0;
+    for (size_t i = 0; i < TB_BIND_COUNT; ++i) {
+        int n = snprintf(bindings + at, sizeof bindings - at, "%s%d", i ? "," : "", keys[i]);
+        if (n < 0 || (size_t)n >= sizeof bindings - at) { ok = false; break; }
+        at += (size_t)n;
+    }
+    int length = snprintf(text, sizeof text, "{\"version\":1,\"theme\":\"%s\",\"variant\":\"%s\",\"keys\":[%s]}\n", selected->family, selected->variant, bindings);
+    if (length < 0 || (size_t)length >= sizeof text) { ok = false; }
     (void)snprintf(temporary, sizeof temporary, "%s/.preferences-XXXXXX", p->directory);
     int fd = -1; bool created = false;
     if (ok) { fd = mkstemp(temporary); created = fd >= 0; ok = created && fcntl(fd, F_SETFD, FD_CLOEXEC) == 0 && fchmod(fd, 0600) == 0; }
@@ -118,10 +138,19 @@ bool tb_preferences_save(TbPreferences *p, size_t palette)
     if (ok) { ok = rename(temporary, p->path) == 0; }
     if (!ok) {
         if (created) { (void)unlink(temporary); }
-        if (!*p->error) { (void)fail(p, "Could not save theme preferences; previous file preserved."); }
+        if (!*p->error) { (void)fail(p, "Could not save preferences; previous file preserved."); }
     } else {
-        p->palette = palette; p->stamp = info; p->existed = true; p->error[0] = 0;
-        if (fsync(dir) != 0) { (void)fail(p, "Theme saved; directory sync failed, crash durability uncertain."); }
+        p->palette = palette; memmove(p->keys, keys, sizeof p->keys); p->stamp = info; p->existed = true; p->error[0] = 0;
+        if (fsync(dir) != 0) { (void)fail(p, "Preferences saved; directory sync failed, crash durability uncertain."); }
     }
     (void)close(lock); (void)close(dir); return ok;
+}
+
+bool tb_preferences_save(TbPreferences *p, size_t palette)
+{
+    return save(p, palette, p->keys);
+}
+bool tb_preferences_save_keys(TbPreferences *p, const int keys[TB_BIND_COUNT])
+{
+    return save(p, p->palette, keys);
 }

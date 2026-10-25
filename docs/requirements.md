@@ -165,6 +165,15 @@ Do **not** allow these features to delay the release:
   Preview and Save. Preview uses simulated data and never saves or reads a
   target; Back cancels and restores the saved palette. Save persists the choice
   and returns to Config. Profiles remains available through Config.
+- **Config → Keybinds** edits personal debugger and workspace/navigation bindings,
+  independent of connection profiles, alongside themes. Use centered Action/Key
+  tables, side by side at ≥112 columns and a scrollable single table below that.
+  Cells capture actual keypresses with blank values and border-only emphasis;
+  draft edits retain a distinct border. Undo reverses changes; Back/quit with
+  unsaved changes and Restore Defaults require confirmation. Only Save persists.
+  Inactive Undo/Save/Restore Defaults buttons are dimmed and inert. Reject conflicts
+  and reserved keys, preserve fixed navigation/quit fallbacks and literal field
+  editing. Legacy profile keys must never override personal preferences.
 - Appearance preferences are global, separate from connection profiles. Preserve
   corrupt/unsupported files and detect stale writers. Colors must retain legible
   fallback and non-color indicators. User-defined themes remain F44; this does
@@ -315,6 +324,6 @@ Inputs: host, port, GDB executable, optional symbol-bearing ELF and remote proto
 
 - Profiles are explicit named data (Linux native / OpenOCD / existing server); support create, edit, select, delete with confirmation, and **recent sessions**.
 - Persist user files according to XDG (`$XDG_CONFIG_HOME/the-bugger`, falling back to `~/.config/the-bugger`) and document the format. Use a format and parser appropriate for C with limited dependencies.
-- v0.1.0 stores tool names/paths, structured argument arrays, ordered scripts, endpoint, source lookup/mapping settings and remapped actions, with paths including spaces. Use json-c, a versioned JSON format and atomic writes.
+- Connection profiles store tool names/paths, structured argument arrays, ordered scripts, endpoint and source lookup/mapping settings, with paths including spaces. The original v0.1.0 format also stored action keys; current personal keybinds live independently with themes, and legacy profile keys are ignored. Use json-c, a versioned JSON format and atomic writes.
 - Rich workspace/tab/Memory/watch/code-breakpoint restoration is **F01, v0.1.4**, ahead of Stack/editing. Do not persist runtime values, hit counts, temporary run-to breakpoints or old hardware allocations as live state. Shareable-profile import/export is **v0.3.x**, separating shared connection definitions and personal workspace/history, with relative paths and prelaunch review; no mandatory project format.
 - Never save passwords/tokens or guess hidden credentials. Avoid executing untrusted session fields as shell snippets. CLI overrides can come later; usability from bare `the-bugger` is the priority.

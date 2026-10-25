@@ -26,6 +26,11 @@ Ctrl+direction transfer of content focus is another shared UI enhancement
 implemented for review, using the existing pane geometry and navigation rules.
 Inline GDB command entry below Console output is implemented for review as a
 shared UI refinement; serial acquisition remains the separate planned F13 gate.
+Config → Keybinds is implemented for review as a shared UI enhancement, with
+responsive direct-capture tables, undo/confirmation and personal bindings stored
+with themes and excluded from
+connection profiles. Legacy profile bindings are ignored; subsequent writes use
+the key-free version-2 format. This does not implement F01/F12 profile sharing.
 The integrated v0.1.0 release-preparation revision is
 `ad606dc6d7af7a3384401fb97e7c328ea1d8b62b`. Acceptance records, observed hashes,
 failures and test evidence are in [validation records](validation.md).
@@ -123,6 +128,9 @@ summarized above and in the [usage guide](usage.md).
 | M17 / M14–M16 | Real NUCLEO-F446RE/ARM and ESP32-S3/Xtensa acceptance with reproducible fixtures; no automatic programming or unspecified-board claim. The every-release matrix below remains separate. | Firmware fixture builds, architecture MI regressions and applicable native suites; QEMU ARM/RISC-V runs as supplementary coverage when available. | Program fixtures externally; validate halt/step/break/watch, source/assembly/registers/RAM/locals, cleanup and disconnect on real boards. FR-15/31. |
 | M18 / M14 and physically validated M17 | Release evidence, compatibility, docs and remaining defects; no deferred features. | Clean GCC/Clang, suites/sanitizers/analysis/tmux, stress and FR/NFR evidence audit. | README clean-checkout workflow, per-release matrix below, final release acceptance and license/provenance finalization under the [release procedure](maintaining.md#release-procedure). |
 
+M13’s row records its original accepted scope. Current personal keybinds have
+moved to Config → Keybinds and are excluded from connection profiles; historical
+M13 validation remains evidence for that earlier implementation.
 
 ## Integration prerequisites and known gaps
 

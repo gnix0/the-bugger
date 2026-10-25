@@ -408,10 +408,11 @@ move within a visual row, and Up/Down prefer aligned controls above/below.
 Directional movement stops at an edge; it does not wrap. Continue → Pause uses
 Right, not Down. Tab/Shift+Tab cycle controls in a stable sequence, excluding
 content bodies, scrollbars, dividers and hidden panes.
-Lowercase `h`/`j`/`k`/`l` are always-on aliases for
+Lowercase `h`/`j`/`k`/`l` are the default aliases for
 Left/Down/Up/Right outside text fields. They follow the focused control: menu
 selection, tab focus, body scrolling, theme/variant cycling and divider
-resizing behave just like arrows. No setting or editing mode is required.
+resizing behave just like arrows. No editing mode is required. Personal aliases
+can be changed in [Config → Keybinds](#personal-keybinds).
 In fields, these letters type normally; use actual Left/Right, Home/End,
 Backspace/Delete and Ctrl+U for text editing.
 Click a pane's content or scrollbar to give it arrow/hjkl scrolling or row
@@ -422,7 +423,7 @@ outside the pane also leaves content focus. Wheel scrolling does not acquire
 keyboard focus. In fullscreen, the first Escape leaves content; the next restores
 the tiles. Field editing and divider resizing retain their own key behavior.
 
-During **CONTENT FOCUS**, **Ctrl+h/j/k/l** and **Ctrl+Left/Down/Up/Right**
+During **CONTENT FOCUS**, the default **Ctrl+h/j/k/l** aliases and fixed **Ctrl+Left/Down/Up/Right**
 move content focus to the neighboring pane in that direction. Movement uses the
 visible pane geometry, including nested splits, preserves viewports and stops
 at layout edges. The destination keeps its active view tab; Source/Disassembly
@@ -433,10 +434,10 @@ Ctrl+H as Backspace and Ctrl+J as line feed, so those bytes move between panes
 only during content focus; text fields keep their existing editing behavior.
 Enter's carriage return remains a separate activation key.
 
-Escape goes back; `q` closes/backs out outside text fields and keeps the launcher
+Escape goes back; the default `q` alias closes/backs out outside text fields and keeps the launcher
 open. **Quit** or `Ctrl+Q` exits the application, confirming active-session closure.
-Function keys have visible alternatives. Reset remains unavailable in live
-sessions; demo actions are explicitly simulated.
+Function keys have visible alternatives. Reset requires reviewed OpenOCD support
+and confirmation; demo actions are explicitly simulated.
 
 Click `...` to customize that pane's tabs or open pane actions. A filled circle
 at the right marks each included view; unselected options have no marker.
@@ -539,15 +540,68 @@ No Neovim or Lua installation is needed. Upstream revisions and licenses are in
 [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES). Custom palette files remain planned
 under F44.
 
-## Profiles and action keys
+## Personal keybinds
+
+Open **Config → Keybinds**. Centered **Action / Key** tables show all 30
+bindings. A blank line separates the instructions from the table headings.
+Compact action columns keep the key cells close to their labels;
+additional Quit/control-traversal keys have concise row labels.
+At 112 columns and wider, two tables sit side by side; narrower
+terminals use a single longer table. Short terminals scroll the rows. Use
+arrows/default movement aliases, Tab/Shift+Tab, Home/End, Page Up/Down or the
+mouse wheel to reach bindings. The minimum remains 48×18.
+
+Click a Key cell, or focus it and press Enter, then **press the actual key**.
+The cell value disappears and only its border is highlighted in orange while
+capturing. Escape cancels capture; Delete clears the binding to `None`.
+Supported bindings are printable ASCII (case-sensitive), function keys F1–F24
+(including terminal-reported Shift+F1–F12) and permitted Ctrl letters. Unsupported,
+reserved or conflicting keys show an error and keep capture active. Key capture
+takes precedence over navigation and quit bindings. Resize retains capture.
+
+Edited cells retain cyan borders, distinct from capture; emphasis also works
+without color. **Undo** reverses the last draft change, including a confirmed
+restore of defaults (up to 128 changes). **Restore Defaults** asks for confirmation
+before replacing the draft. **Back**, Escape or the configured Back binding asks
+before discarding unsaved changes; quitting also asks when capture is inactive.
+Cancel preserves the draft. **Save** alone persists all bindings and returns to
+Config. Undo without history, Save without differences from saved bindings, and
+Restore Defaults when already at factory bindings are dimmed, skipped by keyboard
+navigation and inert on click. No file is written by capture, Undo, cancellation,
+discard or Restore Defaults.
+
+The actions include Continue, Pause/Halt, stepping, breakpoint and Reset;
+left/down/up/right movement; spatial content-pane transfers; previous/next pane;
+pane selection 1–9; Back/close session; and additional Quit and control-traversal
+keys. The factory bindings retain F5/F9/F10/F11/Shift+F11, h/j/k/l,
+Ctrl+H/J/K/L, brackets, digits and q. Pause/Halt, Reset and additional shortcuts
+start unbound. Toolbar hints follow the saved debugger bindings. Binding Reset
+does not bypass confirmation or make it available on unsupported targets.
+
+Physical arrows, Ctrl+arrows, Tab/Shift+Tab, Escape and Ctrl+Q remain available.
+Duplicate bindings are rejected; unbind an existing action before reusing its
+key. Ctrl+C/I/M/Q/S/Z and Space cannot be assigned. Ctrl+H/J/K/L are assignable
+only to spatial content-pane transfers because terminals can encode them as
+editing characters. Spatial transfer applies only in CONTENT FOCUS. Navigation
+and debugger aliases do not intercept literal typing or editing in fields,
+including Memory addresses and Console commands. Terminal/tmux interception can
+still prevent delivery; fixed keys and mouse controls provide alternatives.
+
+Bindings are personal application preferences in the same `preferences.json`
+as themes. Saving either preserves the other. They apply across sessions and
+are never loaded from, exported with or overridden by connection profiles.
+Old theme-only preferences load factory bindings. Invalid preferences preserve
+the file, use defaults and block saving until corrected and restarted.
+
+## Profiles
 
 Use **Save profile** in configuration and **Profile...** for source directories,
-ordered path mappings and action keys. Replacing an existing name and deleting
+ordered path mappings. Replacing an existing name and deleting
 a profile require confirmation. Launcher **Config → Profiles** loads a configuration for
 review; selection alone does not launch tools. Successful saved native sessions
 appear in recents. Source settings restore before execution; errors remain visible.
 
-Profiles use version-1 JSON at `$XDG_CONFIG_HOME/the-bugger/profiles.json`, or
+Profiles write version-2 JSON at `$XDG_CONFIG_HOME/the-bugger/profiles.json`, or
 `$HOME/.config/the-bugger/profiles.json` when XDG configuration is absent/relative.
 Storage is bounded to 16 named profiles and 8 recent entries with private atomic
 writes. Corrupt files are preserved; repair/reload instead of silently overwriting
@@ -557,11 +611,13 @@ arrays are literal, with no shell evaluation.
 Profiles exclude PID, environment overrides and runtime values; Attach requires
 a current PID. Workspace/tabs, Memory locations, watches and breakpoints are not
 restored yet (F01). Remote definitions retain endpoint/tool/protocol choices for reviewed connection.
-OpenOCD profiles retain script choices and require explicit startup review. Key fields accept function keys, Ctrl letters or `None`;
-reserved/conflicting bindings are rejected and toolbar hints follow the profile.
-Terminal/tmux delivery still varies; mouse alternatives remain available.
+OpenOCD profiles retain script choices and require explicit startup review.
+Profiles exclude keybinds and themes. Version-1 profiles remain readable; obsolete
+`keys` fields are ignored and omitted on the next profile-store write, including
+recent-session updates. Newly written version-2 stores require an updated app;
+older versions that require version 1 cannot read them.
 See the [format](architecture.md#profiles-and-source-restoration) and
-[walkthrough](testing.md#profiles-and-action-keys).
+[walkthrough](testing.md#profiles-and-source-settings).
 
 ## Troubleshooting and known limits
 
@@ -573,7 +629,7 @@ See the [format](architecture.md#profiles-and-source-restoration) and
 | STALE memory or Read required variables | Execution/context changed or safety could not be established for automatic reads. Use deliberate Refresh/Read at a fresh stop. |
 | Missing tool, bad ELF or profile write error | Correct the retained configuration/input. Profile corruption is preserved rather than silently overwritten. |
 | Step Out keeps running | Step Out returns from a function, not a loop. An infinite-looping function needs Pause. |
-| Function key is intercepted | Use the visible action or a profile remapping; terminal/tmux key delivery varies. |
+| Function key is intercepted | Use the visible action or Config → Keybinds; terminal/tmux key delivery varies. |
 
 Flash programming, value editing, specialized peripheral/
 RTOS inspectors, trace and runtime analysis remain planned. Profile definitions

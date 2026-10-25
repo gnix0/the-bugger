@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <json-c/json.h>
 
 static void write_file(const char *path, const char *text)
 {
@@ -28,12 +29,47 @@ int main(void)
     CHECK(tb_preferences_load(&second) && second.palette == tb_theme_find("rose-pine", "dawn"));
     CHECK(tb_preferences_save(&second, tb_theme_find("monokai-pro", "classic")));
     CHECK(tb_preferences_load(&first) && first.palette == tb_theme_find("monokai-pro", "classic"));
+    int keys[TB_BIND_COUNT]; tb_keybind_defaults(keys); keys[TB_BIND_CONTINUE] = 6;
+    CHECK(tb_preferences_save_keys(&first, keys));
+    CHECK(tb_preferences_load(&second) && second.keys[TB_BIND_CONTINUE] == 6);
+    CHECK(second.palette == tb_theme_find("monokai-pro", "classic"));
+    CHECK(tb_preferences_save(&second, tb_theme_find("everforest", "dark-medium")));
+    CHECK(tb_preferences_load(&first) && first.keys[TB_BIND_CONTINUE] == 6);
+    keys[TB_BIND_INTO] = 6; CHECK(!tb_preferences_save_keys(&first, keys));
+    keys[TB_BIND_INTO] = -17; CHECK(!tb_preferences_save_keys(&first, keys));
+    CHECK(tb_preferences_load(&second) && second.keys[TB_BIND_INTO] == 11);
+    /* Legacy theme-only settings acquire defaults without changing on disk. */
+    write_file(first.path, "{\"version\":1,\"theme\":\"rose-pine\",\"variant\":\"dawn\"}");
+    CHECK(tb_preferences_load(&first) && first.keys[TB_BIND_CONTINUE] == 5);
+    for (int fault = 0; fault < 5; ++fault) {
+        json_object *bad = json_tokener_parse("{\"version\":1,\"theme\":\"rose-pine\",\"variant\":\"dawn\"}");
+        json_object *array = json_object_new_array(); CHECK(bad && array);
+        int defaults[TB_BIND_COUNT]; tb_keybind_defaults(defaults);
+        for (int i = 0; i < TB_BIND_COUNT; ++i) {
+            json_object *entry = json_object_new_int(defaults[i]);
+            if (i == 0) {
+                json_object_put(entry);
+                entry = fault == 0 ? json_object_new_int(11) : fault == 1 ? json_object_new_int(-17) :
+                        fault == 2 ? json_object_new_int64(INT64_C(2147483648)) : fault == 3 ? json_object_new_boolean(1) : json_object_new_string("F6");
+            }
+            CHECK(entry && json_object_array_add(array, entry) == 0);
+        }
+        CHECK(json_object_object_add(bad, "keys", array) == 0);
+        const char *text = json_object_to_json_string(bad); write_file(first.path, text);
+        CHECK(!tb_preferences_load(&first) && first.blocked);
+        CHECK(first.keys[TB_BIND_CONTINUE] == 5 && !tb_preferences_save_keys(&first, defaults));
+        char preserved[1025] = {0}; FILE *file = fopen(first.path, "r"); CHECK(file);
+        CHECK(fread(preserved, 1, sizeof preserved - 1, file) == strlen(text) && fclose(file) == 0);
+        CHECK(strcmp(preserved, text) == 0); json_object_put(bad);
+    }
     const char *invalid[] = {
         "{", "{}", "{\"version\":2,\"theme\":\"catppuccin\",\"variant\":\"macchiato\"}",
         "{\"version\":1,\"theme\":\"catppuccin\",\"variant\":\"unknown\"}",
         "{\"version\":1,\"theme\":\"nightfox\",\"variant\":\"mocha\"}",
         "{\"version\":1,\"theme\":\"catppuccin\\u0000junk\",\"variant\":\"macchiato\"}",
         "{\"version\":1,\"theme\":\"catppuccin\",\"variant\":\"mocha\"} garbage"
+        ,"{\"version\":1,\"theme\":\"catppuccin\",\"variant\":\"macchiato\",\"keys\":null}"
+        ,"{\"version\":1,\"theme\":\"catppuccin\",\"variant\":\"macchiato\",\"keys\":[]}"
     };
     for (size_t i = 0; i < sizeof invalid / sizeof invalid[0]; ++i) {
         write_file(first.path, invalid[i]);
