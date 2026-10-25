@@ -1353,3 +1353,45 @@ that exact default executable (exit 0), including inline entry and cleanup.
 Logs: `build/console-inline-default-build.log` and
 `build/console-inline-default-native.log`. Restart the application to use the
 rebuilt executable; an already-running process retains its previous code.
+
+## Terminal-size warning correction
+
+Implemented for owner review on 2026-10-25. The warning below 48 columns or
+18 rows now says `Terminal too small` in both demo and live sessions, shows
+`Current: COLSxROWS`, and retains the existing minimum/state/quit instructions.
+No layout threshold or target-control behavior changed.
+
+Agent-run focused TUI and native TUI checks passed against the rebuilt normal
+`build/the-bugger`. Coverage includes 15x5, width-only and height-only failures,
+recovery at exactly 48x18, retained command drafts and a running native target
+remaining running after warning/recovery. Logs:
+`build/terminal-size-focused-build.log`, `build/terminal-size-focused-tui.log`
+and `build/terminal-size-focused-native.log`. The initial native check assumed
+the command field was still focused after returning from the control-free
+warning; it now explicitly resumes editing after verifying the draft survived.
+The original failed log is `build/terminal-size-focused-native-initial.log`.
+
+The first complete baseline stopped at the workspace runner's remaining
+expectation of `DEMO:`. That expectation now matches the deliberately changed
+warning; its layout-restoration assertions remain intact. Initial full log:
+`build/ci-terminal-size-tests.log`. The updated focused workspace runner passed;
+its log is `build/terminal-size-focused-workspace.log`.
+
+Final complete local baseline, with an initially nonexistent build directory:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/ci-terminal-size-final CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci \
+  > build/ci-terminal-size-final-tests.log 2>&1
+```
+
+Baseline result: **PASS, exit 0**, including default/native, real tmux,
+localhost remote, owned-server/TUI and offline OpenOCD checks. Source/test diff
+and base revision are recorded in
+`build/ci-terminal-size-final-tree.patch` and `build/ci-terminal-size-final-base.txt`.
+Environment: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1, tmux 3.8 and
+ncursesw 6.6.20251230. Real-GDB checks run outside the ptrace sandbox. These are
+local results, not hosted Ubuntu or fresh physical-board evidence; no additional
+sanitizer/compiler matrix or static-analysis run is claimed.
+The final host audit found no remaining GDB, OpenOCD or frontend processes.
+The tested source snapshot, relative documentation file links and
+`git diff --check` also passed.
