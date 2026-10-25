@@ -1322,7 +1322,7 @@ Prepare the Linux x86-64 host distribution from a reviewed checkout:
 
 ```sh
 make release
-(cd build/dist && sha256sum --check SHA256SUMS)
+(cd build/dist/v0.1.2 && sha256sum --check SHA256SUMS)
 ```
 
 The [packaging procedure](maintaining.md#linux-x86-64-release-artifacts) describes

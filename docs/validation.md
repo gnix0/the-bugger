@@ -1741,3 +1741,88 @@ was rebuilt through `make all` at `build/the-bugger`
 hosted Ubuntu success. No physical targets, sanitizer or additional compiler
 matrix were run. Exact rendering still requires RGB forwarding by tmux and a
 capable outer terminal; the application cannot supply absent terminal capability.
+
+## v0.1.2 release preparation — 2026-10-25
+
+Status: prepared and locally verified; awaiting owner acceptance, not published
+or release-approved. The owner
+confirmed the tmux visual correction and merged the preceding work. Preparation
+uses the owner's existing `chore/prep_v0.1.2_release` branch, based on
+`f2d085e78552b933f792330a1ed07d0bea5c7761`. The version and dated changelog now
+identify 0.1.2. A version directory is the default distribution destination;
+`RELEASE_DIST_DIR` remains an explicit override. This prevents one release's
+checksum file from replacing another version's checksum file. Existing
+`build/dist/v0.1.0/` and `v0.1.1/` artifacts are preserved. The owner's preliminary
+`make release` invocation used the old 0.1.1 version; those root-level outputs
+are not v0.1.2 artifacts and were not relabeled.
+
+Included implementation references, read from actual local history at preparation:
+
+| Change | Implementation reference |
+|---|---|
+| Multi-file Source tabs | `d94ffac72bb467e95c08ec9fefb162cc781c2208` |
+| Source catalog-order regression | `9a869d203820bae28d2c575471612ddfcc3fa65a` |
+| Spatial content-pane transfer | `4a55838a8e8942954446780b41ade18716fde84b` |
+| Preserve Enter during content focus | `84efd848748e0479add02d52f244b31a4005f908` |
+| Startup debugging / F13 documentation | `5c31adacc2e10006c7728b2748959da6a0b6e9af` |
+| Inline Console command entry | `85bd6fd76f2beab2ca4b2b8a866b0a67d1daf7b5` |
+| Terminal-size warning | `77b2d86fb3cedbda4d3729a17e4c44a3df0841e2` |
+| Personal keybind tables | `4e857b55a75b3db1b9f85cb8221010ec8a67ed9a` |
+| Opt-in Vim-like input | `40894bf8d51b216a77c067555b6111452db9b560` |
+| tmux RGB rendering | `f2d085e78552b933f792330a1ed07d0bea5c7761` |
+
+The final release-preparation commit and resulting main/tag commit remain
+owner-controlled; no hash is invented for an uncreated commit. The preceding
+rendering feature's source analysis passed on this production code; preparation
+changes the version, distribution destination and release documentation.
+
+Agent-run local checks passed (exit 0):
+
+- Fresh fortified baseline:
+  `TERM=xterm-256color make BUILD_DIR=build/v0.1.2-ci CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+  Log: `build/v0.1.2-evidence/test-ci.log`. Exact application, test, workflow
+  and build inputs: `build/v0.1.2-evidence/test-inputs.sha256` (manifest SHA-256
+  `e5c85141009278efd122ee6dcf4ac61fd221213f96ca264aaa5d00b17744f03b`).
+- Hardened `make release`, extracted binary/checksum/license/source-identity and
+  ELF inspection, clean build from extracted source, then packaged CLI, terminal,
+  workspace, navigation and exact-color real-tmux checks. Logs:
+  `build/v0.1.2-evidence/package-final.log`, `artifact-checks.log`,
+  `source-clean-build.log`, `packaged-ui.log`.
+- The first source-completeness comparison correctly found that README had
+  changed after the preliminary archive was built; the archive is regenerated
+  after documentation edits. The initial failure is retained in
+  `build/v0.1.2-evidence/artifact-initial-snapshot.log`; the successful final
+  comparison supersedes that incomplete snapshot.
+- Missing executable, invalid SOURCE_DATE_EPOCH and old-binary/new-source
+  version mismatches were rejected as expected (`package-negative.log`). The
+  explicit RELEASE_DIST_DIR override produced exactly three matching assets
+  (`package-output-override.log`).
+
+Environment: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1 (20260810), GDB 18.1,
+tmux 3.8 and glibc 2.44. The packaged executable references GLIBC symbols
+through GLIBC_2.38; shared dependencies may impose additional requirements.
+The final documentation snapshot is repackaged and the extracted binary, source
+identity, independent source build and packaged UI checks are verified again.
+The ordinary review executable is rebuilt at `build/the-bugger`.
+
+Prepared distribution files (attach separately after release acceptance):
+
+- `build/dist/v0.1.2/the-bugger-v0.1.2-linux-x86_64.tar.gz`
+- `build/dist/v0.1.2/the-bugger-v0.1.2-source.tar.gz`
+- `build/dist/v0.1.2/SHA256SUMS`
+
+SHA256SUMS records the final archives' numeric hashes; the binary's BUILD-INFO.txt
+also embeds its corresponding source archive's hash. The source archive cannot
+contain its own final checksum. A local external release manifest records the
+final archive identities without a self-referential documentation/hash cycle.
+GitHub's two automatic source snapshots are separate from these three uploads;
+filenames in documentation and local preparation do not establish publication.
+
+Release limitations remain explicit: local host tests do not establish hosted
+Ubuntu success or fresh physical-board results. Fresh STM32/ARM, ESP32/Xtensa
+and ESP32/RISC-V release-matrix evidence, required PR checks and final owner
+release acceptance remain outstanding. M17 is historical board evidence, and
+the v0.1.0 physical RISC-V deferral does not automatically apply to v0.1.2.
+No hardware, sanitizer or additional compiler matrix was run during preparation.
+The packaged executable is dynamically linked; recorded host/library requirements
+do not establish compatibility with older distributions.
