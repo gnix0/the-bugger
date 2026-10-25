@@ -18,7 +18,7 @@ JSON_CFLAGS := $(shell $(PKG_CONFIG) --cflags json-c 2>/dev/null)
 PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session -Isrc/model $(NCURSES_CFLAGS) $(ELF_CFLAGS) $(JSON_CFLAGS)
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/session.c src/session/openocd.c src/session/profiles.c src/model/context.c src/model/code.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
+SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/tui/editor.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/session.c src/session/openocd.c src/session/profiles.c src/model/context.c src/model/code.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -621,8 +621,8 @@ test-native: $(BUILD_DIR)/test-keybinds-tui
 
 -include $(BUILD_DIR)/tests/unit/test_preferences.d $(BUILD_DIR)/tests/integration/test_themes_tui.d
 
-$(BUILD_DIR)/test-navigation: $(BUILD_DIR)/tests/integration/test_navigation.o $(BUILD_DIR)/tests/support/terminal.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+$(BUILD_DIR)/test-navigation: $(BUILD_DIR)/tests/integration/test_navigation.o $(BUILD_DIR)/tests/support/terminal.o $(BUILD_DIR)/src/tui/preferences.o $(BUILD_DIR)/src/tui/keybinds.o $(BUILD_DIR)/src/tui/theme.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(NCURSES_LIBS) $(JSON_LIBS) $(LDLIBS)
 
 .PHONY: test-navigation
 test-navigation: all $(BUILD_DIR)/test-navigation
@@ -643,3 +643,14 @@ test-fullscreen-native: all $(BUILD_DIR)/test-fullscreen $(BUILD_DIR)/code-fixtu
 test: test-fullscreen
 test-native: test-fullscreen-native
 -include $(BUILD_DIR)/tests/integration/test_fullscreen.d
+
+$(BUILD_DIR)/test-editor: $(BUILD_DIR)/tests/unit/test_editor.o $(BUILD_DIR)/src/tui/editor.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-editor
+test-editor: $(BUILD_DIR)/test-editor
+	$(BUILD_DIR)/test-editor
+
+test: test-editor
+
+-include $(BUILD_DIR)/tests/unit/test_editor.d

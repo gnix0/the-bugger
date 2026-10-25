@@ -36,6 +36,8 @@ These features extend the original v0.1.0 workspace. The development build also
 provides [Config → Keybinds](docs/usage.md#personal-keybinds) for debugger and
 workspace/navigation shortcuts. Bindings are personal preferences alongside
 themes; connection profiles never carry or override them.
+[Vim-like input](docs/usage.md#vim-like-input) is optional and off by default,
+with Normal/Insert field modes and visible mode feedback when enabled.
 
 Existing TCP GDB servers support reviewed `remote`/`extended-remote` connections
 and shared inspectors. OpenOCD support includes reviewed startup, installed-script
@@ -89,9 +91,9 @@ automatic main breakpoint.
 Click Source for source stepping or Disassembly for instruction stepping.
 Source **+ File** opens another GDB-known source file in a pane-local tab;
 **Current** follows the stopped frame while opened files remain available.
-Lowercase h/j/k/l are arrow-key aliases
-outside text fields; no setting or modal editing is required.
-During CONTENT FOCUS, Ctrl+arrows or Ctrl+h/j/k/l move between neighboring panes.
+Arrows navigate by default; opt-in Vim-like input adds h/j/k/l aliases and
+Normal/Insert field editing. During CONTENT FOCUS, Ctrl+arrows (or optional
+Ctrl+h/j/k/l aliases) move between neighboring panes.
 [Source fullscreen](docs/usage.md#source-fullscreen) expands a Source pane while
 retaining the toolbar/status bars and restores the existing tiled workspace.
 Defaults are F5 Continue, F10 Over, F11 Into, Shift+F11 Out and F9 Breakpoint;

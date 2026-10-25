@@ -4,6 +4,9 @@
 
 ### Added
 
+- Optional Vim-like input in Config → Keybinds, with Normal/Insert field modes,
+  cursor/word editing, distinct field edges and explicit footer feedback.
+
 - Config → Keybinds for personal debugger and workspace/navigation shortcuts,
   compact responsive Action/Key tables and direct keypress capture. Capture and edited
   cells have distinct border emphasis. Undo, confirmed Restore Defaults/discard,
@@ -20,6 +23,10 @@
   stops. Each tab keeps its viewport, and narrow panes can cycle through tabs.
 
 ### Changed
+
+- Vim navigation aliases are now opt-in. New preferences default to ordinary
+  editing; old preferences disable only stock Vim aliases while preserving custom
+  mappings and appearance. The toggle participates in Undo and explicit Save.
 
 - Connection profiles exclude personal keybinds. Version-1 stores remain readable;
   legacy keys are ignored and omitted when writing the key-free version-2 format.

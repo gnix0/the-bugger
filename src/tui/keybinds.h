@@ -12,6 +12,7 @@ enum {
     TB_BIND_NEXT_CONTROL, TB_BIND_PREVIOUS_CONTROL, TB_BIND_COUNT
 };
 /* Existing function/Ctrl encoding; printable ASCII uses 256 + character. */
+bool tb_keybind_vim(int keys[TB_BIND_COUNT], bool enabled);
 void tb_keybind_defaults(int keys[TB_BIND_COUNT]);
 const char *tb_keybind_action(size_t action);
 void tb_keybind_name(int key, char *text, size_t size);

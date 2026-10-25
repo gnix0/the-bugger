@@ -71,7 +71,9 @@ Existing files are preserved; open/write failures retain the input for correctio
 Interactive program input and a full terminal emulator are not provided yet.
 Click the Command field or reach it with Tab to type a GDB command without
 leaving the workspace. Arrows/Home/End/Delete/Backspace and Ctrl+U edit the draft;
-h/j/k/l, `q` and digits remain literal text. Enter or Send submits one command.
+h/j/k/l, `q` and digits remain literal during ordinary or Vim Insert editing.
+With Vim-like input enabled, press i in the field before typing. Enter or Send
+submits one command.
 The field clears only when the session accepts it for dispatch; a rejected
 submission retains the draft, while a later GDB error appears in the log.
 Escape leaves the field without sending or discarding the draft. Each Console
@@ -408,13 +410,10 @@ move within a visual row, and Up/Down prefer aligned controls above/below.
 Directional movement stops at an edge; it does not wrap. Continue → Pause uses
 Right, not Down. Tab/Shift+Tab cycle controls in a stable sequence, excluding
 content bodies, scrollbars, dividers and hidden panes.
-Lowercase `h`/`j`/`k`/`l` are the default aliases for
-Left/Down/Up/Right outside text fields. They follow the focused control: menu
-selection, tab focus, body scrolling, theme/variant cycling and divider
-resizing behave just like arrows. No editing mode is required. Personal aliases
-can be changed in [Config → Keybinds](#personal-keybinds).
-In fields, these letters type normally; use actual Left/Right, Home/End,
-Backspace/Delete and Ctrl+U for text editing.
+Arrows are available by default. **Config → Keybinds → Vim-like input** optionally
+adds lowercase `h`/`j`/`k`/`l` aliases for Left/Down/Up/Right on controls, content
+and divider resizing. See [Vim-like input](#vim-like-input) for field behavior.
+With this option off, fields use ordinary literal typing and editing.
 Click a pane's content or scrollbar to give it arrow/hjkl scrolling or row
 navigation. A `*` in its header and **CONTENT FOCUS** in the help bar identify
 this state, including in monochrome. Escape (or Tab) returns to the last visible
@@ -423,7 +422,7 @@ outside the pane also leaves content focus. Wheel scrolling does not acquire
 keyboard focus. In fullscreen, the first Escape leaves content; the next restores
 the tiles. Field editing and divider resizing retain their own key behavior.
 
-During **CONTENT FOCUS**, the default **Ctrl+h/j/k/l** aliases and fixed **Ctrl+Left/Down/Up/Right**
+During **CONTENT FOCUS**, the optional **Ctrl+h/j/k/l** aliases and fixed **Ctrl+Left/Down/Up/Right**
 move content focus to the neighboring pane in that direction. Movement uses the
 visible pane geometry, including nested splits, preserves viewports and stops
 at layout edges. The destination keeps its active view tab; Source/Disassembly
@@ -448,7 +447,7 @@ Minimal terminals use `*` when a single-cell filled circle is unavailable.
 Wheel or a focused body with
 arrows/PageUp/PageDown scrolls; vertical scrollbar tracks page and thumbs drag.
 Keys `1`–`9` focus retained pane IDs; `[`/`]` cycles panes. There are no layout
-presets, layout selector, floating windows or Vim modes.
+presets, layout selector, floating windows or full Vim editor emulation.
 
 Drag one-cell gutters to resize columns, rows or nested splits. Pane actions
 split right/below, close a tab, close a nested pane or enter keyboard resizing.
@@ -573,8 +572,8 @@ discard or Restore Defaults.
 The actions include Continue, Pause/Halt, stepping, breakpoint and Reset;
 left/down/up/right movement; spatial content-pane transfers; previous/next pane;
 pane selection 1–9; Back/close session; and additional Quit and control-traversal
-keys. The factory bindings retain F5/F9/F10/F11/Shift+F11, h/j/k/l,
-Ctrl+H/J/K/L, brackets, digits and q. Pause/Halt, Reset and additional shortcuts
+keys. The factory bindings retain F5/F9/F10/F11/Shift+F11, brackets, digits and q.
+Vim-like input optionally supplies h/j/k/l and Ctrl+H/J/K/L. Pause/Halt, Reset and additional shortcuts
 start unbound. Toolbar hints follow the saved debugger bindings. Binding Reset
 does not bypass confirmation or make it available on unsupported targets.
 
@@ -637,3 +636,43 @@ do not make those features operational. Register groups currently have an honest
 ungrouped fallback. Log export contains retained history only; native program input
 and a full terminal emulator are not implemented. Physical board support must be
 established by the [release validation matrix](testing.md#every-release-regression-matrix).
+
+## Vim-like input
+
+In **Config → Keybinds**, click **Vim-like input [ Off ]** to enable it, then
+**Save**. This is a personal preference alongside themes and bindings, never part
+of a shared connection profile. It starts off for new users. Older preferences
+without this option retain custom mappings and appearance, but stock h/j/k/l and
+Ctrl+h/j/k/l aliases are disabled until explicitly enabled. Loading never rewrites
+the preference file. Older application builds may reject the added preference
+field; keep the updated build when using these settings.
+
+The toggle fills only unassigned direction slots. It preserves custom mappings;
+if an alias belongs to another action, clear that assignment before enabling.
+Disabling removes only the stock aliases in their direction slots. Undo reverses
+the toggle; Restore Defaults also turns it off. Changes apply only on Save;
+leaving with unsaved changes asks for confirmation.
+
+Every newly focused text field starts in **VIM NORMAL**. Cyan side borders and a
+block cursor (where supported) identify Normal; green borders and a thin cursor
+identify **VIM INSERT**. The footer always names the mode, including monochrome.
+
+| Normal key | Action |
+|---|---|
+| `i` / `a` | Insert before / after the cursor |
+| `I` / `A` | Insert at the start / end |
+| `h` / `l`, Left / Right | Move within the line |
+| `0` / `$`, Home / End | First / last character |
+| `w` / `b` / `e` | Next word / previous word / word end |
+| `x`, Delete | Delete under the cursor |
+| `j` / `k`, Down / Up | Move to another visible control |
+
+In Insert, printable characters are literal, including navigation aliases and
+`q`. Backspace/Delete, arrows, Home/End and Ctrl+U keep their ordinary editing
+behavior. Escape returns to Normal without discarding text; Escape again leaves
+the field or screen. Tab/Shift+Tab changes focus and the next field starts Normal.
+Enter still submits through the existing field action in either mode; entering
+or leaving a mode never sends a command or reads target memory. Ctrl+Q retains
+session-close confirmation. Raw keybind capture is independent of field modes.
+These are single-line conveniences, not a full Vim editor: counts, operators,
+registers, macros and multiline editing are not implemented.

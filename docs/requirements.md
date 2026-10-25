@@ -55,7 +55,7 @@ The intended session workflow is:
 5. Debug normally with **function keys, mouse clicks, and visible toolbar actions**.
 6. Exit cleanly; return later to a saved session profile.
 
-Do not add Vim modes, Vim-motion-first interaction, editor emulation, floating windows, or a mandatory IDE/project generation step. Always-on lowercase `h`/`j`/`k`/`l` are additional Left/Down/Up/Right aliases outside text fields, not a mode or a prerequisite for navigation. Text fields keep these letters literal; standard arrows, mouse and visible actions remain available.
+Do not require Vim-motion-first interaction, editor emulation, floating windows, or IDE/project generation. Vim-like input is an optional personal preference, disabled by default. Enabling it adds navigation aliases and limited single-line Normal/Insert editing with visible mode feedback; standard arrows, mouse and visible actions remain available. Full Vim editor emulation remains out of scope.
 
 
 ## Functional requirements — v0.1.0
@@ -146,7 +146,7 @@ Do **not** allow these features to delay the release:
 
 - Windows/macOS support; core-dump debugging, reverse/time-travel debugging; custom debug probes beyond what GDB/OpenOCD already supports; simulator features/dedicated simulator integration. Xtensa/RISC-V real-board regression remains required.
 - CMSIS-SVD peripheral bitfield UI, RTOS awareness, advanced instruction trace, timeline, profiling, cycle-accurate performance analysis, coverage, fault decoding.
-- A full IDE, build system integration, editor replacement, LSP, Vim modes, floating/detachable panes, SSH remote session administration, a theme marketplace or a plugin marketplace.
+- A full IDE, build system integration, editor replacement, LSP, full Vim editor emulation, floating/detachable panes, SSH remote session administration, a theme marketplace or a plugin marketplace.
 - Silent auto-flashing, automatic reset-to-main and device probing that changes target state.
 
 ## Interface constraints
@@ -233,7 +233,7 @@ Locals/Watches, memory and CPU-register editing are targeted for **v0.2.0**. Ded
 - Mouse-first **and** keyboard-accessible. The visible controls are authoritative; key bindings are accelerators, not the only mechanism.
 - Overflow scrollbars appear only when needed. Vertical bars are one terminal cell wide, with a vertical `|` track and `#` thumb, retaining the horizontal bar's colors/weight rather than its sideways glyphs. Live Source/Disassembly, Console and context views support independent horizontal scrolling with thumb dragging, track paging and Left/Right keys, preserving pane sizes and execution context. Source line numbers stay fixed.
 - Disassembly retains surrounding instructions across steps. Initially show about four valid preceding instructions where GDB metadata permits; keep the viewport still through its middle, scrolling only to preserve roughly five visible rows above and below the PC (smaller margins in short panes, clamped to available context). Manual browsing stays put until stepping or Return to Stopped. Bounded earlier/later windows remain browsable without moving PC; never guess x86 instruction boundaries or treat this as execution history.
-- `q` closes/backs out of the current screen outside text fields; in the workspace it leaves the session for the launcher after confirmation. At the launcher it does not exit. `Ctrl+Q` quits from any screen, retaining active-session confirmation. Text fields accept a literal `q`; Escape backs out while editing. Footers distinguish these actions.
+- `q` closes/backs out of the current screen outside text fields; in the workspace it leaves the session for the launcher after confirmation. At the launcher it does not exit. `Ctrl+Q` quits from any screen, retaining active-session confirmation. Text fields accept a literal `q` during ordinary or Insert editing; with Vim-like input enabled, Escape first returns Insert to Normal, then backs out. Footers distinguish these actions.
 - Standard desired shortcuts: `F5` continue, `F9` breakpoint, `F10` next/step over, `F11` step into, `Shift+F11` step out **where the terminal reports it**. Provide clickable alternatives and allow remapping if tmux/terminal intercepts or collapses special keys.
 - Startup-menu selection, text fields, dialogs, confirmation prompts and view changes must all be operable by clicks plus straightforward arrow/Tab/Enter/Escape navigation.
 - Workspace arrow navigation follows visible control geometry: Left/Right stay
@@ -242,9 +242,9 @@ Locals/Watches, memory and CPU-register editing are targeted for **v0.2.0**. Ded
   Content/scrollbar clicks explicitly acquire pane navigation; Escape/Tab or a
   control/outside-pane click returns to controls. Content focus must be visible
   in color and monochrome, and hidden fullscreen controls are excluded.
-  While content is focused, Ctrl+arrows or Ctrl+h/j/k/l transfer that focus to a
+  While content is focused, Ctrl+arrows or optional Ctrl+h/j/k/l aliases transfer that focus to a
   spatially neighboring visible pane, preserving viewports and stopping at edges.
-- Lowercase `h`/`j`/`k`/`l` act as Left/Down/Up/Right by default on navigation controls, including tabs, scrolling and divider resizing. Editable fields retain ordinary character entry; no enable switch, modal editing, counts or other Vim commands are introduced.
+- Config → Keybinds offers Vim-like input, disabled by default and independent of connection profiles. Enabling supplies unassigned h/j/k/l and Ctrl+h/j/k/l navigation aliases without overwriting custom keys; conflicts prevent the toggle. Fields enter Normal mode on focus; i/a/I/A enter Insert, Escape returns to Normal, and distinct field edges plus a footer identify the mode. Normal supports h/l, 0/$, w/b/e and x; j/k navigate controls. Insert retains literal typing, Backspace and ordinary field editing. Enter submits and Tab changes focus in either mode. Undo, confirmed Restore Defaults/discard and Save cover this preference as well as mappings. No counts, operators, macros or full editor emulation are required.
 - Terminal/multiplexer constraints are real: test mouse click, scroll, drag/resize and function keys in tmux with mouse enabled; avoid assuming a browser-level right click or perfect function-key support in every terminal. Use explicit `...` menus if context clicks aren't reliably conveyed.
 - Do not overwrite user bindings for tmux. If tmux requires `set -g mouse on`, document it as an opt-in prerequisite.
 - Source focus selects source F10/F11; Disassembly focus selects instruction F10/F11. Clicking toolbar/inspection panes preserves the last code-pane mode, visibly indicated. Both execution highlights use GDB PC/frame/source mappings; one source line can remain highlighted over several instructions. Browsing never moves PC. Optimized/inlined/tail-call behavior and unavailable values follow GDB; do not reconstruct missing semantics or fabricate precision.

@@ -47,10 +47,13 @@ bool tb_preferences_load(TbPreferences *p)
     json_tokener *parser = json_tokener_new();
     if (parser) { json_tokener_set_flags(parser, JSON_TOKENER_STRICT | JSON_TOKENER_VALIDATE_UTF8); }
     json_object *root = ok && parser ? json_tokener_parse_ex(parser, text, (int)used + 1) : NULL;
-    json_object *version = NULL, *theme = NULL, *variant = NULL, *bindings = NULL;
+    json_object *version = NULL, *theme = NULL, *variant = NULL, *bindings = NULL, *vim = NULL;
+    bool has_keys = root && json_object_object_get_ex(root, "keys", &bindings);
+    bool has_vim = root && json_object_object_get_ex(root, "vim", &vim);
     int keys[TB_BIND_COUNT]; tb_keybind_defaults(keys);
     ok = root && json_object_is_type(root, json_type_object) &&
-         (json_object_object_length(root) == 3 || (json_object_object_length(root) == 4 && json_object_object_get_ex(root, "keys", &bindings) && bindings)) &&
+         (json_object_object_length(root) == 3 + (int)has_keys + (int)has_vim) &&
+         (!has_vim || json_object_is_type(vim, json_type_boolean)) &&
          json_object_object_get_ex(root, "version", &version) && json_object_is_type(version, json_type_int) && json_object_get_int(version) == 1 &&
          json_object_object_get_ex(root, "theme", &theme) && json_object_is_type(theme, json_type_string) &&
          json_object_object_get_ex(root, "variant", &variant) && json_object_is_type(variant, json_type_string);
@@ -61,7 +64,7 @@ bool tb_preferences_load(TbPreferences *p)
         if (ok) { palette = tb_theme_find(family, name); }
         ok = palette < tb_theme_count();
     }
-    if (ok && bindings) {
+    if (ok && has_keys) {
         ok = json_object_is_type(bindings, json_type_array) && json_object_array_length(bindings) == TB_BIND_COUNT;
         for (size_t i = 0; ok && i < TB_BIND_COUNT; ++i) {
             json_object *entry = json_object_array_get_idx(bindings, i);
@@ -71,9 +74,11 @@ bool tb_preferences_load(TbPreferences *p)
         }
         ok = ok && tb_keybinds_valid(keys);
     }
+    bool vim_enabled = has_vim && json_object_get_boolean(vim);
+    if (ok && !has_vim) { ok = tb_keybind_vim(keys, false); }
     json_object_put(root); if (parser) { json_tokener_free(parser); }
     if (!ok) { p->blocked = true; return fail(p, "Invalid/unsupported preferences; using defaults. File preserved."); }
-    p->palette = palette; memcpy(p->keys, keys, sizeof keys); p->stamp = info; p->existed = true; return true;
+    p->vim = vim_enabled; p->palette = palette; memcpy(p->keys, keys, sizeof keys); p->stamp = info; p->existed = true; return true;
 }
 
 static bool mkdirs(const char *path)
@@ -99,7 +104,7 @@ static bool unchanged(const TbPreferences *p)
            info.st_mtim.tv_sec == p->stamp.st_mtim.tv_sec && info.st_mtim.tv_nsec == p->stamp.st_mtim.tv_nsec;
 }
 
-static bool save(TbPreferences *p, size_t palette, const int keys[TB_BIND_COUNT])
+static bool save(TbPreferences *p, size_t palette, const int keys[TB_BIND_COUNT], bool vim)
 {
     const TbPalette *selected = tb_theme_palette(palette);
     if (!tb_keybinds_valid(keys)) { return fail(p, "Reserved or conflicting keybinds; preferences unchanged."); }
@@ -121,7 +126,7 @@ static bool save(TbPreferences *p, size_t palette, const int keys[TB_BIND_COUNT]
         if (n < 0 || (size_t)n >= sizeof bindings - at) { ok = false; break; }
         at += (size_t)n;
     }
-    int length = snprintf(text, sizeof text, "{\"version\":1,\"theme\":\"%s\",\"variant\":\"%s\",\"keys\":[%s]}\n", selected->family, selected->variant, bindings);
+    int length = snprintf(text, sizeof text, "{\"version\":1,\"theme\":\"%s\",\"variant\":\"%s\",\"keys\":[%s],\"vim\":%s}\n", selected->family, selected->variant, bindings, vim ? "true" : "false");
     if (length < 0 || (size_t)length >= sizeof text) { ok = false; }
     (void)snprintf(temporary, sizeof temporary, "%s/.preferences-XXXXXX", p->directory);
     int fd = -1; bool created = false;
@@ -140,7 +145,7 @@ static bool save(TbPreferences *p, size_t palette, const int keys[TB_BIND_COUNT]
         if (created) { (void)unlink(temporary); }
         if (!*p->error) { (void)fail(p, "Could not save preferences; previous file preserved."); }
     } else {
-        p->palette = palette; memmove(p->keys, keys, sizeof p->keys); p->stamp = info; p->existed = true; p->error[0] = 0;
+        p->vim = vim; p->palette = palette; memmove(p->keys, keys, sizeof p->keys); p->stamp = info; p->existed = true; p->error[0] = 0;
         if (fsync(dir) != 0) { (void)fail(p, "Preferences saved; directory sync failed, crash durability uncertain."); }
     }
     (void)close(lock); (void)close(dir); return ok;
@@ -148,9 +153,14 @@ static bool save(TbPreferences *p, size_t palette, const int keys[TB_BIND_COUNT]
 
 bool tb_preferences_save(TbPreferences *p, size_t palette)
 {
-    return save(p, palette, p->keys);
+    return save(p, palette, p->keys, p->vim);
 }
 bool tb_preferences_save_keys(TbPreferences *p, const int keys[TB_BIND_COUNT])
 {
-    return save(p, p->palette, keys);
+    return save(p, p->palette, keys, p->vim);
+}
+
+bool tb_preferences_save_input(TbPreferences *p, const int keys[TB_BIND_COUNT], bool vim)
+{
+    return save(p, p->palette, keys, vim);
 }

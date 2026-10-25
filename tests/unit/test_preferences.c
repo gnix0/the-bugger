@@ -35,6 +35,19 @@ int main(void)
     CHECK(second.palette == tb_theme_find("monokai-pro", "classic"));
     CHECK(tb_preferences_save(&second, tb_theme_find("everforest", "dark-medium")));
     CHECK(tb_preferences_load(&first) && first.keys[TB_BIND_CONTINUE] == 6);
+    CHECK(!first.vim && tb_keybind_vim(keys, true));
+    CHECK(tb_preferences_save_input(&first, keys, true));
+    CHECK(tb_preferences_load(&second) && second.vim && second.keys[TB_BIND_LEFT] == 256 + 'h');
+    CHECK(tb_preferences_save(&second, second.palette));
+    CHECK(tb_preferences_load(&first) && first.vim);
+    CHECK(tb_preferences_save_keys(&first, first.keys));
+    CHECK(tb_preferences_load(&second) && second.vim);
+    /* An old key map loses stock Vim aliases, preserving custom slots, without a write. */
+    json_object *legacy = json_object_from_file(first.path); CHECK(legacy);
+    json_object_object_del(legacy, "vim");
+    CHECK(json_object_array_put_idx(json_object_object_get(legacy, "keys"), TB_BIND_UP, json_object_new_int(256 + 'w')) == 0);
+    write_file(first.path, json_object_to_json_string(legacy)); json_object_put(legacy);
+    CHECK(tb_preferences_load(&first) && !first.vim && first.keys[TB_BIND_LEFT] == 0 && first.keys[TB_BIND_UP] == 256 + 'w');
     keys[TB_BIND_INTO] = 6; CHECK(!tb_preferences_save_keys(&first, keys));
     keys[TB_BIND_INTO] = -17; CHECK(!tb_preferences_save_keys(&first, keys));
     CHECK(tb_preferences_load(&second) && second.keys[TB_BIND_INTO] == 11);
@@ -63,6 +76,9 @@ int main(void)
         CHECK(strcmp(preserved, text) == 0); json_object_put(bad);
     }
     const char *invalid[] = {
+        "{\"version\":1,\"theme\":\"catppuccin\",\"variant\":\"macchiato\",\"vim\":null}",
+        "{\"version\":1,\"theme\":\"catppuccin\",\"variant\":\"macchiato\",\"vim\":1}",
+        "{\"version\":1,\"theme\":\"catppuccin\",\"variant\":\"macchiato\",\"vim\":false,\"extra\":0}",
         "{", "{}", "{\"version\":2,\"theme\":\"catppuccin\",\"variant\":\"macchiato\"}",
         "{\"version\":1,\"theme\":\"catppuccin\",\"variant\":\"unknown\"}",
         "{\"version\":1,\"theme\":\"nightfox\",\"variant\":\"mocha\"}",

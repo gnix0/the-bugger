@@ -8,10 +8,6 @@ void tb_keybind_defaults(int keys[TB_BIND_COUNT])
     memset(keys, 0, sizeof(int) * TB_BIND_COUNT);
     keys[TB_BIND_CONTINUE] = 5; keys[TB_BIND_OVER] = 10; keys[TB_BIND_INTO] = 11;
     keys[TB_BIND_OUT] = 23; keys[TB_BIND_BREAKPOINT] = 9;
-    keys[TB_BIND_LEFT] = 256 + 'h'; keys[TB_BIND_DOWN] = 256 + 'j';
-    keys[TB_BIND_UP] = 256 + 'k'; keys[TB_BIND_RIGHT] = 256 + 'l';
-    keys[TB_BIND_CONTENT_LEFT] = -8; keys[TB_BIND_CONTENT_DOWN] = -10;
-    keys[TB_BIND_CONTENT_UP] = -11; keys[TB_BIND_CONTENT_RIGHT] = -12;
     keys[TB_BIND_PREVIOUS_PANE] = 256 + '['; keys[TB_BIND_NEXT_PANE] = 256 + ']';
     for (int i = 0; i < 9; ++i) { keys[TB_BIND_PANE_1 + i] = 256 + '1' + i; }
     keys[TB_BIND_BACK] = 256 + 'q';
@@ -84,4 +80,18 @@ bool tb_keybind_matches(int binding, wint_t key, bool special)
     if (binding >= 289 && binding <= 382) { return !special && (int)key == binding - 256; }
     if (binding == -8 && special && key == KEY_BACKSPACE) { return true; }
     return binding < 0 && binding >= -26 && !special && (int)key == -binding;
+}
+
+/* Apply aliases atomically: never steal an existing custom assignment. */
+bool tb_keybind_vim(int keys[TB_BIND_COUNT], bool enabled)
+{
+    static const int aliases[] = {256 + 'h', 256 + 'j', 256 + 'k', 256 + 'l', -8, -10, -11, -12};
+    int draft[TB_BIND_COUNT]; memcpy(draft, keys, sizeof draft);
+    for (size_t i = 0; i < sizeof aliases / sizeof aliases[0]; ++i) {
+        size_t action = TB_BIND_LEFT + i;
+        if (enabled && !draft[action]) { draft[action] = aliases[i]; }
+        else if (!enabled && draft[action] == aliases[i]) { draft[action] = 0; }
+    }
+    if (!tb_keybinds_valid(draft)) { return false; }
+    memcpy(keys, draft, sizeof draft); return true;
 }
