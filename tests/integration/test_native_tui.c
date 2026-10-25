@@ -126,6 +126,13 @@ static void inline_console(TestTerminal *term)
     test_terminal_expect(term, "DRAFT_END");
     test_terminal_resize(term, 24, 80);
     test_terminal_expect(term, "DRAFT_END");
+    test_terminal_resize(term, 17, 48);
+    test_terminal_expect(term, "Terminal too small");
+    test_terminal_expect(term, "Current: 48x17");
+    CHECK(!test_terminal_find(term, "DEMO:", NULL, NULL));
+    test_terminal_resize(term, 24, 80);
+    test_terminal_expect(term, "DRAFT_END");
+    test_terminal_click(term, "Command"); /* Resume editing after the control-free warning. */
     test_terminal_send(term, "\001");
     test_terminal_expect(term, "echo xxx");
     CHECK(test_terminal_find(term, "Command", &x, &y));
@@ -169,6 +176,12 @@ int main(int argc, char *argv[])
     test_terminal_click(&term, "Continue F5");
     test_terminal_expect(&term, "LIVE | Running");
     test_terminal_expect(&term, "STDERR marker");
+    test_terminal_resize(&term, 18, 47);
+    test_terminal_expect(&term, "Terminal too small");
+    test_terminal_expect(&term, "Current: 47x18");
+    CHECK(!test_terminal_find(&term, "DEMO:", NULL, NULL));
+    test_terminal_resize(&term, 44, 140);
+    test_terminal_expect(&term, "LIVE | Running");
     CHECK(strstr(term.output, "\033]52") == NULL);
     test_terminal_click(&term, "Pause");
     test_terminal_expect(&term, "LIVE | Stopped");
