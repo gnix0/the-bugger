@@ -1680,3 +1680,64 @@ was run. `make all` rebuilt the ordinary review binary at `build/the-bugger`
 (`build/vim-evidence/review-build.log`). Final manual review uses the
 [opt-in walkthrough](testing.md#opt-in-vim-like-input); no owner manual acceptance
 is recorded. Full Vim editor emulation remains excluded.
+
+## tmux RGB theme rendering — 2026-10-25
+
+The owner reported that Macchiato backgrounds differed inside tmux despite a
+working `tmux-256color`/`Tc` configuration. The app selected Alacritty direct
+color outside tmux but kept the 256-color description inside it, quantizing
+subtle blue-gray surfaces. The owner subsequently confirmed that the focused
+executable (`build/tmux-color-focused/the-bugger`) corrected the visual issue in
+their own tmux setup. This is an owner-reported visual check, not a full hardware
+or release-matrix result.
+
+Implementation uses ncurses terminfo and conventional RGB advertisements:
+COLORTERM truecolor/24bit, RGB/Tc flags, or setrgbf plus setrgbb. It selects a
+matching tmux-direct description for tmux/screen names inside tmux, preserves
+Alacritty handling, and falls back to the original TERM if no direct description
+is available. NO_COLOR remains authoritative. No palette slots, environment,
+user tmux configuration or server options are changed. A preliminary subprocess
+probe was replaced during development with the smaller existing-library approach
+following review of Neovim, Notcurses, tmux and ncurses primary documentation.
+
+Agent-run focused checks passed with GCC 16.2.1 and fortification under
+`build/tmux-color-focused`: `test-terminal-description` and `test-tmux-colors`.
+The real tmux test uses an isolated server and the reported `*:Tc` override;
+it checks exact Macchiato workspace/panel/raised background RGB values and
+text/accent foreground RGB values against standalone output, changes to Rose
+Pine Dawn, and checks 256-color and NO_COLOR fallback behavior. Existing terminal
+restoration checks run on every exit. `focused-final.log` under
+`build/tmux-color-evidence` records success. Earlier focused failures are retained:
+`focused-theme-selection-failure.log` used the wrong family-cycle count;
+`focused-fallback-fixture-failure.log` assumed unsetting the parent's COLORTERM
+would remove it from tmux children. Current tmux sets that variable itself, so
+the fixture now removes it explicitly only for its app process. Application
+assertions and real color comparisons remain intact.
+
+Fresh full host baseline (agent-run outside sandbox for ptrace, sockets and tmux):
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/tmux-color-ci-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+Environment: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1 (20260810), GDB 18.1,
+tmux 3.8. Log: `build/tmux-color-evidence/test-ci.log`. Exact application, test,
+workflow and build inputs: `build/tmux-color-evidence/source-manifest.sha256`
+(manifest SHA-256
+`09159c7235d1ddaf278584b065cd4628b747c6393bd30e91135c56fc5e5cb13f`).
+Full baseline result: PASS (exit 0). New exact-color/fallback tests, existing
+mouse/drag/split/function-key/resize behavior, live keybind/Normal/Insert input,
+context selection, native/remote sessions and actual OpenOCD pre-init checks all
+passed. The final read-only host process audit found no surviving frontend,
+test, GDB, gdbserver, OpenOCD or tmux processes. `git diff --check` passed.
+This is automated local host evidence; hosted Ubuntu execution remains unverified.
+
+With explicit owner permission, `make BUILD_DIR=build/tmux-color-analysis analyze`
+passed with clang-tidy 23.1.3 (`build/tmux-color-evidence/analysis.log`).
+Fortified compilation of every C test/support object passed (exit 0); its log is
+`build/tmux-color-evidence/test-compilation.log`. The ordinary review executable
+was rebuilt through `make all` at `build/the-bugger`
+(`build/tmux-color-evidence/review-build.log`). Local results do not establish
+hosted Ubuntu success. No physical targets, sanitizer or additional compiler
+matrix were run. Exact rendering still requires RGB forwarding by tmux and a
+capable outer terminal; the application cannot supply absent terminal capability.

@@ -1,4 +1,5 @@
 #include "editor.h"
+#include "terminal.h"
 #include "the_bugger/tui.h"
 #include "the_bugger/version.h"
 #include "demo.h"
@@ -3681,14 +3682,10 @@ int tb_tui_run(bool demo)
             return EXIT_FAILURE;
         }
     }
-    /* Use the matching terminal description, never substitute xterm key/mouse
-     * capabilities for a different terminal or assume tmux forwards RGB. */
-    const char *color_term = getenv("COLORTERM");
-    bool direct_alacritty = strcmp(term, "alacritty") == 0 && getenv("TMUX") == NULL &&
-                            color_term != NULL &&
-                            (strcmp(color_term, "truecolor") == 0 || strcmp(color_term, "24bit") == 0);
-    SCREEN *screen = newterm(direct_alacritty ? "alacritty-direct" : NULL, stdout, stdin);
-    if (screen == NULL && direct_alacritty) { screen = newterm(NULL, stdout, stdin); }
+    /* Keep matching key/mouse capabilities; use RGB only when confirmed. */
+    const char *description = tb_terminal_description();
+    SCREEN *screen = newterm(description, stdout, stdin);
+    if (screen == NULL && description) { screen = newterm(NULL, stdout, stdin); }
     int result = EXIT_FAILURE;
     if (screen == NULL) {
         fputs("the-bugger: terminal initialization failed; check TERM/terminfo.\n", stderr);

@@ -85,9 +85,20 @@ carriage return separately from Ctrl+J's line feed, including in `get_wch`.
 
 Theme roles separate workspace, panel, raised header, notice and footer
 surfaces. Selected-row variants retain semantic foreground colors. Direct-color
-terminfo supplies exact RGB values; a matching Alacritty direct entry can be
-selected when standalone Alacritty advertises truecolor. The app never changes
-the terminal palette or tmux configuration. See the
+terminfo supplies exact RGB values. `src/tui/terminal.c` selects matching
+`alacritty-direct` outside tmux or `tmux-direct` inside tmux when RGB is advertised
+through `COLORTERM=truecolor`/`24bit`, terminfo `RGB`/`Tc`, or both `setrgbf` and
+`setrgbb`. The tmux mapping is restricted to its tmux/screen TERM names and a
+nonempty TMUX environment. Explicit direct-color TERM descriptions already work.
+This uses ncurses' existing terminfo reader before screen initialization; it adds
+no subprocess, terminal-query parser or rendering backend. Missing direct entries
+fall back to the original TERM. NO_COLOR remains authoritative. The app never
+rewrites TERM, changes terminal palette slots or modifies tmux configuration.
+These capability signals follow the established conventions described by
+[Neovim](https://neovim.io/doc/user/tui/) and
+[Notcurses](https://github.com/dankamongmen/notcurses/blob/master/TERMINALS.md);
+[ncurses terminfo](https://invisible-island.net/ncurses/man/terminfo.5.html)
+provides the matching direct-color descriptions. See the
 [prototype mapping](requirements.md#interface-constraints) for rendering adaptations.
 
 The workspace preserves per-view scroll/selection and tabs through compact
