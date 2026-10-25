@@ -18,7 +18,7 @@ JSON_CFLAGS := $(shell $(PKG_CONFIG) --cflags json-c 2>/dev/null)
 PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session -Isrc/model $(NCURSES_CFLAGS) $(ELF_CFLAGS) $(JSON_CFLAGS)
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/tui/editor.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/session.c src/session/openocd.c src/session/profiles.c src/model/context.c src/model/code.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
+SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/tui/editor.c src/tui/terminal.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/session.c src/session/openocd.c src/session/profiles.c src/model/context.c src/model/code.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -654,3 +654,20 @@ test-editor: $(BUILD_DIR)/test-editor
 test: test-editor
 
 -include $(BUILD_DIR)/tests/unit/test_editor.d
+
+$(BUILD_DIR)/test-terminal-description: $(BUILD_DIR)/tests/unit/test_terminal_description.o $(BUILD_DIR)/src/tui/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(NCURSES_LIBS) $(LDLIBS)
+
+$(BUILD_DIR)/test-tmux-colors: $(BUILD_DIR)/tests/integration/test_tmux_colors.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-terminal-description test-tmux-colors
+test-terminal-description: $(BUILD_DIR)/test-terminal-description
+	$(BUILD_DIR)/test-terminal-description
+
+test-tmux-colors: all $(BUILD_DIR)/test-tmux-colors
+	$(BUILD_DIR)/test-tmux-colors $(abspath $(BINARY))
+
+test: test-terminal-description
+test-tmux: test-tmux-colors
+-include $(BUILD_DIR)/tests/unit/test_terminal_description.d $(BUILD_DIR)/tests/integration/test_tmux_colors.d
