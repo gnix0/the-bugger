@@ -11,6 +11,10 @@
 #include <time.h>
 #include <unistd.h>
 
+static char isolated_config[] = "/tmp/the-bugger-terminal-config-XXXXXX";
+static bool config_ready;
+static void config_cleanup(void) { (void)rmdir(isolated_config); }
+
 static long long milliseconds(void)
 {
     struct timespec now;
@@ -204,6 +208,21 @@ static void consume(TestTerminal *term, unsigned char character)
         return;
     }
     if (character == '\b') { if (term->x > 0) { --term->x; } return; }
+    /* tmux converts ACS borders into UTF-8. Preserve their cell positions and
+     * attributes rather than silently dropping the bytes from the test screen. */
+    if (term->utf8_remaining) {
+        if ((character & 0xc0U) == 0x80U) {
+            term->utf8_value = (term->utf8_value << 6) | (character & 0x3fU);
+            if (--term->utf8_remaining) { return; }
+            unsigned value = term->utf8_value;
+            if (value < 0x2500U || value > 0x257fU) { return; }
+            character = value == 0x2500U ? '-' : value == 0x2502U ? '|' : '+';
+        } else { term->utf8_remaining = 0; }
+    } else if (character >= 0xc2U && character <= 0xf4U) {
+        term->utf8_remaining = character < 0xe0U ? 1U : character < 0xf0U ? 2U : 3U;
+        term->utf8_value = character & (term->utf8_remaining == 1 ? 0x1fU : term->utf8_remaining == 2 ? 0x0fU : 0x07U);
+        return;
+    }
     if (character < 32 || character >= 127) { return; }
     if (term->x >= term->cols) {
         term->x = 0;
@@ -215,6 +234,14 @@ static void consume(TestTerminal *term, unsigned char character)
 
 void test_terminal_start_argv(TestTerminal *term, char *const arguments[], const char *type, bool no_color)
 {
+    const char *config = getenv("TB_TEST_CONFIG_HOME");
+    if (!config) {
+        if (!config_ready) {
+            CHECK(mkdtemp(isolated_config) != NULL && atexit(config_cleanup) == 0);
+            config_ready = true;
+        }
+        config = isolated_config;
+    }
     memset(term, 0, sizeof *term);
     term->rows = 44;
     term->cols = 140;
@@ -239,6 +266,7 @@ void test_terminal_start_argv(TestTerminal *term, char *const arguments[], const
         (void)close(term->slave);
         CHECK(setenv("TERM", type, 1) == 0);
         CHECK(setenv("LC_ALL", "C.UTF-8", 1) == 0);
+        CHECK(setenv("XDG_CONFIG_HOME", config, 1) == 0);
         if (no_color) { CHECK(setenv("NO_COLOR", "1", 1) == 0); }
         else { CHECK(unsetenv("NO_COLOR") == 0); }
         execvp(arguments[0], arguments);

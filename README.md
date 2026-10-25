@@ -23,7 +23,7 @@ improvements continue.
 The current build supports native Linux x86-64 launch/attach, stepping, source
 and mixed disassembly, threads/frames, code breakpoints and Run to Selected,
 hardware-required data watchpoints, read-only registers/Memory/Locals/Watches,
-GDB Console, program output, Save Log, named profiles and action-key remapping.
+GDB Console, program output, Save Log, named profiles and personal keybind customization.
 Availability depends on GDB and the target's capabilities.
 
 v0.1.1 adds **Config → Themes** with seven built-in families and 37 variants,
@@ -32,7 +32,10 @@ preview and saved appearance preferences.
 [Theme controls and variants](docs/usage.md#configuration-and-themes) describe
 what is included. Shared UI additions also include
 [Source fullscreen and spatial keyboard navigation](docs/usage.md#workspace-controls).
-These features extend the original v0.1.0 workspace.
+These features extend the original v0.1.0 workspace. The development build also
+provides [Config → Keybinds](docs/usage.md#personal-keybinds) for debugger and
+workspace/navigation shortcuts. Bindings are personal preferences alongside
+themes; connection profiles never carry or override them.
 
 Existing TCP GDB servers support reviewed `remote`/`extended-remote` connections
 and shared inspectors. OpenOCD support includes reviewed startup, installed-script

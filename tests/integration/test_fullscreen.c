@@ -115,6 +115,7 @@ int main(int argc, char **argv)
 {
     CHECK((argc == 2 || argc == 3) && atexit(cleanup) == 0);
     char root[] = "/tmp/the-bugger-fullscreen-XXXXXX"; CHECK(mkdtemp(root)); CHECK(setenv("XDG_CONFIG_HOME", root, 1) == 0);
+    CHECK(setenv("TB_TEST_CONFIG_HOME", root, 1) == 0);
     if (argc == 3) { native(argv[1], argv[2]); } else { demo(argv[1]); }
     CHECK(rmdir(root) == 0); return EXIT_SUCCESS;
 }

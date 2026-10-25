@@ -176,6 +176,7 @@ int main(int argc, char **argv)
     CHECK(argc == 2 && atexit(cleanup) == 0);
     char root[] = "/tmp/the-bugger-navigation-XXXXXX"; CHECK(mkdtemp(root));
     CHECK(setenv("XDG_CONFIG_HOME", root, 1) == 0);
+    CHECK(setenv("TB_TEST_CONFIG_HOME", root, 1) == 0);
     test_terminal_start(&arrows, argv[1], "xterm-256color", true); active[0] = true;
     test_terminal_start(&motions, argv[1], "xterm-256color", true); active[1] = true;
     test_terminal_expect(&arrows, "Start a debugging session");

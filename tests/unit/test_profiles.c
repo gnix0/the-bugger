@@ -2,6 +2,7 @@
 #include "profiles.h"
 #include "../support/check.h"
 #include <dirent.h>
+#include <json-c/json.h>
 #include <fcntl.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -55,7 +56,6 @@ int main(void)
         p->directory_count = 2; (void)snprintf(p->directories[0], TB_PROFILE_PATH, "/priority"); (void)snprintf(p->directories[1], TB_PROFILE_PATH, "/fallback");
         p->rule_count = 2; (void)snprintf(p->rules[0].from, TB_PROFILE_PATH, "/build/project"); (void)snprintf(p->rules[0].to, TB_PROFILE_PATH, "/local project");
         (void)snprintf(p->rules[1].from, TB_PROFILE_PATH, "/build"); (void)snprintf(p->rules[1].to, TB_PROFILE_PATH, "/other");
-        p->keys[3] = 7;
         CHECK(tb_profile_valid(p) && tb_profiles_put(store, p, false));
         CHECK(!tb_profiles_put(store, p, false));
         CHECK(tb_profiles_put(store, p, true));
@@ -64,6 +64,15 @@ int main(void)
         tb_profiles_destroy(copy);
     }
     struct stat info; CHECK(stat(tb_profiles_path(store), &info) == 0 && (info.st_mode & 0777) == 0600);
+    char *clean = read_file(tb_profiles_path(store)); CHECK(strstr(clean, "\"keys\"") == NULL);
+    json_object *legacy = json_tokener_parse(clean), *items = NULL; CHECK(legacy);
+    CHECK(json_object_object_get_ex(legacy, "profiles", &items));
+    CHECK(json_object_object_add(legacy, "version", json_object_new_int(1)) == 0);
+    CHECK(json_object_object_add(json_object_array_get_idx(items, 0), "keys", json_object_new_string("ignored legacy bindings")) == 0);
+    write_file(tb_profiles_path(store), json_object_to_json_string(legacy)); json_object_put(legacy); free(clean);
+    CHECK(tb_profiles_load(store));
+    CHECK(tb_profiles_touch(store, "profile-0"));
+    clean = read_file(tb_profiles_path(store)); CHECK(strstr(clean, "\"keys\"") == NULL); free(clean);
     char *original = read_file(tb_profiles_path(store));
     CHECK(!strstr(original, "pid") && !strstr(original, "environment") && !strstr(original, "breakpoints"));
     char lock_path[256]; (void)snprintf(lock_path, sizeof lock_path, "%s/the-bugger/.lock", root);
@@ -75,7 +84,7 @@ int main(void)
     CHECK(setrlimit(RLIMIT_FSIZE, &tiny) == 0); CHECK(!tb_profiles_put(store, p, true));
     CHECK(setrlimit(RLIMIT_FSIZE, &limit) == 0 && signal(SIGXFSZ, handler) != SIG_ERR);
     char *preserved = read_file(tb_profiles_path(store)); CHECK(strcmp(original, preserved) == 0); free(preserved);
-    const char *bad[] = {"", "{", "[]", "{\"version\":2,\"profiles\":[],\"recent\":[]}",
+    const char *bad[] = {"", "{", "[]", "{\"version\":3,\"profiles\":[],\"recent\":[]}",
         "{\"version\":1,\"profiles\":[],\"recent\":[]} trailing", "{\"version\":1,\"profiles\":[],\"recent\":[\"missing\"]}",
         "{\"version\":1,\"profiles\":[{}],\"recent\":[]}"};
     for (size_t i = 0; i < sizeof bad / sizeof bad[0]; ++i) {
@@ -97,14 +106,8 @@ int main(void)
     CHECK(tb_profiles_remove(store, "profile-0")); CHECK(!tb_profiles_find(store, "profile-0"));
     CHECK(strcmp(tb_profiles_recent(store, 0), "profile-1") == 0);
     tb_profile_defaults(p, 0); (void)snprintf(p->name, sizeof p->name, "bad");
-    p->keys[3] = p->keys[0]; CHECK(!tb_profile_valid(p)); p->keys[3] = -17; CHECK(!tb_profile_valid(p));
-    p->keys[3] = -2; CHECK(tb_profile_valid(p)); p->arguments.count = TB_PROFILE_WORDS + 1; CHECK(!tb_profile_valid(p));
+    p->arguments.count = TB_PROFILE_WORDS + 1; CHECK(!tb_profile_valid(p));
     p->arguments.count = 0; p->name[0] = (char)0xff; CHECK(!tb_profile_valid(p));
-    for (int key = -26; key <= 24; ++key) {
-        if (!tb_profile_key_valid(key)) { continue; }
-        char text[32]; int parsed; tb_profile_key_name(key, text, sizeof text); CHECK(tb_profile_key_parse(text, &parsed) && key == parsed);
-    }
-    int key; CHECK(!tb_profile_key_parse("F0", &key) && !tb_profile_key_parse("F25", &key) && !tb_profile_key_parse("Ctrl+Q", &key));
     /* A non-regular/symlink store is rejected without blocking or following it. */
     CHECK(unlink(tb_profiles_path(store)) == 0); CHECK(mkfifo(tb_profiles_path(store), 0600) == 0);
     CHECK(!tb_profiles_load(store)); CHECK(unlink(tb_profiles_path(store)) == 0);
@@ -128,6 +131,6 @@ int main(void)
     }
     int status; CHECK(waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == 0);
     tb_profiles_destroy(stale); tb_profiles_destroy(store); free(p); free(original); remove_tree(root);
-    puts("PASS M13 XDG versioned profiles, all connection types, literal argv/paths, ordered source/scripts, key validation, atomic private writes, stale-writer rejection, corrupt-file preservation, recent/delete and bounds");
+    puts("PASS M13 XDG versioned profiles, all connection types, literal argv/paths, ordered source/scripts, atomic private writes, stale-writer rejection, corrupt-file preservation, recent/delete and bounds");
     return EXIT_SUCCESS;
 }
