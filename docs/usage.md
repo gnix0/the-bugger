@@ -466,13 +466,22 @@ shrinking and return when space permits.
 All built-in themes use consistent panel, header, tab and footer roles. Direct-color
 terminfo enables the adapted RGB palette; otherwise 256/8-color or monochrome is used.
 Standalone Alacritty advertising truecolor uses `alacritty-direct` when installed.
+Within tmux, matching tmux/screen terminal names use `tmux-direct` when RGB is
+advertised through COLORTERM or terminfo capabilities. Missing direct entries or
+absent RGB signals retain the original terminal's color mode; ncurses-term supplies
+the direct entries on distributions that package them separately.
 `NO_COLOR=1 ./build/the-bugger` forces monochrome. Use a TERM entry supported by
 your terminal; the application does not alter terminal palettes or tmux settings.
 
 In tmux, opt into mouse handling with `set -g mouse on`. Function keys depend on
 the sequences the terminal/multiplexer reports; use clickable alternatives when
-intercepted. Truecolor forwarding also requires matching terminal capabilities;
-an inherited COLORTERM alone does not establish support.
+intercepted. Exact colors also require tmux to forward RGB to a capable outer
+terminal; its `terminal-features` RGB setting or existing `Tc` override handles
+that side. The application now honors the conventional COLORTERM RGB signal,
+including within tmux, instead of quantizing an advertised RGB palette to 256
+colors. It does not modify your tmux settings. Older tmux versions may need
+COLORTERM preserved in the session; current versions advertise it themselves.
+See [tmux's RGB guidance](https://github.com/tmux/tmux/wiki/FAQ#how-do-i-use-rgb-colour).
 
 ## Locals and Watches
 

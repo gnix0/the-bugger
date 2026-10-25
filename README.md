@@ -29,6 +29,8 @@ Availability depends on GDB and the target's capabilities.
 v0.1.1 adds **Config → Themes** with seven built-in families and 37 variants,
 preview and saved appearance preferences.
 **Catppuccin Macchiato** is the default; Monokai Pro remains available.
+The development build preserves exact theme colors inside RGB-advertising tmux
+sessions, with 256-color and monochrome fallbacks.
 [Theme controls and variants](docs/usage.md#configuration-and-themes) describe
 what is included. Shared UI additions also include
 [Source fullscreen and spatial keyboard navigation](docs/usage.md#workspace-controls).

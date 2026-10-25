@@ -1480,3 +1480,21 @@ fields and session cleanup. Existing default-off text-entry assertions remain.
    and monochrome, resize, and verify footer/focus remain consistent.
 5. Restore Defaults with confirmation; it remains a draft until Save. Confirm
    the option becomes Off and profiles never carry personal input settings.
+
+### Exact colors through tmux
+
+`make test-terminal-description test-tmux-colors` checks advertised capability
+selection and actual RGB escape sequences through an isolated real tmux server.
+The tmux check uses `tmux-256color` plus `*:Tc`, compares exact Macchiato workspace,
+panel, raised-surface, text and accent RGB values with standalone Alacritty output,
+and switches to Rose Pine Dawn to check both channels of a light palette.
+It also exercises the 256-color path with COLORTERM removed only in the fixture's
+app process, and NO_COLOR. This explicit removal matters because current tmux
+sets COLORTERM itself. The new checks are included in `test` and `test-tmux`, so
+`test-ci` covers them along with existing input, mouse, resize and cleanup tests.
+
+Manual review: open Config → Themes → Preview both outside and inside your RGB
+configured tmux session. Macchiato's panel should retain its blue-gray color in
+both; also compare a light palette's background and text. Keep the same terminal
+font/settings. Check NO_COLOR and existing mouse/function-key controls. These
+checks do not establish RGB forwarding through an unconfigured outer terminal.

@@ -34,6 +34,11 @@
 
 ### Fixed
 
+- Honor advertised RGB support inside tmux using its matching direct-color
+  terminfo description, preserving exact theme foregrounds and backgrounds
+  instead of reducing subtle backgrounds to 256-color grays. Keep original-TERM
+  and NO_COLOR fallbacks without modifying tmux or the terminal palette.
+
 - Too-small terminal warnings now show current dimensions and no longer label
   live sessions as DEMO; the minimum remains 48 columns by 18 rows.
 - Keep Enter separate from Ctrl+J during content focus so keyboard selection
