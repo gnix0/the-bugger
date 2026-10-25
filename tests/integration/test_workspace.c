@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
     test_terminal_expect(&term, "Only nested split panes can close");
 
     test_terminal_resize(&term, 5, 15);
-    test_terminal_expect(&term, "DEMO:");
+    test_terminal_expect(&term, "Terminal too");
     test_terminal_resize(&term, 44, 140);
     test_terminal_expect(&term, "Source");
     CHECK(count_text(&term, "...") == 6);

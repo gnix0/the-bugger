@@ -1710,7 +1710,10 @@ static void draw_page(App *app)
     (void)leaveok(stdscr, TRUE);
     tb_fill((TbRect){0, 0, COLS, LINES}, TB_WORKSPACE);
     if (COLS < 48 || LINES < 18) {
-        tb_text(0, 0, COLS, TB_ORANGE, A_BOLD, "DEMO: terminal too small");
+        char dimensions[64];
+        (void)snprintf(dimensions, sizeof dimensions, "Current: %dx%d", COLS, LINES);
+        tb_text(0, 0, COLS, TB_ORANGE, A_BOLD, "Terminal too small");
+        tb_text(1, 0, COLS, TB_PANEL, 0, dimensions);
         tb_text(2, 0, COLS, TB_PANEL, 0, "Resize to at least 48x18.");
         tb_text(4, 0, COLS, TB_PANEL, 0, "State retained. Ctrl+Q quits.");
     } else if (app->page == LAUNCHER) {

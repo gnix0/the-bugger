@@ -15,6 +15,8 @@
 
 ### Fixed
 
+- Too-small terminal warnings now show current dimensions and no longer label
+  live sessions as DEMO; the minimum remains 48 columns by 18 rows.
 - Keep Enter separate from Ctrl+J during content focus so keyboard selection
   in Call Stack, Threads and other views continues to work.
 

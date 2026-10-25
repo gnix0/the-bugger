@@ -458,7 +458,9 @@ one tab; each of the six root tiles retains at least one pane.
 The workspace supports up to 32 panes with a minimum tiled size of 20x7 cells per
 pane. At least 112x28 displays all six default panes; 140x44 is comfortable.
 Smaller terminals show a focused pane with controls to reach every retained pane.
-Below 48x18 a resize message preserves state. Tabs, splits and proportions survive
+Below 48x18 a mode-neutral resize warning shows the current dimensions and the
+minimum required size, retaining state without pausing or disconnecting the target.
+Tabs, splits and proportions survive
 shrinking and return when space permits.
 
 All built-in themes use consistent panel, header, tab and footer roles. Direct-color
