@@ -129,7 +129,7 @@ Manual review:
 1. Stop a debug session and resize/split panes. In Source choose **Actions →
    Fullscreen Source**, or **... → Pane actions → Fullscreen Source**. Source
    fills the work area; only its controls and application header/footer remain.
-2. Scroll, use h/j/k/l and step from Source. Normal source/PC markers and toolbar
+2. Scroll, use arrows (or h/j/k/l with Vim-like input enabled) and step from Source. Normal source/PC markers and toolbar
    actions must remain usable; clicking an old divider position or pressing a
    pane-switch shortcut must not activate hidden panes.
 3. Resize small and large. Restore with the visible button, Tab/Enter or Escape:
@@ -141,7 +141,7 @@ board support.
 
 ## Spatial control and content navigation
 
-`make test-navigation` compares arrows/hjkl and checks geometry, toolbar edges,
+`make test-navigation` explicitly enables Vim-like input in an isolated personal preference fixture, then compares arrows/hjkl and checks geometry, toolbar edges,
 control-only Tab traversal, content entry/exit, fullscreen focus recovery and
 identity retention across compact resizing. It also compares Ctrl+arrow and
 Ctrl+hjkl pane transfers across the six-pane layout and a nested split, with
@@ -149,6 +149,9 @@ edge stopping, viewport retention and fullscreen isolation.
 `make test-fullscreen` and the
 workspace PTY checks retain layout/restoration coverage. These require no target.
 Live per-view checks remain necessary for horizontal scrolling and context rows.
+
+Enable Vim-like input before comparing aliases in these steps; use Insert for
+literal field entry.
 
 1. Open a session: Continue is selected. Right/l selects Pause; Left/h returns.
    Down/j moves below the toolbar. At a row edge, focus remains reachable.
@@ -189,13 +192,12 @@ resizing, confirmation controls and compact resize. The harness waits through
 Escape recognition and drains redraws before comparing; a partial screen is
 not a completed frame.
 
-Manual review: navigate menus with h/j/k/l, focus a tab using h/l and activate
-it with Enter,
-scroll a focused body with j/k and resize a divider using the matching axis.
-Type `hjkl` into a configuration or Memory address field: the characters must
-remain literal. Actual arrows, Tab, mouse and function keys must still work.
-Only these four lowercase aliases are provided; there are no Vim modes or
-additional motions. Full native/tmux or hardware evidence requires separate runs.
+Manual review: enable Vim-like input in Config → Keybinds and Save. Navigate
+menus with h/j/k/l, focus a tab with h/l and activate it with Enter; scroll
+content with j/k and resize a divider along its axis. In fields, press i and
+type `hjkl`: the characters must remain literal in Insert. Escape enters Normal,
+and Escape again backs out. Actual arrows, Tab, mouse and function keys remain
+available. Full native/tmux and hardware evidence require their respective runs.
 
 ## Themes and configuration
 
@@ -1454,3 +1456,27 @@ gate, preserving F06/F22 ordering and the separate F18 logging scope.
    settings, loss/recovery observations and logs. PTYs cannot prove electrical
    framing, flow-control wiring or reset-line behavior; physical results apply
    only to named configurations, not every MCU/probe or serial adapter.
+
+### Opt-in Vim-like input
+
+`make test-editor test-keybinds test-navigation` checks bounded Normal commands,
+factory-off defaults, alias conflicts/preservation, preference migration and
+mode-aware navigation. The existing keybind TUI suite additionally exercises the
+toggle, Undo, unsaved confirmation, Save/reload, Normal-on-entry, Insert literal
+text, cursor edits, focus changes and compact resize. Its native and isolated
+real-tmux invocations in `test-ci` cover Console submit, Memory drafts, Save Log
+fields and session cleanup. Existing default-off text-entry assertions remain.
+
+1. With fresh preferences, open Config → Keybinds: Vim-like input is Off. Verify
+   arrows work and ordinary fields immediately accept literal `hjkl` and Backspace.
+2. Turn it On; Undo returns Off without saving. Turn it On, Back and Cancel the
+   unsaved warning, then Save. Reopen the app: the option remains On.
+3. Focus a configuration field: expect cyan edges and VIM NORMAL. Press i and
+   type `alpha beta`; expect green edges and VIM INSERT. Escape, 0, w, x, i, X
+   produces `alpha Xeta`. Tab to another field: expect Normal there.
+4. In a real session, repeat in Console and Memory. Mode changes alone must not
+   send/read. Enter/Send deliberately submits a Console draft. Escape from Insert
+   preserves it and enters Normal; another Escape leaves editing. Repeat in tmux
+   and monochrome, resize, and verify footer/focus remain consistent.
+5. Restore Defaults with confirmation; it remains a draft until Save. Confirm
+   the option becomes Off and profiles never carry personal input settings.

@@ -1597,3 +1597,86 @@ Final audit found no remaining GDB, OpenOCD or frontend processes; log:
 `build/keybinds-spacing-padding-process-audit.log`. The tested source manifest,
 local documentation links and `git diff --check` passed. Final delivery file
 hashes are `build/keybinds-spacing-padding-delivery-tree.json`.
+
+## Opt-in Vim-like input — 2026-10-25
+
+State: implemented, awaiting user acceptance. The owner selected Normal on field
+entry. Vim-like navigation is now opt-in in Config → Keybinds, with a personal
+boolean independent of profiles. New/legacy preferences default off; legacy stock
+aliases alone are cleared without rewriting the file. Custom assignments and
+appearance are preserved. Toggle/Undo/discard/Restore Defaults/Save share the
+existing draft transaction. Normal/Insert field editing adds explicit footer
+and edge feedback without target operations on mode changes.
+
+Agent-run development checks compiled with GCC 16.2.1, C17, strict warnings and
+`CPPFLAGS=-D_FORTIFY_SOURCE=3` under `build/vim-focused`. `test-editor`, preference
+unit checks, `test-keybinds` and `test-navigation` passed after fixes. The first
+navigation run exposed a real cursor bug: rendering an unfocused empty field
+clamped the shared focused cursor and reversed subsequent typing. Rendering now
+uses a separate idle cursor for unfocused fields. An earlier keybind test still
+expected factory `k`; it now asserts the deliberately unbound factory value,
+while the navigation comparison explicitly enables Vim input. Existing default-off
+literal-entry and real custom Ctrl+H dispatch assertions remain covered.
+
+Focused logs: `build/vim-evidence/initial-build.log`,
+`focused-initial-failure.log`, `focused-final.log`. A preliminary build invocation
+also requested nonexistent `test-preferences`; the actual unit binary was built
+and executed explicitly. No application assertion was removed to hide a failure.
+
+Full baseline command (agent-run, outside the sandbox for ptrace, sockets and tmux):
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/vim-ci-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+Environment: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1 (20260810), GDB 18.1,
+tmux 3.8; `TERM=xterm-256color`. Fresh build directory; the existing CI workflow's
+Tests job uses this same target, on hosted Ubuntu 26.04. Log:
+`build/vim-evidence/test-ci.log`. Exact application/test/build inputs are recorded
+in `build/vim-evidence/source-manifest.sha256` (manifest SHA-256
+`b08a32f8e49d854a07596839578ab8302f8bc688727809b85718ded97aee4c28`).
+
+The first complete baseline stopped in the isolated tmux keybind test while
+waiting for Normal feedback after the Console → Memory handoff. Its full log is
+`build/vim-evidence/test-ci-initial-tmux-failure.log`. Diagnostic rerun
+`tmux-debug.log` located the failure at Memory focus: the harness sent a mouse
+sequence while the prior standalone Escape could still be pending in tmux.
+The harness now waits for the field-mode indicator to disappear and asserts
+that the stopped workspace remains open before sending another click. It also
+waits for Insert feedback before submitting `start`. No application assertion
+was weakened. `tmux-debug2.log` records the passing real-GDB/tmux rerun.
+
+The final baseline uses `BUILD_DIR=build/vim-ci-final-20261025` with the same
+command/flags, in another fresh directory. Log: `build/vim-evidence/test-ci-final.log`.
+Final input manifest: `build/vim-evidence/source-manifest-final.sha256`, SHA-256
+`99dd6dc5396cc2963cc4a5e29b8a0f1f53833e22030da141f9e37bcb55c3ed38`.
+That run reached the existing source-view integration test and exposed another
+old default assumption: it sent Ctrl+H without enabling Vim-like input. The test
+now uses fixed Ctrl+Left, retaining its source-stepping and unchanged-PC
+assertions. Opt-in Ctrl+H coverage remains in navigation and custom keybind tests.
+The failure log is `build/vim-evidence/test-ci-default-alias-failure.log`.
+A subsequent complete retry was interrupted when the owner's desktop session
+ended, during the remote test; `test-ci-session-interrupted.log` preserves that
+partial run. A read-only host process audit found no surviving test/debugger
+processes before restarting. The complete baseline was restarted in the same
+freshly created task directory with unchanged flags; no older task's objects were
+used. Final baseline result: PASS (exit 0), including default/native tests, direct and
+isolated tmux input, real localhost remote sessions, authored managed-server
+cases and actual OpenOCD pre-initialization script checks. Native coverage includes
+context selection, text-entry/Enter/Backspace, source stepping, terminal restoration
+and cleanup. New mode checks passed directly and through real tmux. A final
+read-only host process audit found no surviving test/frontend/GDB/gdbserver/
+OpenOCD/tmux processes. `git diff --check` passed. Status remains awaiting owner
+manual review and acceptance; this is local host evidence, not a hosted CI result.
+
+After explicit owner permission, agent-run
+`make BUILD_DIR=build/vim-input-analysis analyze` passed with clang-tidy 23.1.3
+(`build/vim-evidence/analysis.log`); project diagnostics were not suppressed to
+obtain success. Fortified compilation of every `tests/{unit,integration,support}/*.c`
+object under `build/vim-input-analysis` also passed, matching CI's compilation
+step (`build/vim-evidence/test-compilation.log`). Local host success does not establish hosted Ubuntu success or
+physical-board validation. No hardware, sanitizer or additional compiler matrix
+was run. `make all` rebuilt the ordinary review binary at `build/the-bugger`
+(`build/vim-evidence/review-build.log`). Final manual review uses the
+[opt-in walkthrough](testing.md#opt-in-vim-like-input); no owner manual acceptance
+is recorded. Full Vim editor emulation remains excluded.
