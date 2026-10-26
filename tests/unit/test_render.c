@@ -57,6 +57,10 @@ int main(void)
             for (int role = 6; role < 13; ++role) { CHECK(contrast(palette->colors[role], palette->colors[surface]) >= 3.0); }
         }
         CHECK(tb_theme_select(i) && strcmp(tb_theme_init(), "truecolor") == 0);
+        for (int role = TB_STATUS_TEXT; role <= TB_INSERT_TEXT; ++role) {
+            CHECK(extended_pair_content(role, &default_fg, &default_bg) == OK);
+            CHECK((unsigned)default_bg == palette->colors[0]);
+        }
         for (int pair_id = 1; pair_id < 2 * TB_COLOR_COUNT; ++pair_id) {
             if (pair_id == TB_COLOR_COUNT) { continue; } /* No style uses selected pair zero. */
             CHECK(extended_pair_content(pair_id, &default_fg, &default_bg) == OK);

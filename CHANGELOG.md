@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Keybinds scrolling keeps clean cell borders without underlined box glyphs.
+  Action buttons center their labels; Memory Options and session profile actions
+  fit their text with separated hit regions. All session forms wrap their complete
+  explanatory notes and separate them from the action rows. Profile creation
+  and reload actions share a padded bottom row, with Back aligned right. Native
+  and Embedded setup selectors have a small gap before their fields; Start
+  OpenOCD is separated from the preceding field while retaining its gap to
+  script browsing, whose controls have equal spacing above and below. The
+  Console command row is separated from Save Log when pane height permits.
+
+- Footer text uses the window background, with status on the left and controls
+  aligned right on the bottom row; long text uses the last two rows. Session forms, confirmations and
+  action/setup menus use centered cards sized to their content. Keybinds shows
+  an overflow scrollbar with track paging and thumb dragging.
+
+- Menu footers show context-specific guidance instead of retaining launcher or
+  previous-menu messages. Relevant save/action results remain visible, and
+  background session updates do not overwrite menu guidance. The mouse fallback
+  warning no longer labels normal sessions as DEMO.
+
 ## [0.1.2] - 2026-10-25
 
 ### Added

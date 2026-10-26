@@ -88,6 +88,16 @@ static void add_watch(const char *expression)
     test_terminal_send(&term, expression); test_terminal_send(&term, "\r");
     test_terminal_expect(&term, expression);
 }
+static void selected_value(const char *expected)
+{
+    int x, y;
+    test_terminal_expect(&term, "children 0");
+    CHECK(test_terminal_find(&term, "variables_global", &x, &y));
+    CHECK(strstr(term.cells[y], "children 0") && y + 2 < term.rows - 2);
+    const char *value = term.cells[y + 2] + x;
+    CHECK(strncmp(value, expected, strlen(expected)) == 0 && value[strlen(expected)] == ' ');
+    fprintf(stderr, "Selected snapshot value %s verified at centered dialog row %d\n", expected, y + 2);
+}
 int main(int argc, char **argv)
 {
     CHECK(argc == 3 || (argc == 4 && strcmp(argv[3], "--startup-only") == 0)); CHECK(atexit(cleanup) == 0);
@@ -113,10 +123,10 @@ int main(int argc, char **argv)
     /* Do not assert a transient session-footer acknowledgment. Inspect the
      * selected snapshot through the pane's stable Actions screen instead. */
     watch_click("Actions");
-    test_terminal_expect(&term, "children 0"); CHECK(strstr(term.cells[7], "17"));
+    selected_value("17");
     test_terminal_click(&term, "Cycle selected value format");
     watch_wait(NULL); watch_click("Actions");
-    test_terminal_expect(&term, "Hex"); CHECK(strstr(term.cells[7], "0x11"));
+    test_terminal_expect(&term, "Hex"); selected_value("0x11");
     test_terminal_send(&term, "\033"); add_watch("variables_sample");
     watch_click("variables_sample"); watch_click("Read"); watch_wait(NULL);
     watch_click("Actions"); test_terminal_click(&term, "Expand / collapse");

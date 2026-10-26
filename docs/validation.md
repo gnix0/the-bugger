@@ -1826,3 +1826,347 @@ the v0.1.0 physical RISC-V deferral does not automatically apply to v0.1.2.
 No hardware, sanitizer or additional compiler matrix was run during preparation.
 The packaged executable is dynamically linked; recorded host/library requirements
 do not establish compatibility with older distributions.
+
+## Contextual menu footers — 2026-10-25
+
+Status: automated-verified; awaiting user acceptance. The owner supplied an existing fix branch.
+
+The launcher instruction was stored as a global status and leaked into Config,
+Themes, Profiles and session forms. Keybinds already cleared that particular
+instruction on entry, but navigation could carry other previous-page notices.
+Guidance now comes from the current page; ordinary navigation clears transient
+notices, and explicit operation-result transitions preserve relevant success/error
+feedback. Keybind capture/progress, preview and Vim-mode footers retain their
+specialized rendering. Session revisions update workspace status without
+replacing menu guidance. The mouse fallback warning no longer says DEMO in
+ordinary sessions. This changes presentation only, not input bindings, stored
+preferences, session ownership or target operations.
+
+Agent-run evidence:
+
+- The expanded PTY regression fails against the previous ordinary executable:
+  Config still shows `Choose native launch/attach` instead of configuration
+  guidance (expected nonzero exit; `build/footer-evidence/regression-before-fix.log`).
+- The first focused run stopped because the new vt100 case expected launcher
+  guidance while the actual mouse-unavailable warning took precedence. This
+  exposed its inaccurate DEMO label, now corrected. The NO_COLOR context case
+  uses xterm capabilities; existing vt100 coverage remains intact. Failure log:
+  `build/footer-evidence/focused.log`.
+- Final focused command:
+  `TERM=xterm-256color make BUILD_DIR=build/footer-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes`.
+  PASS (exit 0), `build/footer-evidence/focused-final.log`. Covers launcher,
+  Config, Themes/preview/save, Keybinds/capture/cancel, Profiles/options/entries/
+  text, all session forms/review and OpenOCD script browsing/filtering. Checks
+  actual footer rows, clearing stale notices, visible current errors/save results,
+  DEMO, NO_COLOR and 48x18 rendering.
+- Full fresh baseline command:
+  `TERM=xterm-256color make BUILD_DIR=build/footer-ci-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+  PASS (exit 0); full log `build/footer-evidence/test-ci.log`. This includes
+  actual native GDB, Console/keybind/Vim input and terminal restoration, real
+  tmux, localhost remote and offline OpenOCD checks. No hardware was exercised.
+  Exact source/test/build/workflow input manifest:
+  `build/footer-evidence/test-inputs.sha256`, SHA-256
+  `b01ca65cecfc0c001335e7a7f8182864409e54fa603800a80a6ebcc641606ba6`.
+
+Environment: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1 (20260810), GDB 18.1,
+tmux 3.8. These are agent-run local host results, not hosted Ubuntu results.
+No physical hardware, sanitizer/compiler matrix or new static-analysis run is
+claimed. Manual menu/terminal review remains with the owner.
+
+The ordinary review executable was rebuilt with `make all`
+(`build/footer-evidence/review-build.log`). The test input manifest still matches
+the final source; `git diff --check` passed. A read-only host process audit found
+no surviving frontend, test, GDB, gdbserver, OpenOCD or tmux processes
+(`build/footer-evidence/process-audit.log`). The final tracked tree and patch
+are retained in `build/footer-evidence/tracked-tree.sha256` and `final-tree.patch`.
+
+## Footer layout, scrolling and centered screens — 2026-10-25
+
+Status: automated-verified; awaiting user acceptance.
+This extends the footer-context fix following the owner's screenshots and manual
+review. The previous context-only results above remain historical evidence for
+that earlier tree, not a substitute for this expanded layout check.
+
+Global footers now share one renderer: status left, help right on one row when
+both fit, otherwise on separate reserved rows. Status/hint and Vim Normal/Insert
+text use workspace-background semantic roles instead of panel/surface backing.
+The render test checks that background equality for all 37 palettes; existing
+color fallbacks and monochrome mode indicators remain covered.
+
+Keybinds has an overflow-only track/thumb alongside the table viewport, with
+track paging, thumb dragging, capture isolation and resize cancellation. The
+card reserves separation above the footer where space permits. Setup, profile,
+source, inspector-action, input and script/review screens use bounded centered
+cards. Session forms size to their fields/actions instead of terminal height;
+short forms retain scrolling. Reset and disconnect dialogs wrap their text and
+keep centered controls. Source-catalog paging uses the actual rendered row count.
+No debugger command, target-access policy, ownership or persistence format changes.
+
+Agent-run checks and retained logs:
+
+- Strict fortified focused builds initially caught local shadowed/redefined
+  width variables during coordinate conversion. Those compile failures are
+  preserved in `build/footer-layout-evidence/focused.log`; they were corrected
+  rather than bypassing `-Werror`.
+- `TERM=xterm-256color make BUILD_DIR=build/footer-layout-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes test-keybinds`:
+  PASS (exit 0), log `build/footer-layout-evidence/focused-frozen.log`. Added checks cover
+  right alignment, compact form geometry, short-menu scrollbar track/drag/end
+  reachability, disappearance without overflow and palette background equality.
+- `TERM=xterm-256color build/footer-layout-focused/test-native-tui "$PWD/build/footer-layout-focused/the-bugger" "$PWD/build/footer-layout-focused/debug-fixture"`:
+  PASS (exit 0), `build/footer-layout-evidence/native-focused.log`. Includes
+  real GDB, centered close controls, inline Console, field editing, errors,
+  Save Log, launched/attached ownership and signal/terminal cleanup.
+- The first fresh complete baseline used
+  `TERM=xterm-256color make BUILD_DIR=build/footer-layout-ci-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+  It failed at the existing Watches UI assertion that looked for `17` on fixed
+  terminal row 7 (`build/footer-layout-evidence/test-ci.log`). The centered
+  dialog places that same selected snapshot on row 22. The harness now locates
+  the selected variable summary and checks the exact adjacent value, preserving
+  both natural `17` and hexadecimal `0x11` assertions. A focused rerun passed
+  and recorded both values at row 22 (`variables-focused.log`). The initial
+  input manifest is preserved as `test-inputs-first.sha256` (SHA-256
+  `55c36194b83c5d9280f83568c70fa87422e1847fc3de2494cc5f808873a51a82`).
+- Final fresh complete baseline:
+  `TERM=xterm-256color make BUILD_DIR=build/footer-layout-ci-final-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+  PASS (exit 0), log `build/footer-layout-evidence/test-ci-final.log`. Includes
+  all default/native suites, source/catalog navigation, real tmux, localhost
+  remote and offline OpenOCD checks; no physical hardware was exercised.
+  Exact source/test/build/workflow manifest:
+  `build/footer-layout-evidence/test-inputs-before-interface.sha256`, SHA-256
+  `cd17efb7a050cd0f694e3814a7b80628a814cd97e8a5dbde8ff869a0baa0a3b0`.
+- Static analysis initially flagged adjacent line-count/style parameters in the
+  paragraph helper (`analysis.log`). Its text argument now separates those
+  parameters; matching callers were updated without changing rendering behavior.
+  No suppression was added. With explicit owner permission,
+  `make BUILD_DIR=build/footer-layout-analysis analyze` PASS (exit 0),
+  clang-tidy 23.1.3 (`analysis-final.log`).
+- After that interface cleanup, the complete fortified `test-ci` command above
+  was repeated with unchanged flags in the task build directory; Make rebuilt
+  the changed application source. PASS (exit 0), full log
+  `build/footer-layout-evidence/test-ci-verified.log`. The
+  final source/test/build/workflow input manifest is `test-inputs.sha256`, SHA-256
+  `4de214725a79e24f30dcd0a79067679f098033ab0fd43bc3cc84fdbf4769e026`.
+
+Environment: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1 (20260810), GDB 18.1,
+tmux 3.8. Local checks do not establish hosted Ubuntu success. No physical
+hardware or sanitizer/compiler matrix is claimed.
+The ordinary executable is rebuilt through `make all` for manual review;
+log `build/footer-layout-evidence/review-build.log`.
+
+Final input-manifest verification and `git diff --check` passed. The ordinary
+review executable was rebuilt again after the helper-interface cleanup
+(`build/footer-layout-evidence/review-build-final.log`). Final tree/patch
+identities are retained in `tracked-tree.sha256` and `final-tree.patch` under the
+same evidence directory. Hosted Ubuntu and physical visual acceptance remain
+separate from these automated local host results.
+
+The final read-only cleanup audit found no surviving frontend, test, GDB,
+gdbserver, OpenOCD or tmux processes (`process-audit-final.log`).
+
+## Footer/button visual follow-up — 2026-10-25
+
+Owner feedback identified extra strokes around scrolled Keybinds cells, an empty
+row below a combined footer, and uneven/clipped action labels. The selected cell
+border no longer applies underline to box-drawing glyphs; bold/color emphasis
+and border-only capture remain. The terminal test reader now tracks SGR underline
+through erase, scrolling and character insertion/deletion. New assertions inspect
+cell borders after wheel and scrollbar dragging. Shared action-label rendering
+centers padding, full-row choices stay left aligned, Memory Options fits, and
+session profile actions have spacing and separate narrow-screen rows. Wide
+footers now occupy the last row; narrow footers retain the last two rows.
+
+Agent-run checks and evidence are retained in `build/button-scroll-evidence/`:
+
+- Development focused check:
+  `TERM=xterm-256color make BUILD_DIR=build/button-scroll-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes test-keybinds`:
+  PASS, exit 0 (`focused.log`). Final geometry assertions and button adjustments
+  were subsequently included in the complete baseline below.
+- Authorized static analysis:
+  `make BUILD_DIR=build/footer-layout-analysis analyze`: PASS, exit 0
+  (`analysis.log`), with no new suppression.
+- Complete fresh fortified baseline:
+  `TERM=xterm-256color make BUILD_DIR=build/button-scroll-ci-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`:
+  PASS, exit 0 (`test-ci.log`). Includes native editing/Console/context selection,
+  terminal restoration, live Keybinds and isolated tmux runs, RGB rendering,
+  localhost remote sessions and offline/real OpenOCD checks without hardware.
+- `make all`: PASS, exit 0 (`review-build.log`); `build/the-bugger` is the ordinary
+  executable for owner visual review.
+
+Exact source/test/build/workflow inputs: `test-inputs.sha256`, SHA-256
+`e620875c83bab8e0f1444796f036f0ce793111491c8c9db981fd248081feea5c`.
+Environment: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1, tmux 3.8,
+clang-tidy 23.1.3 (`environment.log`). These are local host checks; hosted Ubuntu
+and owner visual acceptance remain separate. No hardware, sanitizer or compiler
+matrix is claimed. Status: awaiting owner visual acceptance after final checks.
+
+Final input verification and `git diff --check` passed. The read-only process
+audit found no surviving processes associated with this task baseline
+(`process-audit.log`). Final tracked-tree hashes and patch are retained as
+`tracked-tree.sha256` and `final-tree.patch` in the same evidence directory.
+
+## Complete session-form notes and spacing — 2026-10-25
+
+Owner review found the primary form actions adjacent to the explanatory note,
+plus clipped Embedded/GDB-server instructions. All three setup forms now measure
+and wrap the entire note before placing actions. At ordinary terminal heights,
+one empty row separates the note from Review/Back and one separates the primary
+row from profile actions. Field viewports shrink as needed at compact heights;
+notes and actions remain visible. Review warnings use the same wrapping path.
+
+Evidence under `build/form-spacing-evidence/`:
+
+- `TERM=xterm-256color make BUILD_DIR=build/form-spacing-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes`:
+  initial development PASS (`focused.log`). A new whole-phrase lookup then failed
+  in the complete baseline (`test-ci.log`) and diagnostic focused run
+  (`focused-notes.log`): the native note correctly wrapped `literal.` onto its
+  next row. The new test had assumed `Paths are literal.` remained contiguous.
+  The screen/raw terminal capture establishes that harness defect. The assertion
+  now locates the final rendered word, retaining exact row-spacing checks for
+  all three session types; no application assertion or safety check was removed.
+- Final focused command above: PASS, exit 0 (`focused-final.log`).
+- A supplementary focused terminal check normalizes all rendered rows and verifies
+  each complete note plus Review/Save profile/Profile/Delete at 48×18: PASS,
+  exit 0 (`minimum-form.log`, source `check-form-minimum.c`, compiled with C17,
+  `-O2 -g -D_FORTIFY_SOURCE=3 -Wall -Wextra -Wpedantic -Werror` against the
+  focused terminal-reader object; exact commands in `minimum-form-command.txt`).
+  No debugger connection is opened.
+- Authorized `make BUILD_DIR=build/footer-layout-analysis analyze`:
+  PASS, exit 0 (`analysis.log`).
+- Fresh final complete baseline:
+  `TERM=xterm-256color make BUILD_DIR=build/form-spacing-ci-final-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`:
+  PASS, exit 0 (`test-ci-final.log`), including native, tmux, remote and OpenOCD
+  suites. Earlier failed run used
+  `BUILD_DIR=build/form-spacing-ci-20261025`; its log/input manifest are retained.
+- `make all`: PASS, exit 0 (`review-build.log`); ordinary review executable
+  `build/the-bugger` rebuilt.
+
+Final source/test/build/workflow input manifest `test-inputs.sha256` has SHA-256
+`ffe6d0576467398f135bab030a847f3bff86ad69434bfb409d1ecb22726b8523`;
+the earlier new-test assertion failure is identified by `test-inputs-first.sha256`
+(`868a84e70bbacf888958290ae5526f15cdab9636f697dd3fafabb6e7e80b7996`).
+The local host remains Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1,
+tmux 3.8 and clang-tidy 23.1.3. Local execution does not establish hosted Ubuntu
+or physical-target results. Owner visual acceptance remains pending.
+
+Final input verification, `git diff --check` and task process cleanup passed
+(`input-verification.log`, `process-audit.log`). Final tracked-tree hashes and
+patch are retained in `tracked-tree.sha256` and `final-tree.patch`.
+
+## Profiles action-row alignment — 2026-10-25
+
+Owner review found New remote touching New OpenOCD, with creation and reload
+controls on different rows. Config → Profiles now places New native, New OpenOCD,
+New remote and Reload file together on the bottom row, with padded labels and
+separate hit rectangles. Back remains aligned right. Below 78 columns, the four
+left actions wrap into two rows; the card reserves the additional action row
+and pages profile entries within the remaining space.
+
+Agent-run evidence is retained in `build/profile-actions-evidence/`:
+
+- `TERM=xterm-256color make BUILD_DIR=build/profile-actions-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes`:
+  PASS, exit 0 (`focused.log`). New checks inspect the common bottom-row geometry,
+  label gaps, 48×18 fallback and Reload file activation, including monochrome.
+- Authorized `make BUILD_DIR=build/footer-layout-analysis analyze`:
+  PASS, exit 0 (`analysis.log`).
+- `TERM=xterm-256color make BUILD_DIR=build/profile-actions-ci-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`:
+  started before subsequent first-selector/script-browse spacing changes. Its
+  intermediate-tree log is retained as `test-ci.log` (PASS, exit 0); the final
+  combined-tree baseline is recorded in the follow-up below.
+- `make all`: PASS, exit 0 (`review-build.log`); review executable
+  `build/the-bugger` rebuilt.
+
+The source/test/build/workflow input manifest is `test-inputs.sha256`, SHA-256
+`1eb97e15f580de5cb875bf1f5a0799ef31ced5be07ef108d8be2ea4ed5e008bd`.
+Host: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1, tmux 3.8,
+clang-tidy 23.1.3. These are local results; hosted Ubuntu and owner visual
+acceptance remain separate. No physical-target validation is claimed.
+
+## Setup selector and script-browse spacing — 2026-10-25
+
+Owner feedback additionally requested minimal separation after Mode/OpenOCD setup
+and a centered Browse boards row. At ordinary heights Native/Embedded forms add
+one blank row after the initial selector. Embedded script-browse controls now
+have equal one-row gaps above and below, including adapter/target mode. Compact
+rendering collapses those gaps. Visible-field indexing, controls and carets use
+the rendered field rows, preserving scrolling and editing.
+
+Evidence under `build/form-field-gaps-evidence/`:
+
+- Initial focused runs failed a new label lookup (`focused.log`,
+  `focused-final.log`). `lookup-diagnostic.log` establishes that it selected
+  `Board script` from the first-row selector value at (66,15), beside the
+  `OpenOCD setup` label at (40,15). The test now finds the next field in the
+  label column and still requires its exact two-row separation. No application
+  assertion was removed.
+- `TERM=xterm-256color make BUILD_DIR=build/form-field-gaps-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes`:
+  PASS, exit 0 (`focused-verified.log`). Covers selector separation,
+  symmetric script-browse spacing, full form notes, Profiles bottom actions,
+  compact rendering and monochrome.
+- Authorized `make BUILD_DIR=build/footer-layout-analysis analyze`:
+  final-tree PASS, exit 0 (`analysis-final.log`). The earlier analysis log
+  is retained because the viewport offset expression was simplified afterward.
+- The earlier focused minimum-size runner was rerun against the final fortified
+  application: `TERM=xterm-256color build/form-spacing-focused/check-form-minimum "$PWD/build/form-field-gaps-focused/the-bugger"`:
+  PASS, exit 0 (`minimum-forms.log`), all three complete notes and action controls
+  visible at 48×18. Runner source/compilation are retained with the earlier
+  form-spacing evidence.
+- Final combined-tree complete fortified baseline:
+  `TERM=xterm-256color make BUILD_DIR=build/profile-form-final-ci-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`:
+  PASS, exit 0 (`test-ci-final.log`), including native, tmux, remote and OpenOCD
+  suites.
+- `make all`: PASS, exit 0 (`review-build-final.log`), ordinary review executable
+  `build/the-bugger` rebuilt.
+
+Exact source/test/build/workflow manifest: `test-inputs.sha256`, SHA-256
+`e840f2cda397518a4ce46b349ed501b890bbc27d42d7d32f000e880ce2f99a4a`.
+Host remains Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1, tmux 3.8,
+clang-tidy 23.1.3. Local host evidence does not establish hosted Ubuntu or
+physical-target success. Owner visual acceptance remains pending.
+
+Final manifest verification, `git diff --check` and process cleanup passed
+(`input-verification.log`, `process-audit.log`). Final tracked-tree hashes and
+patch are retained in `tracked-tree.sha256` and `final-tree.patch`.
+
+## Final Start OpenOCD and Console control gaps — 2026-10-25
+
+Owner clarification requested padding above Start OpenOCD, preserving its distance
+to Browse boards. The final toggle now has one empty row after OpenOCD binary,
+matching the setup selector's separation. Existing script-browse and note gaps
+remain unchanged; compact forms collapse all optional gaps.
+
+The owner also requested separation between the live Console Command/Send row
+and Save Log. Panes at least nine rows high reserve one empty row between those
+controls. A shared row reservation positions the command field, log viewport and
+horizontal scrollbar together; smaller panes keep their prior compact geometry.
+
+Agent evidence:
+
+- `TERM=xterm-256color make BUILD_DIR=build/form-field-gaps-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes`:
+  PASS, exit 0 before the independent Console adjustment; log
+  `build/start-openocd-gap-evidence/focused.log`. Exact new geometry assertions
+  require OpenOCD binary → Start OpenOCD → Browse boards → note to retain two-row
+  steps. The source/test manifest for that focused state has SHA-256
+  `3de54588f163732e94a4f32946e7a554ae499d795097ba6ac49433d51f5abfdc`.
+- `TERM=xterm-256color build/form-field-gaps-focused/test-native-tui "$PWD/build/form-field-gaps-focused/the-bugger" "$PWD/build/form-field-gaps-focused/debug-fixture"`:
+  PASS, exit 0 (`build/console-final-gap-evidence/native-focused.log`). Checks
+  Command/Send alignment, the empty row before Save Log, real GDB Enter/Send,
+  draft/caret/resize behavior, log saving, ownership and terminal cleanup.
+- Final combined-tree full baseline:
+  `TERM=xterm-256color make BUILD_DIR=build/final-console-spacing-ci-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`:
+  PASS, exit 0 (`build/console-final-gap-evidence/test-ci.log`), including native,
+  tmux, viewport/scrollbar, remote and OpenOCD coverage.
+- Authorized `make BUILD_DIR=build/footer-layout-analysis analyze`:
+  final combined-tree PASS, exit 0 (`build/console-final-gap-evidence/analysis.log`).
+- `make all`: PASS, exit 0 (`build/console-final-gap-evidence/review-build.log`),
+  `build/the-bugger` rebuilt for owner review.
+
+Final source/test/build/workflow manifest:
+`build/console-final-gap-evidence/test-inputs.sha256`, SHA-256
+`428a20ef17873f98f093b81ea7c60105375b597221a64492d2e3ced3b03441bc`.
+Environment remains Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1,
+tmux 3.8 and clang-tidy 23.1.3. Local host results do not establish hosted Ubuntu
+or physical-target validation. Owner visual acceptance remains pending.
+
+Final input verification, `git diff --check` and task process cleanup passed
+(`input-verification.log`, `process-audit.log`). Final tracked-tree hashes and
+patch are retained in `tracked-tree.sha256` and `final-tree.patch`.

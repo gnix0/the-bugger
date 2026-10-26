@@ -74,6 +74,12 @@ static void inline_console(TestTerminal *term)
     test_terminal_click(term, "Command");
     test_terminal_expect(term, "Send");
     test_terminal_expect(term, "PID not started");
+    int command_x, command_y, send_x, send_y, save_x, save_y;
+    CHECK(test_terminal_find(term, "Command", &command_x, &command_y));
+    CHECK(test_terminal_find(term, "Send", &send_x, &send_y));
+    CHECK(test_terminal_find(term, "Save Log", &save_x, &save_y));
+    CHECK(send_y == command_y && save_y == command_y + 2);
+    for (int x = command_x; x < send_x + 4; ++x) { CHECK(term->cells[command_y + 1][x] == ' '); }
     CHECK(!test_terminal_find(term, "GDB console command", NULL, NULL));
     test_terminal_send(term, "\r");
     test_terminal_expect(term, "Enter a GDB console command.");
@@ -198,6 +204,11 @@ int main(int argc, char *argv[])
     struct stat info; CHECK(stat(path, &info) == 0 && info.st_size > 0);
     test_terminal_send(&term, "q");
     test_terminal_expect(&term, "Terminate the launched program");
+    int cancel_x, cancel_y, close_x, close_y;
+    CHECK(test_terminal_find(&term, "[ Cancel ]", &cancel_x, &cancel_y));
+    CHECK(test_terminal_find(&term, "[ Close session ]", &close_x, &close_y));
+    CHECK(cancel_y == close_y && cancel_y > 12 && cancel_y < term.rows - 5);
+    CHECK(cancel_x > 10 && close_x > cancel_x && close_x + 17 < term.cols - 10);
     test_terminal_send(&term, "q");
     test_terminal_expect(&term, "LIVE | Stopped");
     test_terminal_send(&term, "q");
