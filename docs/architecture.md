@@ -120,6 +120,40 @@ native-vs-preview availability, profile review and q/Ctrl+Q policy
 explicit; session configuration and the debugging workspace are unchanged.
 
 
+Menu footer guidance is derived from the current page rather than stored as a
+persistent launcher status. Page navigation clears transient notices; explicit
+operation-result transitions retain their relevant success/error message at the
+destination. Keybinds keeps its capture/progress hints and Vim fields keep their
+mode feedback. Background session revisions refresh workspace status only, so
+they cannot replace menu guidance while a configuration/input page is open.
+
+Menu/application footer text uses semantic status, hint and Normal/Insert roles
+on the workspace background. A shared renderer aligns status left and help right
+on the bottom row when they fit, otherwise uses the last two rows without overlap.
+The centered menu-card helper bounds setup/action pages to their content and the
+available area between chrome and footer. Rendered field/button hit regions and
+caret positions use those same rectangles; list paging uses actual visible rows.
+Session-form height includes the wrapped explanatory note and the action rows,
+with one empty row around the primary action row when height permits. Compact
+forms retain field scrolling and configuration state. Native/Embedded forms add
+one row after their initial setup selector and before the final Start OpenOCD
+selector. The spacing from Start OpenOCD to script browsing is unchanged. Installed-script browsing controls
+have equal one-row gaps above and below when height permits. Those gaps collapse
+in compact rendering; field hit rectangles and carets follow the rendered rows.
+
+Keybinds adds an overflow-only one-cell `|`/`#` bar beside its tables. It shares
+the tables' row viewport, supports track paging and thumb dragging, and never
+joins keyboard control traversal. Resizing cancels a drag. Capture blocks scrollbar
+changes; wheel and page/navigation keys retain their existing behavior.
+
+Action button labels use centered padding inside their hit rectangles; full-row
+menu choices remain left aligned. The profile catalog groups its four creation/
+reload actions on the bottom row with gaps between their hit regions, keeping
+Back at the right edge; below 78 columns the group wraps into two rows.
+Session profile actions reserve separate rows
+at narrow widths. Keybind cell borders use color/bold or capture reverse video,
+without underlining box glyphs, which produces extra strokes in terminal fonts.
+
 ## Source fullscreen rendering
 
 `App.fullscreen_source` is a temporary pane identifier, or -1 for ordinary tiled
@@ -519,12 +553,16 @@ rejected requests preserve it. Escape releases field focus without sending.
 Text editing takes precedence over navigation/action bindings; the final refresh
 places the caret in the field after drawing the workspace chrome.
 
+The live Console reserves one blank row between Command/Send and Save Log in
+panes at least nine rows high. Command controls, log viewport and horizontal
+scrollbar share that reservation; smaller panes retain adjacent control rows.
+
 Save Log flushes pending fragments and exports the bounded readable history.
 It creates a new file with O_EXCL and mode 0600, preserving existing files and
 reporting open/short-write/close failures. It exports retained text, not a profile,
 and cannot recover evicted history.
 
-Normal Quit/Session requests use a full-page confirmation. The session interrupts
+Normal Quit/Session requests use a centered confirmation card. The session interrupts
 a running target, kills a still-owned launched inferior through GDB or
 detaches/resumes an attached target, then closes/reaps GDB. Signal exits run the
 same cleanup outside the handler. A stable Linux pidfd acquired from the actual

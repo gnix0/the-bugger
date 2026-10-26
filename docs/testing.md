@@ -109,6 +109,41 @@ TERM/terminal/tmux versions and intercepted keys. Fixtures never rewrite existin
 tmux bindings or security settings. PTY screen parsing is an ASCII-label oracle,
 not a general terminal emulator or proof of UTF-8/physical visual fidelity.
 
+## Menu footer context
+
+`make test-themes` includes PTY coverage of launcher, Config, Themes/preview,
+Keybinds/capture, Profiles/options/entries/text, all three session forms/review,
+and installed OpenOCD script browsing/filtering. It checks that navigation clears
+stale notices while current errors and save results remain visible, including
+DEMO, compact and NO_COLOR cases. Existing live tests retain operation-result,
+field-editing and terminal-restoration coverage through `make test-ci`.
+
+Manual review:
+
+1. Open Config, Themes, Keybinds and Profiles from the launcher. Each footer
+   describes the current menu; session-selection guidance appears only at the
+   launcher.
+2. Start and cancel key capture, then return to Config and open Themes. Capture
+   messages must not follow into another menu. Save a theme or binding: its
+   result remains visible on Config, then clears when another menu opens.
+3. Open a session form, review it, return, and browse profile/script settings.
+   Verify the guidance fits each page. Repeat at 48x18 and with NO_COLOR.
+
+The same PTY checks assert right-aligned help and compact centered session forms.
+`make test-keybinds` checks the short-terminal scrollbar, track paging, thumb drag
+to the final rows and disappearance when all bindings fit. The render unit test
+checks footer backgrounds against the workspace color for all 37 palettes;
+existing direct/256/8-color/monochrome and real-tmux checks remain in the baseline.
+The native Console TUI suite also checks centered close-confirmation controls.
+
+For layout review, compare a tall terminal and 48x18: setup cards should fit their
+fields/actions rather than fill unused height; menus and confirmations should be
+centered. Status belongs at the left and help at the right, on separate rows when
+needed, with no colored text backing. In a short Keybinds menu, page the track,
+drag the thumb, and verify the final rows remain reachable. Widen/heighten the
+terminal until all rows fit: the scrollbar disappears. Repeat with NO_COLOR and
+inside tmux; verify field carets and click targets still match their controls.
+
 ## Source fullscreen
 
 ```sh
@@ -1498,3 +1533,44 @@ configured tmux session. Macchiato's panel should retain its blue-gray color in
 both; also compare a light palette's background and text. Keep the same terminal
 font/settings. Check NO_COLOR and existing mouse/function-key controls. These
 checks do not establish RGB forwarding through an unconfigured outer terminal.
+
+### Footer and button visual follow-up
+
+1. Open Config → Keybinds in a short terminal. Wheel through the rows, page by
+   clicking the scrollbar track and drag its thumb to both ends. Cell outlines
+   must remain clean, including the selected cell, with no extra underline strokes.
+2. At a wide size, status and help share the last terminal row with left/right
+   alignment. At narrow sizes they occupy the last two rows without overlapping.
+3. Inspect launcher Config/Quit, native session Review/Save profile/Profile/Delete,
+   and Memory Refresh/Options. Labels must fit with centered padding and separate
+   hit regions. Resize the session form to 48×18; profile actions must not overlap.
+   Repeat the scrolling and button inspection in tmux and monochrome.
+
+4. Open each session setup: native Linux, Embedded target and GDB server.
+   Read the entire explanatory note through its final sentence. At ordinary
+   heights, one blank row separates that note from Review/Back and another
+   separates the primary row from profile actions. At 48×18, notes still wrap
+   completely while field scrolling and all actions remain reachable.
+
+5. Open Config → Profiles. At 78 columns or wider, New native, New OpenOCD,
+   New remote and Reload file share the bottom row with visible gaps between
+   button backgrounds; Back stays aligned right. Below 78 columns the four left
+   actions wrap into two rows without overlapping Back. Activate Reload file
+   and each New action; check that they remain separate hit targets.
+
+6. In Native and Embedded setup, check one empty row between the first selector
+   and its first text field. In Embedded setup, Browse boards (or adapter/target)
+   should have one empty row above and below, centered between the last field and
+   the explanatory note. At compact heights the gaps collapse; Tab, Enter and
+   text editing must still target the visible fields correctly.
+
+7. In Embedded setup, confirm one empty row between OpenOCD binary and Start
+   OpenOCD, matching the initial selector's separation. Keep exactly one empty
+   row between Start OpenOCD and Browse boards, as before. Repeat with the
+   adapter/target setup; compact rendering should keep all actions reachable.
+
+8. In a live Console pane at least nine rows high, confirm one blank row between
+   Command/Send and Save Log. Enter/send commands, retain a draft across resize,
+   drag the horizontal scrollbar and open Save Log; the gap must stay empty and
+   controls/caret must follow their displayed positions. Small panes collapse
+   the gap. Repeat through tmux.

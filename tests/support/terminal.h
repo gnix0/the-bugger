@@ -17,6 +17,7 @@ typedef struct {
     struct termios original;
     char cells[TEST_ROWS][TEST_COLS + 1];
     bool reverse, inverse[TEST_ROWS][TEST_COLS];
+    bool underlined, underline[TEST_ROWS][TEST_COLS];
     unsigned utf8_value, utf8_remaining;
     char sequence[128];
     size_t sequence_length;
