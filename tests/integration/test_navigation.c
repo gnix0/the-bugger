@@ -110,6 +110,10 @@ static void content_selected(const char *label)
 }
 static void content_hopping(void)
 {
+    for (int i = 0; i < 3; ++i) {
+        test_terminal_lower(&arrows, i, true); test_terminal_lower(&motions, i, true);
+    }
+    click("Pause");
     int x, y; CHECK(test_terminal_find(&motions, "Source", &x, &y));
     mouse_at(x + 12, y + 3); content_selected("Source");
     keys("\033OB", "j");
@@ -217,6 +221,9 @@ int main(int argc, char **argv)
     keys("\033OC", "l"); keys("\033OD", "h"); both("\033");
     test_terminal_resize(&arrows, 18, 48); test_terminal_resize(&motions, 18, 48); same();
     keys("\033OB", "j"); keys("\033OA", "k");
+    for (int i = 0; i < 3; ++i) {
+        test_terminal_lower(&arrows, i, false); test_terminal_lower(&motions, i, false);
+    }
     click("1 Source");
     int compact_x, compact_y; CHECK(test_terminal_find(&motions, "Symbols", &compact_x, &compact_y));
     mouse_at(5, compact_y + 3); content_selected("Source");

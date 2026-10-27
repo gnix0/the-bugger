@@ -34,7 +34,7 @@ typedef enum { CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_ADDRESS, CODE_STOPPE
 typedef enum {
     CONFIG_OPEN, THEME_ACTION, KEY_ACTION, CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
     TOOL, TAB, MENU, BODY, SHOW_VIEW, FOCUS_PANE, CANCEL_RESET, CONFIRM_RESET,
-    MENU_SECTION, PANE_ACTION, DIVIDER, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR, KEY_SCROLLBAR,
+    MENU_SECTION, PANE_ACTION, DIVIDER, LOWER_TOGGLE, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR, KEY_SCROLLBAR,
     COMMAND_FIELD, COMMAND_SEND, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_ARGUMENTS, CONTEXT_PAGE,
     CODE_ACTIONS, CODE_ACTION, CODE_PAGE, CODE_FILE_PICK, CODE_FILE_PAGE, CODE_SOURCE_TAB, CODE_SOURCE_CLOSE, CODE_SOURCE_CYCLE, HSCROLLBAR,
     BREAK_OPEN, BREAK_ACTION, REGISTER_REFRESH, REGISTER_FORMAT, MEMORY_ACTION, MEMORY_FIELD,
@@ -67,7 +67,7 @@ typedef struct {
     int session, focus, count, menu, form_scroll;
     size_t cursor;
     bool quit, previewed, menu_focus, menu_actions, resizing, keyboard_focus;
-    int drag, resize_divider;
+    int drag, resize_divider, drag_node, resize_node;
     int scroll_drag_pane, scroll_drag_grab;
     bool scroll_drag_horizontal;
     Control last_control;
@@ -1126,6 +1126,23 @@ static void code_focus(App *app, int pane)
     if (view == TB_SOURCE || view == TB_DISASSEMBLY) { app->instruction_mode = view == TB_DISASSEMBLY; app->execution_pane = pane; }
 }
 
+static void select_pane(App *app, int pane)
+{
+    if (!tb_layout_has_pane(&app->layout, pane)) { return; }
+    int root = tb_layout_root(&app->layout, pane);
+    if (app->layout.overlays && root >= 3) { app->layout.lower_open[root - 3] = true; }
+    app->demo.pane = pane;
+    code_focus(app, pane);
+}
+
+static void reset_lower(App *app)
+{
+    memset(app->layout.lower_open, 0, sizeof app->layout.lower_open);
+    memset(app->layout.lower_height, 0, sizeof app->layout.lower_height);
+    for (int i = 0; i < 3; ++i) { app->layout.lower_order[i] = i; }
+    app->demo.pane = app->layout.primary_focus; app->content_pane = -1;
+}
+
 static bool selected_location(App *app, char *location, size_t capacity, const TbBreakpoint **existing, TbBreakLocation *where)
 {
     int id = app->execution_pane; TbDemoPane *pane = &app->demo.panes[id];
@@ -1590,12 +1607,81 @@ static void draw_native_pane(App *app, int index, TbRect rect)
     }
 }
 
+static bool exposed_rect(const App *app, TbRect rect, int pane)
+{
+    if (rect.w <= 0 || rect.h <= 0) { return false; }
+    if (!app->layout.overlays || app->fullscreen_source >= 0) { return true; }
+    /* All overlays are bottom-anchored: if this row is wholly covered, the
+     * rectangle below it is covered too. Do not forward input through it. */
+    for (int x = rect.x; x < rect.x + rect.w; ++x) {
+        if (tb_layout_pane_at(&app->layout, x, rect.y) == pane) { return true; }
+    }
+    return false;
+}
+
+static bool exposed_pane(const App *app, int pane)
+{
+    TbRect rect = app->panes[pane];
+    if (rect.w < 10 || rect.h < 7) { return false; }
+    int top = body_top(app, pane);
+    rect.y += top; rect.h -= top + 1;
+    return exposed_rect(app, rect, pane);
+}
+
+static bool exposed_control(const App *app, Control control)
+{
+    if (app->page != WORKSPACE || !app->layout.overlays || app->fullscreen_source >= 0 ||
+        control.rect.y < app->layout.area.y || control.rect.y >= app->layout.area.y + app->layout.area.h) { return true; }
+    if (control.rect.y == app->layout.lower_bars[0].y) { return true; }
+    return exposed_rect(app, control.rect, control.pane);
+}
+
+static void toggle_lower(App *app, int lower)
+{
+    if (lower < 0 || lower >= 3) { return; }
+    bool open = app->layout.lower_open[lower];
+    app->layout.lower_open[lower] = !open;
+    int pane = open && !app->layout.tiled ? app->layout.primary_focus :
+               app->layout.root_focus[open ? lower : lower + 3];
+    select_pane(app, pane);
+    app->menu = -1; app->content_pane = pane; app->focus = 0;
+    if (open) {
+        (void)tb_layout_arrange(&app->layout, app->layout.area, pane);
+        memcpy(app->panes, app->layout.panes, sizeof app->panes);
+        if (!exposed_pane(app, pane)) {
+            for (int i = 2; i >= 0; --i) {
+                int other = app->layout.lower_order[i];
+                if (app->layout.lower_open[other]) {
+                    pane = app->layout.root_focus[other + 3];
+                    if (exposed_pane(app, pane)) { select_pane(app, pane); app->content_pane = pane; break; }
+                }
+            }
+        }
+    }
+}
+
+static void draw_lower_bars(App *app)
+{
+    for (int lower = 0; lower < 3; ++lower) {
+        TbRect bar = app->layout.lower_bars[lower];
+        int pane = app->layout.root_focus[lower + 3];
+        const TbDemoPane *p = &app->demo.panes[pane];
+        tb_fill(bar, TB_SURFACE);
+        int label = add_control(app, (TbRect){bar.x, bar.y, bar.w - 7, 1}, FOCUS_PANE, pane, pane);
+        tb_text(bar.y, bar.x, bar.w - 7, app->focus == label ? TB_ACTIVE_TAB : TB_TAB,
+                app->focus == label ? A_UNDERLINE : 0, tb_view_names[p->tabs[p->active]]);
+        button(app, bar.y, bar.x + bar.w - 7, 1, app->layout.lower_open[lower] ? "v" : "^", LOWER_TOGGLE, lower, pane);
+        button(app, bar.y, bar.x + bar.w - 5, 4, "...", MENU, 0, pane);
+    }
+}
+
 static void draw_pane(App *app, int pane_index, TbRect rect)
 {
     if (rect.w < 10 || rect.h < 7) {
         return;
     }
     TbDemoPane *pane = &app->demo.panes[pane_index];
+    int lower = app->layout.overlays ? tb_layout_root(&app->layout, pane_index) - 3 : -1;
     tb_fill(rect, TB_PANEL);
     tb_fill((TbRect){rect.x, rect.y, rect.w, 1}, TB_SURFACE);
     int x = rect.x + 1;
@@ -1606,7 +1692,7 @@ static void draw_pane(App *app, int pane_index, TbRect rect)
         (void)snprintf(label, sizeof label, " %s ",
                        tb_view_names[pane->tabs[tab]]);
         int width = (int)strlen(label);
-        int available = rect.x + rect.w - 6 - x;
+        int available = rect.x + rect.w - (lower >= 0 ? 8 : 6) - x;
         if (available <= 0 || (pass > 0 && width > available)) {
             break;
         }
@@ -1626,10 +1712,23 @@ static void draw_pane(App *app, int pane_index, TbRect rect)
     if (app->fullscreen_source == pane_index) {
         tb_text(rect.y, rect.x + 1, rect.w - 16, TB_ACTIVE_TAB, A_BOLD, "Source | fullscreen");
         button(app, rect.y, rect.x + rect.w - 14, 13, "[ Restore ]", CODE_ACTION, CODE_FULLSCREEN, pane_index);
-    } else { button(app, rect.y, rect.x + rect.w - 5, 4, "...", MENU, 0, pane_index); }
+    } else {
+        if (lower >= 0) { button(app, rect.y, rect.x + rect.w - 7, 1, "v", LOWER_TOGGLE, lower, pane_index); }
+        button(app, rect.y, rect.x + rect.w - 5, 4, "...", MENU, 0, pane_index);
+    }
     if (app->menu == pane_index) {
+        /* Keep menu paging/actions within the exposed part of a covered pane. */
+        if (app->layout.overlays && app->fullscreen_source < 0) {
+            for (int i = 0; i < 3; ++i) {
+                TbRect cover = app->layout.lower_areas[i];
+                if (tb_layout_root(&app->layout, pane_index) == i + 3 || cover.h <= 0 ||
+                    cover.x >= rect.x + rect.w || cover.x + cover.w <= rect.x || cover.y <= rect.y) { continue; }
+                if (cover.y < rect.y + rect.h) { rect.h = cover.y - rect.y; }
+            }
+        }
         draw_menu(app, pane_index, rect);
     } else {
+        if (!exposed_pane(app, pane_index)) { return; }
         if (app->live) { prepare_scrollbars(app, pane_index, rect); }
         (void)add_control(app, (TbRect){rect.x + 1, rect.y + body_top(app, pane_index),
                           app->live ? app->body_width[pane_index] : rect.w - 2,
@@ -1709,7 +1808,7 @@ static void draw_workspace(App *app)
         for (int i = 0; i < app->layout.count; ++i) {
             int pane = app->layout.order[i];
             TbView view = app->demo.panes[pane].tabs[app->demo.panes[pane].active];
-            if (app->panes[pane].w < 10 || app->panes[pane].h < 7 || app->menu == pane) { continue; }
+            if (!exposed_pane(app, pane) || app->menu == pane) { continue; }
             threads = threads || view == TB_THREADS;
             frames = frames || view == TB_CALL_STACK;
             registers = registers || view == TB_REGISTERS;
@@ -1721,7 +1820,7 @@ static void draw_workspace(App *app)
         tb_variables_begin(tb_session_variables(app->debugger));
         tb_context_visible(tb_session_context(app->debugger), threads, frames);
         for (int pane = 0; pane < TB_MAX_PANES; ++pane) {
-            bool visible = app->panes[pane].w >= 10 && app->panes[pane].h >= 7 && app->menu != pane;
+            bool visible = exposed_pane(app, pane) && app->menu != pane;
             TbView view = app->demo.panes[pane].tabs[app->demo.panes[pane].active];
             tb_code_visible(tb_session_code(app->debugger), pane, visible && view == TB_SOURCE, visible && view == TB_DISASSEMBLY);
             tb_memory_visible(tb_session_memory(app->debugger), pane, visible && view == TB_MEMORY);
@@ -1752,25 +1851,41 @@ static void draw_workspace(App *app)
             button(app, y, COLS - 9, 8, "Next >", NEXT_PANE, 0, 0);
         }
     }
-    for (int i = 0; i < app->layout.count; ++i) {
-        int pane = app->layout.order[i];
-        draw_pane(app, pane, app->panes[pane]);
+    for (int layer = 0; layer < TB_DEFAULT_PANES; ++layer) {
+        int root = layer < 3 || !app->layout.overlays ? layer : app->layout.lower_order[layer - 3] + 3;
+        for (int i = 0; i < app->layout.count; ++i) {
+            int pane = app->layout.order[i];
+            if (tb_layout_root(&app->layout, pane) == root) { draw_pane(app, pane, app->panes[pane]); }
+        }
+    }
+    for (int i = 0; !fullscreen && i < app->layout.divider_count; ++i) {
+        if (app->drag >= 0 && app->layout.dividers[i].node == app->drag_node) { app->drag = i; }
+        if (app->resizing && app->layout.dividers[i].node == app->resize_node) { app->resize_divider = i; }
     }
     for (int i = 0; !fullscreen && i < app->layout.divider_count; ++i) {
         TbDivider divider = app->layout.dividers[i];
+        bool visible = false;
+        for (int dy = 0; dy < divider.rect.h && !visible; ++dy) {
+            for (int dx = 0; dx < divider.rect.w; ++dx) {
+                if (tb_layout_divider_at(&app->layout, divider.rect.x + dx, divider.rect.y + dy) == i) { visible = true; break; }
+            }
+        }
+        if (!visible) { continue; }
         int control = add_control(app, divider.rect, DIVIDER, i, 0);
         if (app->resizing && app->resize_divider == i) { app->focus = control; }
         bool active = app->drag == i || (app->resizing && app->focus == control);
-        if (active) {
-            tb_fill(divider.rect, TB_SELECTED);
-            tb_style(TB_ACTIVE_TAB, A_BOLD);
-            if (divider.direction == TB_SPLIT_RIGHT) {
-                (void)mvvline(divider.rect.y, divider.rect.x, '|', divider.rect.h);
-            } else {
-                (void)mvhline(divider.rect.y, divider.rect.x, '-', divider.rect.w);
+        if (active || (app->layout.overlays && divider.node <= -4)) {
+            for (int dy = 0; dy < divider.rect.h; ++dy) {
+                for (int dx = 0; dx < divider.rect.w; ++dx) {
+                    int draw_x = divider.rect.x + dx, draw_y = divider.rect.y + dy;
+                    if (tb_layout_divider_at(&app->layout, draw_x, draw_y) != i) { continue; }
+                    tb_text(draw_y, draw_x, 1, active ? TB_ACTIVE_TAB : TB_MUTED,
+                            active ? A_BOLD : 0, divider.direction == TB_SPLIT_RIGHT ? "|" : "-");
+                }
             }
         }
     }
+    if (!fullscreen && app->layout.overlays) { draw_lower_bars(app); }
     char footer[256];
     workspace_message(app, footer);
     draw_footer(footer,
@@ -2101,9 +2216,9 @@ static bool same_control(Control a, Control b)
     return a.kind == b.kind && a.value == b.value && a.pane == b.pane;
 }
 
-static bool navigable(Control control)
+static bool navigable(const App *app, Control control)
 {
-    return control.rect.w > 0 && control.rect.h > 0 &&
+    return exposed_control(app, control) && control.rect.w > 0 && control.rect.h > 0 &&
            control.kind != BODY && control.kind != SCROLLBAR &&
            control.kind != HSCROLLBAR && control.kind != KEY_SCROLLBAR && control.kind != DIVIDER;
 }
@@ -2113,7 +2228,7 @@ static void leave_content(App *app)
     app->content_pane = -1;
     app->focus = 0;
     for (int i = 0; i < app->count; ++i) {
-        if (navigable(app->controls[i]) && same_control(app->controls[i], app->last_control)) {
+        if (navigable(app, app->controls[i]) && same_control(app->controls[i], app->last_control)) {
             app->focus = i; break;
         }
     }
@@ -2203,21 +2318,21 @@ static void draw(App *app)
     for (int i = 0; i < app->count; ++i) {
         Control c = app->controls[i];
         if (app->content_pane >= 0) {
-            if (c.kind == BODY && c.pane == app->content_pane) { next = i; break; }
-        } else if (retain && navigable(c) && same_control(c, previous)) { next = i; break; }
+            if (c.kind == BODY && exposed_control(app, c) && c.pane == app->content_pane) { next = i; break; }
+        } else if (retain && navigable(app, c) && same_control(c, previous)) { next = i; break; }
     }
     if (app->count && !app->resizing) {
         if (next < 0) {
             app->content_pane = -1;
-            next = navigable(app->controls[app->focus]) ? app->focus : 0;
-            if (!navigable(app->controls[next])) {
+            next = navigable(app, app->controls[app->focus]) ? app->focus : 0;
+            if (!navigable(app, app->controls[next])) {
                 for (int i = 0; i < app->count; ++i) {
-                    if (navigable(app->controls[i])) { next = i; break; }
+                    if (navigable(app, app->controls[i])) { next = i; break; }
                 }
             }
         }
         if (next != app->focus) { app->focus = next; draw_page(app); }
-        if (app->content_pane < 0 && navigable(app->controls[app->focus])) {
+        if (app->content_pane < 0 && navigable(app, app->controls[app->focus])) {
             app->last_control = app->controls[app->focus];
         }
     }
@@ -2229,17 +2344,33 @@ static void draw(App *app)
     (void)refresh();
 }
 
-/* At most MAX_CONTROLS candidates: use rendered geometry for controls and panes. */
+static TbRect navigation_rect(const App *app, int pane)
+{
+    TbRect rect = app->panes[pane];
+    if (!app->layout.overlays || app->fullscreen_source >= 0) { return rect; }
+    int root = tb_layout_root(&app->layout, pane);
+    bool above = root < 3;
+    for (int i = 0; i < 3; ++i) {
+        int lower = app->layout.lower_order[i];
+        if (root == lower + 3) { above = true; continue; }
+        TbRect cover = app->layout.lower_areas[lower];
+        if (above && cover.h > 0 && cover.x < rect.x + rect.w && rect.x < cover.x + cover.w &&
+            cover.y > rect.y && cover.y < rect.y + rect.h) { rect.h = cover.y - rect.y; }
+    }
+    return rect;
+}
+
+/* At most MAX_CONTROLS candidates: use exposed geometry for controls and panes. */
 static int spatial_target(const App *app, int key, bool content)
 {
-    TbRect from = content ? app->panes[app->content_pane] : app->controls[app->focus].rect;
+    TbRect from = content ? navigation_rect(app, app->content_pane) : app->controls[app->focus].rect;
     bool horizontal = key == KEY_LEFT || key == KEY_RIGHT;
     bool forward = key == KEY_RIGHT || key == KEY_DOWN;
     int best = app->focus, best_gap = INT_MAX, best_distance = INT_MAX, best_offset = INT_MAX;
     for (int i = 0; i < app->count; ++i) {
         Control c = app->controls[i];
-        if (content ? c.kind != BODY || c.rect.w <= 0 || c.rect.h <= 0 : !navigable(c)) { continue; }
-        TbRect to = content ? app->panes[c.pane] : c.rect;
+        if (content ? c.kind != BODY || !exposed_control(app, c) || c.rect.w <= 0 || c.rect.h <= 0 : !navigable(app, c)) { continue; }
+        TbRect to = content ? navigation_rect(app, c.pane) : c.rect;
         int primary = horizontal ? to.x * 2 + to.w - (from.x * 2 + from.w) :
                                    to.y * 2 + to.h - (from.y * 2 + from.h);
         int distance = forward ? primary : -primary;
@@ -2264,6 +2395,10 @@ static int spatial_target(const App *app, int key, bool content)
 static void spatial_focus(App *app, int key)
 {
     app->focus = spatial_target(app, key, false);
+    if (app->page == WORKSPACE) {
+        int pane = app->controls[app->focus].pane, root = tb_layout_root(&app->layout, pane);
+        if (root >= 3 && app->layout.lower_open[root - 3]) { select_pane(app, pane); }
+    }
     app->cursor = 0;
 }
 
@@ -2300,8 +2435,7 @@ static void cycle_pane(App *app, int direction)
     for (int i = 0; i < app->layout.count; ++i) {
         if (app->layout.order[i] == app->demo.pane) {
             int next = (i + direction + app->layout.count) % app->layout.count;
-            app->demo.pane = app->layout.order[next];
-            code_focus(app, app->demo.pane);
+            select_pane(app, app->layout.order[next]);
             app->menu = -1;
             app->focus = 0;
             return;
@@ -2366,7 +2500,10 @@ static void pane_action(App *app, int action, int pane)
         app->resizing = true;
         app->resize_divider = 0;
         for (int i = 0; i < app->count; ++i) {
-            if (app->controls[i].kind == DIVIDER) { app->focus = i; break; }
+            if (app->controls[i].kind == DIVIDER) {
+                app->focus = i; app->resize_divider = app->controls[i].value;
+                app->resize_node = app->layout.dividers[app->resize_divider].node; break;
+            }
         }
         status(app, "Resize dividers with arrows; Tab selects another; Enter finishes.");
     }
@@ -2742,6 +2879,7 @@ static bool start_session(App *app)
     memset(app->source_tabs, 0, sizeof app->source_tabs);
     memset(app->source_revision, 0, sizeof app->source_revision);
     app->live = true; app->previewed = true;
+    reset_lower(app);
     for (int i = 0; i < TB_MAX_PANES; ++i) { app->follow_log[i] = true; }
     status(app, tb_session_message(app->debugger));
     return true;
@@ -2854,6 +2992,7 @@ static void activate(App *app, Control control)
             break;
         }
         app->live = false;
+        reset_lower(app);
         app->previewed = true;
         status(app, "Preview selected. All values are simulated.");
         page_result(app, WORKSPACE);
@@ -2918,7 +3057,7 @@ static void activate(App *app, Control control)
         }
         break;
     case TAB:
-        app->demo.pane = control.pane;
+        select_pane(app, control.pane);
         app->demo.panes[control.pane].active = control.value;
         code_focus(app, control.pane);
         app->menu = -1;
@@ -2932,7 +3071,7 @@ static void activate(App *app, Control control)
         }
         break;
     case MENU:
-        app->demo.pane = control.pane;
+        select_pane(app, control.pane);
         app->menu = app->menu == control.pane ? -1 : control.pane;
         app->menu_focus = app->menu >= 0;
         app->menu_actions = false;
@@ -2954,10 +3093,11 @@ static void activate(App *app, Control control)
         app->focus = 0;
         break;
     case FOCUS_PANE:
-        app->demo.pane = control.value;
-        code_focus(app, control.value);
+        select_pane(app, control.value);
+        if (tb_layout_root(&app->layout, control.value) >= 3) { app->content_pane = control.value; }
         app->menu = -1;
         break;
+    case LOWER_TOGGLE: toggle_lower(app, control.value); break;
     case NEXT_PANE: cycle_pane(app, 1); break;
     case PREVIOUS_PANE: cycle_pane(app, -1); break;
     case MENU_SECTION:
@@ -3057,6 +3197,7 @@ static void activate(App *app, Control control)
     case DIVIDER:
         app->resizing = true;
         app->resize_divider = control.value;
+        app->resize_node = app->layout.dividers[control.value].node;
         break;
     case CANCEL_RESET: page(app, WORKSPACE); break;
     case COMMAND_SEND: {
@@ -3458,6 +3599,13 @@ static void mouse_event(App *app)
         int divider = tb_layout_divider_at(&app->layout, event.x, event.y);
         if (divider >= 0) {
             app->drag = divider;
+            app->drag_node = app->layout.dividers[divider].node;
+            for (int i = 2; i >= 0; --i) {
+                int lower = app->layout.lower_order[i];
+                if (tb_rect_contains(app->layout.lower_areas[lower], event.x, event.y)) {
+                    select_pane(app, app->layout.root_focus[lower + 3]); break;
+                }
+            }
             app->menu = -1;
             status(app, "Dragging divider; release to finish.");
             return;
@@ -3489,8 +3637,19 @@ static void mouse_event(App *app)
             }
         }
     }
+    int hit_pane = -1;
+    bool layered = app->page == WORKSPACE && app->layout.overlays && app->fullscreen_source < 0 &&
+                   tb_rect_contains(app->layout.area, event.x, event.y);
+    if (layered) {
+        hit_pane = tb_layout_pane_at(&app->layout, event.x, event.y);
+        for (int lower = 0; lower < 3; ++lower) {
+            if (tb_rect_contains(app->layout.lower_bars[lower], event.x, event.y)) { hit_pane = app->layout.root_focus[lower + 3]; }
+        }
+        if (hit_pane < 0) { return; }
+    }
     for (int i = 0; i < app->count; ++i) {
         Control control = app->controls[i];
+        if (layered && control.pane != hit_pane) { continue; }
         if (!tb_rect_contains(control.rect, event.x, event.y)) {
             continue;
         }
@@ -3654,8 +3813,14 @@ static void key_event(App *app, wint_t key, bool special)
             status(app, "Divider resizing finished.");
         } else if ((!special && key == '\t') || (special && key == KEY_BTAB)) {
             int direction = key == KEY_BTAB ? -1 : 1;
-            app->resize_divider = (app->resize_divider + direction + app->layout.divider_count) %
-                                 app->layout.divider_count;
+            for (int step = 1; step <= app->count; ++step) {
+                int next = (app->focus + direction * step + app->count) % app->count;
+                if (app->controls[next].kind != DIVIDER) { continue; }
+                app->resize_divider = app->controls[next].value;
+                app->resize_node = app->layout.dividers[app->resize_divider].node;
+                app->focus = next;
+                break;
+            }
         } else if (special && control.kind == DIVIDER &&
                    (key == KEY_LEFT || key == KEY_RIGHT || key == KEY_UP || key == KEY_DOWN)) {
             TbDivider divider = app->layout.dividers[control.value];
@@ -3745,9 +3910,12 @@ static void key_event(App *app, wint_t key, bool special)
         int direction = (special && key == KEY_BTAB) || tb_keybind_matches(app->preferences.keys[TB_BIND_PREVIOUS_CONTROL], key, special) ? -1 : 1;
         for (int step = 1; step <= app->count; ++step) {
             int next = (app->focus + direction * step + app->count) % app->count;
-            if (navigable(app->controls[next]) ||
+            if (navigable(app, app->controls[next]) ||
                 (app->page == CONFIGURE && app->controls[next].kind == FIELD)) {
-                app->focus = next; break;
+                app->focus = next;
+                int pane = app->controls[next].pane, root = tb_layout_root(&app->layout, pane);
+                if (app->page == WORKSPACE && root >= 3 && app->layout.lower_open[root - 3]) { select_pane(app, pane); }
+                break;
             }
         }
         app->cursor = 0;
@@ -3771,8 +3939,7 @@ static void key_event(App *app, wint_t key, bool special)
         for (int i = 0; i < 9; ++i) {
             if (!tb_keybind_matches(app->preferences.keys[TB_BIND_PANE_1 + i], key, special)) { continue; }
             if (app->content_pane >= 0) { leave_content(app); }
-            if (tb_layout_has_pane(&app->layout, i)) { app->demo.pane = i; }
-            code_focus(app, app->demo.pane); app->menu = -1; return;
+            select_pane(app, i); app->menu = -1; return;
         }
         if (tb_keybind_matches(app->preferences.keys[TB_BIND_PREVIOUS_PANE], key, special) ||
             tb_keybind_matches(app->preferences.keys[TB_BIND_NEXT_PANE], key, special)) {
@@ -3860,6 +4027,7 @@ static void initialize(App *app, bool demo)
     app->scroll_drag_pane = -1;
     tb_demo_init(&app->demo);
     tb_layout_init(&app->layout);
+    app->layout.overlays = true;
     const wchar_t *const samples[3][FORM_FIELDS] = {
         {L"", L"./build/debug-fixture", L"", L".", L"", L"gdb", L"", L"", L""},
         {L"", L"board/st_nucleo_f4.cfg", L"interface/stlink.cfg", L"target/stm32f4x.cfg",

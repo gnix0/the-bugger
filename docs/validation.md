@@ -2252,3 +2252,86 @@ or physical-target validation. Owner visual acceptance remains pending.
 Final input verification, `git diff --check` and task process cleanup passed
 (`input-verification.log`, `process-audit.log`). Final tracked-tree hashes and
 patch are retained in `tracked-tree.sha256` and `final-tree.patch`.
+
+## v0.1.3 Task 1.2 — lower dock and independent overlays
+
+State: automated-verified; **awaiting owner visual review**.
+The owner explicitly authorized local commits and continued planned 1.x work
+while review is deferred. This does not establish acceptance or authorize release.
+
+The three lower root groups start minimized directly above the footer. Titles
+and `^` restore them, `v` minimizes them, and separate top grips resize their
+session-only heights. Primary rectangles and split trees remain intact. Compact
+or oversized lower split groups span the workspace; most recent focus controls
+stacking. Pointer/divider hit tests and keyboard navigation use exposed geometry.
+Fully covered inspectors do not become visible to value-request scheduling.
+Source fullscreen temporarily hides the dock and restores retained state.
+
+Evidence: `build/lower-overlays-evidence/`; parent implementation is Task 1.1's
+recorded `3defec4`. `environment.json`, `test-inputs.sha256` and the retained diff
+identify the host/input tree. Source changes use the existing C17/curses layout
+interfaces, without a new dependency or persistent preference schema.
+
+Executed focused checks:
+
+- Layout model and workspace terminal tests: PASS, independent height changes,
+  retained primary geometry/splits, compact stacking, clicks on exposed overlays,
+  dock restoration, new-session reset, resizing/scrollbars and monochrome keys.
+- Spatial navigation: PASS, Ctrl+arrows/Vim aliases, nested panes, viewport
+  retention, fullscreen and compact isolation; `navigation-next.log`.
+- Direct and isolated real-tmux Console: PASS, literal entry, Enter/Backspace,
+  pane-local drafts, Save Log, resize and terminal restoration;
+  `console-focused.log` and `console-tmux.log`.
+- Code TUI: PASS, PC preservation, horizontal/vertical scrolling, instruction
+  margins, mixed navigation and source lookup; `code-tui-final.log`.
+- Static analysis before the final compact-focus correction: PASS,
+  `make BUILD_DIR=build/lower-overlays-analysis-final analyze`,
+  `analysis-final.log`, exit 0. Final-tree analysis is recorded below. Suppressed system/NOLINT diagnostics are not
+  project findings. The first run detected a negative divider-index path;
+  retained `analysis.log` records it, and the final code rejects invalid IDs.
+- Two bounded 30-second native-output stress phases: PASS, 91 rounds each,
+  direct and isolated real tmux; `stress-native.log` and `stress-tmux.log`.
+  Each exercises flooding, wheel, stepping, compact/tiled resizing and cleanup.
+
+Final source-tree checks: PASS static analysis with
+`make BUILD_DIR=build/lower-overlays-analysis-complete analyze`,
+`analysis-complete.log`, exit 0; PASS fortified object compilation of all 65 test
+C sources, `test-compilation-complete.log`, exit 0. Two final-tree 30-second
+native-output stress runs also passed, 91 rounds each directly and through
+isolated tmux; exact argv/environment/results are in `stress-complete.json`.
+Full fresh fortified host baseline: PASS, exit 0, exact command:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/lower-overlays-ci-complete CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+Complete log: `test-ci-complete.log`; exit record: `test-ci-complete.exit`.
+Tested-input manifest SHA-256:
+`b8840973052dd3e271c105b6683a249228662c82cb1970c8f017f04fe616cb1a`.
+The OpenOCD TUI setup was corrected before this fresh build compiled that source;
+all other manifest inputs were unchanged. The earlier complete-tree attempt's
+hidden-Console completion failure remains in `test-ci-verified.log`. The final
+baseline includes actual native GDB, isolated tmux, localhost gdbserver, simulated
+MI/OpenOCD cases and the installed OpenOCD's hardware-free startup checks.
+This is local Arch Linux success, not hosted Ubuntu CI success.
+
+All 118 local links in the edited documents passed consistency checks. A wider
+scan found an already-broken `tests/README.md` anchor to the former Profiles/action
+keys heading; it is recorded for Task 1.3's documentation audit, outside this gate.
+
+Preserved development failures include sandbox ptrace EPERM (independently
+reproduced by real GDB), old tests assuming visible lower controls, and the
+Console draft assertion searching an entire row shared by two fields. Test
+setup now explicitly restores groups, excludes persistent dock duplicates when
+locating bodies, and inspects the intended field. Value/access assertions remain.
+The final compact-focus test first reproduced minimizing Memory incorrectly
+selecting Source when Disassembly was underneath. Minimize now preserves the
+actual compact underlay; `compact-underlay-before.log` retains the failure.
+The workspace mouse driver now waits for a complete refresh between press/release
+instead of returning on the first output fragment. Source scrolling uses a short
+terminal so the 22-line fixture still overflows the enlarged primary viewport.
+
+Physical STM32 and direct-Alacritty human UX checks were not performed. Native,
+local gdbserver, simulated MI/OpenOCD fixtures and isolated tmux do not establish
+hardware behavior or hosted Ubuntu success. Task 1.3 MMIO remains unimplemented.
+Manual review procedure: [lower overlays](testing.md#lower-dock-and-independent-overlays).

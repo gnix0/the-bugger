@@ -58,7 +58,7 @@ static void pane_click(TestTerminal *t, const char *text, int column, bool last)
         int header = -1, left = 0, right = 0;
         /* The default columns have different widths. Locate the lower-row
          * pane boundaries from their rendered menu buttons instead of thirds. */
-        for (int y = 0; y < t->rows - 2; ++y) {
+        for (int y = 0; y < t->rows - 3; ++y) {
             const char *menus[3]; menus[0] = strstr(t->cells[y], "...");
             menus[1] = menus[0] ? strstr(menus[0] + 3, "...") : NULL;
             menus[2] = menus[1] ? strstr(menus[1] + 3, "...") : NULL;
@@ -124,8 +124,9 @@ int main(int argc, char **argv)
     test_terminal_expect(&t, "Native Linux"); test_terminal_send(&t, "\r");
     test_terminal_expect(&t, "Executable / ELF"); test_terminal_send(&t, "\t\025"); test_terminal_send(&t, argv[2]);
     test_terminal_click(&t, "Review session"); test_terminal_click(&t, "Start native");
-    test_terminal_expect(&t, "LIVE | Loaded"); test_terminal_click(&t, "Command");
+    test_terminal_expect(&t, "LIVE | Loaded"); test_terminal_lower(&t, 2, true); test_terminal_click(&t, "Command");
     test_terminal_send(&t, "start\r"); test_terminal_expect(&t, "LIVE | registers");
+    test_terminal_lower(&t, 0, true);
     test_terminal_expect(&t, "Enter an address above");
     CHECK(!test_terminal_find(&t, "Read memory", NULL, NULL));
     address(&t, 0, "&memory_buffer"); test_terminal_expect(&t, "54 48 45 20");
@@ -144,6 +145,7 @@ int main(int argc, char **argv)
     browse(&t);
     /* Add a second Memory instance in the lower-middle pane. Its menu and
      * configuration are local; the first Memory pane remains unchanged. */
+    test_terminal_lower(&t, 1, true);
     pane_click(&t, "Locals", 1, false); pane_click(&t, "...", 1, true);
     pane_click(&t, "Memory", 1, false); address(&t, 1, "&memory_other");
     test_terminal_expect(&t, "49 4e 44 45"); test_terminal_expect(&t, "4854 2045");

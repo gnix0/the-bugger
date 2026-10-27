@@ -48,6 +48,7 @@ int main(int argc, char **argv)
     test_terminal_resize(&term, 44, 160);
     test_terminal_click(&term, "Start session"); test_terminal_expect(&term, "LIVE OPENOCD");
     test_terminal_expect(&term, "LIVE | Stopped"); test_terminal_expect(&term, "Halt");
+    test_terminal_lower(&term, 2, true); /* Retained command outcomes are in Console. */
     test_terminal_click(&term, "Reset"); test_terminal_expect(&term, "Reset and halt target?");
     test_terminal_click(&term, "Cancel"); test_terminal_expect(&term, "LIVE OPENOCD");
     test_terminal_click(&term, "Reset"); test_terminal_click(&term, "Reset and halt ]");

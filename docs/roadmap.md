@@ -11,10 +11,10 @@ not revisions to the accepted M00–M18 evidence or claims of completed features
 
 | Task | Scope | Current state |
 |---|---|---|
-| 0 | Initialize the execution record and general documentation | In progress with Task 1.1; view-specific consolidation remains Task 1.3 |
-| 1.1 | Investigate and correct rendering corruption and the Disassembly navigation trap, preserving current access policy | Investigating; automated, bounded stress and owner hardware/visual evidence remain separate |
-| 1.2 | Initially minimized lower panes with independently resizable overlays | Interaction design approved, including most-recently-focused stacking; implementation follows 1.1 |
-| 1.3 | Implement approved Disassembly/Memory browsing and explicit MMIO access | Design approved; implementation blocked by 1.1/1.2; real monitor-protocol feasibility and hardware access-width validation required |
+| 0 | Initialize the execution record and general documentation | Initialized with Task 1.1; view-specific consolidation remains Task 1.3 |
+| 1.1 | Investigate and correct rendering corruption and the Disassembly navigation trap, preserving current access policy | Local fix committed and host baseline/stress passed; owner hardware/visual review deferred |
+| 1.2 | Initially minimized lower panes with independently resizable overlays | Implemented; fresh fortified host baseline, analysis and bounded stress pass; owner visual review deferred |
+| 1.3 | Implement approved Disassembly/Memory browsing and explicit MMIO access | Design approved; follows local 1.2 handoff under owner continuation authority; real monitor-protocol feasibility and hardware access-width validation required |
 | 1.4 | Investigate runtime font/scale feasibility and implement the owner-approved approach | Approach unresolved; terminal font changes are not portable application scaling |
 | 1.5 | Release preparation | Blocked by implementation, validation and owner acceptance; no release before both browsing views are accepted |
 
@@ -248,7 +248,7 @@ unsafe external resolution and retain provenance/device matching for description
 no XML dependency or universal SVD compatibility is selected by this revision.
 
 F06 must decide and, where approved, implement organization before F11/F34/F35
-or other new views. Preserve tiling, the six-pane baseline and no layout presets.
+or other new views. Preserve primary/group split tiling, the six root groups and no layout presets.
 F01 migration precedes later persisted workspace settings; F12 shares reviewed
 definitions/paths rather than values, personal history or credentials. Necessary
 vendor integration belongs behind the relevant server/probe/target adapter,
