@@ -87,7 +87,9 @@ static void browsing(TbNative *n)
     CHECK(v->instruction_count && strstr(v->instructions[0].opcodes, "00 00") && *tb_code_assembly_notice(code, 0, 0, v->instruction_count));
     tb_code_raw(code, 0); revision = v->assembly_revision; CHECK(tb_code_address(code, 0, "m08_long")); code_ready(n, revision);
     CHECK(v->instruction_count); uint64_t first = v->instructions[0].numeric;
-    for (int i = 0; i < 20; ++i) {
+    /* Overlapping windows retain half the previous rows. Exercise the same
+     * >2000-byte traversal with enough bounded expansions to cross it. */
+    for (int i = 0; i < 40; ++i) {
         revision = v->assembly_revision; CHECK(tb_code_assembly_page(code, 0, 1)); code_ready(n, revision);
         CHECK(v->instruction_count <= TB_CODE_INSNS);
         for (size_t j = 1; j < v->instruction_count; ++j) { CHECK(v->instructions[j].numeric > v->instructions[j - 1].numeric); }

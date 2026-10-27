@@ -200,7 +200,7 @@ Other characteristics already accepted:
 - **Dynamic split** of any pane horizontally or vertically, so more than six views can be shown; six is the **default**, not a limit. Resizing, tabs, and splitting modify the current workspace; they do **not** select predefined layout modes.
 - The primary workspace and each pane group use tiled split trees. Lower groups
   start minimized as three title bars immediately above the footer. Restore them
-  over the primary area using `^`; `v` minimizes them. Each has an independent
+  over the primary area using `^`; `_` minimizes them. Each has an independent
   top-edge height grip. Multiple groups may be open; the most recently focused
   overlapping group is on top. Clicking an exposed part raises that group.
   Covered content receives no pointer input; minimize a group to access it.
@@ -399,10 +399,20 @@ factual technical references, provenance, licenses and historical evidence.
   unknown effects. Consent accepts those risks and is not proof of safe access.
 - Read Register samples one aligned register at the authorized supported width.
   Refresh selected register explicitly repeats that read while consent is valid.
-  No whole-viewport refresh, polling, speculative access, automatic retry or read
+  No whole-viewport refresh, polling, speculative access, automatic frontend retry or read
   caused by focus, navigation, stepping or stopping. Access outside the approved
   range/width requires separate consent; conflicts never broaden permission.
+  External software/hardware may make multiple physical attempts for a single
+  Read, depending on its driver path and failure conditions. Disclose this before
+  consent, especially for side-effectful registers; never claim exactly-once
+  physical access or that every backend operation retries. Timeout/uncertain
+  responses never trigger a frontend retry.
 - Start with verified OpenOCD/STM32 capability over the existing GDB connection.
+  External-server setup confirmation must bind the specific target/device,
+  server configuration, ST-LINK firmware and validated widths. Label it
+  user-confirmed, never automatically verified; invalidate on relevant
+  connection/configuration changes and require renewed confirmation. Confirmation
+  itself must not read hardware.
   Actual bounded, request-identified monitor framing must pass its feasibility
   gate before MMIO read implementation. Parser/simulated success alone is not
   enough. An alternative transport requires approval if that gate cannot pass.

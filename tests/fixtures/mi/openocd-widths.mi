@@ -1,0 +1,24 @@
+=thread-group-added,id="i1"
+(gdb) 
+=thread-group-started,id="i1",pid="42000"
+&"warning: No executable has been specified and target does not support\ndetermining executable automatically.  Try using the \""
+&"file\" command.\n"
+=thread-created,id="1",group-id="i1"
+~"0x080001f4 in ?? ()\n"
+*stopped,frame={addr="0x080001f4",func="??",args=[],arch="arm"},thread-id="1",stopped-threads="all"
+21^connected
+(gdb) 
+@"TBM1|081748b7949a5283f5f7197f4d0843c7-22|stm32f4x.cpu|40020014|8|1|0|END\n"
+22^done
+(gdb) 
+@"TBM1|081748b7949a5283f5f7197f4d0843c7-23|stm32f4x.cpu|40020014|16|1|0|END\n"
+23^done
+(gdb) 
+@"TBM1|081748b7949a5283f5f7197f4d0843c7-24|stm32f4x.cpu|40020014|32|1|0|END\n"
+24^done
+(gdb) 
+=thread-exited,id="1",group-id="i1"
+=thread-group-exited,id="i1"
+25^done
+(gdb) 
+26^exit

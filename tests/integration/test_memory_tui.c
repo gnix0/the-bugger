@@ -118,6 +118,34 @@ static void browse(TestTerminal *t)
     CHECK(first_memory_address(t) == original);
     test_terminal_expect(t, "4854 2045"); test_terminal_expect(t, "Address");
 }
+static void ranges(TestTerminal *t)
+{
+    test_terminal_click(t, "Temporary ranges"); test_terminal_expect(t, "Temporary Memory ranges");
+    test_terminal_click(t, "Add"); test_terminal_expect(t, "Inspect temporary Memory range");
+    test_terminal_expect(t, "NOT AUTHORIZED"); test_terminal_expect(t, "Side effects: UNKNOWN");
+    test_terminal_click(t, "Side effects"); test_terminal_expect(t, "Known side effects");
+    test_terminal_send(t, "owner reviewed RAMx\177\r"); test_terminal_expect(t, "Side effects: owner reviewed RAM");
+    test_terminal_click(t, "Authorize"); test_terminal_expect(t, "Authorize temporary Memory range?");
+    test_terminal_expect(t, "owner reviewed RAM"); test_terminal_click(t, "Cancel");
+    test_terminal_expect(t, "NOT AUTHORIZED");
+    test_terminal_click(t, "Authorize"); test_terminal_click(t, "Authorize without reading");
+    test_terminal_expect(t, "AUTHORIZED | temporary, this view only");
+    /* A policy edit revokes consent and preserves the side-effect description. */
+    test_terminal_click(t, "Policy: ordinary"); test_terminal_expect(t, "Policy: MMIO");
+    test_terminal_expect(t, "NOT AUTHORIZED"); test_terminal_expect(t, "owner reviewed RAM");
+    test_terminal_click(t, "Width:"); test_terminal_expect(t, "Width: 8 bits");
+    test_terminal_click(t, "Policy: MMIO"); test_terminal_expect(t, "Policy: ordinary");
+    test_terminal_resize(t, 18, 48); test_terminal_click(t, "Authorize");
+    for (int i = 0; i < 8 && !test_terminal_find(t, "Authorize without reading", NULL, NULL); ++i) {
+        test_terminal_click(t, "Next"); settle(t);
+    }
+    test_terminal_expect(t, "Authorize without reading"); test_terminal_click(t, "Authorize without reading");
+    test_terminal_expect(t, "AUTHORIZED | temporary");
+    test_terminal_click(t, "Revoke"); test_terminal_expect(t, "NOT AUTHORIZED");
+    test_terminal_send(t, "\033"); test_terminal_expect(t, "Temporary Memory ranges");
+    test_terminal_resize(t, 44, 140);
+    test_terminal_click(t, "Back"); test_terminal_expect(t, "Memory inspection options");
+}
 int main(int argc, char **argv)
 {
     CHECK(argc == 3); TestTerminal t; start(&t, argv[1]);
@@ -138,6 +166,7 @@ int main(int argc, char **argv)
     test_terminal_expect(&t, "54 48 45 20");
     pane_click(&t, "Options", 0, true); test_terminal_expect(&t, "Memory inspection options");
     test_terminal_click(&t, "Cycle grouping"); test_terminal_expect(&t, "grouping 2B");
+    ranges(&t);
     test_terminal_click(&t, "Byte count"); test_terminal_expect(&t, "Memory byte count");
     test_terminal_send(&t, "\0251025\r"); test_terminal_expect(&t, "Enter a byte count from 1 to 1024.");
     test_terminal_send(&t, "\0251024\r"); test_terminal_expect(&t, "requested range 1024 bytes");

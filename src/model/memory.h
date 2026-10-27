@@ -1,11 +1,31 @@
 #ifndef THE_BUGGER_MEMORY_H
 #define THE_BUGGER_MEMORY_H
 #include "context.h"
+#include "browse.h"
 
-enum { TB_MEMORY_VIEWS = 32, TB_MEMORY_BYTES = 1024, TB_MEMORY_ROW = 16, TB_MEMORY_REGIONS = 128 };
+enum { TB_MEMORY_VIEWS = 32, TB_MEMORY_BYTES = 1024, TB_MEMORY_ROW = 16, TB_MEMORY_REGIONS = 128,
+       TB_MEMORY_RANGES = 16 };
 /* Established ordinary RAM/ROM only; unknown/MMIO ranges are never implicit. */
 typedef struct { uint64_t begin, end; } TbMemoryRegion;
 typedef enum { TB_MEMORY_UNKNOWN, TB_MEMORY_LITTLE, TB_MEMORY_BIG } TbMemoryOrder;
+typedef enum { TB_MEMORY_ORDINARY, TB_MEMORY_MMIO } TbMemoryPolicy;
+enum { TB_MEMORY_WIDTH8 = 1, TB_MEMORY_WIDTH16 = 2, TB_MEMORY_WIDTH32 = 4 };
+/* Descriptive assertions from the reviewed setup, not automatic verification.
+ * The session adapter must replace/invalidate this identity whenever any
+ * relevant connection, target or server configuration changes. */
+typedef struct {
+    char target[64], device[128], server[512], firmware[64];
+    uint64_t configuration;
+    unsigned widths;
+} TbMemoryBackend;
+typedef struct {
+    uint64_t begin, end; /* Half-open bounds; never wrap. */
+    TbMemoryPolicy policy;
+    unsigned width; /* MMIO bits; zero for ordinary byte ranges. */
+    bool used, authorized;
+    char risks[160]; /* Empty means side effects are unknown, never safe. */
+    TbGdbGeneration generation;
+} TbMemoryRange;
 typedef struct {
     char expression[256], error[192];
     unsigned length, grouping;
@@ -19,6 +39,20 @@ typedef struct {
 } TbMemoryView;
 typedef struct TbMemory TbMemory;
 TbMemory *tb_memory_create(TbGdb *gdb, TbContext *context);
+void tb_memory_cache(TbMemory *memory, TbBrowseCache *cache);
+/* Metadata-only: no debugger requests, reads or polling. NULL invalidates.
+ * Confirm exactly the identity displayed in the review; stale reviews fail. */
+bool tb_memory_backend_set(TbMemory *memory, const TbMemoryBackend *backend);
+const TbMemoryBackend *tb_memory_backend(const TbMemory *memory);
+bool tb_memory_backend_confirm(TbMemory *memory, const TbMemoryBackend *reviewed);
+bool tb_memory_backend_confirmed(const TbMemory *memory);
+/* Consent management only: none of these functions schedules a target read. */
+const TbMemoryRange *tb_memory_range(const TbMemory *memory, int view, unsigned range);
+bool tb_memory_range_set(TbMemory *memory, int view, unsigned range, uint64_t begin, uint64_t end,
+                         TbMemoryPolicy policy, unsigned width, const char *risks);
+bool tb_memory_range_authorize(TbMemory *memory, int view, unsigned range);
+bool tb_memory_range_revoke(TbMemory *memory, int view, unsigned range);
+bool tb_memory_range_authorized(const TbMemory *memory, int view, unsigned range);
 void tb_memory_destroy(TbMemory *memory);
 void tb_memory_reset(TbMemory *memory);
 void tb_memory_clear(TbMemory *memory, int view);

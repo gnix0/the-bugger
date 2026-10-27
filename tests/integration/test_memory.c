@@ -42,6 +42,74 @@ static void idle(TbGdb *gdb)
 {
     unsigned before = replies; for (int i = 0; i < 8; ++i) { pump(gdb); } CHECK(before == replies);
 }
+static void consent(TbGdb *gdb)
+{
+    CHECK(!tb_memory_range_set(memory, 0, 16, 1, 2, TB_MEMORY_ORDINARY, 0, ""));
+    CHECK(!tb_memory_range_set(memory, 0, 0, 2, 1, TB_MEMORY_ORDINARY, 0, ""));
+    CHECK(!tb_memory_range_set(memory, 0, 0, 1, 2, TB_MEMORY_MMIO, 24, ""));
+    CHECK(tb_memory_range_set(memory, 0, 0, 0x40000000, 0x40000004, TB_MEMORY_MMIO, 32, "Unknown effects"));
+    CHECK(!tb_memory_range_authorized(memory, 0, 0));
+    CHECK(tb_memory_range_authorize(memory, 0, 0) && tb_memory_range_authorized(memory, 0, 0));
+    CHECK(!tb_memory_range_authorized(memory, 1, 0));
+    CHECK(tb_memory_range_set(memory, 0, 1, 0x40000000, 0x40000008, TB_MEMORY_ORDINARY, 0, "Reviewed RAM"));
+    CHECK(!tb_memory_range_authorize(memory, 0, 1)); /* A conflicting grant cannot broaden access. */
+    CHECK(tb_memory_range_set(memory, 1, 0, 0x40000000, 0x40000004, TB_MEMORY_MMIO, 16, ""));
+    CHECK(tb_memory_range_authorize(memory, 1, 0)); /* Independent per view. */
+    CHECK(tb_memory_range_set(memory, 0, 0, 0x40000000, 0x40000008, TB_MEMORY_MMIO, 32, "Read clears status"));
+    CHECK(!tb_memory_range_authorized(memory, 0, 0)); /* Editing always removes consent. */
+    CHECK(tb_memory_range_authorize(memory, 0, 0)); CHECK(tb_memory_range_revoke(memory, 0, 0));
+    CHECK(!tb_memory_range_authorized(memory, 0, 0)); idle(gdb);
+    for (unsigned i = 0; i < TB_MEMORY_RANGES; ++i) {
+        CHECK(tb_memory_range_set(memory, 0, i, 0x30000000 + i * 256, 0x30000080 + i * 256, TB_MEMORY_ORDINARY, 0, "Owner-reviewed ordinary range"));
+    }
+    CHECK(tb_memory_range_authorize(memory, 0, 0)); idle(gdb);
+    /* An authorized MMIO range still cannot fall back to a byte read while
+     * the real explicit-width transport gate remains unverified. */
+    CHECK(tb_memory_address(memory, 1, "0x40000000")); ready(gdb, 1, false);
+    CHECK(strstr(tb_memory_view(memory, 1)->error, "generic byte reads are blocked")); idle(gdb);
+    tb_memory_clear(memory, 1); tb_memory_visible(memory, 1, true);
+}
+static void backend_consent(TbGdb *gdb)
+{
+    TbMemoryBackend reviewed = {.target = "stm32f4x.cpu", .device = "STM32F446 / owner board",
+        .server = "OpenOCD 0.12.0-01004-g9ea7f3d64; board/st_nucleo_f4.cfg; localhost:3333",
+        .firmware = "ST-LINK V2J48M35", .configuration = 1,
+        .widths = TB_MEMORY_WIDTH8 | TB_MEMORY_WIDTH16 | TB_MEMORY_WIDTH32};
+    CHECK(!tb_memory_backend_confirmed(memory) && !tb_memory_backend(memory));
+    CHECK(!tb_memory_backend_confirm(memory, &reviewed));
+    CHECK(tb_memory_backend_set(memory, &reviewed));
+    CHECK(!tb_memory_backend_confirmed(memory));
+    CHECK(tb_memory_backend_confirm(memory, &reviewed)); idle(gdb);
+    CHECK(tb_memory_backend_confirmed(memory));
+    CHECK(tb_memory_backend_set(memory, tb_memory_backend(memory)) && tb_memory_backend_confirmed(memory));
+    for (unsigned field = 0; field < 6; ++field) {
+        CHECK(tb_memory_range_set(memory, 1, 0, 0x40020014, 0x40020018, TB_MEMORY_MMIO, 32, "Reviewed risks"));
+        CHECK(tb_memory_range_authorize(memory, 1, 0));
+        TbMemoryBackend changed = reviewed;
+        switch (field) {
+        case 0: (void)snprintf(changed.target, sizeof changed.target, "other.cpu"); break;
+        case 1: (void)snprintf(changed.device, sizeof changed.device, "other board"); break;
+        case 2: (void)snprintf(changed.server, sizeof changed.server, "other server/configuration"); break;
+        case 3: (void)snprintf(changed.firmware, sizeof changed.firmware, "ST-LINK V2J25M14"); break;
+        case 4: changed.configuration = 2; break;
+        default: changed.widths = TB_MEMORY_WIDTH32; break;
+        }
+        CHECK(tb_memory_backend_set(memory, &changed));
+        CHECK(!tb_memory_backend_confirmed(memory) && !tb_memory_range_authorized(memory, 1, 0));
+        CHECK(!tb_memory_backend_confirm(memory, &reviewed)); /* A stale review cannot confirm a changed setup. */
+        CHECK(tb_memory_backend_confirm(memory, &changed)); idle(gdb);
+        CHECK(tb_memory_backend_set(memory, &reviewed) && !tb_memory_backend_confirmed(memory));
+        CHECK(tb_memory_backend_confirm(memory, &reviewed));
+    }
+    TbMemoryBackend invalid = reviewed; memset(invalid.firmware, 'x', sizeof invalid.firmware);
+    CHECK(!tb_memory_backend_set(memory, &invalid));
+    CHECK(!tb_memory_backend(memory) && !tb_memory_backend_confirmed(memory));
+    CHECK(tb_memory_backend_set(memory, &reviewed) && tb_memory_backend_confirm(memory, &reviewed));
+    CHECK(tb_memory_backend_set(memory, NULL) && !tb_memory_backend_confirmed(memory));
+    CHECK(!tb_memory_backend_confirm(memory, &reviewed));
+    CHECK(tb_memory_backend_set(memory, &reviewed) && tb_memory_backend_confirm(memory, &reviewed));
+    tb_memory_clear(memory, 1); tb_memory_visible(memory, 1, true); idle(gdb);
+}
 int main(int argc, char **argv)
 {
     CHECK(argc == 2);
@@ -57,6 +125,8 @@ int main(int argc, char **argv)
     CHECK(tb_gdb_state(gdb) == TB_GDB_READY);
     tb_memory_visible(memory, 0, true); tb_memory_visible(memory, 1, true);
     command(gdb, "-stop", NULL); context_ready(gdb); idle(gdb);
+    consent(gdb);
+    backend_consent(gdb);
     CHECK(tb_memory_get_order(memory) == TB_MEMORY_UNKNOWN);
     CHECK(!tb_memory_group(memory, 0, 2));
     tb_memory_order(memory, TB_MEMORY_LITTLE);
@@ -69,6 +139,16 @@ int main(int argc, char **argv)
     CHECK(tb_memory_browse(memory, 0, 1)); ready(gdb, 0, true); CHECK(a->address == 0x1040);
     CHECK(tb_memory_browse(memory, 0, -1)); ready(gdb, 0, true); CHECK(a->address == 0x1000);
     CHECK(!tb_memory_browse(memory, 0, -1)); idle(gdb); CHECK(a->address == 0x1000);
+    const TbMemoryRegion adjacent[] = {{0x1000, 0x1050}, {0x1050, 0x1060}};
+    tb_memory_regions(memory, adjacent, 2);
+    /* Use an uncached forward address; adjacent proofs compose and the read
+     * ends at 0x1060 instead of crossing into an unapproved range. */
+    CHECK(tb_memory_address(memory, 0, "0x1010")); ready(gdb, 0, true);
+    CHECK(tb_memory_browse(memory, 0, 1)); ready(gdb, 0, true);
+    CHECK(a->address == 0x1050 && a->data_size == 16 && a->readable == 16 && strstr(a->error, "clipped"));
+    CHECK(!tb_memory_browse(memory, 0, 1)); idle(gdb); CHECK(a->address == 0x1050);
+    tb_memory_regions(memory, ram, 2);
+    CHECK(tb_memory_address(memory, 0, "0x1000")); ready(gdb, 0, true);
     char line[160]; tb_memory_line(memory, 0, 2, line, sizeof line); CHECK(strstr(line, "20 21 22 23")); CHECK(strstr(line, "| !\"#$%&"));
     CHECK(tb_memory_group(memory, 0, 4)); tb_memory_line(memory, 0, 0, line, sizeof line); CHECK(strstr(line, "03020100")); idle(gdb);
     tb_memory_order(memory, TB_MEMORY_BIG); tb_memory_line(memory, 0, 0, line, sizeof line); CHECK(strstr(line, "00010203"));
@@ -103,16 +183,29 @@ int main(int argc, char **argv)
     tb_memory_visible(memory, 0, true);
     CHECK(tb_memory_address(memory, 0, "0x1000")); tb_memory_pump(memory);
     CHECK(tb_memory_address(memory, 0, "0x2000")); ready(gdb, 0, true); CHECK(a->address == 0x2000);
+    CHECK(tb_memory_page(memory, 0, 1)); ready(gdb, 0, true); CHECK(a->address == 0x2100);
     tb_memory_visible(memory, 0, false); CHECK(tb_memory_refresh(memory, 0)); idle(gdb); CHECK(a->pending);
+    CHECK(tb_memory_range_set(memory, 0, 0, 0x2000, 0x2200, TB_MEMORY_ORDINARY, 0, ""));
+    CHECK(tb_memory_range_authorize(memory, 0, 0));
     command(gdb, "-run", NULL); CHECK(tb_memory_stale(memory, 0)); CHECK(!tb_memory_refresh(memory, 1));
+    CHECK(!tb_memory_range_authorized(memory, 0, 0));
+    CHECK(tb_memory_browse(memory, 0, -1) && a->address == 0x2000 && tb_memory_stale(memory, 0));
+    CHECK(tb_memory_browse(memory, 0, 1) && a->address == 0x2100);
+    CHECK(!tb_memory_browse(memory, 0, 1) && a->address == 0x2100); idle(gdb);
     command(gdb, "-stop", NULL); context_ready(gdb); CHECK(!a->pending);
     tb_memory_visible(memory, 0, true); idle(gdb); CHECK(tb_memory_stale(memory, 0));
     CHECK(tb_memory_refresh(memory, 0)); ready(gdb, 0, true);
+    CHECK(!tb_memory_range_authorized(memory, 0, 0) && tb_memory_range_authorize(memory, 0, 0));
     CHECK(tb_context_select_thread(context, "42")); context_ready(gdb); CHECK(tb_memory_stale(memory, 0)); idle(gdb);
+    CHECK(!tb_memory_range_authorized(memory, 0, 0));
     command(gdb, "-memory-mode", "8"); CHECK(tb_memory_refresh(memory, 0)); ready(gdb, 0, false); context_ready(gdb); CHECK(tb_memory_stale(memory, 0)); idle(gdb);
+    CHECK(tb_memory_backend_confirmed(memory));
+    tb_memory_target(memory, true, 32);
+    CHECK(!tb_memory_backend(memory) && !tb_memory_backend_confirmed(memory)); idle(gdb);
     tb_gdb_close(gdb); end = tb_gdb_now_ms() + 1500;
     while (tb_gdb_state(gdb) != TB_GDB_DISCONNECTED && tb_gdb_now_ms() < end) { pump(gdb); }
     CHECK(tb_gdb_state(gdb) == TB_GDB_DISCONNECTED);
+    CHECK(!tb_memory_backend_confirmed(memory) && !tb_memory_backend(memory));
     tb_memory_reset(memory); CHECK(!tb_memory_view(memory, 0)->configured && !tb_memory_view(memory, 1)->data_size);
     CHECK(tb_memory_get_order(memory) == TB_MEMORY_UNKNOWN && !tb_memory_browse(memory, 0, 1));
     tb_memory_destroy(memory); tb_context_destroy(context); CHECK(tb_gdb_destroy(gdb)); CHECK(unsetenv("TB_FAKE_MODE") == 0);

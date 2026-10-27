@@ -312,6 +312,7 @@ TbSession *tb_session_create(void)
         tb_context_destroy(native->context); (void)tb_gdb_destroy(native->gdb); free(native); return NULL;
     }
     native->variables = tb_variables_create(native->gdb, native->context);
+    tb_memory_cache(native->memory, tb_code_cache(native->code));
     if (!native->variables) {
         tb_memory_destroy(native->memory); tb_registers_destroy(native->registers);
         tb_break_destroy(native->breakpoints); tb_code_destroy(native->code);
