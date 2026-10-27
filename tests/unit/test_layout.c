@@ -74,8 +74,52 @@ static uint32_t random_value(uint32_t *state)
     return *state;
 }
 
+static void overlays(void)
+{
+    TbLayout layout;
+    tb_layout_init(&layout); layout.overlays = true;
+    TbRect area = {1, 4, 138, 38};
+    CHECK(tb_layout_arrange(&layout, area, 0));
+    TbRect upper[3]; memcpy(upper, layout.panes, sizeof upper);
+    for (int i = 0; i < 3; ++i) {
+        CHECK(layout.panes[i + 3].h == 0 && !layout.lower_open[i]);
+        CHECK(layout.lower_bars[i].y == area.y + area.h - 1);
+    }
+    layout.lower_open[0] = layout.lower_open[1] = true;
+    layout.lower_height[0] = 12; layout.lower_height[1] = 9;
+    CHECK(tb_layout_arrange(&layout, area, 3));
+    CHECK(memcmp(upper, layout.panes, sizeof upper) == 0);
+    CHECK(layout.panes[3].h == 12 && layout.panes[4].h == 9);
+    int divider = tb_layout_divider_at(&layout, layout.panes[3].x, layout.panes[3].y - 1);
+    CHECK(divider >= 0 && layout.dividers[divider].node == -4);
+    CHECK(tb_layout_move_divider(&layout, divider, layout.panes[3].y - 4));
+    CHECK(tb_layout_arrange(&layout, area, 3));
+    CHECK(layout.panes[3].h == 15 && layout.panes[4].h == 9);
+    CHECK(memcmp(upper, layout.panes, sizeof upper) == 0);
+    CHECK(tb_layout_pane_at(&layout, layout.panes[3].x, layout.panes[3].y) == 3);
+    CHECK(tb_layout_pane_at(&layout, upper[0].x, upper[0].y) == 0);
+    int child = tb_layout_split(&layout, 3, TB_SPLIT_BELOW);
+    CHECK(child >= 6 && tb_layout_root(&layout, child) == 3);
+    CHECK(layout.panes[3].h >= 7 && layout.panes[child].h >= 7);
+    int preferred = layout.lower_height[0];
+    CHECK(!tb_layout_arrange(&layout, (TbRect){1, 4, 70, 12}, child));
+    CHECK(layout.lower_height[0] == preferred && layout.panes[child].h >= 7);
+    CHECK(layout.lower_order[2] == 0);
+    CHECK(tb_layout_pane_at(&layout, layout.panes[child].x, layout.panes[child].y) == child);
+    CHECK(!tb_layout_arrange(&layout, (TbRect){1, 4, 70, 12}, 4));
+    CHECK(layout.lower_order[2] == 1);
+    CHECK(tb_layout_pane_at(&layout, layout.panes[4].x, layout.panes[4].y) == 4);
+    CHECK(tb_layout_arrange(&layout, area, child));
+    CHECK(layout.lower_height[0] == preferred && layout.panes[child].h >= 7 && layout.panes[3].h >= 7);
+    layout.lower_open[0] = false;
+    CHECK(tb_layout_arrange(&layout, area, 0));
+    CHECK(layout.panes[3].h == 0 && layout.panes[child].h == 0);
+    CHECK(memcmp(upper, layout.panes, sizeof upper) == 0);
+}
+
 int main(void)
 {
+    overlays();
     TbLayout layout;
     tb_layout_init(&layout);
     CHECK(tb_layout_arrange(&layout, (TbRect){1, 4, 138, 38}, 0));

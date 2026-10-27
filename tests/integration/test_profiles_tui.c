@@ -65,6 +65,7 @@ int main(int argc, char **argv)
         test_terminal_expect(&term, "Continue F5"); test_terminal_expect(&term, "Into F11");
         click("Actions"); click("Source lookup settings"); test_terminal_expect(&term, root);
         test_terminal_expect(&term, "/old build"); back();
+        test_terminal_lower(&term, 2, true);
         test_terminal_send(&term, "\033[15~"); test_terminal_expect(&term, "FIXTURE PID=");
         click("Pause"); test_terminal_expect(&term, "LIVE | Stopped");
         test_terminal_send(&term, "q"); test_terminal_expect(&term, "Terminate the launched program");

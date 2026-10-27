@@ -28,11 +28,18 @@ typedef struct {
     int divider_count, order[TB_MAX_PANES], count;
     int widths[3], minimum_columns[3], minimum_rows[2];
     bool tiled;
+    /* Lower roots retain their split trees while hidden or over the primary
+     * roots. Preferred heights survive temporary terminal-size clamping. */
+    bool overlays, lower_open[3];
+    int lower_height[3], lower_order[3], root_focus[TB_DEFAULT_PANES], primary_focus;
+    TbRect lower_bars[3], lower_areas[3];
 } TbLayout;
 
 void tb_layout_init(TbLayout *layout);
 bool tb_layout_arrange(TbLayout *layout, TbRect area, int focused);
 bool tb_layout_has_pane(const TbLayout *layout, int pane);
+int tb_layout_root(const TbLayout *layout, int pane);
+int tb_layout_pane_at(const TbLayout *layout, int x, int y);
 /* Split requires enough currently visible space; failure leaves the tree intact. */
 int tb_layout_split(TbLayout *layout, int pane, TbSplit direction);
 /* Only a nested leaf can close. Returns a surviving sibling pane, or -1. */

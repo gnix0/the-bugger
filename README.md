@@ -32,7 +32,10 @@ preview and saved appearance preferences.
 v0.1.2 preserves exact theme colors inside RGB-advertising tmux
 sessions, with 256-color and monochrome fallbacks.
 [Theme controls and variants](docs/usage.md#configuration-and-themes) describe
-what is included. Shared UI additions also include
+what is included. The development build starts the three lower pane groups minimized; restore
+them above the footer and resize their overlay heights independently.
+[Workspace controls](docs/usage.md#workspace-controls) describe the current behavior.
+Shared UI additions also include
 [Source fullscreen and spatial keyboard navigation](docs/usage.md#workspace-controls).
 These features extend the original v0.1.0 workspace. v0.1.2 also
 provides [Config → Keybinds](docs/usage.md#personal-keybinds) for debugger and

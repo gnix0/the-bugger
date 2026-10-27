@@ -59,6 +59,7 @@ static void start(TestTerminal *term, const char *binary, const char *fixture, b
     }
     test_terminal_expect(term, "LIVE | Loaded");
     test_terminal_expect(term, "PID not started");
+    test_terminal_lower(term, 2, true);
     CHECK(strstr(term->output, "Cortex-M4F sample") == NULL);
     CHECK(strstr(term->output, "0x0800042") == NULL);
 }
@@ -119,7 +120,10 @@ static void inline_console(TestTerminal *term)
     test_terminal_click(term, "Console");
     test_terminal_click(term, "Command");
     CHECK(test_terminal_find(term, "Command", &x, &y));
-    CHECK(strstr(term->cells[y], "DRAFT_ONLY") == NULL);
+    /* Both bottom-anchored Console fields can share a screen row. */
+    const char *draft = strstr(term->cells[y] + x, "DRAFT_ONLY");
+    const char *next_command = strstr(term->cells[y] + x + 7, "Command");
+    CHECK(!draft || (next_command && draft > next_command));
     test_terminal_send(term, "OTHER_DRAFT");
     test_terminal_expect(term, "OTHER_DRAFT");
     test_terminal_click(term, "...");

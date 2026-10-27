@@ -641,8 +641,8 @@ configuration.
 
 1. Build `make all fixtures`, run `./build/the-bugger`, launch
    `build/memory-fixture`, then Console `start`.
-2. Open Memory: inline controls and empty data area are already visible. Click
-   the address field, type `&memory_buffer`, press Enter; repeat using Go.
+2. Restore Memory using its lower dock title or `^`; inline controls and the
+   empty data area appear. Click the address field, type `&memory_buffer`, press Enter; repeat using Go.
 3. Verify `THE BUGGER MEMORY` in ASCII and bytes `54 48 45 20`; horizontal scroll
    reveals long rows without hiding the toolbar. Change grouping/count and Refresh.
 4. Wheel/arrow/Page keys reach the cached block edges, then fetch earlier/later
@@ -813,9 +813,8 @@ Coverage: M07/M08; source/instruction mapping, navigation and non-mutating brows
     with roughly four before the first PC where available. The viewport stays
     still through the middle, then scrolls to keep about five rows above and
     below PC where context permits (reduced in short panes). Browse until PC is
-    near the top, then step: the top margin should return. The default upper row
-    is modestly taller (62%); drag its divider and confirm your sizing survives
-    terminal shrink/restore.
+    near the top, then step: the top margin should return. Primary panes use the area above the lower dock. Restore a lower group, drag
+    its top grip and confirm its height survives terminal shrink/restore.
     Wheel/Up/Down at a window edge can load a known earlier/next window; `<` / `>`
     footer controls remain available. Browse away and confirm PC never changes;
     stepping/Stopped returns to execution context. Test **Out Shift+F11** inside
@@ -916,7 +915,7 @@ Coverage: M06; FR-10 and context coherence. Native tests are not remote or board
    and top-frame information. Select a worker: the Call Stack changes to that
    thread and selected frame zero. The original stopped thread/PC remains
    separate from inspected context. Switch back to the original main thread.
-   A seventh split view is optional; the default six-pane geometry is preserved.
+   A seventh split view is optional; the six root groups and retained state remain.
 5. Click Continue. Workers exit and the main thread stops again after joining
    them. Expect one thread; old workers must disappear. Continue once more:
    expect Running and explicit stale context, with selection unavailable until
@@ -1148,8 +1147,9 @@ or hardware debugging acceptance.
    Peripherals and Stack say NOT IMPLEMENTED rather than inventing values.
    Select source rows or click the gutter to toggle sample breakpoints. Wheel
    scrolls the pane under the pointer; a focused body supports arrows/Page keys.
-8. Resize below six-pane dimensions. Expect a single focused view and retained
-   pane navigation. Keys 1–9 and [/] reach panes. Below 48x18 expect a resize
+8. Minimize the lower groups and resize to compact dimensions. Expect a single
+   primary view and retained pane navigation. Restore two lower groups and verify
+   that focusing an exposed group or its dock title raises it. Keys 1–9 and [/] reach panes. Below 48x18 expect a resize
    notice; expanding restores tab/view state. Test dragging/splitting below.
 9. Quit using the visible button or Ctrl+Q. Repeat with Ctrl+C. Expect normal
    shell echo/cursor/mouse behavior afterward. Run `NO_COLOR=1 ./build/the-bugger --demo`
@@ -1186,12 +1186,34 @@ checks alone do not satisfy the visual gate.
 It does not substitute for inspecting the rendered interface.
 
 
+## Lower dock and independent overlays
+
+1. Start a demo or live session at 140x44. Expect three primary groups and three
+   minimized lower title bars directly above the footer. No lower inspector body
+   should become visible or request values merely because its dock is present.
+2. Restore Memory, Locals and Console with their titles or `^` controls. Each
+   should cover its column, leaving primary geometry and browsing state intact.
+   Drag Memory's top grip; Locals and Console must keep their own heights.
+3. Minimize/restore a group with `v`/`^`. Confirm tabs, selection, drafts and
+   preferred height survive. Try keyboard pane IDs/cycling and resize mode;
+   Tab selects visible dividers, arrows resize, Enter/Escape finishes.
+4. Shrink to 80x24. Open groups overlap across the workspace. The most recently
+   focused one is on top. Click an exposed part of another group or its dock
+   title to raise it. Covered controls must not receive clicks or wheel input.
+5. Restore 140x44 and confirm independent preferred heights return. Enter/leave
+   Source fullscreen; restore must retain dock visibility, tabs and split trees.
+6. Close/start another session. Expect all lower groups minimized and default
+   heights on first restore; no values/permissions or pending requests carry over.
+7. Repeat mouse, keyboard, resize and Console output in an isolated tmux session.
+   These manual UX checks remain distinct from automated terminal-cell tests.
+
 ## Tiling, tabs and terminal resizing
 
 1. Run `make test`, then `./build/the-bugger --demo` in a 140x44 or larger terminal.
    Choose Linux application, Review preview, Preview workspace. Compare the
-   initial six-pane presentation with the accepted M01 interface and HTML.
-2. Drag each vertical column gutter and the horizontal row gutter with the
+   three primary panes and initially minimized lower dock; verify the six root
+   groups retain their default tabs. Restore each group with its dock caret.
+2. Drag each vertical column gutter and each independent lower top grip with the
    left button held. Expect continuous constrained resizing; release ends it.
    Move beyond a pane's minimum size and verify neighboring panes remain usable.
 3. In Source, click `...`, then **Pane actions >**, then **Split right**.

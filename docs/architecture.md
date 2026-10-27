@@ -358,12 +358,17 @@ References: [OpenOCD startup and script search](https://openocd.org/doc/html/Run
 [OpenOCD detach handling](https://openocd.org/doc/doxygen/html/gdb__server_8c_source.html) and
 [GDB register/frame cache invalidation](https://sourceware.org/pipermail/gdb-patches/2020-November/173490.html).
 
-## Tiled workspace
+## Workspace geometry
 
-`src/layout/layout.c` is independent of curses and debugger data. Six root tiles
-use 36/34/30 column proportions and a 62/38 default row split; ratios remain
-user-adjustable. The original M02 56/44 row split was superseded by the accepted
-five-row navigation/default-height correction. Each tile contains
+`src/layout/layout.c` is independent of curses and debugger data. The workspace
+uses 36/34/30 primary column proportions. Three lower roots start minimized in
+a one-row dock above the footer. Open roots overlay their columns without
+changing primary rectangles; compact/oversized split groups span the workspace.
+Each root retains its own preferred height, initially 38% of the primary area,
+clamped to at least seven rows and at most the primary height minus its grip.
+Temporary terminal clamping does not overwrite that preference. Session startup
+resets heights and minimizes all three. The legacy 62/38 arrangement remains
+only for the simulated theme reference. Each root contains
 a binary split tree. A leaf names a stable pane slot; an internal node stores
 its direction, child indices and fixed-point ratio. The workspace owns a bounded
 pool of 32 pane slots and 64 tree nodes, avoiding heap ownership complexity.
@@ -371,10 +376,21 @@ Closed nodes/slots are reused. There is no preset catalog or layout selector.
 
 Geometry uses half-open rectangles and one-cell gutters. Recursive subtree
 minimums constrain resizing (each leaf needs 20 columns and 7 rows); globally
-shared row/column dividers respect all affected subtrees. New splits require
+column dividers respect primary subtrees; lower grips adjust only their own root. New splits require
 currently available space. Closing a nested leaf promotes its sibling into
 the parent; a root leaf cannot close. Tabs retain per-view selection/scroll,
-and each pane retains at least one tab. These rules follow the HTML prototype.
+and each pane retains at least one tab. Lower roots preserve the same nested split/close invariants.
+
+Lower roots paint in most-recent-focus order. Layer-aware pane/divider hit tests
+reject covered controls. Keyboard navigation skips covered controls and bodies;
+numbered/cycle navigation restores minimized groups. Dock controls stay reachable
+even when a group is covered. Inspector visibility uses exposed body geometry,
+so a wholly covered inspector cannot request values merely because its root is
+open. Each group has a separate resize grip above its tabs; `v` immediately left
+of `...` minimizes it. Focus returns to its corresponding primary group when
+tiled, or the retained underlying primary pane in compact mode; an exposed
+remaining overlay receives focus when that primary is covered. Source fullscreen hides
+the dock temporarily and restores the retained workspace afterward.
 
 Geometry is recomputed after input, without changing requested ratios on
 terminal resize. If the grid or its subtrees cannot fit, only the focused leaf
@@ -727,8 +743,8 @@ data-navigation implementation. This adds no layout modes or debugger actions.
 Live assembly initially includes prior decoded context where available, then
 keeps its viewport until PC reaches a five-row top or bottom margin (scaled in
 short panes and clamped to available context). Manual browsing does not
-automatically snap back until stepping/Stopped. The default upper row receives
-62% of the usable height; divider dragging continues to set the user's ratio.
+automatically snap back until stepping/Stopped. Primary roots occupy the full
+workspace above the lower dock, including the area beneath expanded lower groups.
 
 Protocol references: GDB's [MI data commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Data-Manipulation.html),
 [execution commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Program-Execution.html),

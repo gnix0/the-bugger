@@ -196,6 +196,7 @@ static void native_bindings(const char *binary, const char *fixture)
     click("Review session"); click("Start native");
     test_terminal_expect(&term, "LIVE | Loaded");
     test_terminal_expect(&term, "Continue F6"); test_terminal_expect(&term, "Pause p");
+    test_terminal_lower(&term, 2, true);
     click("Command"); test_terminal_send(&term, "echo wasdbnp\\n\r");
     test_terminal_expect(&term, "[gdb] wasdbnp");
     test_terminal_send(&term, "start\r"); test_terminal_expect(&term, "LIVE | Stopped");
@@ -251,6 +252,7 @@ static void vim_input(const char *binary, const char *fixture)
     if (fixture) {
         start(binary, "mono"); click("[ Config ]"); click("Profiles"); click("Shared connection");
         click("Review session"); click("Start native"); test_terminal_expect(&term, "LIVE | Loaded");
+        test_terminal_lower(&term, 2, true);
         vim_stage = "native Command focus";
         click("Command"); test_terminal_expect(&term, "VIM NORMAL");
         test_terminal_send(&term, "iecho modal_hjklq[]123\\n"); test_terminal_expect(&term, "VIM INSERT");
@@ -262,6 +264,7 @@ static void vim_input(const char *binary, const char *fixture)
         test_terminal_expect(&term, "LIVE | Stopped");
         test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
         leave_vim_field();
+        test_terminal_lower(&term, 0, true);
         int x, y; CHECK(test_terminal_find(&term, "Address", &x, &y));
         vim_stage = "Memory focus";
         mouse_at(x + 10, y); test_terminal_expect(&term, "VIM NORMAL");

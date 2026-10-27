@@ -181,12 +181,12 @@ Do **not** allow these features to delay the release:
 
 ### Default workspace
 
-The initial **IAR-inspired** workspace is a 3-column by 2-row arrangement:
+The workspace has three primary columns and three lower pane groups:
 
 |                 | Left              | Middle                    | Right                       |
 |-----------------|-------------------|---------------------------|-----------------------------|
-| **Upper row**   | Source            | Disassembly               | CPU Registers               |
-| **Lower row**   | Memory            | Locals                    | Console / Debug log         |
+| **Primary**     | Source            | Disassembly               | CPU Registers               |
+| **Lower group** | Memory            | Locals                    | Console / Debug log         |
 
 Other characteristics already accepted:
 
@@ -194,9 +194,17 @@ Other characteristics already accepted:
 - Mouse interaction for buttons, tabs, view selector, row selection, source gutter breakpoint toggling, scrolling, and **resizable split dividers**.
 - Each pane has a title/tab bar and a menu (e.g. `...`) to switch views. The user may keep several views as tabs in one pane.
 - Activating a tab promotes it to the left. Inactive tabs immediately return to their normal styling; mouse activation must not leave a gray/reverse-video highlight on the old tab. Keyboard focus remains visibly associated with the intended tab after reordering.
-- **No layout presets or layout selection UI.** The six-pane arrangement shown below is the single approved default workspace. "IAR-inspired" is an internal design description, **not** a user-visible preset name or menu item. In particular, do not implement "Source focus", "Memory focus", or alternate named layouts.
+- **No layout presets or layout selection UI.** The six root groups above form the approved default workspace. In particular, do not implement "Source focus", "Memory focus", or alternate named layouts.
 - **Dynamic split** of any pane horizontally or vertically, so more than six views can be shown; six is the **default**, not a limit. Resizing, tabs, and splitting modify the current workspace; they do **not** select predefined layout modes.
-- **Strictly tiled** workspace. No floating windows. Tabs, resize, focus, splitting, and closing views must maintain valid layout geometry.
+- The primary workspace and each pane group use tiled split trees. Lower groups
+  start minimized as three title bars immediately above the footer. Restore them
+  over the primary area using `^`; `v` minimizes them. Each has an independent
+  top-edge height grip. Multiple groups may be open; the most recently focused
+  overlapping group is on top. Clicking an exposed part raises that group.
+  Covered content receives no pointer input; minimize a group to access it.
+  Underlying state is retained. Heights last for the session, survive temporary
+  size clamping, and reset with visibility on session startup. No detached
+  windows or layout presets. Toolbar, dock and footer remain accessible.
 - When the terminal becomes too small, maintain a usable focused view with accessible tabs or a controlled compact mode. Never write outside the terminal, crash, or silently discard pane state.
 - The retired prototype used simulated example addresses, register contents, log entries and step behavior. The shipped debugger must clearly distinguish live data from demo/mock data.
 - A post-v0.1.0 workspace organization **decision gate** is planned for v0.2.1, before the v0.3.x view expansion. Evaluate pages and other navigation then; pages are an idea, not an approved layout or permission to redesign the current workspace now.

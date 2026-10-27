@@ -115,8 +115,9 @@ int main(int argc, char **argv)
     test_terminal_send(&term, "\r");
     test_terminal_expect(&term, "Executable / ELF"); test_terminal_send(&term, "\t\025"); test_terminal_send(&term, argv[2]);
     test_terminal_click(&term, "Review session"); test_terminal_click(&term, "Start native");
-    test_terminal_expect(&term, "LIVE | Loaded"); test_terminal_click(&term, "Command");
+    test_terminal_expect(&term, "LIVE | Loaded"); test_terminal_lower(&term, 2, true); test_terminal_click(&term, "Command");
     test_terminal_send(&term, "start\r"); test_terminal_expect(&term, "LIVE | registers");
+    test_terminal_lower(&term, 1, true);
     test_terminal_click(&term, "Watches"); test_terminal_expect(&term, "+ Watch");
     add_watch("variables_global"); test_terminal_expect(&term, "Read required");
     watch_click("Read"); watch_wait(NULL);

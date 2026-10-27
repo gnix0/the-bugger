@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Lower pane groups start minimized above the footer. Restore them over the
+  primary views, resize heights independently, and minimize without losing
+  tabs or browsing state. Overlapping groups follow the most recent focus.
+  Heights are session-only and survive temporary terminal-size clamping.
+
 ### Fixed
 
 - Confine rendered text to its assigned terminal row and display-cell width,

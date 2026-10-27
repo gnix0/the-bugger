@@ -392,6 +392,44 @@ void test_terminal_click(TestTerminal *term, const char *text)
     while (milliseconds() < settle) { test_terminal_pump(term, 5); }
 }
 
+void test_terminal_lower(TestTerminal *term, int lower, bool open)
+{
+    CHECK(lower >= 0 && lower < 3);
+    int row = term->rows - 3, column = -1, found = 0;
+    long long deadline = milliseconds() + 5000;
+    while (milliseconds() < deadline) {
+        found = 0;
+        for (int x = 0; x + 4 < term->cols; ++x) {
+            if ((term->cells[row][x] == '^' || term->cells[row][x] == 'v') &&
+                strncmp(term->cells[row] + x + 2, "...", 3) == 0) {
+                if (found++ == lower) { column = x; break; }
+            }
+        }
+        if (column >= 0) { break; }
+        test_terminal_pump(term, 50);
+    }
+    CHECK(column >= 0);
+    if ((term->cells[row][column] == 'v') == open) { return; }
+    char input[64];
+    (void)snprintf(input, sizeof input, "\033[<0;%d;%dM", column + 1, row + 1);
+    test_terminal_send(term, input);
+    long long pressed = milliseconds() + 60;
+    while (milliseconds() < pressed) { test_terminal_pump(term, 5); }
+    (void)snprintf(input, sizeof input, "\033[<0;%d;%dm", column + 1, row + 1);
+    test_terminal_send(term, input);
+    deadline = milliseconds() + 5000;
+    while (milliseconds() < deadline) {
+        test_terminal_pump(term, 20);
+        if (term->cells[row][column] == (open ? 'v' : '^')) {
+            long long settle = milliseconds() + 60;
+            while (milliseconds() < settle) { test_terminal_pump(term, 5); }
+            return;
+        }
+    }
+    fprintf(stderr, "Lower group %d toggle at (%d,%d), wanted %s\n", lower, column, row, open ? "open" : "minimized");
+    test_terminal_expect(term, "lower pane toggle did not complete");
+}
+
 void test_terminal_resize(TestTerminal *term, int rows, int cols)
 {
     CHECK(rows > 0 && rows <= TEST_ROWS && cols > 0 && cols <= TEST_COLS);

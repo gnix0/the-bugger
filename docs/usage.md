@@ -238,7 +238,8 @@ for optimized/stripped examples and manual validation.
 For a code-stepping example, run `./build/the-bugger`, choose Linux Launch and
 enter `./build/code-fixture` in **Executable / ELF**. Review and Start native.
 The Loaded / PID not started status and **Awaiting stop** code panes mean the
-program has not run yet. In the bottom-right Console click **Command**, type
+program has not run yet. Restore Console with `^` in the bottom-right dock,
+then click **Command**, type
 `start`, then click **Send** (Enter also submits). Do not run the fixture directly
 in the shell or pass `start` as its argument. This deliberately asks GDB to stop at main; ordinary Launch
 does not insert an automatic breakpoint. Source and Disassembly then follow
@@ -280,8 +281,8 @@ Unknown ranges are labeled for the instructions currently visible. Opening and
 closing the view selector preserves the listing and viewport. Addresses, bytes,
 mnemonics and operands use aligned columns, with full lines available through
 horizontal scrolling.
-The default upper row gets 62% of the available pane height, giving Source,
-Disassembly and Registers more room. Dragging dividers adjusts this as usual.
+Source, Disassembly and Registers occupy the workspace above the lower dock.
+Expanded lower groups cover their lower portions without changing that geometry.
 Live code, Console, Call Stack and Threads show a horizontal scrollbar only when
 rows exceed the pane width: drag its thumb, click the track to page, or focus the
 body and use Left/Right. Each view retains its own position; Source keeps its line
@@ -449,15 +450,24 @@ arrows/PageUp/PageDown scrolls; vertical scrollbar tracks page and thumbs drag.
 Keys `1`–`9` focus retained pane IDs; `[`/`]` cycles panes. There are no layout
 presets, layout selector, floating windows or full Vim editor emulation.
 
-Drag one-cell gutters to resize columns, rows or nested splits. Pane actions
+The Memory/Stack, Locals/Watches and Console/Breakpoints groups start minimized.
+Click a dock title or `^` to restore a group over the primary views; click `v`
+immediately left of `...` to minimize it. Drag its top edge to adjust its height
+independently. Multiple groups can stay open. Where they overlap, the most
+recently focused group is on top; click an exposed part or its dock title to
+bring another forward. Minimize it to access fully covered content. Heights and
+visibility are session-only; resizing the terminal preserves preferred heights.
+
+Drag one-cell gutters to resize columns or nested splits. Pane actions
 split right/below, close a tab, close a nested pane or enter keyboard resizing.
 In resize mode Tab/Shift+Tab selects a divider, arrows move it, and Enter/Escape
 finishes. Closing a nested pane expands its sibling. Each pane retains at least
 one tab; each of the six root tiles retains at least one pane.
 
 The workspace supports up to 32 panes with a minimum tiled size of 20x7 cells per
-pane. At least 112x28 displays all six default panes; 140x44 is comfortable.
-Smaller terminals show a focused pane with controls to reach every retained pane.
+pane. Wide terminals show three primary columns; lower groups cover those
+columns when restored. Smaller terminals show a primary pane and restored
+groups across the workspace, with controls to reach every retained pane.
 Below 48x18 a mode-neutral resize warning shows the current dimensions and the
 minimum required size, retaining state without pausing or disconnecting the target.
 Tabs, splits and proportions survive

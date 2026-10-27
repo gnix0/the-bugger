@@ -3,13 +3,20 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 static void mouse(TestTerminal *term, int button, int x, int y, bool release)
 {
     char sequence[64];
     (void)snprintf(sequence, sizeof sequence, "\033[<%d;%d;%d%c", button, x + 1, y + 1, release ? 'm' : 'M');
     test_terminal_send(term, sequence);
-    test_terminal_pump(term, 60);
+    struct timespec now;
+    CHECK(clock_gettime(CLOCK_MONOTONIC, &now) == 0);
+    long long until = (long long)now.tv_sec * 1000 + now.tv_nsec / 1000000 + 60;
+    do {
+        test_terminal_pump(term, 5);
+        CHECK(clock_gettime(CLOCK_MONOTONIC, &now) == 0);
+    } while ((long long)now.tv_sec * 1000 + now.tv_nsec / 1000000 < until);
 }
 
 static void click_at(TestTerminal *term, int x, int y)
@@ -54,11 +61,82 @@ static void start(TestTerminal *term, const char *binary, const char *type, bool
 static int count_text(const TestTerminal *term, const char *text)
 {
     int count = 0;
-    for (int y = 0; y < term->rows - 2; ++y) {
+    for (int y = 0; y < term->rows - 3; ++y) {
         const char *p = term->cells[y];
         while ((p = strstr(p, text)) != NULL) { ++count; p += strlen(text); }
     }
     return count;
+}
+
+static void lower_overlays(const char *binary)
+{
+    TestTerminal term;
+    start(&term, binary, "xterm-256color", false);
+    CHECK(!test_terminal_find(&term, "HEX bytes / ASCII", NULL, NULL));
+    CHECK(!test_terminal_find(&term, "Sample log", NULL, NULL));
+    CHECK(count_text(&term, "...") == 3);
+    for (int i = 0; i < 3; ++i) { test_terminal_lower(&term, i, false); }
+    int source_x, source_y, memory_x, memory_y, locals_x, locals_y;
+    CHECK(test_terminal_find(&term, "main.c | Cortex-M4F sample", &source_x, &source_y));
+    test_terminal_lower(&term, 0, true);
+    test_terminal_expect(&term, "HEX bytes / ASCII");
+    CHECK(test_terminal_find(&term, "Memory", &memory_x, &memory_y));
+    test_terminal_lower(&term, 1, true);
+    test_terminal_expect(&term, "Name        Type");
+    CHECK(test_terminal_find(&term, "Locals", &locals_x, &locals_y));
+    mouse(&term, 0, memory_x + 2, memory_y - 1, false);
+    test_terminal_expect(&term, "Dragging divider");
+    mouse(&term, 32, memory_x + 2, memory_y - 4, false);
+    mouse(&term, 0, memory_x + 2, memory_y - 4, true);
+    test_terminal_expect(&term, "Divider resized.");
+    int x, y;
+    CHECK(test_terminal_find(&term, "Memory", &x, &y) && y == memory_y - 3);
+    CHECK(test_terminal_find(&term, "Locals", &x, &y) && y == locals_y);
+    CHECK(test_terminal_find(&term, "main.c | Cortex-M4F sample", &x, &y) && x == source_x && y == source_y);
+    test_terminal_lower(&term, 0, false);
+    test_terminal_lower(&term, 0, true);
+    CHECK(test_terminal_find(&term, "Memory", &x, &y) && y == memory_y - 3);
+    test_terminal_lower(&term, 2, true);
+    test_terminal_resize(&term, 24, 80);
+    test_terminal_expect(&term, "Sample log / no commands executed");
+    CHECK(!test_terminal_find(&term, "HEX bytes / ASCII", NULL, NULL));
+    /* The taller Memory header is still exposed above Console. */
+    test_terminal_click(&term, "Memory");
+    test_terminal_expect(&term, "HEX bytes / ASCII");
+    click_at(&term, term.cols - 20, term.rows - 3);
+    test_terminal_expect(&term, "Sample log / no commands executed");
+    /* A dock title brings the already-open group to the front. */
+    click_at(&term, 2, term.rows - 3);
+    test_terminal_expect(&term, "HEX bytes / ASCII");
+    CHECK(!test_terminal_find(&term, "Sample log / no commands executed", NULL, NULL));
+    test_terminal_lower(&term, 0, false);
+    test_terminal_expect(&term, "Sample log / no commands executed");
+    test_terminal_lower(&term, 1, false);
+    test_terminal_lower(&term, 2, false);
+    test_terminal_send(&term, "4"); /* Keyboard pane selection also restores. */
+    test_terminal_expect(&term, "HEX bytes / ASCII");
+    test_terminal_resize(&term, 44, 140);
+    test_terminal_expect(&term, "main.c | Cortex-M4F sample");
+    CHECK(test_terminal_find(&term, "Memory", &x, &y) && y == memory_y - 3);
+    test_terminal_click(&term, "Session");
+    test_terminal_expect(&term, "Start a debugging session");
+    test_terminal_send(&term, "\r\t\t\t\t\t\r");
+    test_terminal_expect(&term, "Review session preview");
+    test_terminal_send(&term, "\r");
+    test_terminal_expect(&term, "DEMO | Paused");
+    CHECK(count_text(&term, "...") == 3);
+    CHECK(!test_terminal_find(&term, "HEX bytes / ASCII", NULL, NULL));
+    test_terminal_lower(&term, 0, true);
+    CHECK(test_terminal_find(&term, "Memory", &x, &y) && y == memory_y);
+    test_terminal_lower(&term, 0, false);
+    test_terminal_resize(&term, 24, 80);
+    test_terminal_send(&term, "2");
+    test_terminal_expect(&term, "Disassembly");
+    test_terminal_lower(&term, 0, true);
+    test_terminal_lower(&term, 0, false);
+    test_terminal_expect(&term, "Disassembly"); /* Return to the actual underlay. */
+    test_terminal_stop(&term, 0);
+    puts("PASS minimized lower groups, independent height, retained geometry, compact stacking and keyboard restore");
 }
 
 static void tab_focus(const char *binary, const char *type, bool monochrome)
@@ -95,12 +173,14 @@ static void tab_focus(const char *binary, const char *type, bool monochrome)
 int main(int argc, char *argv[])
 {
     CHECK(argc == 2);
+    lower_overlays(argv[1]);
     tab_focus(argv[1], "xterm-direct", false);
     tab_focus(argv[1], "xterm-256color", false);
     tab_focus(argv[1], "xterm-256color", true);
     puts("PASS tab promotion, immediate inactive styling and stable mouse/keyboard focus");
     TestTerminal term;
     start(&term, argv[1], "xterm-256color", false);
+    test_terminal_lower(&term, 0, true);
     CHECK(strstr(term.output, "\033[?1002h") != NULL); /* held-button motion requested */
     int x, y;
     CHECK(test_terminal_find(&term, "...", &x, &y));
@@ -129,11 +209,12 @@ int main(int argc, char *argv[])
     }
     CHECK(memory_y == old_memory_y + 2);
 
+    test_terminal_lower(&term, 0, false);
     menu_at(&term, x, y);
     test_terminal_click(&term, "Split right");
     test_terminal_expect(&term, "Pane split right.");
-    CHECK(count_text(&term, "DEMO") >= 8); /* ribbon + seven pane footers */
-    CHECK(count_text(&term, "...") == 7);
+    /* All seven pane headers remain available above/within the overlays. */
+    CHECK(count_text(&term, "...") == 4);
     CHECK(test_terminal_find(&term, "...", &x, &y));
     int original_menu = x;
     /* Newly split pane occupies the remaining half, ending at old outer gutter. */
@@ -141,7 +222,7 @@ int main(int argc, char *argv[])
     menu_at(&term, new_menu, y);
     test_terminal_click(&term, "Split below");
     test_terminal_expect(&term, "Pane split below.");
-    CHECK(count_text(&term, "...") == 8);
+    CHECK(count_text(&term, "...") == 5);
 
     int internal_y = -1;
     for (int row = y + 1; row < term.rows - 2; ++row) {
@@ -166,7 +247,7 @@ int main(int argc, char *argv[])
     test_terminal_expect(&term, "Pane 7");
     test_terminal_resize(&term, 44, 140);
     test_terminal_expect(&term, "Disassembly");
-    CHECK(count_text(&term, "...") == 8);
+    CHECK(count_text(&term, "...") == 5);
 
     /* Find the internal lower pane's menu by its shared x and later y. */
     int lower_y = -1;
@@ -177,11 +258,11 @@ int main(int argc, char *argv[])
     menu_at(&term, new_menu, lower_y);
     test_terminal_click(&term, "Close split pane");
     test_terminal_expect(&term, "Split pane closed");
-    CHECK(count_text(&term, "...") == 7);
+    CHECK(count_text(&term, "...") == 4);
     menu_at(&term, new_menu, y);
     test_terminal_click(&term, "Close split pane");
     test_terminal_expect(&term, "Split pane closed");
-    CHECK(count_text(&term, "...") == 6);
+    CHECK(count_text(&term, "...") == 3);
     CHECK(test_terminal_find(&term, "...", &x, &y));
     CHECK(x == old_menu + 5 && x > original_menu);
 
@@ -221,7 +302,7 @@ int main(int argc, char *argv[])
     test_terminal_expect(&term, "Terminal too");
     test_terminal_resize(&term, 44, 140);
     test_terminal_expect(&term, "Source");
-    CHECK(count_text(&term, "...") == 6);
+    CHECK(count_text(&term, "...") == 3);
     test_terminal_stop(&term, 0);
     CHECK(strstr(term.output, "\033[?1002l") != NULL);
     puts("PASS M02 mouse drag, nested splits, seventh/eighth view, compact access, close and keyboard resize");
@@ -232,8 +313,8 @@ int main(int argc, char *argv[])
     test_terminal_resize(&term, 18, 80);
     test_terminal_expect(&term, "2 Asm");
     test_terminal_click(&term, "Disassembly");
-    test_terminal_click(&term, "08000438"); /* Deliberately focus the visible body. */
-    test_terminal_send(&term, "\033OB");
+    test_terminal_click(&term, "08000436"); /* Last visible row above the dock. */
+    test_terminal_send(&term, "\033OB\033OB");
     test_terminal_expect(&term, "0800043A");
     CHECK(!test_terminal_find(&term, "0800042A  B5 10", NULL, NULL));
     test_terminal_stop(&term, 0);
@@ -260,11 +341,13 @@ int main(int argc, char *argv[])
     test_terminal_expect(&term, "main.c | Cortex-M4F sample");
     CHECK(test_terminal_find(&term, "...", &x, &y));
     int scrollbar_x = x + 4;
-    click_at(&term, scrollbar_x, y + 2); /* page above the thumb */
+    for (int i = 0; i < 4 && !test_terminal_find(&term, "#include <stdint.h>", NULL, NULL); ++i) {
+        click_at(&term, scrollbar_x, y + 2); /* Page above the thumb. */
+    }
     test_terminal_expect(&term, "#include <stdint.h>");
     mouse(&term, 0, scrollbar_x, y + 2, false);
-    mouse(&term, 32, scrollbar_x, y + 9, false);
-    mouse(&term, 0, scrollbar_x, y + 9, true);
+    mouse(&term, 32, scrollbar_x, y + 8, false);
+    mouse(&term, 0, scrollbar_x, y + 8, true);
     test_terminal_expect(&term, "counter++;");
     CHECK(!test_terminal_find(&term, "#include <stdint.h>", NULL, NULL));
     test_terminal_stop(&term, 0);
@@ -280,7 +363,7 @@ int main(int argc, char *argv[])
     test_terminal_expect(&term, "PANE ACTIONS");
     test_terminal_send(&term, "\033OB\r");
     test_terminal_expect(&term, "Pane split below.");
-    CHECK(count_text(&term, "...") == 7);
+    CHECK(count_text(&term, "...") == 4);
     test_terminal_stop(&term, 0);
     puts("PASS M02 monochrome keyboard-only split flow");
     start(&term, argv[1], "xterm-256color", false);

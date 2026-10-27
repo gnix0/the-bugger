@@ -43,7 +43,7 @@ int main(int argc, char *argv[])
     test_terminal_expect(&t, "Native Linux"); test_terminal_send(&t, "\r");
     test_terminal_expect(&t, "Executable / ELF"); test_terminal_send(&t, "\t\025"); test_terminal_send(&t, argv[2]);
     test_terminal_click(&t, "Review session"); test_terminal_click(&t, "Start native");
-    test_terminal_expect(&t, "LIVE | Loaded"); test_terminal_click(&t, "Command"); input(&t, "start");
+    test_terminal_expect(&t, "LIVE | Loaded"); test_terminal_lower(&t, 2, true); test_terminal_click(&t, "Command"); input(&t, "start");
     test_terminal_expect(&t, "LIVE | C/C++ | breakpoints.c"); test_terminal_expect(&t, "m08_long();");
     int x, y; CHECK(test_terminal_find(&t, "m08_long();", &x, &y)); mouse(&t, x + 4, y);
     test_terminal_send(&t, "\033[20~"); source_mark(&t, true);
