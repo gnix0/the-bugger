@@ -2335,3 +2335,30 @@ Physical STM32 and direct-Alacritty human UX checks were not performed. Native,
 local gdbserver, simulated MI/OpenOCD fixtures and isolated tmux do not establish
 hardware behavior or hosted Ubuntu success. Task 1.3 MMIO remains unimplemented.
 Manual review procedure: [lower overlays](testing.md#lower-dock-and-independent-overlays).
+
+## v0.1.3 Task 1.3 — documentation consolidation
+
+Documentation subtask complete; browsing implementation and physical/monitor
+validation remain open. The meaningful requirements from the temporary owner
+`ASM_MEM.md` were reconciled with the approved specification in the canonical
+`~/TODO.md` and the maintained [browsing requirements](requirements.md#approved-v013-browsing-work).
+The canonical crosswalk retains the investigation/approval obligations, direct
+Go-to objective, Disassembly/Memory distinctions, predictable hardware access,
+independent product identity, reference/license preservation and acceptance gates.
+The temporary source was removed only after that preservation review.
+
+The audit covered tracked Markdown references and `THIRD_PARTY_NOTICES`. Rewrote
+the remaining IAR/C-SPY product-definition comparison as dense coordinated
+terminal inspection; relabeled a misleading prototype link. Retained genuine
+technical terminfo references, palette provenance, licenses, historical evidence,
+ST linker-source URLs and the expressly approved optional Vim-like feature.
+Corrected the tests README's stale always-on-alias wording and broken Profiles
+anchor; clarified dock restoration in the first-session guide. No functionality
+or existing M/F identity was removed or inferred from another tool.
+
+Checks: PASS, 173 local links across 15 tracked Markdown files; license/notices
+byte-for-byte unchanged; `git diff --check`. Evidence:
+`build/browsing-documentation-evidence/review.log`. No application matrix was
+rerun for these documentation-only edits. Approved browsing behavior is explicitly
+labeled in progress; parser tests, prior text probes and local host results do
+not establish MMIO protocol reliability, physical widths or owner acceptance.

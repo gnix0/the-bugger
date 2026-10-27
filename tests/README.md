@@ -17,7 +17,7 @@ records remain in the [validation records](../docs/validation.md).
   See [fullscreen procedures](../docs/testing.md#source-fullscreen).
 
 - `make test-navigation`: verifies spatial controls, deliberate content focus,
-  fullscreen/resize focus retention and arrow-key versus always-on h/j/k/l behavior
+  fullscreen/resize focus retention and arrow-key versus opt-in h/j/k/l aliases
   through real demo PTYs, including menus, tabs/bodies, resize, confirmations,
   compact rendering and literal field editing. Included in `make test`; no
   debugger required. See [navigation procedures](../docs/testing.md#letter-key-navigation).
@@ -83,7 +83,7 @@ records remain in the [validation records](../docs/validation.md).
   `make test-m13-native`: actual GDB source restore, relocated duplicate-basename
   breakpoint resolution, execution interlock, saved native reopen/remapped actions,
   recents and cleanup. Included in `make test-native`; GDB/ptrace required. See
-  [M13 procedures](../docs/testing.md#profiles-and-action-keys).
+  [M13 procedures](../docs/testing.md#profiles-and-source-settings).
 
 - `test-watchpoints` / `make test-m12-model`: hardware type reconciliation,
   change/read/access modes, width/overflow checks, hit/scope messages,
