@@ -127,6 +127,28 @@ int main(int argc, char **argv)
         test_terminal_expect(&term, "Memory");
         test_terminal_resize(&term, 28, 110);
         test_terminal_expect(&term, "LIVE REMOTE");
+        const char *stress = getenv("TB_RENDER_STRESS_SECONDS");
+        if (stress) {
+            char *end; long seconds = strtol(stress, &end, 10);
+            CHECK(*stress && !*end && seconds > 0 && seconds <= 300);
+            uint64_t deadline = tb_gdb_now_ms() + (uint64_t)seconds * 1000;
+            unsigned rounds = 0;
+            while (tb_gdb_now_ms() < deadline) {
+                test_terminal_click(&term, "Continue F5"); test_terminal_expect(&term, "LIVE | Running");
+                test_terminal_pump(&term, 50);
+                test_terminal_click(&term, "Pause"); test_terminal_expect(&term, "LIVE | Stopped");
+                test_terminal_send(&term, "2"); /* Select its pane in compact rendering too. */
+                test_terminal_click(&term, rounds % 2 ? "Disassembly" : "Call Stack");
+                test_terminal_resize(&term, 44, 140);
+                test_terminal_expect(&term, "LIVE REMOTE"); test_terminal_expect(&term, "Registers");
+                test_terminal_expect(&term, "Memory"); test_terminal_expect(&term, "Console");
+                test_terminal_resize(&term, 28, 110);
+                test_terminal_expect(&term, rounds % 2 ? "Disassembly" : "Call Stack");
+                CHECK(kill(server, 0) == 0 && kill(fixture, 0) == 0);
+                ++rounds;
+            }
+            printf("PASS rendering stress %ld seconds, %u rounds: real localhost remote updates, tabs, resize and external ownership\n", seconds, rounds);
+        }
         test_terminal_send(&term, "\021");
         test_terminal_expect(&term, "Disconnect from the existing server");
         test_terminal_click(&term, "Close session"); test_terminal_stop(&term, 0);

@@ -42,6 +42,16 @@ only stock aliases in their corresponding slots. Legacy preference files without
 this boolean lose only those old stock aliases on load, without a write. Theme
 and key saves preserve the boolean; profiles remain independent.
 
+The shared text renderer confines each call to its assigned row and display-cell
+width. Printable multibyte characters are measured before drawing; a wide
+character is omitted if it cannot fit completely. Control and invalid bytes are
+escaped as inert text rather than passed to ncurses for tab/newline expansion.
+ASCII runs retain a bounded fast path. Console and source models still apply
+their existing byte-escaping policy; this adds neither ANSI Console interpretation
+nor a Unicode Console decoding feature. Curses-cell regression checks cover
+controls, invalid UTF-8, accented/combining/double-width text and the bottom-right
+screen boundary.
+
 Focused text fields retain `(page, kind, value, pane)` identity. Newly acquired
 fields start Normal; Insert is retained only while that field remains focused.
 `src/tui/editor.c` implements bounded single-line Normal commands, with no target

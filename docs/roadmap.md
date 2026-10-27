@@ -4,6 +4,36 @@ Embedded-first development from v0.1.0 toward v1.0.0. Planned capabilities are n
 implemented features or hardware support claims. See [architecture](architecture.md),
 [requirements](requirements.md) and [validation procedures](testing.md).
 
+## Current development sequence
+
+The owner has approved the following v0.1.3 sequence. These are new work items,
+not revisions to the accepted M00–M18 evidence or claims of completed features.
+
+| Task | Scope | Current state |
+|---|---|---|
+| 0 | Initialize the execution record and general documentation | In progress with Task 1.1; view-specific consolidation remains Task 1.3 |
+| 1.1 | Investigate and correct rendering corruption and the Disassembly navigation trap, preserving current access policy | Investigating; automated, bounded stress and owner hardware/visual evidence remain separate |
+| 1.2 | Initially minimized lower panes with independently resizable overlays | Interaction design approved, including most-recently-focused stacking; implementation follows 1.1 |
+| 1.3 | Implement approved Disassembly/Memory browsing and explicit MMIO access | Design approved; implementation blocked by 1.1/1.2; real monitor-protocol feasibility and hardware access-width validation required |
+| 1.4 | Investigate runtime font/scale feasibility and implement the owner-approved approach | Approach unresolved; terminal font changes are not portable application scaling |
+| 1.5 | Release preparation | Blocked by implementation, validation and owner acceptance; no release before both browsing views are accepted |
+
+The canonical owner execution record is `~/TODO.md`. Task 0 records the approved
+decisions without completing the Disassembly/Memory-specific consolidation of
+`~/ASM_MEM.md`; that remains part of Task 1.3 before its code changes. Temporary
+permissions are scoped per Memory view, never inferred from a successful read,
+and never authorize background MMIO reads. These behaviors are planned, not
+available in the current build.
+
+Later owner-planned milestones are v0.1.4 physical ESP RISC-V validation, an
+approved shortlist of remaining roadmap work, real-world use, documentation and
+owner-led formatting/maintainability review; v0.2.x emphasizes stabilization and
+UX, followed by the owner's exclusive build-system review and then an approved
+testing strategy. Existing F identifiers/scopes are retained. Their older version
+targets below require reconciliation in Task 2.2, not automatic implementation.
+Physical RISC-V is explicitly deferred for v0.1.3 to v0.1.4 and remains unverified;
+this grants no additional hardware-support claim. Other release checks remain.
+
 ## Implementation status
 
 M00–M17 and the documented pane corrections are accepted. M17 physically validates
@@ -14,16 +44,16 @@ deferred for that release. F19 built-in themes is accepted as early post-release
 work through the reported implementation commit. The original always-on h/j/k/l navigation shipped with v0.1.1. Its opt-in
 replacement and limited single-line Normal/Insert editing are accepted through
 the owner-committed implementation as a shared UI refinement, not a new gate.
-Source fullscreen is another accepted, unreleased shared UI addition: a temporary
+Source fullscreen is another accepted shared UI addition: a temporary
 rendering override with retained tiles, not an F06 organization redesign.
 Spatial control navigation and deliberate content focus are accepted through
 implementation commit `53b1e5a`; they do not add a roadmap gate or change F06
 scope. These shared UI additions and F19 are included in v0.1.1 preparation.
-v0.1.1 publication was reported by the owner. The current checkout prepares
-v0.1.2, collecting the Source tabs, content-pane transfers, inline Console,
+v0.1.1 publication was reported by the owner. The v0.1.2 baseline collects
+the Source tabs, content-pane transfers, inline Console,
 terminal-size warning, personal Keybinds, opt-in Vim input and tmux RGB correction.
-Host and artifact evidence is recorded separately from outstanding physical
-release validation; preparation is not publication or release acceptance.
+Historical preparation records retain their original host/artifact results and
+outstanding physical checks; preparation alone is not publication or acceptance.
 Other F gates remain planned.
 Multi-file Source tabs are an accepted shared UI enhancement. They do not add a roadmap gate or change the embedded-first priorities.
 Ctrl+direction transfer of content focus is another shared UI enhancement

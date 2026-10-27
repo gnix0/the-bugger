@@ -52,6 +52,39 @@ under ignored `build/`; record durable result summaries separately. M14 includes
 a full-project analyzer pass; focused checks alone never establish that result
 for subsequent changes.
 
+## Rendering stability stress
+
+The native TUI and localhost-remote harnesses provide an opt-in, bounded stress
+mode. `TB_RENDER_STRESS_SECONDS` accepts 1–300 seconds; ordinary `test-ci` runs
+remain unchanged. The native fixture's `--render-stress` mode produces sustained
+long output lines and hostile control-byte samples while the harness scrolls,
+steps, resizes and checks fixed pane/control labels. The remote harness repeatedly
+continues/pauses an owned localhost fixture, switches tabs and exercises compact
+and tiled rendering. The tmux variant uses its own server and configuration.
+
+Build the application, fixtures and harnesses, then run the three separately:
+
+```sh
+make BUILD_DIR=build/render-stress CPPFLAGS=-D_FORTIFY_SOURCE=3 all fixtures \
+  build/render-stress/test-native-tui build/render-stress/test-remote-native
+TB_RENDER_STRESS_SECONDS=300 TERM=xterm-256color build/render-stress/test-native-tui \
+  "$PWD/build/render-stress/the-bugger" "$PWD/build/render-stress/debug-fixture"
+TB_RENDER_STRESS_SECONDS=300 TERM=xterm-256color build/render-stress/test-remote-native \
+  "$PWD/build/render-stress/remote-fixture" --tui "$PWD/build/render-stress/the-bugger"
+TB_RENDER_STRESS_SECONDS=300 TB_CONSOLE_TEST_TMUX=1 TERM=xterm-256color \
+  build/render-stress/test-native-tui "$PWD/build/render-stress/the-bugger" \
+  "$PWD/build/render-stress/debug-fixture"
+```
+
+These are additional stress checks, not substitutes for the fresh fortified
+baseline. They need working PTYs, ptrace and local sockets; they do not connect
+to physical hardware. Record durations, rounds, results and full logs. The test
+VT reader checks ASCII labels and fixed geometry, not every terminal feature or
+physical appearance. Renderer unit tests inspect ncurses cells for control-byte,
+invalid UTF-8, combining/wide-character and screen-edge clipping. Direct-terminal
+and tmux visual review, plus the relevant real-board workflow, remain separate
+acceptance evidence.
+
 ## Hosted CI
 
 [CI](../.github/workflows/ci.yml) defines **Tests** on Ubuntu 26.04 with GDB 17+

@@ -2052,6 +2052,88 @@ Final input verification, `git diff --check` and task process cleanup passed
 (`input-verification.log`, `process-audit.log`). Final tracked-tree hashes and
 patch are retained in `tracked-tree.sha256` and `final-tree.patch`.
 
+## v0.1.3 Task 1.1 — rendering and failed code requests
+
+Status: **automated-verified; awaiting owner physical/visual review**. The owner authorized planned 1.x work,
+local Conventional Commits and continuation while owner review is deferred.
+That authorization is not physical acceptance, hosted-CI evidence or permission
+to publish. Work is on the local `feature/v0.1.3` branch.
+
+The shared text renderer previously passed a byte count directly to ncurses.
+An authored curses-cell regression demonstrated that tab/control expansion
+escaped the assigned row/cell rectangle. The fix retains an ASCII fast path,
+measures printable multibyte characters by cells, escapes control/invalid bytes
+and does not emit a wide glyph that cannot fit. Console/source byte escaping
+remains unchanged; no ANSI interpreter or new Unicode Console feature was added.
+
+A separate authored MI regression reproduced a navigation trap: a failed
+Disassembly read cleared the old listing, and paging then rejected the empty
+view. Retain the previous instructions and restore their browsing origin while
+showing the failure. Actual native GDB rejection at address zero verifies retained
+listing/stop PC and recovery through Return to stopped context. This does not
+implement Task 1.3's broader browsing or Return to Stop semantics.
+
+Evidence directory: `build/rendering-stability-evidence/`. Base revision:
+`726cd7128340b99615598e7ee4b0b3abeb5bb383`; exact source/test/workflow/build inputs
+are recorded in `test-inputs.sha256` and `test-inputs-final.sha256` for the initial
+and final test trees respectively. Environment is Linux 7.2.11-arch1-1 x86-64,
+glibc 2.44, GCC 16.2.1, GDB 18.1 and tmux 3.8; complete versions are in
+`environment.log`.
+
+| Check | Result and evidence |
+|---|---|
+| Original renderer regression | FAIL as expected, `render-before.log`; ncurses writes outside the assigned cells |
+| Original failed-page regression | FAIL as expected, `code-before.log`; retained instruction count/origin lost |
+| Focused renderer | PASS, `render-wide.log`; controls, accented/combining/double-width text, invalid UTF-8 and bottom-right protection, plus existing palette/style assertions |
+| Focused authored-MI code model | PASS, `code-after.log`; failed adjacent read retains usable paging |
+| Actual GDB code suite | PASS, `native-code.log`; unreadable address preserves listing/stop and recovery, plus existing source/mixed/optimized/stripped/C++/duplicate-file assertions |
+| Initial fresh fortified baseline | PASS, `test-ci.log`, exit 0; prior stress-harness test tree |
+| Final fresh fortified baseline | PASS, `test-ci-final.log`, exit 0; final harness tree |
+| Final 300-second native stress | PASS, 914 rounds, `stress-final-native.log`; flood/wheel/step/resize/fixed controls and terminal restoration |
+| Final 300-second localhost remote stress | PASS, 360 rounds, `stress-final-remote.log`; update/tab/resize, external ownership and subsequent server-loss recovery |
+| Final 300-second isolated tmux stress | PASS, 911 rounds, `stress-final-tmux.log`; flood/wheel/step/resize, fixed controls and terminal restoration through an isolated real tmux server |
+| Static analysis | PASS, `make BUILD_DIR=build/rendering-stability-analysis analyze`, clang-tidy 23.1.3, `analysis.log`, exit 0 |
+| CI analysis-job test compilation | PASS, all 65 unit/integration/support C sources with fortification, `test-compilation.log`, exit 0 |
+| Documentation consistency | PASS: 77 local file/heading links in the four modified general/technical/testing documents |
+| Owner STM32/direct-terminal/tmux visual acceptance | NOT RUN; the original reported STM32 corruption has not been reproduced or attributed to these fixes |
+
+The final baseline command was `TERM=xterm-256color make
+BUILD_DIR=build/rendering-stability-ci-final CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+The initial passing command used `BUILD_DIR=build/rendering-stability-ci`;
+both directories were previously unused. The opt-in stress commands are documented
+in [testing](testing.md#rendering-stability-stress); final exact argv, environment,
+elapsed durations and exit codes are retained in `stress-results.json`.
+The final input manifest SHA-256 is
+`feba3034d519cd37ff6d8ff9891a7cf61dee8c44234882bcdff9328e70dd70dc`.
+
+Preserved harness failures: `stress-remote-smoke.log` expected a tab in a hidden
+compact pane; `stress-native.log` expected the full Registers title in compact
+rendering. Their captured screens show the documented pane selectors instead.
+Corrections select the intended pane and assert the appropriate compact or tiled
+labels; application assertions were not removed. The corrected focused harness
+checks pass (`stress-remote-smoke-retry.log`, `stress-native-compact-smoke.log`).
+An initial new cell-test assertion also incorrectly expected OK instead of the
+five-character return from `mvinnstr`; correcting that return-value expectation
+did not change its cell-boundary assertions.
+
+Owner review remains:
+
+1. Use the tested binary and the native debug fixture with `--render-stress` as
+   its arguments. Continue, scroll the log, pause/step and resize between compact
+   and tiled sizes. Pane titles, command/Save Log controls and neighboring panes
+   must remain intact; target control bytes remain escaped.
+2. While stopped on the native fixture, navigate Disassembly to `0x0`. Expect an
+   access error with the prior listing retained, and usable subsequent navigation
+   and Return to stopped context. Execution must remain unchanged by browsing.
+3. After authorizing the exact physical operations, revisit the owner's STM32
+   blinky/output scenario in Alacritty directly and through tmux. Record the exact
+   output producer, firmware and actions; no new MMIO read commands are implied
+   by this checklist. Report any surviving corruption before acceptance.
+
+The host test VT reader covers bounded ASCII labels/geometry and selected UTF-8
+box drawing, not a complete terminal emulator or visual/hardware proof. New
+Task 1.3 MMIO protocol/width capabilities remain unimplemented and unverified.
+
 ## Profiles action-row alignment — 2026-10-25
 
 Owner review found New remote touching New OpenOCD, with creation and reload

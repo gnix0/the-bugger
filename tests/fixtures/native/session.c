@@ -35,6 +35,14 @@ int main(int argc, char *argv[])
         puts("FLOOD END");
     }
     for (unsigned tick = 0;; ++tick) {
+        if (argc > 1 && strcmp(argv[1], "--render-stress") == 0) {
+            for (unsigned line = 0; line < 64; ++line) {
+                printf("RENDER-STRESS %u/%u abcdefghijklmnopqrstuvwxyz 0123456789 "
+                       "abcdefghijklmnopqrstuvwxyz 0123456789 "
+                       "abcdefghijklmnopqrstuvwxyz 0123456789\n", tick, line);
+            }
+            printf("CONTROL=\033[2J\033]52;c;not-a-clipboard\aEND\n");
+        }
         printf("tick %u\n", tick);
         const struct timespec delay = {.tv_nsec = 100000000};
         (void)nanosleep(&delay, NULL);

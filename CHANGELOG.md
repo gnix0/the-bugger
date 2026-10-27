@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- Confine rendered text to its assigned terminal row and display-cell width,
+  escaping control/invalid bytes instead of allowing ncurses to expand them
+  into adjacent content. Preserve complete printable wide characters.
+- Retain the prior Disassembly listing and browsing origin when GDB rejects a
+  code request, so an unreadable neighboring address cannot leave an empty pane
+  that refuses further paging.
+
 - Keybinds scrolling keeps clean cell borders without underlined box glyphs.
   Action buttons center their labels; Memory Options and session profile actions
   fit their text with separated hit regions. All session forms wrap their complete
