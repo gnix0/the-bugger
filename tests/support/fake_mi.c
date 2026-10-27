@@ -44,6 +44,7 @@ int main(int argc, char *argv[])
     unsigned register_value = 16; bool register_error = false, register_malformed = false;
     bool register_stop_held = false;
     unsigned memory_mode = 0;
+    bool code_page_error = false;
     char variable_name[64] = {0}; unsigned variable_reads = 0, variable_children = 0, variable_deletes = 0;
     unsigned variable_mode = 0;
     unsigned variable_value = 17;
@@ -370,8 +371,13 @@ int main(int argc, char *argv[])
             (void)printf("%s^done,files=[{file=\"unit.c\",fullname=", token);
             quoted(getenv("TB_FAKE_SOURCE") ? getenv("TB_FAKE_SOURCE") : "/missing.c");
             puts("},{file=\"duplicate.c\",fullname=\"/not/here/duplicate.c\"},{file=\"relative-unresolved.c\"}]");
+        } else if (strncmp(mode, "context-code", 12) == 0 && strcmp(command, "-code-page-error\n") == 0) {
+            code_page_error = true; reply(token, "^done");
         } else if (strncmp(mode, "context-code", 12) == 0 && strncmp(command, "-data-disassemble ", 18) == 0) {
-            if (strcmp(mode, "context-code-stale") == 0 && !context_held) {
+            if (code_page_error) {
+                code_page_error = false;
+                reply(token, "^error,msg=\"Cannot access memory at requested page\"");
+            } else if (strcmp(mode, "context-code-stale") == 0 && !context_held) {
                 (void)snprintf(held, sizeof held, "%s", token); context_held = true;
             } else if (strcmp(mode, "context-code-fallback") == 0 && strstr(command, "-- 5")) {
                 reply(token, "^error,msg=\"FAKE mixed mode unavailable\"");

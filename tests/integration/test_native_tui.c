@@ -7,6 +7,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 static char tmux_socket[80], tmux_config[] = "/tmp/the-bugger-console-tmux-XXXXXX";
@@ -43,6 +44,7 @@ static void start(TestTerminal *term, const char *binary, const char *fixture, b
     test_terminal_expect(term, "Executable / ELF");
     test_terminal_send(term, "\t\025");
     test_terminal_send(term, fixture);
+    if (getenv("TB_RENDER_STRESS_SECONDS")) { test_terminal_send(term, "\t\025--render-stress"); }
     if (retry) { test_terminal_send(term, "\t\t\t\t\025/nonexistent/gdb"); }
     test_terminal_click(term, "Review session");
     test_terminal_expect(term, "Review native session");
@@ -165,9 +167,64 @@ static void inline_console(TestTerminal *term)
     puts("PASS inline Console Enter/Send, rejected and pane-local drafts, literal keys, keyboard access, caret and resize");
 }
 
+static long long stress_now(void)
+{
+    struct timespec value; CHECK(clock_gettime(CLOCK_MONOTONIC, &value) == 0);
+    return (long long)value.tv_sec * 1000 + value.tv_nsec / 1000000;
+}
+
+static void render_stress(const char *binary, const char *fixture, const char *duration)
+{
+    char *end;
+    long seconds = strtol(duration, &end, 10);
+    CHECK(*duration && !*end && seconds > 0 && seconds <= 300);
+    TestTerminal term;
+    start(&term, binary, fixture, false);
+    test_terminal_click(&term, "Continue F5"); test_terminal_expect(&term, "LIVE | Running");
+    test_terminal_expect(&term, "RENDER-STRESS");
+    long long until = stress_now() + seconds * 1000;
+    unsigned rounds = 0;
+    while (stress_now() < until) {
+        test_terminal_pump(&term, 50);
+        int x, y;
+        CHECK(test_terminal_find(&term, "Console", &x, &y));
+        char mouse[80];
+        (void)snprintf(mouse, sizeof mouse, "\033[<%d;%d;%dM", rounds % 2 ? 65 : 64, x + 3, y + 4);
+        test_terminal_send(&term, mouse);
+        if (rounds % 20 == 0) {
+            test_terminal_click(&term, "Pause"); test_terminal_expect(&term, "LIVE | Stopped");
+            test_terminal_send(&term, "2");
+            test_terminal_click(&term, "Disassembly");
+            test_terminal_send(&term, "\033[23~"); /* F11 instruction step, not source-next. */
+            test_terminal_pump(&term, 100);
+            test_terminal_expect(&term, "LIVE | Stopped");
+            test_terminal_click(&term, "Continue F5"); test_terminal_expect(&term, "LIVE | Running");
+            test_terminal_resize(&term, rounds % 40 ? 28 : 44, rounds % 40 ? 110 : 140);
+            test_terminal_send(&term, "6"); /* Keep the log accessible in compact rendering. */
+        }
+        test_terminal_expect(&term, "Source");
+        test_terminal_expect(&term, term.cols < 124 ? "2 Asm" : "Disassembly");
+        test_terminal_expect(&term, term.cols < 124 ? "3 Regs" : "Registers");
+        test_terminal_expect(&term, term.cols < 124 ? "4 Mem" : "Memory");
+        test_terminal_expect(&term, "Locals"); test_terminal_expect(&term, "Console");
+        int command_x, command_y, save_x, save_y;
+        CHECK(test_terminal_find(&term, "Command", &command_x, &command_y));
+        CHECK(test_terminal_find(&term, "Save Log", &save_x, &save_y));
+        CHECK(save_y == command_y + 2);
+        CHECK(strstr(term.output, "\033]52") == NULL);
+        ++rounds;
+    }
+    test_terminal_send(&term, "\021"); test_terminal_expect(&term, "Terminate the launched program");
+    test_terminal_click(&term, "Close session"); test_terminal_stop(&term, 0);
+    printf("PASS rendering stress %ld seconds, %u rounds: real native flood, wheel, stepping, resize, fixed controls, terminal cleanup%s\n",
+           seconds, rounds, getenv("TB_CONSOLE_TEST_TMUX") ? " through isolated tmux" : "");
+}
+
 int main(int argc, char *argv[])
 {
     CHECK(argc == 3);
+    const char *stress = getenv("TB_RENDER_STRESS_SECONDS");
+    if (stress) { render_stress(argv[1], argv[2], stress); return 0; }
     TestTerminal term;
     start(&term, argv[1], argv[2], true);
     inline_console(&term);

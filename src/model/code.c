@@ -506,13 +506,21 @@ bool tb_code_event(TbCode *code, const TbGdbEvent *event)
             view->fallback = true; view->assembly_dirty = true;
         } else if (job == CODE_ASSEMBLY || job == CODE_SYMBOL) {
             (void)snprintf(view->data.assembly_error, sizeof view->data.assembly_error, "%s", error);
-            view->data.instruction_count = 0; ++view->data.assembly_revision;
+            ++view->data.assembly_revision;
             if (job == CODE_ASSEMBLY && view->forward) {
+                view->data.instruction_count = 0;
                 append_forward(view);
                 if (view->data.instruction_count) { view->data.anchor = view->data.instructions[0].numeric; }
                 view->precontext = false;
             }
-            if (job == CODE_ASSEMBLY && view->data.instruction_count) { view->data.anchor = view->data.instructions[0].numeric; }
+            if (view->data.instruction_count) {
+                /* A failed neighboring read is not evidence that the retained
+                 * listing disappeared. Keep a usable browsing origin instead
+                 * of leaving an empty pane that refuses all paging. */
+                view->data.anchor = view->data.instructions[0].numeric;
+                const TbInstruction *last = &view->data.instructions[view->data.instruction_count - 1];
+                view->data.next_address = last->numeric <= UINT64_MAX - last->bytes ? last->numeric + last->bytes : 0;
+            }
         }
         message(code, error); return true;
     }

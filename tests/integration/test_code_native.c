@@ -57,6 +57,16 @@ static void ordinary(const char *fixture)
     const TbCodeView *v = tb_code_view(code, 0);
     CHECK(strstr(s->selected.function, "main") && v->line_count > 10 && v->instruction_count > 0);
     CHECK(v->selected_line == s->selected.line && v->stopped_line == s->stopped.line);
+    size_t retained_count = v->instruction_count;
+    uint64_t retained_address = v->instructions[0].numeric;
+    char retained_pc[48]; (void)snprintf(retained_pc, sizeof retained_pc, "%s", s->stopped.address);
+    uint64_t failed_revision = v->assembly_revision;
+    CHECK(tb_code_address(code, 0, "0x0")); code_ready(native, failed_revision);
+    CHECK(*v->assembly_error && v->instruction_count == retained_count);
+    CHECK(v->anchor == retained_address && v->instructions[0].numeric == retained_address);
+    CHECK(strcmp(s->stopped.address, retained_pc) == 0);
+    failed_revision = v->assembly_revision; tb_code_return(code, 0); code_ready(native, failed_revision);
+    CHECK(v->assembly_follow && !*v->assembly_error);
     int call_line = tb_code_find(code, 0, "code_result = code_callee", 0) + 1; CHECK(call_line > 0);
     for (int i = 0; i < 6 && s->selected.line != call_line; ++i) { step(native, TB_STEP_OVER, false); }
     CHECK(s->selected.line == call_line);

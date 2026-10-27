@@ -88,6 +88,26 @@ static void run(const char *peer, const char *mode)
     CHECK(retained_pc);
     earlier = view->assembly_revision; tb_code_return(code, 0); ready(gdb, earlier);
     CHECK(view->assembly_follow && view->instruction_count == TB_CODE_INSNS);
+    if (strcmp(mode, "context-code") == 0) {
+        uint64_t retained = view->instructions[0].numeric;
+        size_t retained_count = view->instruction_count;
+        unsigned before = completions;
+        command(gdb, "-code-page-error");
+        until = tb_gdb_now_ms() + 1000;
+        while (completions == before && tb_gdb_now_ms() < until) { pump(gdb); }
+        CHECK(completions > before);
+        earlier = view->assembly_revision;
+        CHECK(tb_code_assembly_page(code, 0, 1)); ready(gdb, earlier);
+        CHECK(strstr(view->assembly_error, "Cannot access memory"));
+        CHECK(view->instruction_count == retained_count && view->anchor == retained);
+        CHECK(view->instructions[0].numeric == retained);
+        /* A failed adjacent read must leave a listing from which the user can
+         * navigate backward, rather than an empty pane that rejects paging. */
+        earlier = view->assembly_revision;
+        CHECK(tb_code_assembly_page(code, 0, -1)); ready(gdb, earlier);
+        CHECK(view->instruction_count && !*view->assembly_error);
+        earlier = view->assembly_revision; tb_code_return(code, 0); ready(gdb, earlier);
+    }
     char text[128]; CHECK(tb_code_source_line(code, 0, 1, text, sizeof text));
     CHECK(strstr(text, "MARKER") && strstr(text, "\\x1b") && !strchr(text, '\033'));
     CHECK(tb_code_find(code, 0, "MARKER", 0) == 1 && tb_code_find(code, 0, "missing", 0) == -1);

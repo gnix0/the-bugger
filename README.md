@@ -129,6 +129,12 @@ Prepared artifacts do not establish release acceptance or publication.
 | Product and design | [Requirements](docs/requirements.md), [roadmap](docs/roadmap.md), [interface specification](docs/requirements.md#interface-constraints) |
 | Maintainers | [Maintenance/release procedures](docs/maintaining.md) and [validation records](docs/validation.md) |
 
+The [current development sequence](docs/roadmap.md#current-development-sequence)
+starts with rendering stability, then lower-pane organization and approved
+Disassembly/Memory browsing improvements. These are planned work, not current
+capabilities. Both browsing views require implementation, verification and owner
+acceptance before the next release.
+
 The roadmap retains all M00–M18/F01–F47 gates. Post-release priorities progress
 from safe editing and hardware/fault diagnosis to flashing/text channels, RTOS/
 images and validated runtime analysis. Version assignments are planning targets;
