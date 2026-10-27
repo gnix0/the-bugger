@@ -2427,3 +2427,71 @@ This is local host evidence, not hosted Ubuntu CI or owner visual acceptance.
 Task 1.3 remains in progress: production MMIO integration and target-bound setup
 confirmation UI/session wiring, mapping trust and remaining reconstruction work
 are not delivered by this checkpoint. No release is authorized.
+
+## Task 1.3 production MMIO checkpoint
+
+Implemented connection reservation, explicit-width OpenOCD transport, per-view
+consent integration, navigation-only unit rows, user-confirmed setup review and
+session lifecycle guards. Every accepted Console command invalidates setup AND
+MMIO consent before transmission; definitions survive. Rejected submissions
+preserve them. Ordinary execution preserves setup confirmation but expires
+range consent. Setup/target/connection changes and closure invalidate both.
+Queued reads are cancelled on setup invalidation; already outstanding reads can
+have reached hardware. Close waits for them within its existing bounded policy.
+Timeouts/uncertain frames never retry; exact late-token reconciliation or a new
+connection is required. Full transport diagnostics remain in Console.
+
+Agent-run local Arch host checks on frozen source inputs, parent 38b6cfe:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/mmio-verified-ci CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make BUILD_DIR=build/mmio-verified-analysis analyze
+```
+
+Both exited 0. Logs: `build/browsing-evidence/mmio-verified-test-ci.log` and
+`mmio-verified-analysis.log`. All 72 C test sources compiled fortified
+(`mmio-verified-all-test-compilation.log`). The original frozen tree/manifest
+are `mmio-verified-tree.tar.gz` / `mmio-verified-inputs.sha256`; documentation was
+finalized afterward without changing source/build/test inputs. The final
+snapshot is `mmio-verified-final-tree.tar.gz` / `mmio-verified-final-inputs.sha256`.
+Focused Memory tests passed ASan/UBSan with leak detection
+(`mmio-verified-memory-asan-build.log`, `mmio-verified-memory-asan-test.log`).
+The authored remote TUI flow passed direct and isolated real tmux, including
+18x48 paged setup review, unit navigation, missing-frame quarantine/diagnostic
+and Console revocation (`mmio-tui-final-test.log`, `mmio-tmux-test.log`). These
+are host/authored-peer results, not hosted Ubuntu CI or hardware UX acceptance.
+
+Actual production transport was separately run with:
+
+```sh
+openocd -d3 -f board/st_nucleo_f4.cfg
+build/mmio-lifecycle-dev/test-mmio-hardware arm-none-eabi-gdb 127.0.0.1:3333 --stm32f446-gpioa-odr
+```
+
+PASS on the observed STM32F446, device ID 0x10006421, 512 KiB, ST-LINK V2J48M35
+(API v2), OpenOCD 0.12.0-01004-g9ea7f3d64-dirty, arm-none-eabi-gdb 18.1.
+Exactly three frontend GPIOA_ODR operations at 0x40020014, count one each,
+widths 8/16/32; all framed samples returned zero. The actual OpenOCD log shows
+matching adapter sizes 1/2/4, count one. RM0390 7.4/7.4.6 permits these widths;
+ODR has no documented read-clear effect. No explicit flash/reset/write/resume
+command was issued. Connection itself produced additional core/debug/flash
+metadata/PC accesses. This is not a bus trace, an exactly-once claim, or proof
+that arbitrary adapters/firmware honor these widths. Only the agent-owned server
+was started/stopped; no external server was replaced or terminated. Evidence:
+`build/mmio-protocol-evidence/production-client.log`, `production-openocd.log`
+and `production-probe-run.log`. The opt-in physical test is not executed by CI.
+
+Earlier failures remain preserved: `mmio-integration-analysis.log` reported
+three integer conversion diagnostics, now corrected; a first sanitizer link
+omitted the code-model dependency (`mmio-memory-asan-build.log`), corrected in
+subsequent builds; initial authored close tests had not made context visible and
+therefore correctly had no ready snapshot (`mmio-close-debug-test.log`); an
+initial navigation test incorrectly tried granting consent while running
+(`mmio-unit-navigation-test.log`). Tests retain stopped-context protections and
+now exercise their intended conditions. An initial UI probe edited begin beyond
+end and correctly received invalid bounds; its corrected sequence enlarges end
+first. None of those failed runs is counted as a pass.
+
+This completes a production MMIO checkpoint, not Task 1.3. Mapping trust,
+remaining bounded reconstruction requirements and owner hardware/visual review
+remain. No release or complete interactive hardware acceptance is claimed.

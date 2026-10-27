@@ -76,6 +76,13 @@ With Vim-like input enabled, press i in the field before typing. Enter or Send
 submits one command.
 The field clears only when the session accepts it for dispatch; a rejected
 submission retains the draft, while a later GDB error appears in the log.
+Before an accepted Console command is transmitted, MMIO setup confirmation and
+all MMIO range authorizations expire, even for commands that appear harmless.
+Range definitions remain available for inspection. Confirm the setup again and
+renew range consent before another MMIO read; a retained range alone grants no
+access. This protects against aliases/scripts changing the backend invisibly.
+Ordinary stepping and navigation preserve setup confirmation; range consent
+still expires independently on resume or context changes.
 Escape leaves the field without sending or discarding the draft. Each Console
 pane retains its own draft across tab changes, dialogs and terminal resizing;
 new sessions and reused split panes start empty. Leave the field before using
@@ -352,6 +359,33 @@ Partial bytes appear as `??`; failed reads retain the previous snapshot as stale
 Calls, writes and user casts are rejected by the conservative expression policy.
 Memory editing/search/export/comparison remain deferred. See
 [manual acceptance](testing.md#memory-inspector).
+
+For the documented, physically validated STM32F446/ST-LINK V2J48M35/OpenOCD
+setup, **Options → Temporary ranges** also supports explicit-width MMIO.
+Add a range, review its inclusive begin and exclusive end, choose MMIO and its
+8/16/32-bit width, and record known side effects (empty means **UNKNOWN**).
+When moving a draft to higher addresses, enlarge its end before moving its begin;
+each edit must leave valid bounds and revokes consent.
+**Setup → review validated setup** displays the exact target, device, firmware,
+OpenOCD configuration, endpoint and supported widths. Confirm only if every
+detail matches yours. This is your assertion, never automatic verification;
+other setups need separate validation. Setup confirmation and range authorization
+are separate operations, and neither reads hardware.
+
+**Browse declared MMIO units** opens a navigation-only list. Each row is one
+aligned access-width-sized unit, not a verified register identity. Select a row
+and choose **Read unit** to sample just that address at its declared width.
+**Options → Refresh selected sample** explicitly rereads a previously sampled
+unit. Scrolling, numeric address navigation, cached inspection and ordinary
+stepping never cause MMIO reads. There is no whole-window MMIO refresh or polling.
+Samples are historical observations; peripherals may change even while halted.
+One explicit frontend request may cause multiple physical access attempts in
+external software/hardware, depending on driver path and failure conditions.
+The Bugger does not retry automatically. An uncertain outcome blocks further
+MMIO until the exact outstanding request reconciles or you reconnect; a completed
+but untrustworthy frame requires reconnection. Diagnostics remain in Console.
+Closing invalidates setup and consent immediately; an already outstanding read
+may have reached hardware and must finish or follow the bounded close policy.
 
 ## Code breakpoints and Run to Selected
 

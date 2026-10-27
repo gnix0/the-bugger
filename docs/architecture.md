@@ -622,6 +622,12 @@ rewrites that original stop frame. Resume, exit and disconnect mark retained dat
 stale; thread-created/exited/selected notifications schedule invalidation outside
 the callback. Context requests from older generations are discarded. Manual
 console commands invalidate context before execution and refresh it afterward.
+Every accepted Console submission also invalidates MMIO setup confirmation and
+revokes all per-view MMIO range authorizations before command transmission.
+Range definitions survive, but require renewed consent after setup confirmation;
+they cannot bypass an unconfirmed backend. Rejected submissions do not cause
+this invalidation. Console aliases/scripts are treated conservatively because
+their effects on target/server configuration cannot be inferred reliably.
 
 Only visible context views trigger automatic reads, only while stopped. Refresh
 and selections also wait for a stopped target. Sequential `-thread-info`,
@@ -741,9 +747,26 @@ the range-management UI supports paged review, edits and explicit revocation.
 Backend confirmation is metadata-only and binds the target, physical device,
 server configuration, ST-LINK firmware and validated widths to the connection.
 Changing any binding invalidates confirmation and MMIO consent. It represents a
-user assertion, never automatic verification. The session/UI wiring and real
-explicit-width read adapter remain Task 1.3 work. Actual protocol and width-path
-probes provide evidence for the recorded setup, not arbitrary OpenOCD servers.
+user assertion, never automatic verification. Session review offers only the
+documented physically validated STM32F446/ST-LINK V2J48M35/OpenOCD configuration,
+including its endpoint and a configuration revision. Stale reviews cannot
+reconfirm after Console, connection or target changes. The production read
+adapter reserves the existing MI connection while one target-bound explicit-width
+operation is outstanding. A bounded request-identified frame plus matching MI
+completion is required; no human memory table or generic byte fallback is used.
+Timeouts quarantine further MMIO until an exact late completion reconciles the
+request or the connection is replaced. An untrustworthy completed frame requires
+reconnection. No outcome causes an automatic retry. Actual protocol and width-path
+probes provide evidence for the recorded setup, not arbitrary OpenOCD servers;
+product-level physical validation of this adapter remains pending.
+
+MMIO navigation displays one declared access-width-sized unit per row; alignment
+does not identify a hardware register. Navigation and cached sample inspection
+issue no target requests, even while running. Read unit samples only the selected
+aligned address at a user-confirmed width with matching per-view consent checked
+again immediately before dispatch. Samples retain generation/time provenance and
+are historical observations, including while the CPU is halted: peripheral state
+can change independently. There is no whole-window MMIO refresh or polling.
 
 Source lookup
 settings use MI source directories and ordered GDB substitute-path rules, with

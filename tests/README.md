@@ -114,6 +114,14 @@ records remain in the [validation records](../docs/validation.md).
 - `test-memory` / `make test-m10-model`: bounded independent instances, byte order,
   ordinary/unknown-region browsing, partial/invalid/overlapping replies, expression
   restrictions, obsolete replies and no opening/idle/running reads.
+- `test-mmio`, `test-mmio-memory` and `test-mmio-tui` run in the host baseline
+  with authored peers: explicit-width framing, serialization, uncertainty/late
+  replies without retries, independent consent, dispatch/setup/view-lifetime
+  guards, navigation-only units and user-confirmed setup/Console invalidation.
+  `test-remote` also checks queued/in-flight MMIO closure and rejected commands.
+  The separate opt-in `test-mmio-hardware` performs real GPIOA_ODR reads only on
+  the named validated setup; it is never executed by CI. See the
+  [protocol and physical procedures](../docs/testing.md#openocd-mmio-protocol-gate-task-13).
 - `test-memory-native` and `test-memory-tui` / `make test-m10-native`: real buffers,
   inline field/Go, keyboard and mouse browsing, hex/ASCII, independent settings,
   invalid input, stale refresh, unmapped boundary and resize/cleanup. Both are

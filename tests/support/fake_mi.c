@@ -44,6 +44,8 @@ int main(int argc, char *argv[])
     unsigned register_value = 16; bool register_error = false, register_malformed = false;
     bool register_stop_held = false;
     unsigned memory_mode = 0;
+    unsigned mmio_mode = strcmp(mode, "remote-mmio-slow") == 0 ? 1 : 0, mmio_reads = 0;
+    bool mmio_peer = strcmp(mode, "mmio") == 0 || strcmp(mode, "context-mmio") == 0 || strncmp(mode, "remote-mmio", 11) == 0;
     bool code_page_error = false;
     unsigned code_bad_reply = 0;
     char variable_name[64] = {0}; unsigned variable_reads = 0, variable_children = 0, variable_deletes = 0;
@@ -89,7 +91,30 @@ int main(int argc, char *argv[])
         char token[32];
         memcpy(token, line, digits); token[digits] = '\0';
         char *command = line + digits;
-        if (strncmp(mode, "remote-", 7) == 0) {
+        if (mmio_peer && strncmp(command, "-mmio-mode ", 11) == 0) {
+            mmio_mode = (unsigned)strtoul(command + 11, NULL, 10); reply(token, "^done");
+        } else if (mmio_peer && strcmp(command, "-mmio-stats\n") == 0) {
+            (void)printf("%s^done,reads=\"%u\"\n", token, mmio_reads);
+        } else if (mmio_peer && strstr(command, "monitor apply ")) {
+            char id[64], target[64]; unsigned width; unsigned long long address;
+            const char *tail = strstr(command, "}} ");
+            if (!tail || !strstr(command, "$t read_memory $a $w 1") ||
+                sscanf(tail + 3, "%63s %63s %llx %u", id, target, &address, &width) != 4) { free(line); return 81; }
+            ++mmio_reads;
+            if (mmio_mode == 1) { delay(3500); }
+            if (mmio_mode == 9) { reply(token, "^error,msg=\"Authored monitor failure\""); }
+            else {
+                if (mmio_mode == 10) { puts("*running,thread-id=\"all\""); }
+                char frame[256];
+                const char *value = mmio_mode == 7 ? "100000000" : width == 8 ? "5a" : width == 16 ? "125a" : "1234125a";
+                (void)snprintf(frame, sizeof frame, "TBM1|%s|%s|%llx|%u|%u|%s|END\\n",
+                    mmio_mode == 11 ? "old-request" : id, mmio_mode == 4 ? "other.cpu" : target,
+                    address + (mmio_mode == 3 ? 4 : 0), mmio_mode == 5 ? 16 : width, mmio_mode == 6 ? 2 : 1, value);
+                if (mmio_mode != 8) { (void)printf("@\"%s\"\n", frame); }
+                if (mmio_mode == 2) { (void)printf("@\"%s\"\n", frame); }
+                reply(token, "^done");
+            }
+        } else if (strncmp(mode, "remote-", 7) == 0) {
             if (strstr(command, "disable-randomization") || strstr(command, "startup-with-shell") ||
                 strstr(command, "inferior-tty-set") || strstr(command, "exec-arguments") ||
                 strstr(command, "-target-attach") || strstr(command, "kill")) { free(line); return 80; }

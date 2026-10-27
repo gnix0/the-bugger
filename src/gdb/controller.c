@@ -40,6 +40,7 @@ struct TbGdb {
     bool prompted, closing, protocol_failed;
     unsigned startup_ms, setup_left;
     uint64_t resume_token, resume_stop;
+    uint64_t reserved_cookie;
     bool reconcile_pending, reconcile_stopped;
     TbMiParser parser;
     Request requests[TB_GDB_MAX_PENDING];
@@ -228,6 +229,7 @@ bool tb_gdb_start(TbGdb *gdb, const char *executable, unsigned startup_ms)
     ++gdb->generation.session;
     gdb->generation.stop = gdb->generation.context = 0;
     gdb->next_token = 0; gdb->version = 3;
+    gdb->reserved_cookie = 0;
     gdb->startup_ms = startup_ms;
     gdb->startup_deadline = tb_gdb_now_ms() + startup_ms;
     gdb->prompted = gdb->closing = gdb->protocol_failed = false;
@@ -332,9 +334,19 @@ bool tb_gdb_request(TbGdb *gdb, const char *operation, const char *const args[],
                     unsigned timeout_ms, uint64_t *token)
 {
     if (gdb == NULL || gdb->closing || gdb->state == TB_GDB_STARTING ||
-        gdb->state == TB_GDB_DISCONNECTED ||
+        gdb->state == TB_GDB_DISCONNECTED || (gdb->reserved_cookie && gdb->reserved_cookie != cookie) ||
         (scope != TB_GDB_SESSION && gdb->state != TB_GDB_STOPPED)) { return false; }
     return enqueue(gdb, operation, args, count, scope, cookie, timeout_ms, token, false);
+}
+bool tb_gdb_reserve(TbGdb *gdb, uint64_t cookie)
+{
+    if (!gdb || !cookie || gdb->closing || gdb->reserved_cookie || tb_gdb_pending(gdb) ||
+        (gdb->state != TB_GDB_READY && gdb->state != TB_GDB_STOPPED)) { return false; }
+    gdb->reserved_cookie = cookie; return true;
+}
+void tb_gdb_release(TbGdb *gdb, uint64_t cookie)
+{
+    if (gdb && cookie && gdb->reserved_cookie == cookie) { gdb->reserved_cookie = 0; }
 }
 
 static bool obsolete(const TbGdb *gdb, const Request *request)

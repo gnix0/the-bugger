@@ -28,10 +28,11 @@ enum { CONTENT_LEFT = 0x1000, CONTENT_DOWN, CONTENT_UP, CONTENT_RIGHT };
 typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
                SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT, DATA_WATCH_INPUT,
                CONFIG_MENU, THEMES, THEME_PREVIEW, KEYBINDS, PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM, SCRIPT_LIST, SCRIPT_FILTER,
-               MEMORY_RANGES, MEMORY_RANGE, MEMORY_CONSENT, MEMORY_RANGE_INPUT } Page;
+               MEMORY_RANGES, MEMORY_RANGE, MEMORY_CONSENT, MEMORY_RANGE_INPUT, MMIO_SETUP } Page;
 typedef enum { RANGE_ADD, RANGE_PREVIOUS, RANGE_NEXT, RANGE_BEGIN, RANGE_END,
                RANGE_POLICY, RANGE_WIDTH, RANGE_RISKS, RANGE_AUTHORIZE, RANGE_CONFIRM,
-               RANGE_REVOKE, RANGE_REVIEW_PREVIOUS, RANGE_REVIEW_NEXT } RangeAction;
+               RANGE_REVOKE, RANGE_REVIEW_PREVIOUS, RANGE_REVIEW_NEXT, RANGE_BROWSE,
+               RANGE_SETUP, RANGE_SETUP_CONFIRM } RangeAction;
 typedef enum { CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_ADDRESS, CODE_STOPPED,
                CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_DIRECTORY_ADD, CODE_RULE_FROM,
                CODE_RULE_TO, CODE_SETTINGS_CLEAR, CODE_RAW, CODE_RUN_TO, CODE_FULLSCREEN,
@@ -110,6 +111,7 @@ typedef struct {
     unsigned memory_range;
     int memory_range_page, memory_range_rows, memory_range_review;
     RangeAction memory_range_input;
+    TbMemoryBackend mmio_review;
     char memory_input_error[192];
     wchar_t memory_input[TB_MAX_PANES][FIELD_SIZE];
     size_t memory_cursor[TB_MAX_PANES];
@@ -221,6 +223,7 @@ static const char *footer_message(const App *app)
     case MEMORY_INPUT: return "Enter the requested Memory address or byte count. Esc cancels.";
     case MEMORY_RANGES: case MEMORY_RANGE: return "Temporary permissions belong to this Memory view. Managing them never reads hardware.";
     case MEMORY_CONSENT: return "Review the bounds and risks before authorizing. Consent is not proof of safety.";
+    case MMIO_SETUP: return "Confirm only if every documented setup detail matches. This is your assertion, not automatic verification.";
     case MEMORY_RANGE_INPUT: return "Edit this temporary range; applying an edit revokes its permission. No read is performed.";
     case VARIABLE_MENU: return "Choose an explicit variable inspection action.";
     case WATCH_INPUT: return "Add a watch expression; adding does not read memory.";
@@ -922,7 +925,7 @@ static TbScroll workspace_scroll(const App *app, const TbDemoPane *pane, int vis
                        view == TB_BREAKPOINTS ? (int)tb_break_count(tb_session_breakpoints(app->debugger)) :
                        view == TB_REGISTERS ? (int)tb_registers_count(tb_session_registers(app->debugger)) :
                        view == TB_LOCALS || view == TB_WATCHES ? (int)tb_variables_count(tb_session_variables(app->debugger), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES) :
-                       view == TB_MEMORY ? (int)((tb_memory_view(tb_session_memory(app->debugger), index)->data_size + 15) / 16) :
+                       view == TB_MEMORY ? (int)tb_memory_rows(tb_session_memory(app->debugger), index) :
                        view == TB_SOURCE ? (int)code->line_count :
                        view == TB_DISASSEMBLY ? assembly_rows(code) :
                        view == TB_CALL_STACK && context->ready && !context->stale ? (int)context->frame_count :
@@ -985,7 +988,7 @@ static int native_content_width(const App *app, int index)
     TbAssemblyColumns columns = assembly_columns(code);
     const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
     TbCodeRow assembly[TB_CODE_ROWS];
-    size_t rows = view == TB_LOCALS || view == TB_WATCHES ? tb_variables_count(tb_session_variables(app->debugger), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES) : view == TB_MEMORY ? (tb_memory_view(tb_session_memory(app->debugger), index)->data_size + 15) / 16 : view == TB_REGISTERS ? tb_registers_count(tb_session_registers(app->debugger)) : view == TB_SOURCE ? code->line_count : view == TB_DISASSEMBLY ? tb_code_rows(code, assembly) :
+    size_t rows = view == TB_LOCALS || view == TB_WATCHES ? tb_variables_count(tb_session_variables(app->debugger), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES) : view == TB_MEMORY ? tb_memory_rows(tb_session_memory(app->debugger), index) : view == TB_REGISTERS ? tb_registers_count(tb_session_registers(app->debugger)) : view == TB_SOURCE ? code->line_count : view == TB_DISASSEMBLY ? tb_code_rows(code, assembly) :
                   view == TB_CONSOLE ? tb_session_log_count(app->debugger) : view == TB_BREAKPOINTS ? tb_break_count(tb_session_breakpoints(app->debugger)) : view == TB_CALL_STACK && context->ready && !context->stale ? context->frame_count :
                   view == TB_THREADS && context->ready && !context->stale ? context->thread_count : 0;
     size_t maximum = 0;
@@ -1514,13 +1517,20 @@ static void draw_native_pane(App *app, int index, TbRect rect)
                        data->grouping, order == TB_MEMORY_LITTLE ? "LE" : order == TB_MEMORY_BIG ? "BE" : "byte order unknown",
                        data->expression, (long long)data->offset, data->length);
         if (*data->error) { (void)snprintf(header, sizeof header, "%s | %s", stale ? "STALE" : "LIVE", data->error); }
+        if (data->mmio) {
+            stale = true;
+            (void)snprintf(header, sizeof header, "MMIO | %u-bit units | navigation only | %s", data->unit_width,
+                data->register_pending ? "READING one unit" : tb_memory_backend_confirmed(memory) ? "user-confirmed setup" : "setup confirmation required");
+            if (*data->register_error) { (void)snprintf(header, sizeof header, "MMIO | %s", data->register_error); }
+        }
         tb_text(rect.y + 2, rect.x + 1, rect.w - 2, *data->error || stale ? TB_ORANGE : TB_MUTED, 0, header);
-        tb_text(rect.y + 3, rect.x + 1, rect.w - 2, TB_MUTED, 0, "Address             Hex bytes                                        ASCII");
+        tb_text(rect.y + 3, rect.x + 1, rect.w - 2, TB_MUTED, 0, data->mmio ? "Declared address   Width  Sample (no register metadata)" : "Address             Hex bytes                                        ASCII");
         TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
         for (int i = 0; i < scroll.visible && i + scroll.offset < scroll.total; ++i) {
             char text[128]; tb_memory_line(memory, index, (size_t)i + (size_t)scroll.offset, text, sizeof text);
             size_t offset = (size_t)app->horizontal[index][view]; if (offset > strlen(text)) { offset = strlen(text); }
-            tb_text(rect.y + 4 + i, rect.x + 1, app->body_width[index], stale ? TB_MUTED : TB_CYAN, 0, text + offset);
+            tb_text(rect.y + 4 + i, rect.x + 1, app->body_width[index], stale ? TB_MUTED : TB_CYAN,
+                data->mmio && pane->row[TB_MEMORY] == i + scroll.offset ? A_UNDERLINE : 0, text + offset);
             if (!stale) {
                 tb_text(rect.y + 4 + i, rect.x + 1, app->body_width[index], TB_PANEL, 0, text + offset);
                 if (offset < 18) { tb_text(rect.y + 4 + i, rect.x + 1, 18 - (int)offset < app->body_width[index] ? 18 - (int)offset : app->body_width[index], TB_PURPLE, 0, text + offset); }
@@ -1535,8 +1545,8 @@ static void draw_native_pane(App *app, int index, TbRect rect)
         if (!scroll.total) {
             tb_text(rect.y + 4, rect.x + 2, rect.w - 4, TB_MUTED, 0, "Enter an address above; Go reads while stopped.");
         }
-        button(app, rect.y + rect.h - 1, rect.x + 1, 9, " Refresh ", MEMORY_ACTION, 1, index);
-        int x = 11;
+        button(app, rect.y + rect.h - 1, rect.x + 1, data->mmio ? 11 : 9, data->mmio ? " Read unit " : " Refresh ", MEMORY_ACTION, data->mmio ? 10 : 1, index);
+        int x = data->mmio ? 13 : 11;
         button(app, rect.y + rect.h - 1, rect.x + x, rect.w - x - 1 < 9 ? rect.w - x - 1 : 9, " Options ", MEMORY_ACTION, 6, index);
         return;
     }
@@ -2071,10 +2081,15 @@ static void draw_memory_menu(App *app)
     int actions_y = top + (compact ? 2 : 5);
     char text[512];
     (void)snprintf(text, sizeof text, "Pane %d | %s%+lld | requested range %u bytes | grouping %uB", app->memory_pane + 1, v->configured ? v->expression : "No address", (long long)v->offset, v->length, v->grouping);
+    if (v->mmio) { (void)snprintf(text, sizeof text, "Pane %d | MMIO %u-bit units | from 0x%llx", app->memory_pane + 1, v->unit_width, (unsigned long long)v->unit_address); }
     tb_text(top + (compact ? 0 : 1), left, width, TB_CYAN, 0, text);
-    tb_text(top + (compact ? 1 : 3), left, width, TB_MUTED, 0, "Reads are explicit and bounded. Grouping changes cached display only. Range changes require Read/Refresh.");
+    tb_text(top + (compact ? 1 : 3), left, width, TB_MUTED, 0, v->mmio ? "Navigation never reads. Rows are declared width-sized units, not verified registers." : "Reads are explicit and bounded. Grouping changes cached display only. Range changes require Read/Refresh.");
     const char *labels[] = {"Address / Read", "Refresh this range", "Cycle grouping: 1/2/4/8 bytes", "Byte count: 1 to 1024", "Previous range (read)", "Next range (read)"};
-    for (int i = 0; i < 6; ++i) { button(app, actions_y + i, left, width, labels[i], MEMORY_ACTION, i, app->memory_pane); }
+    const char *units[] = {"Navigate address (no read)", "Refresh selected sample (hardware read)", "Return to byte memory (no read)", "32 width-sized address units per window", "Previous units (no read)", "Next units (no read)"};
+    for (int i = 0; i < 6; ++i) {
+        if (v->mmio && i == 3) { tb_text(actions_y + i, left, width, TB_MUTED, 0, units[i]); }
+        else { button(app, actions_y + i, left, width, v->mmio ? units[i] : labels[i], MEMORY_ACTION, i, app->memory_pane); }
+    }
     button(app, actions_y + 6, left, width, "Hardware watchpoint at selected row (first group)", MEMORY_ACTION, 7, app->memory_pane);
     button(app, actions_y + 7, left, width, "Temporary ranges: Add / Inspect / Authorize / Revoke", MEMORY_ACTION, 8, app->memory_pane);
     button(app, top + card.h - 1, left, 12, "[ Back ]", BACK, 0, 0);
@@ -2114,18 +2129,30 @@ static void draw_memory_ranges(App *app)
     const TbMemoryRange *r = tb_memory_range(m, app->memory_pane, app->memory_range);
     if (!r || !r->used) { return; }
     tb_code_safe(risks, sizeof risks, r->risks, strlen(r->risks));
-    draw_header(app, app->page == MEMORY_CONSENT ? "Authorize temporary Memory range?" : "Inspect temporary Memory range");
-    if (app->page == MEMORY_CONSENT) {
-        char access[40]; (void)snprintf(access, sizeof access, r->policy == TB_MEMORY_MMIO ? "%u-bit register" : "ordinary bytes", r->width);
-        (void)snprintf(text, sizeof text,
+    draw_header(app, app->page == MMIO_SETUP ? "Confirm documented MMIO setup?" : app->page == MEMORY_CONSENT ? "Authorize temporary Memory range?" : "Inspect temporary Memory range");
+    if (app->page == MEMORY_CONSENT || app->page == MMIO_SETUP) {
+        char access[40]; (void)snprintf(access, sizeof access, r->policy == TB_MEMORY_MMIO ? "%u-bit address unit" : "ordinary bytes", r->width);
+        if (app->page == MMIO_SETUP) {
+            const TbMemoryBackend *b = &app->mmio_review;
+            (void)snprintf(text, sizeof text,
+                "USER CONFIRMATION, not automatic verification. Confirm only if this exact physically validated setup matches yours: "
+                "target %s; device %s; firmware %s; server configuration %s; configuration revision %llu. "
+                "Validated access widths: 8, 16, 32 bits. Other target/probe/firmware/server configurations are not covered. "
+                "This records your assertion only and performs no hardware read. Per-view range consent is also required. "
+                "Every accepted Console command expires setup confirmation AND MMIO range consent before transmission. "
+                "Relevant target/connection changes also require renewed confirmation. "
+                "One explicit Read may cause multiple physical attempts inside backend software/hardware, depending on path and failure conditions. "
+                "The Bugger never automatically retries an uncertain read.",
+                b->target, b->device, b->firmware, b->server, (unsigned long long)b->configuration);
+        } else { (void)snprintf(text, sizeof text,
             "View %d only. Bounds [0x%llx, 0x%llx), end excluded. Policy: %s; access: %s. "
             "Side effects: %s. Authorization accepts these risks; it does not prove safety. "
-            "Ordinary access asserts this is ordinary readable memory. MMIO requires an explicit supported-width Read Register; "
+            "Ordinary access asserts this is ordinary readable memory. MMIO requires an explicit supported-width Read unit; "
             "even one read can have side effects. The Bugger never polls or retries automatically, including after uncertainty/timeouts. "
             "External software/hardware may make multiple physical attempts depending on driver path and failure conditions; "
-            "one Read is not exactly-once physical access. Consent expires on resume/context change. Authorizing performs no read.",
+            "one Read is not exactly-once physical access. Consent expires on resume/context change or setup invalidation, including accepted Console commands. Authorizing performs no read.",
             app->memory_pane + 1, (unsigned long long)r->begin, (unsigned long long)r->end,
-            r->policy == TB_MEMORY_MMIO ? "MMIO" : "ordinary", access, *risks ? risks : "UNKNOWN");
+            r->policy == TB_MEMORY_MMIO ? "MMIO" : "ordinary", access, *risks ? risks : "UNKNOWN"); }
         int visible = card.h - 4, row = 0, offset = app->memory_range_review;
         const char *part = text;
         while (*part) {
@@ -2136,7 +2163,9 @@ static void draw_memory_ranges(App *app)
             }
             ++row; part += count; while (*part == ' ') { ++part; }
         }
-        if (offset + visible >= row) { button(app, top + card.h - 2, left, width, "[ Authorize without reading ]", MEMORY_RANGE_ACTION, RANGE_CONFIRM, app->memory_pane); }
+        if (offset + visible >= row) { button(app, top + card.h - 2, left, width,
+            app->page == MMIO_SETUP ? "[ I confirm every setup detail matches ]" : "[ Authorize without reading ]",
+            MEMORY_RANGE_ACTION, app->page == MMIO_SETUP ? RANGE_SETUP_CONFIRM : RANGE_CONFIRM, app->memory_pane); }
         button(app, top + card.h - 1, left, 12, "[ Cancel ]", BACK, 0, 0);
         if (offset > 0) { button(app, top + card.h - 1, left + 13, 12, "Previous", MEMORY_RANGE_ACTION, RANGE_REVIEW_PREVIOUS, app->memory_pane); }
         if (offset + visible < row) { button(app, top + card.h - 1, left + 26, 12, "Next", MEMORY_RANGE_ACTION, RANGE_REVIEW_NEXT, app->memory_pane); }
@@ -2146,7 +2175,7 @@ static void draw_memory_ranges(App *app)
     button(app, top, left, width, text, MEMORY_RANGE_ACTION, RANGE_BEGIN, app->memory_pane);
     (void)snprintf(text, sizeof text, "End (excluded): 0x%llx", (unsigned long long)r->end);
     button(app, top + 1, left, width, text, MEMORY_RANGE_ACTION, RANGE_END, app->memory_pane);
-    button(app, top + 2, left, width, r->policy == TB_MEMORY_MMIO ? "Policy: MMIO (explicit register reads only)" : "Policy: ordinary readable memory", MEMORY_RANGE_ACTION, RANGE_POLICY, app->memory_pane);
+    button(app, top + 2, left, width, r->policy == TB_MEMORY_MMIO ? "Policy: MMIO (explicit width-sized reads)" : "Policy: ordinary readable memory", MEMORY_RANGE_ACTION, RANGE_POLICY, app->memory_pane);
     if (r->policy == TB_MEMORY_MMIO) {
         (void)snprintf(text, sizeof text, "Width: %u bits", r->width);
         button(app, top + 3, left, width, text, MEMORY_RANGE_ACTION, RANGE_WIDTH, app->memory_pane);
@@ -2154,6 +2183,10 @@ static void draw_memory_ranges(App *app)
     (void)snprintf(text, sizeof text, "Side effects: %s", *risks ? risks : "UNKNOWN");
     button(app, top + 4, left, width, text, MEMORY_RANGE_ACTION, RANGE_RISKS, app->memory_pane);
     tb_text(top + 6, left, width, TB_CYAN, 0, tb_memory_range_authorized(m, app->memory_pane, app->memory_range) ? "AUTHORIZED | temporary, this view only" : "NOT AUTHORIZED | expired / revoked / edited");
+    if (r->policy == TB_MEMORY_MMIO) {
+        button(app, top + 8, left, width, "Browse declared MMIO units (no read)", MEMORY_RANGE_ACTION, RANGE_BROWSE, app->memory_pane);
+        button(app, top + 9, left, width, tb_memory_backend_confirmed(m) ? "Setup: USER-CONFIRMED (review)" : "Setup: NOT CONFIRMED (review validated setup)", MEMORY_RANGE_ACTION, RANGE_SETUP, app->memory_pane);
+    }
     button(app, top + card.h - 3, left, 16, "[ Authorize ]", MEMORY_RANGE_ACTION, RANGE_AUTHORIZE, app->memory_pane);
     button(app, top + card.h - 3, left + 18, 14, "[ Revoke ]", MEMORY_RANGE_ACTION, RANGE_REVOKE, app->memory_pane);
     button(app, top + card.h - 1, left, 12, "[ Back ]", BACK, 0, 0);
@@ -2243,7 +2276,7 @@ static void draw_page(App *app)
         draw_break_menu(app);
     } else if (app->page == MEMORY_MENU) {
         draw_memory_menu(app);
-    } else if (app->page == MEMORY_RANGES || app->page == MEMORY_RANGE || app->page == MEMORY_CONSENT) {
+    } else if (app->page == MEMORY_RANGES || app->page == MEMORY_RANGE || app->page == MEMORY_CONSENT || app->page == MMIO_SETUP) {
         draw_memory_ranges(app);
     } else if (app->page == VARIABLE_MENU) {
         draw_variable_menu(app);
@@ -3076,7 +3109,7 @@ static void activate(App *app, Control control)
     case BACK:
         if (app->page == MEMORY_RANGES) { page(app, MEMORY_MENU); break; }
         if (app->page == MEMORY_RANGE) { page(app, MEMORY_RANGES); break; }
-        if (app->page == MEMORY_CONSENT || app->page == MEMORY_RANGE_INPUT) { page(app, MEMORY_RANGE); break; }
+        if (app->page == MEMORY_CONSENT || app->page == MEMORY_RANGE_INPUT || app->page == MMIO_SETUP) { page(app, MEMORY_RANGE); break; }
         if (app->page == KEYBINDS) { activate(app, (Control){.kind = KEY_ACTION, .value = app->key_confirm ? 5 : 7}); break; }
         if (app->page == THEME_PREVIEW) { apply_theme(app, app->preferences.palette); page(app, THEMES); break; }
         if (app->page == THEMES) { apply_theme(app, app->preferences.palette); page(app, CONFIG_MENU); break; }
@@ -3218,6 +3251,12 @@ static void activate(App *app, Control control)
         if (control.value == 8) { app->memory_range_page = 0; page(app, MEMORY_RANGES); break; }
         if (control.value == 7) {
             size_t row = (size_t)app->demo.panes[id].row[TB_MEMORY];
+            if (v->mmio) {
+                uint64_t unit;
+                if (!tb_memory_unit_address(m, id, row, &unit)) { status(app, "Select a declared MMIO unit first."); break; }
+                char address[32]; (void)snprintf(address, sizeof address, "0x%llx", (unsigned long long)unit);
+                data_watch_open(app, address, true, v->unit_width / 8); break;
+            }
             if (!v->ready || tb_memory_stale(m, id) || row >= (v->data_size + 15) / 16 || row > (UINT64_MAX - v->address) / 16) {
                 status(app, "Read a current Memory range and select a row first."); break;
             }
@@ -3231,9 +3270,28 @@ static void activate(App *app, Control control)
             char expression[FIELD_SIZE * 4];
             okay = field_utf8(app->memory_input[id], expression, sizeof expression) && tb_memory_address(m, id, expression);
             if (okay) { app->demo.panes[id].scroll[TB_MEMORY] = app->demo.panes[id].row[TB_MEMORY] = 0; }
-            status(app, okay ? "Memory read requested." : v->error); break;
+            status(app, okay ? v->mmio ? "MMIO address selected; no hardware access. Read unit explicitly to sample." : "Memory read requested." :
+                v->mmio ? v->register_error : v->error); break;
         }
         if (control.value == 6) { page(app, MEMORY_MENU); break; }
+        if (v->mmio && (control.value == 1 || control.value == 10)) {
+            uint64_t address; TbMemoryRegister sample;
+            size_t row = (size_t)app->demo.panes[id].row[TB_MEMORY];
+            if (!tb_memory_unit_address(m, id, row, &address)) { status(app, "Select a declared MMIO unit first."); break; }
+            if (control.value == 1 && !tb_memory_register_sample(m, id, address, v->unit_width, &sample)) {
+                status(app, "This unit has no cached sample. Use Read unit for its first explicit hardware read."); break;
+            }
+            okay = tb_memory_read_register(m, id, address, v->unit_width);
+            if (okay) { page(app, WORKSPACE); }
+            status(app, okay ? "One explicit-width unit read requested; backend-internal physical attempts may vary." : v->register_error); break;
+        }
+        if (v->mmio && control.value == 2) {
+            tb_memory_bytes(m, id);
+            size_t n = mbstowcs(app->memory_input[id], v->expression, FIELD_SIZE - 1);
+            if (n == (size_t)-1) { n = 0; } app->memory_input[id][n] = 0; app->memory_cursor[id] = n;
+            app->demo.panes[id].scroll[TB_MEMORY] = app->demo.panes[id].row[TB_MEMORY] = 0;
+            page(app, WORKSPACE); status(app, "Byte-memory presentation restored; no read performed."); break;
+        }
         if (control.value == 1) { okay = tb_memory_refresh(m, id); }
         else if (control.value == 2) { okay = tb_memory_group(m, id, v->grouping == 8 ? 1 : v->grouping * 2); }
         else if (control.value == 3) {
@@ -3247,7 +3305,7 @@ static void activate(App *app, Control control)
             if (control.value != 1) { app->demo.panes[id].scroll[TB_MEMORY] = app->demo.panes[id].row[TB_MEMORY] = 0; }
             page(app, WORKSPACE);
         }
-        status(app, okay ? (control.value == 2 ? "Memory grouping changed; no target read." : control.value == 3 ? "Range changed; use Read or Refresh to fetch bytes." : "Memory read requested.") :
+        status(app, okay ? (v->mmio ? "MMIO units navigated; no hardware access." : control.value == 2 ? "Memory grouping changed; no target read." : control.value == 3 ? "Range changed; use Read or Refresh to fetch bytes." : "Memory read requested.") :
                *v->error ? v->error : "Choose an address and stop the target before reading."); break;
     }
     case MEMORY_RANGE_PICK:
@@ -3270,6 +3328,29 @@ static void activate(App *app, Control control)
         }
         const TbMemoryRange *r = tb_memory_range(m, id, app->memory_range);
         if (!r || !r->used) { break; }
+        if (action == RANGE_SETUP) {
+            if (!tb_session_mmio_review(app->debugger, &app->mmio_review)) {
+                status(app, "Stop a ready 32-bit octet-addressed remote target before reviewing MMIO setup."); break;
+            }
+            app->memory_range_review = 0; page(app, MMIO_SETUP); break;
+        }
+        if (action == RANGE_SETUP_CONFIRM) {
+            bool okay = tb_session_mmio_confirm(app->debugger, &app->mmio_review);
+            page(app, MEMORY_RANGE);
+            status(app, okay ? "Setup USER-CONFIRMED; no hardware read. Review and authorize this view's range separately." :
+                "Setup changed or session unavailable. Review it again; no read was performed."); break;
+        }
+        if (action == RANGE_BROWSE && r->policy == TB_MEMORY_MMIO) {
+            uint64_t address = r->begin, bytes = r->width / 8, padding = (bytes - address % bytes) % bytes;
+            if (address > UINT64_MAX - padding || address + padding >= r->end || bytes > r->end - (address + padding) || !tb_memory_units(m, id, address + padding, r->width)) {
+                status(app, "No aligned width-sized unit fits this declared range."); break;
+            }
+            address += padding;
+            (void)swprintf(app->memory_input[id], FIELD_SIZE, L"0x%llx", (unsigned long long)address);
+            app->memory_cursor[id] = wcslen(app->memory_input[id]);
+            app->demo.panes[id].scroll[TB_MEMORY] = app->demo.panes[id].row[TB_MEMORY] = 0;
+            page(app, WORKSPACE); status(app, "MMIO navigation only. Rows are declared address/width units, not verified hardware registers."); break;
+        }
         if (action == RANGE_AUTHORIZE) { app->memory_range_review = 0; page(app, MEMORY_CONSENT); break; }
         if (action == RANGE_REVIEW_PREVIOUS || action == RANGE_REVIEW_NEXT) {
             int step = menu_card(100, 17).h - 4;
@@ -4028,7 +4109,7 @@ static void key_event(App *app, wint_t key, bool special)
         if (app->page == PROFILE_LIST || app->page == PROFILE_OPTIONS || app->page == PROFILE_ITEMS || app->page == PROFILE_TEXT || app->page == PROFILE_CONFIRM) {
             activate(app, (Control){.kind = BACK}); return;
         }
-        if (app->page == MEMORY_RANGES || app->page == MEMORY_RANGE || app->page == MEMORY_CONSENT || app->page == MEMORY_RANGE_INPUT) {
+        if (app->page == MEMORY_RANGES || app->page == MEMORY_RANGE || app->page == MEMORY_CONSENT || app->page == MEMORY_RANGE_INPUT || app->page == MMIO_SETUP) {
             activate(app, (Control){.kind = BACK}); return;
         }
         if (app->menu >= 0) {

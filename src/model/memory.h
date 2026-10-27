@@ -27,6 +27,11 @@ typedef struct {
     TbGdbGeneration generation;
 } TbMemoryRange;
 typedef struct {
+    uint64_t address, value, sampled_ms;
+    unsigned width;
+    TbGdbGeneration generation;
+} TbMemoryRegister;
+typedef struct {
     char expression[256], error[192];
     unsigned length, grouping;
     int64_t offset;
@@ -36,6 +41,11 @@ typedef struct {
     size_t data_size, readable;
     bool configured, ready, pending;
     TbGdbGeneration generation;
+    bool register_pending;
+    char register_error[192];
+    bool mmio;
+    uint64_t unit_address;
+    unsigned unit_width;
 } TbMemoryView;
 typedef struct TbMemory TbMemory;
 TbMemory *tb_memory_create(TbGdb *gdb, TbContext *context);
@@ -46,6 +56,22 @@ bool tb_memory_backend_set(TbMemory *memory, const TbMemoryBackend *backend);
 const TbMemoryBackend *tb_memory_backend(const TbMemory *memory);
 bool tb_memory_backend_confirm(TbMemory *memory, const TbMemoryBackend *reviewed);
 bool tb_memory_backend_confirmed(const TbMemory *memory);
+/* Explicit one-register operation, authorized again immediately at dispatch.
+ * Cache inspection never schedules a read. Values are samples, not a promise
+ * that autonomous peripheral state is unchanged while halted. */
+bool tb_memory_read_register(TbMemory *memory, int view, uint64_t address, unsigned width);
+bool tb_memory_register_sample(const TbMemory *memory, int view, uint64_t address, unsigned width, TbMemoryRegister *sample);
+bool tb_memory_register_busy(const TbMemory *memory);
+/* Full bounded transport diagnostic for the session footer/retained Console. */
+const char *tb_memory_mmio_message(const TbMemory *memory);
+/* Completion/reservation bookkeeping only; never dispatches a request. */
+void tb_memory_transport(TbMemory *memory);
+/* MMIO presentation/navigation only: width-sized address units, never inferred
+ * hardware-register identities. None of these calls reads the target. */
+bool tb_memory_units(TbMemory *memory, int view, uint64_t address, unsigned width);
+void tb_memory_bytes(TbMemory *memory, int view);
+size_t tb_memory_rows(const TbMemory *memory, int view);
+bool tb_memory_unit_address(const TbMemory *memory, int view, size_t row, uint64_t *address);
 /* Consent management only: none of these functions schedules a target read. */
 const TbMemoryRange *tb_memory_range(const TbMemory *memory, int view, unsigned range);
 bool tb_memory_range_set(TbMemory *memory, int view, unsigned range, uint64_t begin, uint64_t end,

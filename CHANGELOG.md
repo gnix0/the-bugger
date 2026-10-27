@@ -10,6 +10,12 @@
 - Memory provides temporary per-view range review, authorization and revocation;
   managing consent never reads hardware. Mixed disassembly retains file/line
   attribution, blank lines and braces through bounded local source annotations.
+- Memory supports navigation-only MMIO units and explicit-width single-unit
+  sampling for the documented, validated STM32F446/OpenOCD/ST-LINK setup.
+  User-confirmed backend bindings and per-view consent are separate; accepted
+  Console commands expire both before transmission. Reads use the existing
+  serialized GDB connection without frontend polling, retries or byte fallback;
+  uncertain results block further MMIO until reconciliation or reconnection.
 - Lower pane groups start minimized above the footer. Restore them over the
   primary views, resize heights independently, and minimize without losing
   tabs or browsing state. Overlapping groups follow the most recent focus.

@@ -1663,3 +1663,46 @@ server-configuration, firmware and width bindings; expiration and revocation;
 zero reads during navigation/management; one explicit frontend read; malformed,
 failed, timed-out and late responses without automatic retry; and independent
 Memory views. These remain separate from the transport gate and parser replay.
+
+The opt-in production-transport width probe is separate from the text-only gate:
+
+```sh
+make BUILD_DIR=build/mmio-physical build/mmio-physical/test-mmio-hardware
+build/mmio-physical/test-mmio-hardware arm-none-eabi-gdb 127.0.0.1:3333 --stm32f446-gpioa-odr
+```
+
+Run only with explicit hardware authorization and the documented STM32F446,
+ST-LINK V2J48M35, OpenOCD 0.12.0-01004-g9ea7f3d64-dirty setup using
+`openocd -d3 -f board/st_nucleo_f4.cfg`. It sends exactly three frontend
+GPIOA_ODR operations at 0x40020014, count one, widths 8/16/32, through the actual
+production adapter. No write/flash/reset/resume or retry command is issued.
+GDB/OpenOCD connection itself can halt firmware and perform core/debug/flash
+metadata or PC accesses; three frontend operations does not mean three total
+physical accesses. Preserve client frames and OpenOCD adapter logs. This probe
+is never executed by `test-ci`, and does not establish interactive consent/UI
+acceptance or support for another target, firmware or server configuration.
+
+Interactive MMIO review on that setup:
+
+1. Stop the remote target. Open Memory Options → Temporary ranges, add a range,
+   and set inclusive begin/exclusive end, MMIO policy, supported width and risks.
+   Each edit must revoke consent; managing the definition must not access MMIO.
+2. Review Setup. Verify the exact target, device, firmware, server configuration,
+   endpoint and widths. Confirmation must be labeled a user assertion and cause
+   no read. A stale review after a configuration change must fail.
+3. Authorize this view's range, then Browse declared MMIO units. Navigation,
+   selection, scrolling, resize, focus and cached inspection must cause no reads.
+   Alignment must not imply a verified hardware-register identity.
+4. Select a known approved unit and choose Read unit. Verify one frontend
+   operation at its declared width/count/address. Refresh selected sample is a
+   separate explicit hardware operation; there is no whole-window refresh.
+5. Submit a Console command. Before transmission, setup confirmation and MMIO
+   range consent must both expire; definitions remain. Reconfirming setup alone
+   must not restore consent, and granting consent cannot bypass missing setup.
+   Rejected Console submissions must preserve both permissions.
+6. Verify ordinary stepping preserves setup confirmation but expires range
+   consent. Repeat with a second Memory view to prove consent isolation.
+7. Exercise timeout, malformed/late responses and close during a request using
+   the authored integration fixtures. Uncertainty must remain visible in Console,
+   block further MMIO and cause no automatic retry. Reconnection or an exact late
+   completion is required as documented; do not inject arbitrary faults on hardware.
