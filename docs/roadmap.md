@@ -14,16 +14,18 @@ not revisions to the accepted M00–M18 evidence or claims of completed features
 | 0 | Initialize the execution record and general documentation | Initialized with Task 1.1; view-specific consolidation remains Task 1.3 |
 | 1.1 | Investigate and correct rendering corruption and the Disassembly navigation trap, preserving current access policy | Local fix committed and host baseline/stress passed; owner hardware/visual review deferred |
 | 1.2 | Initially minimized lower panes with independently resizable overlays | Implemented; fresh fortified host baseline, analysis and bounded stress pass; owner visual review deferred |
-| 1.3 | Implement approved Disassembly/Memory browsing and explicit MMIO access | Design approved; follows local 1.2 handoff under owner continuation authority; real monitor-protocol feasibility and hardware access-width validation required |
+| 1.3 | Implement approved Disassembly/Memory browsing and explicit MMIO access | In progress after local 1.2 handoff; approved requirements consolidated, real monitor-protocol feasibility and hardware access-width validation still required |
 | 1.4 | Investigate runtime font/scale feasibility and implement the owner-approved approach | Approach unresolved; terminal font changes are not portable application scaling |
 | 1.5 | Release preparation | Blocked by implementation, validation and owner acceptance; no release before both browsing views are accepted |
 
-The canonical owner execution record is `~/TODO.md`. Task 0 records the approved
-decisions without completing the Disassembly/Memory-specific consolidation of
-`~/ASM_MEM.md`; that remains part of Task 1.3 before its code changes. Temporary
+The approved public scope is in the
+[browsing requirements](requirements.md#approved-v013-browsing-work).
+The canonical owner execution record is `~/TODO.md`; the former `~/ASM_MEM.md`
+was consolidated into that record and maintained requirements during Task 1.3,
+with the documentation audit completed before its code changes. Temporary
 permissions are scoped per Memory view, never inferred from a successful read,
-and never authorize background MMIO reads. These behaviors are planned, not
-available in the current build.
+and never authorize background MMIO reads. These browsing behaviors remain work
+in progress, not functionality available merely because the design is approved.
 
 Later owner-planned milestones are v0.1.4 physical ESP RISC-V validation, an
 approved shortlist of remaining roadmap work, real-world use, documentation and

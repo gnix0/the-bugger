@@ -32,7 +32,9 @@ The post-release roadmap places F22 flashing first in v0.4.x independently
 of text-channel readiness. Version targets express workflow objectives and
 dependencies, not dates.
 
-The interface is a **fast, responsive, mouse-operable, terminal-native debugger** with the inspection density of IAR Embedded Workbench's C-SPY debugger, rather than another text editor or a full IDE. It must run comfortably as one pane/window in **tmux** and provide a consistent workflow for:
+The interface is a **fast, responsive, mouse-operable, terminal-native debugger**
+with dense, coordinated inspection views. It must run comfortably as one
+pane/window in **tmux** and provide a consistent workflow for:
 
 - **Native Linux C/C++ processes on x86-64** (GDB controls locally launched programs; attaching to permitted processes is also in scope).
 - **Embedded ARM firmware** (GDB connects to an OpenOCD GDB server; initial reference board is the STM32 NUCLEO-F446RE with onboard ST-LINK).
@@ -335,3 +337,87 @@ Inputs: host, port, GDB executable, optional symbol-bearing ELF and remote proto
 - Connection profiles store tool names/paths, structured argument arrays, ordered scripts, endpoint and source lookup/mapping settings, with paths including spaces. The original v0.1.0 format also stored action keys; current personal keybinds live independently with themes, and legacy profile keys are ignored. Use json-c, a versioned JSON format and atomic writes.
 - Rich workspace/tab/Memory/watch/code-breakpoint restoration is **F01, v0.1.4**, ahead of Stack/editing. Do not persist runtime values, hit counts, temporary run-to breakpoints or old hardware allocations as live state. Shareable-profile import/export is **v0.3.x**, separating shared connection definitions and personal workspace/history, with relative paths and prelaunch review; no mandatory project format.
 - Never save passwords/tokens or guess hidden credentials. Avoid executing untrusted session fields as shell snippets. CLI overrides can come later; usability from bare `the-bugger` is the priority.
+
+## Approved v0.1.3 browsing work
+
+This section specifies approved work in progress, not a claim that the current
+build implements it. Current behavior is described in [usage](usage.md); progress
+and remaining validation gates are in [the roadmap](roadmap.md).
+
+The Bugger's behavior is defined by its own requirements. References to another
+debugger or editor are examples for discussion and research, not requirements
+for product identity, feature parity, architecture or implementation. Preserve
+factual technical references, provenance, licenses and historical evidence.
+
+### Shared browsing behavior
+
+- Go to is efficient direct navigation, not a workaround for artificial scrolling
+  restrictions. Each view retains independent addresses, selection and offsets.
+  Browsing never changes PC or another inspector's thread/frame selection.
+- Manual browsing and following execution are distinct. A new stop preserves a
+  manually browsed location and does not automatically read it. Return to Stop
+  moves only the Disassembly viewport to the original stopped PC; following the
+  selected frame is a separate action.
+- A draggable scrollbar describes the loaded window. Cache expansion/eviction
+  preserves the top visible address and selection. While running, browse cached
+  information with provenance/freshness indicators; uncached requests retain the
+  viewport and require a new user action after stopping, never a deferred read.
+- Unreadable addresses, partial results and decoding failures retain useful prior
+  content with explicit limitations. Never wrap addresses or fabricate bytes,
+  instruction boundaries, capabilities or validation evidence.
+
+### Disassembly
+
+- Browse across function boundaries and unclassified ranges with bounded work
+  and visible uncertainty. Missing range metadata alone is not a navigation wall.
+- Reconstruct evicted rows by decoding forward from reliable anchors, never by
+  guessing variable-length instruction boundaries. Historical rows/anchors may
+  remain inspectable but establish fresh boundaries only when their validity for
+  the current image and memory state has been demonstrated.
+- Distinguish unverified, user-confirmed and backend-verified image mappings.
+  A remote user can confirm the ELF/load addresses; relevant image, target or
+  mapping changes invalidate that confirmation.
+- Metadata-identified data/literal pools appear as compact addressed gaps,
+  continuing at the next established instruction boundary. Raw decoding is an
+  explicit warned action. Mixed source remains verbatim, including mapped braces,
+  in instruction-address order with file/line attribution and missing-source
+  notices. Do not synthesize C or imply false source/instruction correspondence.
+
+### Memory and explicit MMIO
+
+- Browse established ordinary-readable regions and reviewed per-view ranges,
+  clipping each request at authorization boundaries. Traverse adjacent ranges
+  only when the complete footprint is authorized. OpenOCD RAM labels, ELF
+  sections and successful reads alone are not ordinary-memory safety evidence.
+  Retain per-byte validity, holes and partial errors without retries or probing.
+- Provide bounded Add/Inspect/Authorize/Revoke controls for up to 16 temporary
+  ranges per Memory view. Show bounds, policy, consent and risks; editing requires
+  renewed authorization. Permissions expire on resume/context change, remain
+  independent per view, and are never persisted. Managing permission never reads.
+- MMIO scrolling is navigation through addresses/cached samples, never a hardware
+  read. Declare bounds, access width and known side effects; explicitly disclose
+  unknown effects. Consent accepts those risks and is not proof of safe access.
+- Read Register samples one aligned register at the authorized supported width.
+  Refresh selected register explicitly repeats that read while consent is valid.
+  No whole-viewport refresh, polling, speculative access, automatic retry or read
+  caused by focus, navigation, stepping or stopping. Access outside the approved
+  range/width requires separate consent; conflicts never broaden permission.
+- Start with verified OpenOCD/STM32 capability over the existing GDB connection.
+  Actual bounded, request-identified monitor framing must pass its feasibility
+  gate before MMIO read implementation. Parser/simulated success alone is not
+  enough. An alternative transport requires approval if that gate cannot pass.
+  Timeout means uncertain hardware outcome, not proof of no read: block another
+  MMIO read until reconciliation or reconnection, without automatic retry.
+- Read Span, SVD/peripheral parsing and unverified-server adapters remain future
+  work. Ordinary discovery uses verified existing region sources.
+
+Additional browsing cache allocations, including metadata and navigation anchors,
+share a lazy 4 MiB bound without disk spill. Each operation remains bounded to
+128 instruction rows or 1024 memory bytes, with nonblocking work and stale-request
+guards. Sample provenance is distinct from selected frame/thread; a stop alone
+is not proof every sample is invalid, and halted hardware can still change MMIO.
+
+Acceptance requires model/TUI regressions, bounded-allocation and eviction checks,
+zero frontend MMIO requests from permission/navigation actions, failure/late-reply handling,
+the fresh fortified host baseline, and separately authorized real backend/physical
+width validation. Both browsing views require owner review before release.

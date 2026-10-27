@@ -109,7 +109,7 @@ These capability signals follow the established conventions described by
 [Notcurses](https://github.com/dankamongmen/notcurses/blob/master/TERMINALS.md);
 [ncurses terminfo](https://invisible-island.net/ncurses/man/terminfo.5.html)
 provides the matching direct-color descriptions. See the
-[prototype mapping](requirements.md#interface-constraints) for rendering adaptations.
+[interface constraints](requirements.md#interface-constraints) for rendering adaptations.
 
 The workspace preserves per-view scroll/selection and tabs through compact
 rendering, with interactive split-tree geometry, dragging and closing as
