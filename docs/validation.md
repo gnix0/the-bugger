@@ -2362,3 +2362,68 @@ byte-for-byte unchanged; `git diff --check`. Evidence:
 rerun for these documentation-only edits. Approved browsing behavior is explicitly
 labeled in progress; parser tests, prior text probes and local host results do
 not establish MMIO protocol reliability, physical widths or owner acceptance.
+
+## Task 1.3 OpenOCD transport and width evidence — in progress
+
+Agent-run, authorized physical observations used STM32F446 (device ID 0x421),
+ST-LINK V2J48M35/API v2, `openocd -f board/st_nucleo_f4.cfg`, OpenOCD
+0.12.0-01004-g9ea7f3d64-dirty and arm-none-eabi-gdb 18.1 on the Arch Linux host.
+Only agent-owned OpenOCD instances were stopped. No flash, reset, register-write
+or resume command was sent. Connecting halted firmware; server configuration
+controls disconnect behavior.
+
+- Actual controller/monitor framing passed target, address, width, count and value
+  checks; unrelated output; duplicate/malformed frames; expected Tcl error and
+  recovery; and a 20 ms frontend timeout followed by the matching late MI result
+  after a 200 ms server delay, without another request. Logs:
+  `build/mmio-protocol-evidence/controller-probe.log` and
+  `openocd-controller-probe.log`. This probe used constants, not peripheral reads.
+- Three explicitly authorized GPIOA_ODR reads at 0x40020014, widths 8/16/32 and
+  count one, returned bounded frames and successful MI results. The OpenOCD debug
+  log records adapter_read_memory sizes 1/2/4 and count one. Logs and exact input:
+  `build/mmio-protocol-evidence/width-probe.log`, `width-probe.mi`,
+  `width-probe.sha256` and `openocd-width-probe.log`. RM0390 7.4/7.4.6 was
+  reviewed for permitted widths and documented read behavior.
+- Tracked MI captures preserve actual transport/width observations for parser
+  regression replay. Neither replay nor adapter logging proves exactly-once
+  physical access. External-driver retries depend on path and failure conditions;
+  older ST-LINK firmware may substitute byte accesses for unsupported 16-bit
+  operations. No general probe/firmware compatibility claim follows.
+
+The frontend guarantees no automatic frontend retry, including after timeout or
+uncertain outcome. User-confirmed setup metadata is not automatic verification
+or proof that a register is safe. Product MMIO integration, full Task 1.3
+acceptance, owner visual/hardware review and release approval remain outstanding.
+
+### Browsing foundation host checkpoint
+
+The agent-run Arch Linux host baseline passed on the frozen input tree preserved
+in `build/browsing-evidence/verified-tree.tar.gz` and
+`verified-inputs.sha256` (parent revision 0242eac):
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/browsing-verified-ci CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make BUILD_DIR=build/browsing-verified-analysis analyze
+```
+
+Both exited 0; full logs are `verified-test-ci.log` and
+`verified-analysis.log` under `build/browsing-evidence/`. This includes direct
+and isolated-tmux input/terminal restoration, native source/disassembly, Memory,
+watchpoints, localhost GDB server and offline OpenOCD checks. All 68 C test
+sources compiled with fortification (`verified-all-test-compilation.log`).
+Focused source-model tests also passed AddressSanitizer/UBSan with leak detection
+(`source-asan-test.log`). File-link consistency checks found no missing files
+across 164 local documentation links. The normal executable was rebuilt.
+
+Earlier failures remain recorded: stale test expectations for explicit following
+and historical cached listings; the initially clipped gap label; signed-bitwise
+analyzer diagnostics; and the earlier analyzer run during concurrent header
+edits. Tests now preserve actual instruction-step/margin assertions, verify
+historical provenance followed by a fresh Return to Stop, and require the gap
+label in a narrow pane. The renderer puts that label before the address range
+and shares row mapping with horizontal-width calculation.
+
+This is local host evidence, not hosted Ubuntu CI or owner visual acceptance.
+Task 1.3 remains in progress: production MMIO integration and target-bound setup
+confirmation UI/session wiring, mapping trust and remaining reconstruction work
+are not delivered by this checkpoint. No release is authorized.

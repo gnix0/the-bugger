@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Disassembly keeps manual browsing across debugger transitions and distinguishes
+  view-local Return to Stop from following the selected frame. Disassembly and
+  Memory retain bounded shared history for navigation without reads while running.
+- Memory provides temporary per-view range review, authorization and revocation;
+  managing consent never reads hardware. Mixed disassembly retains file/line
+  attribution, blank lines and braces through bounded local source annotations.
 - Lower pane groups start minimized above the footer. Restore them over the
   primary views, resize heights independently, and minimize without losing
   tabs or browsing state. Overlapping groups follow the most recent focus.

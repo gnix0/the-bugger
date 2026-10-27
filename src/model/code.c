@@ -17,10 +17,9 @@ typedef enum { CODE_NONE, CODE_FILES, CODE_ASSEMBLY, CODE_SYMBOL, CODE_FLAVOR,
 enum { CODE_COOKIE = 7000 };
 typedef struct {
     TbCodeView data;
-    bool visible_source, visible_assembly, source_dirty, assembly_dirty;
+    bool visible_source, visible_assembly, source_dirty, assembly_dirty, assembly_refresh;
     char *source;
     size_t source_length, *offsets;
-    uint64_t history[16], history_end[16]; size_t history_count;
     TbGdbGeneration generation;
     uint64_t version;
     bool have_anchor, fallback, origin_tried, precontext, function_known;
@@ -32,6 +31,7 @@ typedef struct {
     bool merge_tail;
     uint64_t range_end, scan_target;
     TbInstruction *scan_prefix;
+    bool mixed_checked[TB_CODE_INSNS];
     size_t scan_count;
     unsigned scan_steps;
     char file_key[TB_CODE_PATH];
@@ -40,6 +40,7 @@ typedef struct {
 } View;
 struct TbCode {
     TbGdb *gdb; TbContext *context;
+    TbBrowseCache *cache;
     TbImages *images;
     pid_t pid;
     char executable[TB_CODE_PATH];
@@ -49,7 +50,7 @@ struct TbCode {
     CodeJob job, settings_job;
     int active;
     uint64_t revision;
-    uint64_t request_version;
+    uint64_t request_version, epoch, request_epoch;
     TbGdbGeneration flavor_generation;
     char selected_thread[32], selected_address[48];
     int selected_level;
@@ -62,6 +63,7 @@ struct TbCode {
     TbSourceRule restore_rules[TB_CODE_RULES]; size_t restore_count, restore_rule;
     bool restoring;
 };
+static void listing_store(TbCode *code, int id);
 
 void tb_code_safe(char *out, size_t capacity, const char *bytes, size_t length)
 {
@@ -141,8 +143,8 @@ TbCode *tb_code_create(TbGdb *gdb, TbContext *context)
 {
     TbCode *code = calloc(1, sizeof *code);
     if (code) {
-        code->gdb = gdb; code->context = context; code->images = tb_images_create();
-        if (!code->images) { free(code); return NULL; }
+        code->gdb = gdb; code->context = context; code->images = tb_images_create(); code->cache = tb_browse_create();
+        if (!code->images || !code->cache) { tb_images_destroy(code->images); tb_browse_release(code->cache); free(code); return NULL; }
         tb_code_reset(code);
     }
     return code;
@@ -151,9 +153,11 @@ void tb_code_reset(TbCode *code)
 {
     TbGdb *gdb = code->gdb; TbContext *context = code->context; uint64_t revision = code->revision;
     TbImages *images = code->images; tb_images_reset(images);
+    TbBrowseCache *cache = code->cache; tb_browse_clear(cache, TB_BROWSE_CODE, -1);
+    tb_browse_clear(cache, TB_BROWSE_SOURCE, -1);
     for (int i = 0; i < TB_CODE_VIEWS; ++i) { free(code->views[i].source); free(code->views[i].offsets); free(code->views[i].forward); free(code->views[i].scan_prefix); }
     memset(code, 0, sizeof *code); code->gdb = gdb; code->context = context;
-    code->images = images; code->revision = revision + 1; code->files_dirty = true; code->selected_level = -1;
+    code->images = images; code->cache = cache; code->revision = revision + 1; code->files_dirty = true; code->selected_level = -1;
     for (int i = 0; i < TB_CODE_VIEWS; ++i) {
         code->views[i].data.source_follow = code->views[i].data.assembly_follow = true;
         code->views[i].data.stale = true;
@@ -165,19 +169,51 @@ void tb_code_destroy(TbCode *code)
 {
     if (!code) { return; }
     for (int i = 0; i < TB_CODE_VIEWS; ++i) { free(code->views[i].source); free(code->views[i].offsets); free(code->views[i].forward); free(code->views[i].scan_prefix); }
-    tb_images_destroy(code->images); free(code);
+    tb_images_destroy(code->images); tb_browse_release(code->cache); free(code);
 }
+TbBrowseCache *tb_code_cache(TbCode *code) { return code->cache; }
 void tb_code_native(TbCode *code, pid_t pid, const char *executable)
 {
-    if (code->pid > 1 && pid != code->pid) { tb_images_reset(code->images); }
+    if (code->pid > 1 && (pid != code->pid || strcmp(code->executable, executable ? executable : "") != 0)) {
+        tb_images_reset(code->images); ++code->epoch;
+    }
     code->pid = pid;
     (void)snprintf(code->executable, sizeof code->executable, "%s", executable ? executable : "");
 }
 const TbCodeView *tb_code_view(const TbCode *code, int view) { return valid_view(view) ? &code->views[view].data : NULL; }
+size_t tb_code_rows(const TbCodeView *view, TbCodeRow *rows)
+{
+    if (!view) { return 0; } size_t count = 0;
+    if (view->gap_end > view->gap_begin && (!view->instruction_count || view->gap_end <= view->instructions[0].numeric)) {
+        if (rows) { rows[count] = (TbCodeRow){TB_CODE_GAP, 0, view->gap_begin, view->gap_end}; } ++count;
+    }
+    for (size_t i = 0; i < view->instruction_count; ++i) {
+        const TbInstruction *instruction = &view->instructions[i];
+        if (i) {
+            const TbInstruction *previous = &view->instructions[i - 1];
+            if (previous->bytes && previous->numeric <= UINT64_MAX - previous->bytes && previous->numeric + previous->bytes < instruction->numeric) {
+                if (rows) { rows[count] = (TbCodeRow){TB_CODE_GAP, i, previous->numeric + previous->bytes, instruction->numeric}; } ++count;
+            }
+        }
+        if (view->mixed && view->mixed_available && instruction->line > 0 &&
+            (!i || instruction->line != view->instructions[i - 1].line || strcmp(instruction->source, view->instructions[i - 1].source) != 0)) {
+            if (rows) { rows[count] = (TbCodeRow){TB_CODE_SOURCE, i, instruction->numeric, instruction->numeric}; } ++count;
+        }
+        if (rows) { rows[count] = (TbCodeRow){TB_CODE_INSTRUCTION, i, instruction->numeric, instruction->numeric}; } ++count;
+    }
+    return count;
+}
+const char *tb_code_gap_label(const TbCode *code, int id, uint64_t begin, uint64_t end)
+{
+    if (!valid_view(id) || code->views[id].data.assembly_historical) { return "historical gap"; }
+    TbImageRange range;
+    return tb_images_lookup(code->images, begin, &range) && range.kind == TB_IMAGE_DATA && range.end >= end ? "data gap" : "not decoded";
+}
 const char *tb_code_assembly_notice(const TbCode *code, int id, size_t first, size_t count)
 {
     if (!valid_view(id)) { return ""; }
     const TbCodeView *view = &code->views[id].data;
+    if (view->assembly_historical) { return "Historical cached instructions; not fresh decoding evidence"; }
     bool unknown = false, data = false;
     for (size_t i = first; count && i < view->instruction_count; ++i, --count) {
         TbImageRange range;
@@ -262,6 +298,64 @@ bool tb_code_source_line(const TbCode *code, int id, size_t line, char *out, siz
     while (end > start && (view->source[end - 1] == '\n' || view->source[end - 1] == '\r')) { --end; }
     tb_code_safe(out, capacity, view->source + start, end - start); return true;
 }
+typedef struct {
+    char path[512], text[1024];
+    int line;
+    bool available;
+} SourceAnnotation;
+static TbBrowseKey annotation_key(int id, const TbInstruction *instruction)
+{
+    uint64_t hash = UINT64_C(14695981039346656037);
+    for (const unsigned char *p = (const unsigned char *)instruction->source; *p; ++p) {
+        hash = (hash ^ *p) * UINT64_C(1099511628211);
+    }
+    hash = (hash ^ (unsigned)instruction->line) * UINT64_C(1099511628211);
+    if (hash == UINT64_MAX) { --hash; }
+    return (TbBrowseKey){.kind = TB_BROWSE_SOURCE, .view = id, .begin = hash, .end = hash + 1};
+}
+bool tb_code_mixed_line(const TbCode *code, int id, const TbInstruction *instruction, char *out, size_t capacity)
+{
+    if (!valid_view(id) || !instruction || !capacity) { return false; } out[0] = 0;
+    if (instruction->line <= 0) { return false; }
+    if (strcmp(instruction->source, code->views[id].data.path) == 0) {
+        return tb_code_source_line(code, id, (size_t)instruction->line - 1, out, capacity);
+    }
+    TbBrowseSample sample;
+    if (!tb_browse_find(code->cache, annotation_key(id, instruction), &sample) || sample.size != sizeof(SourceAnnotation)) { return false; }
+    SourceAnnotation annotation; memcpy(&annotation, sample.data, sizeof annotation);
+    if (!annotation.available || annotation.line != instruction->line || strcmp(annotation.path, instruction->source) != 0) { return false; }
+    (void)snprintf(out, capacity, "%s", annotation.text); return true;
+}
+/* At most one bounded local source file per pump. Keep renderer lookup free of
+ * I/O and keep all retained annotations inside the shared allocation budget. */
+static void mixed_sources(TbCode *code, int id)
+{
+    View *view = &code->views[id];
+    if (!view->visible_assembly || !view->data.mixed || !view->data.mixed_available) { return; }
+    for (size_t i = 0; i < view->data.instruction_count; ++i) {
+        const TbInstruction *instruction = &view->data.instructions[i];
+        if (view->mixed_checked[i]) { continue; } view->mixed_checked[i] = true;
+        if (instruction->line <= 0 || !*instruction->source || strcmp(instruction->source, view->data.path) == 0) { continue; }
+        char existing[1024];
+        if (tb_code_mixed_line(code, id, instruction, existing, sizeof existing)) { continue; }
+        View *local = calloc(1, sizeof *local); if (!local) { return; }
+        (void)snprintf(local->data.path, sizeof local->data.path, "%s", instruction->source); source_load(local);
+        for (size_t j = i; j < view->data.instruction_count; ++j) {
+            const TbInstruction *other = &view->data.instructions[j];
+            if (strcmp(other->source, instruction->source) != 0) { continue; }
+            view->mixed_checked[j] = true;
+            SourceAnnotation annotation = {.line = other->line};
+            (void)snprintf(annotation.path, sizeof annotation.path, "%s", other->source);
+            if (other->line > 0 && (size_t)other->line <= local->data.line_count) {
+                size_t start = local->offsets[other->line - 1], end = local->offsets[other->line];
+                while (end > start && (local->source[end - 1] == '\n' || local->source[end - 1] == '\r')) { --end; }
+                tb_code_safe(annotation.text, sizeof annotation.text, local->source + start, end - start); annotation.available = true;
+            }
+            (void)tb_browse_store(code->cache, annotation_key(id, other), &annotation, sizeof annotation);
+        }
+        free(local->source); free(local->offsets); free(local); ++code->revision; return;
+    }
+}
 int tb_code_find(const TbCode *code, int id, const char *needle, int after)
 {
     if (!valid_view(id) || !needle || !*needle) { return -1; }
@@ -341,6 +435,26 @@ void tb_code_tab_reset(TbCode *code, int id)
     view->data.source_follow = true; view->file_key[0] = '\0';
     view->source_dirty = true; ++code->revision;
 }
+/* Validate the complete reply before replacing a useful retained listing.
+ * Mixed mode adds one source wrapper; its instruction list is otherwise flat. */
+static bool assembly_valid(const TbMiValue *list, bool nested, bool *has_instruction)
+{
+    if (!list || list->type != TB_MI_LIST) { return false; }
+    for (const TbMiValue *item = list->children; item; item = item->next) {
+        if (item->type != TB_MI_TUPLE) { return false; }
+        const TbMiValue *children = tb_mi_find(item->children, "line_asm_insn");
+        if (children) {
+            if (nested || !assembly_valid(children, true, has_instruction)) { return false; }
+        } else {
+            uint64_t address;
+            const TbMiValue *text = tb_mi_find(item->children, "inst");
+            if (!address_value(tb_mi_find(item->children, "address"), &address) ||
+                !text || text->type != TB_MI_STRING || !text->string.length) { return false; }
+            *has_instruction = true;
+        }
+    }
+    return true;
+}
 static void assembly_parse(View *view, const TbMiValue *list, const char *path, int line)
 {
     if (!list || list->type != TB_MI_LIST) { return; }
@@ -379,13 +493,14 @@ static void assembly_parse(View *view, const TbMiValue *list, const char *path, 
         for (size_t i = 0; instruction->opcodes[i]; ++i) { if (isxdigit((unsigned char)instruction->opcodes[i])) { ++hex; } }
         instruction->bytes = (unsigned)(hex / 2);
         view->data.next_address = address <= UINT64_MAX - instruction->bytes ? address + instruction->bytes : 0;
-        if (line > 0 && strcmp(instruction->source, view->data.path) == 0 && (size_t)line <= view->data.line_count) { view->data.mixed_available = true; }
+        if (line > 0 && *instruction->source) { view->data.mixed_available = true; }
     }
 }
 static bool request(TbCode *code, CodeJob job, const char *operation, const char *const args[], size_t count, TbGdbScope scope)
 {
     code->job = job;
     code->request_version = code->views[code->active].version;
+    code->request_epoch = code->epoch;
     code->waiting = tb_gdb_request(code->gdb, operation, args, count, scope, CODE_COOKIE + (uint64_t)job, 3000, NULL);
     if (!code->waiting) { code->job = CODE_NONE; message(code, "Code request unavailable; retry while stopped."); }
     return code->waiting;
@@ -419,8 +534,12 @@ static void files_parse(TbCode *code, const TbMiRecord *record)
 }
 static void invalidate_sources(TbCode *code)
 {
+    tb_browse_clear(code->cache, TB_BROWSE_SOURCE, -1);
     code->files_dirty = true; tb_context_refresh(code->context);
-    for (int i = 0; i < TB_CODE_VIEWS; ++i) { code->views[i].source_dirty = code->views[i].assembly_dirty = true; }
+    for (int i = 0; i < TB_CODE_VIEWS; ++i) {
+        code->views[i].source_dirty = code->views[i].assembly_dirty = code->views[i].assembly_refresh = true;
+        memset(code->views[i].mixed_checked, 0, sizeof code->views[i].mixed_checked);
+    }
 }
 static void cancel_precontext(View *view)
 {
@@ -433,54 +552,46 @@ static void cancel_precontext(View *view)
 static void append_forward(View *view)
 {
     if (!view->forward) { return; }
-    if (view->indexed) {
-        /* Merge monotonically addressed chunks, preserving overlap identity. */
-        TbInstruction *merged = malloc((size_t)2 * TB_CODE_INSNS * sizeof *merged);
-        if (!merged) {
-            memcpy(view->data.instructions, view->forward, view->forward_count * sizeof *view->forward);
-            view->data.instruction_count = view->forward_count;
-            (void)snprintf(view->data.assembly_error, sizeof view->data.assembly_error, "Cannot extend code cache; previous listing retained.");
-        } else {
-            size_t a = 0, b = 0, count = 0;
-            while (a < view->forward_count || b < view->data.instruction_count) {
-                if (b == view->data.instruction_count || (a < view->forward_count && view->forward[a].numeric < view->data.instructions[b].numeric)) {
-                    merged[count++] = view->forward[a++];
-                } else {
-                    if (a < view->forward_count && view->forward[a].numeric == view->data.instructions[b].numeric) { ++a; }
-                    merged[count++] = view->data.instructions[b++];
-                }
+    /* Retain half of the old window at the expansion edge. This leaves room
+     * for new rows while preserving addresses still visible at that edge. */
+    TbInstruction *merged = malloc((size_t)2 * TB_CODE_INSNS * sizeof *merged);
+    if (!merged) {
+        memcpy(view->data.instructions, view->forward, view->forward_count * sizeof *view->forward);
+        view->data.instruction_count = view->forward_count;
+        (void)snprintf(view->data.assembly_error, sizeof view->data.assembly_error, "Cannot extend code cache; previous listing retained.");
+    } else {
+        size_t a = 0, b = 0, count = 0;
+        while (a < view->forward_count || b < view->data.instruction_count) {
+            if (b == view->data.instruction_count || (a < view->forward_count && view->forward[a].numeric < view->data.instructions[b].numeric)) {
+                merged[count++] = view->forward[a++];
+            } else {
+                if (a < view->forward_count && view->forward[a].numeric == view->data.instructions[b].numeric) { ++a; }
+                merged[count++] = view->data.instructions[b++];
             }
-            size_t keep = count < TB_CODE_INSNS ? count : TB_CODE_INSNS;
-            size_t start = view->merge_tail && count > keep ? count - keep : 0;
-            memcpy(view->data.instructions, merged + start, keep * sizeof *merged); view->data.instruction_count = keep;
-            free(merged);
         }
+        size_t keep = count < TB_CODE_INSNS ? count : TB_CODE_INSNS, boundary = 0;
+        uint64_t address = view->forward[view->merge_tail ? view->forward_count - 1 : 0].numeric;
+        while (boundary < count && merged[boundary].numeric < address) { ++boundary; }
+        size_t context = view->merge_tail ? TB_CODE_INSNS / 2 - 1 : TB_CODE_INSNS / 2;
+        size_t start = boundary > context ? boundary - context : 0;
+        if (start > count - keep) { start = count - keep; }
+        memcpy(view->data.instructions, merged + start, keep * sizeof *merged); view->data.instruction_count = keep;
+        free(merged);
+    }
+    if (view->data.instruction_count) {
         view->data.anchor = view->data.instructions[0].numeric;
         const TbInstruction *last = &view->data.instructions[view->data.instruction_count - 1];
         view->data.next_address = last->numeric <= UINT64_MAX - last->bytes ? last->numeric + last->bytes : 0;
-        free(view->forward); view->forward = NULL; view->forward_count = 0; return;
-    }
-    size_t room = TB_CODE_INSNS - view->data.instruction_count;
-    size_t count = view->forward_count < room ? view->forward_count : room;
-    memcpy(view->data.instructions + view->data.instruction_count, view->forward, count * sizeof view->forward[0]);
-    view->data.instruction_count += count;
-    view->data.more = view->data.more || count < view->forward_count;
-    if (view->data.instruction_count) {
-        const TbInstruction *last = &view->data.instructions[view->data.instruction_count - 1];
-        view->data.next_address = last->numeric <= UINT64_MAX - last->bytes ? last->numeric + last->bytes : 0;
-    }
-    for (size_t i = 0; i < view->data.instruction_count; ++i) {
-        const TbInstruction *instruction = &view->data.instructions[i];
-        if (instruction->line > 0 && strcmp(instruction->source, view->data.path) == 0 &&
-            (size_t)instruction->line <= view->data.line_count) { view->data.mixed_available = true; }
     }
     free(view->forward); view->forward = NULL; view->forward_count = 0;
 }
 bool tb_code_event(TbCode *code, const TbGdbEvent *event)
 {
     if (event->kind == TB_GDB_RECORD && event->record && event->record->kind == TB_MI_NOTIFY &&
+        strcmp(event->record->klass, "memory-changed") == 0) { ++code->epoch; }
+    if (event->kind == TB_GDB_RECORD && event->record && event->record->kind == TB_MI_NOTIFY &&
         (strcmp(event->record->klass, "library-loaded") == 0 || strcmp(event->record->klass, "library-unloaded") == 0 ||
-         strcmp(event->record->klass, "thread-group-started") == 0)) { code->images_dirty = true; }
+         strcmp(event->record->klass, "thread-group-started") == 0)) { code->images_dirty = true; ++code->epoch; }
     if (event->cookie <= CODE_COOKIE || event->cookie > CODE_COOKIE + CODE_CLEAR_DIRS ||
         !(event->kind == TB_GDB_REPLY || event->kind == TB_GDB_STALE || event->kind == TB_GDB_TIMEOUT || event->kind == TB_GDB_CANCELLED)) { return false; }
     code->waiting = false;
@@ -495,7 +606,7 @@ bool tb_code_event(TbCode *code, const TbGdbEvent *event)
         cancel_precontext(view);
         if (job == CODE_FILES) { code->files_dirty = true; }
         if (job == CODE_FLAVOR) { code->flavor_done = false; }
-        view->assembly_dirty = true; view->data.stale = true; ++code->revision; return true;
+        view->assembly_dirty = view->data.assembly_follow; view->data.stale = true; ++code->revision; return true;
     }
     bool okay = event->kind == TB_GDB_REPLY && strcmp(event->record->klass, "done") == 0;
     if (!okay) {
@@ -526,10 +637,22 @@ bool tb_code_event(TbCode *code, const TbGdbEvent *event)
     }
     if (job == CODE_FILES) { files_parse(code, event->record); }
     else if (job == CODE_ASSEMBLY) {
+        const TbMiValue *list = tb_mi_find(event->record->results, "asm_insns");
+        bool has_instruction = false;
+        if (!assembly_valid(list, false, &has_instruction) || !has_instruction) {
+            cancel_precontext(view);
+            if (view->data.instruction_count) {
+                view->data.anchor = view->data.instructions[0].numeric;
+            }
+            (void)snprintf(view->data.assembly_error, sizeof view->data.assembly_error,
+                           "Empty or malformed disassembly reply; prior listing retained. No retry sent.");
+            ++view->data.assembly_revision; ++code->revision; return true;
+        }
+        view->data.assembly_generation = event->generation;
+        view->data.assembly_epoch = code->request_epoch;
         view->data.instruction_count = 0; view->data.mixed_available = view->data.more = false;
         view->function_known = false;
         view->data.assembly_error[0] = '\0';
-        const TbMiValue *list = tb_mi_find(event->record->results, "asm_insns");
         assembly_parse(view, list, NULL, 0);
         if (view->scan_target && !view->data.instruction_count) {
             memcpy(view->data.instructions, view->forward, view->forward_count * sizeof *view->forward);
@@ -571,6 +694,7 @@ bool tb_code_event(TbCode *code, const TbGdbEvent *event)
             free(view->scan_prefix); view->scan_prefix = NULL; view->scan_target = 0; view->scan_count = 0;
         }
         append_forward(view);
+        memset(view->mixed_checked, 0, sizeof view->mixed_checked);
         if (view->data.assembly_follow && !view->origin_tried && code->pid <= 1) {
             view->origin_tried = true;
             if (view->function_known && view->function_start < view->data.anchor &&
@@ -603,33 +727,19 @@ static bool generation_equal(TbGdbGeneration a, TbGdbGeneration b)
     return a.session == b.session && a.stop == b.stop && a.context == b.context;
 }
 
-static void remember_window(View *view)
-{
-    if (!view->data.instruction_count || view->data.next_address <= view->data.anchor) { return; }
-    if (view->history_count && view->history[view->history_count - 1] == view->data.anchor) { return; }
-    if (view->history_count == 16) {
-        memmove(view->history, view->history + 1, 15 * sizeof view->history[0]);
-        memmove(view->history_end, view->history_end + 1, 15 * sizeof view->history_end[0]);
-        --view->history_count;
-    }
-    view->history[view->history_count] = view->data.anchor;
-    view->history_end[view->history_count++] = view->data.next_address;
-}
-
-static void follow_address(View *view, uint64_t address)
+static void follow_address(const TbCode *code, View *view, uint64_t address)
 {
     view->follow_pc = address;
     if (view->precontext) { return; }
+    /* Old rows are history, not evidence of boundaries after execution. */
+    if (view->data.assembly_generation.session != view->generation.session ||
+        view->data.assembly_generation.stop != view->generation.stop || view->data.assembly_epoch != code->epoch) {
+        view->data.anchor = address; view->origin_tried = false; return;
+    }
     for (size_t i = 0; i < view->data.instruction_count; ++i) {
         if (view->data.instructions[i].numeric == address) { return; }
     }
     uint64_t anchor = address;
-    for (size_t i = view->history_count; i > 0; --i) {
-        if (address >= view->history[i - 1] && address < view->history_end[i - 1]) {
-            anchor = view->history[i - 1]; break;
-        }
-    }
-    if (view->have_anchor && anchor != view->data.anchor) { remember_window(view); }
     view->data.anchor = anchor; view->origin_tried = anchor != address;
 }
 void tb_code_pump(TbCode *code)
@@ -683,11 +793,18 @@ void tb_code_pump(TbCode *code)
     tb_context_require(code->context, required);
     for (int i = 0; i < TB_CODE_VIEWS; ++i) {
         View *view = &code->views[i];
+        bool historical = view->data.instruction_count &&
+                          (!stopped || view->data.assembly_generation.session != context->generation.session ||
+                           view->data.assembly_generation.stop != context->generation.stop ||
+                           view->data.assembly_epoch != code->epoch);
+        if (view->data.assembly_historical != historical) { view->data.assembly_historical = historical; ++code->revision; }
         bool stale = !stopped || context->stale || !context->ready ||
                      !generation_equal(view->generation, context->generation) || view->source_dirty ||
+                     (view->visible_assembly && historical) ||
                      (view->visible_assembly && view->assembly_dirty) ||
                      (code->waiting && code->active == i && (code->job == CODE_ASSEMBLY || code->job == CODE_SYMBOL));
         if (view->data.stale != stale) { view->data.stale = stale; ++code->revision; }
+        mixed_sources(code, i);
     }
     if (code->waiting || !required) { return; }
     if (!stopped) {
@@ -713,9 +830,14 @@ void tb_code_pump(TbCode *code)
     (void)snprintf(code->selected_address, sizeof code->selected_address, "%s", context->selected.address);
     for (int i = 0; i < TB_CODE_VIEWS; ++i) {
         View *view = &code->views[i];
-        if (changed) { cancel_precontext(view); view->raw = false; view->data.source_follow = view->tab_active == 0; view->data.assembly_follow = true; }
+        if (changed) { cancel_precontext(view); view->data.source_follow = view->tab_active == 0; }
         if (changed || !generation_equal(view->generation, context->generation)) {
-            view->generation = context->generation; view->source_dirty = view->assembly_dirty = true;
+            bool refresh = view->assembly_refresh && view->generation.session == context->generation.session &&
+                           view->generation.stop == context->generation.stop;
+            view->generation = context->generation; view->source_dirty = true;
+            /* A context transition does not authorize a read at a manually
+             * browsed address. Retain that sample and its original generation. */
+            view->assembly_dirty = view->data.assembly_follow || refresh;
         }
         if (view->data.source_follow && strcmp(view->data.path, context->selected.path) != 0) {
             (void)snprintf(view->data.path, sizeof view->data.path, "%s", context->selected.path); view->source_dirty = true;
@@ -724,8 +846,9 @@ void tb_code_pump(TbCode *code)
         view->data.stopped_line = strcmp(view->data.path, context->stopped.path) == 0 ? context->stopped.line : 0;
         if (view->data.assembly_follow) {
             bool symbol; uint64_t address;
-            view->have_anchor = tb_code_location(context->selected.address, &address, &symbol) && !symbol;
-            if (view->have_anchor) { follow_address(view, address); }
+            const char *pc = view->data.assembly_stopped ? context->stopped.address : context->selected.address;
+            view->have_anchor = tb_code_location(pc, &address, &symbol) && !symbol;
+            if (view->have_anchor) { follow_address(code, view, address); }
         }
     }
     if (!code->flavor_done && strstr(context->selected.architecture, "i386")) {
@@ -742,7 +865,7 @@ void tb_code_pump(TbCode *code)
         if (!view->visible_source && !view->visible_assembly) { continue; }
         if (view->source_dirty) { source_load(view); ++code->revision; }
         if (!view->visible_assembly || !view->assembly_dirty) { continue; }
-        view->assembly_dirty = false; code->active = i;
+        view->assembly_dirty = view->assembly_refresh = false; code->active = i;
         if (!view->have_anchor || view->data.anchor > UINT64_MAX - 256) {
             (void)snprintf(view->data.assembly_error, sizeof view->data.assembly_error, "No valid bounded instruction address; use Go to.");
             view->data.instruction_count = 0; ++view->data.assembly_revision;
@@ -764,6 +887,11 @@ void tb_code_pump(TbCode *code)
                 ++view->data.assembly_revision; continue;
             }
             if (range.kind == TB_IMAGE_DATA && !view->raw && !view->data.assembly_follow && !view->scan_target) {
+                view->data.gap_begin = view->data.anchor; view->data.gap_end = range.end;
+                TbImageRange next;
+                if (tb_images_neighbor(code->images, range.end, 1, &next)) {
+                    view->data.anchor = next.anchor; view->assembly_dirty = true; continue;
+                }
                 view->data.instruction_count = 0;
                 (void)snprintf(view->data.assembly_error, sizeof view->data.assembly_error,
                                "Non-code data at 0x%" PRIx64 "; Actions > Decode bytes to inspect explicitly.", view->data.anchor);
@@ -774,7 +902,7 @@ void tb_code_pump(TbCode *code)
                 view->precontext = true; view->prefix_limit = 64; view->data.anchor = range.anchor; view->origin_tried = true;
             }
         } else {
-            view->range_end = UINT64_MAX;
+            view->indexed = false; view->range_end = UINT64_MAX;
         }
         char low[48], high[48];
         (void)snprintf(low, sizeof low, "0x%" PRIx64, view->data.anchor);
@@ -795,12 +923,34 @@ void tb_code_refresh(TbCode *code)
 void tb_code_return(TbCode *code, int id)
 {
     if (!valid_view(id)) { return; }
+    listing_store(code, id);
     View *view = &code->views[id]; cancel_precontext(view);
     view->raw = false;
-    view->data.source_follow = view->tab_active == 0; view->data.assembly_follow = true;
+    view->data.source_follow = view->tab_active == 0; view->data.assembly_follow = true; view->data.assembly_stopped = false;
     view->source_dirty = view->assembly_dirty = true; view->data.stale = true;
     ++view->version; ++code->revision;
 }
+static bool assembly_follow(TbCode *code, int id, bool stopped)
+{
+    if (!valid_view(id) || tb_gdb_state(code->gdb) != TB_GDB_STOPPED) { return false; }
+    const TbContextSnapshot *context = tb_context_snapshot(code->context);
+    bool symbol; uint64_t address;
+    if (!context->ready || context->stale ||
+        !tb_code_location(stopped ? context->stopped.address : context->selected.address, &address, &symbol) || symbol) {
+        message(code, "Stopped instruction address is unavailable; viewport retained."); return false;
+    }
+    listing_store(code, id);
+    View *view = &code->views[id]; cancel_precontext(view);
+    view->raw = false; view->data.assembly_follow = true; view->data.assembly_stopped = stopped;
+    view->have_anchor = true; view->data.anchor = address; view->origin_tried = false;
+    view->assembly_dirty = true; view->data.stale = true;
+    ++view->version; ++code->revision;
+    message(code, stopped ? "Returning this Disassembly view to the stopped PC; selection unchanged." :
+                           "This Disassembly view follows the selected frame; execution unchanged.");
+    return true;
+}
+bool tb_code_return_stop(TbCode *code, int id) { return assembly_follow(code, id, true); }
+bool tb_code_follow_frame(TbCode *code, int id) { return assembly_follow(code, id, false); }
 bool tb_code_stopped(TbCode *code)
 {
     const TbContextSnapshot *context = tb_context_snapshot(code->context);
@@ -813,6 +963,7 @@ bool tb_code_stopped(TbCode *code)
 void tb_code_mixed(TbCode *code, int id, bool mixed)
 {
     if (!valid_view(id)) { return; }
+    listing_store(code, id);
     cancel_precontext(&code->views[id]);
     code->views[id].data.mixed = mixed; code->views[id].assembly_dirty = true;
     code->views[id].data.stale = true; ++code->views[id].version;
@@ -826,9 +977,11 @@ bool tb_code_address(TbCode *code, int id, const char *location)
         message(code, "Use a hexadecimal address or simple symbol (including ::); no expressions/calls."); return false;
     }
     if (!symbol && address > UINT64_MAX - 256) { message(code, "Instruction window would overflow the target address range."); return false; }
+    listing_store(code, id);
     View *view = &code->views[id]; cancel_precontext(view); view->data.assembly_follow = false;
+    view->data.gap_begin = view->data.gap_end = 0;
     ++view->version; view->data.stale = true;
-    view->history_count = 0; view->data.assembly_error[0] = '\0';
+    view->data.assembly_error[0] = '\0';
     if (symbol) {
         char expression[160]; (void)snprintf(expression, sizeof expression, "&'%s'", location);
         const char *const args[] = {"--language", "c", expression}; code->active = id;
@@ -837,11 +990,54 @@ bool tb_code_address(TbCode *code, int id, const char *location)
     }
     view->data.anchor = address; view->have_anchor = true; view->assembly_dirty = true; ++code->revision; return true;
 }
+static TbBrowseKey listing_key(const View *view, int id)
+{
+    return (TbBrowseKey){.kind = TB_BROWSE_CODE, .view = id,
+        .format = (view->data.mixed ? 1U : 0U) | (view->raw ? 2U : 0U),
+        .begin = view->data.instruction_count ? view->data.instructions[0].numeric : view->data.anchor,
+        .end = view->data.next_address, .generation = view->data.assembly_generation,
+        .epoch = view->data.assembly_epoch};
+}
+static void listing_store(TbCode *code, int id)
+{
+    const View *view = &code->views[id];
+    if (view->data.instruction_count) {
+        (void)tb_browse_store(code->cache, listing_key(view, id), &view->data, sizeof view->data);
+    }
+}
+static bool listing_cached(TbCode *code, int id, int direction)
+{
+    View *view = &code->views[id]; TbBrowseSample sample;
+    if (!tb_browse_neighbor(code->cache, listing_key(view, id), direction, &sample) || sample.size != sizeof(TbCodeView)) { return false; }
+    TbCodeView saved; memcpy(&saved, sample.data, sizeof saved);
+    memcpy(view->data.instructions, saved.instructions, sizeof view->data.instructions);
+    view->data.instruction_count = saved.instruction_count;
+    view->data.next_address = saved.next_address; view->data.anchor = sample.key.begin;
+    view->data.more = saved.more; view->data.mixed_available = saved.mixed_available;
+    memset(view->mixed_checked, 0, sizeof view->mixed_checked);
+    view->data.gap_begin = saved.gap_begin; view->data.gap_end = saved.gap_end;
+    view->data.assembly_generation = sample.key.generation; view->data.assembly_epoch = sample.key.epoch;
+    view->data.assembly_follow = false; view->assembly_dirty = false;
+    view->data.assembly_historical = tb_gdb_state(code->gdb) != TB_GDB_STOPPED ||
+        sample.key.generation.session != tb_gdb_generation(code->gdb).session ||
+        sample.key.generation.stop != tb_gdb_generation(code->gdb).stop || sample.key.epoch != code->epoch;
+    view->data.stale = view->data.assembly_historical;
+    view->data.assembly_error[0] = '\0'; view->have_anchor = true; view->function_known = false;
+    ++view->version; ++view->data.assembly_revision; ++code->revision;
+    message(code, view->data.assembly_historical ? "Cached historical instructions; no target read." : "Cached instructions; no target read.");
+    return true;
+}
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): view index precedes signed paging direction.
 bool tb_code_assembly_page(TbCode *code, int id, int direction)
 {
-    if (!valid_view(id) || code->waiting || code->settings_job != CODE_NONE || code->views[id].data.stale || !code->views[id].data.instruction_count) { return false; }
+    if (!valid_view(id) || !direction || code->waiting || code->settings_job != CODE_NONE) { return false; }
     View *view = &code->views[id];
+    listing_store(code, id);
+    if (listing_cached(code, id, direction)) { return true; }
+    if (!view->data.instruction_count) { return false; }
+    if (tb_gdb_state(code->gdb) != TB_GDB_STOPPED || view->data.stale || view->data.assembly_historical) {
+        message(code, "No cached window in that direction; stop and choose a fresh reliable instruction address. No read queued."); return false;
+    }
     if (view->indexed) {
         TbImageRange range; uint64_t anchor;
         if (direction < 0) {
@@ -849,8 +1045,14 @@ bool tb_code_assembly_page(TbCode *code, int id, int direction)
             anchor = range.anchor;
         } else {
             anchor = view->data.next_address;
-            if (!anchor || !tb_images_lookup(code->images, anchor, &range) || range.kind != TB_IMAGE_CODE) {
-                if (!tb_images_neighbor(code->images, anchor, 1, &range)) { message(code, "End of known code; use Go to or Decode bytes for another range."); return false; }
+            if (!anchor) { return false; }
+            if (!tb_images_lookup(code->images, anchor, &range)) {
+                if (tb_images_neighbor(code->images, anchor, 1, &range)) {
+                    anchor = range.anchor;
+                    message(code, "Address gap to the next known instruction boundary; skipped bytes stay labeled.");
+                } else { message(code, "Continuing from a decoded boundary into an unclassified range; bounded inspection only."); }
+            } else if (range.kind != TB_IMAGE_CODE && !view->raw) {
+                if (!tb_images_neighbor(code->images, range.end, 1, &range)) { message(code, "Data gap has no known next instruction boundary; use Decode bytes for raw inspection."); return false; }
                 anchor = range.anchor;
                 message(code, "Skipped non-code/unavailable address gap; loading next code region.");
             }
@@ -869,8 +1071,8 @@ bool tb_code_assembly_page(TbCode *code, int id, int direction)
         view->data.assembly_follow = false; view->assembly_dirty = true; view->data.stale = true; ++code->revision; return true;
     }
     if (direction < 0) {
-        if (view->history_count) { view->data.anchor = view->history[--view->history_count]; }
-        else if (view->function_known && view->function_start < view->data.anchor && view->data.anchor - view->function_start <= 1024) {
+        view->merge_tail = false;
+        if (view->function_known && view->function_start < view->data.anchor && view->data.anchor - view->function_start <= 1024) {
             TbInstruction *forward = malloc(view->data.instruction_count * sizeof *forward);
             if (!forward) { message(code, "Cannot preserve the instruction window; browsing unchanged."); return false; }
             memcpy(forward, view->data.instructions, view->data.instruction_count * sizeof *forward);
@@ -880,7 +1082,11 @@ bool tb_code_assembly_page(TbCode *code, int id, int direction)
         } else { return false; }
     } else {
         if (!view->data.next_address || view->data.next_address <= view->data.anchor) { return false; }
-        remember_window(view); view->data.anchor = view->data.next_address;
+        view->forward = malloc(view->data.instruction_count * sizeof *view->forward);
+        if (!view->forward) { message(code, "Cannot preserve the instruction window; browsing unchanged."); return false; }
+        memcpy(view->forward, view->data.instructions, view->data.instruction_count * sizeof *view->forward);
+        view->forward_count = view->data.instruction_count; view->merge_tail = true;
+        view->data.anchor = view->data.next_address;
     }
     view->data.assembly_follow = false; view->assembly_dirty = true; view->data.stale = true; ++code->revision; return true;
 }

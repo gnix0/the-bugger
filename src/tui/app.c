@@ -27,17 +27,22 @@ enum { MAX_CONTROLS = 1024, FIELD_SIZE = 256, FORM_FIELDS = 9 };
 enum { CONTENT_LEFT = 0x1000, CONTENT_DOWN, CONTENT_UP, CONTENT_RIGHT };
 typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
                SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT, DATA_WATCH_INPUT,
-               CONFIG_MENU, THEMES, THEME_PREVIEW, KEYBINDS, PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM, SCRIPT_LIST, SCRIPT_FILTER } Page;
+               CONFIG_MENU, THEMES, THEME_PREVIEW, KEYBINDS, PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM, SCRIPT_LIST, SCRIPT_FILTER,
+               MEMORY_RANGES, MEMORY_RANGE, MEMORY_CONSENT, MEMORY_RANGE_INPUT } Page;
+typedef enum { RANGE_ADD, RANGE_PREVIOUS, RANGE_NEXT, RANGE_BEGIN, RANGE_END,
+               RANGE_POLICY, RANGE_WIDTH, RANGE_RISKS, RANGE_AUTHORIZE, RANGE_CONFIRM,
+               RANGE_REVOKE, RANGE_REVIEW_PREVIOUS, RANGE_REVIEW_NEXT } RangeAction;
 typedef enum { CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_ADDRESS, CODE_STOPPED,
                CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_DIRECTORY_ADD, CODE_RULE_FROM,
-               CODE_RULE_TO, CODE_SETTINGS_CLEAR, CODE_RAW, CODE_RUN_TO, CODE_FULLSCREEN } CodeAction;
+               CODE_RULE_TO, CODE_SETTINGS_CLEAR, CODE_RAW, CODE_RUN_TO, CODE_FULLSCREEN,
+               CODE_ASSEMBLY_STOP, CODE_FOLLOW_FRAME } CodeAction;
 typedef enum {
     CONFIG_OPEN, THEME_ACTION, KEY_ACTION, CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
     TOOL, TAB, MENU, BODY, SHOW_VIEW, FOCUS_PANE, CANCEL_RESET, CONFIRM_RESET,
     MENU_SECTION, PANE_ACTION, DIVIDER, LOWER_TOGGLE, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR, KEY_SCROLLBAR,
     COMMAND_FIELD, COMMAND_SEND, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_ARGUMENTS, CONTEXT_PAGE,
     CODE_ACTIONS, CODE_ACTION, CODE_PAGE, CODE_FILE_PICK, CODE_FILE_PAGE, CODE_SOURCE_TAB, CODE_SOURCE_CLOSE, CODE_SOURCE_CYCLE, HSCROLLBAR,
-    BREAK_OPEN, BREAK_ACTION, REGISTER_REFRESH, REGISTER_FORMAT, MEMORY_ACTION, MEMORY_FIELD,
+    BREAK_OPEN, BREAK_ACTION, REGISTER_REFRESH, REGISTER_FORMAT, MEMORY_ACTION, MEMORY_FIELD, MEMORY_RANGE_ACTION, MEMORY_RANGE_PICK,
     VARIABLE_OPEN, VARIABLE_ACTION, DATA_WATCH_OPTION,
     PROFILE_OPEN, PROFILE_PICK, PROFILE_ACTION, PROFILE_ITEM, SCRIPT_OPEN, SCRIPT_PICK, SCRIPT_ACTION, REVIEW_PAGE, CLOSE_POLICY
 } ControlKind;
@@ -102,6 +107,9 @@ typedef struct {
     int execution_pane, break_pane, break_action, memory_pane, variable_pane;
     bool break_hardware;
     bool memory_length_input;
+    unsigned memory_range;
+    int memory_range_page, memory_range_rows, memory_range_review;
+    RangeAction memory_range_input;
     char memory_input_error[192];
     wchar_t memory_input[TB_MAX_PANES][FIELD_SIZE];
     size_t memory_cursor[TB_MAX_PANES];
@@ -136,7 +144,7 @@ static bool prepare_server(App *app);
 
 static bool editing_page(const App *app)
 {
-    return app->page == SCRIPT_FILTER || app->page == SAVE_INPUT || app->page == CODE_INPUT || app->page == CODE_FILES || app->page == BREAK_INPUT || app->page == MEMORY_INPUT || app->page == WATCH_INPUT || app->page == DATA_WATCH_INPUT || app->page == PROFILE_TEXT;
+    return app->page == SCRIPT_FILTER || app->page == SAVE_INPUT || app->page == CODE_INPUT || app->page == CODE_FILES || app->page == BREAK_INPUT || app->page == MEMORY_INPUT || app->page == WATCH_INPUT || app->page == DATA_WATCH_INPUT || app->page == PROFILE_TEXT || app->page == MEMORY_RANGE_INPUT;
 }
 
 /* Signal handler communicates only through this flag; cleanup runs normally. */
@@ -211,6 +219,9 @@ static const char *footer_message(const App *app)
     case BREAK_INPUT: return "Enter the breakpoint setting for GDB to validate.";
     case MEMORY_MENU: return "Configure Memory inspection; reads are explicit and bounded.";
     case MEMORY_INPUT: return "Enter the requested Memory address or byte count. Esc cancels.";
+    case MEMORY_RANGES: case MEMORY_RANGE: return "Temporary permissions belong to this Memory view. Managing them never reads hardware.";
+    case MEMORY_CONSENT: return "Review the bounds and risks before authorizing. Consent is not proof of safety.";
+    case MEMORY_RANGE_INPUT: return "Edit this temporary range; applying an edit revokes its permission. No read is performed.";
     case VARIABLE_MENU: return "Choose an explicit variable inspection action.";
     case WATCH_INPUT: return "Add a watch expression; adding does not read memory.";
     case DATA_WATCH_INPUT: return "Configure a hardware data watchpoint before creating it.";
@@ -874,12 +885,12 @@ static void context_row(const TbContextSnapshot *snapshot, TbView view, int item
 static void mixed_summary(const App *app, int index, const TbInstruction *instruction,
                           char *summary, size_t capacity)
 {
-    const TbCodeView *view = tb_code_view(tb_session_code(app->debugger), index);
     char text[1024] = {0};
-    if (strcmp(instruction->source, view->path) == 0) {
-        (void)tb_code_source_line(tb_session_code(app->debugger), index, (size_t)instruction->line - 1, text, sizeof text);
+    bool available = tb_code_mixed_line(tb_session_code(app->debugger), index, instruction, text, sizeof text);
+    if (available) {
+        char file[512]; tb_code_safe(file, sizeof file, instruction->source, strlen(instruction->source));
+        (void)snprintf(summary, capacity, "  %.511s:L%d %.1023s", file, instruction->line, text);
     }
-    if (*text) { (void)snprintf(summary, capacity, "  L%d %.1023s", instruction->line, text); }
     else {
         char file[512]; tb_code_safe(file, sizeof file, instruction->source, strlen(instruction->source));
         (void)snprintf(summary, capacity, "  L%d %.511s <source text unavailable>", instruction->line, file);
@@ -959,6 +970,13 @@ static void variable_text(const TbVariable *row, char *text, size_t capacity)
                    row->format_pending ? " [natural; format read required]" : "");
 }
 
+static void assembly_gap_text(const App *app, int index, const TbCodeRow *row, char *out, size_t capacity)
+{
+    (void)snprintf(out, capacity, "%llu bytes %s | 0x%llx..0x%llx",
+        (unsigned long long)(row->end - row->begin),
+        tb_code_gap_label(tb_session_code(app->debugger), index, row->begin, row->end),
+        (unsigned long long)row->begin, (unsigned long long)row->end);
+}
 static int native_content_width(const App *app, int index)
 {
     const TbDemoPane *pane = &app->demo.panes[index];
@@ -966,7 +984,8 @@ static int native_content_width(const App *app, int index)
     const TbCodeView *code = tb_code_view(tb_session_code(app->debugger), index);
     TbAssemblyColumns columns = assembly_columns(code);
     const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
-    size_t rows = view == TB_LOCALS || view == TB_WATCHES ? tb_variables_count(tb_session_variables(app->debugger), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES) : view == TB_MEMORY ? (tb_memory_view(tb_session_memory(app->debugger), index)->data_size + 15) / 16 : view == TB_REGISTERS ? tb_registers_count(tb_session_registers(app->debugger)) : view == TB_SOURCE ? code->line_count : view == TB_DISASSEMBLY ? code->instruction_count :
+    TbCodeRow assembly[TB_CODE_ROWS];
+    size_t rows = view == TB_LOCALS || view == TB_WATCHES ? tb_variables_count(tb_session_variables(app->debugger), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES) : view == TB_MEMORY ? (tb_memory_view(tb_session_memory(app->debugger), index)->data_size + 15) / 16 : view == TB_REGISTERS ? tb_registers_count(tb_session_registers(app->debugger)) : view == TB_SOURCE ? code->line_count : view == TB_DISASSEMBLY ? tb_code_rows(code, assembly) :
                   view == TB_CONSOLE ? tb_session_log_count(app->debugger) : view == TB_BREAKPOINTS ? tb_break_count(tb_session_breakpoints(app->debugger)) : view == TB_CALL_STACK && context->ready && !context->stale ? context->frame_count :
                   view == TB_THREADS && context->ready && !context->stale ? context->thread_count : 0;
     size_t maximum = 0;
@@ -977,17 +996,19 @@ static int native_content_width(const App *app, int index)
         else if (view == TB_LOCALS || view == TB_WATCHES) { variable_text(tb_variables_row(tb_session_variables(app->debugger), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES, row), text, sizeof text); }
         else if (view == TB_SOURCE) { (void)tb_code_source_line(tb_session_code(app->debugger), index, row, text, sizeof text); }
         else if (view == TB_DISASSEMBLY) {
-            const TbInstruction *instruction = &code->instructions[row];
-            tb_format_assembly(text, sizeof text, columns, instruction->address, instruction->opcodes, instruction->text);
+            const TbCodeRow *mapped = &assembly[row];
+            if (mapped->kind == TB_CODE_GAP) { assembly_gap_text(app, index, mapped, text, sizeof text); }
+            else if (mapped->kind == TB_CODE_SOURCE) {
+                char summary[1600]; mixed_summary(app, index, &code->instructions[mapped->instruction], summary, sizeof summary);
+                (void)snprintf(text, sizeof text, "%s", summary + 2);
+            } else {
+                const TbInstruction *instruction = &code->instructions[mapped->instruction];
+                tb_format_assembly(text, sizeof text, columns, instruction->address, instruction->opcodes, instruction->text);
+            }
         } else if (view == TB_CONSOLE) { (void)snprintf(text, sizeof text, "%s", tb_session_log_line(app->debugger, row)); }
         else if (view == TB_BREAKPOINTS) { break_text(tb_break_row(tb_session_breakpoints(app->debugger), row), text, sizeof text); }
         else { context_row(context, view, (int)row, text, sizeof text, &selected); }
         size_t length = strlen(text); if (length > maximum) { maximum = length; }
-        if (view == TB_DISASSEMBLY && code->mixed && code->mixed_available && code->instructions[row].line > 0) {
-            char summary[1200]; mixed_summary(app, index, &code->instructions[row], summary, sizeof summary);
-            length = strlen(summary) - 2;
-            if (length > maximum) { maximum = length; }
-        }
     }
     return (int)maximum;
 }
@@ -1096,27 +1117,9 @@ static void draw_scrollbars(App *app, int index, TbRect rect)
     }
 }
 
-static bool assembly_gap(const TbCodeView *view, size_t row)
-{
-    if (!row) { return false; }
-    const TbInstruction *previous = &view->instructions[row - 1];
-    return previous->bytes && previous->numeric <= UINT64_MAX - previous->bytes &&
-           previous->numeric + previous->bytes < view->instructions[row].numeric;
-}
-
 static int assembly_rows(const TbCodeView *view)
 {
-    int rows = (int)view->instruction_count;
-    for (size_t i = 1; i < view->instruction_count; ++i) {
-        if (assembly_gap(view, i)) { ++rows; }
-    }
-    if (view->mixed && view->mixed_available) {
-        for (size_t i = 0; i < view->instruction_count; ++i) {
-            if (view->instructions[i].line > 0 && (i == 0 || view->instructions[i].line != view->instructions[i - 1].line ||
-                strcmp(view->instructions[i].source, view->instructions[i - 1].source) != 0)) { ++rows; }
-        }
-    }
-    return rows;
+    return (int)tb_code_rows(view, NULL);
 }
 
 static void code_focus(App *app, int pane)
@@ -1154,17 +1157,13 @@ static bool selected_location(App *app, char *location, size_t capacity, const T
         *where = (TbBreakLocation){.source = code->path, .line = line};
         return *code->path && line && line <= code->line_count;
     }
-    int row = 0;
-    for (size_t i = 0; i < code->instruction_count; ++i) {
-        const TbInstruction *instruction = &code->instructions[i];
-        if (assembly_gap(code, i)) { ++row; }
-        if (code->mixed && code->mixed_available && instruction->line > 0 &&
-            (!i || instruction->line != code->instructions[i - 1].line || strcmp(instruction->source, code->instructions[i - 1].source) != 0)) { ++row; }
-        if (row++ != pane->row[TB_DISASSEMBLY]) { continue; }
-        *existing = tb_break_at(b, NULL, 0, instruction->address);
-        (void)snprintf(location, capacity, "*%s", instruction->address); *where = (TbBreakLocation){.text = location}; return !code->stale;
-    }
-    return false;
+    TbCodeRow rows[TB_CODE_ROWS]; size_t count = tb_code_rows(code, rows);
+    if (pane->row[TB_DISASSEMBLY] < 0 || (size_t)pane->row[TB_DISASSEMBLY] >= count) { return false; }
+    const TbCodeRow *row = &rows[pane->row[TB_DISASSEMBLY]];
+    if (row->kind != TB_CODE_INSTRUCTION) { return false; }
+    const TbInstruction *instruction = &code->instructions[row->instruction];
+    *existing = tb_break_at(b, NULL, 0, instruction->address);
+    (void)snprintf(location, capacity, "*%s", instruction->address); *where = (TbBreakLocation){.text = location}; return !code->stale;
 }
 static bool toggle_breakpoint(App *app)
 {
@@ -1181,15 +1180,9 @@ static int assembly_pc_row(const TbCodeView *view, const char *pc)
 {
     uint64_t address; bool symbol;
     if (!tb_code_location(pc, &address, &symbol) || symbol) { return -1; }
-    int row = 0;
-    for (size_t i = 0; i < view->instruction_count; ++i) {
-        const TbInstruction *instruction = &view->instructions[i];
-        if (assembly_gap(view, i)) { ++row; }
-        if (view->mixed && view->mixed_available && instruction->line > 0 &&
-            (i == 0 || instruction->line != view->instructions[i - 1].line ||
-             strcmp(instruction->source, view->instructions[i - 1].source) != 0)) { ++row; }
-        if (instruction->numeric == address) { return row; }
-        ++row;
+    TbCodeRow rows[TB_CODE_ROWS]; size_t count = tb_code_rows(view, rows);
+    for (size_t i = 0; i < count; ++i) {
+        if (rows[i].kind == TB_CODE_INSTRUCTION && view->instructions[rows[i].instruction].numeric == address) { return (int)i; }
     }
     return -1;
 }
@@ -1211,7 +1204,9 @@ static void draw_code_pane(App *app, int index, TbRect rect)
     (void)snprintf(header, sizeof header, "%s | %s%s | %.240s",
                    loaded ? empty ? "Awaiting stop" : "BROWSE" : stale ? "STALE" : "LIVE",
                    context->selected.level > 0 ? "caller | " : "",
-                   source ? "C/C++" : view->mixed && view->mixed_available ? "mixed" : "assembly", label);
+                   source ? "C/C++" : view->assembly_historical ? "historical assembly" :
+                   view->assembly_follow ? view->assembly_stopped ? "assembly: stopped PC" : "assembly: selected frame" :
+                   view->mixed && view->mixed_available ? "mixed: browsing" : "assembly: browsing", label);
     tb_text(rect.y + 1, rect.x + 1, rect.w - 2, stale ? TB_ORANGE : TB_MUTED, 0, header);
     if (source) { source_tab_strip(app, code, index, rect); }
     TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
@@ -1223,7 +1218,7 @@ static void draw_code_pane(App *app, int index, TbRect rect)
             pane->scroll[TB_SOURCE] = view->selected_line > 4 ? view->selected_line - 4 : 0;
             pane->row[TB_SOURCE] = view->selected_line - 1;
         } else if (!source && view->assembly_follow) {
-            int pc_row = assembly_pc_row(view, context->selected.address);
+            int pc_row = assembly_pc_row(view, view->assembly_stopped ? context->stopped.address : context->selected.address);
             if (pc_row >= 0) { pane->row[TB_DISASSEMBLY] = pc_row; }
             int margin = scroll.visible > 10 ? 5 : scroll.visible / 3;
             if (pc_row >= 0 && (pc_row < scroll.offset + margin || pc_row >= scroll.offset + scroll.visible - margin)) {
@@ -1239,39 +1234,30 @@ static void draw_code_pane(App *app, int index, TbRect rect)
         if (!source) { app->assembly_tail[index] = false; }
         scroll = workspace_scroll(app, pane, rect.h - 3);
     }
-    int output_row = 0, flat_row = 0;
+    int output_row = 0;
     uint64_t selected_pc = 0, stopped_pc = 0; bool symbol;
     bool selected_valid = tb_code_location(context->selected.address, &selected_pc, &symbol) && !symbol;
     bool stopped_valid = tb_code_location(context->stopped.address, &stopped_pc, &symbol) && !symbol;
-    size_t total = source ? view->line_count : view->instruction_count;
-    size_t visible_first = total, visible_end = 0;
+    TbCodeRow rows[TB_CODE_ROWS];
+    size_t total = source ? view->line_count : tb_code_rows(view, rows);
+    size_t visible_first = view->instruction_count, visible_end = 0;
     TbAssemblyColumns columns = assembly_columns(view);
-    for (size_t i = 0; i < total && output_row < scroll.visible; ++i) {
-        const TbInstruction *instruction = source ? NULL : &view->instructions[i];
-        if (!source && assembly_gap(view, i)) {
-            if (flat_row >= scroll.offset && output_row < scroll.visible) {
-                char gap[128];
-                const TbInstruction *previous = &view->instructions[i - 1];
-                unsigned long long bytes = (unsigned long long)(instruction->numeric - previous->numeric - previous->bytes);
-                (void)snprintf(gap, sizeof gap, "... %llu bytes not decoded", bytes);
-                tb_text(content_y + output_row++, rect.x + 4, app->body_width[index] - 3, TB_MUTED, 0, gap);
-            }
-            ++flat_row;
+    for (size_t flat = (size_t)scroll.offset; flat < total && output_row < scroll.visible; ++flat) {
+        size_t i = source ? flat : rows[flat].instruction;
+        const TbInstruction *instruction = source || !view->instruction_count ? NULL : &view->instructions[i];
+        if (!source && rows[flat].kind == TB_CODE_GAP) {
+            char gap[160];
+            assembly_gap_text(app, index, &rows[flat], gap, sizeof gap);
+            size_t offset = (size_t)app->horizontal[index][TB_DISASSEMBLY];
+            if (offset > strlen(gap)) { offset = strlen(gap); }
+            tb_text(content_y + output_row++, rect.x + 4, app->body_width[index] - 3, TB_MUTED, 0, gap + offset); continue;
         }
-        bool mixed_header = !source && view->mixed && view->mixed_available && instruction->line > 0 &&
-                            (i == 0 || instruction->line != view->instructions[i - 1].line ||
-                             strcmp(instruction->source, view->instructions[i - 1].source) != 0);
-        if (mixed_header) {
-            if (flat_row >= scroll.offset && output_row < scroll.visible) {
-                char summary[1200]; mixed_summary(app, index, instruction, summary, sizeof summary);
-                size_t offset = (size_t)app->horizontal[index][TB_DISASSEMBLY];
-                if (offset > strlen(summary) - 2) { offset = strlen(summary) - 2; }
-                tb_text(content_y + output_row++, rect.x + 4, app->body_width[index] - 3, TB_CYAN, 0, summary + 2 + offset);
-            }
-            ++flat_row;
+        if (!source && rows[flat].kind == TB_CODE_SOURCE) {
+            char summary[1600]; mixed_summary(app, index, instruction, summary, sizeof summary);
+            size_t offset = (size_t)app->horizontal[index][TB_DISASSEMBLY];
+            if (offset > strlen(summary) - 2) { offset = strlen(summary) - 2; }
+            tb_text(content_y + output_row++, rect.x + 4, app->body_width[index] - 3, TB_CYAN, 0, summary + 2 + offset); continue;
         }
-        if (flat_row++ < scroll.offset) { continue; }
-        if (output_row >= scroll.visible) { break; }
         char text[4096]; bool stopped, selected;
         if (source) {
             (void)tb_code_source_line(code, index, i, text, sizeof text);
@@ -1279,9 +1265,10 @@ static void draw_code_pane(App *app, int index, TbRect rect)
             selected = (int)i + 1 == view->selected_line;
         } else {
             tb_format_assembly(text, sizeof text, columns, instruction->address, instruction->opcodes, instruction->text);
-            if (visible_first == total) { visible_first = i; }
+            if (visible_first == view->instruction_count) { visible_first = i; }
             visible_end = i + 1;
-            stopped = stopped_valid && instruction->numeric == stopped_pc && strcmp(context->selected_thread, context->stopped_thread) == 0;
+            stopped = stopped_valid && instruction->numeric == stopped_pc &&
+                      (view->assembly_stopped || strcmp(context->selected_thread, context->stopped_thread) == 0);
             selected = selected_valid && instruction->numeric == selected_pc;
         }
         stopped = stopped && !stale; selected = selected && !stale;
@@ -1670,7 +1657,7 @@ static void draw_lower_bars(App *app)
         int label = add_control(app, (TbRect){bar.x, bar.y, bar.w - 7, 1}, FOCUS_PANE, pane, pane);
         tb_text(bar.y, bar.x, bar.w - 7, app->focus == label ? TB_ACTIVE_TAB : TB_TAB,
                 app->focus == label ? A_UNDERLINE : 0, tb_view_names[p->tabs[p->active]]);
-        button(app, bar.y, bar.x + bar.w - 7, 1, app->layout.lower_open[lower] ? "v" : "^", LOWER_TOGGLE, lower, pane);
+        button(app, bar.y, bar.x + bar.w - 7, 1, app->layout.lower_open[lower] ? "_" : "^", LOWER_TOGGLE, lower, pane);
         button(app, bar.y, bar.x + bar.w - 5, 4, "...", MENU, 0, pane);
     }
 }
@@ -1713,7 +1700,7 @@ static void draw_pane(App *app, int pane_index, TbRect rect)
         tb_text(rect.y, rect.x + 1, rect.w - 16, TB_ACTIVE_TAB, A_BOLD, "Source | fullscreen");
         button(app, rect.y, rect.x + rect.w - 14, 13, "[ Restore ]", CODE_ACTION, CODE_FULLSCREEN, pane_index);
     } else {
-        if (lower >= 0) { button(app, rect.y, rect.x + rect.w - 7, 1, "v", LOWER_TOGGLE, lower, pane_index); }
+        if (lower >= 0) { button(app, rect.y, rect.x + rect.w - 7, 1, "_", LOWER_TOGGLE, lower, pane_index); }
         button(app, rect.y, rect.x + rect.w - 5, 4, "...", MENU, 0, pane_index);
     }
     if (app->menu == pane_index) {
@@ -1902,7 +1889,8 @@ static bool field_utf8(const wchar_t *value, char *target, size_t capacity);
 static const char *const code_labels[] = {
     "Choose source file", "Find in current file", "Go to line", "Go to address / symbol",
     "Return to stopped context", "Toggle mixed source/assembly", "Source lookup settings",
-    "Add source directory", "Mapping: build prefix", "Mapping: local prefix", "Clear source overrides", "Decode bytes (raw inspection)", "Run to Selected", "Fullscreen Source"
+    "Add source directory", "Mapping: build prefix", "Mapping: local prefix", "Clear source overrides", "Decode bytes (raw inspection)", "Run to Selected", "Fullscreen Source",
+    "Return to Stop (this view)", "Follow selected frame (this view)"
 };
 
 static void draw_code_menu(App *app)
@@ -1912,8 +1900,8 @@ static void draw_code_menu(App *app)
     draw_header(app, "Code view actions");
     bool source = app->demo.panes[app->code_pane].tabs[app->demo.panes[app->code_pane].active] == TB_SOURCE;
     const CodeAction source_actions[] = {CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_STOPPED, CODE_SOURCE_SETTINGS, CODE_RUN_TO, CODE_FULLSCREEN};
-    const CodeAction asm_actions[] = {CODE_ADDRESS, CODE_STOPPED, CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_RAW, CODE_RUN_TO};
-    int count = source ? 7 : 6;
+    const CodeAction asm_actions[] = {CODE_ADDRESS, CODE_ASSEMBLY_STOP, CODE_FOLLOW_FRAME, CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_RAW, CODE_RUN_TO};
+    int count = 7;
     for (int i = 0; i < count; ++i) {
         CodeAction action = source ? source_actions[i] : asm_actions[i];
         button(app, top + 1 + i, left, width, action == CODE_FULLSCREEN && app->fullscreen_source >= 0 ? "Restore tiled workspace" : code_labels[action], CODE_ACTION, action, app->code_pane);
@@ -2027,6 +2015,12 @@ static void draw_input(App *app)
         char summary[160]; (void)snprintf(summary, sizeof summary, "Read exactly %u bytes; no calls/writes/casts. MMIO reads can have side effects. Esc cancels.", tb_memory_view(tb_session_memory(app->debugger), app->memory_pane)->length);
         tb_text(top + 3, left, width, TB_MUTED, 0, memory_length ? "Changes the requested range only; no target read. Use Address or Refresh afterward." : summary);
     }
+    if (app->page == MEMORY_RANGE_INPUT) {
+        draw_header(app, "Edit temporary Memory range");
+        tb_text(top + 1, left, width, TB_CYAN, A_BOLD, app->memory_range_input == RANGE_BEGIN ? "Begin address (inclusive, hexadecimal 0x...)" :
+                app->memory_range_input == RANGE_END ? "End address (exclusive, hexadecimal 0x...)" : "Known side effects (empty means unknown)");
+        tb_text(top + 3, left, width, TB_MUTED, 0, "Apply changes the range and revokes permission; it does not read hardware.");
+    }
     if (profile_text) {
         static const char *const labels[] = {"Profile name", "Source directory (highest priority first)", "Build prefix to replace", "Local replacement prefix", "Ordered OpenOCD config path", "OpenOCD search directory"};
         tb_fill((TbRect){left - 1, top + 1, card.w - 2, 3}, TB_PANEL);
@@ -2048,7 +2042,7 @@ static void draw_input(App *app)
     }
     wide_text(top + 5, left, width, app->input, start, index == app->focus);
     if (memory && *app->memory_input_error) { tb_text(top + 7, left, width, TB_ORANGE, 0, app->memory_input_error); }
-    button(app, top + card.h - 2, left, 14, profile_text || app->page == SCRIPT_FILTER ? "[ Apply ]" : data_watch ? "[ Create ]" : watch ? "[ Add ]" : memory_length ? "[ Apply ]" : memory ? "[ Read ]" : bp || code ? "[ Apply ]" : "[ Save Log ]", INPUT_SUBMIT, 0, 0);
+    button(app, top + card.h - 2, left, 14, profile_text || app->page == SCRIPT_FILTER || app->page == MEMORY_RANGE_INPUT ? "[ Apply ]" : data_watch ? "[ Create ]" : watch ? "[ Add ]" : memory_length ? "[ Apply ]" : memory ? "[ Read ]" : bp || code ? "[ Apply ]" : "[ Save Log ]", INPUT_SUBMIT, 0, 0);
     button(app, top + card.h - 2, left + 16, 12, "[ Cancel ]", BACK, 0, 0);
     if (data_watch) {
         char label[96]; (void)snprintf(label, sizeof label, "Mode: %s", tb_break_watch_mode(app->watch_mode));
@@ -2082,6 +2076,86 @@ static void draw_memory_menu(App *app)
     const char *labels[] = {"Address / Read", "Refresh this range", "Cycle grouping: 1/2/4/8 bytes", "Byte count: 1 to 1024", "Previous range (read)", "Next range (read)"};
     for (int i = 0; i < 6; ++i) { button(app, actions_y + i, left, width, labels[i], MEMORY_ACTION, i, app->memory_pane); }
     button(app, actions_y + 6, left, width, "Hardware watchpoint at selected row (first group)", MEMORY_ACTION, 7, app->memory_pane);
+    button(app, actions_y + 7, left, width, "Temporary ranges: Add / Inspect / Authorize / Revoke", MEMORY_ACTION, 8, app->memory_pane);
+    button(app, top + card.h - 1, left, 12, "[ Back ]", BACK, 0, 0);
+}
+
+static void draw_memory_ranges(App *app)
+{
+    TbMemory *m = tb_session_memory(app->debugger);
+    TbRect card = menu_card(100, app->page == MEMORY_RANGES ? 22 : 17);
+    int left = card.x + 2, width = card.w - 4, top = card.y;
+    char text[2048], risks[640];
+    if (app->page == MEMORY_RANGES) {
+        draw_header(app, "Temporary Memory ranges");
+        (void)snprintf(text, sizeof text, "Memory view %d | 16 slots | select a range to inspect", app->memory_pane + 1);
+        tb_text(top, left, width, TB_CYAN, 0, text);
+        app->memory_range_rows = card.h - 5;
+        int rows = app->memory_range_rows;
+        if (app->memory_range_page > (TB_MEMORY_RANGES - 1) / rows) { app->memory_range_page = (TB_MEMORY_RANGES - 1) / rows; }
+        for (int row = 0; row < rows; ++row) {
+            unsigned slot = (unsigned)(app->memory_range_page * rows + row);
+            const TbMemoryRange *r = tb_memory_range(m, app->memory_pane, slot);
+            if (!r) { break; }
+            if (!r->used) { continue; }
+            char policy[40]; (void)snprintf(policy, sizeof policy, r->policy == TB_MEMORY_MMIO ? "MMIO %u-bit" : "ordinary bytes", r->width);
+            (void)snprintf(text, sizeof text, "%u: 0x%llx..0x%llx | %s | %s", slot + 1,
+                           (unsigned long long)r->begin, (unsigned long long)r->end,
+                           policy,
+                           tb_memory_range_authorized(m, app->memory_pane, slot) ? "AUTHORIZED" : "not authorized");
+            button(app, top + 2 + row, left, width, text, MEMORY_RANGE_PICK, (int)slot, app->memory_pane);
+        }
+        button(app, top + card.h - 2, left, 12, "[ Add ]", MEMORY_RANGE_ACTION, RANGE_ADD, app->memory_pane);
+        button(app, top + card.h - 1, left, 12, "[ Back ]", BACK, 0, 0);
+        if (app->memory_range_page > 0) { button(app, top + card.h - 1, left + 13, 12, "Previous", MEMORY_RANGE_ACTION, RANGE_PREVIOUS, app->memory_pane); }
+        if ((app->memory_range_page + 1) * rows < TB_MEMORY_RANGES) { button(app, top + card.h - 1, left + 26, 12, "Next", MEMORY_RANGE_ACTION, RANGE_NEXT, app->memory_pane); }
+        return;
+    }
+    const TbMemoryRange *r = tb_memory_range(m, app->memory_pane, app->memory_range);
+    if (!r || !r->used) { return; }
+    tb_code_safe(risks, sizeof risks, r->risks, strlen(r->risks));
+    draw_header(app, app->page == MEMORY_CONSENT ? "Authorize temporary Memory range?" : "Inspect temporary Memory range");
+    if (app->page == MEMORY_CONSENT) {
+        char access[40]; (void)snprintf(access, sizeof access, r->policy == TB_MEMORY_MMIO ? "%u-bit register" : "ordinary bytes", r->width);
+        (void)snprintf(text, sizeof text,
+            "View %d only. Bounds [0x%llx, 0x%llx), end excluded. Policy: %s; access: %s. "
+            "Side effects: %s. Authorization accepts these risks; it does not prove safety. "
+            "Ordinary access asserts this is ordinary readable memory. MMIO requires an explicit supported-width Read Register; "
+            "even one read can have side effects. The Bugger never polls or retries automatically, including after uncertainty/timeouts. "
+            "External software/hardware may make multiple physical attempts depending on driver path and failure conditions; "
+            "one Read is not exactly-once physical access. Consent expires on resume/context change. Authorizing performs no read.",
+            app->memory_pane + 1, (unsigned long long)r->begin, (unsigned long long)r->end,
+            r->policy == TB_MEMORY_MMIO ? "MMIO" : "ordinary", access, *risks ? risks : "UNKNOWN");
+        int visible = card.h - 4, row = 0, offset = app->memory_range_review;
+        const char *part = text;
+        while (*part) {
+            int count = paragraph_chunk(part, width);
+            if (row >= offset && row < offset + visible) {
+                char line[512]; (void)snprintf(line, sizeof line, "%.*s", count, part);
+                tb_text(top + 1 + row - offset, left, width, TB_ORANGE, 0, line);
+            }
+            ++row; part += count; while (*part == ' ') { ++part; }
+        }
+        if (offset + visible >= row) { button(app, top + card.h - 2, left, width, "[ Authorize without reading ]", MEMORY_RANGE_ACTION, RANGE_CONFIRM, app->memory_pane); }
+        button(app, top + card.h - 1, left, 12, "[ Cancel ]", BACK, 0, 0);
+        if (offset > 0) { button(app, top + card.h - 1, left + 13, 12, "Previous", MEMORY_RANGE_ACTION, RANGE_REVIEW_PREVIOUS, app->memory_pane); }
+        if (offset + visible < row) { button(app, top + card.h - 1, left + 26, 12, "Next", MEMORY_RANGE_ACTION, RANGE_REVIEW_NEXT, app->memory_pane); }
+        return;
+    }
+    (void)snprintf(text, sizeof text, "Begin: 0x%llx", (unsigned long long)r->begin);
+    button(app, top, left, width, text, MEMORY_RANGE_ACTION, RANGE_BEGIN, app->memory_pane);
+    (void)snprintf(text, sizeof text, "End (excluded): 0x%llx", (unsigned long long)r->end);
+    button(app, top + 1, left, width, text, MEMORY_RANGE_ACTION, RANGE_END, app->memory_pane);
+    button(app, top + 2, left, width, r->policy == TB_MEMORY_MMIO ? "Policy: MMIO (explicit register reads only)" : "Policy: ordinary readable memory", MEMORY_RANGE_ACTION, RANGE_POLICY, app->memory_pane);
+    if (r->policy == TB_MEMORY_MMIO) {
+        (void)snprintf(text, sizeof text, "Width: %u bits", r->width);
+        button(app, top + 3, left, width, text, MEMORY_RANGE_ACTION, RANGE_WIDTH, app->memory_pane);
+    } else { tb_text(top + 3, left, width, TB_MUTED, 0, "Access: ordinary bytes"); }
+    (void)snprintf(text, sizeof text, "Side effects: %s", *risks ? risks : "UNKNOWN");
+    button(app, top + 4, left, width, text, MEMORY_RANGE_ACTION, RANGE_RISKS, app->memory_pane);
+    tb_text(top + 6, left, width, TB_CYAN, 0, tb_memory_range_authorized(m, app->memory_pane, app->memory_range) ? "AUTHORIZED | temporary, this view only" : "NOT AUTHORIZED | expired / revoked / edited");
+    button(app, top + card.h - 3, left, 16, "[ Authorize ]", MEMORY_RANGE_ACTION, RANGE_AUTHORIZE, app->memory_pane);
+    button(app, top + card.h - 3, left + 18, 14, "[ Revoke ]", MEMORY_RANGE_ACTION, RANGE_REVOKE, app->memory_pane);
     button(app, top + card.h - 1, left, 12, "[ Back ]", BACK, 0, 0);
 }
 
@@ -2169,6 +2243,8 @@ static void draw_page(App *app)
         draw_break_menu(app);
     } else if (app->page == MEMORY_MENU) {
         draw_memory_menu(app);
+    } else if (app->page == MEMORY_RANGES || app->page == MEMORY_RANGE || app->page == MEMORY_CONSENT) {
+        draw_memory_ranges(app);
     } else if (app->page == VARIABLE_MENU) {
         draw_variable_menu(app);
     } else if (app->page == PROFILE_LIST || app->page == PROFILE_OPTIONS || app->page == PROFILE_ITEMS || app->page == PROFILE_CONFIRM) {
@@ -2786,7 +2862,7 @@ static void draw_server_review(App *app)
     int left = card.x + 2, top = card.y, width = card.w - 4;
     draw_header(app, "Review OpenOCD session"); TbOpenOcdPlan *p = app->server_plan;
     if (!p) { tb_text(top + 1, left, width, TB_ORANGE, 0, "Return to configuration and review the setup."); button(app, top + 5, left, 12, "[ Back ]", BACK, 0, 0); return; }
-    char summary[1200];
+    char summary[1600];
     (void)snprintf(summary, sizeof summary, "Endpoint: %s | %s", p->endpoint, p->start_server ? "Start owned OpenOCD" : "Connect to existing server (never owned)");
     tb_text(top, left, width, TB_CYAN, A_BOLD, summary);
     (void)snprintf(summary, sizeof summary, "GDB: %s", app->profile->gdb); tb_text(top + 1, left, width, TB_MUTED, 0, summary);
@@ -2998,6 +3074,9 @@ static void activate(App *app, Control control)
         page_result(app, WORKSPACE);
         break;
     case BACK:
+        if (app->page == MEMORY_RANGES) { page(app, MEMORY_MENU); break; }
+        if (app->page == MEMORY_RANGE) { page(app, MEMORY_RANGES); break; }
+        if (app->page == MEMORY_CONSENT || app->page == MEMORY_RANGE_INPUT) { page(app, MEMORY_RANGE); break; }
         if (app->page == KEYBINDS) { activate(app, (Control){.kind = KEY_ACTION, .value = app->key_confirm ? 5 : 7}); break; }
         if (app->page == THEME_PREVIEW) { apply_theme(app, app->preferences.palette); page(app, THEMES); break; }
         if (app->page == THEMES) { apply_theme(app, app->preferences.palette); page(app, CONFIG_MENU); break; }
@@ -3136,6 +3215,7 @@ static void activate(App *app, Control control)
         TbMemory *m = tb_session_memory(app->debugger); int id = control.pane;
         const TbMemoryView *v = tb_memory_view(m, id); bool okay = true;
         app->memory_pane = id;
+        if (control.value == 8) { app->memory_range_page = 0; page(app, MEMORY_RANGES); break; }
         if (control.value == 7) {
             size_t row = (size_t)app->demo.panes[id].row[TB_MEMORY];
             if (!v->ready || tb_memory_stale(m, id) || row >= (v->data_size + 15) / 16 || row > (UINT64_MAX - v->address) / 16) {
@@ -3169,6 +3249,55 @@ static void activate(App *app, Control control)
         }
         status(app, okay ? (control.value == 2 ? "Memory grouping changed; no target read." : control.value == 3 ? "Range changed; use Read or Refresh to fetch bytes." : "Memory read requested.") :
                *v->error ? v->error : "Choose an address and stop the target before reading."); break;
+    }
+    case MEMORY_RANGE_PICK:
+        app->memory_range = (unsigned)control.value; page(app, MEMORY_RANGE); break;
+    case MEMORY_RANGE_ACTION: {
+        TbMemory *m = tb_session_memory(app->debugger); int id = app->memory_pane;
+        RangeAction action = (RangeAction)control.value;
+        if (action == RANGE_PREVIOUS || action == RANGE_NEXT) {
+            app->memory_range_page += action == RANGE_NEXT ? 1 : -1; break;
+        }
+        if (action == RANGE_ADD) {
+            unsigned slot = 0;
+            while (slot < TB_MEMORY_RANGES && tb_memory_range(m, id, slot)->used) { ++slot; }
+            if (slot == TB_MEMORY_RANGES) { status(app, "All 16 range slots are used; inspect and edit an existing range."); break; }
+            const TbMemoryView *v = tb_memory_view(m, id);
+            uint64_t begin = v->data_size && v->address < UINT64_MAX ? v->address : 0;
+            uint64_t end = begin < UINT64_MAX - v->length ? begin + v->length : UINT64_MAX;
+            if (!tb_memory_range_set(m, id, slot, begin, end, TB_MEMORY_ORDINARY, 0, "")) { status(app, "Range bounds are unavailable for this target."); break; }
+            app->memory_range = slot; page(app, MEMORY_RANGE); status(app, "Draft added without permission or target reads. Review its bounds and policy."); break;
+        }
+        const TbMemoryRange *r = tb_memory_range(m, id, app->memory_range);
+        if (!r || !r->used) { break; }
+        if (action == RANGE_AUTHORIZE) { app->memory_range_review = 0; page(app, MEMORY_CONSENT); break; }
+        if (action == RANGE_REVIEW_PREVIOUS || action == RANGE_REVIEW_NEXT) {
+            int step = menu_card(100, 17).h - 4;
+            app->memory_range_review += action == RANGE_REVIEW_NEXT ? step : -step;
+            if (app->memory_range_review < 0) { app->memory_range_review = 0; } break;
+        }
+        if (action == RANGE_CONFIRM || action == RANGE_REVOKE) {
+            bool okay = action == RANGE_CONFIRM ? tb_memory_range_authorize(m, id, app->memory_range) : tb_memory_range_revoke(m, id, app->memory_range);
+            page(app, MEMORY_RANGE);
+            status(app, okay ? action == RANGE_CONFIRM ? "Temporary consent recorded; no hardware read performed." : "Permission revoked; no hardware read performed." :
+                   "Permission unavailable: stop, wait for context, check bounds and conflicting grants.");
+            break;
+        }
+        if (action == RANGE_POLICY || action == RANGE_WIDTH) {
+            TbMemoryPolicy policy = action == RANGE_POLICY ? r->policy == TB_MEMORY_MMIO ? TB_MEMORY_ORDINARY : TB_MEMORY_MMIO : r->policy;
+            unsigned width = policy == TB_MEMORY_ORDINARY ? 0 : action == RANGE_POLICY ? 32 : r->width == 8 ? 16 : r->width == 16 ? 32 : 8;
+            if (action == RANGE_WIDTH && policy == TB_MEMORY_ORDINARY) { break; }
+            if (tb_memory_range_set(m, id, app->memory_range, r->begin, r->end, policy, width, r->risks)) {
+                status(app, "Range edited; permission revoked. No target read.");
+            }
+            break;
+        }
+        app->memory_range_input = action;
+        if (action == RANGE_RISKS) {
+            size_t length = strlen(r->risks);
+            for (size_t i = 0; i <= length; ++i) { app->input[i] = (unsigned char)r->risks[i]; }
+        } else { (void)swprintf(app->input, FIELD_SIZE, L"0x%llx", (unsigned long long)(action == RANGE_BEGIN ? r->begin : r->end)); }
+        page(app, MEMORY_RANGE_INPUT); app->cursor = wcslen(app->input); break;
     }
     case REGISTER_REFRESH:
         tb_registers_refresh(tb_session_registers(app->debugger));
@@ -3250,6 +3379,11 @@ static void activate(App *app, Control control)
             (void)tb_code_tab_select(code, control.pane, 0);
             source_tab_restore(app, control.pane);
             status(app, tb_code_stopped(code) ? "Returning to stopped context; execution unchanged." : tb_code_message(code)); page_result(app, WORKSPACE);
+        } else if (app->code_action == CODE_ASSEMBLY_STOP || app->code_action == CODE_FOLLOW_FRAME) {
+            bool okay = app->code_action == CODE_ASSEMBLY_STOP ? tb_code_return_stop(code, control.pane) :
+                                                              tb_code_follow_frame(code, control.pane);
+            status(app, okay ? tb_code_message(code) : "Stop the target and wait for its instruction address.");
+            page_result(app, WORKSPACE);
         } else if (app->code_action == CODE_RUN_TO) {
             char location[8192]; const TbBreakpoint *existing = NULL;
             TbBreakLocation where;
@@ -3353,6 +3487,20 @@ static void activate(App *app, Control control)
                 page_result(app, WORKSPACE);
             }
             break;
+        }
+        if (app->page == MEMORY_RANGE_INPUT) {
+            TbMemory *m = tb_session_memory(app->debugger);
+            const TbMemoryRange *r = tb_memory_range(m, app->memory_pane, app->memory_range);
+            if (!r) { break; }
+            uint64_t address = 0; bool symbol = false;
+            bool risks = app->memory_range_input == RANGE_RISKS;
+            if (!risks && (!tb_code_location(input, &address, &symbol) || symbol)) { status(app, "Use a numeric hexadecimal address, 0x..."); break; }
+            if (!tb_memory_range_set(m, app->memory_pane, app->memory_range,
+                app->memory_range_input == RANGE_BEGIN ? address : r->begin,
+                app->memory_range_input == RANGE_END ? address : r->end, r->policy, r->width, risks ? input : r->risks)) {
+                status(app, "Invalid bounds or side-effect text exceeds 159 bytes; draft unchanged."); break;
+            }
+            page(app, MEMORY_RANGE); status(app, "Range edited; permission revoked. No target read."); break;
         }
         if (app->page == MEMORY_INPUT) {
             TbMemory *m = tb_session_memory(app->debugger); int id = app->memory_pane;
@@ -3500,23 +3648,18 @@ static void scroll_body(App *app, Control control, int amount)
     }
     if (app->live && view == TB_DISASSEMBLY &&
         ((amount < 0 && scroll.offset == 0) || (amount > 0 && scroll.offset == scroll.maximum))) {
-        if (tb_code_assembly_page(tb_session_code(app->debugger), control.pane, amount < 0 ? -1 : 1)) {
-            app->assembly_tail[control.pane] = true;
+        char previous[48];
             {
                 const TbCodeView *code = tb_code_view(tb_session_code(app->debugger), control.pane);
-                int flat = 0; size_t visible = 0;
-                for (size_t row = 0; row < code->instruction_count; ++row) {
-                    const TbInstruction *instruction = &code->instructions[row];
-                    if (assembly_gap(code, row)) { ++flat; }
-                    if (code->mixed && code->mixed_available && instruction->line > 0 &&
-                        (!row || instruction->line != code->instructions[row - 1].line || strcmp(instruction->source, code->instructions[row - 1].source) != 0)) { ++flat; }
-                    visible = row;
-                    if (flat++ >= scroll.offset) { break; }
-                }
-                (void)snprintf(app->assembly_previous[control.pane], sizeof app->assembly_previous[control.pane], "%s",
+                TbCodeRow rows[TB_CODE_ROWS]; size_t count = tb_code_rows(code, rows);
+                size_t visible = (size_t)scroll.offset < count ? rows[scroll.offset].instruction : 0;
+                (void)snprintf(previous, sizeof previous, "%s",
                                code->instruction_count ? code->instructions[visible].address : "");
-                app->assembly_scroll_up[control.pane] = -amount;
             }
+        if (tb_code_assembly_page(tb_session_code(app->debugger), control.pane, amount < 0 ? -1 : 1)) {
+            app->assembly_tail[control.pane] = true;
+            memcpy(app->assembly_previous[control.pane], previous, sizeof previous);
+            app->assembly_scroll_up[control.pane] = -amount;
             pane->scroll[view] = 0;
             return;
         }
@@ -3883,6 +4026,9 @@ static void key_event(App *app, wint_t key, bool special)
             activate(app, (Control){.kind = BACK}); return;
         }
         if (app->page == PROFILE_LIST || app->page == PROFILE_OPTIONS || app->page == PROFILE_ITEMS || app->page == PROFILE_TEXT || app->page == PROFILE_CONFIRM) {
+            activate(app, (Control){.kind = BACK}); return;
+        }
+        if (app->page == MEMORY_RANGES || app->page == MEMORY_RANGE || app->page == MEMORY_CONSENT || app->page == MEMORY_RANGE_INPUT) {
             activate(app, (Control){.kind = BACK}); return;
         }
         if (app->menu >= 0) {

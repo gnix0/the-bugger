@@ -45,6 +45,7 @@ int main(int argc, char *argv[])
     bool register_stop_held = false;
     unsigned memory_mode = 0;
     bool code_page_error = false;
+    unsigned code_bad_reply = 0;
     char variable_name[64] = {0}; unsigned variable_reads = 0, variable_children = 0, variable_deletes = 0;
     unsigned variable_mode = 0;
     unsigned variable_value = 17;
@@ -373,8 +374,15 @@ int main(int argc, char *argv[])
             puts("},{file=\"duplicate.c\",fullname=\"/not/here/duplicate.c\"},{file=\"relative-unresolved.c\"}]");
         } else if (strncmp(mode, "context-code", 12) == 0 && strcmp(command, "-code-page-error\n") == 0) {
             code_page_error = true; reply(token, "^done");
+        } else if (strncmp(mode, "context-code", 12) == 0 && strncmp(command, "-code-bad-reply ", 16) == 0) {
+            code_bad_reply = (unsigned)atoi(command + 16); reply(token, "^done");
         } else if (strncmp(mode, "context-code", 12) == 0 && strncmp(command, "-data-disassemble ", 18) == 0) {
-            if (code_page_error) {
+            if (code_bad_reply) {
+                if (code_bad_reply == 1) { reply(token, "^done,asm_insns=\"invalid\""); }
+                else if (code_bad_reply == 2) { reply(token, "^done,asm_insns=[]"); }
+                else { reply(token, "^done,asm_insns=[{address=\"0x6000\",inst=\"nop\"},{address=\"invalid\",inst=\"nop\"}]"); }
+                code_bad_reply = 0;
+            } else if (code_page_error) {
                 code_page_error = false;
                 reply(token, "^error,msg=\"Cannot access memory at requested page\"");
             } else if (strcmp(mode, "context-code-stale") == 0 && !context_held) {
@@ -392,9 +400,16 @@ int main(int argc, char *argv[])
                     fputs(",line_asm_insn=[", stdout);
                 }
                 for (unsigned i = 0; i < 140 && address + i < end; ++i) {
+                    if (mixed && strcmp(mode, "context-code-multifile") == 0 && i > 0 && i <= 4) {
+                        fputs("]},src_and_asm_line={line=", stdout);
+                        quoted(i == 2 ? "3" : "2"); fputs(",fullname=", stdout);
+                        quoted(i == 3 ? "/missing/mixed-source.c" : i == 4 ? getenv("TB_FAKE_SOURCE") : getenv("TB_FAKE_SOURCE2"));
+                        fputs(",line_asm_insn=[", stdout);
+                    }
                     unsigned long long base = strcmp(mode, "context-code-short") == 0 ? 0x122f : 0x1228;
                     unsigned long long offset = address + i >= base && address + i < 0x1328 ? address + i - base : 0;
-                    (void)printf("%s{address=\"0x%llx\",offset=\"%llu\",opcodes=\"90\",inst=\"mov %%eax,%%ebx\"}", i ? "," : "", address + i, offset);
+                    bool new_group = mixed && strcmp(mode, "context-code-multifile") == 0 && i > 0 && i <= 4;
+                    (void)printf("%s{address=\"0x%llx\",offset=\"%llu\",opcodes=\"90\",inst=\"mov %%eax,%%ebx\"}", i && !new_group ? "," : "", address + i, offset);
                 }
                 if (mixed) { fputs("]}", stdout); }
                 puts("]");

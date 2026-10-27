@@ -386,7 +386,7 @@ reject covered controls. Keyboard navigation skips covered controls and bodies;
 numbered/cycle navigation restores minimized groups. Dock controls stay reachable
 even when a group is covered. Inspector visibility uses exposed body geometry,
 so a wholly covered inspector cannot request values merely because its root is
-open. Each group has a separate resize grip above its tabs; `v` immediately left
+open. Each group has a separate resize grip above its tabs; `_` immediately left
 of `...` minimizes it. Focus returns to its corresponding primary group when
 tiled, or the retained underlying primary pane in compact mode; an exposed
 remaining overlay receives focus when that primary is covered. Source fullscreen hides
@@ -683,8 +683,8 @@ ambiguous read relative to the frontend's working directory.
 
 `-data-disassemble` requests 256-byte address windows, retaining at most 128
 instructions with opcodes and optional source groups (`-- 2` / `-- 5`). Forward
-navigation uses the last decoded instruction's byte length, with 16 previous
-window anchors retained for Back; it never guesses a backward instruction boundary.
+navigation uses the last decoded instruction's byte length, with retained
+windows in the shared bounded cache for Back; it never guesses a backward instruction boundary.
 Stopped refreshes retain the current window if it contains PC, and can restore
 previously decoded ranges after returning from another function. A new window
 may use the structured first instruction's function offset for one bounded
@@ -692,15 +692,17 @@ pre-context read (at most 1024 preceding bytes plus the normal 256-byte forward
 range). The metadata-free compatibility path retains four preceding instructions;
 the native indexed path retains up to 64 preceding instructions and the bounded
 forward listing. Missing/too-distant metadata falls back to the known PC boundary.
-All bytes are fetched fresh after stops; saved anchors are browsing context,
-not trace or retained historical target state. Scrolling beyond a window edge
+Following views fetch fresh bytes after stops; manual listings stay historical
+without implicit reads. Saved history is not proof of current code boundaries.
+Scrolling beyond a window edge
 can load a known earlier/next window without resuming execution.
 Without an earlier saved anchor, a known nearby function origin can supply a
 bounded backward decode ending at the current window, retaining at most 128
 preceding instructions. Unavailable or distant origins require explicit address/
 symbol navigation; the frontend does not disassemble backwards from arbitrary bytes.
 A short backward-prefix read prepends its rows to a bounded owned copy of the
-current forward listing instead of replacing that listing. At most 128 combined
+current forward listing instead of replacing that listing. Expansion retains
+up to half the previous window at its edge. At most 128 combined
 instructions remain; pending copies are released on completion, cancellation,
 view-navigation changes, reset and destruction. The TUI preserves the old first
 row's position, adjusted by the requested upward scroll, when it appears in the
@@ -715,7 +717,35 @@ Address navigation accepts hexadecimal addresses or simple identifiers/qualified
 symbols, excluding calls/operators/command fragments. Symbol addresses use
 `-data-evaluate-expression --language c` and a quoted symbol's address, avoiding
 C++ overloaded address-of calls. Browsing never issues execution/PC-write commands.
-Return to Stopped selects the original stopped thread/frame zero. Source lookup
+Source's Return to Stopped selects the original stopped thread/frame zero.
+Disassembly has separate view-local stopped-PC and selected-frame following;
+neither action changes the context model. Manual Disassembly windows survive
+context transitions without reads, retaining their sampling generation and code
+invalidation epoch. Execution/image/memory-change invalidation prevents historical
+rows from becoming fresh decoding evidence. The shared `browse` LRU pool accounts
+for its object, entry headers and retained payload allocations under 4 MiB,
+evicting before allocation so the transient peak obeys the same budget. Cached
+navigation has no debugger callback or request side effect. Mixed-source
+annotations share this budget. The model loads at most one bounded local file
+per view per pump; rendering only looks up cached text. File/line attribution,
+blank lines and brace-only lines are retained; missing or evicted text is
+explicitly unavailable. Empty or malformed disassembly replies leave the prior
+listing and its provenance intact.
+
+Memory's bounded per-view consent model holds up to sixteen draft/authorized
+ordinary or explicit-width MMIO ranges. Edits revoke authorization; resume and
+context changes expire it. Conflicting policies/widths cannot broaden a grant.
+Managing consent never schedules reads. Ordinary navigation composes adjacent
+proofs and clips reads at boundaries. Declared MMIO blocks the generic byte path;
+the range-management UI supports paged review, edits and explicit revocation.
+Backend confirmation is metadata-only and binds the target, physical device,
+server configuration, ST-LINK firmware and validated widths to the connection.
+Changing any binding invalidates confirmation and MMIO consent. It represents a
+user assertion, never automatic verification. The session/UI wiring and real
+explicit-width read adapter remain Task 1.3 work. Actual protocol and width-path
+probes provide evidence for the recorded setup, not arbitrary OpenOCD servers.
+
+Source lookup
 settings use MI source directories and ordered GDB substitute-path rules, with
 separate GDB-CLI and MI encoding; only successful replies update saved-in-session
 settings. Clear resets both overrides. Profile persistence is described below.

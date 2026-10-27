@@ -1629,3 +1629,37 @@ checks do not establish RGB forwarding through an unconfigured outer terminal.
    drag the horizontal scrollbar and open Save Log; the gap must stay empty and
    controls/caret must follow their displayed positions. Small panes collapse
    the gap. Repeat through tmux.
+
+## OpenOCD MMIO protocol gate (Task 1.3)
+
+The opt-in text-only probe uses The Bugger's actual GDB/MI controller:
+
+```sh
+make BUILD_DIR=build/mmio-protocol build/mmio-protocol/test-monitor-hardware
+build/mmio-protocol/test-monitor-hardware arm-none-eabi-gdb 127.0.0.1:3333
+```
+
+Start the reviewed OpenOCD setup separately before running it. Connecting may
+halt firmware; disconnect disposition depends on server configuration. The probe
+formats constants, checks target association, injects framing errors and an
+expected Tcl error, and delays one response to exercise exact late-token
+reconciliation. It sends no peripheral read, write, flash, reset or resume.
+It is never executed by `test-ci`. Success proves transport behavior on that
+setup, not supported hardware access widths.
+
+The captured `tests/fixtures/mi/openocd-monitor.mi` and `openocd-widths.mi` are
+actual observations, replayed by `test-monitor`. Replay validates parser behavior;
+it does not repeat physical validation. The width capture came from three
+separately authorized GPIOA_ODR reads at 0x40020014, count one, widths 8/16/32,
+on STM32F446 with ST-LINK V2J48M35 and the recorded OpenOCD configuration.
+RM0390 sections 7.4/7.4.6 were reviewed before those reads. Debug logs show
+explicit adapter widths 1/2/4 bytes and count one, without frontend fallback.
+This is neither an independent bus trace nor proof of exactly-once physical
+access. Other firmware/driver paths need their own validation; do not infer
+access widths from displayed grouping or a successful generic byte read.
+
+Product-level validation must additionally exercise user-confirmed target,
+server-configuration, firmware and width bindings; expiration and revocation;
+zero reads during navigation/management; one explicit frontend read; malformed,
+failed, timed-out and late responses without automatic retry; and independent
+Memory views. These remain separate from the transport gate and parser replay.

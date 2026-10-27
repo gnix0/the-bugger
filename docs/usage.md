@@ -264,16 +264,23 @@ the active file's bounded local text is loaded. Opening a file does not run the
 target or change the selected frame.
 Disassembly offers hexadecimal address/simple-symbol navigation and **Mixed**
 source/assembly, with an assembly fallback when source is unavailable. x86-64
-assembly uses AT&T syntax. **Stopped** returns to the original stopped thread
-and frame. Wheel/scrollbars and arrow/Page keys move viewports; Left/Right pans
+assembly uses AT&T syntax. Source's **Stopped** returns to the original stopped
+thread and frame. Disassembly's **Actions → Return to Stop (this view)** instead
+moves only that viewport to the stopped PC, leaving selected thread/frame and
+other inspectors unchanged. **Follow selected frame (this view)** is separate.
+Wheel/scrollbars and arrow/Page keys move viewports; Left/Right pans
 long code lines. Disassembly's `<` / `>` footer controls page instruction windows.
 Assembly retains surrounding instructions across stops; scrolling at a window
 edge can load earlier/next code without moving execution. ELF metadata and GDB
 provide trusted decoding anchors and preceding context where available.
 Stepping leaves the viewport still until PC reaches a five-row
 top or bottom margin (smaller in short panes and limited by available context).
-Manual browsing stays put until stepping
-or **Stopped**. Reads/history are bounded; missing metadata is never replaced by
+Manual Disassembly browsing stays put across stepping and frame changes, with
+historical samples labeled. Cached windows can be browsed while running; an
+uncached request leaves the viewport unchanged and is never queued for later.
+Disassembly and Memory share a lazily populated 4 MiB history cache, including
+entry metadata. Eviction does not move a viewport or authorize reads.
+Reads/history are bounded; missing metadata is never replaced by
 guessed x86 instruction boundaries. Browsing skips known data/section gaps and
 labels the bytes not decoded. **Actions → Decode bytes** explicitly inspects raw
 data; repeated instructions are not hidden merely because they look unusual.
@@ -296,7 +303,8 @@ resolve source identities; the frontend does not guess duplicate basenames or
 unresolved relative paths. Save applied settings through the source/profile
 action to reuse them in a named profile; unsaved changes remain session-only.
 Code browsing is bounded to 256 catalog files, 1 MiB / 32,768 source lines per
-pane and a 128-instruction cache with bounded, normally 256-byte fetches.
+pane and a 128-instruction active window with bounded, normally 256-byte fetches;
+older loaded windows share the 4 MiB browsing cache.
 Backward scans from known anchors have a work limit and retain the prior listing
 on failure. Mixed groups outside the cached
 file show their location with unavailable text rather than loading every file.
@@ -451,7 +459,7 @@ Keys `1`–`9` focus retained pane IDs; `[`/`]` cycles panes. There are no layou
 presets, layout selector, floating windows or full Vim editor emulation.
 
 The Memory/Stack, Locals/Watches and Console/Breakpoints groups start minimized.
-Click a dock title or `^` to restore a group over the primary views; click `v`
+Click a dock title or `^` to restore a group over the primary views; click `_`
 immediately left of `...` to minimize it. Drag its top edge to adjust its height
 independently. Multiple groups can stay open. Where they overlap, the most
 recently focused group is on top; click an exposed part or its dock title to

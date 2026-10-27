@@ -185,7 +185,8 @@ static void instruction_margin(TestTerminal *term)
         if (strncmp(top, term->cells[tab_y + 2] + tab_x, strlen(top)) == 0) { ++stable; }
     }
     CHECK(stable >= 3);
-    /* Browse until PC is near the top, then resume following by stepping. */
+    /* Browse until PC is near the top. Browsing an extended window now remains
+     * manual across stops; explicitly restore following before testing margins. */
     unsigned long long pc = assembly_pc(term);
     int pc_row = -1;
     for (int row = tab_y + 2; row < footer; ++row) {
@@ -201,6 +202,8 @@ static void instruction_margin(TestTerminal *term)
         }
     }
     CHECK(pc_row >= tab_y + 2 && pc_row <= tab_y + 5);
+    actions(term, false); test_terminal_click(term, "Follow selected frame (this view)");
+    test_terminal_expect(term, "This Disassembly view follows the selected frame");
     test_terminal_send(term, "\033[21~"); /* instruction Next, without entering a callee */
     long long until = now() + 5000;
     while ((!assembly_pc(term) || assembly_pc(term) == pc) && now() < until) { test_terminal_pump(term, 50); }
@@ -253,7 +256,7 @@ static void direct_start(const char *binary, const char *fixture)
     test_terminal_lower(&term, 2, true);
     test_terminal_click(&term, "Command"); test_terminal_expect(&term, "LIVE | GDB / program log"); input(&term, "start");
     test_terminal_expect(&term, "LIVE | C/C++ | code.c");
-    test_terminal_expect(&term, "LIVE | assembly | code.c");
+    test_terminal_expect(&term, "LIVE | assembly: selected frame | code.c");
     CHECK(source_pc_line(&term) > 0 && assembly_pc(&term) != 0);
     scrolling(&term);
     instruction_margin(&term);
@@ -271,7 +274,7 @@ static void wheel_up_listing(const char *binary, const char *fixture)
     test_terminal_expect(&term, "LIVE | Loaded");
     test_terminal_lower(&term, 2, true);
     test_terminal_click(&term, "Command"); test_terminal_expect(&term, "LIVE | GDB / program log"); input(&term, "start");
-    test_terminal_expect(&term, "LIVE | assembly | session.c");
+    test_terminal_expect(&term, "LIVE | assembly: selected frame | session.c");
     unsigned long long pc = assembly_pc(&term); CHECK(pc);
     test_terminal_click(&term, "Disassembly");
     int x, y; CHECK(test_terminal_find(&term, "Disassembly", &x, &y));
@@ -379,7 +382,7 @@ int main(int argc, char *argv[])
     actions(&term, false); test_terminal_click(&term, "Go to address / symbol"); input(&term, "code_callee");
     test_terminal_expect(&term, "Instruction window loaded");
     actions(&term, false); test_terminal_click(&term, "Toggle mixed source/assembly");
-    test_terminal_expect(&term, "mixed | code.c");
+    test_terminal_expect(&term, "mixed: browsing | code.c");
     actions(&term, true); test_terminal_click(&term, "Source lookup settings");
     test_terminal_expect(&term, "Directories: newest first"); test_terminal_click(&term, "Add directory"); input(&term, "/tmp");
     test_terminal_expect(&term, "GDB source settings applied");
