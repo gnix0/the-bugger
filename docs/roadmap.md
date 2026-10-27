@@ -14,7 +14,7 @@ not revisions to the accepted M00–M18 evidence or claims of completed features
 | 0 | Initialize the execution record and general documentation | Initialized with Task 1.1; view-specific consolidation remains Task 1.3 |
 | 1.1 | Investigate and correct rendering corruption and the Disassembly navigation trap, preserving current access policy | Local fix committed and host baseline/stress passed; owner hardware/visual review deferred |
 | 1.2 | Initially minimized lower panes with independently resizable overlays | Implemented; fresh fortified host baseline, analysis and bounded stress pass; owner visual review deferred |
-| 1.3 | Implement approved Disassembly/Memory browsing and explicit MMIO access | Browsing/consent foundation passes local host checks; actual protocol and recorded width-path probes passed. Production MMIO, mapping trust, remaining reconstruction and owner review still pending |
+| 1.3 | Implement approved Disassembly/Memory browsing and explicit MMIO access | Browsing foundation and production MMIO/consent UI pass local host checks; production transport widths validated on the recorded STM32 setup. Mapping trust, remaining reconstruction and owner review still pending |
 | 1.4 | Investigate runtime font/scale feasibility and implement the owner-approved approach | Approach unresolved; terminal font changes are not portable application scaling |
 | 1.5 | Release preparation | Blocked by implementation, validation and owner acceptance; no release before both browsing views are accepted |
 

@@ -397,8 +397,10 @@ factual technical references, provenance, licenses and historical evidence.
 - MMIO scrolling is navigation through addresses/cached samples, never a hardware
   read. Declare bounds, access width and known side effects; explicitly disclose
   unknown effects. Consent accepts those risks and is not proof of safe access.
-- Read Register samples one aligned register at the authorized supported width.
-  Refresh selected register explicitly repeats that read while consent is valid.
+- Read unit samples one aligned access-width-sized unit at the authorized
+  supported width. Without metadata, alignment does not identify a hardware
+  register. Refresh selected sample explicitly repeats that read while consent
+  is valid.
   No whole-viewport refresh, polling, speculative access, automatic frontend retry or read
   caused by focus, navigation, stepping or stopping. Access outside the approved
   range/width requires separate consent; conflicts never broaden permission.
@@ -413,6 +415,12 @@ factual technical references, provenance, licenses and historical evidence.
   user-confirmed, never automatically verified; invalidate on relevant
   connection/configuration changes and require renewed confirmation. Confirmation
   itself must not read hardware.
+  Every accepted Console command invalidates setup confirmation and revokes all
+  MMIO range authorizations before transmission, including aliases/scripts.
+  Retain range definitions for review; they cannot bypass missing setup
+  confirmation. Rejected commands do not cause this invalidation. Ordinary
+  stepping/navigation preserve setup confirmation while the independent
+  range-consent expiration rules still apply.
   Actual bounded, request-identified monitor framing must pass its feasibility
   gate before MMIO read implementation. Parser/simulated success alone is not
   enough. An alternative transport requires approval if that gate cannot pass.

@@ -108,6 +108,9 @@ fields, `q` closes/backs out; `Ctrl+Q` quits, confirming active-session closure.
 Restore Memory from its dock to use the inline address/expression field;
 variable values require deliberate
 reads when automatic access safety cannot be established.
+Declared MMIO units support navigation without reads and explicit-width sampling
+on the documented validated OpenOCD setup, with separate user-confirmed backend
+bindings and per-view range consent. See [Memory inspection](docs/usage.md#memory-inspection).
 
 `./build/the-bugger --demo` opens the explicitly simulated visual reference.
 It does not connect to hardware. In tmux, mouse support requires the opt-in
@@ -136,8 +139,8 @@ Prepared artifacts do not establish release acceptance or publication.
 
 The [current development sequence](docs/roadmap.md#current-development-sequence)
 starts with rendering stability, then lower-pane organization and approved
-Disassembly/Memory browsing improvements. These are planned work, not current
-capabilities. Both browsing views require implementation, verification and owner
+Disassembly/Memory browsing improvements. This unreleased work is still in
+progress. Both browsing views require complete implementation, verification and owner
 acceptance before the next release.
 
 The roadmap retains all M00–M18/F01–F47 gates. Post-release priorities progress
