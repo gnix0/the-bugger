@@ -6,16 +6,17 @@ implemented features or hardware support claims. See [architecture](architecture
 
 ## Current development sequence
 
-The owner has approved the following v0.1.3 sequence. These are new work items,
-not revisions to the accepted M00–M18 evidence or claims of completed features.
+The owner has approved the following v0.1.3 sequence. These extend the accepted
+M00–M18 baseline; the table distinguishes implemented, accepted work from release
+publication.
 
 | Task | Scope | Current state |
 |---|---|---|
-| 0 | Initialize the execution record and general documentation | Initialized with Task 1.1; view-specific consolidation remains Task 1.3 |
-| 1.1 | Investigate and correct rendering corruption and the Disassembly navigation trap, preserving current access policy | Local fix committed and host baseline/stress passed; owner hardware/visual review deferred |
-| 1.2 | Initially minimized lower panes with independently resizable overlays | Implemented; fresh fortified host baseline, analysis and bounded stress pass; owner visual review deferred |
-| 1.3 | Implement approved Disassembly/Memory browsing and explicit MMIO access | Implemented and host-verified; recorded STM32 MMIO transport widths pass; owner hardware/visual acceptance pending |
-| 1.5 | Release preparation | Blocked by implementation, validation and owner acceptance; no release before both browsing views are accepted |
+| 0 | Initialize the execution record and consolidate documentation | Complete, including the Task 1.3 ASM_MEM consolidation |
+| 1.1 | Correct rendering corruption and failed Disassembly navigation | Implemented, host/stress verified and owner accepted |
+| 1.2 | Initially minimized lower panes with independently resizable overlays | Implemented, host/stress verified and owner accepted |
+| 1.3 | Disassembly/Memory browsing and explicit MMIO access | Implemented, host verified and owner accepted; named physical evidence remains scoped |
+| 1.5 | Prepare v0.1.3 | Local validation/documentation/artifacts complete; owner publication through protected branches pending |
 
 The approved public scope is in the
 [browsing requirements](requirements.md#approved-v013-browsing-work).
@@ -23,8 +24,8 @@ The canonical owner execution record is `~/TODO.md`; the former `~/ASM_MEM.md`
 was consolidated into that record and maintained requirements during Task 1.3,
 with the documentation audit completed before its code changes. Temporary
 permissions are scoped per Memory view, never inferred from a successful read,
-and never authorize background MMIO reads. These browsing behaviors remain work
-in progress, not functionality available merely because the design is approved.
+and never authorize background MMIO reads. These browsing behaviors are
+implemented; current controls and limits are documented in [usage](usage.md). Release preparation does not establish publication.
 
 Later owner-planned milestones are v0.1.4 physical ESP RISC-V validation, an
 approved shortlist of remaining roadmap work, real-world use, documentation and
@@ -186,7 +187,7 @@ No additional feature family or milestone renumbering is introduced.
 
 ## Release validation
 
-Except for the explicit [v0.1.0 RISC-V deferral](requirements.md#release-acceptance),
+Except for the explicit [version-specific RISC-V deferrals](requirements.md#release-acceptance),
 every release, including patches, requires native Linux x86-64 and real STM32/ARM,
 ESP32/Xtensa and ESP32/RISC-V regression. QEMU ARM/RISC-V is supplementary, not
 a board substitute or a simulator feature. Capabilities are claimed only for

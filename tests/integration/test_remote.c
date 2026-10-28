@@ -154,6 +154,8 @@ static void run(const char *peer, const char *mode)
 int main(int argc, char **argv)
 {
     CHECK(argc == 2);
+    TbSession *idle = tb_session_create(); CHECK(idle);
+    CHECK(tb_session_destroy(idle)); /* MMIO releases its lease before its controller dies. */
     CHECK(tb_session_endpoint("localhost:3333") && tb_session_endpoint("[::1]:65535"));
     const char *bad[] = {"|touch /tmp/no", "/dev/ttyUSB0", "localhost", "-x:1", "h:0", "h:65536", "h:1\n-gdb-exit", "h:22;true", "h:2 3"};
     for (size_t i = 0; i < sizeof bad / sizeof bad[0]; ++i) { CHECK(!tb_session_endpoint(bad[i])); }

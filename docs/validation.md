@@ -9,6 +9,10 @@ instructions are required to interpret the results.
 
 ## Current evidence boundary
 
+The [v0.1.3 release-preparation record](#v013-release-preparation) is the current
+release snapshot. Entries below are chronological evidence: their original
+pending states and failures are retained rather than rewritten as fresh results.
+
 M00–M18 and the listed corrections form the first-release baseline. The maintainer
 reported v0.1.0 published on 2026-10-20. Historical preparation entries below retain
 their original pending states and test boundaries; publication does not supply
@@ -2054,10 +2058,10 @@ patch are retained in `tracked-tree.sha256` and `final-tree.patch`.
 
 ## v0.1.3 Task 1.1 — rendering and failed code requests
 
-Status: **automated-verified; awaiting owner physical/visual review**. The owner authorized planned 1.x work,
-local Conventional Commits and continuation while owner review is deferred.
-That authorization is not physical acceptance, hosted-CI evidence or permission
-to publish. Work is on the local `feature/v0.1.3` branch.
+Status: **accepted** through the owner's subsequent manual-check report and
+v0.1.3 release-preparation instruction. The original implementation authorization
+allowed local commits and continuation with review deferred; it did not itself
+establish physical acceptance, hosted-CI evidence or publication. Work is on the local `feature/v0.1.3` branch.
 
 The shared text renderer previously passed a byte count directly to ncurses.
 An authored curses-cell regression demonstrated that tab/control expansion
@@ -2255,12 +2259,13 @@ patch are retained in `tracked-tree.sha256` and `final-tree.patch`.
 
 ## v0.1.3 Task 1.2 — lower dock and independent overlays
 
-State: automated-verified; **awaiting owner visual review**.
-The owner explicitly authorized local commits and continued planned 1.x work
-while review is deferred. This does not establish acceptance or authorize release.
+State: **accepted** through the owner's subsequent manual-check report and
+v0.1.3 release-preparation instruction. Initial local commit/continuation
+permission alone did not establish acceptance or publication.
 
 The three lower root groups start minimized directly above the footer. Titles
-and `^` restore them, `v` minimizes them, and separate top grips resize their
+and `^` restore them, `_` minimizes them (the owner's later correction to the
+original `v` indicator), and separate top grips resize their
 session-only heights. Primary rectangles and split trees remain intact. Compact
 or oversized lower split groups span the workspace; most recent focus controls
 stacking. Pointer/divider hit tests and keyboard navigation use exposed geometry.
@@ -2498,9 +2503,12 @@ remain. No release or complete interactive hardware acceptance is claimed.
 
 ## Task 1.3 ELF trust and bounded reconstruction
 
-State: **automated-verified; awaiting-user**. Owner authorized implementation, local commits and continued
-1.x work, with manual review deferred. This record does not grant release
-permission or establish owner acceptance.
+State: **accepted**. Owner subsequently reported that the manual tests performed
+passed and resumed ownership. Exact additional device/setup coverage was not
+specified; this does not expand the recorded physical matrix. Current follow-up
+changes are to remain uncommitted at the owner's request. Owner previously
+authorized implementation, local commits and continued1.x work with review deferred. This record does not grant release
+permission.
 
 The implementation adds metadata-only remote configured-ELF/additive-load-bias
 review with full escaped paths and paged allocated-section addresses. It
@@ -2577,6 +2585,164 @@ nonuniform relocation or general F33 multi-image controls. No SVD register
 identity, Read Span, writes, polling or unvalidated MMIO backend was introduced.
 The previously recorded production physical MMIO transport/width evidence remains
 specific to that STM32F446/ST-LINK/OpenOCD setup. This phase adds no new physical
-claim. Owner hardware/visual workflow and release acceptance remain outstanding.
+claim. Owner reports manual workflow checks passed; release acceptance remains
+outstanding, including any required matrix evidence not explicitly reported.
 Review procedures are in [ELF trust and reconstruction](testing.md#elf-mapping-trust-and-bounded-reconstruction)
 and [MMIO](testing.md#openocd-mmio-protocol-gate-task-13).
+
+## v0.1.3 release preparation
+
+Date: 2026-10-28. The owner accepted the implemented Tasks 1.1–1.3 and
+reported STM32 manual checks passing, then authorized S3 physical validation,
+all-document review, artifact preparation and the finishing local commit.
+Publication remains owner-controlled; this record does not claim a published
+release. Tasks 2.x require new owner authorization. The canceled runtime-font
+work is excluded. Physical ESP/RISC-V validation is explicitly deferred to
+v0.1.4, remains UNVERIFIED and confers no hardware support claim.
+
+Implementation references, preserving their existing history:
+
+- `726cd7128340b99615598e7ee4b0b3abeb5bb383`: contextual menus/footer rendering.
+- `3defec4892a4472969938ee6c07bf9d44bfc236b`: contained output/retained listings.
+- `00586ed8e59a7df3df738775d25c08f16c1cd500`: independent lower overlays.
+- `0242eac30486952cdb34695e25b75f6c28812741`: browsing requirements consolidation.
+- `38b6cfe8d4f05349dd6438fd370db2470af8e991`: bounded browsing history.
+- `7d7b0e2da8e0ecb52ada089858ecc23b2ecc8ded`: explicit MMIO sampling.
+- `3c1cc8b69d74010d4d75864e00201b636fc970a3`: image mappings and bounded reconstruction.
+
+The release-preparation changes also fix a real session-destruction use-after-free:
+Memory releases its MMIO controller reservation before the controller is freed,
+after verifying that the session/controller is inactive, reaped and drained.
+An idle-session teardown regression and actual remote/MMIO-close tests cover this
+lifecycle. A fixed-size variable baseline copy now uses `memcpy`, avoiding GCC's
+fortified sanitizer `snprintf` restrict diagnostic without disabling warnings.
+
+### Final host verification
+
+Evidence directory: `build/v0.1.3-evidence/` (ignored local artifacts, not files
+shipped in the source archive). Host: Arch Linux x86-64, kernel7.2.11,
+glibc2.44, GCC16.2.1, GDB18.1, tmux3.8, clang-tidy23.1.3.
+
+- PASS, exit0: `TERM=xterm-256color make BUILD_DIR=build/v0.1.3-ci-final
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`, full fresh baseline including native,
+  input, terminal restoration, tmux/color, remote and offline OpenOCD checks.
+  Full log: `test-ci-final.log`. This is local host evidence, not hosted Ubuntu CI.
+- PASS, exit0: `make BUILD_DIR=build/v0.1.3-analysis-final analyze`, log
+  `analysis-final.log`; no project diagnostic failure. System-header and existing
+  explicitly annotated suppressions retain the normal configured policy.
+- PASS: all73 C test sources compiled fortified, `test-compilation-final.log`.
+  The subsequent physical Continue/Pause assertion was separately recompiled in
+  `test-compilation-followup.log` and physically executed in normal/sanitizer runs;
+  it does not change any code executed by the already-passing host baseline.
+- PASS: fresh-peer host remote/MMIO-close suite under ASan/UBSan/leak checking,
+  `remote-lifecycle-asan-final.log`.
+
+The frozen runtime/build/test-input manifest is `test-inputs.sha256`; the
+physical-harness follow-up and documentation-only MI-fixture README update
+are the only manifest differences; no executed host-test or runtime input changed.
+`environment.log`,
+`implementation-references.log` and `implementation.patch` retain environment,
+base revisions and implementation evidence. The final tree and artifact records
+are retained separately with the release handoff. Earlier failures are preserved:
+`s3-asan-build.log` contains the compiler diagnostic; `s3-board-asan.log` exposed
+the real lifetime defect. `remote-lifecycle-asan.log` used a stale Oct24 fake peer
+missing the newer MMIO protocol; the fresh-peer rerun passes without weakening
+application assertions.
+
+### Physical release matrix
+
+| Target | Evidence and boundary |
+|---|---|
+| STM32 / ARM | PASS, owner-reported manual checks for this release. Prior actual production STM32F446/ST-LINK/OpenOCD MMIO framing/8/16/32-bit evidence remains scoped to the recorded setup above; no new scripted STM32 run is claimed here. |
+| ESP32-S3 / Xtensa | PASS, agent-run physical backend, direct PTY and isolated tmux, plus ASan/UBSan/leak backend and tmux runs described below. |
+| ESP / RISC-V | UNVERIFIED; explicit owner deferral to v0.1.4. |
+| QEMU | Not run in this release pass; supplementary, not hardware evidence. |
+
+S3 setup: ESP32-S3(QFN56) revision0.2, dual Xtensa LX7, native USB/JTAG
+serial84:FC:E6:64:27:EC, ESP-IDF6.1, Xtensa GDB17.1_20260402 and Espressif
+OpenOCDv0.12.0-esp32-20260703 with the authored `openocd/esp32s3.cfg`
+hardware-thread configuration. The initial flashed image differed from the
+acceptance fixture. Under the owner's authorized build/flash/test procedure,
+flashed only that identified USB device; standard bootloader/partition/application
+hash verification passed. Fresh GDB comparisons of `.flash.text` and
+`.flash.rodata` matched (`s3-image-identity-final.log`). No eFuse/security change.
+The board now contains the acceptance fixture rather than its preceding firmware.
+
+The fixture ELF SHA-256 is
+`dd42dab971b4f5ecad0395b1b3e6e01f0abf6a56ec4e293a0f0ee0fd9a41602f`.
+`s3-firmware.sha256` also records the exact application/bootloader/partition
+binary identities. Build/flash logs: `s3-flash.log` and the S3 build logs.
+
+Normal backend command (after activating the ESP-IDF environment):
+
+```sh
+TB_BOARD_LOG="$PWD/build/v0.1.3-evidence/s3-continue-pause-session.log" \
+  timeout 180s build/test-board xtensa-esp32s3-elf-gdb 127.0.0.1:3333 \
+  "$PWD/build/v0.1.3-s3/the_bugger_m17.elf" xtensa --reset-halt
+```
+
+PASS logs: `s3-board-final.log`, `s3-tui-final.log`, `s3-tmux-final.log`,
+`s3-board-asan-final.log`, `s3-tmux-asan-final.log`, and final explicit
+Continue/Pause runs `s3-continue-pause.log` / `s3-continue-pause-asan.log`.
+The sanitizer build uses `-O1 -g -fsanitize=address,undefined
+-fno-omit-frame-pointer`, matching sanitizer linker flags, FORTIFY3,
+`ASAN_OPTIONS=detect_leaks=1` and `UBSAN_OPTIONS=halt_on_error=1`.
+
+Actual checks covered source/disassembly, stopped-PC/register agreement,
+independent known SRAM/Flash reads, explicit locals/aggregate inspection,
+caller selection, source/instruction stepping and Step Out, hardware code/data
+breakpoints, explicit Continue/Pause, reset and both disconnect choices.
+Resume advanced the fixture counter; leave-halted retained it. TUI checks
+covered actual connection review, checkpoint/step, Memory, Reset cancellation,
+resize and terminal cleanup directly and in tmux. A reset into ROM without
+source is legitimate unknown context, not fabricated application source.
+These runs do not assert every manual profile/unplug scenario or arbitrary S3
+MMIO support. The STM32-specific MMIO width adapter remains gated to its validated
+setup; no S3 MMIO capability is inferred from successful SRAM reads.
+
+Only agent-owned OpenOCD instances were stopped. SIGINT was ignored by the first
+plain child, which remained during successful flashing; SIGTERM stopped it.
+Fresh owned instances served the final tests and were stopped with SIGTERM.
+The board was left halted under the tested disconnect policy, with no debugger
+or server intentionally left running.
+
+### Documentation and distribution handoff
+
+All tracked Markdown documentation was reviewed for current behavior, version,
+status, links, release boundaries and third-party notices. Current guides now
+cover v0.1.3; dated validation snapshots remain historical evidence. The owner's
+updated workspace screenshot is retained; the obsolete v0.1.0 launcher image
+is no longer presented as the current README interface. Theme provenance,
+GPLv3 and `THIRD_PARTY_NOTICES` remain intact.
+
+Distribution verification and exact final checksum evidence accompany
+`build/v0.1.3-evidence/`; the release assets are:
+
+- `the-bugger-v0.1.3-linux-x86_64.tar.gz`
+- `the-bugger-v0.1.3-source.tar.gz`
+- `SHA256SUMS`
+
+These are separate uploads, in addition to GitHub's two automatic source
+snapshots. The latter do not contain the packaged host executable. Final
+publication and hosted PR checks remain owner actions. Locally prepared files
+are not evidence of a published release. The owner's push/PR into `develop`,
+then GitHub `develop` → `main` release PR, required checks/review, squash merge
+and tag/release on the resulting `main` commit remain the release sequence.
+
+Final artifact checks PASS: `make release` produced the three versioned assets
+under `build/dist/v0.1.3/`. The extracted executable passed existing CLI, direct
+PTY/terminal-restoration, workspace and real tmux suites outside the checkout
+(`artifact-cli.log`, `artifact-tui.log`, `artifact-workspace.log`,
+`artifact-tmux.log`). Extracted corresponding source built independently with
+FORTIFY3 and reported the matching `the-bugger 0.1.3`
+(`artifact-source-build.log`). Architecture x86-64, PIE, non-executable stack,
+RELRO/BIND_NOW, resolved runtime libraries, matching GPL/third-party notices,
+tracked source completeness and the BUILD-INFO corresponding-source checksum
+passed (`artifact-structure.log`). Invalid/missing executable inputs failed
+without producing archives (`artifact-rejections.log`). The executable requires
+GLIBC symbols through2.38; dependency libraries can impose additional requirements.
+No older-distribution compatibility is asserted. Final archives were repackaged
+after recording these results; checksum and exact-source checks were repeated.
+Archive hashes are in the delivered `SHA256SUMS`, avoiding a self-referential
+checksum inside the source archive itself. All15 tracked Markdown files passed
+183 local-link /119 heading-anchor checks (`documentation-check.log`).

@@ -115,7 +115,7 @@ For every release, including patches:
    unsafe defaults, terminal corruption, leaks and unusable interaction paths.
 2. Collect actual [release-matrix evidence](testing.md#every-release-regression-matrix)
    for native x86-64, real STM32/ARM, ESP32/Xtensa and ESP32/RISC-V, applying
-   the explicit [v0.1.0 RISC-V deferral](requirements.md#release-acceptance). QEMU ARM/RISC-V
+   the explicit [version-specific RISC-V deferrals](requirements.md#release-acceptance). QEMU ARM/RISC-V
    adds coverage where available and never replaces boards. UNVERIFIED is not PASS.
 3. Record board/probe, firmware, GDB/server/toolchain versions, capability-specific
    exclusions, new-feature regression, reset/disconnect and cleanup behavior.

@@ -344,10 +344,14 @@ static void close_fds(TbSession *native)
 bool tb_session_destroy(TbSession *native)
 {
     if (native == NULL) { return true; }
-    if (tb_session_active(native)) { return false; }
+    if (tb_session_active(native) || tb_gdb_pid(native->gdb) || tb_gdb_pending(native->gdb)) { return false; }
     if (!tb_openocd_destroy(native->server)) { return false; }
+    native->server = NULL;
+    /* Memory releases its MMIO reservation through the still-live controller.
+     * Disconnected, reaped and drained above means destroy cannot emit replies. */
+    tb_memory_destroy(native->memory); native->memory = NULL;
     if (!tb_gdb_destroy(native->gdb)) { return false; }
-    tb_variables_destroy(native->variables); tb_memory_destroy(native->memory); tb_registers_destroy(native->registers); tb_break_destroy(native->breakpoints); tb_code_destroy(native->code); tb_context_destroy(native->context); close_fds(native); free(native); return true;
+    tb_variables_destroy(native->variables); tb_registers_destroy(native->registers); tb_break_destroy(native->breakpoints); tb_code_destroy(native->code); tb_context_destroy(native->context); close_fds(native); free(native); return true;
 }
 
 static bool elf(const char *path, bool executable)
