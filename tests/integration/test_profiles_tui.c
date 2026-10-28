@@ -44,6 +44,28 @@ static void save(const char *name, bool replace)
     if (replace) { test_terminal_expect(&term, "Replace profile:"); click("[ Confirm ]"); }
     test_terminal_expect(&term, "Profile file saved atomically.");
 }
+static void recovery(const char *binary, const char *path)
+{
+    json_object *root = json_object_from_file(path); CHECK(root);
+    CHECK(json_object_object_add(root, "version", json_object_new_int(3)) == 0);
+    json_object *setups = json_object_new_array(); CHECK(setups);
+    CHECK(json_object_array_add(setups, json_object_new_object()) == 0);
+    CHECK(json_object_object_add(root, "setups", setups) == 0);
+    CHECK(json_object_to_file_ext(path, root, JSON_C_TO_STRING_PRETTY) == 0);
+    start(binary); click("[ Config ]"); click("Profiles"); test_terminal_expect(&term, "READ ONLY");
+    test_terminal_resize(&term, 18, 48); test_terminal_expect(&term, "READ ONLY");
+    test_terminal_resize(&term, 44, 160); settle();
+    click("remote definition"); click("Save profile"); input("remote definition"); click("[ Confirm ]");
+    test_terminal_expect(&term, "Profile writes blocked");
+    json_object *unchanged = json_object_from_file(path); CHECK(unchanged && json_object_equal(root, unchanged)); json_object_put(unchanged);
+    back(); back(); click("[ Config ]"); click("Profiles"); test_terminal_expect(&term, "READ ONLY");
+    CHECK(json_object_object_add(root, "setups", json_object_new_array()) == 0);
+    CHECK(json_object_to_file_ext(path, root, JSON_C_TO_STRING_PRETTY) == 0); json_object_put(root);
+    click("Reload file"); test_terminal_expect(&term, "Profile file reloaded.");
+    CHECK(!test_terminal_find(&term, "READ ONLY", NULL, NULL));
+    click("remote definition"); save("remote definition", true); stop();
+    puts("PASS F01 schema-3 read-only recovery, valid connection review, blocked save, 48-column indication and repaired reload");
+}
 int main(int argc, char **argv)
 {
     CHECK(argc == 3 || (argc == 4 && strcmp(argv[3], "--native") == 0)); CHECK(atexit(cleanup) == 0);
@@ -89,7 +111,7 @@ int main(int argc, char **argv)
     if (argc == 4) { CHECK(strcmp(tb_profiles_recent(store, 0), "native saved") == 0); }
     start(argv[1]); click("[ Config ]"); click("Profiles"); click("native saved"); click("[ Delete ]"); click("[ Confirm ]"); stop();
     CHECK(tb_profiles_load(store) && tb_profiles_count(store) == 2 && !tb_profiles_find(store, "native saved"));
-    const char *path = tb_profiles_path(store); CHECK(unlink(path) == 0);
+    const char *path = tb_profiles_path(store); recovery(argv[1], path); CHECK(unlink(path) == 0);
     char directory[512], lock[512]; (void)snprintf(directory, sizeof directory, "%s/the-bugger", root); (void)snprintf(lock, sizeof lock, "%s/the-bugger/.lock", root);
     CHECK(unlink(lock) == 0); CHECK(rmdir(directory) == 0); CHECK(rmdir(root) == 0); tb_profiles_destroy(store);
     puts("PASS M13 TUI profile create/reload/edit/delete confirmation, literal argv, source options, inert ordered OpenOCD/remote definitions");

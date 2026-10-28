@@ -691,7 +691,7 @@ a profile require confirmation. Launcher **Config → Profiles** loads a configu
 review; selection alone does not launch tools. Successful saved native sessions
 appear in recents. Source settings restore before execution; errors remain visible.
 
-Profiles write version-2 JSON at `$XDG_CONFIG_HOME/the-bugger/profiles.json`, or
+Connection-only stores write version-2 JSON at `$XDG_CONFIG_HOME/the-bugger/profiles.json`, or
 `$HOME/.config/the-bugger/profiles.json` when XDG configuration is absent/relative.
 Storage is bounded to 16 named profiles and 8 recent entries with private atomic
 writes. Corrupt files are preserved; repair/reload instead of silently overwriting
@@ -706,6 +706,13 @@ Profiles exclude keybinds and themes. Version-1 profiles remain readable; obsole
 `keys` fields are ignored and omitted on the next profile-store write, including
 recent-session updates. Newly written version-2 stores require an updated app;
 older versions that require version 1 cannot read them.
+Schema-3 stores can also be read. They contain separate saved setup definitions;
+workspace saving/restoration controls are not available yet. Older builds that
+accept only schema 1/2 cannot read schema 3, and there is no silent downgrade.
+A malformed setup record puts an otherwise valid schema-3 store into read-only
+recovery: usable connections remain available, but all writes, including recents,
+are blocked. **Config → Profiles** indicates read-only mode. Repair the file,
+then choose **Reload file**; successful recovery requires a fully valid store.
 See the [format](architecture.md#profiles-and-source-restoration) and
 [walkthrough](testing.md#profiles-and-source-settings).
 

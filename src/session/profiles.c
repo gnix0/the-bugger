@@ -18,6 +18,8 @@ struct TbProfiles {
     char directory[4000], path[4096], error[192];
     struct stat stamp;
     bool existed, blocked;
+    bool schema3;
+    json_object *setups[TB_PROFILES]; /* Immutable, owned records, indexed with items. */
 };
 static bool fail(TbProfiles *p, const char *text)
 { (void)snprintf(p->error, sizeof p->error, "%s", text); return false; }
@@ -88,7 +90,12 @@ TbProfiles *tb_profiles_create(void)
     } else { (void)snprintf(p->path, sizeof p->path, "%s/profiles.json", p->directory); }
     return p;
 }
-void tb_profiles_destroy(TbProfiles *p) { free(p); }
+void tb_profiles_destroy(TbProfiles *p)
+{
+    if (!p) { return; }
+    for (size_t i = 0; i < TB_PROFILES; ++i) { json_object_put(p->setups[i]); }
+    free(p);
+}
 size_t tb_profiles_count(const TbProfiles *p) { return p->count; }
 const TbProfile *tb_profiles_at(const TbProfiles *p, size_t i) { return i < p->count ? &p->items[i] : NULL; }
 const TbProfile *tb_profiles_find(const TbProfiles *p, const char *name)
@@ -100,6 +107,7 @@ const TbProfile *tb_profiles_find(const TbProfiles *p, const char *name)
 const char *tb_profiles_recent(const TbProfiles *p, size_t i) { return i < p->recent_count ? p->recent[i] : NULL; }
 const char *tb_profiles_error(const TbProfiles *p) { return p->error; }
 const char *tb_profiles_path(const TbProfiles *p) { return p->path; }
+bool tb_profiles_read_only(const TbProfiles *p) { return p->blocked; }
 
 /* A strict schema; obsolete v1 personal keys are explicitly ignored on read. */
 static json_object *member(json_object *object, const char *name, enum json_type type)
@@ -213,7 +221,10 @@ bool tb_profiles_load(TbProfiles *p)
 {
     if (!*p->path) { return false; }
     int fd = open(p->path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
-    if (fd < 0 && errno == ENOENT) { p->count = p->recent_count = 0; p->existed = p->blocked = false; p->error[0] = 0; return true; }
+    if (fd < 0 && errno == ENOENT) {
+        for (size_t i = 0; i < TB_PROFILES; ++i) { json_object_put(p->setups[i]); p->setups[i] = NULL; }
+        p->count = p->recent_count = 0; p->schema3 = false; p->existed = p->blocked = false; p->error[0] = 0; return true;
+    }
     struct stat info;
     if (fd < 0 || fstat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_uid != getuid() || info.st_size < 0 || info.st_size > FILE_LIMIT) {
         if (fd >= 0) { (void)close(fd); } p->blocked = true; return fail(p, "Cannot read owned regular profiles.json (maximum 1 MiB). File preserved.");
@@ -232,12 +243,16 @@ bool tb_profiles_load(TbProfiles *p)
     size_t end = tokener ? json_tokener_get_parse_end(tokener) : 0;
     for (size_t i = end; ok && i < used; ++i) { ok = isspace((unsigned char)buffer[i]) != 0; }
     if (tokener) { json_tokener_free(tokener); } free(buffer);
-    static const char *const names[] = {"version", "profiles", "recent"};
+    static const char *const names[] = {"version", "profiles", "recent", "setups"};
     json_object *version = ok ? member(root, "version", json_type_int) : NULL;
     json_object *items = ok ? member(root, "profiles", json_type_array) : NULL;
     json_object *recent = ok ? member(root, "recent", json_type_array) : NULL;
-    ok = ok && fields(root, names, 3) && version && (json_object_get_int64(version) == 1 || json_object_get_int64(version) == 2) && items && recent &&
+    int64_t schema = version ? json_object_get_int64(version) : 0;
+    json_object *setups = ok ? member(root, "setups", json_type_array) : NULL;
+    bool recovery = false;
+    ok = ok && fields(root, names, schema == 3 ? 4 : 3) && version && schema >= 1 && schema <= 3 && items && recent &&
          json_object_array_length(items) <= TB_PROFILES && json_object_array_length(recent) <= TB_PROFILE_RECENT;
+    if (ok && schema == 3 && !setups) { recovery = true; }
     TbProfiles *next = ok ? calloc(1, sizeof *next) : NULL; ok = ok && next;
     if (ok) {
         next->count = json_object_array_length(items); next->recent_count = json_object_array_length(recent);
@@ -255,9 +270,40 @@ bool tb_profiles_load(TbProfiles *p)
             if (ok) { (void)snprintf(next->recent[i], TB_PROFILE_NAME, "%s", name); }
         }
     }
+    if (ok && schema == 3 && setups) {
+        size_t count = json_object_array_length(setups);
+        if (count > TB_PROFILES) { recovery = true; }
+        bool seen[TB_PROFILES] = {0};
+        for (size_t i = 0; i < count; ++i) {
+            json_object *record = json_object_array_get_idx(setups, i);
+            static const char *const record_names[] = {"profile", "connection", "launch_directory", "definition"};
+            char name[TB_PROFILE_NAME], directory[TB_SETUP_PATH]; TbProfile connection = {0};
+            json_object *definition = member(record, "definition", json_type_object);
+            bool valid = fields(record, record_names, 4) && string_get(record, "profile", name, sizeof name) &&
+                         string_get(record, "launch_directory", directory, sizeof directory) && *directory == '/' &&
+                         profile_get(member(record, "connection", json_type_object), &connection);
+            size_t index = 0;
+            if (valid) { while (index < next->count && strcmp(next->items[index].name, name) != 0) { ++index; } }
+            if (!valid || index == next->count) { recovery = true; }
+            else if (seen[index]) {
+                recovery = true; json_object_put(next->setups[index]); next->setups[index] = NULL;
+            } else {
+                TbSetup *setup = definition ? tb_setup_decode(definition) : NULL;
+                if (setup) { next->setups[index] = json_object_get(record); } else { recovery = true; }
+                free(setup);
+            }
+            if (valid && index < next->count) { seen[index] = true; }
+        }
+    }
     json_object_put(root);
-    if (ok) { memcpy(p->items, next->items, sizeof p->items); memcpy(p->recent, next->recent, sizeof p->recent); p->count = next->count; p->recent_count = next->recent_count; p->stamp = info; p->existed = true; p->blocked = false; p->error[0] = 0; }
-    free(next);
+    if (ok) {
+        for (size_t i = 0; i < TB_PROFILES; ++i) { json_object_put(p->setups[i]); p->setups[i] = next->setups[i]; next->setups[i] = NULL; }
+        memcpy(p->items, next->items, sizeof p->items); memcpy(p->recent, next->recent, sizeof p->recent);
+        p->count = next->count; p->recent_count = next->recent_count; p->stamp = info; p->existed = true;
+        p->schema3 = schema == 3; p->blocked = recovery; p->error[0] = 0;
+        if (recovery) { (void)fail(p, "Read-only recovery: malformed setup records rejected. Repair profiles.json, then Reload before any writes."); }
+    }
+    tb_profiles_destroy(next);
     if (!ok) { p->blocked = true; return fail(p, "Invalid/unsupported profile schema or JSON; file preserved. Correct it, then Reload."); }
     return true;
 }
@@ -302,9 +348,18 @@ static bool save(TbProfiles *p)
     for (size_t i = 0; ok && i < p->recent_count; ++i) {
         json_object *v = json_object_new_string(p->recent[i]); if (!v || json_object_array_add(recent, v) != 0) { json_object_put(v); ok = false; }
     }
-    if (ok) { ok = add(root, "version", json_object_new_int(2)); }
+    if (ok) { ok = add(root, "version", json_object_new_int(p->schema3 ? 3 : 2)); }
     if (ok) { ok = add(root, "profiles", items); items = NULL; }
     if (ok) { ok = add(root, "recent", recent); recent = NULL; }
+    if (ok && p->schema3) {
+        json_object *setups = json_object_new_array(); ok = setups != NULL;
+        for (size_t i = 0; ok && i < p->count; ++i) {
+            if (!p->setups[i]) { continue; }
+            json_object *record = json_object_get(p->setups[i]);
+            if (json_object_array_add(setups, record) != 0) { json_object_put(record); ok = false; }
+        }
+        if (ok) { ok = add(root, "setups", setups); } else { json_object_put(setups); }
+    }
     json_object_put(items); json_object_put(recent);
     char temporary[4096]; (void)snprintf(temporary, sizeof temporary, "%s/.profiles-XXXXXX", p->directory);
     int fd = -1;
@@ -333,8 +388,19 @@ static void recent_remove(TbProfiles *p, const char *name)
 static bool transaction(TbProfiles *p, TbProfiles *next)
 {
     next->error[0] = 0; bool ok = save(next);
-    if (ok) { memcpy(p, next, sizeof *p); } else { (void)fail(p, next->error); }
-    free(next); return ok;
+    if (ok) {
+        for (size_t i = 0; i < TB_PROFILES; ++i) { json_object_put(p->setups[i]); }
+        memcpy(p, next, sizeof *p); memset(next->setups, 0, sizeof next->setups);
+    } else { (void)fail(p, next->error); }
+    tb_profiles_destroy(next); return ok;
+}
+static TbProfiles *clone(TbProfiles *p)
+{
+    TbProfiles *next = malloc(sizeof *next);
+    if (!next) { (void)fail(p, "Profile allocation failed."); return NULL; }
+    memcpy(next, p, sizeof *next);
+    for (size_t i = 0; i < TB_PROFILES; ++i) { next->setups[i] = json_object_get(p->setups[i]); }
+    return next;
 }
 bool tb_profiles_put(TbProfiles *p, const TbProfile *profile, bool replace)
 {
@@ -342,25 +408,81 @@ bool tb_profiles_put(TbProfiles *p, const TbProfile *profile, bool replace)
     size_t index = 0; while (index < p->count && strcmp(p->items[index].name, profile->name) != 0) { ++index; }
     if (index < p->count && !replace) { return fail(p, "A profile already has that name; confirm replacement."); }
     if (index == TB_PROFILES) { return fail(p, "At most 16 named profiles are supported."); }
-    TbProfiles *next = malloc(sizeof *next); if (!next) { return fail(p, "Profile allocation failed."); }
-    memcpy(next, p, sizeof *next); next->items[index] = *profile; if (index == next->count) { ++next->count; }
+    TbProfiles *next = clone(p); if (!next) { return false; }
+    next->items[index] = *profile; if (index == next->count) { ++next->count; }
     return transaction(p, next);
 }
 bool tb_profiles_remove(TbProfiles *p, const char *name)
 {
     size_t index = 0; while (index < p->count && strcmp(p->items[index].name, name) != 0) { ++index; }
     if (index == p->count) { return fail(p, "Profile no longer exists."); }
-    TbProfiles *next = malloc(sizeof *next); if (!next) { return fail(p, "Profile allocation failed."); }
-    memcpy(next, p, sizeof *next); memmove(&next->items[index], &next->items[index + 1], (next->count - index - 1) * sizeof next->items[0]);
+    TbProfiles *next = clone(p); if (!next) { return false; }
+    memmove(&next->items[index], &next->items[index + 1], (next->count - index - 1) * sizeof next->items[0]);
+    json_object_put(next->setups[index]);
+    memmove(&next->setups[index], &next->setups[index + 1], (next->count - index - 1) * sizeof next->setups[0]);
+    next->setups[next->count - 1] = NULL;
     --next->count; recent_remove(next, name); return transaction(p, next);
 }
 bool tb_profiles_touch(TbProfiles *p, const char *name)
 {
     if (!tb_profiles_find(p, name)) { return fail(p, "Save a named profile before recording it as recent."); }
-    TbProfiles *next = malloc(sizeof *next); if (!next) { return fail(p, "Profile allocation failed."); }
-    memcpy(next, p, sizeof *next); recent_remove(next, name);
+    TbProfiles *next = clone(p); if (!next) { return false; }
+    recent_remove(next, name);
     if (next->recent_count == TB_PROFILE_RECENT) { --next->recent_count; }
     memmove(next->recent[1], next->recent[0], next->recent_count * sizeof next->recent[0]);
     (void)snprintf(next->recent[0], TB_PROFILE_NAME, "%s", name); ++next->recent_count;
+    return transaction(p, next);
+}
+static size_t profile_index(const TbProfiles *p, const char *name)
+{
+    size_t i = 0; while (i < p->count && (!name || strcmp(p->items[i].name, name) != 0)) { ++i; } return i;
+}
+TbSetup *tb_profiles_setup(const TbProfiles *p, const char *name)
+{
+    size_t i = profile_index(p, name);
+    return i < p->count && p->setups[i] ? tb_setup_decode(member(p->setups[i], "definition", json_type_object)) : NULL;
+}
+bool tb_profiles_has_setup(const TbProfiles *p, const char *name)
+{
+    size_t i = profile_index(p, name); return i < p->count && p->setups[i];
+}
+bool tb_profiles_setup_connection(const TbProfiles *p, const char *name, TbProfile *connection, char directory[TB_SETUP_PATH])
+{
+    size_t i = profile_index(p, name);
+    return i < p->count && p->setups[i] && profile_get(member(p->setups[i], "connection", json_type_object), connection) &&
+           string_get(p->setups[i], "launch_directory", directory, TB_SETUP_PATH);
+}
+bool tb_profiles_save_setup(TbProfiles *p, const char *name, const TbSetup *setup, const TbProfile *connection, const char *directory)
+{
+    size_t i = profile_index(p, name);
+    if (i == p->count) { return fail(p, "Save a connection profile before saving setup."); }
+    if (!tb_setup_valid(setup) || !tb_profile_valid(connection) || !directory || *directory != '/' || !clean(directory, TB_SETUP_PATH, false)) {
+        return fail(p, "Invalid setup definitions or connection snapshot.");
+    }
+    json_object *record = json_object_new_object();
+    if (!record || !add(record, "profile", json_object_new_string(name)) || !add(record, "connection", profile_make(connection)) ||
+        !add(record, "launch_directory", json_object_new_string(directory)) || !add(record, "definition", tb_setup_encode(setup))) {
+        json_object_put(record); return fail(p, "Setup allocation/serialization failed.");
+    }
+    TbProfiles *next = clone(p); if (!next) { json_object_put(record); return false; }
+    json_object_put(next->setups[i]); next->setups[i] = record; next->schema3 = true;
+    return transaction(p, next);
+}
+bool tb_profiles_duplicate(TbProfiles *p, const char *name, const char *new_name)
+{
+    size_t i = profile_index(p, name);
+    if (i == p->count || !new_name || !clean(new_name, TB_PROFILE_NAME, false) || tb_profiles_find(p, new_name) || p->count == TB_PROFILES) {
+        return fail(p, "Choose an existing profile and a unique name; at most 16 profiles are supported.");
+    }
+    TbProfiles *next = clone(p); if (!next) { return false; }
+    size_t out = next->count++; next->items[out] = next->items[i];
+    (void)snprintf(next->items[out].name, TB_PROFILE_NAME, "%s", new_name);
+    if (next->setups[i]) {
+        json_object *record = NULL;
+        if (json_object_deep_copy(next->setups[i], &record, NULL) != 0 || !record || !add(record, "profile", json_object_new_string(new_name))) {
+            json_object_put(record); tb_profiles_destroy(next); return fail(p, "Setup duplication failed.");
+        }
+        next->setups[out] = record;
+    }
     return transaction(p, next);
 }

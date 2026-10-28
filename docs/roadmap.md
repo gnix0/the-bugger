@@ -6,7 +6,7 @@ implemented features or hardware support claims. See [architecture](architecture
 
 ## Current development sequence
 
-v0.1.3 is released. v0.1.4 starts with RISC-V hardware validation.
+v0.1.3 is released. RISC-V hardware validation is accepted; F01 is in progress.
 
 | Task | Scope | Current state |
 |---|---|---|
@@ -14,18 +14,21 @@ v0.1.3 is released. v0.1.4 starts with RISC-V hardware validation.
 | 1.2 | Initially minimized lower panes with independently resizable overlays | Implemented, host/stress verified and accepted |
 | 1.3 | Disassembly/Memory browsing and explicit MMIO access | Implemented, host verified and accepted |
 | 1.5 | Prepare v0.1.3 | Published; uploaded artifacts verified |
-| 2.1 | Validate ESP RISC-V hardware for v0.1.4 | RISC-V RV32 automated-verified on real hardware (ESP32-C6FH4); review pending |
+| 2.1 | Validate ESP RISC-V hardware for v0.1.4 | Accepted; recorded RISC-V RV32 hardware checks use ESP32-C6FH4 |
+| F01 | Setup restoration for v0.1.4 | Definition/store foundation implemented; capture, controls and restoration pending |
 
 Current controls are in [usage](usage.md); the accepted browsing scope is in
 [requirements](requirements.md#approved-v013-browsing-work).
 
-Remaining v0.1.4 work covers the roadmap shortlist, real-world evaluation,
-documentation, formatting and maintainability review. v0.2.x covers stabilization,
-UX, build-system review and testing strategy. Reconcile older F version targets
-in Task2.2.
+Remaining v0.1.4 work includes F01, real-world evaluation, documentation,
+formatting and owner-led maintenance. F02–F05 retain separate planning and
+acceptance gates and their version targets below. Final stabilization,
+owner-exclusive build-system review and testing-strategy work precede v0.2.0
+publication.
 
 Physical RISC-V validation was deferred for v0.1.3. Task2.1 now records real
-RISC-V RV32 checks using ESP32-C6FH4 as the test device; acceptance is pending.
+RISC-V RV32 checks using ESP32-C6FH4 as the test device. Acceptance adds no new
+physical results or waiver of later release regression.
 
 ## Implementation status
 
@@ -37,7 +40,8 @@ Accepted post-release work includes themes, Source fullscreen, spatial navigatio
 (`53b1e5a`), multi-file Source tabs, inline Console, personal keybinds, Vim-like
 input, tmux RGB, rendering fixes, lower overlays and browsing history. Release
 contents are in [CHANGELOG](../CHANGELOG.md); results are in
-[validation records](validation.md). The future F gates remain planned.
+[validation records](validation.md). F01 is in progress; the other future gates
+remain planned.
 
 | Milestone | Deliverable | State | Commit / release reference |
 |---|---|---|---|
@@ -64,7 +68,8 @@ contents are in [CHANGELOG](../CHANGELOG.md); results are in
 | M17 | NUCLEO-F446RE and ESP32-S3 validation | accepted | `f568bd2482b2309e3534ebc8e197854ada37bf77` |
 | M18 | v0.1.0 release evidence/acceptance | accepted; published | v0.1.0; `ad606dc6d7af7a3384401fb97e7c328ea1d8b62b` (preparation) |
 | F19 | Config, built-in themes and variants | accepted; shipped in v0.1.1 | [Recorded checks](validation.md#f19--themes-and-configuration) |
-| F01–F18, F20–F47 | Independent versioned future gates below | planned | — |
+| F01 | Setup restoration | in progress; storage foundation only | — |
+| F02–F18, F20–F47 | Independent versioned future gates below | planned | — |
 
 ## Development priorities
 

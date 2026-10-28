@@ -2819,10 +2819,14 @@ static void draw_profiles(App *app)
                             8 + (wrap_actions ? 1 : 0) + (int)((app->page == PROFILE_LIST ? tb_profiles_count(app->profiles) : profile_item_count(app)) > 8 ? 8 :
                                       (app->page == PROFILE_LIST ? tb_profiles_count(app->profiles) : profile_item_count(app))));
     int left = card.x + 2, top = card.y, width = card.w - 4;
-    draw_header(app, app->page == PROFILE_LIST ? "Saved profiles / recent sessions" : app->page == PROFILE_OPTIONS ? "Profile options (unsaved until Save profile)" : app->page == PROFILE_CONFIRM ? "Confirm profile change" : "Profile entries (unsaved)");
+    draw_header(app, app->page == PROFILE_LIST ? (tb_profiles_read_only(app->profiles) ? "READ ONLY: profiles (repair and Reload)" : "Saved profiles / recent sessions") : app->page == PROFILE_OPTIONS ? "Profile options (unsaved until Save profile)" : app->page == PROFILE_CONFIRM ? "Confirm profile change" : "Profile entries (unsaved)");
     if (app->page == PROFILE_CONFIRM) {
         char text[160]; (void)snprintf(text, sizeof text, "%s profile: %s?", app->profile_replacing ? "Replace" : "Delete", app->profile->name);
         tb_text(top + 2, left, width, TB_ORANGE, A_BOLD, text);
+        if (tb_profiles_has_setup(app->profiles, app->profile->name)) {
+            tb_text(top + 3, left, width, TB_MUTED, 0, app->profile_replacing ?
+                    "The saved setup is retained for compatibility review." : "The associated saved setup will also be deleted.");
+        }
         button(app, top + 5, left, 16, "[ Confirm ]", PROFILE_ACTION, 30, 0);
         button(app, top + 5, left + 18, 14, "[ Cancel ]", BACK, 0, 0); return;
     }
@@ -2895,7 +2899,10 @@ static void profile_activate(App *app, Control control)
         app->profile_selected = control.value;
     } else {
         int action = control.value;
-        if (action == 0) { status(app, tb_profiles_load(app->profiles) ? "Profile file reloaded." : tb_profiles_error(app->profiles)); }
+        if (action == 0) {
+            bool loaded = tb_profiles_load(app->profiles);
+            status(app, loaded && !tb_profiles_read_only(app->profiles) ? "Profile file reloaded." : tb_profiles_error(app->profiles));
+        }
         else if (action == 1) { app->profile_offset += control.pane; }
         else if (action >= 10 && action <= 13) { app->profile_group = action - 10; app->profile_selected = app->profile_offset = 0; page(app, PROFILE_ITEMS); }
         else if (action == 23) { (void)snprintf(app->profile->protocol, sizeof app->profile->protocol, "%s", strcmp(app->profile->protocol, "remote") == 0 ? "extended-remote" : "remote"); }
@@ -4362,7 +4369,10 @@ static void initialize(App *app, bool demo)
         }
         app->forms[form].start_server = true;
     }
-    if (!demo && app->profiles && !tb_profiles_load(app->profiles)) { status(app, tb_profiles_error(app->profiles)); }
+    if (!demo && app->profiles) {
+        bool loaded = tb_profiles_load(app->profiles);
+        if (!loaded || tb_profiles_read_only(app->profiles)) { status(app, tb_profiles_error(app->profiles)); }
+    }
 }
 
 int tb_tui_run(bool demo)

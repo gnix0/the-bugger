@@ -517,6 +517,33 @@ No remote/hardware compatibility follows this checklist. Persisted definitions
 are not permissions to perform target operations; M15/M16 must test their actual
 application and lifecycle separately. F01 owns workspace/watch/breakpoint restore.
 
+### F01 setup-definition storage
+
+`make test-m13-model` includes definition/store foundation checks: setup-local
+identities, Source role/identity selection, tree cycles, round trips, connection
+snapshot separation, independent saved duplication, profile replacement/deletion,
+schema-3 read-only recovery and stale-writer detection after a setup transaction.
+It encodes a maximum 256-breakpoint definition containing escaped long locations,
+checks that its actual encoding exceeds 1 MiB, and verifies save failure preserves
+both disk bytes and the prior in-memory setup. Legacy schema checks remain in
+the same suite. These checks do not establish workspace restoration.
+
+Manual storage recovery review, using a disposable config directory:
+
+1. Start with a temporary `XDG_CONFIG_HOME`, save a native connection profile,
+   then close the application. Keep the profile file for recovery testing.
+2. In that file, change `version` to `3` and add `"setups": [{}]` at the root,
+   preserving `profiles` and `recent`. Start again. Config → Profiles must show
+   **READ ONLY** and still list the saved connection. Loading it must reach
+   configuration; Save profile must fail without replacing the file.
+3. Change `setups` to an empty array and select Reload file. The read-only
+   indication must disappear; profile saves work again. Merely loading must not
+   downgrade version 3. Repeat at 48×18 and through tmux.
+
+Capture/save controls, restoration consent, bounded backend restoration,
+breakpoint intent/import/reconciliation and physical restoration acceptance
+remain unimplemented and unverified.
+
 ## Hardware data watchpoints
 
 Coverage: M12; FR-25 and NFR-03/04/05/06/07/09/10. Native results do not establish
@@ -1483,7 +1510,7 @@ editable; OpenOCD is not a requirement for every architecture.
 | Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | M05–M14 accepted; GCC/Clang native and tmux regressions plus full default/native sanitizers passed at M14. Per-release evidence and release acceptance remain required |
 | ARM / Cortex-M | NUCLEO-F446RE fixture via GDB/OpenOCD; halt/step/break/watch, real code/register/RAM/variables, reset/disconnect/cleanup | M17 physical core/API/TUI/tmux PASS; exact setup and exclusions in validation records |
 | Xtensa | Validation board via appropriate GDB/server; applicable core workflow and cleanup | M17 ESP32-S3 physical core/API/TUI/tmux PASS; other boards require evidence |
-| RISC-V RV32 | Validation board via appropriate GDB/server; applicable core workflow and cleanup | ESP32-C6FH4 core/API/TUI evidence in Task2.1; maintainer review pending. Historical release deferrals remain recorded; other targets need evidence |
+| RISC-V RV32 | Validation board via appropriate GDB/server; applicable core workflow and cleanup | Accepted ESP32-C6FH4 core/API/TUI evidence in Task2.1. Historical release deferrals remain recorded; other targets need evidence |
 | QEMU ARM / RISC-V | Supplementary reproducible native/guest runs where available | UNVERIFIED; not a physical-board substitute |
 
 For each release, capture the actual setup/version, relevant fixture/source
