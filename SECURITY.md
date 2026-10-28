@@ -12,10 +12,8 @@ issues, discussions or pull requests before coordinated disclosure.
 Use **Security → Report a vulnerability** in the
 [project repository](https://github.com/gnix0/the-bugger/security), when available,
 or open the [private reporting form](https://github.com/gnix0/the-bugger/security/advisories/new).
-Private reporting must be enabled separately in GitHub; adding this file does
-not enable it. If the form is unavailable, open an issue requesting a private
-security contact **without including vulnerability details or sensitive data**.
-See [GitHub's private reporting guidance](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/report-privately).
+If the form is unavailable, request a private security contact in an issue
+**without including vulnerability details or sensitive data**.
 
 Include what you can:
 
@@ -30,8 +28,7 @@ Include what you can:
 
 Remove credentials, private firmware/source, personal paths, device identifiers
 and sensitive memory contents from reports unless necessary. Share necessary
-sensitive material only through the agreed private channel. A complete exploit
-or proposed fix is not required to report a credible issue.
+sensitive material only through the agreed private channel. Partial reports are welcome.
 
 ## Supported versions and updates
 
@@ -47,8 +44,7 @@ there is no guaranteed response or remediation deadline.
 
 Confirmed issues and mitigations can be published through
 [GitHub Security Advisories](https://github.com/gnix0/the-bugger/security/advisories)
-and release notes. Check those locations for published updates. This project does
-not claim a dedicated security team, continuous monitoring or a bug bounty.
+and release notes. Check those locations for published updates.
 
 ## Security boundaries
 
@@ -89,8 +85,7 @@ value-producing requests require pre-dispatch access authorization. The frontend
 adds no implicit firmware programming or reset operation; selected backend scripts
 and explicit commands can perform such operations.
 
-These are engineering controls, not a guarantee that every input or dependency is
-safe. Reports of failures in these boundaries are welcome, including:
+Report failures such as:
 
 - Memory corruption or resource exhaustion from malformed MI, ELF or configuration
   data, and terminal-control injection through debugger or program output.
@@ -121,8 +116,6 @@ analysis. See [testing procedures](docs/testing.md) for commands and prerequisit
 [validation records](docs/validation.md) for checks actually performed.
 [CI](.github/workflows/ci.yml) defines tests and static analysis for pull requests
 and manual dispatch. Automatic push runs are disabled.
-This is not an independent security audit, security certification or proof of
-complete vulnerability coverage.
 
 Contributors should preserve input bounds, structured MI quoting, shell-free
 spawning, private file handling, generation checks and authorization **before**

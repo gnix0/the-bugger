@@ -3,7 +3,7 @@
 The Bugger is a Linux-hosted, terminal-native GDB frontend written in C17.
 Embedded debugging drives feature priorities; native Linux remains a maintained,
 regression-tested capability. See the [roadmap](docs/roadmap.md) before proposing
-work. Planned features are not necessarily available in the current build.
+work.
 
 ## Branches and pull requests
 
@@ -14,10 +14,8 @@ to `develop`. Discuss scope before starting a new roadmap feature.
 
 Release branches start from `develop` and merge into both `main` and `develop`.
 Urgent `hotfix/<description>` branches start from `main` and merge into both.
-Preserve existing implementation references when merging; do not rewrite commits
-already referenced by validation records. Exact release revisions are recorded
-with release evidence rather than requiring a separate documentation commit for
-every feature.
+Preserve commits referenced by validation records. Record exact release revisions
+with release evidence.
 
 Explain the problem, behavior change, relevant tests and limitations in the pull
 request. Confirm that CI passes and address review conversations before merging.
@@ -59,11 +57,8 @@ same pull request update. The jobs are:
 
 The test job installs GDB/gdbserver, tmux, OpenOCD and the build dependencies.
 Test compilation explicitly enables `_FORTIFY_SOURCE=3`.
-Its OpenOCD check deliberately stops before hardware initialization; hosted jobs
-never establish physical board compatibility. Logs are retained for seven days,
-including failed runs. Sanitizers, slow recovery checks, release packaging and
-physical tests remain part of their documented milestone/release validation;
-they are not implied by a green basic CI run.
+The OpenOCD check stops before hardware initialization. Logs are retained for
+seven days. Sanitizers, slow recovery, packaging and physical tests run separately.
 
 ## Code and design conventions
 
@@ -94,9 +89,7 @@ they are not implied by a green basic CI run.
 ## Tests and documentation
 
 Add focused C tests for changed behavior and meaningful failure cases, including
-stale responses, bounds and cleanup where relevant. Native success does not prove
-embedded compatibility. Tests must expose application defects; do not weaken
-assertions or safety checks to obtain a passing result.
+stale responses, bounds and cleanup where relevant. Keep assertions and safety checks intact when diagnosing failures.
 
 Documentation responsibilities are:
 
@@ -110,10 +103,10 @@ Documentation responsibilities are:
 | [Design](docs/requirements.md#interface-constraints) | Interface constraints, terminal mapping and reference rationale |
 | [Validation records](docs/validation.md) | Recorded hashes, results, failures and decisions |
 
-Use concise technical descriptions. Distinguish implemented behavior, validation
-gaps and plans. Keep execution records in the evidence register and agent instructions
-out of public technical references. Link to the canonical description instead of
-copying it into several documents. Never invent test results or commit hashes.
+Write for developers: be concise, direct and technically precise. Link to the
+canonical reference rather than repeating it. Include limitations and implementation
+details when they help the reader act. Keep results in the validation register
+and coding-agent rules in AGENTS.md.
 
 ## Security reports
 
@@ -131,5 +124,4 @@ Separate documentation follow-ups remain useful when the code is already committ
 The [maintainer workflow](docs/maintaining.md#commit-organization-and-traceability)
 records exact implementation hashes at release or when an investigation needs
 revision-level evidence; existing historical references are preserved.
-Maintainers control merges, acceptance, tags and publication. A passing CI run
-does not itself approve a milestone or authorize a release.
+Maintainers approve milestones and control merges, tags and publication.

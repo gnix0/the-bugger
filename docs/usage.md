@@ -1,13 +1,18 @@
 # Using The Bugger
 
-The current development build supports native Linux and existing remote
-GDB-server sessions, plus reviewed OpenOCD startup and target actions. Physical
-validation covers NUCLEO-F446RE and ESP32-S3 with the
-[recorded configurations](validation.md#m17--physical-board-validation).
-This guide describes v0.1.3, including independent lower overlays, retained
-Disassembly/Memory browsing and explicit, setup-gated MMIO sampling. Themes,
-Source fullscreen and spatial keyboard navigation remain available.
+The shared workspace supports native Linux x86-64 and embedded ARM/Cortex-M,
+Xtensa and 32-bit RISC-V through a target-compatible GDB/server. Physical checks
+exercise ARM/Cortex-M on STM32 NUCLEO-F446RE, Xtensa on ESP32-S3 and RISC-V RV32
+on ESP32-C6FH4. See [validation records](validation.md) for the test configurations.
+This guide covers the current development build, including the v0.1.3 workspace
+and v0.1.4 RISC-V setup.
 See [build and first session](../README.md#build-and-first-session) for prerequisites.
+
+For RISC-V (tested on ESP32-C6FH4), select `riscv32-esp-elf-gdb`, the matching
+application ELF and `tests/fixtures/embedded/openocd/esp32c6.cfg` in Embedded
+target setup. Use the board's native USB/JTAG connector for debugging. This
+configuration keeps CPU context available across reset; it does not implement
+FreeRTOS task inspection. See the [RISC-V setup and tool limitations](testing.md#risc-v-hardware-validation).
 
 ## Native Linux sessions
 

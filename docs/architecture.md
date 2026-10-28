@@ -2,19 +2,15 @@
 
 ## Overview
 
-The product is embedded-first, with shared target-neutral inspectors. Linux is
-the frontend host, not the universal target OS. Native and existing remote-server integration are accepted
-through M15. M16's reviewed OpenOCD management is also accepted;
-M17 records physical validation on NUCLEO-F446RE and ESP32-S3. Known integration
-gaps are listed below and in the roadmap.
+The Linux frontend shares target-neutral models between native launch/attach
+and remote GDB sessions. OpenOCD management handles reviewed startup and target
+actions. [Validation records](validation.md) cover the tested architectures.
 
 `src/main.c` handles help/version and starts the terminal application.
 `src/tui/app.c` owns startup/configuration/review/workspace pages, keyboard
 and mouse controls, form editing and terminal lifetime. Rendering and theme
 selection are in separate files. `src/tui/demo.c` owns explicitly simulated
 sample data, demo actions and tabs. The layout module owns tiled geometry.
-These samples are never
-debugger-domain state and must be replaced by live data in real sessions.
 
 The build and tests are C17 with strict warnings; Make is the only build driver.
 C tests use POSIX pipes, processes and PTYs.  Application libraries are ncursesw and libelf (ELF metadata
@@ -24,11 +20,8 @@ and existing remote GDB-server sessions through the TUI. Console/output and Cont
 live. Source/Disassembly and stepping use the code model; Call Stack and Threads
 use the selected-context model. Code breakpoints and Run to Selected use the
 breakpoint model, which now also provides M12 hardware data watchpoints.
-CPU Registers, Memory and Locals/Watches use the inspection models described below. Other
-inspection views have explicit unavailable messages. Explicit --demo
-retains simulated presentation separately. OpenOCD management is implemented and accepted at M16.
-Remote connections use the shared inspectors and preserve capability limitations.
-Profiles retain a review step before connection. Keybinds are separate personal preferences.
+CPU Registers, Memory and Locals/Watches use the inspection models described below. Unavailable views are labelled. Profiles require review before connection;
+keybinds are separate personal preferences.
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
 descriptors together, redrawing after input or session revisions. Idle waits are
@@ -100,8 +93,7 @@ terminfo supplies exact RGB values. `src/tui/terminal.c` selects matching
 through `COLORTERM=truecolor`/`24bit`, terminfo `RGB`/`Tc`, or both `setrgbf` and
 `setrgbb`. The tmux mapping is restricted to its tmux/screen TERM names and a
 nonempty TMUX environment. Explicit direct-color TERM descriptions already work.
-This uses ncurses' existing terminfo reader before screen initialization; it adds
-no subprocess, terminal-query parser or rendering backend. Missing direct entries
+Capability selection uses ncurses' terminfo reader before screen initialization. Missing direct entries
 fall back to the original TERM. NO_COLOR remains authoritative. The app never
 rewrites TERM, changes terminal palette slots or modifies tmux configuration.
 These capability signals follow the established conventions described by
@@ -118,17 +110,13 @@ described below.
 Tab activation promotes the active tab to the left. Focus follows its identity
 as rendering promotes it to the first position. Mouse input suppresses the
 additional inverse keyboard-focus marker;
-keyboard input restores it. This prevents the old numeric control index from
-highlighting/activating a different tab after reordering. The active-tab theme
+keyboard input restores it.  The active-tab theme
 and monochrome selection indicator remain intact.
 
 The launcher uses the existing render/theme primitives: a bounded
 card centered in the usable terminal area, full-row hit regions including choice
 descriptions, simple ASCII icons/chevrons and a compact height below 28 rows.
-No image assets, new dependency, animation or background work is needed. It keeps
-native-vs-preview availability, profile review and q/Ctrl+Q policy
-explicit; session configuration and the debugging workspace are unchanged.
-
+Profile review and q/Ctrl+Q handling use the same controls as session setup.
 
 Menu footer guidance is derived from the current page rather than stored as a
 persistent launcher status. Page navigation clears transient notices; explicit
@@ -147,8 +135,7 @@ Session-form height includes the wrapped explanatory note and the action rows,
 with one empty row around the primary action row when height permits. Compact
 forms retain field scrolling and configuration state. Native/Embedded forms add
 one row after their initial setup selector and before the final Start OpenOCD
-selector. The spacing from Start OpenOCD to script browsing is unchanged. Installed-script browsing controls
-have equal one-row gaps above and below when height permits. Those gaps collapse
+selector. Script-browsing controls have equal one-row gaps above and below when space permits. Those gaps collapse
 in compact rendering; field hit rectangles and carets follow the rendered rows.
 
 Keybinds adds an overflow-only one-cell `|`/`#` bar beside its tables. It shares
@@ -927,7 +914,6 @@ partial reads; the frontend preserves the exact reported bytes/validity rather
 than reconstructing inaccessible memory. Scalar address conversion suppresses
 character-pointer string printing. User calls/writes/casts remain rejected.
 
-
 ## Locals and Watches
 
 `src/model/variables.{h,c}` owns separate shared Locals/Watches trees; panes
@@ -1093,7 +1079,6 @@ M16/M17 validation.
 See [M14 checks](testing.md#native-integration-and-hardening) for reproducible
 coverage and the [validation register](validation.md) for recorded outcomes.
 
-
 ## Extension boundaries
 
 The [future sequence](roadmap.md#release-progression-and-priority-changes)
@@ -1131,9 +1116,16 @@ are late reviewed candidates; native correctness/maintenance remains continuous.
 
 ## Known limitations and integration gaps
 
+The [RISC-V validation](validation.md#v014-task-21--risc-v-hardware-validation)
+exercises the existing structured-MI session/models with `riscv:rv32`; no new
+frontend transport or decoder is introduced. The named setup uses OpenOCD
+hardware-thread awareness for verified reset context. This does not add an LP-core,
+FreeRTOS task model or C6 MMIO adapter. Backend checksum and optional ROM-symbol
+limits are described in the [RISC-V procedure](testing.md#risc-v-hardware-validation).
+
 - Shared sessions isolate local PTY/pidfd/proc ownership from remote target IDs.
   Existing-server mode never owns the server. Managed OpenOCD lifecycle and
-  named STM32/S3 target behavior have [M17 evidence](validation.md#m17--physical-board-validation);
+  ARM/Cortex-M and Xtensa workflows (tested on STM32/S3) have [M17 evidence](validation.md#m17--physical-board-validation);
   this does not establish behavior for other scripts, probes or boards.
 - The native code index verifies backing-file mappings through process maps.
   Remote configured-ELF/load-bias review records a user declaration; automatic
@@ -1149,8 +1141,10 @@ are late reviewed candidates; native correctness/maintenance remains continuous.
   values require deliberate operations. Target descriptions and SVD readability
   alone cannot establish that MMIO access is free of side effects.
 - Localhost GDB/gdbserver has focused automated coverage. Physical validation
-  covers the named NUCLEO-F446RE and ESP32-S3 setups only; other targets and
-  optional acquisition capabilities require separate evidence.
+  covers ARM/Cortex-M, Xtensa and RISC-V RV32 workflows using NUCLEO-F446RE,
+  ESP32-S3 and ESP32-C6FH4 respectively. Those devices identify the tested
+  configurations; architecture support does not establish every device's optional
+  acquisition capabilities.
   See [hardware validation](testing.md#every-release-regression-matrix). Register
   groups have an ungrouped fallback; specialized views remain planned.
 

@@ -200,6 +200,20 @@ int main(int argc, char **argv)
     while ((listing->stale || !listing->line_count || !listing->instruction_count) && tb_gdb_now_ms() < code_end) { pump(); }
     CHECK(!listing->stale && listing->line_count && listing->instruction_count);
     CHECK(strstr(listing->path, "workload.c"));
+    const TbInstruction *stopped_instruction = NULL;
+    uint64_t stopped_pc = strtoull(context()->stopped.address, NULL, 0);
+    for (size_t i = 0; i < listing->instruction_count; ++i) {
+        if (listing->instructions[i].numeric == stopped_pc) { stopped_instruction = &listing->instructions[i]; break; }
+    }
+    CHECK(stopped_instruction && stopped_instruction->bytes && *stopped_instruction->opcodes);
+    const char *mnemonic = stopped_instruction->text;
+    while (*mnemonic == ' ' || *mnemonic == '\t') { ++mnemonic; }
+    /* The authored checkpoint contains instructions, not data or unknown opcodes. */
+    CHECK(*mnemonic && *mnemonic != '.' && !strstr(mnemonic, "(bad)"));
+    if (strstr(tb_session_capabilities(session)->architecture, "riscv")) {
+        CHECK(!(stopped_pc & 1U) && (stopped_instruction->bytes == 2 || stopped_instruction->bytes == 4));
+    }
+    printf("DECODE %s (%u bytes): %s\n", stopped_instruction->address, stopped_instruction->bytes, mnemonic);
     registers();
     memory(0, "&fixture_buffer", 15, "17 SRAM: hex and");
     memory(1, "&fixture_flash", 14, "THE BUGGER M17");

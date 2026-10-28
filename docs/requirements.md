@@ -38,7 +38,7 @@ pane/window in **tmux** and provide a consistent workflow for:
 
 - **Native Linux C/C++ processes on x86-64** (GDB controls locally launched programs; attaching to permitted processes is also in scope).
 - **Embedded ARM firmware** (GDB connects to an OpenOCD GDB server; initial reference board is the STM32 NUCLEO-F446RE with onboard ST-LINK).
-- **ESP32 Xtensa and RISC-V firmware** through appropriate editable GDB/server choices, included in recorded release regression. Do not claim untested boards/backends are supported. QEMU ARM/RISC-V guest/native tests are supplementary test infrastructure, not a simulator product feature.
+- **Xtensa and 32-bit RISC-V firmware** through appropriate editable GDB/server choices, included in recorded release regression. Distinguish architecture support from physical validation of a particular device/backend configuration. QEMU ARM/RISC-V guest/native tests are supplementary test infrastructure, not a simulator product feature.
 - General firmware and system-level C/C++ across GDB-supported architectures without replacing the TUI or assuming ARM registers. Validation targets do not limit the product architecture.
 
 This is **a GDB frontend, not a replacement debugger engine**. Use structured **GDB/MI** for debugger communication. OpenOCD is an **optional remote server backend**, not the universal backend for every architecture or a prerequisite for native Linux debugging.
@@ -58,7 +58,6 @@ The intended session workflow is:
 6. Exit cleanly; return later to a saved session profile.
 
 Do not require Vim-motion-first interaction, editor emulation, floating windows, or IDE/project generation. Vim-like input is an optional personal preference, disabled by default. Enabling it adds navigation aliases and limited single-line Normal/Insert editing with visible mode feedback; standard arrows, mouse and visible actions remain available. Full Vim editor emulation remains out of scope.
-
 
 ## Functional requirements — v0.1.0
 
@@ -122,7 +121,6 @@ An existing view choice is not evidence of functionality unless its **data path 
 
 Performance numbers are targets to measure, not grounds for hiding failures. The UI should never freeze while waiting for a remote target.
 
-
 ## Release acceptance
 
 `v0.1.0` may be proposed **only when**:
@@ -143,6 +141,8 @@ Performance numbers are targets to measure, not grounds for hiding failures. The
    substituting for boards. Target-specific features list their actual setups.
 7. Final end-to-end validation and release authorization follow the [maintainer release procedure](maintaining.md#release-procedure). The original baseline release was **`v0.1.0`**, without a prerelease suffix; the current release target is recorded in the roadmap and version header.
 
+The current development branch adds [physical RISC-V core-workflow evidence](validation.md#v014-task-21--risc-v-hardware-validation)
+for Task2.1, using ESP32-C6FH4 as its validation device.
 
 ## Release exclusions
 
@@ -346,15 +346,10 @@ This section specifies the implemented, owner-accepted v0.1.3 browsing scope.
 Current controls and limits are described in [usage](usage.md); release and
 future-work status are in [the roadmap](roadmap.md).
 
-The Bugger's behavior is defined by its own requirements. References to another
-debugger or editor are examples for discussion and research, not requirements
-for product identity, feature parity, architecture or implementation. Preserve
-factual technical references, provenance, licenses and historical evidence.
-
 ### Shared browsing behavior
 
-- Go to is efficient direct navigation, not a workaround for artificial scrolling
-  restrictions. Each view retains independent addresses, selection and offsets.
+- Go to and scrolling provide direct and continuous navigation. Each view
+  retains independent addresses, selection and offsets.
   Browsing never changes PC or another inspector's thread/frame selection.
 - Manual browsing and following execution are distinct. A new stop preserves a
   manually browsed location and does not automatically read it. Return to Stop
