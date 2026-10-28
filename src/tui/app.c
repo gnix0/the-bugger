@@ -28,7 +28,7 @@ enum { CONTENT_LEFT = 0x1000, CONTENT_DOWN, CONTENT_UP, CONTENT_RIGHT };
 typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
                SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT, DATA_WATCH_INPUT,
                CONFIG_MENU, THEMES, THEME_PREVIEW, KEYBINDS, PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM, SCRIPT_LIST, SCRIPT_FILTER,
-               MEMORY_RANGES, MEMORY_RANGE, MEMORY_CONSENT, MEMORY_RANGE_INPUT, MMIO_SETUP } Page;
+               MEMORY_RANGES, MEMORY_RANGE, MEMORY_CONSENT, MEMORY_RANGE_INPUT, MMIO_SETUP, IMAGE_REVIEW } Page;
 typedef enum { RANGE_ADD, RANGE_PREVIOUS, RANGE_NEXT, RANGE_BEGIN, RANGE_END,
                RANGE_POLICY, RANGE_WIDTH, RANGE_RISKS, RANGE_AUTHORIZE, RANGE_CONFIRM,
                RANGE_REVOKE, RANGE_REVIEW_PREVIOUS, RANGE_REVIEW_NEXT, RANGE_BROWSE,
@@ -36,13 +36,13 @@ typedef enum { RANGE_ADD, RANGE_PREVIOUS, RANGE_NEXT, RANGE_BEGIN, RANGE_END,
 typedef enum { CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_ADDRESS, CODE_STOPPED,
                CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_DIRECTORY_ADD, CODE_RULE_FROM,
                CODE_RULE_TO, CODE_SETTINGS_CLEAR, CODE_RAW, CODE_RUN_TO, CODE_FULLSCREEN,
-               CODE_ASSEMBLY_STOP, CODE_FOLLOW_FRAME } CodeAction;
+               CODE_ASSEMBLY_STOP, CODE_FOLLOW_FRAME, CODE_IMAGE_MAP } CodeAction;
 typedef enum {
     CONFIG_OPEN, THEME_ACTION, KEY_ACTION, CHOOSE_SESSION, QUIT, SESSION_MENU, FIELD, SUBMIT, BACK, PREVIEW,
     TOOL, TAB, MENU, BODY, SHOW_VIEW, FOCUS_PANE, CANCEL_RESET, CONFIRM_RESET,
     MENU_SECTION, PANE_ACTION, DIVIDER, LOWER_TOGGLE, NEXT_PANE, PREVIOUS_PANE, SCROLLBAR, KEY_SCROLLBAR,
     COMMAND_FIELD, COMMAND_SEND, SAVE_OPEN, INPUT_SUBMIT, CLOSE_ACCEPT, CONTEXT_REFRESH, CONTEXT_ARGUMENTS, CONTEXT_PAGE,
-    CODE_ACTIONS, CODE_ACTION, CODE_PAGE, CODE_FILE_PICK, CODE_FILE_PAGE, CODE_SOURCE_TAB, CODE_SOURCE_CLOSE, CODE_SOURCE_CYCLE, HSCROLLBAR,
+    CODE_ACTIONS, CODE_ACTION, CODE_PAGE, CODE_FILE_PICK, CODE_FILE_PAGE, CODE_SOURCE_TAB, CODE_SOURCE_CLOSE, CODE_SOURCE_CYCLE, HSCROLLBAR, CODE_IMAGE_CONTROL,
     BREAK_OPEN, BREAK_ACTION, REGISTER_REFRESH, REGISTER_FORMAT, MEMORY_ACTION, MEMORY_FIELD, MEMORY_RANGE_ACTION, MEMORY_RANGE_PICK,
     VARIABLE_OPEN, VARIABLE_ACTION, DATA_WATCH_OPTION,
     PROFILE_OPEN, PROFILE_PICK, PROFILE_ACTION, PROFILE_ITEM, SCRIPT_OPEN, SCRIPT_PICK, SCRIPT_ACTION, REVIEW_PAGE, CLOSE_POLICY
@@ -112,6 +112,7 @@ typedef struct {
     int memory_range_page, memory_range_rows, memory_range_review;
     RangeAction memory_range_input;
     TbMemoryBackend mmio_review;
+    TbCodeImageReview image_review;
     char memory_input_error[192];
     wchar_t memory_input[TB_MAX_PANES][FIELD_SIZE];
     size_t memory_cursor[TB_MAX_PANES];
@@ -122,6 +123,7 @@ typedef struct {
     TbWatchMode watch_mode;
     bool watch_address;
     unsigned watch_width;
+    int image_review_row;
     TbGdbGeneration watch_context;
     TbProfiles *profiles;
     TbProfile *profile;
@@ -224,6 +226,7 @@ static const char *footer_message(const App *app)
     case MEMORY_RANGES: case MEMORY_RANGE: return "Temporary permissions belong to this Memory view. Managing them never reads hardware.";
     case MEMORY_CONSENT: return "Review the bounds and risks before authorizing. Consent is not proof of safety.";
     case MMIO_SETUP: return "Confirm only if every documented setup detail matches. This is your assertion, not automatic verification.";
+    case IMAGE_REVIEW: return "Review the configured ELF and runtime addresses. Confirmation is not byte verification or permission to read memory.";
     case MEMORY_RANGE_INPUT: return "Edit this temporary range; applying an edit revokes its permission. No read is performed.";
     case VARIABLE_MENU: return "Choose an explicit variable inspection action.";
     case WATCH_INPUT: return "Add a watch expression; adding does not read memory.";
@@ -1202,11 +1205,15 @@ static void draw_code_pane(App *app, int index, TbRect rect)
     bool loaded = tb_session_state(app->debugger) == TB_SESSION_READY;
     bool empty = source ? !view->line_count : !view->instruction_count;
     char header[512];
-    const char *path = strrchr(view->path, '/'); path = path ? path + 1 : view->path;
+    const char *origin = view->path;
+    if (!source && !view->assembly_follow) {
+        origin = view->instruction_count && *view->instructions[0].source ? view->instructions[0].source : "address window";
+    }
+    const char *path = strrchr(origin, '/'); path = path ? path + 1 : origin;
     char label[256]; tb_code_safe(label, sizeof label, path, strlen(path));
     (void)snprintf(header, sizeof header, "%s | %s%s | %.240s",
                    loaded ? empty ? "Awaiting stop" : "BROWSE" : stale ? "STALE" : "LIVE",
-                   context->selected.level > 0 ? "caller | " : "",
+                   (source || view->assembly_follow) && context->selected.level > 0 ? "caller | " : "",
                    source ? "C/C++" : view->assembly_historical ? "historical assembly" :
                    view->assembly_follow ? view->assembly_stopped ? "assembly: stopped PC" : "assembly: selected frame" :
                    view->mixed && view->mixed_available ? "mixed: browsing" : "assembly: browsing", label);
@@ -1304,7 +1311,9 @@ static void draw_code_pane(App *app, int index, TbRect rect)
                 *error ? error : "Stop a program to inspect live code.");
     }
     const char *notice = source ? "" : tb_code_assembly_notice(code, index, visible_first, visible_end > visible_first ? visible_end - visible_first : 0);
-    if (*notice) {
+    TbImageTrust mapping = source ? TB_IMAGE_UNVERIFIED :
+        tb_code_assembly_mapping(code, index, visible_first, visible_end > visible_first ? visible_end - visible_first : 0);
+    if (*notice && mapping == TB_IMAGE_UNVERIFIED) {
         tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_ORANGE, 0, notice);
     }
     if (!source && total && *view->assembly_error) {
@@ -1320,6 +1329,8 @@ static void draw_code_pane(App *app, int index, TbRect rect)
         button(app, rect.y + rect.h - 1, rect.x + 11, 7, view->mixed ? " Mixed+" : " Mixed ", CODE_ACTION, CODE_MIXED, index);
         button(app, rect.y + rect.h - 1, rect.x + 19, 3, " < ", CODE_PAGE, -1, index);
         button(app, rect.y + rect.h - 1, rect.x + 23, 3, " > ", CODE_PAGE, 1, index);
+        tb_text(rect.y + rect.h - 1, rect.x + 27, rect.w - 28, TB_MUTED, 0,
+                mapping == TB_IMAGE_BACKEND_VERIFIED ? "ELF:native" : mapping == TB_IMAGE_USER_CONFIRMED ? "ELF:user" : "ELF:?");
         if (view->mixed && !view->mixed_available && total) {
             tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_MUTED, 0, "Assembly only | mixed data unavailable");
         }
@@ -1900,24 +1911,76 @@ static const char *const code_labels[] = {
     "Choose source file", "Find in current file", "Go to line", "Go to address / symbol",
     "Return to stopped context", "Toggle mixed source/assembly", "Source lookup settings",
     "Add source directory", "Mapping: build prefix", "Mapping: local prefix", "Clear source overrides", "Decode bytes (raw inspection)", "Run to Selected", "Fullscreen Source",
-    "Return to Stop (this view)", "Follow selected frame (this view)"
+    "Return to Stop (this view)", "Follow selected frame (this view)", "Review ELF/load address mapping"
 };
 
 static void draw_code_menu(App *app)
 {
-    TbRect card = menu_card(80, 12);
+    bool source = app->demo.panes[app->code_pane].tabs[app->demo.panes[app->code_pane].active] == TB_SOURCE;
+    int count = source || tb_session_kind(app->debugger) == TB_SESSION_LOCAL ? 7 : 8;
+    TbRect card = menu_card(80, count + 5);
     int left = card.x + 2, top = card.y, width = card.w - 4;
     draw_header(app, "Code view actions");
-    bool source = app->demo.panes[app->code_pane].tabs[app->demo.panes[app->code_pane].active] == TB_SOURCE;
     const CodeAction source_actions[] = {CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_STOPPED, CODE_SOURCE_SETTINGS, CODE_RUN_TO, CODE_FULLSCREEN};
-    const CodeAction asm_actions[] = {CODE_ADDRESS, CODE_ASSEMBLY_STOP, CODE_FOLLOW_FRAME, CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_RAW, CODE_RUN_TO};
-    int count = 7;
+    const CodeAction asm_actions[] = {CODE_ADDRESS, CODE_ASSEMBLY_STOP, CODE_FOLLOW_FRAME, CODE_MIXED, CODE_SOURCE_SETTINGS, CODE_RAW, CODE_RUN_TO, CODE_IMAGE_MAP};
     for (int i = 0; i < count; ++i) {
         CodeAction action = source ? source_actions[i] : asm_actions[i];
         button(app, top + 1 + i, left, width, action == CODE_FULLSCREEN && app->fullscreen_source >= 0 ? "Restore tiled workspace" : code_labels[action], CODE_ACTION, action, app->code_pane);
     }
-    tb_text(top + card.h - 3, left, width, TB_MUTED, 0, "Browsing never moves execution. Left/Right scroll long code lines.");
+    if (card.h >= count + 5) { tb_text(top + card.h - 3, left, width, TB_MUTED, 0, "Browsing never moves execution. Left/Right scroll long code lines."); }
     button(app, top + card.h - 2, left, 12, "[ Back ]", BACK, 0, 0);
+}
+
+static void image_review_text(const char *text, TbRect card, int offset, int *row)
+{
+    int width = card.w - 4, visible = card.h - 4;
+    while (*text) {
+        int count = paragraph_chunk(text, width);
+        if (*row >= offset && *row < offset + visible) {
+            char part[256]; size_t n = (size_t)count < sizeof part - 1 ? (size_t)count : sizeof part - 1;
+            memcpy(part, text, n); part[n] = 0;
+            tb_text(card.y + *row - offset, card.x + 2, width, TB_MUTED, 0, part);
+        }
+        ++*row; text += count; while (*text == ' ') { ++text; }
+    }
+}
+
+static void draw_image_review(App *app)
+{
+    TbRect card = menu_card(100, 20); TbCode *code = tb_session_code(app->debugger);
+    draw_header(app, "Confirm remote ELF mapping?");
+    TbImageRange range;
+    if (!tb_code_image_range(code, &app->image_review, 0, &range)) {
+        tb_text(card.y, card.x + 2, card.w - 4, TB_ORANGE, 0, "Review expired or image unavailable. Open a new review.");
+    } else {
+        char path[TB_CODE_PATH * 4 + 1], text[TB_CODE_PATH * 4 + 2048];
+        tb_code_safe(path, sizeof path, app->image_review.image.path, strlen(app->image_review.image.path));
+        (void)snprintf(text, sizeof text,
+            "USER CONFIRMATION, not automatic verification. Current mapping: %s. Configured ELF: %s. "
+            "Additive load bias: 0x%llx. Zero means linked virtual addresses. "
+            "Confirm only if this ELF matches the current target image and every runtime section address below. "
+            "Nonuniform relocation is not inferred. This declaration permits code/data classification and instruction-anchor selection; "
+            "it does not prove live bytes match, authorize memory access, or grant MMIO consent. "
+            "Target, connection, Console, relevant image/mapping or file-identity changes require renewed confirmation. "
+            "Reviewing/confirming reads local ELF metadata only, never target memory.",
+            range.trust == TB_IMAGE_USER_CONFIRMED ? "USER-CONFIRMED" : range.trust == TB_IMAGE_BACKEND_VERIFIED ? "BACKEND-VERIFIED" : "UNVERIFIED", path,
+            (unsigned long long)app->image_review.image.bias);
+        int row = 0, offset = app->image_review_row, visible = card.h - 4;
+        image_review_text(text, card, offset, &row);
+        for (size_t i = 0; i < app->image_review.image.ranges; ++i) {
+            if (!tb_code_image_range(code, &app->image_review, i, &range)) { break; }
+            char name[385]; tb_code_safe(name, sizeof name, range.name, strlen(range.name));
+            (void)snprintf(text, sizeof text, "%s: [0x%llx, 0x%llx) %s (metadata; not read permission)", name,
+                (unsigned long long)range.start, (unsigned long long)range.end, range.kind == TB_IMAGE_CODE ? "executable section" : "data section");
+            image_review_text(text, card, offset, &row);
+        }
+        if (offset + visible >= row) {
+            button(app, card.y + card.h - 2, card.x + 2, card.w - 4, "[ I confirm the ELF and all load addresses ]", CODE_IMAGE_CONTROL, 0, 0);
+        }
+        if (offset > 0) { button(app, card.y + card.h - 1, card.x + 15, 12, "Previous", CODE_IMAGE_CONTROL, -1, 0); }
+        if (offset + visible < row) { button(app, card.y + card.h - 1, card.x + 28, 12, "Next", CODE_IMAGE_CONTROL, 1, 0); }
+    }
+    button(app, card.y + card.h - 1, card.x + 2, 12, "[ Back ]", BACK, 0, 0);
 }
 
 static void draw_source_settings(App *app)
@@ -2024,6 +2087,10 @@ static void draw_input(App *app)
     if (memory) {
         char summary[160]; (void)snprintf(summary, sizeof summary, "Read exactly %u bytes; no calls/writes/casts. MMIO reads can have side effects. Esc cancels.", tb_memory_view(tb_session_memory(app->debugger), app->memory_pane)->length);
         tb_text(top + 3, left, width, TB_MUTED, 0, memory_length ? "Changes the requested range only; no target read. Use Address or Refresh afterward." : summary);
+    }
+    if (code && app->code_action == CODE_IMAGE_MAP) {
+        tb_text(top + 1, left, width, TB_CYAN, A_BOLD, "Additive load bias, hexadecimal (0x0 = linked virtual addresses)");
+        tb_text(top + 3, left, width, TB_MUTED, 0, "Local ELF metadata only. Review every runtime section address before confirming.");
     }
     if (app->page == MEMORY_RANGE_INPUT) {
         draw_header(app, "Edit temporary Memory range");
@@ -2272,6 +2339,8 @@ static void draw_page(App *app)
     } else if (app->page == SCRIPT_LIST) { draw_scripts(app);
     } else if (app->page == CODE_MENU) {
         draw_code_menu(app);
+    } else if (app->page == IMAGE_REVIEW) {
+        draw_image_review(app);
     } else if (app->page == BREAK_MENU) {
         draw_break_menu(app);
     } else if (app->page == MEMORY_MENU) {
@@ -2581,7 +2650,7 @@ static void pane_action(App *app, int action, int pane)
         memset(&app->demo.panes[added], 0, sizeof app->demo.panes[added]);
         memset(app->horizontal[added], 0, sizeof app->horizontal[added]);
         memset(app->source_tabs[added], 0, sizeof app->source_tabs[added]);
-        if (app->live) { tb_code_tab_reset(tb_session_code(app->debugger), added); }
+        if (app->live) { tb_code_clear(tb_session_code(app->debugger), added); }
         app->memory_input[added][0] = 0; app->memory_cursor[added] = 0;
         app->command_input[added][0] = 0; app->command_cursor[added] = 0;
         if (app->live) { tb_memory_clear(tb_session_memory(app->debugger), added); }
@@ -2598,7 +2667,7 @@ static void pane_action(App *app, int action, int pane)
         } else {
             memset(&app->demo.panes[pane], 0, sizeof app->demo.panes[pane]);
             memset(app->source_tabs[pane], 0, sizeof app->source_tabs[pane]);
-            if (app->live) { tb_code_tab_reset(tb_session_code(app->debugger), pane); }
+            if (app->live) { tb_code_clear(tb_session_code(app->debugger), pane); }
             if (app->live) { tb_memory_clear(tb_session_memory(app->debugger), pane); }
             app->demo.pane = survivor;
             status(app, "Split pane closed; sibling expanded.");
@@ -3107,6 +3176,7 @@ static void activate(App *app, Control control)
         page_result(app, WORKSPACE);
         break;
     case BACK:
+        if (app->page == IMAGE_REVIEW) { page(app, CODE_MENU); break; }
         if (app->page == MEMORY_RANGES) { page(app, MEMORY_MENU); break; }
         if (app->page == MEMORY_RANGE) { page(app, MEMORY_RANGES); break; }
         if (app->page == MEMORY_CONSENT || app->page == MEMORY_RANGE_INPUT || app->page == MMIO_SETUP) { page(app, MEMORY_RANGE); break; }
@@ -3447,6 +3517,17 @@ static void activate(App *app, Control control)
     }
     case CODE_ACTIONS:
         app->code_pane = control.pane; code_focus(app, control.pane); page(app, CODE_MENU); break;
+    case CODE_IMAGE_CONTROL:
+        if (control.value) {
+            app->image_review_row += control.value * (menu_card(100, 20).h - 4);
+            if (app->image_review_row < 0) { app->image_review_row = 0; }
+        } else {
+            bool okay = tb_code_image_confirm(tb_session_code(app->debugger), &app->image_review);
+            status(app, okay ? "ELF/load addresses USER-CONFIRMED; no target read and no memory permission granted." :
+                "Image, target or file identity changed; open a new review. No target read.");
+            if (okay) { page(app, WORKSPACE); }
+        }
+        break;
     case CODE_ACTION: {
         if (control.value == CODE_FULLSCREEN) { toggle_source_fullscreen(app, control.pane); break; }
         TbCode *code = tb_session_code(app->debugger);
@@ -3476,7 +3557,11 @@ static void activate(App *app, Control control)
             tb_code_mixed(code, control.pane, !tb_code_view(code, control.pane)->mixed); page(app, WORKSPACE);
         } else if (app->code_action == CODE_SETTINGS_CLEAR) {
             status(app, tb_code_clear_settings(code) ? "Clearing current GDB source overrides." : "Wait for the current source operation.");
-        } else { app->input[0] = L'\0'; page(app, CODE_INPUT); }
+        } else {
+            app->input[0] = L'\0';
+            if (app->code_action == CODE_IMAGE_MAP) { (void)swprintf(app->input, FIELD_SIZE, L"0x0"); }
+            page(app, CODE_INPUT); app->cursor = wcslen(app->input);
+        }
         break;
     }
     case CODE_PAGE:
@@ -3613,6 +3698,16 @@ static void activate(App *app, Control control)
         if (app->page == CODE_FILES) { app->file_page = 0; break; }
         if (app->page == CODE_INPUT) {
             TbCode *code = tb_session_code(app->debugger);
+            if (app->code_action == CODE_IMAGE_MAP) {
+                uint64_t bias; bool symbol;
+                if (!tb_code_location(input, &bias, &symbol) || symbol) {
+                    status(app, "Use a nonnegative numeric load bias, for example 0x0. No target read."); break;
+                }
+                if (!tb_code_image_review(code, bias, &app->image_review)) {
+                    status(app, "Stop a remote target with a readable configured ELF; unsupported/overflowing mappings remain unverified."); break;
+                }
+                app->image_review_row = 0; page(app, IMAGE_REVIEW); break;
+            }
             TbDemoPane *pane = &app->demo.panes[app->code_pane];
             bool okay = false;
             if (app->code_action == CODE_FIND || app->code_action == CODE_LINE) {
@@ -4109,7 +4204,7 @@ static void key_event(App *app, wint_t key, bool special)
         if (app->page == PROFILE_LIST || app->page == PROFILE_OPTIONS || app->page == PROFILE_ITEMS || app->page == PROFILE_TEXT || app->page == PROFILE_CONFIRM) {
             activate(app, (Control){.kind = BACK}); return;
         }
-        if (app->page == MEMORY_RANGES || app->page == MEMORY_RANGE || app->page == MEMORY_CONSENT || app->page == MEMORY_RANGE_INPUT || app->page == MMIO_SETUP) {
+        if (app->page == MEMORY_RANGES || app->page == MEMORY_RANGE || app->page == MEMORY_CONSENT || app->page == MEMORY_RANGE_INPUT || app->page == MMIO_SETUP || app->page == IMAGE_REVIEW) {
             activate(app, (Control){.kind = BACK}); return;
         }
         if (app->menu >= 0) {

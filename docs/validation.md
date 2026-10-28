@@ -2495,3 +2495,88 @@ first. None of those failed runs is counted as a pass.
 This completes a production MMIO checkpoint, not Task 1.3. Mapping trust,
 remaining bounded reconstruction requirements and owner hardware/visual review
 remain. No release or complete interactive hardware acceptance is claimed.
+
+## Task 1.3 ELF trust and bounded reconstruction
+
+State: **automated-verified; awaiting-user**. Owner authorized implementation, local commits and continued
+1.x work, with manual review deferred. This record does not grant release
+permission or establish owner acceptance.
+
+The implementation adds metadata-only remote configured-ELF/additive-load-bias
+review with full escaped paths and paged allocated-section addresses. It
+separates UNVERIFIED, USER-CONFIRMED and native BACKEND-VERIFIED mapping evidence;
+no declaration proves live-byte equality or authorizes Memory. Native mappings
+match device/inode and executable PT_LOAD offsets. File revision/identity,
+configuration and code-epoch guards invalidate stale authority while retaining
+historical rows. Confirming another bias supersedes the preceding declaration
+for that ELF, including overlapping mappings.
+
+Small session/stop/epoch-qualified boundary records share the actual 4 MiB
+history allocation pool. Reconstruction starts from a reliable earlier boundary
+within 1024 bytes and consumes at most 128 decoded rows, including trimmed prefix
+rows. Exhaustion, errors and stale replies preserve prior instructions and
+provenance, including internal function/region/follow-anchor state, without
+retry. Closed/reused splits clear their Code history and change request identity.
+Trusted-mapping feedback uses ELF:native / ELF:user / ELF:? in the pane footer;
+selected-frame/file context remains visible. Manual headers use sampled source
+attribution or an address-window label, never an unrelated selected caller.
+
+Agent-run focused results on Arch Linux x86-64, kernel 7.2.11-arch1-1, glibc2.44,
+GCC16.2.1, GDB18.1, tmux3.8 and clang-tidy23.1.3:
+
+- PASS authored Code/image model cases: forty forward expansions with actual
+  shared-cache eviction, fresh-anchor reconstruction, missing/stale-anchor
+  refusal, row-budget exhaustion and complete provenance retention, in-flight
+  epoch invalidation, no implicit replacement reads and pane-slot cleanup.
+- PASS native GDB ordinary/optimized/stripped/C++ and relocated-source fixtures;
+  code/data gaps, explicit raw decoding, long-function browsing and breakpoints.
+- PASS Code terminal workflow with the existing selected-frame/header assertions
+  retained and new footer/manual-header assertions: browsing-header-final-tui.log.
+- PASS Code/image AddressSanitizer+UBSan with leak detection, including the final
+  boundary/identity changes: browsing-complete-asan-code.log and
+  browsing-complete-asan-images.log. These focused checks do not instrument the
+  entire application or establish physical behavior.
+- PASS complete fresh fortified baseline and final full analysis, both exit0.
+  Commands:
+  `TERM=xterm-256color make BUILD_DIR=build/browsing-delivery-ci CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`
+  and `make BUILD_DIR=build/browsing-delivery-analysis analyze`.
+  Logs: build/browsing-evidence/browsing-delivery-test-ci.log and
+  browsing-delivery-analysis.log. Local host success is distinct from hosted
+  Ubuntu CI.
+- PASS remote ELF review on the rebuilt normal build/the-bugger directly and
+  through an actual isolated tmux server, including18x48 paging and Console
+  invalidation. Logs: browsing-delivery-tui-direct.log and
+  browsing-delivery-tui-tmux.log, exit0; owned tmux server stopped afterward.
+- All73 C test sources compiled fortified in build/browsing-complete-analysis;
+  the final Code TUI assertions were recompiled in the follow-up log. Source and
+  object freshness checks found no missing/stale test objects. The runtime,
+  build and test inputs remained identical to the frozen delivery manifest
+  throughout the successful final baseline. Documentation was finalized afterward.
+  Evidence: browsing-delivery-input-check.log, browsing-delivery-inputs.sha256,
+  browsing-delivery-tree.tar.gz and final-tree/manifest artifacts in
+  build/browsing-evidence. The environment/tool record is
+  browsing-delivery-environment.txt. Normal build/the-bugger is rebuilt.
+
+Initial failures remain visible. image-reconstruction-analysis.log failed two
+convertible helper-parameter diagnostics and App padding; signatures/field
+placement were corrected without disabling checks. One overlapping analysis read
+headers during a source rewrite and produced incomplete-header diagnostics; it
+is invalid as final-tree evidence. image-reconstruction-test-ci.log failed the
+old empty-notice expectation; its replacement explicitly requires the approved
+BACKEND-VERIFIED label while retaining/strengthening unknown/raw distinctions.
+image-browsing-final-test-ci.log then exposed a real renderer regression: the
+new informational notice hid selected-frame/file context. The renderer was fixed
+and existing assertions preserved. image-verified-ci and browsing-complete-ci
+were interrupted as superseded, with logs marked; neither is a passing baseline.
+An environment-only attempt at tmux validation did not launch tmux and is retained
+as image-final-tui-env-only.log; the separately recorded isolated-server runs are
+the actual tmux evidence.
+
+Scope limitations: one configured remote ELF and additive bias, no inferred
+nonuniform relocation or general F33 multi-image controls. No SVD register
+identity, Read Span, writes, polling or unvalidated MMIO backend was introduced.
+The previously recorded production physical MMIO transport/width evidence remains
+specific to that STM32F446/ST-LINK/OpenOCD setup. This phase adds no new physical
+claim. Owner hardware/visual workflow and release acceptance remain outstanding.
+Review procedures are in [ELF trust and reconstruction](testing.md#elf-mapping-trust-and-bounded-reconstruction)
+and [MMIO](testing.md#openocd-mmio-protocol-gate-task-13).

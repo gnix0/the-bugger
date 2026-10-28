@@ -35,6 +35,13 @@ sessions, with 256-color and monochrome fallbacks.
 what is included. The development build starts the three lower pane groups minimized; restore
 them above the footer and resize their overlay heights independently.
 [Workspace controls](docs/usage.md#workspace-controls) describe the current behavior.
+The development build also retains shared browsing history and supports
+[explicit MMIO unit sampling](docs/usage.md#memory-inspection) for the documented,
+validated STM32/OpenOCD setup. Temporary per-view consent never causes automatic
+reads. Remote ELF/load-address review distinguishes a user declaration from
+native backing-file verification; neither proves live-byte equality or grants
+Memory access. See [code browsing](docs/usage.md#code-and-execution-context).
+
 Shared UI additions also include
 [Source fullscreen and spatial keyboard navigation](docs/usage.md#workspace-controls).
 These features extend the original v0.1.0 workspace. v0.1.2 also
@@ -139,9 +146,8 @@ Prepared artifacts do not establish release acceptance or publication.
 
 The [current development sequence](docs/roadmap.md#current-development-sequence)
 starts with rendering stability, then lower-pane organization and approved
-Disassembly/Memory browsing improvements. This unreleased work is still in
-progress. Both browsing views require complete implementation, verification and owner
-acceptance before the next release.
+Disassembly/Memory browsing improvements. This unreleased work awaits owner hardware/visual review. Both browsing views
+require owner acceptance before the next release.
 
 The roadmap retains all M00–M18/F01–F47 gates. Post-release priorities progress
 from safe editing and hardware/fault diagnosis to flashing/text channels, RTOS/

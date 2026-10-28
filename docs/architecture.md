@@ -814,17 +814,33 @@ remain. No global membership state or persistence is introduced.
 
 `src/model/images.{c,h}` uses libelf/GElf for ELF32/64 in either byte order.
 Allocated/executable sections, function/object symbols and ARM mapping symbols
-classify ranges and supply trusted anchors. Native `/proc/PID/maps` plus PT_LOAD
-offsets establish mapped-image load bias. Library/PID lifecycle events invalidate
-metadata. Unsupported/unavailable metadata stays unknown, never fabricated.
+classify ranges and supply anchors only through trusted catalog queries. Loading
+an ELF starts UNVERIFIED. Remote metadata-only review binds its full path,
+additive bias and monotonically increasing file revision to the current session
+and code epoch; confirmation declares USER-CONFIRMED, never live-byte proof
+or read permission. A new user-confirmed bias revokes the preceding declaration
+for the same file. Native `/proc/PID/maps` device/inode identity plus executable
+PT_LOAD offsets establish BACKEND-VERIFIED mapping/load bias, not live-byte
+equality. File stat identity includes device, inode, size, mtime and ctime with
+nanoseconds; validation precedes decoding and confirmation, not rendering.
+Library/PID lifecycle, memory-change notifications, accepted Console commands and
+local file changes invalidate the applicable catalog/code evidence. In-flight
+code replies from an earlier epoch are discarded; retained listings keep their
+original provenance. Unsupported/unavailable metadata stays unknown, never
+fabricated.
 Limits are 16 images, 256 allocated sections/image, 8192 retained symbols/image,
 65536 scanned symbols/image and 64 MiB/image; limited catalogs are disclosed.
 
 Indexed instruction caches merge sorted/deduplicated windows, retaining at most
-128 instructions. Backward extension decodes forward from a known anchor in
-256-byte chunks, at most 4096 chunks. It skips unknown/non-code boundaries to
-the next known code anchor instead of guessing a variable-length x86 boundary.
-Failures retain the prior listing. Raw decoding is explicit; repeated byte or
+128 instructions. Each view/format retains up to 512 boundary records in the
+same 4 MiB LRU pool, with session/stop/code-epoch provenance. Backward
+reconstruction uses a fresh known anchor within 1024 bytes and at most 128 decoded
+rows per operation; trimming a prefix does not replenish that budget. Requests
+are clipped to remaining work and trusted code ranges. Unknown/non-code gaps can
+be crossed only at an established next code anchor; no variable-length x86
+boundary is guessed. Failures and budget exhaustion retain the complete prior
+listing/provenance without retry. Closing/reusing a pane clears its listings,
+annotations and boundary records and changes its request identity. Raw decoding is explicit; repeated byte or
 instruction patterns alone never classify code. Gap rows say how many bytes
 were not decoded. Visible instruction metadata determines warnings, independent
 of the last request or offscreen rows.
@@ -833,6 +849,10 @@ Visibility changes do not invalidate a cached code view; stop/context/settings
 changes do. Opening/closing a selector therefore preserves cache and viewport.
 One assembly formatter supplies both rendered rows and horizontal extent,
 aligning address, byte, mnemonic and operand columns without discarding bytes.
+Trusted mapping feedback uses the compact pane footer rather than replacing
+selected-frame/file context. Manual headers use retained instruction source
+attribution or an address-window label, never a different selected frame's
+filename/caller label; unknown/data/error notices still take priority.
 
 `src/model/breakpoints.{c,h}` owns a bounded 256-row MI snapshot, parent/child and
 pending locations, conditions, ignore counts, hits, enabled state and hardware

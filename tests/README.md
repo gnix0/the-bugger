@@ -143,14 +143,22 @@ records remain in the [validation records](../docs/validation.md).
   selection, respecting GDB's default backtrace boundary at main.
 
 - `test-images`: ELF32/64, both byte orders, code/data and ARM mapping symbols,
-  relocation overflow, reset and 1,000 malformed/truncated metadata mutations.
+  relocation overflow, reset and 1,000 malformed/truncated metadata mutations;
+  unverified/user/native trust, backing-file identity, changed-file revisions and
+  stale load-bias declarations.
 - `test-breakpoints`: structured breakpoint rows, multiple/pending/hardware
   state, resource errors, run-to races/timeouts/cleanup failures and ownership,
   bounded malformed tables, no retry spin and aborted-execution reconciliation.
 
 - `test-code`: synthetic GDB-known files, bounded source/assembly windows and
   navigation, mixed fallback, raw-path/display escaping, stale local-view replies,
-  source byte/line limits and no automatic invisible/running/idle reads.
+  source byte/line limits and no automatic invisible/running/idle reads;
+  actual shared-cache eviction, reconstruction from retained fresh boundaries,
+  absent/stale-anchor refusal, 128-decoded-row exhaustion with full provenance
+  preservation, in-flight code-epoch changes and pane-history cleanup.
+- `test-image-tui`: authored ARM/big-endian remote ELF metadata review, paths
+  with spaces, 18x48 pagination, USER-CONFIRMED state and accepted-Console
+  invalidation. No hardware/image-match verification is implied.
 - `test-native-words`: quoted whitespace/backslash parsing, empty arguments,
   literal metacharacters and input bounds, without a shell or GDB.
 - `test-context`: bounded coherent frame/thread snapshots via a synthetic C

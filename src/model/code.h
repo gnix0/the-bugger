@@ -3,6 +3,7 @@
 
 #include "context.h"
 #include "browse.h"
+#include "images.h"
 
 enum { TB_CODE_VIEWS = 32, TB_CODE_FILES = 256, TB_CODE_INSNS = 128,
        TB_CODE_SOURCE_BYTES = 1024 * 1024, TB_CODE_LINES = 32768,
@@ -38,6 +39,15 @@ typedef struct {
  * Pass NULL for a count only; otherwise provide TB_CODE_ROWS slots. */
 size_t tb_code_rows(const TbCodeView *view, TbCodeRow *rows);
 typedef struct TbCode TbCode;
+typedef struct { TbImageReview image; TbGdbGeneration generation; uint64_t epoch; } TbCodeImageReview;
+/* Remote configured ELF review: metadata-only, no target access or permission.
+ * Bias is added to linked virtual addresses; nonuniform relocation is not
+ * inferred. User confirmation is distinct from native mapping verification. */
+bool tb_code_image_review(TbCode *code, uint64_t bias, TbCodeImageReview *review);
+bool tb_code_image_range(const TbCode *code, const TbCodeImageReview *review, size_t index, TbImageRange *range);
+bool tb_code_image_confirm(TbCode *code, const TbCodeImageReview *review);
+void tb_code_image_invalidate(TbCode *code);
+TbImageTrust tb_code_assembly_mapping(const TbCode *code, int view, size_t first, size_t count);
 const char *tb_code_gap_label(const TbCode *code, int view, uint64_t begin, uint64_t end);
 
 TbCode *tb_code_create(TbGdb *gdb, TbContext *context);
@@ -66,6 +76,8 @@ size_t tb_code_tab_active(const TbCode *code, int view);
 const TbCodeFile *tb_code_tab_file(const TbCode *code, int view, size_t tab);
 bool tb_code_tab_select(TbCode *code, int view, size_t tab);
 bool tb_code_tab_close(TbCode *code, int view, size_t tab);
+/* Clear a closed/reused pane, including its browsing history and request identity. */
+void tb_code_clear(TbCode *code, int view);
 void tb_code_tab_reset(TbCode *code, int view);
 bool tb_code_source_line(const TbCode *code, int view, size_t line, char *out, size_t capacity);
 /* Local source annotations only; lookup never performs filesystem/debugger I/O.
