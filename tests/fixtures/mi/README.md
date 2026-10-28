@@ -4,8 +4,7 @@
 following the official
 GDB manual's [MI output grammar](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Output-Syntax.html)
 and [stream record specification](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Stream-Records.html).
-Those two files are not captured debugger sessions or hardware evidence;
-their addresses and values are deliberately illustrative.
+Addresses and values in these authored examples are illustrative.
 
 - `valid.mi`: 22 records covering the prompt, all seven output prefixes,
   result classes including unknown future classes, token preservation,
@@ -34,7 +33,5 @@ The decoder escapes control bytes and launches no debugger.
   recorded STM32F446/ST-LINK V2J48M35/OpenOCD setup at8/16/32bits, count one.
 
 These captures have physical provenance in [the validation record](../../../docs/validation.md#task-13-openocd-transport-and-width-evidence--in-progress).
-`test-monitor` replays them with fragmented input to check parsing. Replay is
-not a fresh hardware test, a bus trace, proof of exactly-once access or support
-for another target/backend. Product transport and physical width checks remain
-separate from parser/corpus evidence.
+`test-monitor` replays them with fragmented input to check parsing. Physical
+transport and width validation are recorded separately.

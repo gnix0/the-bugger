@@ -1,79 +1,40 @@
 # The Bugger
 
 <p align="center">
-  <img src="docs/assets/base_layout.png" alt="The Bugger default debugging workspace">
+  <img src="docs/assets/base_layout.png" alt="The Bugger debugging workspace">
 </p>
 
-A terminal-native GDB frontend written in C17 for embedded firmware development.
-It combines source, disassembly, registers, memory, variables and debugger output
-in a configurable tiled workspace with semantic theme colors.
-
-The Bugger is **embedded-first, not embedded-only**. Native Linux debugging is a
-supported capability and the repeatable foundation for the current development
-build. After v0.1.0, feature development focuses overwhelmingly on embedded
-workflows; native fixes, compatibility and shared interface/infrastructure
-improvements continue.
+A terminal-native GDB frontend written in C17 for embedded firmware development,
+with native Linux debugging support.
 
 ## Current capabilities and limitations
 
-The current build supports native Linux x86-64 launch/attach, stepping, source
-and mixed disassembly, threads/frames, code breakpoints and Run to Selected,
-hardware-required data watchpoints, read-only registers/Memory/Locals/Watches,
-GDB Console, program output, Save Log, named profiles and personal keybind customization.
-Availability depends on GDB and the target's capabilities.
+Debug **ARM/Cortex-M**, **Xtensa** and **32-bit RISC-V** firmware, or launch/attach
+to native Linux **x86-64** programs. Physical testing covers these embedded
+architectures using STM32 NUCLEO-F446RE, ESP32-S3 and ESP32-C6FH4 respectively.
+See the [validation records](docs/validation.md) for configurations and results.
 
-v0.1.1 adds **Config → Themes** with seven built-in families and 37 variants,
-preview and saved appearance preferences.
-**Catppuccin Macchiato** is the default; Monokai Pro remains available.
-v0.1.2 preserves exact theme colors inside RGB-advertising tmux
-sessions, with 256-color and monochrome fallbacks.
-[Theme controls and variants](docs/usage.md#configuration-and-themes) describe
-what is included. The development build starts the three lower pane groups minimized; restore
-them above the footer and resize their overlay heights independently.
-[Workspace controls](docs/usage.md#workspace-controls) describe the current behavior.
-The development build also retains shared browsing history and supports
-[explicit MMIO unit sampling](docs/usage.md#memory-inspection) for the documented,
-validated STM32/OpenOCD setup. Temporary per-view consent never causes automatic
-reads. Remote ELF/load-address review distinguishes a user declaration from
-native backing-file verification; neither proves live-byte equality or grants
-Memory access. See [code browsing](docs/usage.md#code-and-execution-context).
+The tiled workspace provides source and mixed disassembly, registers, memory,
+locals/watches, threads/frames, code breakpoints, hardware watchpoints, stepping
+and GDB Console. Lower panes start minimized and expand with independent heights.
+Source tabs, fullscreen and cached browsing keep large programs navigable.
 
-Shared UI additions also include
-[Source fullscreen and spatial keyboard navigation](docs/usage.md#workspace-controls).
-These features extend the original v0.1.0 workspace. v0.1.2 also
-provides [Config → Keybinds](docs/usage.md#personal-keybinds) for debugger and
-workspace/navigation shortcuts. Bindings are personal preferences alongside
-themes; connection profiles never carry or override them.
-[Vim-like input](docs/usage.md#vim-like-input) is optional and off by default,
-with Normal/Insert field modes and visible mode feedback when enabled.
+Configure themes, keybinds and optional Vim-like input under **Config**.
+Catppuccin Macchiato is the default; RGB-capable tmux sessions retain theme colors.
+Connection profiles are separate from personal preferences.
 
-Existing TCP GDB servers support reviewed `remote`/`extended-remote` connections
-and shared inspectors. OpenOCD support includes reviewed startup, installed-script
-browsing, owned lifecycle and explicit Reset/Halt/disconnect actions.
-[Embedded startup debugging](docs/usage.md#debugging-embedded-startup-code)
-covers stopping before `main`, instruction stepping and reset-catch limitations.
+Memory and variable inspection are read-only. Explicit-width MMIO sampling is
+available for the validated STM32/OpenOCD setup; navigation never samples MMIO.
+See [Memory inspection](docs/usage.md#memory-inspection) for access controls.
 
-Physical hardware validation covers **STM32 NUCLEO-F446RE** through onboard ST-LINK
-and **ESP32-S3** through native USB/JTAG, with the
-[recorded GDB/OpenOCD configurations](docs/validation.md#m17--physical-board-validation).
-These results cover the tested workflows, not all boards, probes or architectures.
-OpenOCD is optional, not universal; broader compatibility needs separate evidence.
-Physical RISC-V validation is deferred for v0.1.3 to v0.1.4 and is not a hardware support claim.
-
-This checkout targets **v0.1.3**. Its release validation status is recorded in the
-[roadmap status](docs/roadmap.md#implementation-status) and
-[recorded validation evidence](docs/validation.md).
+The latest release is **v0.1.3**; development is on **v0.1.4**.
 
 ## Build and first session
 
-Build on Linux with GCC or Clang supporting C17, GNU Make, pkg-config, and the
-ncursesw, libelf and json-c development libraries/headers. Interactive use needs
-a TTY and usable TERM/terminfo. Native launch requires GDB 17 or newer to preserve
-literal arguments without a startup shell, plus permitted ptrace;
-Linux pidfds support owned-inferior crash recovery. Remote sessions need a
-target-compatible GDB and an already running server; `gdbserver` is required only
-for the localhost integration fixture. A C++ compiler is used only
-for optional debug-target fixtures. Dependencies are external, not bundled.
+On Linux, install a C17 compiler, GNU Make, pkg-config and the ncursesw, libelf
+and json-c development libraries. Native launch requires GDB 17+ and ptrace
+permission. Embedded sessions need a target-compatible GDB and debug server.
+OpenOCD is supported but optional. A C++ compiler builds test fixtures only.
 
 ```sh
 make
@@ -82,7 +43,7 @@ make
 ./build/the-bugger
 ```
 
-For a reproducible first debug session:
+To try a native session:
 
 ```sh
 make fixtures
@@ -90,66 +51,35 @@ make fixtures
 ```
 
 Choose **Linux application → Launch**, enter `./build/code-fixture`, then
-**Review session → Start native**. Restore Console with its dock title or `^`.
-In its inline **Command** field, enter
-`start`, then press Enter or click Send to ask GDB to stop at main.
-The fixture runs under GDB; do not pass `start` to it
-as a shell argument. Ordinary Continue starts the loaded program without an
-automatic main breakpoint.
+**Review session → Start native**. Expand Console with `^`, enter `start` in
+its **Command** field and press Enter to stop at `main`.
 
-Click Source for source stepping or Disassembly for instruction stepping.
-Source **+ File** opens another GDB-known source file in a pane-local tab;
-**Current** follows the stopped frame while opened files remain available.
-Arrows navigate by default; opt-in Vim-like input adds h/j/k/l aliases and
-Normal/Insert field editing. During CONTENT FOCUS, Ctrl+arrows (or optional
-Ctrl+h/j/k/l aliases) move between neighboring panes.
-[Source fullscreen](docs/usage.md#source-fullscreen) expands a Source pane while
-retaining the toolbar/status bars and restores the existing tiled workspace.
-Defaults are F5 Continue, F10 Over, F11 Into, Shift+F11 Out and F9 Breakpoint;
-clickable actions remain available when a terminal intercepts keys. Outside
-fields, `q` closes/backs out; `Ctrl+Q` quits, confirming active-session closure.
-Restore Memory from its dock to use the inline address/expression field;
-variable values require deliberate
-reads when automatic access safety cannot be established.
-Declared MMIO units support navigation without reads and explicit-width sampling
-on the documented validated OpenOCD setup, with separate user-confirmed backend
-bindings and per-view range consent. See [Memory inspection](docs/usage.md#memory-inspection).
+F5 continues, F10 steps over, F11 steps into, Shift+F11 steps out and F9 toggles
+a breakpoint. Focus Source for source stepping or Disassembly for instruction
+stepping. Ctrl+Q quits; active sessions require confirmation.
 
-`./build/the-bugger --demo` opens the explicitly simulated visual reference.
-It does not connect to hardware. In tmux, mouse support requires the opt-in
-`set -g mouse on`; the application does not alter tmux configuration or bindings.
+For embedded sessions, see [OpenOCD setup](docs/usage.md#openocd-sessions) and
+[startup debugging](docs/usage.md#debugging-embedded-startup-code).
+In tmux, enable mouse forwarding with `set -g mouse on`.
+`./build/the-bugger --demo` opens a simulated workspace.
 
 ## Linux x86-64 distribution
 
-`make release` prepares the host-binary archive, corresponding source archive
-and `SHA256SUMS` in `build/dist/v0.1.3/`. Other versions use their own
-version directory; `RELEASE_DIST_DIR` can override the destination. Extract the binary archive and run
-`./the-bugger` from a terminal. GDB/OpenOCD and the shared runtime libraries remain
-external; `BUILD-INFO.txt` lists the actual build host and dependency requirements.
-This build does not promise compatibility with every Linux distribution.
-See [artifact validation](docs/testing.md#release-artifacts-m18) and
-[release procedures](docs/maintaining.md#linux-x86-64-release-artifacts).
-Prepared artifacts do not establish release acceptance or publication.
+`make release` prepares a binary archive, corresponding source archive and
+`SHA256SUMS` under `build/dist/v<version>/`. Extract the binary archive and run
+`./the-bugger` in a terminal. GDB, OpenOCD and shared libraries remain external;
+`BUILD-INFO.txt` records the build host and runtime requirements.
+See [packaging and release procedures](docs/maintaining.md#linux-x86-64-release-artifacts).
 
 ## Documentation
 
-| Audience | Start here |
+| Topic | Reference |
 |---|---|
-| Users | [Usage and configuration](docs/usage.md), including themes, profiles, controls and limitations; [security policy](SECURITY.md) |
-| Contributors | [Contributing](CONTRIBUTING.md), [architecture](docs/architecture.md), [testing](docs/testing.md) and [suite catalog](tests/README.md) |
-| Product and design | [Requirements](docs/requirements.md), [roadmap](docs/roadmap.md), [interface specification](docs/requirements.md#interface-constraints) |
-| Maintainers | [Maintenance/release procedures](docs/maintaining.md) and [validation records](docs/validation.md) |
-
-The [current development sequence](docs/roadmap.md#current-development-sequence)
-starts with rendering stability, then lower-pane organization and approved
-Disassembly/Memory browsing improvements. Implementation and owner manual review
-are complete; the [v0.1.3 release record](docs/validation.md#v013-release-preparation)
-distinguishes final validation and prepared artifacts from publication.
-
-The roadmap retains all M00–M18/F01–F47 gates. Post-release priorities progress
-from safe editing and hardware/fault diagnosis to flashing/text channels, RTOS/
-images and validated runtime analysis. Version assignments are planning targets;
-advanced acquisition depends on actual hardware/backend evidence.
+| Controls, setup and troubleshooting | [Usage](docs/usage.md) |
+| Development | [Contributing](CONTRIBUTING.md), [architecture](docs/architecture.md) |
+| Product scope and planned work | [Requirements](docs/requirements.md), [roadmap](docs/roadmap.md) |
+| Tests and results | [Testing](docs/testing.md), [suite catalog](tests/README.md), [validation records](docs/validation.md) |
+| Maintenance and security | [Maintaining](docs/maintaining.md), [security policy](SECURITY.md) |
 
 ## Development checks
 
@@ -159,9 +89,7 @@ make test-native
 make test-tmux
 ```
 
-[CI](.github/workflows/ci.yml) runs tests and static analysis on pull requests and
-manual dispatch; see [contributor guidance](CONTRIBUTING.md#continuous-integration).
-These checks have different prerequisites and evidence boundaries. See
-[testing](docs/testing.md#commands-and-prerequisites) for focused suites,
-compiler/sanitizer/static-analysis checks and hardware validation. `build/` is
-ignored/disposable; use a fresh `BUILD_DIR` for different compilers or flags.
+[CI](.github/workflows/ci.yml) runs tests and static analysis on pull requests.
+Use a fresh `BUILD_DIR` when changing compilers or flags. See
+[testing](docs/testing.md#commands-and-prerequisites) for prerequisites and
+hardware procedures.

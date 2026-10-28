@@ -1,7 +1,7 @@
 # Embedded acceptance fixtures
 
-These are M17 test programs, not frontend features. Physical results apply only
-to the configurations named in the [validation records](../../../docs/validation.md#m17--physical-board-validation).
+These fixtures exercise ARM/Cortex-M, Xtensa and RISC-V debugging.
+[Validation records](../../../docs/validation.md) list the tested configurations.
 Build commands do not connect, reset or program a target. Programming replaces
 existing firmware and is a separate deliberate operation. Record the selected
 ELF's SHA-256, board revision, probe serial, tool versions and commands with each
@@ -23,7 +23,9 @@ subject to frontend authorization; an ELF symbol is not automatic access proof.
 Use explicit reads of these known fixture objects. Do not generalize a fixture's
 safe SRAM to an entire unknown target address space.
 
-## STM32 NUCLEO-F446RE
+## ARM Cortex-M fixture
+
+Test device: STM32 NUCLEO-F446RE.
 
 Requires `arm-none-eabi-gcc`, `arm-none-eabi-gdb` and OpenOCD/ST-LINK for physical
 execution. The authored bare-metal startup initializes `.data` and `.bss`, uses
@@ -66,7 +68,9 @@ stops. The installed board script already supplies adapter/target dependencies;
 do not append another pair to it.
 Connecting/loading symbols must not issue another programming command.
 
-## ESP32-S3
+## Xtensa fixture
+
+Test device: ESP32-S3.
 
 `espidf/` is an authored ESP-IDF project using the same workload, with a short
 FreeRTOS task delay between cycles. It does not configure LEDs, Wi-Fi, external
@@ -105,6 +109,32 @@ connection. Select `xtensa-esp32s3-elf-gdb`.
 Exact board/connectors and debug availability must be confirmed before access.
 See the official [S3](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-guides/jtag-debugging/index.html)
 JTAG guide. Actual physical evidence is recorded separately.
+
+## RISC-V fixture
+
+Test device: ESP32-C6FH4, exercising the RISC-V RV32 core workflow.
+The same ESP-IDF project/workload also targets this device. Use a separate build
+and sdkconfig; never flash the S3 image onto C6:
+
+```sh
+idf.py -C tests/fixtures/embedded/espidf -B "$PWD/build/m17/esp32c6" \
+  -DIDF_TARGET=esp32c6 -DSDKCONFIG="$PWD/build/m17/esp32c6/sdkconfig" build
+```
+
+Activate the matching ESP-IDF environment first. The tested device is
+ESP32-C6FH4 revision0.0 with built-in USB/JTAG. Use `riscv32-esp-elf-gdb` and
+`openocd/esp32c6.cfg`. Like the S3 fixture configuration, this selects
+hardware-thread awareness: reset removes FreeRTOS tasks, whose former contexts
+cannot establish a fresh stopped CPU frame. FreeRTOS task inspection is separate.
+
+The recorded fixture was flashed through the board's UART connector; JTAG tests
+use its native USB connector. Confirm the actual port before programming and
+record the ELF/binary identities. UART-only connectivity does not provide built-in
+JTAG. BOOT/RESET download mode is for flashing when needed; debugger connection
+normally uses the booted application. No security/eFuse changes are needed here.
+
+The validated tool versions and the OpenOCD checksum/GDB ROM-symbol limitations
+are in the [RISC-V procedure](../../../docs/testing.md#risc-v-hardware-validation).
 
 ## Physical acceptance
 

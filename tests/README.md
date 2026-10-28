@@ -217,13 +217,16 @@ LeakSanitizer needs execution outside ptrace-based execution environments. No ch
 is disabled to obtain a pass. `make analyze` runs clang-tidy over application
 sources. See `docs/testing.md` for commands and the manual/tmux checklist.
 
-UI/layout tests alone establish presentation evidence, not live debugging or complete
-FR-06/07/08/09/10/11/12/13/14/15/16/17 acceptance. M03's synthetic GDB/MI corpus
+UI/layout tests cover presentation; live debugging uses separate integration
+and physical tests. M03's synthetic GDB/MI corpus
 is in `fixtures/mi/` with a provenance README; it establishes NFR-04 parser
 evidence. M04's C fake peer tests controller behavior without launching a target;
 real native C/C++ fixtures are in `fixtures/native/`, with separate M05
 `make test-native` and `make sanitize-native` checks. M14 records native
-integration acceptance; real board evidence remains M17. Every release retests native
+integration acceptance; real board evidence includes M17 and the
+[RISC-V Task2.1 checks](../docs/testing.md#risc-v-hardware-validation). The board runner
+requires a decoded checkpoint instruction at the stopped PC, rejecting raw-data
+pseudo-operations in the known fixture. Every release retests native
 x86-64 and the STM32/ARM validation, ESP32/Xtensa and ESP32/RISC-V hardware,
 subject to the explicitly recorded version-specific RISC-V deferrals;
 QEMU ARM/RISC-V adds coverage where available and never replaces board evidence.

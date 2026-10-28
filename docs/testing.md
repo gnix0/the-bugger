@@ -25,16 +25,14 @@ Use a fresh `BUILD_DIR` when changing compilers/flags. `make clean` removes igno
 format, shadow and prototype checks. Project-owned ESP-IDF fixture sources also
 explicitly use `-Wall -Wextra -Werror`, with private category overrides for SDK
 warning-as-error exceptions; SDK components keep their own policy. See the
-[fixture build instructions](../tests/fixtures/embedded/README.md#esp32-s3).
+[fixture build instructions](../tests/fixtures/embedded/README.md#xtensa-fixture).
 Sanitizer targets instrument the frontend
 and C harnesses; targets debugged by GDB stay uninstrumented because LeakSanitizer
-cannot operate in a deliberately ptraced target. Sanitizers run with leak checking;
-no suppression or disabled check turns an environment failure into PASS.
+cannot operate in a deliberately ptraced target. Sanitizers run with leak checking.
 
 `make analyze` enables clang-analyzer and bugprone checks and fails on warnings.
 The Annex K replacement recommendation is excluded because Linux libc does not
-provide those optional `_s` functions. Missing tools and ptrace/socket restrictions
-are recorded as limitations or failed runs, not silently skipped passes.
+provide those optional `_s` functions. Record missing tools and ptrace/socket restrictions.
 
 | Layer | Entry points | Evidence boundary |
 |---|---|---|
@@ -45,12 +43,8 @@ are recorded as limitations or failed runs, not silently skipped passes.
 | Physical embedded | M17 and per-feature fixtures | Named board/probe/server/toolchain, capability and recovery evidence |
 
 The [suite catalog](../tests/README.md) lists individual binaries; fixture READMEs
-specify authored data and target behavior. Procedures below describe expected
-behavior, not proof that a particular run passed. Historical executions, blocked
-checks and exact evidence are in the [ledger](validation.md). Store logs
-under ignored `build/`; record durable result summaries separately. M14 includes
-a full-project analyzer pass; focused checks alone never establish that result
-for subsequent changes.
+specify authored data and target behavior. Record results in the [validation register](validation.md) and raw logs under
+ignored `build/`.
 
 ## Rendering stability stress
 
@@ -92,8 +86,7 @@ and **Static analysis** on Ubuntu 24.04. They run `make test-ci` and `make analy
 respectively. `test-ci` shares the complete host target list between local
 preflight and CI: `test test-native test-tmux test-m15-native test-m16-server
 test-m16-tui test-m16-openocd`.
-GDB/ptrace, PTYs and localhost sockets must work on the runner. Failures stay
-failures; required assertions are not skipped to obtain green status. Test and
+GDB/ptrace, PTYs and localhost sockets must work on the runner. Preserve failing assertions during diagnosis. Test and
 analysis logs are retained as workflow artifacts for seven days. Both jobs compile
 test code with `_FORTIFY_SOURCE=3`; the Ubuntu 24.04 job compiles every unit,
 integration and support C test source in addition to analysis. Local reproduction
@@ -120,8 +113,7 @@ Triggers cover pull requests and manual dispatch. Automatic push runs are
 disabled, so each PR update schedules one Tests job and one Static analysis job.
 There are no path filters that would leave required checks absent on docs-only
 pull requests. Hardware access, sanitizers, slow-recovery cases and artifact
-packaging remain separately documented checks. No hardware claim follows from
-hosted OpenOCD tests that terminate before adapter initialization.
+packaging remain separately documented checks. Hosted OpenOCD tests stop before adapter initialization.
 
 ## Validation strategy
 
@@ -665,7 +657,6 @@ register/context agreement, OpenOCD errors/disconnect and controlled peripheral
 behavior; repeat applicable workflows on ESP32 Xtensa/RISC-V. All are
 UNVERIFIED until actual recorded evidence, regardless of simulated MI success.
 
-
 ## CPU registers
 
 Coverage: M09; FR-08/20 and selected-context correctness.
@@ -688,7 +679,6 @@ Coverage: M09; FR-08/20 and selected-context correctness.
 Focused commands: `make test-m09-model` for synthetic model coverage,
 `make test-m09-native` for actual GDB and PTY. They are also included in `make test`
 and `make test-native` respectively; sanitizer targets inherit those suites.
-
 
 ## Disassembly browsing and code breakpoints
 
@@ -885,7 +875,6 @@ Manual acceptance, directly and inside tmux:
 
 Physical embedded compatibility and managed reset recovery remain
 M16–M17 work; native tests do not establish those results.
-
 
 ## Call Stack and Threads
 
@@ -1185,7 +1174,6 @@ checks alone do not satisfy the visual gate.
 `tests/unit/test_render.c` inspects ncurses cells and exact direct-color pairs.
 It does not substitute for inspecting the rendered interface.
 
-
 ## Lower dock and independent overlays
 
 1. Start a demo or live session at 140x44. Expect three primary groups and three
@@ -1295,9 +1283,10 @@ extended-color parameters when interpreting inverse attributes. Physical appeara
 
 ## Physical-board core workflow (M17)
 
-M17 validates NUCLEO-F446RE with its onboard ST-LINK and ESP32-S3 with native
-USB/JTAG. These results do not imply support for unnamed boards, probes or
-architectures. Build instructions and non-destructive defaults are in the
+M17 validates ARM/Cortex-M and Xtensa debugging on real hardware, using
+NUCLEO-F446RE with ST-LINK and ESP32-S3 with native USB/JTAG respectively.
+Task2.1 adds the [RISC-V core workflow](#risc-v-hardware-validation).
+ Build instructions and non-destructive defaults are in the
 [embedded fixture guide](../tests/fixtures/embedded/README.md).
 
 Build offline without connecting or programming:
@@ -1373,10 +1362,49 @@ Unperformed manual steps are not implied by automated terminal checks.
 
 Subject to the explicit v0.1.0 physical RISC-V deferral, exercise the same applicable core workflow on the ESP32 validation/Xtensa and ESP32/RISC-V boards through the appropriate GDB/server. Native x86-64 is always retested. Exact board/probe details are recorded with actual evidence, not required during planning. QEMU ARM/RISC-V guest/native tests are supplementary when available. This is validation coverage, not an in-product simulator or a promise that hardware-specific features work on every target. See the [release matrix](#every-release-regression-matrix).
 
+## RISC-V hardware validation
 
-### Embedded startup debugging check
+Task2.1 validates the shared RISC-V RV32 workflow on physical hardware, using
+ESP32-C6FH4 as the test device and the existing board runners.
+The [fixture guide](../tests/fixtures/embedded/README.md#risc-v-fixture) covers building
+and the UART/native-USB distinction. In the matching activated ESP-IDF environment:
 
-This is a procedure for additional evidence, not a newly recorded M17 pass.
+```sh
+make all build/test-board build/test-board-tui
+mkdir -p build/m17
+openocd -f tests/fixtures/embedded/openocd/esp32c6.cfg
+# In a second terminal, also with the ESP-IDF environment activated:
+TB_BOARD_LOG=build/m17/c6-session-new.log build/test-board \
+  riscv32-esp-elf-gdb 127.0.0.1:3333 \
+  "$PWD/build/m17/esp32c6/the_bugger_m17.elf" riscv --reset-halt
+build/test-board-tui "$PWD/build/the-bugger" riscv32-esp-elf-gdb \
+  127.0.0.1:3333 "$PWD/build/m17/esp32c6/the_bugger_m17.elf"
+```
+
+Build the host runners as in the core workflow, create the log directory and
+use a fresh log path. Set `TB_BOARD_TMUX=1` for the isolated tmux TUI run.
+Tests deliberately control execution/reset and read known fixture objects; they
+never flash. The checkpoint must have a decoded instruction and opcode bytes at the stopped
+PC; the RISC-V fixture checks 2/4-byte instruction alignment. Manually check
+profile reopen, visual appearance and physical unplug/recovery.
+
+Known tool issues for this setup:
+
+- OpenOCD `v0.12.0-esp32-20260703` crashes on the C6 `qCRC` path used by
+  `compare-sections`. Verify image identity with GDB
+  `dump binary memory FILE START END`, then compare each dumped section with
+  its ELF bytes. Obtain exact bounds from that ELF.
+- RISC-V GDB `17.1_20260402` displays application instructions as `.word` after
+  loading `esp32c6_rev0_rom.elf` from ROM package20241011. Application and
+  bootloader symbols decode correctly; avoid adding that ROM file for this setup.
+- Reset destroys FreeRTOS task contexts. The fixture's `ESP_RTOS hwthread`
+  setting keeps a CPU context available for fresh-stop verification.
+
+[Validation records](validation.md#v014-task-21--risc-v-hardware-validation)
+contain the reproductions and results.
+
+## Embedded startup debugging check
+
 Use the [startup walkthrough](usage.md#debugging-embedded-startup-code) with an
 already-programmed disposable fixture and matching ELF. Record board/core, reset
 wiring, probe, GDB/OpenOCD versions, scripts/arguments and firmware identity.
@@ -1453,9 +1481,9 @@ editable; OpenOCD is not a requirement for every architecture.
 | Environment | Minimum evidence | Current live evidence |
 |---|---|---|
 | Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | M05–M14 accepted; GCC/Clang native and tmux regressions plus full default/native sanitizers passed at M14. Per-release evidence and release acceptance remain required |
-| STM32 / ARM | NUCLEO-F446RE fixture via GDB/OpenOCD; halt/step/break/watch, real code/register/RAM/variables, reset/disconnect/cleanup | M17 physical core/API/TUI/tmux PASS; exact setup and exclusions in validation records |
-| ESP32 / Xtensa | Validation board via appropriate GDB/server; applicable core workflow and cleanup | M17 ESP32-S3 physical core/API/TUI/tmux PASS; other boards require evidence |
-| ESP32 / RISC-V | Validation board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED; physical acceptance deferred for v0.1.0 and separately v0.1.3 to v0.1.4; no hardware support claim |
+| ARM / Cortex-M | NUCLEO-F446RE fixture via GDB/OpenOCD; halt/step/break/watch, real code/register/RAM/variables, reset/disconnect/cleanup | M17 physical core/API/TUI/tmux PASS; exact setup and exclusions in validation records |
+| Xtensa | Validation board via appropriate GDB/server; applicable core workflow and cleanup | M17 ESP32-S3 physical core/API/TUI/tmux PASS; other boards require evidence |
+| RISC-V RV32 | Validation board via appropriate GDB/server; applicable core workflow and cleanup | ESP32-C6FH4 core/API/TUI evidence in Task2.1; owner review pending. Historical release deferrals remain recorded; other targets need evidence |
 | QEMU ARM / RISC-V | Supplementary reproducible native/guest runs where available | UNVERIFIED; not a physical-board substitute |
 
 For each release, capture the actual setup/version, relevant fixture/source
@@ -1707,7 +1735,6 @@ Interactive MMIO review on that setup:
    the authored integration fixtures. Uncertainty must remain visible in Console,
    block further MMIO and cause no automatic retry. Reconnection or an exact late
    completion is required as documented; do not inject arbitrary faults on hardware.
-
 
 ## ELF mapping trust and bounded reconstruction
 

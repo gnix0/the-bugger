@@ -1,44 +1,15 @@
 # Validation records
 
-This is the project evidence register: implementation references, acceptance
-states, executed checks, significant failures and unresolved validation limits.
-It complements the [roadmap](roadmap.md), [test procedures](testing.md) and
-[architecture](architecture.md). Procedures describe how to test; entries here
-state what was actually recorded. No workflow transcript or superseded agent
-instructions are required to interpret the results.
+Commands, results, revisions and acceptance records for The Bugger.
 
 ## Current evidence boundary
 
-The [v0.1.3 release-preparation record](#v013-release-preparation) is the current
-release snapshot. Entries below are chronological evidence: their original
-pending states and failures are retained rather than rewritten as fresh results.
+Latest release: [v0.1.3](#v013-release-preparation).
+Current development: [RISC-V validation for v0.1.4](#v014-task-21--risc-v-hardware-validation),
+using ESP32-C6FH4; owner review pending.
 
-M00–M18 and the listed corrections form the first-release baseline. The maintainer
-reported v0.1.0 published on 2026-10-20. Historical preparation entries below retain
-their original pending states and test boundaries; publication does not supply
-missing individual manual outcomes or new hardware evidence. F19 is accepted
-through the maintainer-reported implementation commit. F19 and the accepted
-shared navigation/fullscreen work are included in v0.1.1 preparation; publication
-and fresh release-matrix validation are not implied by implementation acceptance.
-
-M14 records passing GCC/Clang default/native/tmux suites,
-slow watchpoint recovery, full default/native ASan/UBSan with leak detection and
-full-project static analysis. These results do not establish physical embedded
-compatibility or measured terminal input-to-redraw latency. M15 now records
-passing GCC/Clang default/native/remote/tmux regressions, full default/native/remote
-ASan/UBSan with leak detection and full-project static analysis. M15 is accepted
-through its implementation commit; individual manual outcomes were not separately
-reported. M16 records passing GCC/Clang regressions, sanitizer/leak checks and static
-analysis, including focused offline OpenOCD lifecycle coverage. M17 records
-physical NUCLEO-F446RE/ARM and ESP32-S3/Xtensa workflows with sanitizer and
-terminal/tmux coverage. Other physical targets remain unverified. QEMU coverage
-is supplementary and currently unverified.
-
-Log paths identify the original local artifacts, which are ignored/disposable;
-the command/result summaries below are the durable record. Unreported runs and
-failed environment checks remain distinct from PASS. Acceptance does not imply
-that every checklist step was separately reported. No tests were rerun to
-restructure these records.
+Entries are chronological. Raw logs are stored under ignored `build/`; summaries
+and references below retain the results, including failures and unrun checks.
 
 ## Implementation references and acceptance
 
@@ -66,8 +37,7 @@ restructure these records.
 | M16 | OpenOCD wizard/lifecycle/actions | accepted | `18e460ddd4cbc897409e2879c03ed0fc983212df` |
 | M17 | NUCLEO-F446RE and ESP32-S3 validation | accepted | `f568bd2482b2309e3534ebc8e197854ada37bf77` |
 | M18 | v0.1.0 release evidence/acceptance | accepted; published | v0.1.0; preparation revision recorded below |
-| F19 | Themes, variants and Config | accepted; unreleased | [Focused checks](#f19--themes-and-configuration); implementation committed per maintainer report |
-
+| F19 | Themes, variants and Config | accepted; shipped in v0.1.1 | [Focused checks](#f19--themes-and-configuration); implementation committed per maintainer report |
 
 ### Full recorded commit identifiers
 
@@ -421,7 +391,6 @@ Clang 23.1.1, GDB 18.1 and tmux 3.8. The direct/tmux manual procedure remains
 available for reproduction; individual outcomes and terminal input-to-redraw
 measurements were not separately reported. Hardware limitations remain unchanged.
 
-
 ## M15 — existing remote server
 
 Status: **accepted** through implementation commit
@@ -490,7 +459,6 @@ compatibility is claimed; actual server evidence is limited to the documented
 localhost GDB/gdbserver setup. Configured ELF metadata does not verify runtime firmware identity or
 relocation; default remote region evidence is empty. Explicit bounded inspection
 remains available while automatic unknown/MMIO reads remain denied.
-
 
 ## M16 — OpenOCD wizard, lifecycle and actions
 
@@ -854,7 +822,6 @@ the archives after the tracked release notes and verified their SHA-256 checksum
 The source archive contains those final tracked notes. Later content changes
 require another `make release` before publication.
 
-
 ## F19 — Themes and configuration
 
 Accepted through the maintainer's reported feature commit. This post-v0.1.0 work
@@ -929,7 +896,6 @@ Artifacts: `build/test-navigation`, `/tmp/tb-navigation-build.log` and
 matrices, physical hardware and manual acceptance were not run for this change.
 The [manual steps](testing.md#letter-key-navigation) remain to be reviewed.
 
-
 ## ESP fixture warning policy
 
 Accepted through the subsequent implementation commit; unreleased. The root
@@ -1003,7 +969,6 @@ and manual visual acceptance were not run for this change. Follow the
 [manual fullscreen procedure](testing.md#source-fullscreen); focused native
 success does not establish embedded hardware compatibility.
 
-
 ## Spatial control navigation
 
 Accepted through implementation commit `53b1e5a`; included in v0.1.1 preparation.
@@ -1072,7 +1037,6 @@ Hardware and sanitizer/compiler matrices were not run for this task and remain
 separate release checks. These host tests do not establish new board compatibility.
 Manual review follows the
 [spatial navigation procedure](testing.md#spatial-control-and-content-navigation).
-
 
 ## v0.1.1 release preparation
 
@@ -2746,3 +2710,93 @@ after recording these results; checksum and exact-source checks were repeated.
 Archive hashes are in the delivered `SHA256SUMS`, avoiding a self-referential
 checksum inside the source archive itself. All15 tracked Markdown files passed
 183 local-link /119 heading-anchor checks (`documentation-check.log`).
+
+## v0.1.4 Task 2.1 — RISC-V hardware validation
+
+2026-10-28. Automated verification passed; owner review pending.
+The task adds a core-context OpenOCD fixture configuration and a board assertion
+requiring a decoded instruction with opcode bytes at the stopped PC. Frontend
+runtime code is unchanged.
+
+### Setup and image identity
+
+| Component | Tested configuration |
+|---|---|
+| Architecture | RISC-V RV32, HP core |
+| Test device | ESP32-C6FH4 revision0.0, 160MHz, 4MiB Flash; USB/JTAG serial40:4C:CA:43:5D:FC |
+| Host | Arch Linux x86-64, kernel7.2.11, glibc2.44, GCC16.2.1, tmux3.8, clang-tidy23.1.3 |
+| Firmware | Shared ESP-IDF6.1 fixture, RISC-V GCC15.2.0_20251204, -Og -g3, isolated build/v0.1.4-c6 |
+| Debugger | riscv32-esp-elf-gdb17.1_20260402 |
+| Server | Espressif OpenOCDv0.12.0-esp32-20260703, matching scripts, default24MHz clock, hwthread awareness |
+
+The owner flashed the fixture through UART, then connected native USB/JTAG.
+USB access/udev rules, packages, runtime libraries and tool/script paths checked
+successfully; no system changes were required.
+
+ELF SHA-256: `a9a8f4fe66b51d79b061becef89fa818b0b6059ed7fa5510bcd8c8500538b508`.
+`build/v0.1.4-evidence/c6-firmware.sha256` records all programmed image identities.
+Full `.flash.text` (81,044 bytes) and `.flash.rodata` (35,560 bytes) dumps matched
+the ELF sections byte for byte. The captured transfer used ordinary memory reads,
+not `qCRC`: `c6-byte-comparison-final.log`, its remote log and
+`c6-byte-identity-final-result.log`.
+
+### Diagnosed backend limitations
+
+- **Checksum crash:** `compare-sections .flash.text` sent
+  `qCRC:42000020,13c94` and crashed OpenOCD, both in ROM and after the official
+  startup reached `app_main` on a direct USB port. The release's
+  [RISC-V checksum helper](https://github.com/espressif/openocd-esp32/blob/v0.12.0-esp32-20260703/src/target/riscv/riscv.c)
+  passes null algorithm information to the
+  [Espressif runner](https://github.com/espressif/openocd-esp32/blob/v0.12.0-esp32-20260703/src/target/espressif/esp_riscv.c),
+  which dereferences it. The core dump confirms the null dereference.
+  Standard byte dumps matched both sections without that path. The Bugger does
+  not issue `qCRC`. Logs: `c6-crc-remote.log`, `openocd-crash-backtrace.log`,
+  `openocd-crash-registers.log`. OpenOCD itself was not patched.
+- **ROM symbols:** adding `esp32c6_rev0_rom.elf` (ROM package20241011) changed
+  application disassembly to `.word`; application and bootloader symbols alone
+  decoded correctly. Controlled log: `c6-symbol-decode-control.log`.
+  The Bugger does not automatically load this ROM file.
+- **Reset context:** default FreeRTOS awareness lost task contexts on reset,
+  failing fresh-stop verification. Changing only to `ESP_RTOS hwthread` passed
+  the full backend run. Logs: `c6-board-official.log`, `c6-board-hwthread.log`.
+  The final fixture configuration retains this setting and the verification guard.
+- **Earlier transport failures:** USB serial flashing failed in `c6-flash.log`
+  and `c6-flash-rom.log`; earlier hub-connected JTAG logs contain USB pipe errors.
+  The final direct-port runs had no transport errors. Their cause was not
+  established; the independently reproduced checksum crash is a separate defect.
+
+### Executed checks
+
+Logs below are in `build/v0.1.4-evidence/`.
+
+| Check | Result | Logs |
+|---|---|---|
+| Physical backend, normal and ASan/UBSan/leak | PASS | c6-board-final.log, c6-board-asan.log |
+| Direct TUI, normal and ASan/UBSan/leak | PASS | c6-tui-final.log, c6-tui-asan.log |
+| Isolated tmux TUI, normal and ASan/UBSan/leak | PASS | c6-tmux-final.log, c6-tmux-asan.log |
+| Fresh full fortified host test-ci | PASS, exit0 | test-ci-final.log |
+| Static analysis | PASS, exit0 | analysis.log |
+| Fortified compilation, all73 C test sources | PASS, exit0 | test-compilation.log |
+
+Physical checks covered source/disassembly, PC/SP/registers, explicit SRAM/Flash
+and local/aggregate inspection, frame selection, source/instruction stepping,
+Step Out, hardware break/watchpoints, Continue/Pause, reset and reconnection.
+Resume advanced the counter1→9; leave-halted retained it. The checkpoint decoded
+as a 2-byte `addi sp,sp,-16`. TUI checks covered connection review, instruction
+step, inline SRAM, Reset cancellation, resizing and terminal cleanup.
+
+Commands and sanitizer flags are in the local logs and
+[reproduction procedure](testing.md#risc-v-hardware-validation). Host baseline:
+`TERM=xterm-256color make BUILD_DIR=build/v0.1.4-ci-final CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+Analysis: `make BUILD_DIR=build/v0.1.4-analysis analyze`.
+The earlier interrupted host run is retained separately. These are local Arch
+results; hosted Ubuntu checks await the PR.
+
+The device was left halted and agent-owned OpenOCD stopped. Owner visual,
+profile-reopen and physical-unplug checks remain unreported. LP-core/RTOS
+inspection and C6 MMIO sampling are outside this gate; no fresh physical ARM or
+Xtensa run was made. Documentation links/anchors and whitespace were checked
+before the authorized finishing commit.
+
+The published v0.1.3 binary/source/checksum uploads were also downloaded and
+matched the approved artifacts (`v0.1.3-published-assets.log`).

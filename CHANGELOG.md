@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- Physical RISC-V RV32 validation (test device: ESP32-C6FH4, built-in
+  USB/JTAG) using the shared
+  embedded fixture, core-context OpenOCD configuration and target-compatible
+  GDB. Record source/disassembly, registers, explicit memory/variables,
+  stepping, hardware break/watchpoints, execution/reset and disconnect results.
+- Board validation checks actual decoded instructions and opcode bytes at the
+  stopped PC, including aligned 2/4-byte RISC-V instructions. Document confirmed
+  OpenOCD checksum and optional ROM-symbol decoding limitations separately from
+  the working debugger workflow.
+
 ## [0.1.3] - 2026-10-28
 
 ### Changed
