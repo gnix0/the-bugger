@@ -39,7 +39,7 @@ static void pane_click(const char *label, int column)
     long long until = now() + 5000;
     do {
         int header = -1, left = 0, right = 0, x = -1, y = -1;
-        for (int row = 0; row < term.rows - 2; ++row) {
+        for (int row = 0; row < term.rows - 3; ++row) {
             /* A redraw can publish the upper row before the lower row.
              * Identify the intended panes, not merely three menu buttons:
              * otherwise "Actions" can select Disassembly's footer. */
@@ -86,7 +86,9 @@ int main(int argc, char **argv)
     test_terminal_send(&term, "\r"); test_terminal_expect(&term, "Executable / ELF");
     test_terminal_send(&term, "\t\025"); test_terminal_send(&term, argv[2]);
     menu_click("Review session"); menu_click("Start native");
-    test_terminal_expect(&term, "LIVE | Loaded"); menu_click("Command"); test_terminal_send(&term, "start\r");
+    test_terminal_expect(&term, "LIVE | Loaded");
+    for (int i = 0; i < 3; ++i) { test_terminal_lower(&term, i, true); }
+    menu_click("Command"); test_terminal_send(&term, "start\r");
     test_terminal_expect(&term, "LIVE | registers");
     pane_click("Watches", 1); pane_click("+ Watch", 1);
     test_terminal_expect(&term, "Add watch expression"); test_terminal_send(&term, "watched_value\r");

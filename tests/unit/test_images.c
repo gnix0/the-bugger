@@ -6,6 +6,7 @@
 #include <gelf.h>
 #include <libelf.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 static Elf_Scn *section(Elf *elf, unsigned type, unsigned flags, uint64_t address,
@@ -49,6 +50,35 @@ static void exercise(const char *path, int bits, int order)
     fixture(path, bits, order); TbImages *images = tb_images_create(); CHECK(images);
     CHECK(tb_images_load(images, path, 0x100000)); TbImageRange range;
     CHECK(tb_images_lookup(images, 0x101010, &range) && range.kind == TB_IMAGE_CODE && range.anchor == 0x101000);
+    CHECK(range.trust == TB_IMAGE_UNVERIFIED);
+    CHECK(!tb_images_trusted_neighbor(images, 0x101010, -1, &range));
+    TbImageReview review;
+    CHECK(tb_images_review(images, path, 0x100000, &review) && review.ranges == 2);
+    CHECK(tb_images_review_range(images, &review, 0, &range) && range.start == 0x101000 && range.kind == TB_IMAGE_CODE);
+    CHECK(tb_images_review_range(images, &review, 1, &range) && range.start == 0x102000 && range.kind == TB_IMAGE_DATA);
+    CHECK(!tb_images_review_range(images, &review, 2, &range));
+    CHECK(!tb_images_validate(images));
+    CHECK(tb_images_confirm(images, &review, TB_IMAGE_USER_CONFIRMED));
+    CHECK(tb_images_lookup(images, 0x101010, &range) && range.trust == TB_IMAGE_USER_CONFIRMED);
+    CHECK(tb_images_trusted_neighbor(images, 0x101010, -1, &range));
+    struct stat info; CHECK(stat(path, &info) == 0);
+    const struct timespec times[] = {{.tv_nsec = UTIME_OMIT}, {.tv_sec = info.st_mtim.tv_sec + 1, .tv_nsec = 0}};
+    CHECK(utimensat(AT_FDCWD, path, times, 0) == 0);
+    CHECK(tb_images_validate(images));
+    CHECK(tb_images_lookup(images, 0x101010, &range) && range.trust == TB_IMAGE_UNVERIFIED);
+    CHECK(!tb_images_confirm(images, &review, TB_IMAGE_USER_CONFIRMED));
+    CHECK(!tb_images_trusted_neighbor(images, 0x101010, -1, &range));
+    TbImageReview renewed; CHECK(tb_images_review(images, path, 0x100000, &renewed));
+    CHECK(renewed.revision != review.revision && tb_images_confirm(images, &renewed, TB_IMAGE_USER_CONFIRMED));
+    tb_images_unverify(images);
+    CHECK(!tb_images_confirm(images, &renewed, TB_IMAGE_USER_CONFIRMED));
+    CHECK(tb_images_review(images, path, 0x100000, &renewed) && tb_images_confirm(images, &renewed, TB_IMAGE_USER_CONFIRMED));
+    TbImageReview shifted; CHECK(tb_images_review(images, path, 0x200000, &shifted));
+    CHECK(tb_images_confirm(images, &shifted, TB_IMAGE_USER_CONFIRMED));
+    CHECK(tb_images_lookup(images, 0x101010, &range) && range.trust == TB_IMAGE_UNVERIFIED);
+    CHECK(tb_images_lookup(images, 0x201010, &range) && range.trust == TB_IMAGE_USER_CONFIRMED);
+    CHECK(!tb_images_confirm(images, &renewed, TB_IMAGE_USER_CONFIRMED)); /* New bias replaces the prior declaration. */
+    CHECK(tb_images_lookup(images, 0x101010, &range));
     CHECK(range.end == 0x101020); /* embedded object must end the code read */
     CHECK(tb_images_lookup(images, 0x101020, &range) && range.kind == TB_IMAGE_DATA);
     CHECK(tb_images_lookup(images, 0x102000, &range) && range.kind == TB_IMAGE_DATA);
@@ -58,11 +88,24 @@ static void exercise(const char *path, int bits, int order)
         CHECK(tb_images_lookup(images, 0x101050, &range) && range.kind == TB_IMAGE_CODE);
     }
     CHECK(tb_images_neighbor(images, 0x101010, -1, &range) && range.anchor == 0x101000);
+    /* An overlapping old, unverified bias must not mask the current declaration. */
+    TbImageReview overlap;
+    CHECK(tb_images_review(images, path, 0x100010, &overlap));
+    CHECK(tb_images_confirm(images, &overlap, TB_IMAGE_USER_CONFIRMED));
+    CHECK(tb_images_trusted_lookup(images, 0x101010, &range) && range.trust == TB_IMAGE_USER_CONFIRMED);
+    CHECK(range.anchor == 0x101010);
+    CHECK(tb_images_trusted_neighbor(images, 0x101011, -1, &range) && range.anchor == 0x101010);
+    CHECK(!tb_images_trusted_lookup(images, 0x101000, &range));
     CHECK(!tb_images_load(images, path, UINT64_MAX - 10));
     tb_images_reset(images); CHECK(!tb_images_lookup(images, 0x101010, &range)); tb_images_destroy(images);
 }
 int main(void)
 {
+    TbImages *native = tb_images_create(); CHECK(native); TbImageRange mapped;
+    uint64_t pc = (uint64_t)(uintptr_t)&main;
+    tb_images_native(native, getpid(), NULL, pc);
+    CHECK(tb_images_lookup(native, pc, &mapped) && mapped.trust == TB_IMAGE_BACKEND_VERIFIED);
+    tb_images_destroy(native);
     char path[] = "/tmp/the-bugger-images-XXXXXX"; int fd = mkstemp(path); CHECK(fd >= 0 && close(fd) == 0);
     exercise(path, ELFCLASS64, ELFDATA2LSB); exercise(path, ELFCLASS64, ELFDATA2MSB);
     exercise(path, ELFCLASS32, ELFDATA2LSB); exercise(path, ELFCLASS32, ELFDATA2MSB);

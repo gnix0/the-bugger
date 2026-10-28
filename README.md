@@ -1,10 +1,6 @@
 # The Bugger
 
 <p align="center">
-  <img src="docs/assets/dashboard.png" alt="The Bugger dashboard">
-</p>
-
-<p align="center">
   <img src="docs/assets/base_layout.png" alt="The Bugger default debugging workspace">
 </p>
 
@@ -32,7 +28,17 @@ preview and saved appearance preferences.
 v0.1.2 preserves exact theme colors inside RGB-advertising tmux
 sessions, with 256-color and monochrome fallbacks.
 [Theme controls and variants](docs/usage.md#configuration-and-themes) describe
-what is included. Shared UI additions also include
+what is included. The development build starts the three lower pane groups minimized; restore
+them above the footer and resize their overlay heights independently.
+[Workspace controls](docs/usage.md#workspace-controls) describe the current behavior.
+The development build also retains shared browsing history and supports
+[explicit MMIO unit sampling](docs/usage.md#memory-inspection) for the documented,
+validated STM32/OpenOCD setup. Temporary per-view consent never causes automatic
+reads. Remote ELF/load-address review distinguishes a user declaration from
+native backing-file verification; neither proves live-byte equality or grants
+Memory access. See [code browsing](docs/usage.md#code-and-execution-context).
+
+Shared UI additions also include
 [Source fullscreen and spatial keyboard navigation](docs/usage.md#workspace-controls).
 These features extend the original v0.1.0 workspace. v0.1.2 also
 provides [Config → Keybinds](docs/usage.md#personal-keybinds) for debugger and
@@ -52,9 +58,9 @@ and **ESP32-S3** through native USB/JTAG, with the
 [recorded GDB/OpenOCD configurations](docs/validation.md#m17--physical-board-validation).
 These results cover the tested workflows, not all boards, probes or architectures.
 OpenOCD is optional, not universal; broader compatibility needs separate evidence.
-Physical RISC-V acceptance is deferred for v0.1.0 and is not a hardware support claim.
+Physical RISC-V validation is deferred for v0.1.3 to v0.1.4 and is not a hardware support claim.
 
-This checkout targets **v0.1.2**. Its release validation status is recorded in the
+This checkout targets **v0.1.3**. Its release validation status is recorded in the
 [roadmap status](docs/roadmap.md#implementation-status) and
 [recorded validation evidence](docs/validation.md).
 
@@ -84,7 +90,8 @@ make fixtures
 ```
 
 Choose **Linux application → Launch**, enter `./build/code-fixture`, then
-**Review session → Start native**. In Console's inline **Command** field, enter
+**Review session → Start native**. Restore Console with its dock title or `^`.
+In its inline **Command** field, enter
 `start`, then press Enter or click Send to ask GDB to stop at main.
 The fixture runs under GDB; do not pass `start` to it
 as a shell argument. Ordinary Continue starts the loaded program without an
@@ -101,8 +108,12 @@ retaining the toolbar/status bars and restores the existing tiled workspace.
 Defaults are F5 Continue, F10 Over, F11 Into, Shift+F11 Out and F9 Breakpoint;
 clickable actions remain available when a terminal intercepts keys. Outside
 fields, `q` closes/backs out; `Ctrl+Q` quits, confirming active-session closure.
-Memory has an inline address/expression field; variable values require deliberate
+Restore Memory from its dock to use the inline address/expression field;
+variable values require deliberate
 reads when automatic access safety cannot be established.
+Declared MMIO units support navigation without reads and explicit-width sampling
+on the documented validated OpenOCD setup, with separate user-confirmed backend
+bindings and per-view range consent. See [Memory inspection](docs/usage.md#memory-inspection).
 
 `./build/the-bugger --demo` opens the explicitly simulated visual reference.
 It does not connect to hardware. In tmux, mouse support requires the opt-in
@@ -111,7 +122,7 @@ It does not connect to hardware. In tmux, mouse support requires the opt-in
 ## Linux x86-64 distribution
 
 `make release` prepares the host-binary archive, corresponding source archive
-and `SHA256SUMS` in `build/dist/v0.1.2/`. Other versions use their own
+and `SHA256SUMS` in `build/dist/v0.1.3/`. Other versions use their own
 version directory; `RELEASE_DIST_DIR` can override the destination. Extract the binary archive and run
 `./the-bugger` from a terminal. GDB/OpenOCD and the shared runtime libraries remain
 external; `BUILD-INFO.txt` lists the actual build host and dependency requirements.
@@ -128,6 +139,12 @@ Prepared artifacts do not establish release acceptance or publication.
 | Contributors | [Contributing](CONTRIBUTING.md), [architecture](docs/architecture.md), [testing](docs/testing.md) and [suite catalog](tests/README.md) |
 | Product and design | [Requirements](docs/requirements.md), [roadmap](docs/roadmap.md), [interface specification](docs/requirements.md#interface-constraints) |
 | Maintainers | [Maintenance/release procedures](docs/maintaining.md) and [validation records](docs/validation.md) |
+
+The [current development sequence](docs/roadmap.md#current-development-sequence)
+starts with rendering stability, then lower-pane organization and approved
+Disassembly/Memory browsing improvements. Implementation and owner manual review
+are complete; the [v0.1.3 release record](docs/validation.md#v013-release-preparation)
+distinguishes final validation and prepared artifacts from publication.
 
 The roadmap retains all M00–M18/F01–F47 gates. Post-release priorities progress
 from safe editing and hardware/fault diagnosis to flashing/text channels, RTOS/

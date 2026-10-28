@@ -17,6 +17,7 @@ typedef struct {
     struct termios original;
     char cells[TEST_ROWS][TEST_COLS + 1];
     bool reverse, inverse[TEST_ROWS][TEST_COLS];
+    bool underlined, underline[TEST_ROWS][TEST_COLS];
     unsigned utf8_value, utf8_remaining;
     char sequence[128];
     size_t sequence_length;
@@ -31,6 +32,8 @@ void test_terminal_pump(TestTerminal *term, int milliseconds);
 bool test_terminal_find(const TestTerminal *term, const char *text, int *x, int *y);
 void test_terminal_expect(TestTerminal *term, const char *text);
 void test_terminal_click(TestTerminal *term, const char *text);
+/* Explicitly open/minimize a lower group through its persistent dock control. */
+void test_terminal_lower(TestTerminal *term, int lower, bool open);
 void test_terminal_resize(TestTerminal *term, int rows, int cols);
 void test_terminal_stop(TestTerminal *term, int signal_number);
 

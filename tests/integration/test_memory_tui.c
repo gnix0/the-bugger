@@ -58,7 +58,7 @@ static void pane_click(TestTerminal *t, const char *text, int column, bool last)
         int header = -1, left = 0, right = 0;
         /* The default columns have different widths. Locate the lower-row
          * pane boundaries from their rendered menu buttons instead of thirds. */
-        for (int y = 0; y < t->rows - 2; ++y) {
+        for (int y = 0; y < t->rows - 3; ++y) {
             const char *menus[3]; menus[0] = strstr(t->cells[y], "...");
             menus[1] = menus[0] ? strstr(menus[0] + 3, "...") : NULL;
             menus[2] = menus[1] ? strstr(menus[1] + 3, "...") : NULL;
@@ -118,14 +118,43 @@ static void browse(TestTerminal *t)
     CHECK(first_memory_address(t) == original);
     test_terminal_expect(t, "4854 2045"); test_terminal_expect(t, "Address");
 }
+static void ranges(TestTerminal *t)
+{
+    test_terminal_click(t, "Temporary ranges"); test_terminal_expect(t, "Temporary Memory ranges");
+    test_terminal_click(t, "Add"); test_terminal_expect(t, "Inspect temporary Memory range");
+    test_terminal_expect(t, "NOT AUTHORIZED"); test_terminal_expect(t, "Side effects: UNKNOWN");
+    test_terminal_click(t, "Side effects"); test_terminal_expect(t, "Known side effects");
+    test_terminal_send(t, "owner reviewed RAMx\177\r"); test_terminal_expect(t, "Side effects: owner reviewed RAM");
+    test_terminal_click(t, "Authorize"); test_terminal_expect(t, "Authorize temporary Memory range?");
+    test_terminal_expect(t, "owner reviewed RAM"); test_terminal_click(t, "Cancel");
+    test_terminal_expect(t, "NOT AUTHORIZED");
+    test_terminal_click(t, "Authorize"); test_terminal_click(t, "Authorize without reading");
+    test_terminal_expect(t, "AUTHORIZED | temporary, this view only");
+    /* A policy edit revokes consent and preserves the side-effect description. */
+    test_terminal_click(t, "Policy: ordinary"); test_terminal_expect(t, "Policy: MMIO");
+    test_terminal_expect(t, "NOT AUTHORIZED"); test_terminal_expect(t, "owner reviewed RAM");
+    test_terminal_click(t, "Width:"); test_terminal_expect(t, "Width: 8 bits");
+    test_terminal_click(t, "Policy: MMIO"); test_terminal_expect(t, "Policy: ordinary");
+    test_terminal_resize(t, 18, 48); test_terminal_click(t, "Authorize");
+    for (int i = 0; i < 8 && !test_terminal_find(t, "Authorize without reading", NULL, NULL); ++i) {
+        test_terminal_click(t, "Next"); settle(t);
+    }
+    test_terminal_expect(t, "Authorize without reading"); test_terminal_click(t, "Authorize without reading");
+    test_terminal_expect(t, "AUTHORIZED | temporary");
+    test_terminal_click(t, "Revoke"); test_terminal_expect(t, "NOT AUTHORIZED");
+    test_terminal_send(t, "\033"); test_terminal_expect(t, "Temporary Memory ranges");
+    test_terminal_resize(t, 44, 140);
+    test_terminal_click(t, "Back"); test_terminal_expect(t, "Memory inspection options");
+}
 int main(int argc, char **argv)
 {
     CHECK(argc == 3); TestTerminal t; start(&t, argv[1]);
     test_terminal_expect(&t, "Native Linux"); test_terminal_send(&t, "\r");
     test_terminal_expect(&t, "Executable / ELF"); test_terminal_send(&t, "\t\025"); test_terminal_send(&t, argv[2]);
     test_terminal_click(&t, "Review session"); test_terminal_click(&t, "Start native");
-    test_terminal_expect(&t, "LIVE | Loaded"); test_terminal_click(&t, "Command");
+    test_terminal_expect(&t, "LIVE | Loaded"); test_terminal_lower(&t, 2, true); test_terminal_click(&t, "Command");
     test_terminal_send(&t, "start\r"); test_terminal_expect(&t, "LIVE | registers");
+    test_terminal_lower(&t, 0, true);
     test_terminal_expect(&t, "Enter an address above");
     CHECK(!test_terminal_find(&t, "Read memory", NULL, NULL));
     address(&t, 0, "&memory_buffer"); test_terminal_expect(&t, "54 48 45 20");
@@ -137,6 +166,7 @@ int main(int argc, char **argv)
     test_terminal_expect(&t, "54 48 45 20");
     pane_click(&t, "Options", 0, true); test_terminal_expect(&t, "Memory inspection options");
     test_terminal_click(&t, "Cycle grouping"); test_terminal_expect(&t, "grouping 2B");
+    ranges(&t);
     test_terminal_click(&t, "Byte count"); test_terminal_expect(&t, "Memory byte count");
     test_terminal_send(&t, "\0251025\r"); test_terminal_expect(&t, "Enter a byte count from 1 to 1024.");
     test_terminal_send(&t, "\0251024\r"); test_terminal_expect(&t, "requested range 1024 bytes");
@@ -144,6 +174,7 @@ int main(int argc, char **argv)
     browse(&t);
     /* Add a second Memory instance in the lower-middle pane. Its menu and
      * configuration are local; the first Memory pane remains unchanged. */
+    test_terminal_lower(&t, 1, true);
     pane_click(&t, "Locals", 1, false); pane_click(&t, "...", 1, true);
     pane_click(&t, "Memory", 1, false); address(&t, 1, "&memory_other");
     test_terminal_expect(&t, "49 4e 44 45"); test_terminal_expect(&t, "4854 2045");

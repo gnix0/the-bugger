@@ -57,6 +57,16 @@ static void ordinary(const char *fixture)
     const TbCodeView *v = tb_code_view(code, 0);
     CHECK(strstr(s->selected.function, "main") && v->line_count > 10 && v->instruction_count > 0);
     CHECK(v->selected_line == s->selected.line && v->stopped_line == s->stopped.line);
+    size_t retained_count = v->instruction_count;
+    uint64_t retained_address = v->instructions[0].numeric;
+    char retained_pc[48]; (void)snprintf(retained_pc, sizeof retained_pc, "%s", s->stopped.address);
+    uint64_t failed_revision = v->assembly_revision;
+    CHECK(tb_code_address(code, 0, "0x0")); code_ready(native, failed_revision);
+    CHECK(*v->assembly_error && v->instruction_count == retained_count);
+    CHECK(v->anchor == retained_address && v->instructions[0].numeric == retained_address);
+    CHECK(strcmp(s->stopped.address, retained_pc) == 0);
+    failed_revision = v->assembly_revision; tb_code_return(code, 0); code_ready(native, failed_revision);
+    CHECK(v->assembly_follow && !*v->assembly_error);
     int call_line = tb_code_find(code, 0, "code_result = code_callee", 0) + 1; CHECK(call_line > 0);
     for (int i = 0; i < 6 && s->selected.line != call_line; ++i) { step(native, TB_STEP_OVER, false); }
     CHECK(s->selected.line == call_line);
@@ -85,6 +95,19 @@ static void ordinary(const char *fixture)
     char stopped[48]; (void)snprintf(stopped, sizeof stopped, "%s", s->stopped.address);
     revision = v->assembly_revision; CHECK(tb_context_select_frame(tb_native_context(native), 1)); code_ready(native, revision);
     CHECK(s->selected.level == 1 && strcmp(stopped, s->stopped.address) == 0);
+    TbGdbGeneration selected_generation = s->generation;
+    char selected_address[48]; (void)snprintf(selected_address, sizeof selected_address, "%s", s->selected.address);
+    const TbCodeView *other = tb_code_view(code, 1);
+    uint64_t other_revision = other->assembly_revision;
+    revision = v->assembly_revision; CHECK(tb_code_return_stop(code, 0)); code_ready(native, revision);
+    CHECK(s->selected.level == 1 && strcmp(s->selected.address, selected_address) == 0);
+    CHECK(s->generation.context == selected_generation.context && other->assembly_revision == other_revision);
+    CHECK(v->assembly_stopped && v->assembly_follow);
+    bool contains_stop = false;
+    for (size_t i = 0; i < v->instruction_count; ++i) { contains_stop |= strcmp(v->instructions[i].address, stopped) == 0; }
+    CHECK(contains_stop);
+    revision = v->assembly_revision; CHECK(tb_code_follow_frame(code, 0)); code_ready(native, revision);
+    CHECK(!v->assembly_stopped && v->assembly_follow && s->selected.level == 1);
     revision = v->assembly_revision; CHECK(tb_code_stopped(code)); code_ready(native, revision);
     CHECK(s->selected.level == 0 && strcmp(stopped, s->selected.address) == 0);
     revision = v->assembly_revision; CHECK(tb_code_address(code, 0, "main")); code_ready(native, revision);
@@ -98,8 +121,17 @@ static void ordinary(const char *fixture)
     CHECK(strcmp(stopped, s->stopped.address) != 0);
     (void)snprintf(stopped, sizeof stopped, "%s", s->stopped.address);
     revision = v->assembly_revision; uint64_t returned_window = v->anchor;
-    CHECK(tb_code_assembly_page(code, 0, -1)); code_ready(native, revision);
+    CHECK(tb_code_assembly_page(code, 0, -1));
+    uint64_t until = tb_gdb_now_ms() + 5000;
+    while (v->assembly_revision <= revision && tb_gdb_now_ms() < until) { tb_native_pump(native, 5); }
+    CHECK(v->assembly_revision > revision && v->instruction_count);
+    if (v->assembly_historical) {
+        CHECK(v->stale && v->assembly_generation.stop < s->generation.stop);
+        CHECK(strstr(tb_code_message(code), "Cached historical instructions; no target read"));
+    } else { code_ready(native, revision); }
     CHECK(v->anchor != returned_window && strcmp(stopped, s->stopped.address) == 0);
+    revision = v->assembly_revision; CHECK(tb_code_return_stop(code, 0)); code_ready(native, revision);
+    CHECK(!v->assembly_historical && v->assembly_generation.stop == s->generation.stop);
     close_session(native);
     puts("PASS M07 real source/AT&T/mixed, synchronized multi-instruction line, source/instruction stepping, caller/return-to-stop, read-only symbol navigation and Step Out");
 }

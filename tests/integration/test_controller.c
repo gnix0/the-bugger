@@ -114,6 +114,30 @@ static void request(Observer *observer, const char *operation, TbGdbScope scope,
 {
     CHECK(tb_gdb_request(observer->gdb, operation, NULL, 0, scope, cookie, 1500, NULL));
 }
+static void reservation(const char *peer)
+{
+    Observer observer = create(); start(&observer, peer, "normal");
+    CHECK(!tb_gdb_reserve(observer.gdb, 0));
+    request(&observer, "-hold", TB_GDB_SESSION, 8);
+    CHECK(!tb_gdb_reserve(observer.gdb, 9));
+    request(&observer, "-release", TB_GDB_SESSION, 8); pending_done(&observer);
+    CHECK(tb_gdb_reserve(observer.gdb, 9));
+    CHECK(!tb_gdb_reserve(observer.gdb, 9) && !tb_gdb_reserve(observer.gdb, 10));
+    size_t before = observer.replies;
+    CHECK(!tb_gdb_request(observer.gdb, "-echo", NULL, 0, TB_GDB_SESSION, 10, 1000, NULL));
+    CHECK(!tb_gdb_pending(observer.gdb) && observer.replies == before);
+    tb_gdb_release(observer.gdb, 10); /* Another caller cannot release ownership. */
+    CHECK(!tb_gdb_request(observer.gdb, "-echo", NULL, 0, TB_GDB_SESSION, 10, 1000, NULL));
+    request(&observer, "-echo", TB_GDB_SESSION, 9); pending_done(&observer);
+    tb_gdb_release(observer.gdb, 9);
+    request(&observer, "-echo", TB_GDB_SESSION, 10); pending_done(&observer);
+    CHECK(tb_gdb_reserve(observer.gdb, 9)); close_peer(&observer);
+    CHECK(!tb_gdb_reserve(observer.gdb, 10));
+    start(&observer, peer, "normal"); /* New connection cannot inherit reservation. */
+    request(&observer, "-echo", TB_GDB_SESSION, 10); pending_done(&observer);
+    destroy(&observer);
+    puts("PASS exclusive stream transaction ownership, idle acquisition, unrelated-request rejection, release, shutdown and reconnect");
+}
 
 static void normal(const char *peer)
 {
@@ -378,7 +402,7 @@ int main(int argc, char *argv[])
 {
     CHECK(argc == 2);
     CHECK(tb_gdb_create(NULL, NULL) == NULL && tb_gdb_destroy(NULL));
-    normal(argv[1]); timeouts(argv[1]); startup_failures(argv[1]);
+    reservation(argv[1]); normal(argv[1]); timeouts(argv[1]); startup_failures(argv[1]);
     transport_failures(argv[1]); pressure(argv[1]); interruptions(argv[1]); resources(argv[1]);
     CHECK(unsetenv("TB_FAKE_MODE") == 0);
     return 0;

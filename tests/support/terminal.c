@@ -27,6 +27,7 @@ static void clear_screen(TestTerminal *term)
     for (int y = 0; y < TEST_ROWS; ++y) {
         memset(term->cells[y], ' ', TEST_COLS);
         memset(term->inverse[y], term->reverse, sizeof term->inverse[y]);
+        memset(term->underline[y], term->underlined, sizeof term->underline[y]);
         term->cells[y][term->cols] = '\0';
     }
 }
@@ -40,17 +41,23 @@ static void scroll_lines(TestTerminal *term, int top, int bottom, int distance)
         if (size > 0) { memmove(term->cells[top], term->cells[top + count], size); }
         memmove(term->inverse[top], term->inverse[top + count],
                 (size_t)(bottom - top + 1 - count) * sizeof term->inverse[0]);
+        memmove(term->underline[top], term->underline[top + count],
+                (size_t)(bottom - top + 1 - count) * sizeof term->underline[0]);
         for (int y = bottom - count + 1; y <= bottom; ++y) {
             memset(term->cells[y], ' ', (size_t)term->cols);
             memset(term->inverse[y], term->reverse, (size_t)term->cols * sizeof(bool));
+            memset(term->underline[y], term->underlined, (size_t)term->cols * sizeof(bool));
         }
     } else {
         if (size > 0) { memmove(term->cells[top + count], term->cells[top], size); }
         memmove(term->inverse[top + count], term->inverse[top],
                 (size_t)(bottom - top + 1 - count) * sizeof term->inverse[0]);
+        memmove(term->underline[top + count], term->underline[top],
+                (size_t)(bottom - top + 1 - count) * sizeof term->underline[0]);
         for (int y = top; y < top + count; ++y) {
             memset(term->cells[y], ' ', (size_t)term->cols);
             memset(term->inverse[y], term->reverse, (size_t)term->cols * sizeof(bool));
+            memset(term->underline[y], term->underlined, (size_t)term->cols * sizeof(bool));
         }
     }
 }
@@ -58,12 +65,14 @@ static void scroll_lines(TestTerminal *term, int top, int bottom, int distance)
 static void sgr(TestTerminal *term)
 {
     const char *next = term->sequence;
-    if (*next == '\0') { term->reverse = false; }
+    if (*next == '\0') { term->reverse = false; term->underlined = false; }
     while (*next != '\0') {
         char *end;
         long code = strtol(next, &end, 10);
         if (end == next) { return; }
         next = *end == ';' ? end + 1 : end;
+        if (code == 0 || code == 24) { term->underlined = false; }
+        else if (code == 4) { term->underlined = true; }
         if (code == 0 || code == 27) { term->reverse = false; }
         else if (code == 7) { term->reverse = true; }
         else if (code == 38 || code == 48 || code == 58) {
@@ -121,9 +130,12 @@ static void csi(TestTerminal *term, char command)
             memset(term->cells[term->y] + term->x, ' ', (size_t)(term->cols - term->x));
             memset(term->inverse[term->y] + term->x, term->reverse,
                     (size_t)(term->cols - term->x) * sizeof(bool));
+            memset(term->underline[term->y] + term->x, term->underlined,
+                    (size_t)(term->cols - term->x) * sizeof(bool));
             for (int y = term->y + 1; y < term->rows; ++y) {
                 memset(term->cells[y], ' ', (size_t)term->cols);
                 memset(term->inverse[y], term->reverse, (size_t)term->cols * sizeof(bool));
+                memset(term->underline[y], term->underlined, (size_t)term->cols * sizeof(bool));
             }
         }
         break;
@@ -135,23 +147,29 @@ static void csi(TestTerminal *term, char command)
             int start = first == 1 || first == 2 ? 0 : term->x;
             int count = first == 1 ? term->x + 1 : term->cols - start;
             memset(term->inverse[term->y] + start, term->reverse, (size_t)count * sizeof(bool));
+            memset(term->underline[term->y] + start, term->underlined, (size_t)count * sizeof(bool));
         }
         break;
     case 'P': case '@': {
         int count = distance < term->cols - term->x ? distance : term->cols - term->x;
         char *line = term->cells[term->y] + term->x;
         bool *inverse = term->inverse[term->y] + term->x;
+        bool *underline = term->underline[term->y] + term->x;
         size_t tail = (size_t)(term->cols - term->x - count);
         if (command == 'P') {
             memmove(line, line + count, tail);
             memset(line + tail, ' ', (size_t)count);
             memmove(inverse, inverse + count, tail * sizeof(bool));
+            memmove(underline, underline + count, tail * sizeof(bool));
             memset(inverse + tail, term->reverse, (size_t)count * sizeof(bool));
+            memset(underline + tail, term->underlined, (size_t)count * sizeof(bool));
         } else {
             memmove(line + count, line, tail);
             memset(line, ' ', (size_t)count);
             memmove(inverse + count, inverse, tail * sizeof(bool));
+            memmove(underline + count, underline, tail * sizeof(bool));
             memset(inverse, term->reverse, (size_t)count * sizeof(bool));
+            memset(underline, term->underlined, (size_t)count * sizeof(bool));
         }
         break;
     }
@@ -159,6 +177,7 @@ static void csi(TestTerminal *term, char command)
         int count = distance < term->cols - term->x ? distance : term->cols - term->x;
         memset(term->cells[term->y] + term->x, ' ', (size_t)count);
         memset(term->inverse[term->y] + term->x, term->reverse, (size_t)count * sizeof(bool));
+        memset(term->underline[term->y] + term->x, term->underlined, (size_t)count * sizeof(bool));
         break;
     }
     default: break; /* Other modes and cursor visibility. */
@@ -229,6 +248,7 @@ static void consume(TestTerminal *term, unsigned char character)
         if (term->y < term->rows - 1) { ++term->y; }
     }
     term->inverse[term->y][term->x] = term->reverse;
+    term->underline[term->y][term->x] = term->underlined;
     term->cells[term->y][term->x++] = (char)character;
 }
 
@@ -370,6 +390,44 @@ void test_terminal_click(TestTerminal *term, const char *text)
     test_terminal_send(term, input);
     settle = milliseconds() + 60;
     while (milliseconds() < settle) { test_terminal_pump(term, 5); }
+}
+
+void test_terminal_lower(TestTerminal *term, int lower, bool open)
+{
+    CHECK(lower >= 0 && lower < 3);
+    int row = term->rows - 3, column = -1, found = 0;
+    long long deadline = milliseconds() + 5000;
+    while (milliseconds() < deadline) {
+        found = 0;
+        for (int x = 0; x + 4 < term->cols; ++x) {
+            if ((term->cells[row][x] == '^' || term->cells[row][x] == '_') &&
+                strncmp(term->cells[row] + x + 2, "...", 3) == 0) {
+                if (found++ == lower) { column = x; break; }
+            }
+        }
+        if (column >= 0) { break; }
+        test_terminal_pump(term, 50);
+    }
+    CHECK(column >= 0);
+    if ((term->cells[row][column] == '_') == open) { return; }
+    char input[64];
+    (void)snprintf(input, sizeof input, "\033[<0;%d;%dM", column + 1, row + 1);
+    test_terminal_send(term, input);
+    long long pressed = milliseconds() + 60;
+    while (milliseconds() < pressed) { test_terminal_pump(term, 5); }
+    (void)snprintf(input, sizeof input, "\033[<0;%d;%dm", column + 1, row + 1);
+    test_terminal_send(term, input);
+    deadline = milliseconds() + 5000;
+    while (milliseconds() < deadline) {
+        test_terminal_pump(term, 20);
+        if (term->cells[row][column] == (open ? '_' : '^')) {
+            long long settle = milliseconds() + 60;
+            while (milliseconds() < settle) { test_terminal_pump(term, 5); }
+            return;
+        }
+    }
+    fprintf(stderr, "Lower group %d toggle at (%d,%d), wanted %s\n", lower, column, row, open ? "open" : "minimized");
+    test_terminal_expect(term, "lower pane toggle did not complete");
 }
 
 void test_terminal_resize(TestTerminal *term, int rows, int cols)

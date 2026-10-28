@@ -42,6 +42,16 @@ only stock aliases in their corresponding slots. Legacy preference files without
 this boolean lose only those old stock aliases on load, without a write. Theme
 and key saves preserve the boolean; profiles remain independent.
 
+The shared text renderer confines each call to its assigned row and display-cell
+width. Printable multibyte characters are measured before drawing; a wide
+character is omitted if it cannot fit completely. Control and invalid bytes are
+escaped as inert text rather than passed to ncurses for tab/newline expansion.
+ASCII runs retain a bounded fast path. Console and source models still apply
+their existing byte-escaping policy; this adds neither ANSI Console interpretation
+nor a Unicode Console decoding feature. Curses-cell regression checks cover
+controls, invalid UTF-8, accented/combining/double-width text and the bottom-right
+screen boundary.
+
 Focused text fields retain `(page, kind, value, pane)` identity. Newly acquired
 fields start Normal; Insert is retained only while that field remains focused.
 `src/tui/editor.c` implements bounded single-line Normal commands, with no target
@@ -99,7 +109,7 @@ These capability signals follow the established conventions described by
 [Notcurses](https://github.com/dankamongmen/notcurses/blob/master/TERMINALS.md);
 [ncurses terminfo](https://invisible-island.net/ncurses/man/terminfo.5.html)
 provides the matching direct-color descriptions. See the
-[prototype mapping](requirements.md#interface-constraints) for rendering adaptations.
+[interface constraints](requirements.md#interface-constraints) for rendering adaptations.
 
 The workspace preserves per-view scroll/selection and tabs through compact
 rendering, with interactive split-tree geometry, dragging and closing as
@@ -119,6 +129,40 @@ No image assets, new dependency, animation or background work is needed. It keep
 native-vs-preview availability, profile review and q/Ctrl+Q policy
 explicit; session configuration and the debugging workspace are unchanged.
 
+
+Menu footer guidance is derived from the current page rather than stored as a
+persistent launcher status. Page navigation clears transient notices; explicit
+operation-result transitions retain their relevant success/error message at the
+destination. Keybinds keeps its capture/progress hints and Vim fields keep their
+mode feedback. Background session revisions refresh workspace status only, so
+they cannot replace menu guidance while a configuration/input page is open.
+
+Menu/application footer text uses semantic status, hint and Normal/Insert roles
+on the workspace background. A shared renderer aligns status left and help right
+on the bottom row when they fit, otherwise uses the last two rows without overlap.
+The centered menu-card helper bounds setup/action pages to their content and the
+available area between chrome and footer. Rendered field/button hit regions and
+caret positions use those same rectangles; list paging uses actual visible rows.
+Session-form height includes the wrapped explanatory note and the action rows,
+with one empty row around the primary action row when height permits. Compact
+forms retain field scrolling and configuration state. Native/Embedded forms add
+one row after their initial setup selector and before the final Start OpenOCD
+selector. The spacing from Start OpenOCD to script browsing is unchanged. Installed-script browsing controls
+have equal one-row gaps above and below when height permits. Those gaps collapse
+in compact rendering; field hit rectangles and carets follow the rendered rows.
+
+Keybinds adds an overflow-only one-cell `|`/`#` bar beside its tables. It shares
+the tables' row viewport, supports track paging and thumb dragging, and never
+joins keyboard control traversal. Resizing cancels a drag. Capture blocks scrollbar
+changes; wheel and page/navigation keys retain their existing behavior.
+
+Action button labels use centered padding inside their hit rectangles; full-row
+menu choices remain left aligned. The profile catalog groups its four creation/
+reload actions on the bottom row with gaps between their hit regions, keeping
+Back at the right edge; below 78 columns the group wraps into two rows.
+Session profile actions reserve separate rows
+at narrow widths. Keybind cell borders use color/bold or capture reverse video,
+without underlining box glyphs, which produces extra strokes in terminal fonts.
 
 ## Source fullscreen rendering
 
@@ -314,12 +358,17 @@ References: [OpenOCD startup and script search](https://openocd.org/doc/html/Run
 [OpenOCD detach handling](https://openocd.org/doc/doxygen/html/gdb__server_8c_source.html) and
 [GDB register/frame cache invalidation](https://sourceware.org/pipermail/gdb-patches/2020-November/173490.html).
 
-## Tiled workspace
+## Workspace geometry
 
-`src/layout/layout.c` is independent of curses and debugger data. Six root tiles
-use 36/34/30 column proportions and a 62/38 default row split; ratios remain
-user-adjustable. The original M02 56/44 row split was superseded by the accepted
-five-row navigation/default-height correction. Each tile contains
+`src/layout/layout.c` is independent of curses and debugger data. The workspace
+uses 36/34/30 primary column proportions. Three lower roots start minimized in
+a one-row dock above the footer. Open roots overlay their columns without
+changing primary rectangles; compact/oversized split groups span the workspace.
+Each root retains its own preferred height, initially 38% of the primary area,
+clamped to at least seven rows and at most the primary height minus its grip.
+Temporary terminal clamping does not overwrite that preference. Session startup
+resets heights and minimizes all three. The legacy 62/38 arrangement remains
+only for the simulated theme reference. Each root contains
 a binary split tree. A leaf names a stable pane slot; an internal node stores
 its direction, child indices and fixed-point ratio. The workspace owns a bounded
 pool of 32 pane slots and 64 tree nodes, avoiding heap ownership complexity.
@@ -327,10 +376,21 @@ Closed nodes/slots are reused. There is no preset catalog or layout selector.
 
 Geometry uses half-open rectangles and one-cell gutters. Recursive subtree
 minimums constrain resizing (each leaf needs 20 columns and 7 rows); globally
-shared row/column dividers respect all affected subtrees. New splits require
+column dividers respect primary subtrees; lower grips adjust only their own root. New splits require
 currently available space. Closing a nested leaf promotes its sibling into
 the parent; a root leaf cannot close. Tabs retain per-view selection/scroll,
-and each pane retains at least one tab. These rules follow the HTML prototype.
+and each pane retains at least one tab. Lower roots preserve the same nested split/close invariants.
+
+Lower roots paint in most-recent-focus order. Layer-aware pane/divider hit tests
+reject covered controls. Keyboard navigation skips covered controls and bodies;
+numbered/cycle navigation restores minimized groups. Dock controls stay reachable
+even when a group is covered. Inspector visibility uses exposed body geometry,
+so a wholly covered inspector cannot request values merely because its root is
+open. Each group has a separate resize grip above its tabs; `_` immediately left
+of `...` minimizes it. Focus returns to its corresponding primary group when
+tiled, or the retained underlying primary pane in compact mode; an exposed
+remaining overlay receives focus when that primary is covered. Source fullscreen hides
+the dock temporarily and restores the retained workspace afterward.
 
 Geometry is recomputed after input, without changing requested ratios on
 terminal resize. If the grid or its subtrees cannot fit, only the focused leaf
@@ -519,12 +579,16 @@ rejected requests preserve it. Escape releases field focus without sending.
 Text editing takes precedence over navigation/action bindings; the final refresh
 places the caret in the field after drawing the workspace chrome.
 
+The live Console reserves one blank row between Command/Send and Save Log in
+panes at least nine rows high. Command controls, log viewport and horizontal
+scrollbar share that reservation; smaller panes retain adjacent control rows.
+
 Save Log flushes pending fragments and exports the bounded readable history.
 It creates a new file with O_EXCL and mode 0600, preserving existing files and
 reporting open/short-write/close failures. It exports retained text, not a profile,
 and cannot recover evicted history.
 
-Normal Quit/Session requests use a full-page confirmation. The session interrupts
+Normal Quit/Session requests use a centered confirmation card. The session interrupts
 a running target, kills a still-owned launched inferior through GDB or
 detaches/resumes an attached target, then closes/reaps GDB. Signal exits run the
 same cleanup outside the handler. A stable Linux pidfd acquired from the actual
@@ -558,6 +622,12 @@ rewrites that original stop frame. Resume, exit and disconnect mark retained dat
 stale; thread-created/exited/selected notifications schedule invalidation outside
 the callback. Context requests from older generations are discarded. Manual
 console commands invalidate context before execution and refresh it afterward.
+Every accepted Console submission also invalidates MMIO setup confirmation and
+revokes all per-view MMIO range authorizations before command transmission.
+Range definitions survive, but require renewed consent after setup confirmation;
+they cannot bypass an unconfirmed backend. Rejected submissions do not cause
+this invalidation. Console aliases/scripts are treated conservatively because
+their effects on target/server configuration cannot be inferred reliably.
 
 Only visible context views trigger automatic reads, only while stopped. Refresh
 and selections also wait for a stopped target. Sequential `-thread-info`,
@@ -619,8 +689,8 @@ ambiguous read relative to the frontend's working directory.
 
 `-data-disassemble` requests 256-byte address windows, retaining at most 128
 instructions with opcodes and optional source groups (`-- 2` / `-- 5`). Forward
-navigation uses the last decoded instruction's byte length, with 16 previous
-window anchors retained for Back; it never guesses a backward instruction boundary.
+navigation uses the last decoded instruction's byte length, with retained
+windows in the shared bounded cache for Back; it never guesses a backward instruction boundary.
 Stopped refreshes retain the current window if it contains PC, and can restore
 previously decoded ranges after returning from another function. A new window
 may use the structured first instruction's function offset for one bounded
@@ -628,30 +698,78 @@ pre-context read (at most 1024 preceding bytes plus the normal 256-byte forward
 range). The metadata-free compatibility path retains four preceding instructions;
 the native indexed path retains up to 64 preceding instructions and the bounded
 forward listing. Missing/too-distant metadata falls back to the known PC boundary.
-All bytes are fetched fresh after stops; saved anchors are browsing context,
-not trace or retained historical target state. Scrolling beyond a window edge
+Following views fetch fresh bytes after stops; manual listings stay historical
+without implicit reads. Saved history is not proof of current code boundaries.
+Scrolling beyond a window edge
 can load a known earlier/next window without resuming execution.
 Without an earlier saved anchor, a known nearby function origin can supply a
 bounded backward decode ending at the current window, retaining at most 128
 preceding instructions. Unavailable or distant origins require explicit address/
 symbol navigation; the frontend does not disassemble backwards from arbitrary bytes.
 A short backward-prefix read prepends its rows to a bounded owned copy of the
-current forward listing instead of replacing that listing. At most 128 combined
+current forward listing instead of replacing that listing. Expansion retains
+up to half the previous window at its edge. At most 128 combined
 instructions remain; pending copies are released on completion, cancellation,
 view-navigation changes, reset and destruction. The TUI preserves the old first
 row's position, adjusted by the requested upward scroll, when it appears in the
 combined result. A full older window uses its end instead. This avoids a one-row
 result collapsing the display or jumping it to the far end of the retained data.
 Mixed failures fall back independently per pane to assembly. Source text is
-interleaved when its exact file matches the cached source; other source groups
-keep their file/line labels with an explicit unavailable-text message. Current
+interleaved from the active Source file or bounded, lazily loaded cross-file
+annotations. Missing/evicted text retains file/line attribution and an explicit
+unavailable-text message. Current
 x86 targets reported by GDB as i386-family explicitly select AT&T syntax.
 
 Address navigation accepts hexadecimal addresses or simple identifiers/qualified
 symbols, excluding calls/operators/command fragments. Symbol addresses use
 `-data-evaluate-expression --language c` and a quoted symbol's address, avoiding
 C++ overloaded address-of calls. Browsing never issues execution/PC-write commands.
-Return to Stopped selects the original stopped thread/frame zero. Source lookup
+Source's Return to Stopped selects the original stopped thread/frame zero.
+Disassembly has separate view-local stopped-PC and selected-frame following;
+neither action changes the context model. Manual Disassembly windows survive
+context transitions without reads, retaining their sampling generation and code
+invalidation epoch. Execution/image/memory-change invalidation prevents historical
+rows from becoming fresh decoding evidence. The shared `browse` LRU pool accounts
+for its object, entry headers and retained payload allocations under 4 MiB,
+evicting before allocation so the transient peak obeys the same budget. Cached
+navigation has no debugger callback or request side effect. Mixed-source
+annotations share this budget. The model loads at most one bounded local file
+per view per pump; rendering only looks up cached text. File/line attribution,
+blank lines and brace-only lines are retained; missing or evicted text is
+explicitly unavailable. Empty or malformed disassembly replies leave the prior
+listing and its provenance intact.
+
+Memory's bounded per-view consent model holds up to sixteen draft/authorized
+ordinary or explicit-width MMIO ranges. Edits revoke authorization; resume and
+context changes expire it. Conflicting policies/widths cannot broaden a grant.
+Managing consent never schedules reads. Ordinary navigation composes adjacent
+proofs and clips reads at boundaries. Declared MMIO blocks the generic byte path;
+the range-management UI supports paged review, edits and explicit revocation.
+Backend confirmation is metadata-only and binds the target, physical device,
+server configuration, ST-LINK firmware and validated widths to the connection.
+Changing any binding invalidates confirmation and MMIO consent. It represents a
+user assertion, never automatic verification. Session review offers only the
+documented physically validated STM32F446/ST-LINK V2J48M35/OpenOCD configuration,
+including its endpoint and a configuration revision. Stale reviews cannot
+reconfirm after Console, connection or target changes. The production read
+adapter reserves the existing MI connection while one target-bound explicit-width
+operation is outstanding. A bounded request-identified frame plus matching MI
+completion is required; no human memory table or generic byte fallback is used.
+Timeouts quarantine further MMIO until an exact late completion reconciles the
+request or the connection is replaced. An untrustworthy completed frame requires
+reconnection. No outcome causes an automatic retry. Actual protocol and width-path
+probes provide evidence for the recorded setup, not arbitrary OpenOCD servers;
+product-level physical validation of this adapter remains pending.
+
+MMIO navigation displays one declared access-width-sized unit per row; alignment
+does not identify a hardware register. Navigation and cached sample inspection
+issue no target requests, even while running. Read unit samples only the selected
+aligned address at a user-confirmed width with matching per-view consent checked
+again immediately before dispatch. Samples retain generation/time provenance and
+are historical observations, including while the CPU is halted: peripheral state
+can change independently. There is no whole-window MMIO refresh or polling.
+
+Source lookup
 settings use MI source directories and ordered GDB substitute-path rules, with
 separate GDB-CLI and MI encoding; only successful replies update saved-in-session
 settings. Clear resets both overrides. Profile persistence is described below.
@@ -679,8 +797,8 @@ data-navigation implementation. This adds no layout modes or debugger actions.
 Live assembly initially includes prior decoded context where available, then
 keeps its viewport until PC reaches a five-row top or bottom margin (scaled in
 short panes and clamped to available context). Manual browsing does not
-automatically snap back until stepping/Stopped. The default upper row receives
-62% of the usable height; divider dragging continues to set the user's ratio.
+automatically snap back until stepping/Stopped. Primary roots occupy the full
+workspace above the lower dock, including the area beneath expanded lower groups.
 
 Protocol references: GDB's [MI data commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Data-Manipulation.html),
 [execution commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Program-Execution.html),
@@ -697,17 +815,33 @@ remain. No global membership state or persistence is introduced.
 
 `src/model/images.{c,h}` uses libelf/GElf for ELF32/64 in either byte order.
 Allocated/executable sections, function/object symbols and ARM mapping symbols
-classify ranges and supply trusted anchors. Native `/proc/PID/maps` plus PT_LOAD
-offsets establish mapped-image load bias. Library/PID lifecycle events invalidate
-metadata. Unsupported/unavailable metadata stays unknown, never fabricated.
+classify ranges and supply anchors only through trusted catalog queries. Loading
+an ELF starts UNVERIFIED. Remote metadata-only review binds its full path,
+additive bias and monotonically increasing file revision to the current session
+and code epoch; confirmation declares USER-CONFIRMED, never live-byte proof
+or read permission. A new user-confirmed bias revokes the preceding declaration
+for the same file. Native `/proc/PID/maps` device/inode identity plus executable
+PT_LOAD offsets establish BACKEND-VERIFIED mapping/load bias, not live-byte
+equality. File stat identity includes device, inode, size, mtime and ctime with
+nanoseconds; validation precedes decoding and confirmation, not rendering.
+Library/PID lifecycle, memory-change notifications, accepted Console commands and
+local file changes invalidate the applicable catalog/code evidence. In-flight
+code replies from an earlier epoch are discarded; retained listings keep their
+original provenance. Unsupported/unavailable metadata stays unknown, never
+fabricated.
 Limits are 16 images, 256 allocated sections/image, 8192 retained symbols/image,
 65536 scanned symbols/image and 64 MiB/image; limited catalogs are disclosed.
 
 Indexed instruction caches merge sorted/deduplicated windows, retaining at most
-128 instructions. Backward extension decodes forward from a known anchor in
-256-byte chunks, at most 4096 chunks. It skips unknown/non-code boundaries to
-the next known code anchor instead of guessing a variable-length x86 boundary.
-Failures retain the prior listing. Raw decoding is explicit; repeated byte or
+128 instructions. Each view/format retains up to 512 boundary records in the
+same 4 MiB LRU pool, with session/stop/code-epoch provenance. Backward
+reconstruction uses a fresh known anchor within 1024 bytes and at most 128 decoded
+rows per operation; trimming a prefix does not replenish that budget. Requests
+are clipped to remaining work and trusted code ranges. Unknown/non-code gaps can
+be crossed only at an established next code anchor; no variable-length x86
+boundary is guessed. Failures and budget exhaustion retain the complete prior
+listing/provenance without retry. Closing/reusing a pane clears its listings,
+annotations and boundary records and changes its request identity. Raw decoding is explicit; repeated byte or
 instruction patterns alone never classify code. Gap rows say how many bytes
 were not decoded. Visible instruction metadata determines warnings, independent
 of the last request or offscreen rows.
@@ -716,6 +850,10 @@ Visibility changes do not invalidate a cached code view; stop/context/settings
 changes do. Opening/closing a selector therefore preserves cache and viewport.
 One assembly formatter supplies both rendered rows and horizontal extent,
 aligning address, byte, mnemonic and operand columns without discarding bytes.
+Trusted mapping feedback uses the compact pane footer rather than replacing
+selected-frame/file context. Manual headers use retained instruction source
+attribution or an address-window label, never a different selected frame's
+filename/caller label; unknown/data/error notices still take priority.
 
 `src/model/breakpoints.{c,h}` owns a bounded 256-row MI snapshot, parent/child and
 pending locations, conditions, ignore counts, hits, enabled state and hardware
@@ -997,8 +1135,10 @@ are late reviewed candidates; native correctness/maintenance remains continuous.
   Existing-server mode never owns the server. Managed OpenOCD lifecycle and
   named STM32/S3 target behavior have [M17 evidence](validation.md#m17--physical-board-validation);
   this does not establish behavior for other scripts, probes or boards.
-- The native code index uses process maps and mapped ELF images. Remote runtime image identity/relocation remain unverified; configured ELF
-  metadata is not independent proof of the loaded firmware. Remote metadata
+- The native code index verifies backing-file mappings through process maps.
+  Remote configured-ELF/load-bias review records a user declaration; automatic
+  remote image identity and nonuniform relocation remain unverified. Neither
+  declaration nor native mapping evidence proves live-byte equality. Remote metadata
   queries supply width/units and preserve unknown byte order without guessing. Initial Memory uses octet addressing and at most 64-bit addresses.
 - Call Stack argument discovery is names-only. Explicit argument reads and native
   frame-print suppression have M14 native/terminal automated coverage. Metadata

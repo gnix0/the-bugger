@@ -2,13 +2,63 @@
 #include "../support/check.h"
 
 #include <math.h>
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 
 static int pair_at(int y, int x)
 {
     return PAIR_NUMBER(mvinch(y, x));
+}
+
+static void text_bounds(void)
+{
+    /* A terminal row's cell budget must also constrain curses' expansion of
+     * control characters: a byte limit alone lets tabs/newlines escape it. */
+    const char *const samples[] = {"A\tB", "A\nB", "A\rB", "A\033B", "A\177B"};
+    for (size_t i = 0; i < sizeof samples / sizeof samples[0]; ++i) {
+        CHECK(mvhline(0, 0, '.', COLS) == OK);
+        CHECK(mvhline(1, 0, '.', COLS) == OK);
+        tb_text(0, 2, 4, TB_PANEL, 0, samples[i]);
+        for (int x = 0; x < COLS; ++x) {
+            if (x < 2 || x >= 6) { CHECK((mvinch(0, x) & A_CHARTEXT) == '.'); }
+            CHECK((mvinch(1, x) & A_CHARTEXT) == '.');
+        }
+    }
+    CHECK(mvhline(0, 0, '.', COLS) == OK);
+    tb_text(0, 2, 1, TB_CYAN, 0, "\xc3\xa9Z");
+    cchar_t cell;
+    wchar_t characters[CCHARW_MAX];
+    attr_t attributes;
+    short pair;
+    CHECK(mvin_wch(0, 2, &cell) == OK);
+    CHECK(getcchar(&cell, characters, &attributes, &pair, NULL) == OK);
+    CHECK(characters[0] == L'\u00e9' && pair == TB_CYAN);
+    CHECK((mvinch(0, 3) & A_CHARTEXT) == '.');
+    tb_text(0, 5, 1, TB_PANEL, 0, "\xe7\x95\x8cZ");
+    CHECK((mvinch(0, 5) & A_CHARTEXT) == '.');
+    tb_text(0, 5, 2, TB_PANEL, 0, "\xe7\x95\x8cZ");
+    CHECK(mvin_wch(0, 5, &cell) == OK);
+    CHECK(getcchar(&cell, characters, &attributes, &pair, NULL) == OK);
+    CHECK(characters[0] == L'\u754c' && (mvinch(0, 7) & A_CHARTEXT) == '.');
+    tb_text(0, 9, 2, TB_PANEL, 0, "e\xcc\x81Z");
+    CHECK(mvin_wch(0, 9, &cell) == OK);
+    CHECK(getcchar(&cell, characters, &attributes, &pair, NULL) == OK);
+    CHECK(characters[0] == L'e' && characters[1] == L'\u0301');
+    CHECK((mvinch(0, 10) & A_CHARTEXT) == 'Z');
+    tb_text(0, 12, 5, TB_PANEL, 0, "\xffZ");
+    char escaped[6]; CHECK(mvinnstr(0, 12, escaped, 5) == 5);
+    CHECK(strcmp(escaped, "\\xffZ") == 0);
+    CHECK((mvinch(0, 17) & A_CHARTEXT) == '.');
+    tb_text(0, 19, 2, TB_PANEL, 0, "\xcc\x81Z");
+    CHECK((mvinch(0, 18) & A_CHARTEXT) == '.');
+    CHECK((mvinch(0, 21) & A_CHARTEXT) == '.');
+    CHECK(mvhline(LINES - 1, 0, '.', COLS) == OK);
+    tb_text(LINES - 1, COLS - 2, 8, TB_PANEL, 0, "ABC");
+    CHECK((mvinch(LINES - 1, COLS - 2) & A_CHARTEXT) == 'A');
+    CHECK((mvinch(LINES - 1, COLS - 1) & A_CHARTEXT) == '.');
 }
 
 static double luminance(unsigned rgb)
@@ -29,6 +79,7 @@ static double contrast(unsigned foreground, unsigned background)
 
 int main(void)
 {
+    CHECK(setlocale(LC_ALL, "C.UTF-8") != NULL);
     TbAssemblyColumns columns = {18, 44, 7};
     char short_line[256], long_line[256], tiny[8];
     tb_format_assembly(short_line, sizeof short_line, columns, "0x0000000000001000", "55", "push   %rbp");
@@ -45,6 +96,7 @@ int main(void)
     CHECK(resizeterm(44, 140) == OK);
     CHECK(strcmp(tb_theme_palette(tb_theme_current())->variant, "macchiato") == 0);
     CHECK(strcmp(tb_theme_init(), "truecolor") == 0);
+    text_bounds();
     int default_fg, default_bg;
     CHECK(extended_pair_content(TB_PANEL, &default_fg, &default_bg) == OK);
     CHECK(default_fg == 0xcad3f5 && default_bg == 0x24273a);
@@ -57,6 +109,10 @@ int main(void)
             for (int role = 6; role < 13; ++role) { CHECK(contrast(palette->colors[role], palette->colors[surface]) >= 3.0); }
         }
         CHECK(tb_theme_select(i) && strcmp(tb_theme_init(), "truecolor") == 0);
+        for (int role = TB_STATUS_TEXT; role <= TB_INSERT_TEXT; ++role) {
+            CHECK(extended_pair_content(role, &default_fg, &default_bg) == OK);
+            CHECK((unsigned)default_bg == palette->colors[0]);
+        }
         for (int pair_id = 1; pair_id < 2 * TB_COLOR_COUNT; ++pair_id) {
             if (pair_id == TB_COLOR_COUNT) { continue; } /* No style uses selected pair zero. */
             CHECK(extended_pair_content(pair_id, &default_fg, &default_bg) == OK);
@@ -135,6 +191,6 @@ int main(void)
         }
         (void)endwin(); delscreen(screen); CHECK(fclose(input) == 0 && fclose(output) == 0);
     }
-    puts("PASS 37 palettes, contrast, direct/256/8-color/monochrome, execution highlight and scrollbar");
+    puts("PASS cell/control/UTF-8 text bounds, 37 palettes, contrast, direct/256/8-color/monochrome, execution highlight and scrollbar");
     return EXIT_SUCCESS;
 }

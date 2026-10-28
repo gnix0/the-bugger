@@ -17,7 +17,7 @@ records remain in the [validation records](../docs/validation.md).
   See [fullscreen procedures](../docs/testing.md#source-fullscreen).
 
 - `make test-navigation`: verifies spatial controls, deliberate content focus,
-  fullscreen/resize focus retention and arrow-key versus always-on h/j/k/l behavior
+  fullscreen/resize focus retention and arrow-key versus opt-in h/j/k/l aliases
   through real demo PTYs, including menus, tabs/bodies, resize, confirmations,
   compact rendering and literal field editing. Included in `make test`; no
   debugger required. See [navigation procedures](../docs/testing.md#letter-key-navigation).
@@ -83,7 +83,7 @@ records remain in the [validation records](../docs/validation.md).
   `make test-m13-native`: actual GDB source restore, relocated duplicate-basename
   breakpoint resolution, execution interlock, saved native reopen/remapped actions,
   recents and cleanup. Included in `make test-native`; GDB/ptrace required. See
-  [M13 procedures](../docs/testing.md#profiles-and-action-keys).
+  [M13 procedures](../docs/testing.md#profiles-and-source-settings).
 
 - `test-watchpoints` / `make test-m12-model`: hardware type reconciliation,
   change/read/access modes, width/overflow checks, hit/scope messages,
@@ -114,6 +114,14 @@ records remain in the [validation records](../docs/validation.md).
 - `test-memory` / `make test-m10-model`: bounded independent instances, byte order,
   ordinary/unknown-region browsing, partial/invalid/overlapping replies, expression
   restrictions, obsolete replies and no opening/idle/running reads.
+- `test-mmio`, `test-mmio-memory` and `test-mmio-tui` run in the host baseline
+  with authored peers: explicit-width framing, serialization, uncertainty/late
+  replies without retries, independent consent, dispatch/setup/view-lifetime
+  guards, navigation-only units and user-confirmed setup/Console invalidation.
+  `test-remote` also checks queued/in-flight MMIO closure and rejected commands.
+  The separate opt-in `test-mmio-hardware` performs real GPIOA_ODR reads only on
+  the named validated setup; it is never executed by CI. See the
+  [protocol and physical procedures](../docs/testing.md#openocd-mmio-protocol-gate-task-13).
 - `test-memory-native` and `test-memory-tui` / `make test-m10-native`: real buffers,
   inline field/Go, keyboard and mouse browsing, hex/ASCII, independent settings,
   invalid input, stale refresh, unmapped boundary and resize/cleanup. Both are
@@ -135,14 +143,22 @@ records remain in the [validation records](../docs/validation.md).
   selection, respecting GDB's default backtrace boundary at main.
 
 - `test-images`: ELF32/64, both byte orders, code/data and ARM mapping symbols,
-  relocation overflow, reset and 1,000 malformed/truncated metadata mutations.
+  relocation overflow, reset and 1,000 malformed/truncated metadata mutations;
+  unverified/user/native trust, backing-file identity, changed-file revisions and
+  stale load-bias declarations.
 - `test-breakpoints`: structured breakpoint rows, multiple/pending/hardware
   state, resource errors, run-to races/timeouts/cleanup failures and ownership,
   bounded malformed tables, no retry spin and aborted-execution reconciliation.
 
 - `test-code`: synthetic GDB-known files, bounded source/assembly windows and
   navigation, mixed fallback, raw-path/display escaping, stale local-view replies,
-  source byte/line limits and no automatic invisible/running/idle reads.
+  source byte/line limits and no automatic invisible/running/idle reads;
+  actual shared-cache eviction, reconstruction from retained fresh boundaries,
+  absent/stale-anchor refusal, 128-decoded-row exhaustion with full provenance
+  preservation, in-flight code-epoch changes and pane-history cleanup.
+- `test-image-tui`: authored ARM/big-endian remote ELF metadata review, paths
+  with spaces, 18x48 pagination, USER-CONFIRMED state and accepted-Console
+  invalidation. No hardware/image-match verification is implied.
 - `test-native-words`: quoted whitespace/backslash parsing, empty arguments,
   literal metacharacters and input bounds, without a shell or GDB.
 - `test-context`: bounded coherent frame/thread snapshots via a synthetic C
@@ -208,7 +224,8 @@ evidence. M04's C fake peer tests controller behavior without launching a target
 real native C/C++ fixtures are in `fixtures/native/`, with separate M05
 `make test-native` and `make sanitize-native` checks. M14 records native
 integration acceptance; real board evidence remains M17. Every release retests native
-x86-64 and the STM32/ARM validation, ESP32/Xtensa and ESP32/RISC-V hardware;
+x86-64 and the STM32/ARM validation, ESP32/Xtensa and ESP32/RISC-V hardware,
+subject to the explicitly recorded version-specific RISC-V deferrals;
 QEMU ARM/RISC-V adds coverage where available and never replaces board evidence.
 After v0.1.0, native tests remain the regression foundation while new feature
 acceptance emphasizes embedded capabilities and physical failure/recovery paths.

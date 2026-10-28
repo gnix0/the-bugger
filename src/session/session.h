@@ -55,6 +55,11 @@ bool tb_session_pause(TbSession *native);
 typedef enum { TB_STEP_OVER, TB_STEP_INTO, TB_STEP_OUT } TbStep;
 bool tb_session_step(TbSession *native, TbStep step, bool instruction);
 bool tb_session_console(TbSession *native, const char *command);
+/* Metadata-only review of the documented physically validated MMIO setup.
+ * These functions perform no hardware requests. Confirmation is the user's
+ * assertion that every displayed binding matches, never automatic detection. */
+bool tb_session_mmio_review(TbSession *session, TbMemoryBackend *review);
+bool tb_session_mmio_confirm(TbSession *session, const TbMemoryBackend *review);
 bool tb_session_save_log(TbSession *native, const char *path);
 /* Local launch: terminate the still-owned inferior; local attach: detach/resume.
  * Remote: disconnect only, with target disposition controlled by the server.

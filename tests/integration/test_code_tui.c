@@ -52,6 +52,8 @@ static void input(TestTerminal *term, const char *text)
 }
 static void actions(TestTerminal *term, bool source)
 {
+    /* Expose this primary pane's footer before selecting its Actions control. */
+    test_terminal_lower(term, source ? 0 : 1, false);
     /* Click the Actions footer belonging to the requested code column. */
     int x = -1, y = -1;
     for (int row = 0; row < term->rows - 2; ++row) {
@@ -105,6 +107,9 @@ static void horizontal_drag(TestTerminal *term, const char *footer, int right, b
 static void scrolling(TestTerminal *term)
 {
     unsigned long long pc = assembly_pc(term); CHECK(pc);
+    /* Keep this short source fixture taller than the primary viewport. */
+    test_terminal_resize(term, 28, 140);
+    test_terminal_expect(term, "LIVE | C/C++ | code.c");
     int menu_x, menu_y; CHECK(test_terminal_find(term, "...", &menu_x, &menu_y));
     CHECK(term->cells[menu_y + 2][menu_x + 4] == '#' || term->cells[menu_y + 2][menu_x + 4] == '|');
     CHECK(term->cells[menu_y + 2][menu_x + 3] != term->cells[menu_y + 2][menu_x + 4]);
@@ -123,6 +128,7 @@ static void scrolling(TestTerminal *term)
     mouse_at(term, 0, track_x, track_y, true);
     test_terminal_expect(term, "CODE_FIND_MARKER");
     horizontal_drag(term, "Actions", 46, false);
+    test_terminal_lower(term, 2, true);
     test_terminal_click(term, "Command"); test_terminal_expect(term, "LIVE | GDB / program log");
     input(term, "echo HORIZONTAL_BEGIN_abcdefghijklmnopqrstuvwxyz_abcdefghijklmnopqrstuvwxyz_abcdefghijklmnopqrstuvwxyz_abcdefghijklmnopqrstuvwxyz_HORIZONTAL_END\\n");
     test_terminal_expect(term, "HORIZONTAL_BEGIN");
@@ -179,7 +185,8 @@ static void instruction_margin(TestTerminal *term)
         if (strncmp(top, term->cells[tab_y + 2] + tab_x, strlen(top)) == 0) { ++stable; }
     }
     CHECK(stable >= 3);
-    /* Browse until PC is near the top, then resume following by stepping. */
+    /* Browse until PC is near the top. Browsing an extended window now remains
+     * manual across stops; explicitly restore following before testing margins. */
     unsigned long long pc = assembly_pc(term);
     int pc_row = -1;
     for (int row = tab_y + 2; row < footer; ++row) {
@@ -195,6 +202,8 @@ static void instruction_margin(TestTerminal *term)
         }
     }
     CHECK(pc_row >= tab_y + 2 && pc_row <= tab_y + 5);
+    actions(term, false); test_terminal_click(term, "Follow selected frame (this view)");
+    test_terminal_expect(term, "This Disassembly view follows the selected frame");
     test_terminal_send(term, "\033[21~"); /* instruction Next, without entering a callee */
     long long until = now() + 5000;
     while ((!assembly_pc(term) || assembly_pc(term) == pc) && now() < until) { test_terminal_pump(term, 50); }
@@ -244,9 +253,11 @@ static void direct_start(const char *binary, const char *fixture)
     /* These code-pane headers are the contract before the first stop.
      * Other inspectors may correctly report stale/unread register data;
      * searching the entire workspace for STALE confuses their lifecycles. */
+    test_terminal_lower(&term, 2, true);
     test_terminal_click(&term, "Command"); test_terminal_expect(&term, "LIVE | GDB / program log"); input(&term, "start");
     test_terminal_expect(&term, "LIVE | C/C++ | code.c");
-    test_terminal_expect(&term, "LIVE | assembly | code.c");
+    test_terminal_expect(&term, "LIVE | assembly: selected frame | code.c");
+    test_terminal_expect(&term, "ELF:native");
     CHECK(source_pc_line(&term) > 0 && assembly_pc(&term) != 0);
     scrolling(&term);
     instruction_margin(&term);
@@ -262,8 +273,10 @@ static void wheel_up_listing(const char *binary, const char *fixture)
     test_terminal_expect(&term, "Executable / ELF"); test_terminal_send(&term, "\t\025"); test_terminal_send(&term, fixture);
     test_terminal_click(&term, "Review session"); test_terminal_click(&term, "Start native");
     test_terminal_expect(&term, "LIVE | Loaded");
+    test_terminal_lower(&term, 2, true);
     test_terminal_click(&term, "Command"); test_terminal_expect(&term, "LIVE | GDB / program log"); input(&term, "start");
-    test_terminal_expect(&term, "LIVE | assembly | session.c");
+    test_terminal_expect(&term, "LIVE | assembly: selected frame | session.c");
+    test_terminal_expect(&term, "ELF:native");
     unsigned long long pc = assembly_pc(&term); CHECK(pc);
     test_terminal_click(&term, "Disassembly");
     int x, y; CHECK(test_terminal_find(&term, "Disassembly", &x, &y));
@@ -275,6 +288,7 @@ static void wheel_up_listing(const char *binary, const char *fixture)
         if (strstr(term.cells[row] + x - 2, "0x")) { ++rows; }
     }
     CHECK(rows >= 8 && assembly_pc(&term) == pc);
+    test_terminal_expect(&term, "address window");
     mouse_at(&term, 65, x + 3, y + 3, false);
     until = now() + 300; while (now() < until) { test_terminal_pump(&term, 10); }
     rows = 0;
@@ -330,6 +344,7 @@ int main(int argc, char *argv[])
     input(&term, "code.c"); test_terminal_click(&term, "tests/fixtures/native/code.c");
     test_terminal_expect(&term, "#define _POSIX_C_SOURCE");
     CHECK(assembly_pc(&term) == 0); /* Browsing a loaded ELF invents no PC. */
+    test_terminal_lower(&term, 2, true);
     test_terminal_click(&term, "Command"); test_terminal_expect(&term, "LIVE | GDB / program log"); input(&term, "start");
     long long first_stop = now() + 5000;
     while (!source_pc_line(&term) && now() < first_stop) { test_terminal_pump(&term, 50); }
@@ -370,7 +385,7 @@ int main(int argc, char *argv[])
     actions(&term, false); test_terminal_click(&term, "Go to address / symbol"); input(&term, "code_callee");
     test_terminal_expect(&term, "Instruction window loaded");
     actions(&term, false); test_terminal_click(&term, "Toggle mixed source/assembly");
-    test_terminal_expect(&term, "mixed | code.c");
+    test_terminal_expect(&term, "mixed: browsing | code.c");
     actions(&term, true); test_terminal_click(&term, "Source lookup settings");
     test_terminal_expect(&term, "Directories: newest first"); test_terminal_click(&term, "Add directory"); input(&term, "/tmp");
     test_terminal_expect(&term, "GDB source settings applied");

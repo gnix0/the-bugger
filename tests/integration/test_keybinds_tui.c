@@ -105,6 +105,40 @@ static void capture(int action)
     CHECK(term.cells[y][x] == ' ' && !term.inverse[y][x]);
     CHECK(term.inverse[y - 1][x]); /* Capture emphasis affects the border only. */
 }
+static void clean_key_borders(void)
+{
+    settle();
+    for (int action = 0; action < TB_BIND_COUNT; ++action) {
+        char label[25]; (void)snprintf(label, sizeof label, "%.24s", tb_keybind_action((size_t)action));
+        if (!test_terminal_find(&term, label, NULL, NULL)) { continue; }
+        int x, y; cell(action, &x, &y);
+        /* Underlining box glyphs adds stray strokes on real terminals. */
+        CHECK(!term.underline[y - 1][x] && !term.underline[y + 1][x]);
+    }
+}
+static void scrollbar_layout(void)
+{
+    resize_keys(20, 160); clean_key_borders();
+    int x, y; CHECK(test_terminal_find(&term, "#", &x, &y));
+    int top = y, bottom = y;
+    while (top > 0 && strchr("|#", term.cells[top - 1][x])) { --top; }
+    while (bottom + 1 < term.rows && strchr("|#", term.cells[bottom + 1][x])) { ++bottom; }
+    CHECK(bottom > top && bottom < term.rows - 3);
+    mouse_at(x, bottom); test_terminal_expect(&term, "Rows 3-4/15");
+    test_terminal_send(&term, "\033OH"); test_terminal_expect(&term, "Rows 1-2/15"); settle();
+    CHECK(test_terminal_find(&term, "#", &x, &y));
+    char event[80];
+    (void)snprintf(event, sizeof event, "\033[<0;%d;%dM", x + 1, y + 1); test_terminal_send(&term, event); settle();
+    (void)snprintf(event, sizeof event, "\033[<32;%d;%dM", x + 1, bottom + 1); test_terminal_send(&term, event); settle();
+    (void)snprintf(event, sizeof event, "\033[<0;%d;%dm", x + 1, bottom + 1); test_terminal_send(&term, event);
+    test_terminal_expect(&term, "Rows 14-15/15"); clean_key_borders();
+    test_terminal_send(&term, "\033[<64;50;10M"); settle(); clean_key_borders();
+    test_terminal_send(&term, "\033[<65;50;10M"); settle(); clean_key_borders();
+    resize_keys(64, 160); CHECK(!test_terminal_find(&term, "#", NULL, NULL));
+    test_terminal_send(&term, "\033OH"); settle();
+    resize_keys(60, 140); selected = 0;
+}
+
 static void open_keys(void)
 {
     click("[ Config ]"); click("Keybinds"); selected = 0;
@@ -162,6 +196,7 @@ static void native_bindings(const char *binary, const char *fixture)
     click("Review session"); click("Start native");
     test_terminal_expect(&term, "LIVE | Loaded");
     test_terminal_expect(&term, "Continue F6"); test_terminal_expect(&term, "Pause p");
+    test_terminal_lower(&term, 2, true);
     click("Command"); test_terminal_send(&term, "echo wasdbnp\\n\r");
     test_terminal_expect(&term, "[gdb] wasdbnp");
     test_terminal_send(&term, "start\r"); test_terminal_expect(&term, "LIVE | Stopped");
@@ -217,6 +252,7 @@ static void vim_input(const char *binary, const char *fixture)
     if (fixture) {
         start(binary, "mono"); click("[ Config ]"); click("Profiles"); click("Shared connection");
         click("Review session"); click("Start native"); test_terminal_expect(&term, "LIVE | Loaded");
+        test_terminal_lower(&term, 2, true);
         vim_stage = "native Command focus";
         click("Command"); test_terminal_expect(&term, "VIM NORMAL");
         test_terminal_send(&term, "iecho modal_hjklq[]123\\n"); test_terminal_expect(&term, "VIM INSERT");
@@ -228,6 +264,7 @@ static void vim_input(const char *binary, const char *fixture)
         test_terminal_expect(&term, "LIVE | Stopped");
         test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
         leave_vim_field();
+        test_terminal_lower(&term, 0, true);
         int x, y; CHECK(test_terminal_find(&term, "Address", &x, &y));
         vim_stage = "Memory focus";
         mouse_at(x + 10, y); test_terminal_expect(&term, "VIM NORMAL");
@@ -262,6 +299,7 @@ int main(int argc, char **argv)
     CHECK(setenv("XDG_CONFIG_HOME", root, 1) == 0);
     CHECK(setenv("TB_TEST_CONFIG_HOME", root, 1) == 0);
     start(argv[1], "xterm-256color"); test_terminal_resize(&term, 60, 140); open_keys();
+    scrollbar_layout();
     int x, y; CHECK(test_terminal_find(&term, "Keybinds", &x, &y) && x > 0 && y > 0);
     inactive("[ Undo ]"); inactive("[ Save ]"); inactive("[ Restore Defaults ]");
     TbPreferences prefs; CHECK(tb_preferences_load(&prefs) && !prefs.existed);

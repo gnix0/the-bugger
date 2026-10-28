@@ -1,0 +1,33 @@
+=thread-group-added,id="i1"
+(gdb) 
+=thread-group-started,id="i1",pid="42000"
+&"warning: No executable has been specified and target does not support\ndetermining executable automatically.  Try using the \""
+&"file\" command.\n"
+=thread-created,id="1",group-id="i1"
+~"0x080001f4 in ?? ()\n"
+*stopped,frame={addr="0x080001f4",func="??",args=[],arch="arm"},thread-id="1",stopped-threads="all"
+11^connected
+(gdb) 
+@"TBM1|d2304c391cb1698bb6c4cc6293930c53-12|stm32f4x.cpu|20000000|32|1|12345678|END\n"
+12^done
+(gdb) 
+@"TBP_UNRELATED\n"
+@"TBM1|d2304c391cb1698bb6c4cc6293930c53-13|stm32f4x.cpu|20000000|32|1|12345678|END\n"
+13^done
+(gdb) 
+@"TBM1|d2304c391cb1698bb6c4cc6293930c53-14|stm32f4x.cpu|20000000|32|1|12345678|END\n"
+@"TBM1|d2304c391cb1698bb6c4cc6293930c53-14|stm32f4x.cpu|20000000|32|1|12345678|END\n"
+14^done
+(gdb) 
+@"TBP_EXPECTED_ERROR\n"
+&"Protocol error with Rcmd: 01.\n"
+15^error,msg="Protocol error with Rcmd: 01."
+(gdb) 
+@"TBM1|d2304c391cb1698bb6c4cc6293930c53-16|stm32f4x.cpu|20000000|32|1|12345678|END\n"
+16^done
+(gdb) 
+=thread-exited,id="1",group-id="i1"
+=thread-group-exited,id="i1"
+17^done
+(gdb) 
+18^exit

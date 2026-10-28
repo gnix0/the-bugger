@@ -29,6 +29,7 @@ static void start(TestTerminal *t, const char *binary)
 }
 static void console(TestTerminal *t, const char *command)
 {
+    test_terminal_lower(t, 2, true);
     test_terminal_click(t, "Command"); test_terminal_expect(t, "LIVE | GDB / program log");
     test_terminal_send(t, "\025"); test_terminal_send(t, command); test_terminal_send(t, "\r");
 }
@@ -61,6 +62,7 @@ int main(int argc, char **argv)
     test_terminal_click(&t, "Into");
     for (int i = 0; (!pc(&t) || pc(&t) == before) && i < 200; ++i) { test_terminal_pump(&t, 10); }
     CHECK(pc(&t) && pc(&t) != before);
+    test_terminal_lower(&t, 0, true);
     int x = -1, y = -1;
     for (int row = t.rows / 2; row < t.rows; ++row) {
         const char *at = strstr(t.cells[row], "Address");

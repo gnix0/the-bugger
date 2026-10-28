@@ -42,6 +42,7 @@ struct TbSession {
     int stage, master, slave, pidfd;
     pid_t target_pid, owned_pid;
     uint64_t revision, close_deadline, partial_time[5], recovery_deadline;
+    uint64_t mmio_configuration;
     pid_t memory_pid;
     uint64_t memory_stop;
     char executable[PATH_MAX], directory[PATH_MAX], debugger[PATH_MAX], tty[PATH_MAX];
@@ -49,6 +50,7 @@ struct TbSession {
     char message[TB_SESSION_LOG_WIDTH], reply_error[TB_SESSION_LOG_WIDTH];
     char code_message[192];
     char break_message[192];
+    char memory_message[192];
     char logs[TB_SESSION_LOG_LINES][TB_SESSION_LOG_WIDTH];
     size_t first, count;
     char partial[5][TB_SESSION_LOG_WIDTH - 24];
@@ -122,6 +124,13 @@ static void stream(TbSession *native, size_t channel, const char *bytes, size_t 
 static void state_set(TbSession *native, TbSessionState state)
 {
     if (native->state != state) { native->state = state; ++native->revision; }
+}
+
+static void configuration_changed(TbSession *session)
+{
+    ++session->mmio_configuration;
+    (void)tb_memory_backend_set(session->memory, NULL);
+    tb_code_image_invalidate(session->code);
 }
 
 bool tb_session_words(const char *input, TbSessionWords *words, char *error, size_t capacity)
@@ -234,6 +243,7 @@ static void emit(void *context, const TbGdbEvent *event)
         stream(native, record->kind == TB_MI_CONSOLE ? 0 : record->kind == TB_MI_TARGET ? 1 : 2,
                record->stream.data, record->stream.length);
     } else if (record->kind == TB_MI_NOTIFY && strcmp(record->klass, "thread-group-started") == 0) {
+        configuration_changed(native);
         if (native->kind == TB_SESSION_LOCAL) {
             native->target_pid = record_pid(tb_mi_find(record->results, "pid"));
             native->alive = native->target_pid > 0;
@@ -253,6 +263,7 @@ static void emit(void *context, const TbGdbEvent *event)
         }
         native->launch_requested = false;
     } else if (record->kind == TB_MI_NOTIFY && strcmp(record->klass, "thread-group-exited") == 0) {
+        configuration_changed(native);
         native->alive = false;
         if (native->kind != TB_SESSION_LOCAL) {
             /* A detached/exited inferior is not proof that its server died.
@@ -312,6 +323,7 @@ TbSession *tb_session_create(void)
         tb_context_destroy(native->context); (void)tb_gdb_destroy(native->gdb); free(native); return NULL;
     }
     native->variables = tb_variables_create(native->gdb, native->context);
+    tb_memory_cache(native->memory, tb_code_cache(native->code));
     if (!native->variables) {
         tb_memory_destroy(native->memory); tb_registers_destroy(native->registers);
         tb_break_destroy(native->breakpoints); tb_code_destroy(native->code);
@@ -332,10 +344,14 @@ static void close_fds(TbSession *native)
 bool tb_session_destroy(TbSession *native)
 {
     if (native == NULL) { return true; }
-    if (tb_session_active(native)) { return false; }
+    if (tb_session_active(native) || tb_gdb_pid(native->gdb) || tb_gdb_pending(native->gdb)) { return false; }
     if (!tb_openocd_destroy(native->server)) { return false; }
+    native->server = NULL;
+    /* Memory releases its MMIO reservation through the still-live controller.
+     * Disconnected, reaped and drained above means destroy cannot emit replies. */
+    tb_memory_destroy(native->memory); native->memory = NULL;
     if (!tb_gdb_destroy(native->gdb)) { return false; }
-    tb_variables_destroy(native->variables); tb_memory_destroy(native->memory); tb_registers_destroy(native->registers); tb_break_destroy(native->breakpoints); tb_code_destroy(native->code); tb_context_destroy(native->context); close_fds(native); free(native); return true;
+    tb_variables_destroy(native->variables); tb_registers_destroy(native->registers); tb_break_destroy(native->breakpoints); tb_code_destroy(native->code); tb_context_destroy(native->context); close_fds(native); free(native); return true;
 }
 
 static bool elf(const char *path, bool executable)
@@ -426,6 +442,7 @@ bool tb_session_start(TbSession *native, const TbSessionConfig *config)
     native->target_connected = native->remote_metadata_dirty = false;
     native->close_interrupt_sent = native->close_resume = native->close_prepared = native->target_uncertain = false;
     native->target_action = 0; native->target_uncertain = false;
+    configuration_changed(native);
     memset(&native->capabilities, 0, sizeof native->capabilities);
     native->capabilities.local_process = native->kind == TB_SESSION_LOCAL;
     native->capabilities.openocd = config->openocd != NULL;
@@ -436,8 +453,10 @@ bool tb_session_start(TbSession *native, const TbSessionConfig *config)
     }
     native->code_message[0] = '\0';
     native->break_message[0] = '\0';
+    native->memory_message[0] = '\0';
     tb_context_reset(native->context);
     tb_code_reset(native->code);
+    tb_code_native(native->code, 0, native->executable);
     tb_break_reset(native->breakpoints);
     tb_registers_reset(native->registers);
     tb_memory_reset(native->memory);
@@ -483,9 +502,15 @@ static bool issue(TbSession *native, Job job, const char *operation, const char 
     if (!native->waiting && job == JOB_SETUP) { native->failed = true; tb_session_close(native); }
     return native->waiting;
 }
+static bool register_read_pending(TbSession *native)
+{
+    if (!tb_memory_register_busy(native->memory)) { return false; }
+    diagnostic(native, "Wait for the explicit register read to finish before changing debugger state."); return true;
+}
 
 bool tb_session_continue(TbSession *native)
 {
+    if (register_read_pending(native)) { return false; }
     if (tb_code_restoring(native->code)) { diagnostic(native, "Wait for profile source settings to finish applying."); return false; }
     if (native->waiting || native->want_close || native->target_action || !native->configured || tb_break_busy(native->breakpoints)) { return false; }
     tb_context_refresh(native->context);
@@ -501,12 +526,14 @@ bool tb_session_continue(TbSession *native)
 
 bool tb_session_pause(TbSession *native)
 {
+    if (register_read_pending(native)) { return false; }
     return !native->waiting && !native->want_close && native->state == TB_SESSION_RUNNING &&
            issue(native, JOB_PAUSE, "-exec-interrupt", NULL, 0);
 }
 
 bool tb_session_step(TbSession *native, TbStep step, bool instruction)
 {
+    if (register_read_pending(native)) { return false; }
     if (tb_code_restoring(native->code)) { diagnostic(native, "Wait for profile source settings to finish applying."); return false; }
     const TbContextSnapshot *context = tb_context_snapshot(native->context);
     if (native->waiting || native->want_close || native->target_action || !native->configured || tb_break_busy(native->breakpoints) ||
@@ -524,6 +551,7 @@ bool tb_session_step(TbSession *native, TbStep step, bool instruction)
 
 bool tb_session_console(TbSession *native, const char *command)
 {
+    if (register_read_pending(native)) { return false; }
     if (tb_code_restoring(native->code)) { diagnostic(native, "Wait for profile source settings to finish applying."); return false; }
     if (tb_break_busy(native->breakpoints)) { diagnostic(native, "Wait for the pending breakpoint operation."); return false; }
     if (native->waiting || native->want_close || native->target_action || !native->configured) {
@@ -537,8 +565,15 @@ bool tb_session_console(TbSession *native, const char *command)
         strncmp(command, "set non-stop", 12) == 0) { diagnostic(native, "Interpreter/async mode is managed by the frontend."); return false; }
     char safe[192]; safe_text(safe, sizeof safe, command, strlen(command)); line(native, "[command] ", safe);
     const char *const args[] = {"console", command};
-    tb_context_refresh(native->context);
     bool accepted = issue(native, JOB_CONSOLE, "-interpreter-exec", args, 2);
+    if (accepted) {
+        /* Request acceptance only queues bytes; transmission happens in the
+         * next GDB pump. Invalidate before that pump, even for harmless-looking
+         * aliases/scripts. Setup confirmation and per-view MMIO consent both
+         * expire; retained range definitions are not permission to read. */
+        configuration_changed(native);
+        tb_context_refresh(native->context);
+    }
     const char *verb = command;
     while (*verb == ' ' || *verb == '\t') { ++verb; }
     size_t length = strcspn(verb, " \t");
@@ -547,6 +582,32 @@ bool tb_session_console(TbSession *native, const char *command)
                   (length == 6 && strncmp(verb, "starti", length) == 0);
     if (accepted && launch && !native->attach) { native->launch_requested = true; }
     return accepted;
+}
+
+static bool mmio_review_ready(const TbSession *s)
+{
+    return s && s->kind != TB_SESSION_LOCAL && s->configured && !s->remote_metadata_dirty && !s->waiting && !s->want_close &&
+           !s->target_action && !tb_memory_register_busy(s->memory) && s->capabilities.connected &&
+           s->capabilities.octet_addressing && s->capabilities.address_bits == 32 &&
+           tb_gdb_state(s->gdb) == TB_GDB_STOPPED;
+}
+
+bool tb_session_mmio_review(TbSession *s, TbMemoryBackend *review)
+{
+    if (!review || !mmio_review_ready(s)) { return false; }
+    TbMemoryBackend candidate = {.target = "stm32f4x.cpu", .device = "STM32F446 / Cortex-M4 / ST-LINK",
+        .firmware = "ST-LINK V2J48M35 (API v2)", .configuration = s->mmio_configuration,
+        .widths = (unsigned)TB_MEMORY_WIDTH8 | (unsigned)TB_MEMORY_WIDTH16 | (unsigned)TB_MEMORY_WIDTH32};
+    int n = snprintf(candidate.server, sizeof candidate.server,
+        "OpenOCD 0.12.0-01004-g9ea7f3d64-dirty; -f board/st_nucleo_f4.cfg; GDB %s", s->endpoint);
+    if (n < 0 || (size_t)n >= sizeof candidate.server || !tb_memory_backend_set(s->memory, &candidate)) { return false; }
+    *review = candidate; return true;
+}
+
+bool tb_session_mmio_confirm(TbSession *s, const TbMemoryBackend *review)
+{
+    return review && mmio_review_ready(s) && review->configuration == s->mmio_configuration &&
+           tb_memory_backend_confirm(s->memory, review);
 }
 
 bool tb_session_save_log(TbSession *native, const char *path)
@@ -576,7 +637,10 @@ bool tb_session_save_log(TbSession *native, const char *path)
 void tb_session_close(TbSession *native)
 {
     if (!tb_session_active(native)) { return; }
-    if (!native->want_close) { native->close_deadline = tb_gdb_now_ms() + 4000; }
+    if (!native->want_close) {
+        native->close_deadline = tb_gdb_now_ms() + 4000;
+        configuration_changed(native);
+    }
     native->want_close = true;
     state_set(native, TB_SESSION_CLOSING);
     if (native->kind != TB_SESSION_LOCAL && !native->configured && !native->target_connected) {
@@ -586,6 +650,7 @@ void tb_session_close(TbSession *native)
 
 static bool target_action(TbSession *s, int action)
 {
+    if (register_read_pending(s)) { return false; }
     if (!s->capabilities.openocd || !s->configured || tb_code_restoring(s->code) || tb_break_busy(s->breakpoints) || s->waiting || s->want_close || s->target_action ||
         (s->state != TB_SESSION_STOPPED && s->state != TB_SESSION_RUNNING)) {
         diagnostic(s, "OpenOCD action unavailable; connect a target and wait for pending operations."); return false;
@@ -702,7 +767,7 @@ static void process_reply(TbSession *native)
 
 static void release_target(TbSession *native)
 {
-    if (native->waiting || tb_gdb_state(native->gdb) == TB_GDB_CLOSING) { return; }
+    if (native->waiting || tb_memory_register_busy(native->memory) || tb_gdb_state(native->gdb) == TB_GDB_CLOSING) { return; }
     if (native->kind != TB_SESSION_LOCAL) {
         if (native->target_connected) {
             if (native->target_uncertain) {
@@ -780,6 +845,7 @@ void tb_session_pump(TbSession *native, int wait_ms)
         tb_session_close(native); tb_gdb_abort(native->gdb);
     }
     tb_gdb_pump(native->gdb, wait_ms);
+    tb_memory_transport(native->memory);
     if (native->master >= 0) {
         char buffer[4096]; size_t budget = TB_GDB_IO_BUDGET;
         while (budget != 0) {
@@ -872,6 +938,8 @@ void tb_session_pump(TbSession *native, int wait_ms)
         }
     }
     else if (native->configured && !native->waiting && (native->kind == TB_SESSION_LOCAL || native->alive)) {
+        if (tb_memory_register_busy(native->memory)) { tb_memory_pump(native->memory); }
+        else {
         tb_break_pump(native->breakpoints);
         tb_context_pump(native->context);
         const TbContextSnapshot *snapshot = tb_context_snapshot(native->context);
@@ -879,6 +947,7 @@ void tb_session_pump(TbSession *native, int wait_ms)
             (void)snprintf(native->capabilities.architecture, sizeof native->capabilities.architecture, "%s", snapshot->selected.architecture);
         }
         tb_code_pump(native->code); tb_registers_pump(native->registers); tb_memory_pump(native->memory); tb_variables_pump(native->variables);
+        }
     }
     if (strcmp(native->code_message, tb_code_message(native->code)) != 0) {
         (void)snprintf(native->code_message, sizeof native->code_message, "%s", tb_code_message(native->code));
@@ -887,6 +956,10 @@ void tb_session_pump(TbSession *native, int wait_ms)
     if (strcmp(native->break_message, tb_break_message(native->breakpoints)) != 0) {
         (void)snprintf(native->break_message, sizeof native->break_message, "%s", tb_break_message(native->breakpoints));
         if (*native->break_message) { diagnostic(native, native->break_message); }
+    }
+    if (strcmp(native->memory_message, tb_memory_mmio_message(native->memory)) != 0) {
+        (void)snprintf(native->memory_message, sizeof native->memory_message, "%s", tb_memory_mmio_message(native->memory));
+        if (*native->memory_message) { diagnostic(native, native->memory_message); }
     }
 }
 
@@ -920,6 +993,7 @@ TbCode *tb_session_code(TbSession *native) { return native->code; }
 TbBreakpoints *tb_session_breakpoints(TbSession *native) { return native->breakpoints; }
 bool tb_session_run_at(TbSession *native, TbBreakLocation location)
 {
+    if (register_read_pending(native)) { return false; }
     const TbContextSnapshot *context = tb_context_snapshot(native->context);
     if (native->waiting || native->want_close || native->target_action || native->state != TB_SESSION_STOPPED || context->stale || !context->ready) {
         diagnostic(native, "Run to Selected needs a fresh stopped context."); return false;

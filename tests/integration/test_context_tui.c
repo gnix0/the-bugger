@@ -45,6 +45,7 @@ int main(int argc, char *argv[])
     test_terminal_expect(&term, "worker_main(");
     test_terminal_click(&term, "T1 stopped");
     test_terminal_expect(&term, "T1 frame #0");
+    test_terminal_lower(&term, 2, true);
     test_terminal_click(&term, "Continue F5");
     test_terminal_expect(&term, "CONTEXT workers joined");
     test_terminal_expect(&term, "T1 stopped");

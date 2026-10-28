@@ -2,6 +2,67 @@
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-28
+
+### Changed
+
+- Disassembly distinguishes unverified ELF metadata, user-confirmed remote
+  ELF/load addresses and verified native backing-file mappings. Paginated review
+  makes the declaration explicit; changed files/configuration invalidate trust
+  while historical listings remain available. Confirmation never reads hardware.
+- Backward reconstruction can reuse fresh retained boundaries after larger
+  listings are evicted, within the shared 4 MiB budget. Each action decodes at
+  most 128 rows from a reliable anchor within 1024 bytes; failure preserves the
+  listing and its provenance. Closed/reused panes discard their former history.
+- Disassembly keeps manual browsing across debugger transitions and distinguishes
+  view-local Return to Stop from following the selected frame. Disassembly and
+  Memory retain bounded shared history for navigation without reads while running.
+- Memory provides temporary per-view range review, authorization and revocation;
+  managing consent never reads hardware. Mixed disassembly retains file/line
+  attribution, blank lines and braces through bounded local source annotations.
+- Memory supports navigation-only MMIO units and explicit-width single-unit
+  sampling for the documented, validated STM32F446/OpenOCD/ST-LINK setup.
+  User-confirmed backend bindings and per-view consent are separate; accepted
+  Console commands expire both before transmission. Reads use the existing
+  serialized GDB connection without frontend polling, retries or byte fallback;
+  uncertain results block further MMIO until reconciliation or reconnection.
+- Lower pane groups start minimized above the footer. Restore them over the
+  primary views, resize heights independently, and minimize without losing
+  tabs or browsing state. Overlapping groups follow the most recent focus.
+  Heights are session-only and survive temporary terminal-size clamping.
+
+### Fixed
+
+- Release inspector models before their GDB controller during session cleanup,
+  preventing a Memory/MMIO use-after-free on exit. Keep variable baseline copies
+  bounded in strict fortified sanitizer builds.
+- Confine rendered text to its assigned terminal row and display-cell width,
+  escaping control/invalid bytes instead of allowing ncurses to expand them
+  into adjacent content. Preserve complete printable wide characters.
+- Retain the prior Disassembly listing and browsing origin when GDB rejects a
+  code request, so an unreadable neighboring address cannot leave an empty pane
+  that refuses further paging.
+
+- Keybinds scrolling keeps clean cell borders without underlined box glyphs.
+  Action buttons center their labels; Memory Options and session profile actions
+  fit their text with separated hit regions. All session forms wrap their complete
+  explanatory notes and separate them from the action rows. Profile creation
+  and reload actions share a padded bottom row, with Back aligned right. Native
+  and Embedded setup selectors have a small gap before their fields; Start
+  OpenOCD is separated from the preceding field while retaining its gap to
+  script browsing, whose controls have equal spacing above and below. The
+  Console command row is separated from Save Log when pane height permits.
+
+- Footer text uses the window background, with status on the left and controls
+  aligned right on the bottom row; long text uses the last two rows. Session forms, confirmations and
+  action/setup menus use centered cards sized to their content. Keybinds shows
+  an overflow scrollbar with track paging and thumb dragging.
+
+- Menu footers show context-specific guidance instead of retaining launcher or
+  previous-menu messages. Relevant save/action results remain visible, and
+  background session updates do not overwrite menu guidance. The mouse fallback
+  warning no longer labels normal sessions as DEMO.
+
 ## [0.1.2] - 2026-10-25
 
 ### Added

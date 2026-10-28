@@ -1,10 +1,11 @@
 # MI parser corpus
 
-These are synthetic protocol examples authored for M03, following the official
+`valid.mi` and `invalid.mi` are synthetic protocol examples authored for M03,
+following the official
 GDB manual's [MI output grammar](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Output-Syntax.html)
 and [stream record specification](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Stream-Records.html).
-They are not captured debugger sessions, hardware evidence or working transport
-fixtures. Addresses and values are deliberately illustrative.
+Those two files are not captured debugger sessions or hardware evidence;
+their addresses and values are deliberately illustrative.
 
 - `valid.mi`: 22 records covering the prompt, all seven output prefixes,
   result classes including unknown future classes, token preservation,
@@ -23,3 +24,17 @@ Run `make mi-demo` to decode the valid file one byte at a time. Expect exit 0.
 Run `./build/mi-dump --chunk 1 tests/fixtures/mi/invalid.mi` to inspect diagnostics
 and recovery. Expect six errors, recovered records 7–8 and exit 1.
 The decoder escapes control bytes and launches no debugger.
+
+## Captured OpenOCD monitor exchanges
+
+- `openocd-monitor.mi`: actual GDB/MI stream observations from the Task 1.3
+  OpenOCD text/framing gate, including formatted constants, expected errors,
+  unrelated output and recovery.
+- `openocd-widths.mi`: actual framed single-unit GPIOA_ODR samples from the
+  recorded STM32F446/ST-LINK V2J48M35/OpenOCD setup at8/16/32bits, count one.
+
+These captures have physical provenance in [the validation record](../../../docs/validation.md#task-13-openocd-transport-and-width-evidence--in-progress).
+`test-monitor` replays them with fragmented input to check parsing. Replay is
+not a fresh hardware test, a bus trace, proof of exactly-once access or support
+for another target/backend. Product transport and physical width checks remain
+separate from parser/corpus evidence.

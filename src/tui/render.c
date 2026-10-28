@@ -3,7 +3,9 @@
 #include <curses.h>
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): named display columns follow output capacity.
 void tb_format_assembly(char *out, size_t capacity, TbAssemblyColumns columns,
@@ -31,9 +33,35 @@ void tb_text(int y, int x, int width, TbStyle style, attr_t attributes, const ch
     if (width > available) {
         width = available;
     }
-    if (width > 0) {
-        tb_style(style, attributes);
-        (void)mvaddnstr(y, x, text, width);
+    if (width <= 0 || !text) { return; }
+    tb_style(style, attributes);
+    int cells = 0;
+    mbstate_t state = {0};
+    while (*text && cells < width) {
+        /* Keep the usual ASCII path cheap, but never let curses interpret a
+         * control character or use a byte count as a display-cell bound. */
+        int ascii = 0;
+        while (ascii < width - cells && text[ascii] >= ' ' && text[ascii] <= '~') { ++ascii; }
+        if (ascii) {
+            (void)mvaddnstr(y, x + cells, text, ascii);
+            cells += ascii; text += ascii;
+            continue;
+        }
+        wchar_t character;
+        size_t count = mbrtowc(&character, text, strnlen(text, MB_CUR_MAX), &state);
+        bool invalid = count == (size_t)-1 || count == (size_t)-2;
+        int columns = invalid ? -1 : wcwidth(character);
+        if (columns < 0 || (columns == 0 && cells == 0)) {
+            char escaped[5];
+            (void)snprintf(escaped, sizeof escaped, "\\x%02x", (unsigned char)*text);
+            int length = width - cells < 4 ? width - cells : 4;
+            (void)mvaddnstr(y, x + cells, escaped, length);
+            cells += length; ++text; memset(&state, 0, sizeof state);
+        } else {
+            if (columns > width - cells) { break; }
+            (void)mvaddnwstr(y, x + cells, &character, 1);
+            cells += columns; text += count;
+        }
     }
 }
 

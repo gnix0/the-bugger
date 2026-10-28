@@ -52,7 +52,7 @@ static void browsing(TbNative *n)
 {
     TbCode *code = tb_native_code(n); const TbCodeView *v = tb_code_view(code, 0);
     uint64_t revision = v->assembly_revision; CHECK(tb_code_address(code, 0, "_init")); code_ready(n, revision);
-    CHECK(v->instruction_count && !*tb_code_assembly_notice(code, 0, 0, v->instruction_count));
+    CHECK(v->instruction_count && strstr(tb_code_assembly_notice(code, 0, 0, v->instruction_count), "BACKEND-VERIFIED"));
     uint64_t init = v->instructions[0].numeric, gap = v->next_address;
     revision = v->assembly_revision; CHECK(tb_code_assembly_page(code, 0, 1)); code_ready(n, revision);
     uint64_t next = 0;
@@ -63,7 +63,7 @@ static void browsing(TbNative *n)
     char location[48]; (void)snprintf(location, sizeof location, "0x%" PRIx64, next);
     revision = v->assembly_revision; CHECK(tb_code_address(code, 0, location)); code_ready(n, revision);
     revision = v->assembly_revision; CHECK(tb_code_assembly_page(code, 0, -1)); code_ready(n, revision);
-    CHECK(v->instructions[0].numeric == init && !*tb_code_assembly_notice(code, 0, 0, v->instruction_count));
+    CHECK(v->instructions[0].numeric == init && strstr(tb_code_assembly_notice(code, 0, 0, v->instruction_count), "BACKEND-VERIFIED"));
     for (size_t i = 0; i < v->instruction_count; ++i) { CHECK(v->instructions[i].numeric < gap || v->instructions[i].numeric >= next); }
     TbCodeView *saved = malloc(sizeof *saved); CHECK(saved); *saved = *v;
     for (int repeat = 0; repeat < 5; ++repeat) {
@@ -75,19 +75,21 @@ static void browsing(TbNative *n)
     free(saved);
     (void)snprintf(location, sizeof location, "0x%" PRIx64, gap);
     revision = v->assembly_revision; CHECK(tb_code_address(code, 0, location)); code_ready(n, revision);
-    CHECK(*tb_code_assembly_notice(code, 0, 0, 1));
+    CHECK(strstr(tb_code_assembly_notice(code, 0, 0, 1), "unknown"));
     bool known_slice = false;
     for (size_t i = 1; i < v->instruction_count; ++i) {
-        if (!*tb_code_assembly_notice(code, 0, i, 1)) { known_slice = true; break; }
+        if (strstr(tb_code_assembly_notice(code, 0, i, 1), "BACKEND-VERIFIED")) { known_slice = true; break; }
     }
     CHECK(known_slice); /* Scrolling to known rows clears an offscreen warning. */
     revision = v->assembly_revision; CHECK(tb_code_address(code, 0, "m08_zeros")); code_ready(n, revision);
     CHECK(!v->instruction_count && strstr(v->assembly_error, "Non-code data"));
     revision = v->assembly_revision; tb_code_raw(code, 0); code_ready(n, revision);
-    CHECK(v->instruction_count && strstr(v->instructions[0].opcodes, "00 00") && *tb_code_assembly_notice(code, 0, 0, v->instruction_count));
+    CHECK(v->instruction_count && strstr(v->instructions[0].opcodes, "00 00") && strstr(tb_code_assembly_notice(code, 0, 0, v->instruction_count), "Raw decoding"));
     tb_code_raw(code, 0); revision = v->assembly_revision; CHECK(tb_code_address(code, 0, "m08_long")); code_ready(n, revision);
     CHECK(v->instruction_count); uint64_t first = v->instructions[0].numeric;
-    for (int i = 0; i < 20; ++i) {
+    /* Overlapping windows retain half the previous rows. Exercise the same
+     * >2000-byte traversal with enough bounded expansions to cross it. */
+    for (int i = 0; i < 40; ++i) {
         revision = v->assembly_revision; CHECK(tb_code_assembly_page(code, 0, 1)); code_ready(n, revision);
         CHECK(v->instruction_count <= TB_CODE_INSNS);
         for (size_t j = 1; j < v->instruction_count; ++j) { CHECK(v->instructions[j].numeric > v->instructions[j - 1].numeric); }

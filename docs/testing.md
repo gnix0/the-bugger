@@ -52,6 +52,39 @@ under ignored `build/`; record durable result summaries separately. M14 includes
 a full-project analyzer pass; focused checks alone never establish that result
 for subsequent changes.
 
+## Rendering stability stress
+
+The native TUI and localhost-remote harnesses provide an opt-in, bounded stress
+mode. `TB_RENDER_STRESS_SECONDS` accepts 1–300 seconds; ordinary `test-ci` runs
+remain unchanged. The native fixture's `--render-stress` mode produces sustained
+long output lines and hostile control-byte samples while the harness scrolls,
+steps, resizes and checks fixed pane/control labels. The remote harness repeatedly
+continues/pauses an owned localhost fixture, switches tabs and exercises compact
+and tiled rendering. The tmux variant uses its own server and configuration.
+
+Build the application, fixtures and harnesses, then run the three separately:
+
+```sh
+make BUILD_DIR=build/render-stress CPPFLAGS=-D_FORTIFY_SOURCE=3 all fixtures \
+  build/render-stress/test-native-tui build/render-stress/test-remote-native
+TB_RENDER_STRESS_SECONDS=300 TERM=xterm-256color build/render-stress/test-native-tui \
+  "$PWD/build/render-stress/the-bugger" "$PWD/build/render-stress/debug-fixture"
+TB_RENDER_STRESS_SECONDS=300 TERM=xterm-256color build/render-stress/test-remote-native \
+  "$PWD/build/render-stress/remote-fixture" --tui "$PWD/build/render-stress/the-bugger"
+TB_RENDER_STRESS_SECONDS=300 TB_CONSOLE_TEST_TMUX=1 TERM=xterm-256color \
+  build/render-stress/test-native-tui "$PWD/build/render-stress/the-bugger" \
+  "$PWD/build/render-stress/debug-fixture"
+```
+
+These are additional stress checks, not substitutes for the fresh fortified
+baseline. They need working PTYs, ptrace and local sockets; they do not connect
+to physical hardware. Record durations, rounds, results and full logs. The test
+VT reader checks ASCII labels and fixed geometry, not every terminal feature or
+physical appearance. Renderer unit tests inspect ncurses cells for control-byte,
+invalid UTF-8, combining/wide-character and screen-edge clipping. Direct-terminal
+and tmux visual review, plus the relevant real-board workflow, remain separate
+acceptance evidence.
+
 ## Hosted CI
 
 [CI](../.github/workflows/ci.yml) defines **Tests** on Ubuntu 26.04 with GDB 17+
@@ -108,6 +141,41 @@ Test terminal behavior directly and in tmux with opt-in mouse support. Record
 TERM/terminal/tmux versions and intercepted keys. Fixtures never rewrite existing
 tmux bindings or security settings. PTY screen parsing is an ASCII-label oracle,
 not a general terminal emulator or proof of UTF-8/physical visual fidelity.
+
+## Menu footer context
+
+`make test-themes` includes PTY coverage of launcher, Config, Themes/preview,
+Keybinds/capture, Profiles/options/entries/text, all three session forms/review,
+and installed OpenOCD script browsing/filtering. It checks that navigation clears
+stale notices while current errors and save results remain visible, including
+DEMO, compact and NO_COLOR cases. Existing live tests retain operation-result,
+field-editing and terminal-restoration coverage through `make test-ci`.
+
+Manual review:
+
+1. Open Config, Themes, Keybinds and Profiles from the launcher. Each footer
+   describes the current menu; session-selection guidance appears only at the
+   launcher.
+2. Start and cancel key capture, then return to Config and open Themes. Capture
+   messages must not follow into another menu. Save a theme or binding: its
+   result remains visible on Config, then clears when another menu opens.
+3. Open a session form, review it, return, and browse profile/script settings.
+   Verify the guidance fits each page. Repeat at 48x18 and with NO_COLOR.
+
+The same PTY checks assert right-aligned help and compact centered session forms.
+`make test-keybinds` checks the short-terminal scrollbar, track paging, thumb drag
+to the final rows and disappearance when all bindings fit. The render unit test
+checks footer backgrounds against the workspace color for all 37 palettes;
+existing direct/256/8-color/monochrome and real-tmux checks remain in the baseline.
+The native Console TUI suite also checks centered close-confirmation controls.
+
+For layout review, compare a tall terminal and 48x18: setup cards should fit their
+fields/actions rather than fill unused height; menus and confirmations should be
+centered. Status belongs at the left and help at the right, on separate rows when
+needed, with no colored text backing. In a short Keybinds menu, page the track,
+drag the thumb, and verify the final rows remain reachable. Widen/heighten the
+terminal until all rows fit: the scrollbar disappears. Repeat with NO_COLOR and
+inside tmux; verify field carets and click targets still match their controls.
 
 ## Source fullscreen
 
@@ -573,8 +641,8 @@ configuration.
 
 1. Build `make all fixtures`, run `./build/the-bugger`, launch
    `build/memory-fixture`, then Console `start`.
-2. Open Memory: inline controls and empty data area are already visible. Click
-   the address field, type `&memory_buffer`, press Enter; repeat using Go.
+2. Restore Memory using its lower dock title or `^`; inline controls and the
+   empty data area appear. Click the address field, type `&memory_buffer`, press Enter; repeat using Go.
 3. Verify `THE BUGGER MEMORY` in ASCII and bytes `54 48 45 20`; horizontal scroll
    reveals long rows without hiding the toolbar. Change grouping/count and Refresh.
 4. Wheel/arrow/Page keys reach the cached block edges, then fetch earlier/later
@@ -745,9 +813,8 @@ Coverage: M07/M08; source/instruction mapping, navigation and non-mutating brows
     with roughly four before the first PC where available. The viewport stays
     still through the middle, then scrolls to keep about five rows above and
     below PC where context permits (reduced in short panes). Browse until PC is
-    near the top, then step: the top margin should return. The default upper row
-    is modestly taller (62%); drag its divider and confirm your sizing survives
-    terminal shrink/restore.
+    near the top, then step: the top margin should return. Primary panes use the area above the lower dock. Restore a lower group, drag
+    its top grip and confirm its height survives terminal shrink/restore.
     Wheel/Up/Down at a window edge can load a known earlier/next window; `<` / `>`
     footer controls remain available. Browse away and confirm PC never changes;
     stepping/Stopped returns to execution context. Test **Out Shift+F11** inside
@@ -848,7 +915,7 @@ Coverage: M06; FR-10 and context coherence. Native tests are not remote or board
    and top-frame information. Select a worker: the Call Stack changes to that
    thread and selected frame zero. The original stopped thread/PC remains
    separate from inspected context. Switch back to the original main thread.
-   A seventh split view is optional; the default six-pane geometry is preserved.
+   A seventh split view is optional; the six root groups and retained state remain.
 5. Click Continue. Workers exit and the main thread stops again after joining
    them. Expect one thread; old workers must disappear. Continue once more:
    expect Running and explicit stale context, with selection unavailable until
@@ -1080,8 +1147,9 @@ or hardware debugging acceptance.
    Peripherals and Stack say NOT IMPLEMENTED rather than inventing values.
    Select source rows or click the gutter to toggle sample breakpoints. Wheel
    scrolls the pane under the pointer; a focused body supports arrows/Page keys.
-8. Resize below six-pane dimensions. Expect a single focused view and retained
-   pane navigation. Keys 1–9 and [/] reach panes. Below 48x18 expect a resize
+8. Minimize the lower groups and resize to compact dimensions. Expect a single
+   primary view and retained pane navigation. Restore two lower groups and verify
+   that focusing an exposed group or its dock title raises it. Keys 1–9 and [/] reach panes. Below 48x18 expect a resize
    notice; expanding restores tab/view state. Test dragging/splitting below.
 9. Quit using the visible button or Ctrl+Q. Repeat with Ctrl+C. Expect normal
    shell echo/cursor/mouse behavior afterward. Run `NO_COLOR=1 ./build/the-bugger --demo`
@@ -1118,12 +1186,34 @@ checks alone do not satisfy the visual gate.
 It does not substitute for inspecting the rendered interface.
 
 
+## Lower dock and independent overlays
+
+1. Start a demo or live session at 140x44. Expect three primary groups and three
+   minimized lower title bars directly above the footer. No lower inspector body
+   should become visible or request values merely because its dock is present.
+2. Restore Memory, Locals and Console with their titles or `^` controls. Each
+   should cover its column, leaving primary geometry and browsing state intact.
+   Drag Memory's top grip; Locals and Console must keep their own heights.
+3. Minimize/restore a group with `_`/`^`. Confirm tabs, selection, drafts and
+   preferred height survive. Try keyboard pane IDs/cycling and resize mode;
+   Tab selects visible dividers, arrows resize, Enter/Escape finishes.
+4. Shrink to 80x24. Open groups overlap across the workspace. The most recently
+   focused one is on top. Click an exposed part of another group or its dock
+   title to raise it. Covered controls must not receive clicks or wheel input.
+5. Restore 140x44 and confirm independent preferred heights return. Enter/leave
+   Source fullscreen; restore must retain dock visibility, tabs and split trees.
+6. Close/start another session. Expect all lower groups minimized and default
+   heights on first restore; no values/permissions or pending requests carry over.
+7. Repeat mouse, keyboard, resize and Console output in an isolated tmux session.
+   These manual UX checks remain distinct from automated terminal-cell tests.
+
 ## Tiling, tabs and terminal resizing
 
 1. Run `make test`, then `./build/the-bugger --demo` in a 140x44 or larger terminal.
    Choose Linux application, Review preview, Preview workspace. Compare the
-   initial six-pane presentation with the accepted M01 interface and HTML.
-2. Drag each vertical column gutter and the horizontal row gutter with the
+   three primary panes and initially minimized lower dock; verify the six root
+   groups retain their default tabs. Restore each group with its dock caret.
+2. Drag each vertical column gutter and each independent lower top grip with the
    left button held. Expect continuous constrained resizing; release ends it.
    Move beyond a pane's minimum size and verify neighboring panes remain usable.
 3. In Source, click `...`, then **Pane actions >**, then **Split right**.
@@ -1322,7 +1412,7 @@ Prepare the Linux x86-64 host distribution from a reviewed checkout:
 
 ```sh
 make release
-(cd build/dist/v0.1.2 && sha256sum --check SHA256SUMS)
+(cd build/dist/v0.1.3 && sha256sum --check SHA256SUMS)
 ```
 
 The [packaging procedure](maintaining.md#linux-x86-64-release-artifacts) describes
@@ -1352,10 +1442,11 @@ a listening socket does not establish successful target examination.
 
 ## Every-release regression matrix
 
-Apply the explicit [v0.1.0 physical RISC-V deferral](requirements.md#release-acceptance);
-it does not turn unverified hardware into supported hardware. Before every other
-release (including patches), record actual commands, results and
-release acceptance for the minimum matrix below. Exact ESP/probe setup is not a
+Apply the explicit [version-specific physical RISC-V deferrals](requirements.md#release-acceptance):
+v0.1.0 deferred it, and the owner separately deferred v0.1.3 RISC-V validation to
+v0.1.4. Neither is a hardware support claim or a general waiver for future
+releases. Record actual commands, results and release acceptance for the
+applicable matrix below. Exact ESP/probe setup is not a
 P00 prerequisite; fill it in when conducting the tests. Tool/server paths stay
 editable; OpenOCD is not a requirement for every architecture.
 
@@ -1364,7 +1455,7 @@ editable; OpenOCD is not a requirement for every architecture.
 | Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | M05–M14 accepted; GCC/Clang native and tmux regressions plus full default/native sanitizers passed at M14. Per-release evidence and release acceptance remain required |
 | STM32 / ARM | NUCLEO-F446RE fixture via GDB/OpenOCD; halt/step/break/watch, real code/register/RAM/variables, reset/disconnect/cleanup | M17 physical core/API/TUI/tmux PASS; exact setup and exclusions in validation records |
 | ESP32 / Xtensa | Validation board via appropriate GDB/server; applicable core workflow and cleanup | M17 ESP32-S3 physical core/API/TUI/tmux PASS; other boards require evidence |
-| ESP32 / RISC-V | Validation board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED; physical acceptance deferred for v0.1.0, no hardware support claim |
+| ESP32 / RISC-V | Validation board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED; physical acceptance deferred for v0.1.0 and separately v0.1.3 to v0.1.4; no hardware support claim |
 | QEMU ARM / RISC-V | Supplementary reproducible native/guest runs where available | UNVERIFIED; not a physical-board substitute |
 
 For each release, capture the actual setup/version, relevant fixture/source
@@ -1498,3 +1589,159 @@ configured tmux session. Macchiato's panel should retain its blue-gray color in
 both; also compare a light palette's background and text. Keep the same terminal
 font/settings. Check NO_COLOR and existing mouse/function-key controls. These
 checks do not establish RGB forwarding through an unconfigured outer terminal.
+
+### Footer and button visual follow-up
+
+1. Open Config → Keybinds in a short terminal. Wheel through the rows, page by
+   clicking the scrollbar track and drag its thumb to both ends. Cell outlines
+   must remain clean, including the selected cell, with no extra underline strokes.
+2. At a wide size, status and help share the last terminal row with left/right
+   alignment. At narrow sizes they occupy the last two rows without overlapping.
+3. Inspect launcher Config/Quit, native session Review/Save profile/Profile/Delete,
+   and Memory Refresh/Options. Labels must fit with centered padding and separate
+   hit regions. Resize the session form to 48×18; profile actions must not overlap.
+   Repeat the scrolling and button inspection in tmux and monochrome.
+
+4. Open each session setup: native Linux, Embedded target and GDB server.
+   Read the entire explanatory note through its final sentence. At ordinary
+   heights, one blank row separates that note from Review/Back and another
+   separates the primary row from profile actions. At 48×18, notes still wrap
+   completely while field scrolling and all actions remain reachable.
+
+5. Open Config → Profiles. At 78 columns or wider, New native, New OpenOCD,
+   New remote and Reload file share the bottom row with visible gaps between
+   button backgrounds; Back stays aligned right. Below 78 columns the four left
+   actions wrap into two rows without overlapping Back. Activate Reload file
+   and each New action; check that they remain separate hit targets.
+
+6. In Native and Embedded setup, check one empty row between the first selector
+   and its first text field. In Embedded setup, Browse boards (or adapter/target)
+   should have one empty row above and below, centered between the last field and
+   the explanatory note. At compact heights the gaps collapse; Tab, Enter and
+   text editing must still target the visible fields correctly.
+
+7. In Embedded setup, confirm one empty row between OpenOCD binary and Start
+   OpenOCD, matching the initial selector's separation. Keep exactly one empty
+   row between Start OpenOCD and Browse boards, as before. Repeat with the
+   adapter/target setup; compact rendering should keep all actions reachable.
+
+8. In a live Console pane at least nine rows high, confirm one blank row between
+   Command/Send and Save Log. Enter/send commands, retain a draft across resize,
+   drag the horizontal scrollbar and open Save Log; the gap must stay empty and
+   controls/caret must follow their displayed positions. Small panes collapse
+   the gap. Repeat through tmux.
+
+## OpenOCD MMIO protocol gate (Task 1.3)
+
+The opt-in text-only probe uses The Bugger's actual GDB/MI controller:
+
+```sh
+make BUILD_DIR=build/mmio-protocol build/mmio-protocol/test-monitor-hardware
+build/mmio-protocol/test-monitor-hardware arm-none-eabi-gdb 127.0.0.1:3333
+```
+
+Start the reviewed OpenOCD setup separately before running it. Connecting may
+halt firmware; disconnect disposition depends on server configuration. The probe
+formats constants, checks target association, injects framing errors and an
+expected Tcl error, and delays one response to exercise exact late-token
+reconciliation. It sends no peripheral read, write, flash, reset or resume.
+It is never executed by `test-ci`. Success proves transport behavior on that
+setup, not supported hardware access widths.
+
+The captured `tests/fixtures/mi/openocd-monitor.mi` and `openocd-widths.mi` are
+actual observations, replayed by `test-monitor`. Replay validates parser behavior;
+it does not repeat physical validation. The width capture came from three
+separately authorized GPIOA_ODR reads at 0x40020014, count one, widths 8/16/32,
+on STM32F446 with ST-LINK V2J48M35 and the recorded OpenOCD configuration.
+RM0390 sections 7.4/7.4.6 were reviewed before those reads. Debug logs show
+explicit adapter widths 1/2/4 bytes and count one, without frontend fallback.
+This is neither an independent bus trace nor proof of exactly-once physical
+access. Other firmware/driver paths need their own validation; do not infer
+access widths from displayed grouping or a successful generic byte read.
+
+Product-level validation must additionally exercise user-confirmed target,
+server-configuration, firmware and width bindings; expiration and revocation;
+zero reads during navigation/management; one explicit frontend read; malformed,
+failed, timed-out and late responses without automatic retry; and independent
+Memory views. These remain separate from the transport gate and parser replay.
+
+The opt-in production-transport width probe is separate from the text-only gate:
+
+```sh
+make BUILD_DIR=build/mmio-physical build/mmio-physical/test-mmio-hardware
+build/mmio-physical/test-mmio-hardware arm-none-eabi-gdb 127.0.0.1:3333 --stm32f446-gpioa-odr
+```
+
+Run only with explicit hardware authorization and the documented STM32F446,
+ST-LINK V2J48M35, OpenOCD 0.12.0-01004-g9ea7f3d64-dirty setup using
+`openocd -d3 -f board/st_nucleo_f4.cfg`. It sends exactly three frontend
+GPIOA_ODR operations at 0x40020014, count one, widths 8/16/32, through the actual
+production adapter. No write/flash/reset/resume or retry command is issued.
+GDB/OpenOCD connection itself can halt firmware and perform core/debug/flash
+metadata or PC accesses; three frontend operations does not mean three total
+physical accesses. Preserve client frames and OpenOCD adapter logs. This probe
+is never executed by `test-ci`, and does not establish interactive consent/UI
+acceptance or support for another target, firmware or server configuration.
+
+Interactive MMIO review on that setup:
+
+1. Stop the remote target. Open Memory Options → Temporary ranges, add a range,
+   and set inclusive begin/exclusive end, MMIO policy, supported width and risks.
+   Each edit must revoke consent; managing the definition must not access MMIO.
+2. Review Setup. Verify the exact target, device, firmware, server configuration,
+   endpoint and widths. Confirmation must be labeled a user assertion and cause
+   no read. A stale review after a configuration change must fail.
+3. Authorize this view's range, then Browse declared MMIO units. Navigation,
+   selection, scrolling, resize, focus and cached inspection must cause no reads.
+   Alignment must not imply a verified hardware-register identity.
+4. Select a known approved unit and choose Read unit. Verify one frontend
+   operation at its declared width/count/address. Refresh selected sample is a
+   separate explicit hardware operation; there is no whole-window refresh.
+5. Submit a Console command. Before transmission, setup confirmation and MMIO
+   range consent must both expire; definitions remain. Reconfirming setup alone
+   must not restore consent, and granting consent cannot bypass missing setup.
+   Rejected Console submissions must preserve both permissions.
+6. Verify ordinary stepping preserves setup confirmation but expires range
+   consent. Repeat with a second Memory view to prove consent isolation.
+7. Exercise timeout, malformed/late responses and close during a request using
+   the authored integration fixtures. Uncertainty must remain visible in Console,
+   block further MMIO and cause no automatic retry. Reconnection or an exact late
+   completion is required as documented; do not inject arbitrary faults on hardware.
+
+
+## ELF mapping trust and bounded reconstruction
+
+`make test` includes image-model revision/identity checks, authored Code-model
+reconstruction checks and `test-image-tui`. The latter creates a local ELF32 ARM
+big-endian metadata fixture with a path containing spaces, then connects to an
+authored MI peer. It verifies the remote review, 18x48 pagination, user-confirmed
+label and Console invalidation. It is not a physical ARM validation.
+
+1. Connect a stopped remote session with its configured ELF. In Disassembly
+   Actions, choose Review ELF/load address mapping. Inspect the path, additive
+   bias and all allocated-section ranges before confirming. Expect
+   USER-CONFIRMED, no debugger request, no movement of PC or selected frame and
+   no Memory authorization. At 18x48, page to the final confirmation.
+2. Reopen the review; the current trust must be visible. A new confirmed bias
+   supersedes the previous declaration for that ELF. Rejected/expired reviews
+   cannot restore trust. Replacing the local ELF or accepting a Console command
+   makes old declarations unusable for fresh decoding; old listings remain.
+3. Use ordinary and optimized/stripped native fixtures. Native mapping evidence
+   must match the backing device/inode and executable load segments. A native
+   mapping label must not imply that every live code byte has been compared.
+4. Browse more than sixteen windows in both directions. Retained windows need
+   no request. Under actual cache eviction, a retained fresh boundary may support
+   backward reconstruction; absent/stale boundaries must not cause guessed
+   decoding. The authored model exercises forty forward expansions and verifies
+   that the early full listing was evicted before reconstructing its boundary.
+5. Exhaust the 128-decoded-row reconstruction budget and inject a changed code
+   epoch while a request is in flight. Expect all previous instructions,
+   generation, epoch, next address and gap provenance to remain intact, with no
+   automatic replacement request. Close/reuse a split: old rows, annotations,
+   anchor history and old request identity must not transfer to the new view.
+
+The shared 4 MiB allocation check includes cached listings, source annotations,
+anchor payloads and entry headers. Fixed active views and bounded temporary
+reconstruction buffers are separate from that retained-history pool. Actual
+terminal appearance, hardware-image correspondence and owner acceptance remain
+separate checks.

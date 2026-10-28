@@ -4,8 +4,9 @@ The current development build supports native Linux and existing remote
 GDB-server sessions, plus reviewed OpenOCD startup and target actions. Physical
 validation covers NUCLEO-F446RE and ESP32-S3 with the
 [recorded configurations](validation.md#m17--physical-board-validation).
-This guide describes v0.1.1, including themes, Source fullscreen and spatial
-keyboard navigation added since the first public release, v0.1.0.
+This guide describes v0.1.3, including independent lower overlays, retained
+Disassembly/Memory browsing and explicit, setup-gated MMIO sampling. Themes,
+Source fullscreen and spatial keyboard navigation remain available.
 See [build and first session](../README.md#build-and-first-session) for prerequisites.
 
 ## Native Linux sessions
@@ -76,6 +77,13 @@ With Vim-like input enabled, press i in the field before typing. Enter or Send
 submits one command.
 The field clears only when the session accepts it for dispatch; a rejected
 submission retains the draft, while a later GDB error appears in the log.
+Before an accepted Console command is transmitted, MMIO setup confirmation and
+all MMIO range authorizations expire, even for commands that appear harmless.
+Range definitions remain available for inspection. Confirm the setup again and
+renew range consent before another MMIO read; a retained range alone grants no
+access. This protects against aliases/scripts changing the backend invisibly.
+Ordinary stepping and navigation preserve setup confirmation; range consent
+still expires independently on resume or context changes.
 Escape leaves the field without sending or discarding the draft. Each Console
 pane retains its own draft across tab changes, dialogs and terminal resizing;
 new sessions and reused split panes start empty. Leave the field before using
@@ -238,7 +246,8 @@ for optimized/stripped examples and manual validation.
 For a code-stepping example, run `./build/the-bugger`, choose Linux Launch and
 enter `./build/code-fixture` in **Executable / ELF**. Review and Start native.
 The Loaded / PID not started status and **Awaiting stop** code panes mean the
-program has not run yet. In the bottom-right Console click **Command**, type
+program has not run yet. Restore Console with `^` in the bottom-right dock,
+then click **Command**, type
 `start`, then click **Send** (Enter also submits). Do not run the fixture directly
 in the shell or pass `start` as its argument. This deliberately asks GDB to stop at main; ordinary Launch
 does not insert an automatic breakpoint. Source and Disassembly then follow
@@ -263,16 +272,40 @@ the active file's bounded local text is loaded. Opening a file does not run the
 target or change the selected frame.
 Disassembly offers hexadecimal address/simple-symbol navigation and **Mixed**
 source/assembly, with an assembly fallback when source is unavailable. x86-64
-assembly uses AT&T syntax. **Stopped** returns to the original stopped thread
-and frame. Wheel/scrollbars and arrow/Page keys move viewports; Left/Right pans
+assembly uses AT&T syntax. Source's **Stopped** returns to the original stopped
+thread and frame. Disassembly's **Actions → Return to Stop (this view)** instead
+moves only that viewport to the stopped PC, leaving selected thread/frame and
+other inspectors unchanged. **Follow selected frame (this view)** is separate.
+Wheel/scrollbars and arrow/Page keys move viewports; Left/Right pans
 long code lines. Disassembly's `<` / `>` footer controls page instruction windows.
 Assembly retains surrounding instructions across stops; scrolling at a window
 edge can load earlier/next code without moving execution. ELF metadata and GDB
-provide trusted decoding anchors and preceding context where available.
+provide decoding anchors and preceding context where their mapping is trusted.
+For remote sessions, **Actions → Review ELF/load address mapping** reviews the
+configured ELF and an unsigned additive load bias (zero for linked addresses).
+The review shows the complete local path and paged allocated-section addresses.
+Confirm only when they describe the current target image. **USER-CONFIRMED** is
+your declaration, not automatic verification, proof that live bytes match, or
+permission to read Memory. Native file/device/inode and load-segment matches are
+labeled **BACKEND-VERIFIED**; unavailable or invalidated mappings are
+**UNVERIFIED**. The pane footer uses `ELF:native`, `ELF:user` or `ELF:?` for
+visible instruction mappings, preserving the selected-frame/file header. Changed ELF identity, target/image lifecycle and accepted Console
+commands invalidate trust; cached listings remain historical. A new confirmation
+for another bias supersedes the previous declaration for that ELF. Confirmation
+preserves existing rows; an explicit code action obtains fresh decoding when
+those rows are marked historical. Nonuniform
+relocation and general multi-image configuration are not inferred.
+
 Stepping leaves the viewport still until PC reaches a five-row
 top or bottom margin (smaller in short panes and limited by available context).
-Manual browsing stays put until stepping
-or **Stopped**. Reads/history are bounded; missing metadata is never replaced by
+Manual Disassembly browsing stays put across stepping and frame changes, with
+historical samples labeled. Its header uses the sampled source attribution when
+available, otherwise `address window`; it does not borrow the current selected
+frame's filename or caller label. Cached windows can be browsed while running; an
+uncached request leaves the viewport unchanged and is never queued for later.
+Disassembly and Memory share a lazily populated 4 MiB history cache, including
+entry metadata. Eviction does not move a viewport or authorize reads.
+Reads/history are bounded; missing metadata is never replaced by
 guessed x86 instruction boundaries. Browsing skips known data/section gaps and
 labels the bytes not decoded. **Actions → Decode bytes** explicitly inspects raw
 data; repeated instructions are not hidden merely because they look unusual.
@@ -280,8 +313,8 @@ Unknown ranges are labeled for the instructions currently visible. Opening and
 closing the view selector preserves the listing and viewport. Addresses, bytes,
 mnemonics and operands use aligned columns, with full lines available through
 horizontal scrolling.
-The default upper row gets 62% of the available pane height, giving Source,
-Disassembly and Registers more room. Dragging dividers adjusts this as usual.
+Source, Disassembly and Registers occupy the workspace above the lower dock.
+Expanded lower groups cover their lower portions without changing that geometry.
 Live code, Console, Call Stack and Threads show a horizontal scrollbar only when
 rows exceed the pane width: drag its thumb, click the track to page, or focus the
 body and use Left/Right. Each view retains its own position; Source keeps its line
@@ -295,10 +328,18 @@ resolve source identities; the frontend does not guess duplicate basenames or
 unresolved relative paths. Save applied settings through the source/profile
 action to reuse them in a named profile; unsaved changes remain session-only.
 Code browsing is bounded to 256 catalog files, 1 MiB / 32,768 source lines per
-pane and a 128-instruction cache with bounded, normally 256-byte fetches.
-Backward scans from known anchors have a work limit and retain the prior listing
-on failure. Mixed groups outside the cached
-file show their location with unavailable text rather than loading every file.
+pane and a 128-instruction active window with bounded, normally 256-byte fetches;
+older loaded windows share the 4 MiB browsing cache.
+Backward reconstruction starts at a reliable earlier boundary within 1024 bytes
+and decodes at most 128 instruction rows per action, including rows omitted from
+the displayed prefix. Small retained boundary records share the history budget
+and can survive eviction of larger listings; historical records never establish
+fresh boundaries. Failure or exhaustion keeps the previous rows and provenance;
+there is no automatic retry. Closing a split clears its Code history before its
+pane slot can be reused.
+Mixed groups use bounded local source annotations across mapped files, loading at
+most one file per view per pump. Blank lines and braces remain verbatim; missing
+or evicted source text shows its location and an unavailable notice.
 See the [code checklist](testing.md#source-and-instruction-stepping)
 for optimized, stripped and relocated-source examples.
 
@@ -343,6 +384,33 @@ Partial bytes appear as `??`; failed reads retain the previous snapshot as stale
 Calls, writes and user casts are rejected by the conservative expression policy.
 Memory editing/search/export/comparison remain deferred. See
 [manual acceptance](testing.md#memory-inspector).
+
+For the documented, physically validated STM32F446/ST-LINK V2J48M35/OpenOCD
+setup, **Options → Temporary ranges** also supports explicit-width MMIO.
+Add a range, review its inclusive begin and exclusive end, choose MMIO and its
+8/16/32-bit width, and record known side effects (empty means **UNKNOWN**).
+When moving a draft to higher addresses, enlarge its end before moving its begin;
+each edit must leave valid bounds and revokes consent.
+**Setup → review validated setup** displays the exact target, device, firmware,
+OpenOCD configuration, endpoint and supported widths. Confirm only if every
+detail matches yours. This is your assertion, never automatic verification;
+other setups need separate validation. Setup confirmation and range authorization
+are separate operations, and neither reads hardware.
+
+**Browse declared MMIO units** opens a navigation-only list. Each row is one
+aligned access-width-sized unit, not a verified register identity. Select a row
+and choose **Read unit** to sample just that address at its declared width.
+**Options → Refresh selected sample** explicitly rereads a previously sampled
+unit. Scrolling, numeric address navigation, cached inspection and ordinary
+stepping never cause MMIO reads. There is no whole-window MMIO refresh or polling.
+Samples are historical observations; peripherals may change even while halted.
+One explicit frontend request may cause multiple physical access attempts in
+external software/hardware, depending on driver path and failure conditions.
+The Bugger does not retry automatically. An uncertain outcome blocks further
+MMIO until the exact outstanding request reconciles or you reconnect; a completed
+but untrustworthy frame requires reconnection. Diagnostics remain in Console.
+Closing invalidates setup and consent immediately; an already outstanding read
+may have reached hardware and must finish or follow the bounded close policy.
 
 ## Code breakpoints and Run to Selected
 
@@ -449,15 +517,24 @@ arrows/PageUp/PageDown scrolls; vertical scrollbar tracks page and thumbs drag.
 Keys `1`–`9` focus retained pane IDs; `[`/`]` cycles panes. There are no layout
 presets, layout selector, floating windows or full Vim editor emulation.
 
-Drag one-cell gutters to resize columns, rows or nested splits. Pane actions
+The Memory/Stack, Locals/Watches and Console/Breakpoints groups start minimized.
+Click a dock title or `^` to restore a group over the primary views; click `_`
+immediately left of `...` to minimize it. Drag its top edge to adjust its height
+independently. Multiple groups can stay open. Where they overlap, the most
+recently focused group is on top; click an exposed part or its dock title to
+bring another forward. Minimize it to access fully covered content. Heights and
+visibility are session-only; resizing the terminal preserves preferred heights.
+
+Drag one-cell gutters to resize columns or nested splits. Pane actions
 split right/below, close a tab, close a nested pane or enter keyboard resizing.
 In resize mode Tab/Shift+Tab selects a divider, arrows move it, and Enter/Escape
 finishes. Closing a nested pane expands its sibling. Each pane retains at least
 one tab; each of the six root tiles retains at least one pane.
 
 The workspace supports up to 32 panes with a minimum tiled size of 20x7 cells per
-pane. At least 112x28 displays all six default panes; 140x44 is comfortable.
-Smaller terminals show a focused pane with controls to reach every retained pane.
+pane. Wide terminals show three primary columns; lower groups cover those
+columns when restored. Smaller terminals show a primary pane and restored
+groups across the workspace, with controls to reach every retained pane.
 Below 48x18 a mode-neutral resize warning shows the current dimensions and the
 minimum required size, retaining state without pausing or disconnecting the target.
 Tabs, splits and proportions survive

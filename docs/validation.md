@@ -9,6 +9,10 @@ instructions are required to interpret the results.
 
 ## Current evidence boundary
 
+The [v0.1.3 release-preparation record](#v013-release-preparation) is the current
+release snapshot. Entries below are chronological evidence: their original
+pending states and failures are retained rather than rewritten as fresh results.
+
 M00–M18 and the listed corrections form the first-release baseline. The maintainer
 reported v0.1.0 published on 2026-10-20. Historical preparation entries below retain
 their original pending states and test boundaries; publication does not supply
@@ -1826,3 +1830,919 @@ the v0.1.0 physical RISC-V deferral does not automatically apply to v0.1.2.
 No hardware, sanitizer or additional compiler matrix was run during preparation.
 The packaged executable is dynamically linked; recorded host/library requirements
 do not establish compatibility with older distributions.
+
+## Contextual menu footers — 2026-10-25
+
+Status: automated-verified; awaiting user acceptance. The owner supplied an existing fix branch.
+
+The launcher instruction was stored as a global status and leaked into Config,
+Themes, Profiles and session forms. Keybinds already cleared that particular
+instruction on entry, but navigation could carry other previous-page notices.
+Guidance now comes from the current page; ordinary navigation clears transient
+notices, and explicit operation-result transitions preserve relevant success/error
+feedback. Keybind capture/progress, preview and Vim-mode footers retain their
+specialized rendering. Session revisions update workspace status without
+replacing menu guidance. The mouse fallback warning no longer says DEMO in
+ordinary sessions. This changes presentation only, not input bindings, stored
+preferences, session ownership or target operations.
+
+Agent-run evidence:
+
+- The expanded PTY regression fails against the previous ordinary executable:
+  Config still shows `Choose native launch/attach` instead of configuration
+  guidance (expected nonzero exit; `build/footer-evidence/regression-before-fix.log`).
+- The first focused run stopped because the new vt100 case expected launcher
+  guidance while the actual mouse-unavailable warning took precedence. This
+  exposed its inaccurate DEMO label, now corrected. The NO_COLOR context case
+  uses xterm capabilities; existing vt100 coverage remains intact. Failure log:
+  `build/footer-evidence/focused.log`.
+- Final focused command:
+  `TERM=xterm-256color make BUILD_DIR=build/footer-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes`.
+  PASS (exit 0), `build/footer-evidence/focused-final.log`. Covers launcher,
+  Config, Themes/preview/save, Keybinds/capture/cancel, Profiles/options/entries/
+  text, all session forms/review and OpenOCD script browsing/filtering. Checks
+  actual footer rows, clearing stale notices, visible current errors/save results,
+  DEMO, NO_COLOR and 48x18 rendering.
+- Full fresh baseline command:
+  `TERM=xterm-256color make BUILD_DIR=build/footer-ci-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+  PASS (exit 0); full log `build/footer-evidence/test-ci.log`. This includes
+  actual native GDB, Console/keybind/Vim input and terminal restoration, real
+  tmux, localhost remote and offline OpenOCD checks. No hardware was exercised.
+  Exact source/test/build/workflow input manifest:
+  `build/footer-evidence/test-inputs.sha256`, SHA-256
+  `b01ca65cecfc0c001335e7a7f8182864409e54fa603800a80a6ebcc641606ba6`.
+
+Environment: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1 (20260810), GDB 18.1,
+tmux 3.8. These are agent-run local host results, not hosted Ubuntu results.
+No physical hardware, sanitizer/compiler matrix or new static-analysis run is
+claimed. Manual menu/terminal review remains with the owner.
+
+The ordinary review executable was rebuilt with `make all`
+(`build/footer-evidence/review-build.log`). The test input manifest still matches
+the final source; `git diff --check` passed. A read-only host process audit found
+no surviving frontend, test, GDB, gdbserver, OpenOCD or tmux processes
+(`build/footer-evidence/process-audit.log`). The final tracked tree and patch
+are retained in `build/footer-evidence/tracked-tree.sha256` and `final-tree.patch`.
+
+## Footer layout, scrolling and centered screens — 2026-10-25
+
+Status: automated-verified; awaiting user acceptance.
+This extends the footer-context fix following the owner's screenshots and manual
+review. The previous context-only results above remain historical evidence for
+that earlier tree, not a substitute for this expanded layout check.
+
+Global footers now share one renderer: status left, help right on one row when
+both fit, otherwise on separate reserved rows. Status/hint and Vim Normal/Insert
+text use workspace-background semantic roles instead of panel/surface backing.
+The render test checks that background equality for all 37 palettes; existing
+color fallbacks and monochrome mode indicators remain covered.
+
+Keybinds has an overflow-only track/thumb alongside the table viewport, with
+track paging, thumb dragging, capture isolation and resize cancellation. The
+card reserves separation above the footer where space permits. Setup, profile,
+source, inspector-action, input and script/review screens use bounded centered
+cards. Session forms size to their fields/actions instead of terminal height;
+short forms retain scrolling. Reset and disconnect dialogs wrap their text and
+keep centered controls. Source-catalog paging uses the actual rendered row count.
+No debugger command, target-access policy, ownership or persistence format changes.
+
+Agent-run checks and retained logs:
+
+- Strict fortified focused builds initially caught local shadowed/redefined
+  width variables during coordinate conversion. Those compile failures are
+  preserved in `build/footer-layout-evidence/focused.log`; they were corrected
+  rather than bypassing `-Werror`.
+- `TERM=xterm-256color make BUILD_DIR=build/footer-layout-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes test-keybinds`:
+  PASS (exit 0), log `build/footer-layout-evidence/focused-frozen.log`. Added checks cover
+  right alignment, compact form geometry, short-menu scrollbar track/drag/end
+  reachability, disappearance without overflow and palette background equality.
+- `TERM=xterm-256color build/footer-layout-focused/test-native-tui "$PWD/build/footer-layout-focused/the-bugger" "$PWD/build/footer-layout-focused/debug-fixture"`:
+  PASS (exit 0), `build/footer-layout-evidence/native-focused.log`. Includes
+  real GDB, centered close controls, inline Console, field editing, errors,
+  Save Log, launched/attached ownership and signal/terminal cleanup.
+- The first fresh complete baseline used
+  `TERM=xterm-256color make BUILD_DIR=build/footer-layout-ci-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+  It failed at the existing Watches UI assertion that looked for `17` on fixed
+  terminal row 7 (`build/footer-layout-evidence/test-ci.log`). The centered
+  dialog places that same selected snapshot on row 22. The harness now locates
+  the selected variable summary and checks the exact adjacent value, preserving
+  both natural `17` and hexadecimal `0x11` assertions. A focused rerun passed
+  and recorded both values at row 22 (`variables-focused.log`). The initial
+  input manifest is preserved as `test-inputs-first.sha256` (SHA-256
+  `55c36194b83c5d9280f83568c70fa87422e1847fc3de2494cc5f808873a51a82`).
+- Final fresh complete baseline:
+  `TERM=xterm-256color make BUILD_DIR=build/footer-layout-ci-final-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+  PASS (exit 0), log `build/footer-layout-evidence/test-ci-final.log`. Includes
+  all default/native suites, source/catalog navigation, real tmux, localhost
+  remote and offline OpenOCD checks; no physical hardware was exercised.
+  Exact source/test/build/workflow manifest:
+  `build/footer-layout-evidence/test-inputs-before-interface.sha256`, SHA-256
+  `cd17efb7a050cd0f694e3814a7b80628a814cd97e8a5dbde8ff869a0baa0a3b0`.
+- Static analysis initially flagged adjacent line-count/style parameters in the
+  paragraph helper (`analysis.log`). Its text argument now separates those
+  parameters; matching callers were updated without changing rendering behavior.
+  No suppression was added. With explicit owner permission,
+  `make BUILD_DIR=build/footer-layout-analysis analyze` PASS (exit 0),
+  clang-tidy 23.1.3 (`analysis-final.log`).
+- After that interface cleanup, the complete fortified `test-ci` command above
+  was repeated with unchanged flags in the task build directory; Make rebuilt
+  the changed application source. PASS (exit 0), full log
+  `build/footer-layout-evidence/test-ci-verified.log`. The
+  final source/test/build/workflow input manifest is `test-inputs.sha256`, SHA-256
+  `4de214725a79e24f30dcd0a79067679f098033ab0fd43bc3cc84fdbf4769e026`.
+
+Environment: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1 (20260810), GDB 18.1,
+tmux 3.8. Local checks do not establish hosted Ubuntu success. No physical
+hardware or sanitizer/compiler matrix is claimed.
+The ordinary executable is rebuilt through `make all` for manual review;
+log `build/footer-layout-evidence/review-build.log`.
+
+Final input-manifest verification and `git diff --check` passed. The ordinary
+review executable was rebuilt again after the helper-interface cleanup
+(`build/footer-layout-evidence/review-build-final.log`). Final tree/patch
+identities are retained in `tracked-tree.sha256` and `final-tree.patch` under the
+same evidence directory. Hosted Ubuntu and physical visual acceptance remain
+separate from these automated local host results.
+
+The final read-only cleanup audit found no surviving frontend, test, GDB,
+gdbserver, OpenOCD or tmux processes (`process-audit-final.log`).
+
+## Footer/button visual follow-up — 2026-10-25
+
+Owner feedback identified extra strokes around scrolled Keybinds cells, an empty
+row below a combined footer, and uneven/clipped action labels. The selected cell
+border no longer applies underline to box-drawing glyphs; bold/color emphasis
+and border-only capture remain. The terminal test reader now tracks SGR underline
+through erase, scrolling and character insertion/deletion. New assertions inspect
+cell borders after wheel and scrollbar dragging. Shared action-label rendering
+centers padding, full-row choices stay left aligned, Memory Options fits, and
+session profile actions have spacing and separate narrow-screen rows. Wide
+footers now occupy the last row; narrow footers retain the last two rows.
+
+Agent-run checks and evidence are retained in `build/button-scroll-evidence/`:
+
+- Development focused check:
+  `TERM=xterm-256color make BUILD_DIR=build/button-scroll-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes test-keybinds`:
+  PASS, exit 0 (`focused.log`). Final geometry assertions and button adjustments
+  were subsequently included in the complete baseline below.
+- Authorized static analysis:
+  `make BUILD_DIR=build/footer-layout-analysis analyze`: PASS, exit 0
+  (`analysis.log`), with no new suppression.
+- Complete fresh fortified baseline:
+  `TERM=xterm-256color make BUILD_DIR=build/button-scroll-ci-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`:
+  PASS, exit 0 (`test-ci.log`). Includes native editing/Console/context selection,
+  terminal restoration, live Keybinds and isolated tmux runs, RGB rendering,
+  localhost remote sessions and offline/real OpenOCD checks without hardware.
+- `make all`: PASS, exit 0 (`review-build.log`); `build/the-bugger` is the ordinary
+  executable for owner visual review.
+
+Exact source/test/build/workflow inputs: `test-inputs.sha256`, SHA-256
+`e620875c83bab8e0f1444796f036f0ce793111491c8c9db981fd248081feea5c`.
+Environment: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1, tmux 3.8,
+clang-tidy 23.1.3 (`environment.log`). These are local host checks; hosted Ubuntu
+and owner visual acceptance remain separate. No hardware, sanitizer or compiler
+matrix is claimed. Status: awaiting owner visual acceptance after final checks.
+
+Final input verification and `git diff --check` passed. The read-only process
+audit found no surviving processes associated with this task baseline
+(`process-audit.log`). Final tracked-tree hashes and patch are retained as
+`tracked-tree.sha256` and `final-tree.patch` in the same evidence directory.
+
+## Complete session-form notes and spacing — 2026-10-25
+
+Owner review found the primary form actions adjacent to the explanatory note,
+plus clipped Embedded/GDB-server instructions. All three setup forms now measure
+and wrap the entire note before placing actions. At ordinary terminal heights,
+one empty row separates the note from Review/Back and one separates the primary
+row from profile actions. Field viewports shrink as needed at compact heights;
+notes and actions remain visible. Review warnings use the same wrapping path.
+
+Evidence under `build/form-spacing-evidence/`:
+
+- `TERM=xterm-256color make BUILD_DIR=build/form-spacing-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes`:
+  initial development PASS (`focused.log`). A new whole-phrase lookup then failed
+  in the complete baseline (`test-ci.log`) and diagnostic focused run
+  (`focused-notes.log`): the native note correctly wrapped `literal.` onto its
+  next row. The new test had assumed `Paths are literal.` remained contiguous.
+  The screen/raw terminal capture establishes that harness defect. The assertion
+  now locates the final rendered word, retaining exact row-spacing checks for
+  all three session types; no application assertion or safety check was removed.
+- Final focused command above: PASS, exit 0 (`focused-final.log`).
+- A supplementary focused terminal check normalizes all rendered rows and verifies
+  each complete note plus Review/Save profile/Profile/Delete at 48×18: PASS,
+  exit 0 (`minimum-form.log`, source `check-form-minimum.c`, compiled with C17,
+  `-O2 -g -D_FORTIFY_SOURCE=3 -Wall -Wextra -Wpedantic -Werror` against the
+  focused terminal-reader object; exact commands in `minimum-form-command.txt`).
+  No debugger connection is opened.
+- Authorized `make BUILD_DIR=build/footer-layout-analysis analyze`:
+  PASS, exit 0 (`analysis.log`).
+- Fresh final complete baseline:
+  `TERM=xterm-256color make BUILD_DIR=build/form-spacing-ci-final-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`:
+  PASS, exit 0 (`test-ci-final.log`), including native, tmux, remote and OpenOCD
+  suites. Earlier failed run used
+  `BUILD_DIR=build/form-spacing-ci-20261025`; its log/input manifest are retained.
+- `make all`: PASS, exit 0 (`review-build.log`); ordinary review executable
+  `build/the-bugger` rebuilt.
+
+Final source/test/build/workflow input manifest `test-inputs.sha256` has SHA-256
+`ffe6d0576467398f135bab030a847f3bff86ad69434bfb409d1ecb22726b8523`;
+the earlier new-test assertion failure is identified by `test-inputs-first.sha256`
+(`868a84e70bbacf888958290ae5526f15cdab9636f697dd3fafabb6e7e80b7996`).
+The local host remains Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1,
+tmux 3.8 and clang-tidy 23.1.3. Local execution does not establish hosted Ubuntu
+or physical-target results. Owner visual acceptance remains pending.
+
+Final input verification, `git diff --check` and task process cleanup passed
+(`input-verification.log`, `process-audit.log`). Final tracked-tree hashes and
+patch are retained in `tracked-tree.sha256` and `final-tree.patch`.
+
+## v0.1.3 Task 1.1 — rendering and failed code requests
+
+Status: **accepted** through the owner's subsequent manual-check report and
+v0.1.3 release-preparation instruction. The original implementation authorization
+allowed local commits and continuation with review deferred; it did not itself
+establish physical acceptance, hosted-CI evidence or publication. Work is on the local `feature/v0.1.3` branch.
+
+The shared text renderer previously passed a byte count directly to ncurses.
+An authored curses-cell regression demonstrated that tab/control expansion
+escaped the assigned row/cell rectangle. The fix retains an ASCII fast path,
+measures printable multibyte characters by cells, escapes control/invalid bytes
+and does not emit a wide glyph that cannot fit. Console/source byte escaping
+remains unchanged; no ANSI interpreter or new Unicode Console feature was added.
+
+A separate authored MI regression reproduced a navigation trap: a failed
+Disassembly read cleared the old listing, and paging then rejected the empty
+view. Retain the previous instructions and restore their browsing origin while
+showing the failure. Actual native GDB rejection at address zero verifies retained
+listing/stop PC and recovery through Return to stopped context. This does not
+implement Task 1.3's broader browsing or Return to Stop semantics.
+
+Evidence directory: `build/rendering-stability-evidence/`. Base revision:
+`726cd7128340b99615598e7ee4b0b3abeb5bb383`; exact source/test/workflow/build inputs
+are recorded in `test-inputs.sha256` and `test-inputs-final.sha256` for the initial
+and final test trees respectively. Environment is Linux 7.2.11-arch1-1 x86-64,
+glibc 2.44, GCC 16.2.1, GDB 18.1 and tmux 3.8; complete versions are in
+`environment.log`.
+
+| Check | Result and evidence |
+|---|---|
+| Original renderer regression | FAIL as expected, `render-before.log`; ncurses writes outside the assigned cells |
+| Original failed-page regression | FAIL as expected, `code-before.log`; retained instruction count/origin lost |
+| Focused renderer | PASS, `render-wide.log`; controls, accented/combining/double-width text, invalid UTF-8 and bottom-right protection, plus existing palette/style assertions |
+| Focused authored-MI code model | PASS, `code-after.log`; failed adjacent read retains usable paging |
+| Actual GDB code suite | PASS, `native-code.log`; unreadable address preserves listing/stop and recovery, plus existing source/mixed/optimized/stripped/C++/duplicate-file assertions |
+| Initial fresh fortified baseline | PASS, `test-ci.log`, exit 0; prior stress-harness test tree |
+| Final fresh fortified baseline | PASS, `test-ci-final.log`, exit 0; final harness tree |
+| Final 300-second native stress | PASS, 914 rounds, `stress-final-native.log`; flood/wheel/step/resize/fixed controls and terminal restoration |
+| Final 300-second localhost remote stress | PASS, 360 rounds, `stress-final-remote.log`; update/tab/resize, external ownership and subsequent server-loss recovery |
+| Final 300-second isolated tmux stress | PASS, 911 rounds, `stress-final-tmux.log`; flood/wheel/step/resize, fixed controls and terminal restoration through an isolated real tmux server |
+| Static analysis | PASS, `make BUILD_DIR=build/rendering-stability-analysis analyze`, clang-tidy 23.1.3, `analysis.log`, exit 0 |
+| CI analysis-job test compilation | PASS, all 65 unit/integration/support C sources with fortification, `test-compilation.log`, exit 0 |
+| Documentation consistency | PASS: 77 local file/heading links in the four modified general/technical/testing documents |
+| Owner STM32/direct-terminal/tmux visual acceptance | NOT RUN; the original reported STM32 corruption has not been reproduced or attributed to these fixes |
+
+The final baseline command was `TERM=xterm-256color make
+BUILD_DIR=build/rendering-stability-ci-final CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+The initial passing command used `BUILD_DIR=build/rendering-stability-ci`;
+both directories were previously unused. The opt-in stress commands are documented
+in [testing](testing.md#rendering-stability-stress); final exact argv, environment,
+elapsed durations and exit codes are retained in `stress-results.json`.
+The final input manifest SHA-256 is
+`feba3034d519cd37ff6d8ff9891a7cf61dee8c44234882bcdff9328e70dd70dc`.
+
+Preserved harness failures: `stress-remote-smoke.log` expected a tab in a hidden
+compact pane; `stress-native.log` expected the full Registers title in compact
+rendering. Their captured screens show the documented pane selectors instead.
+Corrections select the intended pane and assert the appropriate compact or tiled
+labels; application assertions were not removed. The corrected focused harness
+checks pass (`stress-remote-smoke-retry.log`, `stress-native-compact-smoke.log`).
+An initial new cell-test assertion also incorrectly expected OK instead of the
+five-character return from `mvinnstr`; correcting that return-value expectation
+did not change its cell-boundary assertions.
+
+Owner review remains:
+
+1. Use the tested binary and the native debug fixture with `--render-stress` as
+   its arguments. Continue, scroll the log, pause/step and resize between compact
+   and tiled sizes. Pane titles, command/Save Log controls and neighboring panes
+   must remain intact; target control bytes remain escaped.
+2. While stopped on the native fixture, navigate Disassembly to `0x0`. Expect an
+   access error with the prior listing retained, and usable subsequent navigation
+   and Return to stopped context. Execution must remain unchanged by browsing.
+3. After authorizing the exact physical operations, revisit the owner's STM32
+   blinky/output scenario in Alacritty directly and through tmux. Record the exact
+   output producer, firmware and actions; no new MMIO read commands are implied
+   by this checklist. Report any surviving corruption before acceptance.
+
+The host test VT reader covers bounded ASCII labels/geometry and selected UTF-8
+box drawing, not a complete terminal emulator or visual/hardware proof. New
+Task 1.3 MMIO protocol/width capabilities remain unimplemented and unverified.
+
+## Profiles action-row alignment — 2026-10-25
+
+Owner review found New remote touching New OpenOCD, with creation and reload
+controls on different rows. Config → Profiles now places New native, New OpenOCD,
+New remote and Reload file together on the bottom row, with padded labels and
+separate hit rectangles. Back remains aligned right. Below 78 columns, the four
+left actions wrap into two rows; the card reserves the additional action row
+and pages profile entries within the remaining space.
+
+Agent-run evidence is retained in `build/profile-actions-evidence/`:
+
+- `TERM=xterm-256color make BUILD_DIR=build/profile-actions-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes`:
+  PASS, exit 0 (`focused.log`). New checks inspect the common bottom-row geometry,
+  label gaps, 48×18 fallback and Reload file activation, including monochrome.
+- Authorized `make BUILD_DIR=build/footer-layout-analysis analyze`:
+  PASS, exit 0 (`analysis.log`).
+- `TERM=xterm-256color make BUILD_DIR=build/profile-actions-ci-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`:
+  started before subsequent first-selector/script-browse spacing changes. Its
+  intermediate-tree log is retained as `test-ci.log` (PASS, exit 0); the final
+  combined-tree baseline is recorded in the follow-up below.
+- `make all`: PASS, exit 0 (`review-build.log`); review executable
+  `build/the-bugger` rebuilt.
+
+The source/test/build/workflow input manifest is `test-inputs.sha256`, SHA-256
+`1eb97e15f580de5cb875bf1f5a0799ef31ced5be07ef108d8be2ea4ed5e008bd`.
+Host: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1, tmux 3.8,
+clang-tidy 23.1.3. These are local results; hosted Ubuntu and owner visual
+acceptance remain separate. No physical-target validation is claimed.
+
+## Setup selector and script-browse spacing — 2026-10-25
+
+Owner feedback additionally requested minimal separation after Mode/OpenOCD setup
+and a centered Browse boards row. At ordinary heights Native/Embedded forms add
+one blank row after the initial selector. Embedded script-browse controls now
+have equal one-row gaps above and below, including adapter/target mode. Compact
+rendering collapses those gaps. Visible-field indexing, controls and carets use
+the rendered field rows, preserving scrolling and editing.
+
+Evidence under `build/form-field-gaps-evidence/`:
+
+- Initial focused runs failed a new label lookup (`focused.log`,
+  `focused-final.log`). `lookup-diagnostic.log` establishes that it selected
+  `Board script` from the first-row selector value at (66,15), beside the
+  `OpenOCD setup` label at (40,15). The test now finds the next field in the
+  label column and still requires its exact two-row separation. No application
+  assertion was removed.
+- `TERM=xterm-256color make BUILD_DIR=build/form-field-gaps-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes`:
+  PASS, exit 0 (`focused-verified.log`). Covers selector separation,
+  symmetric script-browse spacing, full form notes, Profiles bottom actions,
+  compact rendering and monochrome.
+- Authorized `make BUILD_DIR=build/footer-layout-analysis analyze`:
+  final-tree PASS, exit 0 (`analysis-final.log`). The earlier analysis log
+  is retained because the viewport offset expression was simplified afterward.
+- The earlier focused minimum-size runner was rerun against the final fortified
+  application: `TERM=xterm-256color build/form-spacing-focused/check-form-minimum "$PWD/build/form-field-gaps-focused/the-bugger"`:
+  PASS, exit 0 (`minimum-forms.log`), all three complete notes and action controls
+  visible at 48×18. Runner source/compilation are retained with the earlier
+  form-spacing evidence.
+- Final combined-tree complete fortified baseline:
+  `TERM=xterm-256color make BUILD_DIR=build/profile-form-final-ci-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`:
+  PASS, exit 0 (`test-ci-final.log`), including native, tmux, remote and OpenOCD
+  suites.
+- `make all`: PASS, exit 0 (`review-build-final.log`), ordinary review executable
+  `build/the-bugger` rebuilt.
+
+Exact source/test/build/workflow manifest: `test-inputs.sha256`, SHA-256
+`e840f2cda397518a4ce46b349ed501b890bbc27d42d7d32f000e880ce2f99a4a`.
+Host remains Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1, tmux 3.8,
+clang-tidy 23.1.3. Local host evidence does not establish hosted Ubuntu or
+physical-target success. Owner visual acceptance remains pending.
+
+Final manifest verification, `git diff --check` and process cleanup passed
+(`input-verification.log`, `process-audit.log`). Final tracked-tree hashes and
+patch are retained in `tracked-tree.sha256` and `final-tree.patch`.
+
+## Final Start OpenOCD and Console control gaps — 2026-10-25
+
+Owner clarification requested padding above Start OpenOCD, preserving its distance
+to Browse boards. The final toggle now has one empty row after OpenOCD binary,
+matching the setup selector's separation. Existing script-browse and note gaps
+remain unchanged; compact forms collapse all optional gaps.
+
+The owner also requested separation between the live Console Command/Send row
+and Save Log. Panes at least nine rows high reserve one empty row between those
+controls. A shared row reservation positions the command field, log viewport and
+horizontal scrollbar together; smaller panes keep their prior compact geometry.
+
+Agent evidence:
+
+- `TERM=xterm-256color make BUILD_DIR=build/form-field-gaps-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes`:
+  PASS, exit 0 before the independent Console adjustment; log
+  `build/start-openocd-gap-evidence/focused.log`. Exact new geometry assertions
+  require OpenOCD binary → Start OpenOCD → Browse boards → note to retain two-row
+  steps. The source/test manifest for that focused state has SHA-256
+  `3de54588f163732e94a4f32946e7a554ae499d795097ba6ac49433d51f5abfdc`.
+- `TERM=xterm-256color build/form-field-gaps-focused/test-native-tui "$PWD/build/form-field-gaps-focused/the-bugger" "$PWD/build/form-field-gaps-focused/debug-fixture"`:
+  PASS, exit 0 (`build/console-final-gap-evidence/native-focused.log`). Checks
+  Command/Send alignment, the empty row before Save Log, real GDB Enter/Send,
+  draft/caret/resize behavior, log saving, ownership and terminal cleanup.
+- Final combined-tree full baseline:
+  `TERM=xterm-256color make BUILD_DIR=build/final-console-spacing-ci-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`:
+  PASS, exit 0 (`build/console-final-gap-evidence/test-ci.log`), including native,
+  tmux, viewport/scrollbar, remote and OpenOCD coverage.
+- Authorized `make BUILD_DIR=build/footer-layout-analysis analyze`:
+  final combined-tree PASS, exit 0 (`build/console-final-gap-evidence/analysis.log`).
+- `make all`: PASS, exit 0 (`build/console-final-gap-evidence/review-build.log`),
+  `build/the-bugger` rebuilt for owner review.
+
+Final source/test/build/workflow manifest:
+`build/console-final-gap-evidence/test-inputs.sha256`, SHA-256
+`428a20ef17873f98f093b81ea7c60105375b597221a64492d2e3ced3b03441bc`.
+Environment remains Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1,
+tmux 3.8 and clang-tidy 23.1.3. Local host results do not establish hosted Ubuntu
+or physical-target validation. Owner visual acceptance remains pending.
+
+Final input verification, `git diff --check` and task process cleanup passed
+(`input-verification.log`, `process-audit.log`). Final tracked-tree hashes and
+patch are retained in `tracked-tree.sha256` and `final-tree.patch`.
+
+## v0.1.3 Task 1.2 — lower dock and independent overlays
+
+State: **accepted** through the owner's subsequent manual-check report and
+v0.1.3 release-preparation instruction. Initial local commit/continuation
+permission alone did not establish acceptance or publication.
+
+The three lower root groups start minimized directly above the footer. Titles
+and `^` restore them, `_` minimizes them (the owner's later correction to the
+original `v` indicator), and separate top grips resize their
+session-only heights. Primary rectangles and split trees remain intact. Compact
+or oversized lower split groups span the workspace; most recent focus controls
+stacking. Pointer/divider hit tests and keyboard navigation use exposed geometry.
+Fully covered inspectors do not become visible to value-request scheduling.
+Source fullscreen temporarily hides the dock and restores retained state.
+
+Evidence: `build/lower-overlays-evidence/`; parent implementation is Task 1.1's
+recorded `3defec4`. `environment.json`, `test-inputs.sha256` and the retained diff
+identify the host/input tree. Source changes use the existing C17/curses layout
+interfaces, without a new dependency or persistent preference schema.
+
+Executed focused checks:
+
+- Layout model and workspace terminal tests: PASS, independent height changes,
+  retained primary geometry/splits, compact stacking, clicks on exposed overlays,
+  dock restoration, new-session reset, resizing/scrollbars and monochrome keys.
+- Spatial navigation: PASS, Ctrl+arrows/Vim aliases, nested panes, viewport
+  retention, fullscreen and compact isolation; `navigation-next.log`.
+- Direct and isolated real-tmux Console: PASS, literal entry, Enter/Backspace,
+  pane-local drafts, Save Log, resize and terminal restoration;
+  `console-focused.log` and `console-tmux.log`.
+- Code TUI: PASS, PC preservation, horizontal/vertical scrolling, instruction
+  margins, mixed navigation and source lookup; `code-tui-final.log`.
+- Static analysis before the final compact-focus correction: PASS,
+  `make BUILD_DIR=build/lower-overlays-analysis-final analyze`,
+  `analysis-final.log`, exit 0. Final-tree analysis is recorded below. Suppressed system/NOLINT diagnostics are not
+  project findings. The first run detected a negative divider-index path;
+  retained `analysis.log` records it, and the final code rejects invalid IDs.
+- Two bounded 30-second native-output stress phases: PASS, 91 rounds each,
+  direct and isolated real tmux; `stress-native.log` and `stress-tmux.log`.
+  Each exercises flooding, wheel, stepping, compact/tiled resizing and cleanup.
+
+Final source-tree checks: PASS static analysis with
+`make BUILD_DIR=build/lower-overlays-analysis-complete analyze`,
+`analysis-complete.log`, exit 0; PASS fortified object compilation of all 65 test
+C sources, `test-compilation-complete.log`, exit 0. Two final-tree 30-second
+native-output stress runs also passed, 91 rounds each directly and through
+isolated tmux; exact argv/environment/results are in `stress-complete.json`.
+Full fresh fortified host baseline: PASS, exit 0, exact command:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/lower-overlays-ci-complete CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+Complete log: `test-ci-complete.log`; exit record: `test-ci-complete.exit`.
+Tested-input manifest SHA-256:
+`b8840973052dd3e271c105b6683a249228662c82cb1970c8f017f04fe616cb1a`.
+The OpenOCD TUI setup was corrected before this fresh build compiled that source;
+all other manifest inputs were unchanged. The earlier complete-tree attempt's
+hidden-Console completion failure remains in `test-ci-verified.log`. The final
+baseline includes actual native GDB, isolated tmux, localhost gdbserver, simulated
+MI/OpenOCD cases and the installed OpenOCD's hardware-free startup checks.
+This is local Arch Linux success, not hosted Ubuntu CI success.
+
+All 118 local links in the edited documents passed consistency checks. A wider
+scan found an already-broken `tests/README.md` anchor to the former Profiles/action
+keys heading; it is recorded for Task 1.3's documentation audit, outside this gate.
+
+Preserved development failures include sandbox ptrace EPERM (independently
+reproduced by real GDB), old tests assuming visible lower controls, and the
+Console draft assertion searching an entire row shared by two fields. Test
+setup now explicitly restores groups, excludes persistent dock duplicates when
+locating bodies, and inspects the intended field. Value/access assertions remain.
+The final compact-focus test first reproduced minimizing Memory incorrectly
+selecting Source when Disassembly was underneath. Minimize now preserves the
+actual compact underlay; `compact-underlay-before.log` retains the failure.
+The workspace mouse driver now waits for a complete refresh between press/release
+instead of returning on the first output fragment. Source scrolling uses a short
+terminal so the 22-line fixture still overflows the enlarged primary viewport.
+
+Physical STM32 and direct-Alacritty human UX checks were not performed. Native,
+local gdbserver, simulated MI/OpenOCD fixtures and isolated tmux do not establish
+hardware behavior or hosted Ubuntu success. Task 1.3 MMIO remains unimplemented.
+Manual review procedure: [lower overlays](testing.md#lower-dock-and-independent-overlays).
+
+## v0.1.3 Task 1.3 — documentation consolidation
+
+Documentation subtask complete; browsing implementation and physical/monitor
+validation remain open. The meaningful requirements from the temporary owner
+`ASM_MEM.md` were reconciled with the approved specification in the canonical
+`~/TODO.md` and the maintained [browsing requirements](requirements.md#approved-v013-browsing-work).
+The canonical crosswalk retains the investigation/approval obligations, direct
+Go-to objective, Disassembly/Memory distinctions, predictable hardware access,
+independent product identity, reference/license preservation and acceptance gates.
+The temporary source was removed only after that preservation review.
+
+The audit covered tracked Markdown references and `THIRD_PARTY_NOTICES`. Rewrote
+the remaining IAR/C-SPY product-definition comparison as dense coordinated
+terminal inspection; relabeled a misleading prototype link. Retained genuine
+technical terminfo references, palette provenance, licenses, historical evidence,
+ST linker-source URLs and the expressly approved optional Vim-like feature.
+Corrected the tests README's stale always-on-alias wording and broken Profiles
+anchor; clarified dock restoration in the first-session guide. No functionality
+or existing M/F identity was removed or inferred from another tool.
+
+Checks: PASS, 173 local links across 15 tracked Markdown files; license/notices
+byte-for-byte unchanged; `git diff --check`. Evidence:
+`build/browsing-documentation-evidence/review.log`. No application matrix was
+rerun for these documentation-only edits. Approved browsing behavior is explicitly
+labeled in progress; parser tests, prior text probes and local host results do
+not establish MMIO protocol reliability, physical widths or owner acceptance.
+
+## Task 1.3 OpenOCD transport and width evidence — in progress
+
+Agent-run, authorized physical observations used STM32F446 (device ID 0x421),
+ST-LINK V2J48M35/API v2, `openocd -f board/st_nucleo_f4.cfg`, OpenOCD
+0.12.0-01004-g9ea7f3d64-dirty and arm-none-eabi-gdb 18.1 on the Arch Linux host.
+Only agent-owned OpenOCD instances were stopped. No flash, reset, register-write
+or resume command was sent. Connecting halted firmware; server configuration
+controls disconnect behavior.
+
+- Actual controller/monitor framing passed target, address, width, count and value
+  checks; unrelated output; duplicate/malformed frames; expected Tcl error and
+  recovery; and a 20 ms frontend timeout followed by the matching late MI result
+  after a 200 ms server delay, without another request. Logs:
+  `build/mmio-protocol-evidence/controller-probe.log` and
+  `openocd-controller-probe.log`. This probe used constants, not peripheral reads.
+- Three explicitly authorized GPIOA_ODR reads at 0x40020014, widths 8/16/32 and
+  count one, returned bounded frames and successful MI results. The OpenOCD debug
+  log records adapter_read_memory sizes 1/2/4 and count one. Logs and exact input:
+  `build/mmio-protocol-evidence/width-probe.log`, `width-probe.mi`,
+  `width-probe.sha256` and `openocd-width-probe.log`. RM0390 7.4/7.4.6 was
+  reviewed for permitted widths and documented read behavior.
+- Tracked MI captures preserve actual transport/width observations for parser
+  regression replay. Neither replay nor adapter logging proves exactly-once
+  physical access. External-driver retries depend on path and failure conditions;
+  older ST-LINK firmware may substitute byte accesses for unsupported 16-bit
+  operations. No general probe/firmware compatibility claim follows.
+
+The frontend guarantees no automatic frontend retry, including after timeout or
+uncertain outcome. User-confirmed setup metadata is not automatic verification
+or proof that a register is safe. Product MMIO integration, full Task 1.3
+acceptance, owner visual/hardware review and release approval remain outstanding.
+
+### Browsing foundation host checkpoint
+
+The agent-run Arch Linux host baseline passed on the frozen input tree preserved
+in `build/browsing-evidence/verified-tree.tar.gz` and
+`verified-inputs.sha256` (parent revision 0242eac):
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/browsing-verified-ci CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make BUILD_DIR=build/browsing-verified-analysis analyze
+```
+
+Both exited 0; full logs are `verified-test-ci.log` and
+`verified-analysis.log` under `build/browsing-evidence/`. This includes direct
+and isolated-tmux input/terminal restoration, native source/disassembly, Memory,
+watchpoints, localhost GDB server and offline OpenOCD checks. All 68 C test
+sources compiled with fortification (`verified-all-test-compilation.log`).
+Focused source-model tests also passed AddressSanitizer/UBSan with leak detection
+(`source-asan-test.log`). File-link consistency checks found no missing files
+across 164 local documentation links. The normal executable was rebuilt.
+
+Earlier failures remain recorded: stale test expectations for explicit following
+and historical cached listings; the initially clipped gap label; signed-bitwise
+analyzer diagnostics; and the earlier analyzer run during concurrent header
+edits. Tests now preserve actual instruction-step/margin assertions, verify
+historical provenance followed by a fresh Return to Stop, and require the gap
+label in a narrow pane. The renderer puts that label before the address range
+and shares row mapping with horizontal-width calculation.
+
+This is local host evidence, not hosted Ubuntu CI or owner visual acceptance.
+Task 1.3 remains in progress: production MMIO integration and target-bound setup
+confirmation UI/session wiring, mapping trust and remaining reconstruction work
+are not delivered by this checkpoint. No release is authorized.
+
+## Task 1.3 production MMIO checkpoint
+
+Implemented connection reservation, explicit-width OpenOCD transport, per-view
+consent integration, navigation-only unit rows, user-confirmed setup review and
+session lifecycle guards. Every accepted Console command invalidates setup AND
+MMIO consent before transmission; definitions survive. Rejected submissions
+preserve them. Ordinary execution preserves setup confirmation but expires
+range consent. Setup/target/connection changes and closure invalidate both.
+Queued reads are cancelled on setup invalidation; already outstanding reads can
+have reached hardware. Close waits for them within its existing bounded policy.
+Timeouts/uncertain frames never retry; exact late-token reconciliation or a new
+connection is required. Full transport diagnostics remain in Console.
+
+Agent-run local Arch host checks on frozen source inputs, parent 38b6cfe:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/mmio-verified-ci CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make BUILD_DIR=build/mmio-verified-analysis analyze
+```
+
+Both exited 0. Logs: `build/browsing-evidence/mmio-verified-test-ci.log` and
+`mmio-verified-analysis.log`. All 72 C test sources compiled fortified
+(`mmio-verified-all-test-compilation.log`). The original frozen tree/manifest
+are `mmio-verified-tree.tar.gz` / `mmio-verified-inputs.sha256`; documentation was
+finalized afterward without changing source/build/test inputs. The final
+snapshot is `mmio-verified-final-tree.tar.gz` / `mmio-verified-final-inputs.sha256`.
+Focused Memory tests passed ASan/UBSan with leak detection
+(`mmio-verified-memory-asan-build.log`, `mmio-verified-memory-asan-test.log`).
+The authored remote TUI flow passed direct and isolated real tmux, including
+18x48 paged setup review, unit navigation, missing-frame quarantine/diagnostic
+and Console revocation (`mmio-tui-final-test.log`, `mmio-tmux-test.log`). These
+are host/authored-peer results, not hosted Ubuntu CI or hardware UX acceptance.
+
+Actual production transport was separately run with:
+
+```sh
+openocd -d3 -f board/st_nucleo_f4.cfg
+build/mmio-lifecycle-dev/test-mmio-hardware arm-none-eabi-gdb 127.0.0.1:3333 --stm32f446-gpioa-odr
+```
+
+PASS on the observed STM32F446, device ID 0x10006421, 512 KiB, ST-LINK V2J48M35
+(API v2), OpenOCD 0.12.0-01004-g9ea7f3d64-dirty, arm-none-eabi-gdb 18.1.
+Exactly three frontend GPIOA_ODR operations at 0x40020014, count one each,
+widths 8/16/32; all framed samples returned zero. The actual OpenOCD log shows
+matching adapter sizes 1/2/4, count one. RM0390 7.4/7.4.6 permits these widths;
+ODR has no documented read-clear effect. No explicit flash/reset/write/resume
+command was issued. Connection itself produced additional core/debug/flash
+metadata/PC accesses. This is not a bus trace, an exactly-once claim, or proof
+that arbitrary adapters/firmware honor these widths. Only the agent-owned server
+was started/stopped; no external server was replaced or terminated. Evidence:
+`build/mmio-protocol-evidence/production-client.log`, `production-openocd.log`
+and `production-probe-run.log`. The opt-in physical test is not executed by CI.
+
+Earlier failures remain preserved: `mmio-integration-analysis.log` reported
+three integer conversion diagnostics, now corrected; a first sanitizer link
+omitted the code-model dependency (`mmio-memory-asan-build.log`), corrected in
+subsequent builds; initial authored close tests had not made context visible and
+therefore correctly had no ready snapshot (`mmio-close-debug-test.log`); an
+initial navigation test incorrectly tried granting consent while running
+(`mmio-unit-navigation-test.log`). Tests retain stopped-context protections and
+now exercise their intended conditions. An initial UI probe edited begin beyond
+end and correctly received invalid bounds; its corrected sequence enlarges end
+first. None of those failed runs is counted as a pass.
+
+This completes a production MMIO checkpoint, not Task 1.3. Mapping trust,
+remaining bounded reconstruction requirements and owner hardware/visual review
+remain. No release or complete interactive hardware acceptance is claimed.
+
+## Task 1.3 ELF trust and bounded reconstruction
+
+State: **accepted**. Owner subsequently reported that the manual tests performed
+passed and resumed ownership. Exact additional device/setup coverage was not
+specified; this does not expand the recorded physical matrix. Current follow-up
+changes are to remain uncommitted at the owner's request. Owner previously
+authorized implementation, local commits and continued1.x work with review deferred. This record does not grant release
+permission.
+
+The implementation adds metadata-only remote configured-ELF/additive-load-bias
+review with full escaped paths and paged allocated-section addresses. It
+separates UNVERIFIED, USER-CONFIRMED and native BACKEND-VERIFIED mapping evidence;
+no declaration proves live-byte equality or authorizes Memory. Native mappings
+match device/inode and executable PT_LOAD offsets. File revision/identity,
+configuration and code-epoch guards invalidate stale authority while retaining
+historical rows. Confirming another bias supersedes the preceding declaration
+for that ELF, including overlapping mappings.
+
+Small session/stop/epoch-qualified boundary records share the actual 4 MiB
+history allocation pool. Reconstruction starts from a reliable earlier boundary
+within 1024 bytes and consumes at most 128 decoded rows, including trimmed prefix
+rows. Exhaustion, errors and stale replies preserve prior instructions and
+provenance, including internal function/region/follow-anchor state, without
+retry. Closed/reused splits clear their Code history and change request identity.
+Trusted-mapping feedback uses ELF:native / ELF:user / ELF:? in the pane footer;
+selected-frame/file context remains visible. Manual headers use sampled source
+attribution or an address-window label, never an unrelated selected caller.
+
+Agent-run focused results on Arch Linux x86-64, kernel 7.2.11-arch1-1, glibc2.44,
+GCC16.2.1, GDB18.1, tmux3.8 and clang-tidy23.1.3:
+
+- PASS authored Code/image model cases: forty forward expansions with actual
+  shared-cache eviction, fresh-anchor reconstruction, missing/stale-anchor
+  refusal, row-budget exhaustion and complete provenance retention, in-flight
+  epoch invalidation, no implicit replacement reads and pane-slot cleanup.
+- PASS native GDB ordinary/optimized/stripped/C++ and relocated-source fixtures;
+  code/data gaps, explicit raw decoding, long-function browsing and breakpoints.
+- PASS Code terminal workflow with the existing selected-frame/header assertions
+  retained and new footer/manual-header assertions: browsing-header-final-tui.log.
+- PASS Code/image AddressSanitizer+UBSan with leak detection, including the final
+  boundary/identity changes: browsing-complete-asan-code.log and
+  browsing-complete-asan-images.log. These focused checks do not instrument the
+  entire application or establish physical behavior.
+- PASS complete fresh fortified baseline and final full analysis, both exit0.
+  Commands:
+  `TERM=xterm-256color make BUILD_DIR=build/browsing-delivery-ci CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`
+  and `make BUILD_DIR=build/browsing-delivery-analysis analyze`.
+  Logs: build/browsing-evidence/browsing-delivery-test-ci.log and
+  browsing-delivery-analysis.log. Local host success is distinct from hosted
+  Ubuntu CI.
+- PASS remote ELF review on the rebuilt normal build/the-bugger directly and
+  through an actual isolated tmux server, including18x48 paging and Console
+  invalidation. Logs: browsing-delivery-tui-direct.log and
+  browsing-delivery-tui-tmux.log, exit0; owned tmux server stopped afterward.
+- All73 C test sources compiled fortified in build/browsing-complete-analysis;
+  the final Code TUI assertions were recompiled in the follow-up log. Source and
+  object freshness checks found no missing/stale test objects. The runtime,
+  build and test inputs remained identical to the frozen delivery manifest
+  throughout the successful final baseline. Documentation was finalized afterward.
+  Evidence: browsing-delivery-input-check.log, browsing-delivery-inputs.sha256,
+  browsing-delivery-tree.tar.gz and final-tree/manifest artifacts in
+  build/browsing-evidence. The environment/tool record is
+  browsing-delivery-environment.txt. Normal build/the-bugger is rebuilt.
+
+Initial failures remain visible. image-reconstruction-analysis.log failed two
+convertible helper-parameter diagnostics and App padding; signatures/field
+placement were corrected without disabling checks. One overlapping analysis read
+headers during a source rewrite and produced incomplete-header diagnostics; it
+is invalid as final-tree evidence. image-reconstruction-test-ci.log failed the
+old empty-notice expectation; its replacement explicitly requires the approved
+BACKEND-VERIFIED label while retaining/strengthening unknown/raw distinctions.
+image-browsing-final-test-ci.log then exposed a real renderer regression: the
+new informational notice hid selected-frame/file context. The renderer was fixed
+and existing assertions preserved. image-verified-ci and browsing-complete-ci
+were interrupted as superseded, with logs marked; neither is a passing baseline.
+An environment-only attempt at tmux validation did not launch tmux and is retained
+as image-final-tui-env-only.log; the separately recorded isolated-server runs are
+the actual tmux evidence.
+
+Scope limitations: one configured remote ELF and additive bias, no inferred
+nonuniform relocation or general F33 multi-image controls. No SVD register
+identity, Read Span, writes, polling or unvalidated MMIO backend was introduced.
+The previously recorded production physical MMIO transport/width evidence remains
+specific to that STM32F446/ST-LINK/OpenOCD setup. This phase adds no new physical
+claim. Owner reports manual workflow checks passed; release acceptance remains
+outstanding, including any required matrix evidence not explicitly reported.
+Review procedures are in [ELF trust and reconstruction](testing.md#elf-mapping-trust-and-bounded-reconstruction)
+and [MMIO](testing.md#openocd-mmio-protocol-gate-task-13).
+
+## v0.1.3 release preparation
+
+Date: 2026-10-28. The owner accepted the implemented Tasks 1.1–1.3 and
+reported STM32 manual checks passing, then authorized S3 physical validation,
+all-document review, artifact preparation and the finishing local commit.
+Publication remains owner-controlled; this record does not claim a published
+release. Tasks 2.x require new owner authorization. The canceled runtime-font
+work is excluded. Physical ESP/RISC-V validation is explicitly deferred to
+v0.1.4, remains UNVERIFIED and confers no hardware support claim.
+
+Implementation references, preserving their existing history:
+
+- `726cd7128340b99615598e7ee4b0b3abeb5bb383`: contextual menus/footer rendering.
+- `3defec4892a4472969938ee6c07bf9d44bfc236b`: contained output/retained listings.
+- `00586ed8e59a7df3df738775d25c08f16c1cd500`: independent lower overlays.
+- `0242eac30486952cdb34695e25b75f6c28812741`: browsing requirements consolidation.
+- `38b6cfe8d4f05349dd6438fd370db2470af8e991`: bounded browsing history.
+- `7d7b0e2da8e0ecb52ada089858ecc23b2ecc8ded`: explicit MMIO sampling.
+- `3c1cc8b69d74010d4d75864e00201b636fc970a3`: image mappings and bounded reconstruction.
+
+The release-preparation changes also fix a real session-destruction use-after-free:
+Memory releases its MMIO controller reservation before the controller is freed,
+after verifying that the session/controller is inactive, reaped and drained.
+An idle-session teardown regression and actual remote/MMIO-close tests cover this
+lifecycle. A fixed-size variable baseline copy now uses `memcpy`, avoiding GCC's
+fortified sanitizer `snprintf` restrict diagnostic without disabling warnings.
+
+### Final host verification
+
+Evidence directory: `build/v0.1.3-evidence/` (ignored local artifacts, not files
+shipped in the source archive). Host: Arch Linux x86-64, kernel7.2.11,
+glibc2.44, GCC16.2.1, GDB18.1, tmux3.8, clang-tidy23.1.3.
+
+- PASS, exit0: `TERM=xterm-256color make BUILD_DIR=build/v0.1.3-ci-final
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`, full fresh baseline including native,
+  input, terminal restoration, tmux/color, remote and offline OpenOCD checks.
+  Full log: `test-ci-final.log`. This is local host evidence, not hosted Ubuntu CI.
+- PASS, exit0: `make BUILD_DIR=build/v0.1.3-analysis-final analyze`, log
+  `analysis-final.log`; no project diagnostic failure. System-header and existing
+  explicitly annotated suppressions retain the normal configured policy.
+- PASS: all73 C test sources compiled fortified, `test-compilation-final.log`.
+  The subsequent physical Continue/Pause assertion was separately recompiled in
+  `test-compilation-followup.log` and physically executed in normal/sanitizer runs;
+  it does not change any code executed by the already-passing host baseline.
+- PASS: fresh-peer host remote/MMIO-close suite under ASan/UBSan/leak checking,
+  `remote-lifecycle-asan-final.log`.
+
+The frozen runtime/build/test-input manifest is `test-inputs.sha256`; the
+physical-harness follow-up and documentation-only MI-fixture README update
+are the only manifest differences; no executed host-test or runtime input changed.
+`environment.log`,
+`implementation-references.log` and `implementation.patch` retain environment,
+base revisions and implementation evidence. The final tree and artifact records
+are retained separately with the release handoff. Earlier failures are preserved:
+`s3-asan-build.log` contains the compiler diagnostic; `s3-board-asan.log` exposed
+the real lifetime defect. `remote-lifecycle-asan.log` used a stale Oct24 fake peer
+missing the newer MMIO protocol; the fresh-peer rerun passes without weakening
+application assertions.
+
+### Physical release matrix
+
+| Target | Evidence and boundary |
+|---|---|
+| STM32 / ARM | PASS, owner-reported manual checks for this release. Prior actual production STM32F446/ST-LINK/OpenOCD MMIO framing/8/16/32-bit evidence remains scoped to the recorded setup above; no new scripted STM32 run is claimed here. |
+| ESP32-S3 / Xtensa | PASS, agent-run physical backend, direct PTY and isolated tmux, plus ASan/UBSan/leak backend and tmux runs described below. |
+| ESP / RISC-V | UNVERIFIED; explicit owner deferral to v0.1.4. |
+| QEMU | Not run in this release pass; supplementary, not hardware evidence. |
+
+S3 setup: ESP32-S3(QFN56) revision0.2, dual Xtensa LX7, native USB/JTAG
+serial84:FC:E6:64:27:EC, ESP-IDF6.1, Xtensa GDB17.1_20260402 and Espressif
+OpenOCDv0.12.0-esp32-20260703 with the authored `openocd/esp32s3.cfg`
+hardware-thread configuration. The initial flashed image differed from the
+acceptance fixture. Under the owner's authorized build/flash/test procedure,
+flashed only that identified USB device; standard bootloader/partition/application
+hash verification passed. Fresh GDB comparisons of `.flash.text` and
+`.flash.rodata` matched (`s3-image-identity-final.log`). No eFuse/security change.
+The board now contains the acceptance fixture rather than its preceding firmware.
+
+The fixture ELF SHA-256 is
+`dd42dab971b4f5ecad0395b1b3e6e01f0abf6a56ec4e293a0f0ee0fd9a41602f`.
+`s3-firmware.sha256` also records the exact application/bootloader/partition
+binary identities. Build/flash logs: `s3-flash.log` and the S3 build logs.
+
+Normal backend command (after activating the ESP-IDF environment):
+
+```sh
+TB_BOARD_LOG="$PWD/build/v0.1.3-evidence/s3-continue-pause-session.log" \
+  timeout 180s build/test-board xtensa-esp32s3-elf-gdb 127.0.0.1:3333 \
+  "$PWD/build/v0.1.3-s3/the_bugger_m17.elf" xtensa --reset-halt
+```
+
+PASS logs: `s3-board-final.log`, `s3-tui-final.log`, `s3-tmux-final.log`,
+`s3-board-asan-final.log`, `s3-tmux-asan-final.log`, and final explicit
+Continue/Pause runs `s3-continue-pause.log` / `s3-continue-pause-asan.log`.
+The sanitizer build uses `-O1 -g -fsanitize=address,undefined
+-fno-omit-frame-pointer`, matching sanitizer linker flags, FORTIFY3,
+`ASAN_OPTIONS=detect_leaks=1` and `UBSAN_OPTIONS=halt_on_error=1`.
+
+Actual checks covered source/disassembly, stopped-PC/register agreement,
+independent known SRAM/Flash reads, explicit locals/aggregate inspection,
+caller selection, source/instruction stepping and Step Out, hardware code/data
+breakpoints, explicit Continue/Pause, reset and both disconnect choices.
+Resume advanced the fixture counter; leave-halted retained it. TUI checks
+covered actual connection review, checkpoint/step, Memory, Reset cancellation,
+resize and terminal cleanup directly and in tmux. A reset into ROM without
+source is legitimate unknown context, not fabricated application source.
+These runs do not assert every manual profile/unplug scenario or arbitrary S3
+MMIO support. The STM32-specific MMIO width adapter remains gated to its validated
+setup; no S3 MMIO capability is inferred from successful SRAM reads.
+
+Only agent-owned OpenOCD instances were stopped. SIGINT was ignored by the first
+plain child, which remained during successful flashing; SIGTERM stopped it.
+Fresh owned instances served the final tests and were stopped with SIGTERM.
+The board was left halted under the tested disconnect policy, with no debugger
+or server intentionally left running.
+
+### Documentation and distribution handoff
+
+All tracked Markdown documentation was reviewed for current behavior, version,
+status, links, release boundaries and third-party notices. Current guides now
+cover v0.1.3; dated validation snapshots remain historical evidence. The owner's
+updated workspace screenshot is retained; the obsolete v0.1.0 launcher image
+is no longer presented as the current README interface. Theme provenance,
+GPLv3 and `THIRD_PARTY_NOTICES` remain intact.
+
+Distribution verification and exact final checksum evidence accompany
+`build/v0.1.3-evidence/`; the release assets are:
+
+- `the-bugger-v0.1.3-linux-x86_64.tar.gz`
+- `the-bugger-v0.1.3-source.tar.gz`
+- `SHA256SUMS`
+
+These are separate uploads, in addition to GitHub's two automatic source
+snapshots. The latter do not contain the packaged host executable. Final
+publication and hosted PR checks remain owner actions. Locally prepared files
+are not evidence of a published release. The owner's push/PR into `develop`,
+then GitHub `develop` → `main` release PR, required checks/review, squash merge
+and tag/release on the resulting `main` commit remain the release sequence.
+
+Final artifact checks PASS: `make release` produced the three versioned assets
+under `build/dist/v0.1.3/`. The extracted executable passed existing CLI, direct
+PTY/terminal-restoration, workspace and real tmux suites outside the checkout
+(`artifact-cli.log`, `artifact-tui.log`, `artifact-workspace.log`,
+`artifact-tmux.log`). Extracted corresponding source built independently with
+FORTIFY3 and reported the matching `the-bugger 0.1.3`
+(`artifact-source-build.log`). Architecture x86-64, PIE, non-executable stack,
+RELRO/BIND_NOW, resolved runtime libraries, matching GPL/third-party notices,
+tracked source completeness and the BUILD-INFO corresponding-source checksum
+passed (`artifact-structure.log`). Invalid/missing executable inputs failed
+without producing archives (`artifact-rejections.log`). The executable requires
+GLIBC symbols through2.38; dependency libraries can impose additional requirements.
+No older-distribution compatibility is asserted. Final archives were repackaged
+after recording these results; checksum and exact-source checks were repeated.
+Archive hashes are in the delivered `SHA256SUMS`, avoiding a self-referential
+checksum inside the source archive itself. All15 tracked Markdown files passed
+183 local-link /119 heading-anchor checks (`documentation-check.log`).

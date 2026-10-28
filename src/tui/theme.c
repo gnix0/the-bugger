@@ -146,14 +146,16 @@ const char *tb_theme_init(void)
     const unsigned *c = palette->colors;
     const unsigned foreground[TB_COLOR_COUNT] = {
         0, c[5], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12],
-        c[5], c[4], c[5], c[6], c[6], c[7], c[6], c[9], c[7], c[12], c[8], c[10]
+        c[5], c[4], c[5], c[6], c[6], c[7], c[6], c[9], c[7], c[12], c[8], c[10],
+        c[10], c[6], c[12], c[8]
     };
     const int fallback[TB_COLOR_COUNT] = {
         0, COLOR_WHITE, COLOR_WHITE, COLOR_WHITE, COLOR_MAGENTA, COLOR_GREEN,
         COLOR_YELLOW, COLOR_YELLOW, COLOR_MAGENTA, COLOR_CYAN,
         COLOR_WHITE, COLOR_WHITE, COLOR_WHITE, COLOR_WHITE, COLOR_WHITE,
         COLOR_MAGENTA, COLOR_WHITE, COLOR_YELLOW, COLOR_MAGENTA,
-        COLOR_CYAN, COLOR_GREEN, COLOR_YELLOW
+        COLOR_CYAN, COLOR_GREEN, COLOR_YELLOW,
+        COLOR_YELLOW, COLOR_WHITE, COLOR_CYAN, COLOR_GREEN
     };
     if (getenv("NO_COLOR") != NULL || !has_colors() || start_color() == ERR ||
         COLORS < 8 || COLOR_PAIRS < 2 * TB_COLOR_COUNT) {
@@ -162,7 +164,7 @@ const char *tb_theme_init(void)
     for (int pair = 1; pair < 2 * TB_COLOR_COUNT; ++pair) {
         int i = pair % TB_COLOR_COUNT;
         unsigned background = i == TB_SURFACE || i == TB_TAB || i == TB_KEY ? c[2] :
-                         i == TB_WORKSPACE ? c[0] :
+                         i == TB_WORKSPACE || i >= TB_STATUS_TEXT ? c[0] :
                          i == TB_CHROME || i == TB_BRAND || i == TB_TARGET || i == TB_STATE ? c[0] :
                          i == TB_FOOTER || i == TB_NOTICE ? c[2] :
                          i == TB_SELECTED || i == TB_ACTIVE_TAB ? c[3] : c[1];

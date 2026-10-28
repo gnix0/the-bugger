@@ -50,6 +50,11 @@ bool tb_gdb_start(TbGdb *gdb, const char *executable, unsigned startup_ms);
 bool tb_gdb_request(TbGdb *gdb, const char *operation, const char *const args[],
                     size_t count, TbGdbScope scope, uint64_t cookie,
                     unsigned timeout_ms, uint64_t *token);
+/* Reserve an idle connection for one owner of an untagged stream transaction.
+ * Other public requests fail without enqueueing until that owner releases it.
+ * Acquire/release outside callbacks; shutdown and a new session remain usable. */
+bool tb_gdb_reserve(TbGdb *gdb, uint64_t cookie);
+void tb_gdb_release(TbGdb *gdb, uint64_t cookie);
 void tb_gdb_context_changed(TbGdb *gdb);
 /* Explicit monitor actions may change registers without an MI stop event.
  * Verify through structured thread state; emits RECONCILED only on proof. */
