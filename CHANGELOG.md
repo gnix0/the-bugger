@@ -156,9 +156,6 @@
 - Catppuccin Macchiato is the default when no valid appearance preference exists;
   Monokai Pro remains selectable. The six-pane workspace and target behavior
   are unchanged.
-- Routine contributions combine implementation, tests and relevant documentation.
-  Exact implementation hashes are recorded at release or when an investigation
-  requires them; historical evidence and owner-controlled Git operations remain.
 
 ## [0.1.0] - 2026-10-20
 

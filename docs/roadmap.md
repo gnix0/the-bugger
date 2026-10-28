@@ -6,28 +6,24 @@ implemented features or hardware support claims. See [architecture](architecture
 
 ## Current development sequence
 
-The owner approved the following sequence through v0.1.3 and into v0.1.4.
-These extend the accepted M00–M18 baseline; the table distinguishes automated
-verification, owner acceptance and release publication.
+v0.1.3 is released. v0.1.4 starts with RISC-V hardware validation.
 
 | Task | Scope | Current state |
 |---|---|---|
-| 0 | Initialize the execution record and consolidate documentation | Complete, including the Task 1.3 ASM_MEM consolidation |
-| 1.1 | Correct rendering corruption and failed Disassembly navigation | Implemented, host/stress verified and owner accepted |
-| 1.2 | Initially minimized lower panes with independently resizable overlays | Implemented, host/stress verified and owner accepted |
-| 1.3 | Disassembly/Memory browsing and explicit MMIO access | Implemented, host verified and owner accepted; named physical evidence remains scoped |
-| 1.5 | Prepare v0.1.3 | Complete; owner published, uploaded assets verified against prepared artifacts |
-| 2.1 | Validate ESP RISC-V hardware for v0.1.4 | RISC-V RV32 automated-verified on real hardware (ESP32-C6FH4); owner review pending |
+| 1.1 | Correct rendering corruption and failed Disassembly navigation | Implemented, host/stress verified and accepted |
+| 1.2 | Initially minimized lower panes with independently resizable overlays | Implemented, host/stress verified and accepted |
+| 1.3 | Disassembly/Memory browsing and explicit MMIO access | Implemented, host verified and accepted |
+| 1.5 | Prepare v0.1.3 | Published; uploaded artifacts verified |
+| 2.1 | Validate ESP RISC-V hardware for v0.1.4 | RISC-V RV32 automated-verified on real hardware (ESP32-C6FH4); review pending |
 
 Current controls are in [usage](usage.md); the accepted browsing scope is in
 [requirements](requirements.md#approved-v013-browsing-work).
 
-Later owner-planned milestones are v0.1.4 physical ESP RISC-V validation, an
-approved shortlist of remaining roadmap work, real-world use, documentation and
-owner-led formatting/maintainability review; v0.2.x emphasizes stabilization and
-UX, followed by the owner's exclusive build-system review and then an approved
-testing strategy. Existing F identifiers/scopes are retained. Their older version
-targets below require reconciliation in Task 2.2, not automatic implementation.
+Remaining v0.1.4 work covers the roadmap shortlist, real-world evaluation,
+documentation, formatting and maintainability review. v0.2.x covers stabilization,
+UX, build-system review and testing strategy. Reconcile older F version targets
+in Task2.2.
+
 Physical RISC-V validation was deferred for v0.1.3. Task2.1 now records real
 RISC-V RV32 checks using ESP32-C6FH4 as the test device; acceptance is pending.
 

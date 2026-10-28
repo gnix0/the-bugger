@@ -103,11 +103,6 @@ Documentation responsibilities are:
 | [Design](docs/requirements.md#interface-constraints) | Interface constraints, terminal mapping and reference rationale |
 | [Validation records](docs/validation.md) | Recorded hashes, results, failures and decisions |
 
-Write for developers: be concise, direct and technically precise. Link to the
-canonical reference rather than repeating it. Include limitations and implementation
-details when they help the reader act. Keep results in the validation register
-and coding-agent rules in AGENTS.md.
-
 ## Security reports
 
 Report vulnerabilities privately using the [security policy](SECURITY.md).
@@ -118,7 +113,7 @@ data out of public reports and pull requests before coordinated disclosure.
 
 Work is divided into the existing M/F gates. Coordinate scope before starting;
 do not combine unrelated gates. Proposed Conventional Commit titles are at most
-50 characters, followed by a body explaining behavior, validation and limitations.
+50 characters, with a short body for relevant behavior and validation details.
 Routine commits include relevant implementation, tests and documentation together.
 Separate documentation follow-ups remain useful when the code is already committed.
 The [maintainer workflow](docs/maintaining.md#commit-organization-and-traceability)

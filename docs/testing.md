@@ -1471,7 +1471,7 @@ a listening socket does not establish successful target examination.
 ## Every-release regression matrix
 
 Apply the explicit [version-specific physical RISC-V deferrals](requirements.md#release-acceptance):
-v0.1.0 deferred it, and the owner separately deferred v0.1.3 RISC-V validation to
+v0.1.0 deferred it, and the maintainer separately deferred v0.1.3 RISC-V validation to
 v0.1.4. Neither is a hardware support claim or a general waiver for future
 releases. Record actual commands, results and release acceptance for the
 applicable matrix below. Exact ESP/probe setup is not a
@@ -1483,7 +1483,7 @@ editable; OpenOCD is not a requirement for every architecture.
 | Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | M05–M14 accepted; GCC/Clang native and tmux regressions plus full default/native sanitizers passed at M14. Per-release evidence and release acceptance remain required |
 | ARM / Cortex-M | NUCLEO-F446RE fixture via GDB/OpenOCD; halt/step/break/watch, real code/register/RAM/variables, reset/disconnect/cleanup | M17 physical core/API/TUI/tmux PASS; exact setup and exclusions in validation records |
 | Xtensa | Validation board via appropriate GDB/server; applicable core workflow and cleanup | M17 ESP32-S3 physical core/API/TUI/tmux PASS; other boards require evidence |
-| RISC-V RV32 | Validation board via appropriate GDB/server; applicable core workflow and cleanup | ESP32-C6FH4 core/API/TUI evidence in Task2.1; owner review pending. Historical release deferrals remain recorded; other targets need evidence |
+| RISC-V RV32 | Validation board via appropriate GDB/server; applicable core workflow and cleanup | ESP32-C6FH4 core/API/TUI evidence in Task2.1; maintainer review pending. Historical release deferrals remain recorded; other targets need evidence |
 | QEMU ARM / RISC-V | Supplementary reproducible native/guest runs where available | UNVERIFIED; not a physical-board substitute |
 
 For each release, capture the actual setup/version, relevant fixture/source
@@ -1770,5 +1770,5 @@ label and Console invalidation. It is not a physical ARM validation.
 The shared 4 MiB allocation check includes cached listings, source annotations,
 anchor payloads and entry headers. Fixed active views and bounded temporary
 reconstruction buffers are separate from that retained-history pool. Actual
-terminal appearance, hardware-image correspondence and owner acceptance remain
+terminal appearance, hardware-image correspondence and maintainer acceptance remain
 separate checks.

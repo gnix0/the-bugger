@@ -1,37 +1,17 @@
 # Maintenance and release procedures
 
 Technical scope is in [requirements](requirements.md) and the [roadmap](roadmap.md).
-Results belong in [validation records](validation.md); coding-agent rules are in
-`AGENTS.md`.
+Test results are recorded in [validation records](validation.md).
 
 ## Milestone lifecycle
 
-Work on one authorized M/F gate at a time. Each gate includes its bounded scope,
-relevant tests, documentation and a reproducible manual demonstration. Preserve
-accepted work and history. Scope changes, combining gates or splitting an overly
-broad deliverable require review before implementation; do not silently widen work.
+Each M/F gate includes implementation, tests, documentation and manual review.
+Agree on scope changes before implementation.
 
-1. Implement only the authorized scope and run the permitted relevant checks.
-2. Deliver behavior changes/exclusions, exact test commands and results, artifact
-   locations, limitations and a numbered manual checklist with expected results.
-3. Include exact staging paths and one proposed Conventional Commit message:
-   title at most 50 characters plus a detailed body. Include source, tests and
-   relevant documentation together for routine work. Revise the message after fixes.
-4. Stop for manual validation. Fix reported issues and repeat relevant validation.
-5. Explicit acceptance is required. Simple positive feedback without issues also
-   means acceptance and continuation authorization unless stated otherwise;
-   questions/instructions are not acceptance. Silence or automated success is not.
-6. The repository owner stages, commits and pushes the reviewed work. An
-   owner-reported or observed implementation commit establishes acceptance; do not
-   demand a duplicate approval or leave the gate awaiting approval afterward.
-7. Continue only after the relevant commit/push gate and authorization. If code
-   was already committed, deliver any remaining documentation as a focused
-   follow-up rather than rewriting the implementation commit.
-
-Git operations remain owner-controlled unless explicitly delegated. An acceptance
-report does not authorize pushing, merging or publishing. Documentation-only
-changes need consistency checks; run application tests when a technical change
-requires them.
+1. Implement the change and run the required checks.
+2. Submit the changes, test results and manual reproduction steps for review.
+3. Fix reported issues and repeat affected checks.
+4. Obtain maintainer acceptance before merging and starting the next gate.
 
 ## Commit organization and traceability
 
@@ -48,42 +28,30 @@ implementation revisions.
 
 Preserve historical hashes, failures and acceptance records.
 
-## Release recommendation at delivery
+## Release planning
 
-After the proposed commit message, assess the cumulative changes since the latest
-public release, including intervening commits, current work and `CHANGELOG.md`.
-A completed task does not automatically justify a release. If none is warranted,
-add the line **No release needed yet.**
-
-When a release is warranted, recommend a version and explain why, provide a
-publication-ready title and description, and give sequential preparation and
-publication steps through the protected-branch workflow. Identify outstanding
-checks or acceptance conditions before publication. The owner authorizes publication.
+Assess cumulative changes since the latest release against `CHANGELOG.md` and the
+roadmap. Propose a version, release notes and any outstanding validation before
+starting release preparation. Maintainers approve publication.
 
 ## Evidence records
 
 Use states `planned`, `implemented`, `automated-verified`, `awaiting-user` and
-`accepted`. Only manual acceptance or an owner-reported/observed milestone commit
-permits `accepted`. Record command, result, relevant artifact, who ran it, tool/
-environment limitations and physical setup when applicable. Record exact revisions
-for releases and investigations as described above.
+`accepted`. Record commands, results, artifacts, environment and physical setup.
+Mark acceptance after maintainer review. Record revisions at release or when
+needed for an investigation.
 Keep current status in the roadmap and durable results in the validation register.
 Store raw logs under ignored `build/`. Update README after technical documents.
 
-## Test execution policy for coding agents
+## Required checks
 
 Focused checks support development; the complete hosted Tests target list is
-shared through `make test-ci`. Code/test/build handoffs include a fresh fortified
-run of that baseline, with command, tool versions and log location recorded.
+shared through `make test-ci`. Code, test and build changes require a fresh
+fortified baseline with commands, tool versions and logs recorded.
 Existing input and terminal tests remain necessary when adding shortcuts; new
 shortcut tests alone do not establish compatibility with frame selection, text
 entry or terminal restoration. Report local and hosted results separately. See the
 [reproduction command](testing.md#hosted-ci).
-
-Current agent execution authorization is governed by `AGENTS.md` and explicit
-user instructions. Additional stress runs, sanitizer/compiler matrices, physical
-hardware and other checks outside the normal host baseline retain their separate
-authorization requirements. Identify who ran each check.
 
 ## Release procedure
 
@@ -99,16 +67,15 @@ For every release, including patches:
    QEMU is supplementary.
 3. Record board/probe, firmware, GDB/server/toolchain versions, capability-specific
    exclusions, new-feature regression, reset/disconnect and cleanup behavior.
-   Missing hardware/support requires owner resolution before release acceptance.
+   Missing hardware/support requires maintainer review before release acceptance.
 4. Review requirements, compatibility, limitations, clean-checkout instructions,
    changelog, provenance/license status and the validation evidence summary.
    Record the actual release tag/commit, relevant implementation revisions and
    artifact checksums without upgrading unrun checks to PASS.
-5. Obtain explicit final owner release acceptance and authorization before
-   recommending a release commit/tag. Do not create or publish it automatically.
+5. Obtain final maintainer acceptance before tagging and publishing.
 
 Agree on acquisition hardware and backend capabilities before implementing a
-hardware-dependent gate. Review unavailable capabilities with the owner.
+hardware-dependent gate. Review unavailable capabilities with the maintainer.
 
 ## Linux x86-64 release artifacts
 
