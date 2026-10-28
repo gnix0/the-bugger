@@ -8,6 +8,8 @@
 
 typedef enum { BREAK_NONE, BREAK_LIST, BREAK_CHANGE, BREAK_RUN_INSERT, BREAK_RUN_CONTINUE, BREAK_RUN_CLEAN, BREAK_WATCH_INSERT, BREAK_WATCH_CLEAN } BreakJob;
 enum { BREAK_COOKIE = 8100 };
+typedef enum { EDIT_NONE, EDIT_CREATE, EDIT_REMOVE, EDIT_ENABLE, EDIT_CONDITION, EDIT_IGNORE } DefinitionEdit;
+typedef struct { TbBreakDefinition data; char backend[32]; bool conflict; } ConfiguredBreak;
 struct TbBreakpoints {
     TbGdb *gdb;
     TbBreakpoint rows[TB_BREAK_ROWS]; size_t count;
@@ -23,7 +25,34 @@ struct TbBreakpoints {
     TbWatchMode watch_mode;
     TbGdbGeneration watch_generation;
     char managed[TB_BREAK_ROWS][32]; size_t managed_count;
+    ConfiguredBreak definitions[TB_BREAK_ROWS]; size_t definition_count;
+    TbBreakDefinition pending_definition;
+    char edit_id[32]; DefinitionEdit edit;
+    uint64_t definition_serial;
+    bool definition_uncertain;
 };
+size_t tb_break_definition_count(const TbBreakpoints *b) { return b->definition_count; }
+const TbBreakDefinition *tb_break_definition(const TbBreakpoints *b, size_t i)
+{ return i < b->definition_count ? &b->definitions[i].data : NULL; }
+bool tb_break_definitions_ready(const TbBreakpoints *b)
+{
+    if (b->definition_uncertain || b->edit != EDIT_NONE || tb_break_busy(b)) { return false; }
+    TbGdbState state = tb_gdb_state(b->gdb);
+    if ((state == TB_GDB_READY || state == TB_GDB_STOPPED) && (b->dirty || b->waiting)) { return false; }
+    for (size_t i = 0; i < b->definition_count; ++i) { if (b->definitions[i].conflict) { return false; } }
+    return true;
+}
+static size_t configured_index(const TbBreakpoints *b, const char *id)
+{
+    size_t i = 0; while (i < b->definition_count && strcmp(b->definitions[i].backend, id) != 0) { ++i; } return i;
+}
+static void edit_definition(TbBreakpoints *b, const char *id, DefinitionEdit edit)
+{
+    size_t i = configured_index(b, id);
+    if (i == b->definition_count) { return; }
+    b->pending_definition = b->definitions[i].data; b->edit = edit;
+    (void)snprintf(b->edit_id, sizeof b->edit_id, "%s", id);
+}
 static void message(TbBreakpoints *b, const char *text)
 {
     size_t out = 0;
@@ -125,9 +154,15 @@ static size_t location_args(TbBreakLocation location, const char *args[], size_t
 bool tb_break_add_at(TbBreakpoints *b, TbBreakLocation location, bool hardware)
 {
     if (!allowed(b) || !location_valid(location)) { return false; }
+    if (b->definition_count == TB_BREAK_ROWS) { message(b, "At most 256 configured code breakpoints are supported."); return false; }
     const char *args[6]; char line[24]; size_t n = 0; args[n++] = "-f";
     if (hardware) { args[n++] = "-h"; }
-    n = location_args(location, args, n, line); return issue(b, BREAK_CHANGE, "-break-insert", args, n);
+    n = location_args(location, args, n, line);
+    if (!issue(b, BREAK_CHANGE, "-break-insert", args, n)) { return false; }
+    b->pending_definition = (TbBreakDefinition){.enabled = true, .hardware = hardware, .line = location.source ? location.line : 0};
+    if (location.source) { (void)snprintf(b->pending_definition.source, sizeof b->pending_definition.source, "%s", location.source); }
+    else { (void)snprintf(b->pending_definition.location, sizeof b->pending_definition.location, "%s", location.text); }
+    b->edit = EDIT_CREATE; b->edit_id[0] = 0; return true;
 }
 bool tb_break_add(TbBreakpoints *b, const char *location, bool hardware)
 {
@@ -181,7 +216,8 @@ static bool by_id(TbBreakpoints *b, const char *id)
 bool tb_break_remove(TbBreakpoints *b, const char *id)
 {
     if (!by_id(b, id)) { return false; } const char *args[] = {id};
-    return issue(b, BREAK_CHANGE, "-break-delete", args, 1);
+    if (!issue(b, BREAK_CHANGE, "-break-delete", args, 1)) { return false; }
+    edit_definition(b, id, EDIT_REMOVE); return true;
 }
 bool tb_break_enable(TbBreakpoints *b, const char *id, bool enabled)
 {
@@ -192,6 +228,7 @@ bool tb_break_enable(TbBreakpoints *b, const char *id, bool enabled)
         message(b, "Software data watchpoints cannot be enabled here; hardware support is required."); return false;
     }
     bool okay = issue(b, BREAK_CHANGE, enabled ? "-break-enable" : "-break-disable", args, 1);
+    if (okay) { edit_definition(b, id, EDIT_ENABLE); b->pending_definition.enabled = enabled; }
     if (okay && enabled && row && row->watchpoint) {
         b->watch_pending = true; b->watch_recover = b->watch_reject = b->watch_failed = false;
         b->baseline_count = 0; b->watch_mode = row->watch_mode; b->watch_generation = tb_gdb_generation(b->gdb);
@@ -203,7 +240,10 @@ bool tb_break_enable(TbBreakpoints *b, const char *id, bool enabled)
 bool tb_break_condition(TbBreakpoints *b, const char *id, const char *condition)
 {
     if (!by_id(b, id) || !condition || strlen(condition) >= 512) { return false; }
-    const char *args[] = {id, condition}; return issue(b, BREAK_CHANGE, "-break-condition", args, *condition ? 2 : 1);
+    const char *args[] = {id, condition};
+    if (!issue(b, BREAK_CHANGE, "-break-condition", args, *condition ? 2 : 1)) { return false; }
+    edit_definition(b, id, EDIT_CONDITION);
+    (void)snprintf(b->pending_definition.condition, sizeof b->pending_definition.condition, "%s", condition); return true;
 }
 bool tb_break_ignore(TbBreakpoints *b, const char *id, const char *count)
 {
@@ -215,7 +255,9 @@ bool tb_break_ignore(TbBreakpoints *b, const char *id, const char *count)
         }
         value = value * 10 + (unsigned)(count[i] - '0');
     }
-    const char *args[] = {id, count}; return issue(b, BREAK_CHANGE, "-break-after", args, 2);
+    const char *args[] = {id, count};
+    if (!issue(b, BREAK_CHANGE, "-break-after", args, 2)) { return false; }
+    edit_definition(b, id, EDIT_IGNORE); b->pending_definition.ignore = (unsigned)value; b->pending_definition.ignore_set = true; return true;
 }
 bool tb_break_run_at(TbBreakpoints *b, TbBreakLocation location, const char *thread)
 {
@@ -323,6 +365,39 @@ static void watch_verify(TbBreakpoints *b)
         message(b, "Hardware data watchpoint verified. Width/slot insertion can still fail on resume; inspect GDB errors.");
     }
 }
+static void definition_complete(TbBreakpoints *b, const TbMiRecord *record)
+{
+    if (b->edit == EDIT_NONE) { return; }
+    size_t i = configured_index(b, b->edit_id);
+    if (b->edit == EDIT_CREATE) {
+        const TbMiValue *bp = tb_mi_find(record->results, "bkpt"); char id[32];
+        copy(id, sizeof id, bp ? tb_mi_find(bp->children, "number") : NULL);
+        if (!id_valid(id) || strchr(id, '.') || configured_index(b, id) != b->definition_count) { b->definition_uncertain = true; }
+        else {
+            ConfiguredBreak *d = &b->definitions[b->definition_count++];
+            memset(d, 0, sizeof *d);
+            d->data = b->pending_definition; d->data.identity = ++b->definition_serial;
+            (void)snprintf(d->backend, sizeof d->backend, "%s", id);
+        }
+    } else if (i < b->definition_count) {
+        if (b->edit == EDIT_REMOVE) {
+            memmove(&b->definitions[i], &b->definitions[i + 1], (b->definition_count - i - 1) * sizeof b->definitions[0]); --b->definition_count;
+        } else { b->definitions[i].data = b->pending_definition; }
+    }
+    b->edit = EDIT_NONE;
+}
+static void definition_observations(TbBreakpoints *b)
+{
+    for (size_t i = 0; i < b->definition_count; ++i) {
+        ConfiguredBreak *d = &b->definitions[i]; const TbBreakpoint *row = NULL;
+        for (size_t j = 0; j < b->count; ++j) { if (strcmp(d->backend, b->rows[j].id) == 0) { row = &b->rows[j]; break; } }
+        d->conflict = !row || row->watchpoint || row->temporary || row->enabled != d->data.enabled ||
+            strcmp(row->condition, d->data.condition) != 0 || (d->data.hardware && !row->hardware) ||
+            (row->ignore > (d->data.ignore_set ? d->data.ignore : 0));
+        /* Declining remaining ignore counts and hits are observations, never
+         * replacements for the explicitly configured count. */
+    }
+}
 bool tb_break_event(TbBreakpoints *b, const TbGdbEvent *event)
 {
     const TbMiRecord *record = event->record;
@@ -378,6 +453,10 @@ bool tb_break_event(TbBreakpoints *b, const TbGdbEvent *event)
     b->waiting = false; BreakJob job = (BreakJob)(event->cookie - BREAK_COOKIE); b->job = BREAK_NONE;
     bool okay = event->kind == TB_GDB_REPLY && record && (strcmp(record->klass, "done") == 0 || strcmp(record->klass, "running") == 0);
     if (!okay) {
+        if (b->edit != EDIT_NONE) {
+            if (event->kind != TB_GDB_REPLY) { b->definition_uncertain = true; }
+            b->edit = EDIT_NONE;
+        }
         char error[192]; copy(error, sizeof error, record ? tb_mi_find(record->results, "msg") : NULL);
         if (!*error) { (void)snprintf(error, sizeof error, "Breakpoint operation cancelled/timed out; refresh before retrying."); }
         message(b, error); b->dirty = true;
@@ -420,6 +499,7 @@ bool tb_break_event(TbBreakpoints *b, const TbGdbEvent *event)
         b->count = 0; b->limited = false;
         for (const TbMiValue *v = body->children; v; v = v->next) { parse_row(b, v, NULL); }
         b->ready = true;
+        definition_observations(b);
         if (!b->watch_pending && !b->limited) {
             size_t keep = 0;
             for (size_t i = 0; i < b->managed_count; ++i) {
@@ -459,7 +539,7 @@ bool tb_break_event(TbBreakpoints *b, const TbGdbEvent *event)
         else { b->continue_run = true; }
         b->dirty = true;
     } else if (job == BREAK_RUN_CLEAN) { b->cleanup = b->cleanup_failed = false; b->temporary[0] = 0; b->dirty = true; }
-    else if (job == BREAK_CHANGE) { b->dirty = true; message(b, "Breakpoint updated; refreshing backend state."); }
+    else if (job == BREAK_CHANGE) { definition_complete(b, record); b->dirty = true; message(b, "Breakpoint updated; refreshing backend state."); }
     ++b->revision; return true;
 }
 void tb_break_pump(TbBreakpoints *b)

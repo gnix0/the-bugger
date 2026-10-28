@@ -32,6 +32,10 @@ typedef bool (*TbVariableAuthorize)(void *user, TbGdbGeneration generation,
                                    const char *expression, TbVariableRead operation,
                                    unsigned first, unsigned count, TbVariableAccess *access);
 typedef struct TbVariables TbVariables;
+typedef struct { uint64_t identity; char expression[256]; TbVariableFormat format; } TbWatchDefinition;
+/* Root definitions only; no values, permissions or backend objects. */
+size_t tb_variables_definitions(const TbVariables *variables);
+bool tb_variables_definition(const TbVariables *variables, size_t index, TbWatchDefinition *definition);
 TbVariables *tb_variables_create(TbGdb *gdb, TbContext *context);
 /* Destroy/reset after session shutdown; live root cleanup runs in pump. */
 void tb_variables_destroy(TbVariables *variables);

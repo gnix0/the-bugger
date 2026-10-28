@@ -12,6 +12,17 @@ typedef struct {
     TbWatchMode watch_mode;
 } TbBreakpoint;
 typedef struct TbBreakpoints TbBreakpoints;
+typedef struct {
+    uint64_t identity;
+    char location[8193], source[4096], condition[512];
+    unsigned line, ignore;
+    bool enabled, ignore_set, hardware;
+} TbBreakDefinition;
+/* Configured frontend intent, independent of hits/remaining backend counts.
+ * Backend-only entries are excluded until explicitly imported. */
+size_t tb_break_definition_count(const TbBreakpoints *breakpoints);
+const TbBreakDefinition *tb_break_definition(const TbBreakpoints *breakpoints, size_t index);
+bool tb_break_definitions_ready(const TbBreakpoints *breakpoints);
 typedef struct { const char *text, *source; unsigned line; } TbBreakLocation;
 TbBreakpoints *tb_break_create(TbGdb *gdb);
 void tb_break_destroy(TbBreakpoints *breakpoints);

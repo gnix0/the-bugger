@@ -7,7 +7,7 @@ Commands, results, revisions and acceptance records for The Bugger.
 Latest release: [v0.1.3](#v013-release-preparation).
 Current development: [RISC-V validation for v0.1.4](#v014-task-21--risc-v-hardware-validation),
 using ESP32-C6FH4, accepted before F01 implementation. F01 currently has a
-setup-definition/storage foundation; full restoration remains incomplete.
+storage, definition capture and Save setup controls; full restoration remains incomplete.
 
 Entries are chronological. Raw logs are stored under ignored `build/`; summaries
 and references below retain the results, including failures and unrun checks.
@@ -2844,3 +2844,53 @@ Full versions and the code-tree snapshot are retained in
 These are local host checks, not hosted Ubuntu results. Owner manual review of
 [storage recovery](testing.md#f01-setup-definition-storage), hosted CI and physical
 F01 checks remain unrun. No board operations or Git mutations were performed.
+
+
+## F01 — definition capture and Save setup checkpoint
+
+2026-10-28. **Implemented; F01 incomplete.** Live metadata capture now saves
+pane/split/tab definitions, Source role/pinned identities, Memory drafts/settings,
+Watch roots/formats and frontend-managed code-breakpoint intent. Save review
+requires a saved profile, displays active connection differences and confirms
+replacement of skipped setups without merging hidden definitions. Connection
+profiles remain separate; duplication copies only saved connection/setup records.
+Toolbar controls retain the prior row count at narrow widths and long key labels.
+Restoration/consent, unresolved-entry recovery and explicit breakpoint
+import/reconciliation remain pending. No physical restoration result is claimed.
+
+### Local checks
+
+Environment and exact tested source/test/build hashes:
+`build/f01-capture-evidence/environment.log` and `tested-tree.sha256`.
+The patch and new source copies are retained beside them.
+
+- Focused capture/profile/source-setting tests: PASS (`focused-model.log`).
+  Capture grants no permissions and reads no values; lifecycle identities,
+  transient exclusions, skipped replacement and parsed active-field comparison
+  are exercised.
+- Actual native breakpoint model/TUI tests: PASS (`focused-breakpoints.log`).
+  Configured ignore counts and identities survive hits and declining remaining
+  counts; temporary run-to is excluded and successful frontend edits update intent.
+- Direct-terminal native save workflow: PASS
+  (`focused-profiles-native-repaired-fixture.log`). An earlier fixture used a
+  nonexistent source directory, which the application correctly rejected; the
+  expected difference could not appear. The repaired fixture creates a real
+  temporary directory with spaces. The failing assertion/log are retained in
+  `focused-profiles-native-final.log`.
+- Isolated tmux native save workflow: PASS
+  (`focused-setup-tmux-bounded-resize.log`, exit 0). Checks cover association,
+  saved duplication, connection preservation, Source selected identity, skipped
+  replacement and widths 48/80/123/124/152/160 with long custom shortcut labels.
+  Initial tmux failures are retained: the harness now waits for deferred Escape
+  navigation and for application resize geometry after tmux's outer resize;
+  the toolbar row assertion is unchanged.
+
+- Full fresh fortified baseline outside the sandbox: PASS, exit 0.
+  `TERM=xterm-256color make BUILD_DIR=build/f01-capture-ci-20261028 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+  Full output/status: `build/f01-capture-evidence/test-ci.log` and `test-ci.exit`.
+  This includes existing text-entry/Enter/Backspace, context, terminal cleanup,
+  native/tmux, actual localhost remote and offline OpenOCD coverage. Final
+  source/test/build hashes match the tested snapshot.
+- `git diff --check`: PASS. All 173 local Markdown file links resolve.
+These are local host results, not hosted Ubuntu results. Owner manual review,
+physical ARM/Xtensa/RV32 restoration and full F01 acceptance remain unrun.

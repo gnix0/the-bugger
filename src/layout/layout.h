@@ -2,6 +2,7 @@
 #define THE_BUGGER_LAYOUT_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 enum { TB_DEFAULT_PANES = 6, TB_MAX_PANES = 32, TB_LAYOUT_NODES = 64,
        TB_MIN_PANE_WIDTH = 20, TB_MIN_PANE_HEIGHT = 7 };
@@ -26,6 +27,7 @@ typedef struct {
     TbRect panes[TB_MAX_PANES], area;
     TbDivider dividers[TB_MAX_PANES];
     int divider_count, order[TB_MAX_PANES], count;
+    uint64_t serial, identities[TB_MAX_PANES];
     int widths[3], minimum_columns[3], minimum_rows[2];
     bool tiled;
     /* Lower roots retain their split trees while hidden or over the primary
