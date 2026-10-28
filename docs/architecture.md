@@ -1014,8 +1014,10 @@ leaves PID empty. Environment overrides are session-only.
 
 Storage is `$XDG_CONFIG_HOME/the-bugger/profiles.json`, falling back to
 `$HOME/.config/the-bugger/profiles.json` for missing/relative XDG configuration.
-Loading absent data creates nothing. json-c reads version-1 or version-2 UTF-8
-JSON and writes version 2, at most 1 MiB, 16 profiles and 8 recent names.
+Loading absent data creates nothing. json-c reads version-1, version-2 or
+version-3 UTF-8 JSON, at most 1 MiB, 16 profiles and 8 recent names.
+Connection-only stores continue to write version 2; saving the first setup
+definition writes version 3 atomically. Loading never migrates a store.
 Root fields are `version`,
 `profiles` and `recent`. Every profile requires the following fields; unknown
 fields/types/versions and duplicate names are rejected. Version-1 `keys` fields
@@ -1033,9 +1035,42 @@ cannot read newly written version-2 stores.
 
 Names hold up to 63 bytes; paths/source prefixes up to 1023, endpoint up to 255.
 JSON quoting is not shell execution; arguments/scripts remain arrays.
-The format deliberately excludes personal keys/themes, PID, environment overrides, geometry/tabs,
+Connection profile definitions exclude personal keys/themes, PID, environment overrides, geometry/tabs,
 watch/breakpoint definitions, region grants, values and temporary backend state.
 F01 and F12 own later restoration/sharing and schema evolution.
+
+### Setup definition storage (F01 foundation)
+
+`session/setup.{h,c}` defines bounded, independently owned setup definitions.
+The model contains split nodes, column/row proportions, pane view membership and
+selection, Source context-role selection or pinned-file identity, Memory
+expression/count/grouping, Watch expressions/formats and code-breakpoint intent.
+Nonzero setup-local identities are unique across panes and retained entries;
+zero Source selection denotes the stopped-context role. Validation rejects
+cycles, shared nodes/leaves, unreachable used nodes, invalid selections, duplicate
+identities and overflowing limits. No sampled data, permissions, debugger IDs,
+hardware allocations, temporary breakpoints or lower-overlay state are present.
+
+Schema 3 adds a separate `setups` array. Each record contains `profile` (the
+associated saved name), `connection` (a connection snapshot), `launch_directory`
+(the absolute launch context) and `definition`. The connection snapshot does not
+replace connection-profile data. Setup transactions require an existing profile;
+profile replacement retains its setup, duplication copies only saved definitions
+independently, and deletion removes the associated record in the same transaction.
+All encoded connections and setups together must fit the existing 1 MiB limit;
+an oversized save preserves both the file and the previous in-memory definitions.
+
+Readable schema-3 stores with malformed setup records expose valid connection
+profiles and accepted setup records in read-only recovery. Duplicate setup
+associations reject the ambiguous records. Invalid JSON, unsupported versions and
+invalid connection records reject the store. Recovery blocks every transaction,
+including recents, until a repaired file loads successfully. The Profiles header
+indicates read-only mode; Reload reports recovery rather than successful repair.
+Schema-1/2 builds cannot read schema 3; there is no downgrade operation.
+
+This foundation supplies storage APIs only. Workspace capture, Save setup controls,
+compatibility consent, restoration coordination and breakpoint-intent tracking
+remain unimplemented; it does not restore a session or dispatch debugger requests.
 
 Writes use an owned regular file, nonblocking advisory lock, stale-writer stamp
 check, private temporary file, fsync, atomic rename and directory fsync. Corrupt,

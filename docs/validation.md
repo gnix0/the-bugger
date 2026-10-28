@@ -6,7 +6,8 @@ Commands, results, revisions and acceptance records for The Bugger.
 
 Latest release: [v0.1.3](#v013-release-preparation).
 Current development: [RISC-V validation for v0.1.4](#v014-task-21--risc-v-hardware-validation),
-using ESP32-C6FH4; maintainer review pending.
+using ESP32-C6FH4, accepted before F01 implementation. F01 currently has a
+setup-definition/storage foundation; full restoration remains incomplete.
 
 Entries are chronological. Raw logs are stored under ignored `build/`; summaries
 and references below retain the results, including failures and unrun checks.
@@ -2704,7 +2705,8 @@ checksum inside the source archive itself. All15 tracked Markdown files passed
 
 ## v0.1.4 Task 2.1 — RISC-V hardware validation
 
-2026-10-28. Automated verification passed; maintainer review pending.
+2026-10-28. Automated verification passed; accepted by subsequent continuation
+to Task2.2. This status update adds no new physical test results.
 The task adds a core-context OpenOCD fixture configuration and a board assertion
 requiring a decoded instruction with opcode bytes at the stopped PC. Frontend
 runtime code is unchanged.
@@ -2791,3 +2793,54 @@ before the authorized finishing commit.
 
 The published v0.1.3 binary/source/checksum uploads were also downloaded and
 matched the approved artifacts (`v0.1.3-published-assets.log`).
+
+## F01 — setup-definition storage checkpoint
+
+2026-10-28. **Implemented foundation; F01 incomplete.** The working tree adds
+bounded setup definitions, schema-3 profile transactions and read-only recovery
+indication. Capture/save controls, compatibility consent, restoration coordination,
+breakpoint intent/import/reconciliation and physical restoration acceptance are
+not implemented. This checkpoint does not establish F01 acceptance.
+
+The definition codec checks the split forest, setup-local identities, selected
+view/source identity and existing capacity limits. Setup transactions preserve
+separate connection profiles and snapshots, deep-copy saved duplication and
+remove associated records atomically. Malformed setup records retain usable
+connections in read-only recovery; ambiguous duplicate associations are rejected.
+The full encoded store retains its 1 MiB bound.
+
+### Local checks
+
+Environment: Arch Linux x86-64, kernel 7.2.11, GCC 16.2.1, GDB 18.1 and tmux 3.8.
+Full versions and the code-tree snapshot are retained in
+`build/f01-evidence/tree-and-environment.log` and `final-tree.log`.
+
+- Focused fortified `build/f01-focused/test-profiles`: PASS, including round trips,
+  selected identities, invalid forests, duplication independence, replacement,
+  deletion, stale writers, malformed/null/duplicate record recovery and oversized
+  encoded saves preserving disk bytes and previous definitions. Definition
+  equality ignores allocator progress and unused layout fields.
+- `TERM=xterm-256color make BUILD_DIR=build/f01-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-m13-tui`:
+  PASS. Existing create/edit/reopen/delete coverage remains. New PTY checks confirm
+  usable connection review during recovery, blocked saves, a visible READ ONLY
+  indication at 48 columns and successful repair/reload.
+- The initial fortified baseline in `build/f01-ci-20261028` failed at the existing
+  native-register test: the fixture exited during startup with code 127 inside
+  the sandbox. The unchanged focused check passed outside the sandbox. Preserve
+  the original assertion and logs: `test-ci.log`, `test-ci.exit` and
+  `registers-unsandboxed.log` under `build/f01-evidence/`.
+- The unsandboxed baseline in `build/f01-ci-host-20261028` passed on the earlier
+  storage tree. Subsequent equality, duplicate-recovery and narrow-header fixes
+  required a new full baseline on the final code tree.
+- Final fortified baseline outside the sandbox: PASS, exit 0. Command:
+  `TERM=xterm-256color make BUILD_DIR=build/f01-ci-final-20261028 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+  Full output and exit status: `build/f01-evidence/test-ci-final.log` and
+  `test-ci-final.exit`.
+  A final POSIX-feature lint annotation produced a byte-identical `setup.o`;
+  the rebuild/comparison evidence is retained with the logs.
+- `git diff --check`: PASS. All 172 local file links in the 15 tracked Markdown
+  files resolve.
+
+These are local host checks, not hosted Ubuntu results. Owner manual review of
+[storage recovery](testing.md#f01-setup-definition-storage), hosted CI and physical
+F01 checks remain unrun. No board operations or Git mutations were performed.

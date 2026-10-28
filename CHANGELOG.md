@@ -4,6 +4,9 @@
 
 ### Added
 
+- Setup-definition storage foundation with separate schema-3 records, atomic
+  save/duplicate/delete APIs and read-only recovery for malformed setup records.
+  Workspace Save setup controls and session restoration remain unimplemented.
 - Physical RISC-V RV32 validation (test device: ESP32-C6FH4, built-in
   USB/JTAG) using the shared
   embedded fixture, core-context OpenOCD configuration and target-compatible

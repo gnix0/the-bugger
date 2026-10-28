@@ -18,7 +18,7 @@ JSON_CFLAGS := $(shell $(PKG_CONFIG) --cflags json-c 2>/dev/null)
 PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session -Isrc/model $(NCURSES_CFLAGS) $(ELF_CFLAGS) $(JSON_CFLAGS)
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/tui/editor.c src/tui/terminal.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/session.c src/session/openocd.c src/session/profiles.c src/model/context.c src/model/code.c src/model/browse.c src/model/monitor.c src/model/mmio.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
+SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/tui/editor.c src/tui/terminal.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/session.c src/session/openocd.c src/session/profiles.c src/session/setup.c src/model/context.c src/model/code.c src/model/browse.c src/model/monitor.c src/model/mmio.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -371,7 +371,7 @@ $(BUILD_DIR)/test-watchpoints: $(BUILD_DIR)/tests/integration/test_watchpoints.o
 test-m12-model: $(BUILD_DIR)/test-watchpoints $(BUILD_DIR)/fake-mi
 	$(BUILD_DIR)/test-watchpoints $(abspath $(BUILD_DIR)/fake-mi)
 
-$(BUILD_DIR)/test-profiles: $(BUILD_DIR)/tests/unit/test_profiles.o $(BUILD_DIR)/src/session/profiles.o
+$(BUILD_DIR)/test-profiles: $(BUILD_DIR)/tests/unit/test_profiles.o $(BUILD_DIR)/src/session/profiles.o $(BUILD_DIR)/src/session/setup.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(JSON_LIBS) $(LDLIBS)
 
 .PHONY: test-m13-model
@@ -385,14 +385,14 @@ test-m13-model: $(BUILD_DIR)/test-profiles $(BUILD_DIR)/test-profile-sources $(B
 test: test-m13-model
 -include $(BUILD_DIR)/tests/unit/test_profiles.d $(BUILD_DIR)/tests/integration/test_profile_sources.d
 
-$(BUILD_DIR)/test-profiles-tui: $(BUILD_DIR)/tests/integration/test_profiles_tui.o $(BUILD_DIR)/tests/support/terminal.o $(BUILD_DIR)/src/session/profiles.o
+$(BUILD_DIR)/test-profiles-tui: $(BUILD_DIR)/tests/integration/test_profiles_tui.o $(BUILD_DIR)/tests/support/terminal.o $(BUILD_DIR)/src/session/profiles.o $(BUILD_DIR)/src/session/setup.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(JSON_LIBS) $(LDLIBS)
 
 .PHONY: test-m13-tui test-m13-native
 test-m13-tui: all $(BUILD_DIR)/test-profiles-tui $(BUILD_DIR)/debug-fixture
 	$(BUILD_DIR)/test-profiles-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/debug-fixture)
 
-$(BUILD_DIR)/test-profiles-native: $(BUILD_DIR)/tests/integration/test_profiles_native.o $(BUILD_DIR)/src/session/profiles.o $(NATIVE_OBJECTS)
+$(BUILD_DIR)/test-profiles-native: $(BUILD_DIR)/tests/integration/test_profiles_native.o $(BUILD_DIR)/src/session/profiles.o $(BUILD_DIR)/src/session/setup.o $(NATIVE_OBJECTS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(JSON_LIBS) $(ELF_LIBS) $(LDLIBS)
 
 test-m13-native: all $(BUILD_DIR)/test-profiles-native $(BUILD_DIR)/test-profiles-tui $(BUILD_DIR)/debug-fixture $(BUILD_DIR)/code-fixture-relocated
@@ -627,7 +627,7 @@ $(BUILD_DIR)/test-keybinds: $(BUILD_DIR)/tests/unit/test_keybinds.o $(BUILD_DIR)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 .PHONY: test-keybinds
-$(BUILD_DIR)/test-keybinds-tui: $(BUILD_DIR)/tests/integration/test_keybinds_tui.o $(BUILD_DIR)/tests/support/terminal.o $(BUILD_DIR)/src/tui/preferences.o $(BUILD_DIR)/src/tui/keybinds.o $(BUILD_DIR)/src/tui/theme.o $(BUILD_DIR)/src/session/profiles.o
+$(BUILD_DIR)/test-keybinds-tui: $(BUILD_DIR)/tests/integration/test_keybinds_tui.o $(BUILD_DIR)/tests/support/terminal.o $(BUILD_DIR)/src/tui/preferences.o $(BUILD_DIR)/src/tui/keybinds.o $(BUILD_DIR)/src/tui/theme.o $(BUILD_DIR)/src/session/profiles.o $(BUILD_DIR)/src/session/setup.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(NCURSES_LIBS) $(JSON_LIBS) $(LDLIBS)
 
 test-keybinds: all $(BUILD_DIR)/test-keybinds $(BUILD_DIR)/test-keybinds-tui

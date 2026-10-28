@@ -2,6 +2,7 @@
 #define THE_BUGGER_PROFILES_H
 #include <stdbool.h>
 #include <stddef.h>
+#include "setup.h"
 
 enum { TB_PROFILES = 16, TB_PROFILE_NAME = 64, TB_PROFILE_PATH = 1024,
        TB_PROFILE_WORDS = 32, TB_PROFILE_WORD = 512, TB_PROFILE_SOURCES = 8,
@@ -31,6 +32,16 @@ const TbProfile *tb_profiles_find(const TbProfiles *profiles, const char *name);
 const char *tb_profiles_recent(const TbProfiles *profiles, size_t index);
 const char *tb_profiles_error(const TbProfiles *profiles);
 const char *tb_profiles_path(const TbProfiles *profiles);
+bool tb_profiles_read_only(const TbProfiles *profiles);
+bool tb_profiles_has_setup(const TbProfiles *profiles, const char *name);
+/* Returned definitions are independently owned; free after use. */
+TbSetup *tb_profiles_setup(const TbProfiles *profiles, const char *name);
+bool tb_profiles_setup_connection(const TbProfiles *profiles, const char *name,
+                                 TbProfile *connection, char directory[TB_SETUP_PATH]);
+bool tb_profiles_save_setup(TbProfiles *profiles, const char *name, const TbSetup *setup,
+                            const TbProfile *connection, const char *launch_directory);
+/* Copies only saved definitions, never a session draft or recency. */
+bool tb_profiles_duplicate(TbProfiles *profiles, const char *name, const char *new_name);
 /* Atomic whole-file transactions; failures retain the previous in-memory data.
  * Put requires explicit replacement consent for an existing name. */
 bool tb_profiles_put(TbProfiles *profiles, const TbProfile *profile, bool replace);
