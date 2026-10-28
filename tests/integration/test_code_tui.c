@@ -257,6 +257,7 @@ static void direct_start(const char *binary, const char *fixture)
     test_terminal_click(&term, "Command"); test_terminal_expect(&term, "LIVE | GDB / program log"); input(&term, "start");
     test_terminal_expect(&term, "LIVE | C/C++ | code.c");
     test_terminal_expect(&term, "LIVE | assembly: selected frame | code.c");
+    test_terminal_expect(&term, "ELF:native");
     CHECK(source_pc_line(&term) > 0 && assembly_pc(&term) != 0);
     scrolling(&term);
     instruction_margin(&term);
@@ -275,6 +276,7 @@ static void wheel_up_listing(const char *binary, const char *fixture)
     test_terminal_lower(&term, 2, true);
     test_terminal_click(&term, "Command"); test_terminal_expect(&term, "LIVE | GDB / program log"); input(&term, "start");
     test_terminal_expect(&term, "LIVE | assembly: selected frame | session.c");
+    test_terminal_expect(&term, "ELF:native");
     unsigned long long pc = assembly_pc(&term); CHECK(pc);
     test_terminal_click(&term, "Disassembly");
     int x, y; CHECK(test_terminal_find(&term, "Disassembly", &x, &y));
@@ -286,6 +288,7 @@ static void wheel_up_listing(const char *binary, const char *fixture)
         if (strstr(term.cells[row] + x - 2, "0x")) { ++rows; }
     }
     CHECK(rows >= 8 && assembly_pc(&term) == pc);
+    test_terminal_expect(&term, "address window");
     mouse_at(&term, 65, x + 3, y + 3, false);
     until = now() + 300; while (now() < until) { test_terminal_pump(&term, 10); }
     rows = 0;

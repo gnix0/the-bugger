@@ -200,6 +200,7 @@ test: all test-mi test-controller $(BUILD_DIR)/test-code $(BUILD_DIR)/test-conte
 	$(BUILD_DIR)/test-mmio $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-mmio-memory $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-mmio-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/fake-mi)
+	$(BUILD_DIR)/test-image-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-registers $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-memory $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-variables $(abspath $(BUILD_DIR)/fake-mi)
@@ -705,6 +706,13 @@ $(BUILD_DIR)/test-mmio-tui: $(BUILD_DIR)/tests/integration/test_mmio_tui.o $(BUI
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 test: $(BUILD_DIR)/test-mmio-tui
+
+$(BUILD_DIR)/test-image-tui: $(BUILD_DIR)/tests/integration/test_image_tui.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+test: $(BUILD_DIR)/test-image-tui
+
+-include $(BUILD_DIR)/tests/integration/test_image_tui.d
 
 # Physical, explicitly named GPIOA_ODR probe: never executed by test-ci.
 $(BUILD_DIR)/test-mmio-hardware: $(BUILD_DIR)/tests/integration/test_mmio_hardware.o $(BUILD_DIR)/src/model/mmio.o $(BUILD_DIR)/src/model/monitor.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o

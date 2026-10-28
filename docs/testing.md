@@ -1706,3 +1706,41 @@ Interactive MMIO review on that setup:
    the authored integration fixtures. Uncertainty must remain visible in Console,
    block further MMIO and cause no automatic retry. Reconnection or an exact late
    completion is required as documented; do not inject arbitrary faults on hardware.
+
+
+## ELF mapping trust and bounded reconstruction
+
+`make test` includes image-model revision/identity checks, authored Code-model
+reconstruction checks and `test-image-tui`. The latter creates a local ELF32 ARM
+big-endian metadata fixture with a path containing spaces, then connects to an
+authored MI peer. It verifies the remote review, 18x48 pagination, user-confirmed
+label and Console invalidation. It is not a physical ARM validation.
+
+1. Connect a stopped remote session with its configured ELF. In Disassembly
+   Actions, choose Review ELF/load address mapping. Inspect the path, additive
+   bias and all allocated-section ranges before confirming. Expect
+   USER-CONFIRMED, no debugger request, no movement of PC or selected frame and
+   no Memory authorization. At 18x48, page to the final confirmation.
+2. Reopen the review; the current trust must be visible. A new confirmed bias
+   supersedes the previous declaration for that ELF. Rejected/expired reviews
+   cannot restore trust. Replacing the local ELF or accepting a Console command
+   makes old declarations unusable for fresh decoding; old listings remain.
+3. Use ordinary and optimized/stripped native fixtures. Native mapping evidence
+   must match the backing device/inode and executable load segments. A native
+   mapping label must not imply that every live code byte has been compared.
+4. Browse more than sixteen windows in both directions. Retained windows need
+   no request. Under actual cache eviction, a retained fresh boundary may support
+   backward reconstruction; absent/stale boundaries must not cause guessed
+   decoding. The authored model exercises forty forward expansions and verifies
+   that the early full listing was evicted before reconstructing its boundary.
+5. Exhaust the 128-decoded-row reconstruction budget and inject a changed code
+   epoch while a request is in flight. Expect all previous instructions,
+   generation, epoch, next address and gap provenance to remain intact, with no
+   automatic replacement request. Close/reuse a split: old rows, annotations,
+   anchor history and old request identity must not transfer to the new view.
+
+The shared 4 MiB allocation check includes cached listings, source annotations,
+anchor payloads and entry headers. Fixed active views and bounded temporary
+reconstruction buffers are separate from that retained-history pool. Actual
+terminal appearance, hardware-image correspondence and owner acceptance remain
+separate checks.

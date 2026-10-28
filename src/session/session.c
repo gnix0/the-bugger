@@ -126,10 +126,11 @@ static void state_set(TbSession *native, TbSessionState state)
     if (native->state != state) { native->state = state; ++native->revision; }
 }
 
-static void mmio_configuration_changed(TbSession *session)
+static void configuration_changed(TbSession *session)
 {
     ++session->mmio_configuration;
     (void)tb_memory_backend_set(session->memory, NULL);
+    tb_code_image_invalidate(session->code);
 }
 
 bool tb_session_words(const char *input, TbSessionWords *words, char *error, size_t capacity)
@@ -242,7 +243,7 @@ static void emit(void *context, const TbGdbEvent *event)
         stream(native, record->kind == TB_MI_CONSOLE ? 0 : record->kind == TB_MI_TARGET ? 1 : 2,
                record->stream.data, record->stream.length);
     } else if (record->kind == TB_MI_NOTIFY && strcmp(record->klass, "thread-group-started") == 0) {
-        mmio_configuration_changed(native);
+        configuration_changed(native);
         if (native->kind == TB_SESSION_LOCAL) {
             native->target_pid = record_pid(tb_mi_find(record->results, "pid"));
             native->alive = native->target_pid > 0;
@@ -262,7 +263,7 @@ static void emit(void *context, const TbGdbEvent *event)
         }
         native->launch_requested = false;
     } else if (record->kind == TB_MI_NOTIFY && strcmp(record->klass, "thread-group-exited") == 0) {
-        mmio_configuration_changed(native);
+        configuration_changed(native);
         native->alive = false;
         if (native->kind != TB_SESSION_LOCAL) {
             /* A detached/exited inferior is not proof that its server died.
@@ -437,7 +438,7 @@ bool tb_session_start(TbSession *native, const TbSessionConfig *config)
     native->target_connected = native->remote_metadata_dirty = false;
     native->close_interrupt_sent = native->close_resume = native->close_prepared = native->target_uncertain = false;
     native->target_action = 0; native->target_uncertain = false;
-    mmio_configuration_changed(native);
+    configuration_changed(native);
     memset(&native->capabilities, 0, sizeof native->capabilities);
     native->capabilities.local_process = native->kind == TB_SESSION_LOCAL;
     native->capabilities.openocd = config->openocd != NULL;
@@ -451,6 +452,7 @@ bool tb_session_start(TbSession *native, const TbSessionConfig *config)
     native->memory_message[0] = '\0';
     tb_context_reset(native->context);
     tb_code_reset(native->code);
+    tb_code_native(native->code, 0, native->executable);
     tb_break_reset(native->breakpoints);
     tb_registers_reset(native->registers);
     tb_memory_reset(native->memory);
@@ -565,7 +567,7 @@ bool tb_session_console(TbSession *native, const char *command)
          * next GDB pump. Invalidate before that pump, even for harmless-looking
          * aliases/scripts. Setup confirmation and per-view MMIO consent both
          * expire; retained range definitions are not permission to read. */
-        mmio_configuration_changed(native);
+        configuration_changed(native);
         tb_context_refresh(native->context);
     }
     const char *verb = command;
@@ -633,7 +635,7 @@ void tb_session_close(TbSession *native)
     if (!tb_session_active(native)) { return; }
     if (!native->want_close) {
         native->close_deadline = tb_gdb_now_ms() + 4000;
-        mmio_configuration_changed(native);
+        configuration_changed(native);
     }
     native->want_close = true;
     state_set(native, TB_SESSION_CLOSING);

@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/sysmacros.h>
 #include <unistd.h>
 
 enum { IMAGE_COUNT = 16, IMAGE_SECTIONS = 256, IMAGE_SYMBOLS = 8192,
@@ -18,19 +19,25 @@ typedef struct { uint64_t start, end; size_t index; bool code; char name[96]; } 
 typedef struct { uint64_t start, end; size_t section; TbImageKind kind; bool mapping; } Symbol;
 typedef struct {
     char path[4096]; uint64_t bias;
+    struct stat identity;
+    uint64_t revision;
+    TbImageTrust trust;
+    bool fresh;
     Section sections[IMAGE_SECTIONS]; size_t section_count;
     Symbol *symbols; size_t symbol_count;
 } Image;
-struct TbImages { Image entries[IMAGE_COUNT]; size_t count; bool limited; };
+struct TbImages { Image entries[IMAGE_COUNT]; size_t count; uint64_t revision; bool limited; };
 
 TbImages *tb_images_create(void) { return calloc(1, sizeof(TbImages)); }
 void tb_images_reset(TbImages *images)
 {
     for (size_t i = 0; i < images->count; ++i) { free(images->entries[i].symbols); }
-    memset(images, 0, sizeof *images);
+    uint64_t revision = images->revision + 1;
+    memset(images, 0, sizeof *images); images->revision = revision;
 }
 void tb_images_destroy(TbImages *images) { if (images) { tb_images_reset(images); free(images); } }
 bool tb_images_limited(const TbImages *images) { return images->limited; }
+uint64_t tb_images_revision(const TbImages *images) { return images->revision; }
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): standard qsort comparator signature.
 static int symbol_order(const void *left, const void *right)
 {
@@ -51,11 +58,45 @@ static const char *bounded_name(Elf *elf, size_t table, size_t offset)
     size_t available = sh.sh_size - offset > 96 ? 96 : (size_t)(sh.sh_size - offset);
     return name && memchr(name, 0, available) ? name : NULL;
 }
+static bool same_file(const struct stat *a, const struct stat *b)
+{
+    return a->st_dev == b->st_dev && a->st_ino == b->st_ino && a->st_size == b->st_size &&
+           a->st_mtim.tv_sec == b->st_mtim.tv_sec && a->st_mtim.tv_nsec == b->st_mtim.tv_nsec &&
+           a->st_ctim.tv_sec == b->st_ctim.tv_sec && a->st_ctim.tv_nsec == b->st_ctim.tv_nsec;
+}
+bool tb_images_validate(TbImages *images)
+{
+    bool changed = false;
+    for (size_t i = 0; i < images->count; ++i) {
+        Image *image = &images->entries[i]; struct stat info;
+        if (image->fresh && (stat(image->path, &info) || !S_ISREG(info.st_mode) || !same_file(&image->identity, &info))) {
+            image->fresh = false; image->trust = TB_IMAGE_UNVERIFIED;
+            image->revision = ++images->revision; changed = true;
+        }
+    }
+    return changed;
+}
+bool tb_images_unverify(TbImages *images)
+{
+    bool revoked = false;
+    for (size_t i = 0; i < images->count; ++i) {
+        revoked = revoked || images->entries[i].trust != TB_IMAGE_UNVERIFIED;
+        images->entries[i].trust = TB_IMAGE_UNVERIFIED;
+        images->entries[i].revision = ++images->revision;
+    }
+    return revoked;
+}
 bool tb_images_load(TbImages *images, const char *path, uint64_t bias)
 {
     if (!path || strlen(path) >= sizeof images->entries[0].path) { return false; }
+    (void)tb_images_validate(images);
     for (size_t i = 0; i < images->count; ++i) {
-        if (images->entries[i].bias == bias && strcmp(images->entries[i].path, path) == 0) { return true; }
+        if (images->entries[i].bias == bias && strcmp(images->entries[i].path, path) == 0) {
+            if (images->entries[i].fresh) { return true; }
+            free(images->entries[i].symbols);
+            memmove(images->entries + i, images->entries + i + 1, (images->count - i - 1) * sizeof images->entries[0]);
+            --images->count; break;
+        }
     }
     if (images->count == IMAGE_COUNT) { images->limited = true; return false; }
     if (elf_version(EV_CURRENT) == EV_NONE) { return false; }
@@ -111,21 +152,71 @@ bool tb_images_load(TbImages *images, const char *path, uint64_t bias)
             ++image->symbol_count;
         }
     }
+    struct stat after;
+    if (okay && (fstat(fd, &after) || !same_file(&info, &after))) { okay = false; }
     if (elf) { (void)elf_end(elf); } (void)close(fd);
     if (!okay || !image->section_count) { free(image->symbols); memset(image, 0, sizeof *image); return false; }
     qsort(image->symbols, image->symbol_count, sizeof *image->symbols, symbol_order);
-    image->bias = bias; (void)snprintf(image->path, sizeof image->path, "%s", path); ++images->count; return true;
+    image->bias = bias; image->identity = info; image->fresh = true; image->revision = ++images->revision;
+    (void)snprintf(image->path, sizeof image->path, "%s", path); ++images->count; return true;
 }
-bool tb_images_lookup(const TbImages *images, uint64_t address, TbImageRange *range)
+static const Image *review_image(const TbImages *images, const TbImageReview *review)
+{
+    if (!review || !memchr(review->path, 0, sizeof review->path)) { return NULL; }
+    for (size_t i = 0; i < images->count; ++i) {
+        const Image *image = &images->entries[i];
+        if (image->fresh && image->revision == review->revision && image->bias == review->bias &&
+            strcmp(image->path, review->path) == 0) { return image; }
+    }
+    return NULL;
+}
+bool tb_images_review(TbImages *images, const char *path, uint64_t bias, TbImageReview *review)
+{
+    if (!review || !tb_images_load(images, path, bias)) { return false; }
+    for (size_t i = 0; i < images->count; ++i) {
+        const Image *image = &images->entries[i];
+        if (image->bias != bias || strcmp(image->path, path) != 0) { continue; }
+        *review = (TbImageReview){.bias = bias, .revision = image->revision, .ranges = image->section_count};
+        (void)snprintf(review->path, sizeof review->path, "%s", image->path); return true;
+    }
+    return false;
+}
+bool tb_images_review_range(const TbImages *images, const TbImageReview *review, size_t index, TbImageRange *range)
+{
+    const Image *image = review_image(images, review);
+    if (!range || !image || index >= image->section_count) { return false; }
+    const Section *section = &image->sections[index];
+    *range = (TbImageRange){.start = section->start, .end = section->end, .anchor = section->start,
+        .kind = section->code ? TB_IMAGE_CODE : TB_IMAGE_DATA, .trust = image->trust};
+    (void)snprintf(range->name, sizeof range->name, "%s", section->name); return true;
+}
+bool tb_images_confirm(TbImages *images, const TbImageReview *review, TbImageTrust trust)
+{
+    if (trust != TB_IMAGE_USER_CONFIRMED && trust != TB_IMAGE_BACKEND_VERIFIED) { return false; }
+    (void)tb_images_validate(images);
+    const Image *image = review_image(images, review); if (!image) { return false; }
+    if (trust == TB_IMAGE_USER_CONFIRMED) {
+        for (size_t i = 0; i < images->count; ++i) {
+            Image *other = &images->entries[i];
+            if (other != image && other->trust == TB_IMAGE_USER_CONFIRMED && strcmp(other->path, image->path) == 0) {
+                other->trust = TB_IMAGE_UNVERIFIED; other->revision = ++images->revision;
+            }
+        }
+    }
+    images->entries[(size_t)(image - images->entries)].trust = trust; return true;
+}
+static bool lookup(const TbImages *images, uint64_t address, TbImageRange *range, bool trusted)
 {
     memset(range, 0, sizeof *range);
     for (size_t n = 0; n < images->count; ++n) {
         const Image *image = &images->entries[n];
+        if (trusted && (!image->fresh || image->trust == TB_IMAGE_UNVERIFIED)) { continue; }
         for (size_t i = 0; i < image->section_count; ++i) {
             const Section *s = &image->sections[i];
             if (address < s->start || address >= s->end) { continue; }
             *range = (TbImageRange){.start = s->start, .end = s->end, .anchor = s->start,
-                                   .kind = s->code ? TB_IMAGE_CODE : TB_IMAGE_DATA};
+                                   .kind = s->code ? TB_IMAGE_CODE : TB_IMAGE_DATA,
+                                   .trust = image->trust};
             (void)snprintf(range->name, sizeof range->name, "%s", s->name);
             for (size_t j = 0; j < image->symbol_count; ++j) {
                 const Symbol *sym = &image->symbols[j];
@@ -145,17 +236,22 @@ bool tb_images_lookup(const TbImages *images, uint64_t address, TbImageRange *ra
     }
     return false;
 }
-bool tb_images_neighbor(const TbImages *images, uint64_t address, int direction, TbImageRange *range)
+bool tb_images_lookup(const TbImages *images, uint64_t address, TbImageRange *range)
+{ return lookup(images, address, range, false); }
+bool tb_images_trusted_lookup(const TbImages *images, uint64_t address, TbImageRange *range)
+{ return lookup(images, address, range, true); }
+static bool neighbor(const TbImages *images, uint64_t address, int direction, TbImageRange *range, bool trusted)
 {
     bool found = false; uint64_t best = direction < 0 ? 0 : UINT64_MAX;
     for (size_t n = 0; n < images->count; ++n) {
         const Image *image = &images->entries[n];
+        if (trusted && (!image->fresh || image->trust == TB_IMAGE_UNVERIFIED)) { continue; }
         for (size_t i = 0; i < image->section_count; ++i) {
             const Section *s = &image->sections[i]; if (!s->code) { continue; }
             uint64_t candidate = s->start;
             if ((direction < 0 ? candidate < address && (!found || candidate > best) : candidate >= address && (!found || candidate < best))) {
                 TbImageRange r;
-                if (tb_images_lookup(images, candidate, &r) && r.kind == TB_IMAGE_CODE) { best = candidate; *range = r; found = true; }
+                if (lookup(images, candidate, &r, trusted) && r.kind == TB_IMAGE_CODE && (!trusted || r.trust != TB_IMAGE_UNVERIFIED)) { best = candidate; *range = r; found = true; }
             }
         }
         for (size_t j = 0; j < image->symbol_count; ++j) {
@@ -163,12 +259,16 @@ bool tb_images_neighbor(const TbImages *images, uint64_t address, int direction,
             uint64_t candidate = s->start;
             if ((direction < 0 ? candidate < address && (!found || candidate > best) : candidate >= address && (!found || candidate < best))) {
                 TbImageRange r;
-                if (tb_images_lookup(images, candidate, &r) && r.kind == TB_IMAGE_CODE) { best = candidate; r.anchor = candidate; *range = r; found = true; }
+                if (lookup(images, candidate, &r, trusted) && r.kind == TB_IMAGE_CODE && (!trusted || r.trust != TB_IMAGE_UNVERIFIED)) { best = candidate; r.anchor = candidate; *range = r; found = true; }
             }
         }
     }
     return found;
 }
+bool tb_images_neighbor(const TbImages *images, uint64_t address, int direction, TbImageRange *range)
+{ return neighbor(images, address, direction, range, false); }
+bool tb_images_trusted_neighbor(const TbImages *images, uint64_t address, int direction, TbImageRange *range)
+{ return neighbor(images, address, direction, range, true); }
 static bool map_number(char **cursor, const char *limit, uint64_t *out, char separator)
 {
     uint64_t value = 0; unsigned digits = 0;
@@ -191,15 +291,19 @@ void tb_images_native(TbImages *images, pid_t pid, const char *executable, uint6
     char line[8192]; unsigned lines = 0;
     while (fgets(line, sizeof line, file) && ++lines <= 4096) {
         if (!strchr(line, '\n')) { continue; }
-        uint64_t low, high, offset; char *cursor = line; const char *limit = line + strlen(line);
+        uint64_t low, high, offset, device_major, device_minor; char *cursor = line; const char *limit = line + strlen(line);
         if (!map_number(&cursor, limit, &low, '-') || !map_number(&cursor, limit, &high, ' ')) { continue; }
         cursor += strspn(cursor, " ");
         if (strnlen(cursor, 5) < 5 || cursor[4] != ' ') { continue; }
         bool executable_mapping = cursor[2] == 'x'; cursor += 5;
         cursor += strspn(cursor, " "); if (!map_number(&cursor, limit, &offset, ' ')) { continue; }
-        for (int token = 0; token < 2; ++token) {
-            cursor += strspn(cursor, " "); cursor += strcspn(cursor, " \n");
-        }
+        cursor += strspn(cursor, " ");
+        if (!map_number(&cursor, limit, &device_major, ':') || !map_number(&cursor, limit, &device_minor, ' ')) { continue; }
+        cursor += strspn(cursor, " ");
+        errno = 0; char *after_inode = NULL;
+        if (*cursor < '0' || *cursor > '9') { continue; }
+        unsigned long long inode = strtoull(cursor, &after_inode, 10);
+        if (errno || after_inode == cursor || *after_inode != ' ') { continue; } cursor = after_inode;
         cursor += strspn(cursor, " "); char *path = cursor; path[strcspn(path, "\n")] = 0;
         if (*path != '/' || !executable_mapping || pc < low || pc >= high) { continue; }
         /* procfs escapes newline/backslash names; do not guess the resulting path. */
@@ -207,21 +311,25 @@ void tb_images_native(TbImages *images, pid_t pid, const char *executable, uint6
         int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
         if (fd < 0) { continue; }
         struct stat info;
-        if (fstat(fd, &info) || !S_ISREG(info.st_mode) || info.st_size <= 0 || info.st_size > IMAGE_FILE_BYTES) { (void)close(fd); continue; }
+        if (fstat(fd, &info) || !S_ISREG(info.st_mode) || info.st_size <= 0 || info.st_size > IMAGE_FILE_BYTES ||
+            device_major != major(info.st_dev) || device_minor != minor(info.st_dev) || inode != info.st_ino) { (void)close(fd); continue; }
         Elf *elf = elf_version(EV_CURRENT) == EV_NONE ? NULL : elf_begin(fd, ELF_C_READ, NULL);
         GElf_Ehdr header; size_t phnum = 0; uint64_t bias = 0; bool mapped = false;
         if (elf && gelf_getehdr(elf, &header) && elf_getphdrnum(elf, &phnum) == 0 && phnum <= 1024) {
             long page = sysconf(_SC_PAGESIZE); uint64_t size = page > 0 ? (uint64_t)page : 4096;
             for (size_t i = 0; i < phnum; ++i) {
                 GElf_Phdr p;
-                if (gelf_getphdr(elf, (int)i, &p) && p.p_type == PT_LOAD && p.p_offset / size * size == offset &&
+                if (gelf_getphdr(elf, (int)i, &p) && p.p_type == PT_LOAD && (p.p_flags & PF_X) && p.p_offset / size * size == offset &&
                     low >= p.p_vaddr / size * size) {
                     bias = low - p.p_vaddr / size * size; mapped = true; break;
                 }
             }
         }
         if (elf) { (void)elf_end(elf); } (void)close(fd);
-        if (mapped) { (void)tb_images_load(images, path, bias); }
+        if (mapped) {
+            TbImageReview review;
+            if (tb_images_review(images, path, bias, &review)) { (void)tb_images_confirm(images, &review, TB_IMAGE_BACKEND_VERIFIED); }
+        }
         break;
     }
     (void)fclose(file); (void)executable;

@@ -4,6 +4,14 @@
 
 ### Changed
 
+- Disassembly distinguishes unverified ELF metadata, user-confirmed remote
+  ELF/load addresses and verified native backing-file mappings. Paginated review
+  makes the declaration explicit; changed files/configuration invalidate trust
+  while historical listings remain available. Confirmation never reads hardware.
+- Backward reconstruction can reuse fresh retained boundaries after larger
+  listings are evicted, within the shared 4 MiB budget. Each action decodes at
+  most 128 rows from a reliable anchor within 1024 bytes; failure preserves the
+  listing and its provenance. Closed/reused panes discard their former history.
 - Disassembly keeps manual browsing across debugger transitions and distinguishes
   view-local Return to Stop from following the selected frame. Disassembly and
   Memory retain bounded shared history for navigation without reads while running.

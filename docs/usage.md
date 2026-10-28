@@ -279,11 +279,28 @@ Wheel/scrollbars and arrow/Page keys move viewports; Left/Right pans
 long code lines. Disassembly's `<` / `>` footer controls page instruction windows.
 Assembly retains surrounding instructions across stops; scrolling at a window
 edge can load earlier/next code without moving execution. ELF metadata and GDB
-provide trusted decoding anchors and preceding context where available.
+provide decoding anchors and preceding context where their mapping is trusted.
+For remote sessions, **Actions → Review ELF/load address mapping** reviews the
+configured ELF and an unsigned additive load bias (zero for linked addresses).
+The review shows the complete local path and paged allocated-section addresses.
+Confirm only when they describe the current target image. **USER-CONFIRMED** is
+your declaration, not automatic verification, proof that live bytes match, or
+permission to read Memory. Native file/device/inode and load-segment matches are
+labeled **BACKEND-VERIFIED**; unavailable or invalidated mappings are
+**UNVERIFIED**. The pane footer uses `ELF:native`, `ELF:user` or `ELF:?` for
+visible instruction mappings, preserving the selected-frame/file header. Changed ELF identity, target/image lifecycle and accepted Console
+commands invalidate trust; cached listings remain historical. A new confirmation
+for another bias supersedes the previous declaration for that ELF. Confirmation
+preserves existing rows; an explicit code action obtains fresh decoding when
+those rows are marked historical. Nonuniform
+relocation and general multi-image configuration are not inferred.
+
 Stepping leaves the viewport still until PC reaches a five-row
 top or bottom margin (smaller in short panes and limited by available context).
 Manual Disassembly browsing stays put across stepping and frame changes, with
-historical samples labeled. Cached windows can be browsed while running; an
+historical samples labeled. Its header uses the sampled source attribution when
+available, otherwise `address window`; it does not borrow the current selected
+frame's filename or caller label. Cached windows can be browsed while running; an
 uncached request leaves the viewport unchanged and is never queued for later.
 Disassembly and Memory share a lazily populated 4 MiB history cache, including
 entry metadata. Eviction does not move a viewport or authorize reads.
@@ -312,9 +329,16 @@ action to reuse them in a named profile; unsaved changes remain session-only.
 Code browsing is bounded to 256 catalog files, 1 MiB / 32,768 source lines per
 pane and a 128-instruction active window with bounded, normally 256-byte fetches;
 older loaded windows share the 4 MiB browsing cache.
-Backward scans from known anchors have a work limit and retain the prior listing
-on failure. Mixed groups outside the cached
-file show their location with unavailable text rather than loading every file.
+Backward reconstruction starts at a reliable earlier boundary within 1024 bytes
+and decodes at most 128 instruction rows per action, including rows omitted from
+the displayed prefix. Small retained boundary records share the history budget
+and can survive eviction of larger listings; historical records never establish
+fresh boundaries. Failure or exhaustion keeps the previous rows and provenance;
+there is no automatic retry. Closing a split clears its Code history before its
+pane slot can be reused.
+Mixed groups use bounded local source annotations across mapped files, loading at
+most one file per view per pump. Blank lines and braces remain verbatim; missing
+or evicted source text shows its location and an unavailable notice.
 See the [code checklist](testing.md#source-and-instruction-stepping)
 for optimized, stripped and relocated-source examples.
 
