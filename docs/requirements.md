@@ -135,7 +135,7 @@ Performance numbers are targets to measure, not grounds for hiding failures. The
    ESP32-S3/Xtensa. Physical RISC-V acceptance is explicitly deferred for this
    release, remains UNVERIFIED, and supplies no hardware compatibility claim.
    Later releases retain the full matrix unless separately reviewed. For
-   v0.1.3, the owner explicitly deferred physical ESP/RISC-V validation to
+   v0.1.3, the maintainer explicitly deferred physical ESP/RISC-V validation to
    v0.1.4; it remains UNVERIFIED and is not a support claim. Native, STM32/ARM
    and ESP32-S3/Xtensa release checks remain required. QEMU adds coverage without
    substituting for boards. Target-specific features list their actual setups.
@@ -342,7 +342,7 @@ Inputs: host, port, GDB executable, optional symbol-bearing ELF and remote proto
 
 ## Approved v0.1.3 browsing work
 
-This section specifies the implemented, owner-accepted v0.1.3 browsing scope.
+This section specifies the implemented v0.1.3 browsing scope.
 Current controls and limits are described in [usage](usage.md); release and
 future-work status are in [the roadmap](roadmap.md).
 
@@ -435,4 +435,4 @@ is not proof every sample is invalid, and halted hardware can still change MMIO.
 Acceptance requires model/TUI regressions, bounded-allocation and eviction checks,
 zero frontend MMIO requests from permission/navigation actions, failure/late-reply handling,
 the fresh fortified host baseline, and separately authorized real backend/physical
-width validation. Both browsing views require owner review before release.
+width validation. Both browsing views require maintainer review before release.
