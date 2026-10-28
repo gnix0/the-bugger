@@ -15,7 +15,7 @@ v0.1.3 is released. RISC-V hardware validation is accepted; F01 is in progress.
 | 1.3 | Disassembly/Memory browsing and explicit MMIO access | Implemented, host verified and accepted |
 | 1.5 | Prepare v0.1.3 | Published; uploaded artifacts verified |
 | 2.1 | Validate ESP RISC-V hardware for v0.1.4 | Accepted; recorded RISC-V RV32 hardware checks use ESP32-C6FH4 |
-| F01 | Setup restoration for v0.1.4 | Definition/store foundation implemented; capture, controls and restoration pending |
+| F01 | Setup restoration for v0.1.4 | Storage, capture/save controls and breakpoint intent implemented; restoration pending |
 
 Current controls are in [usage](usage.md); the accepted browsing scope is in
 [requirements](requirements.md#approved-v013-browsing-work).
@@ -68,7 +68,7 @@ remain planned.
 | M17 | NUCLEO-F446RE and ESP32-S3 validation | accepted | `f568bd2482b2309e3534ebc8e197854ada37bf77` |
 | M18 | v0.1.0 release evidence/acceptance | accepted; published | v0.1.0; `ad606dc6d7af7a3384401fb97e7c328ea1d8b62b` (preparation) |
 | F19 | Config, built-in themes and variants | accepted; shipped in v0.1.1 | [Recorded checks](validation.md#f19--themes-and-configuration) |
-| F01 | Setup restoration | in progress; storage foundation only | — |
+| F01 | Setup restoration | in progress; capture/save implemented, restoration pending | — |
 | F02–F18, F20–F47 | Independent versioned future gates below | planned | — |
 
 ## Development priorities

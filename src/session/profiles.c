@@ -56,6 +56,41 @@ static bool words_valid(const TbProfileWords *words)
     for (size_t i = 0; i < words->count; ++i) { if (!clean(words->values[i], TB_PROFILE_WORD, true)) { return false; } }
     return true;
 }
+static bool words_equal(const TbProfileWords *a, const TbProfileWords *b)
+{
+    if (a->count != b->count) { return false; }
+    for (size_t i = 0; i < a->count; ++i) { if (strcmp(a->values[i], b->values[i]) != 0) { return false; } } return true;
+}
+uint32_t tb_profile_differences(const TbProfile *a, const TbProfile *b)
+{
+    uint32_t changes = 0;
+    if (a->kind != b->kind || (!a->kind && !b->kind && a->attach != b->attach) ||
+        (a->kind == 1 && b->kind == 1 && a->start_server != b->start_server)) { changes |= TB_PROFILE_MODE; }
+    if (strcmp(a->gdb, b->gdb) != 0 || (a->kind == 1 && b->kind == 1 && a->start_server && b->start_server && strcmp(a->openocd, b->openocd) != 0)) { changes |= TB_PROFILE_TOOLS; }
+    if (strcmp(a->executable, b->executable) != 0) { changes |= TB_PROFILE_ELF; }
+    if (!a->kind && !b->kind && !a->attach && !b->attach) {
+        if (!words_equal(&a->arguments, &b->arguments)) { changes |= TB_PROFILE_ARGUMENTS; }
+        if (strcmp(a->directory, b->directory) != 0) { changes |= TB_PROFILE_DIRECTORY; }
+    }
+    if (a->kind && b->kind && (strcmp(a->endpoint, b->endpoint) != 0 || strcmp(a->protocol, b->protocol) != 0)) { changes |= TB_PROFILE_ENDPOINT; }
+    if (a->kind == 1 && b->kind == 1 && a->start_server && b->start_server) {
+        if (!words_equal(&a->search, &b->search)) { changes |= TB_PROFILE_SEARCH; }
+        bool same = words_equal(&a->scripts, &b->scripts);
+        if (!a->scripts.count && !b->scripts.count) {
+            same = a->adapter_target == b->adapter_target && (a->adapter_target ?
+                strcmp(a->adapter, b->adapter) == 0 && strcmp(a->target, b->target) == 0 : strcmp(a->board, b->board) == 0);
+        }
+        if (!same) { changes |= TB_PROFILE_SCRIPTS; }
+    }
+    if (a->directory_count != b->directory_count || a->rule_count != b->rule_count) { changes |= TB_PROFILE_SOURCE; }
+    else {
+        for (size_t i = 0; i < a->directory_count; ++i) { if (strcmp(a->directories[i], b->directories[i]) != 0) { changes |= TB_PROFILE_SOURCE; } }
+        for (size_t i = 0; i < a->rule_count; ++i) {
+            if (strcmp(a->rules[i].from, b->rules[i].from) != 0 || strcmp(a->rules[i].to, b->rules[i].to) != 0) { changes |= TB_PROFILE_SOURCE; }
+        }
+    }
+    return changes;
+}
 bool tb_profile_valid(const TbProfile *p)
 {
     if (!clean(p->name, sizeof p->name, false) || p->kind < 0 || p->kind > 2 ||

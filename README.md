@@ -21,7 +21,9 @@ Source tabs, fullscreen and cached browsing keep large programs navigable.
 
 Configure themes, keybinds and optional Vim-like input under **Config**.
 Catppuccin Macchiato is the default; RGB-capable tmux sessions retain theme colors.
-Connection profiles are separate from personal preferences.
+Connection profiles are separate from personal preferences. The live Setup menu
+saves workspace definitions separately; reopening/restoration is still pending
+in v0.1.4 development. See [setup saving](docs/usage.md#saving-a-setup).
 
 Memory and variable inspection are read-only. Explicit-width MMIO sampling is
 available for the validated STM32/OpenOCD setup; navigation never samples MMIO.

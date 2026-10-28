@@ -76,13 +76,19 @@ records remain in the [validation records](../docs/validation.md).
   arguments/scripts/paths, key validation, private atomic failures, stale writers,
   corrupt-file preservation, recents/deletion/bounds and asynchronous source
   restore order/failure/no-retry behavior.
+- `test-setup-capture` / `make test-setup-capture`: metadata-only definitions,
+  stable lifecycle identities, transient exclusions and active connection comparison.
+  Included in `make test`.
+- `make test-setup-tmux`: native profile/setup save workflow through an isolated
+  tmux server, including narrow toolbar geometry with long custom shortcut labels.
+  Included in `make test-tmux`; requires GDB/ptrace and tmux.
 - `test-profiles-tui` / `make test-m13-tui`: file-only live launcher/profile CRUD,
   review, source options, remaps and inert remote/OpenOCD definitions, using an
   isolated XDG directory and no inferior. Included in `make test`.
 - `test-profiles-native` plus `test-profiles-tui --native` /
   `make test-m13-native`: actual GDB source restore, relocated duplicate-basename
   breakpoint resolution, execution interlock, saved native reopen/remapped actions,
-  recents and cleanup. Included in `make test-native`; GDB/ptrace required. See
+  recents, Setup save/association/replacement/duplication and cleanup. Included in `make test-native`; GDB/ptrace required. See
   [M13 procedures](../docs/testing.md#profiles-and-source-settings).
 
 - `test-watchpoints` / `make test-m12-model`: hardware type reconciliation,

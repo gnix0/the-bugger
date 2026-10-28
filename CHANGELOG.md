@@ -6,7 +6,11 @@
 
 - Setup-definition storage foundation with separate schema-3 records, atomic
   save/duplicate/delete APIs and read-only recovery for malformed setup records.
-  Workspace Save setup controls and session restoration remain unimplemented.
+- Live Setup menu captures and saves pane/tab/Source/Memory/Watch definitions and
+  frontend-created code-breakpoint intent without values or permissions. Save
+  review shows connection differences and confirms replacement of skipped setups;
+  profile duplication copies saved data independently. Runtime hits do not change
+  configured ignore counts. Session restoration and backend import remain pending.
 - Physical RISC-V RV32 validation (test device: ESP32-C6FH4, built-in
   USB/JTAG) using the shared
   embedded fixture, core-context OpenOCD configuration and target-compatible

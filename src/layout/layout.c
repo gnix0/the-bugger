@@ -77,6 +77,7 @@ void tb_layout_init(TbLayout *layout)
         layout->nodes[i] = (TbLayoutNode){.used = true, .pane = i};
         layout->roots[i] = i;
         layout->order[i] = i;
+        layout->identities[i] = ++layout->serial;
         layout->root_focus[i] = i;
     }
     for (int i = 0; i < 3; ++i) { layout->lower_order[i] = i; }
@@ -262,6 +263,7 @@ int tb_layout_split(TbLayout *layout, int pane, TbSplit direction)
     while (tb_layout_has_pane(layout, new_pane)) { ++new_pane; }
     layout->nodes[slots[0]] = layout->nodes[node];
     layout->nodes[slots[1]] = (TbLayoutNode){.used = true, .pane = new_pane};
+    layout->identities[new_pane] = ++layout->serial;
     layout->nodes[node] = (TbLayoutNode){true, -1, slots[0], slots[1], 5000, direction};
     (void)tb_layout_arrange(layout, layout->area, new_pane);
     return new_pane;
@@ -281,6 +283,7 @@ int tb_layout_close(TbLayout *layout, int pane)
         *n = layout->nodes[sibling];
         layout->nodes[node].used = false;
         layout->nodes[sibling].used = false;
+        layout->identities[pane] = 0;
         (void)tb_layout_arrange(layout, layout->area, focus);
         return focus;
     }

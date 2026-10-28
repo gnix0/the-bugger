@@ -103,6 +103,7 @@ bool tb_code_clear_settings(TbCode *code);
 bool tb_code_restore_settings(TbCode *code, const char *const directories[], size_t count,
                               const TbSourceRule *rules, size_t rule_count);
 bool tb_code_restoring(const TbCode *code);
+bool tb_code_settings_busy(const TbCode *code);
 size_t tb_code_directory_count(const TbCode *code);
 const char *tb_code_directory(const TbCode *code, size_t index);
 size_t tb_code_rule_count(const TbCode *code);

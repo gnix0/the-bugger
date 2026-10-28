@@ -1039,7 +1039,7 @@ Connection profile definitions exclude personal keys/themes, PID, environment ov
 watch/breakpoint definitions, region grants, values and temporary backend state.
 F01 and F12 own later restoration/sharing and schema evolution.
 
-### Setup definition storage (F01 foundation)
+### Setup definitions and saving (F01)
 
 `session/setup.{h,c}` defines bounded, independently owned setup definitions.
 The model contains split nodes, column/row proportions, pane view membership and
@@ -1068,9 +1068,30 @@ including recents, until a repaired file loads successfully. The Profiles header
 indicates read-only mode; Reload reports recovery rather than successful repair.
 Schema-1/2 builds cannot read schema 3; there is no downgrade operation.
 
-This foundation supplies storage APIs only. Workspace capture, Save setup controls,
-compatibility consent, restoration coordination and breakpoint-intent tracking
-remain unimplemented; it does not restore a session or dispatch debugger requests.
+`tui/setup_capture.{h,c}` captures metadata only. Pane lifecycle identities and
+model-local Watch/breakpoint identities map to stable setup-local entries; Source
+selection uses the context role or a pinned identity. Resize, samples, permissions,
+fullscreen and lower-overlay geometry do not change the definition. Memory saves
+the visible expression draft, byte count and grouping without reading it.
+
+The live Setup menu reviews the current definition and the effective session
+connection against its associated saved profile. Active parsed fields are compared
+in order, preserving case and literal paths. Inactive fields, names and formatting
+are excluded. Save setup writes the definition and connection snapshot only;
+Save profile remains a separate operation. Review detects changes before committing.
+Skipped saved definitions require explicit replacement and are never merged into
+the current draft. Profile duplication copies saved data independently.
+
+Code-breakpoint configured intent is separate from observed GDB rows. Successful
+frontend mutations retain original locations, enabled intent, conditions, explicit
+ignore counts and Default/Require hardware policy. Hits and declining remaining
+ignore counts do not alter definitions. Temporary/data/backend-only breakpoints
+are excluded. Detected external conflicts and uncertain managed mutations block
+saving; advanced reconciliation and explicit backend import remain pending.
+
+Compatibility consent, restoration coordination, unresolved-entry recovery and
+breakpoint import/reconciliation remain unimplemented. Saving does not restore
+or dispatch saved definitions to the debugger.
 
 Writes use an owned regular file, nonblocking advisory lock, stale-writer stamp
 check, private temporary file, fsync, atomic rename and directory fsync. Corrupt,

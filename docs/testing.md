@@ -540,8 +540,36 @@ Manual storage recovery review, using a disposable config directory:
    indication must disappear; profile saves work again. Merely loading must not
    downgrade version 3. Repeat at 48×18 and through tmux.
 
-Capture/save controls, restoration consent, bounded backend restoration,
-breakpoint intent/import/reconciliation and physical restoration acceptance
+`make test-setup-capture` checks metadata-only capture, stable pane/Watch/Source
+identities, explicit removal, reused pane slots, transient exclusions, oversized
+drafts, skipped-definition replacement and active connection comparison.
+`make test-m13-native` adds live association/save review, pinned Source selection,
+profile preservation and independent saved duplication. `make test-setup-tmux`
+repeats the profile workflow through an isolated tmux server; `test-tmux` includes
+it. Both direct and tmux runs check widths 48, 80, 123, 124, 152 and 160 with long
+custom shortcut labels, preserving action names and the former toolbar row count.
+`make test-m08-native` verifies configured breakpoint intent across actual hits,
+remaining-ignore decline and frontend edits, excluding temporary run-to entries.
+
+Manual capture/save review with a disposable configuration:
+
+1. Start a native session without a saved profile. Change pane splits/tabs, pin a
+   Source file, add a Watch and edit Memory settings without reading. Save setup
+   must offer Save profile. Save the profile, then review/save the setup. The
+   asterisk must clear; no Memory/Watch read is granted.
+2. Create a code breakpoint using the frontend. Set a condition and explicit
+   ignore count, then run through hits. Saving must retain the original configured
+   count and location. Temporary run-to and Console-created breakpoints are excluded.
+3. Close/reopen the profile. Restoration is pending, so expect a fresh workspace
+   with minimized lower views. Cancel Replace setup: the saved definitions remain.
+   Confirm replacement: hidden old definitions disappear; the connection profile
+   remains unchanged. Duplicate the profile with unsaved edits and verify the copy
+   contains only its saved connection/setup.
+4. Repeat in a direct terminal and tmux at the widths above. Inspect Setup,
+   Session/Quit, action names, focus, text entry, Escape and shortcut operation.
+
+Restoration consent, bounded backend restoration, unresolved-entry handling,
+explicit breakpoint import/reconciliation and physical restoration acceptance
 remain unimplemented and unverified.
 
 ## Hardware data watchpoints

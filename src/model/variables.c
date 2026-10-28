@@ -14,6 +14,7 @@ typedef struct {
     int parent;
     bool used, wanted, read, expand, evaluate, evaluate_explicit, failed, canonical_ok, baseline_ok;
     TbGdbGeneration sampled;
+    uint64_t identity;
 } Node;
 typedef struct {
     Node nodes[TB_VARIABLE_NODES];
@@ -248,9 +249,28 @@ bool tb_variables_watch(TbVariables *v, const char *expression)
     int i = allocate(t, -1); if (i < 0) { (void)snprintf(t->error, sizeof t->error, "Watch/node limit reached (64 roots, 256 rows); collapse children or remove a watch."); return false; }
     Node *n = &t->nodes[i]; (void)snprintf(n->row.name, sizeof n->row.name, "%s", expression);
     (void)snprintf(n->expression, sizeof n->expression, "%s", expression);
-    (void)snprintf(n->key, sizeof n->key, "w:%llu", (unsigned long long)++v->serial);
+    n->identity = ++v->serial;
+    (void)snprintf(n->key, sizeof n->key, "w:%llu", (unsigned long long)n->identity);
     /* Adding a name does not grant a value read; Read is an explicit action. */
     order(t); t->error[0] = 0; ++v->revision; return true;
+}
+size_t tb_variables_definitions(const TbVariables *v)
+{
+    size_t count = 0; const Tree *t = &v->trees[TB_VARIABLE_WATCHES];
+    for (size_t i = 0; i < t->count; ++i) { count += t->nodes[t->order[i]].parent < 0; }
+    return count;
+}
+bool tb_variables_definition(const TbVariables *v, size_t index, TbWatchDefinition *out)
+{
+    const Tree *t = &v->trees[TB_VARIABLE_WATCHES];
+    for (size_t i = 0; i < t->count; ++i) {
+        const Node *n = &t->nodes[t->order[i]];
+        if (n->parent >= 0) { continue; }
+        if (index--) { continue; }
+        out->identity = n->identity; out->format = n->row.format;
+        memcpy(out->expression, n->expression, sizeof out->expression); return true;
+    }
+    return false;
 }
 bool tb_variables_remove(TbVariables *v, size_t row)
 {

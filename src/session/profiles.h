@@ -2,6 +2,7 @@
 #define THE_BUGGER_PROFILES_H
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include "setup.h"
 
 enum { TB_PROFILES = 16, TB_PROFILE_NAME = 64, TB_PROFILE_PATH = 1024,
@@ -23,6 +24,12 @@ typedef struct {
 typedef struct TbProfiles TbProfiles;
 void tb_profile_defaults(TbProfile *profile, int kind);
 bool tb_profile_valid(const TbProfile *profile);
+enum { TB_PROFILE_MODE = 1, TB_PROFILE_TOOLS = 2, TB_PROFILE_ARGUMENTS = 4,
+       TB_PROFILE_SCRIPTS = 8, TB_PROFILE_SEARCH = 16, TB_PROFILE_ENDPOINT = 32,
+       TB_PROFILE_ELF = 64, TB_PROFILE_DIRECTORY = 128, TB_PROFILE_SOURCE = 256 };
+/* Parsed active fields only; names, inactive controls and unused array slots
+ * are not connection differences. Paths and endpoint aliases stay literal. */
+uint32_t tb_profile_differences(const TbProfile *session, const TbProfile *saved);
 TbProfiles *tb_profiles_create(void);
 void tb_profiles_destroy(TbProfiles *profiles);
 bool tb_profiles_load(TbProfiles *profiles);

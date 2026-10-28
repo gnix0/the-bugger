@@ -707,7 +707,7 @@ Profiles exclude keybinds and themes. Version-1 profiles remain readable; obsole
 recent-session updates. Newly written version-2 stores require an updated app;
 older versions that require version 1 cannot read them.
 Schema-3 stores can also be read. They contain separate saved setup definitions;
-workspace saving/restoration controls are not available yet. Older builds that
+saving is available through the live Setup menu; restoration is pending. Older builds that
 accept only schema 1/2 cannot read schema 3, and there is no silent downgrade.
 A malformed setup record puts an otherwise valid schema-3 store into read-only
 recovery: usable connections remain available, but all writes, including recents,
@@ -715,6 +715,36 @@ are blocked. **Config → Profiles** indicates read-only mode. Repair the file,
 then choose **Reload file**; successful recovery requires a fully valid store.
 See the [format](architecture.md#profiles-and-source-restoration) and
 [walkthrough](testing.md#profiles-and-source-settings).
+
+## Saving a setup
+
+In a live session, choose **Setup → Save setup** beside Session/Quit. The asterisk
+marks changed persistable definitions. Saving requires an associated saved
+connection profile; the review provides **Save profile** when one is needed.
+It saves pane splits/proportions, tab membership/order/selection, Source context
+role and pinned files, Memory expressions/count/grouping, Watch roots/formats and
+supported frontend-created code-breakpoint definitions. Values, permissions,
+temporary/data breakpoints, fullscreen and lower-overlay state are excluded.
+
+Review shows effective connection differences from the saved profile. **Save
+setup** saves that snapshot separately and never changes the connection profile.
+**Profile... → Duplicate** copies the saved connection and setup independently;
+unsaved edits are excluded. Deleting a profile also deletes its saved setup after
+confirmation. Replacing the connection retains the setup.
+
+Setup restoration is not available in this checkpoint. Reopening a profile starts
+the usual fresh workspace. Saving over its skipped setup requires **Replace
+setup** confirmation; hidden old definitions are discarded, not merged. The
+Unresolved/Restoration pages report this limitation. Review GDB breakpoints lists
+cached observations; explicit import is pending and backend-only entries are
+excluded from saving. Uncertain or conflicting managed breakpoint changes block
+saving until recovery support is implemented or the session closes.
+
+Runtime hits and remaining ignore counts do not change saved configured counts
+or the asterisk. Saving waits for active source-setting and breakpoint work to
+settle. Memory/Watch capture grants no read permission and requests no values.
+Toolbar hints disappear from right to left when needed to keep the existing row
+count; action names and configured shortcuts continue to work.
 
 ## Troubleshooting and known limits
 

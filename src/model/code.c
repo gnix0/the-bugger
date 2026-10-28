@@ -71,6 +71,11 @@ struct TbCode {
     TbSourceRule restore_rules[TB_CODE_RULES]; size_t restore_count, restore_rule;
     bool restoring;
 };
+bool tb_code_settings_busy(const TbCode *code)
+{
+    return code->restoring || code->settings_job != CODE_NONE ||
+        (code->waiting && code->job >= CODE_DIRECTORY && code->job <= CODE_CLEAR_DIRS);
+}
 static void listing_store(TbCode *code, int id);
 
 void tb_code_safe(char *out, size_t capacity, const char *bytes, size_t length)
