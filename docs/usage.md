@@ -699,15 +699,16 @@ them. Concurrent stale writers must reload. Paths and ordered argument/script
 arrays are literal, with no shell evaluation.
 
 Profiles exclude PID, environment overrides and runtime values; Attach requires
-a current PID. Workspace/tabs, Memory locations, watches and breakpoints are not
-restored yet (F01). Remote definitions retain endpoint/tool/protocol choices for reviewed connection.
+a current PID. Workspace/Source/Memory/Watch definitions can restore through the
+saved-setup review; code-breakpoint installation remains pending (F01). Remote
+definitions retain endpoint/tool/protocol choices for reviewed connection.
 OpenOCD profiles retain script choices and require explicit startup review.
 Profiles exclude keybinds and themes. Version-1 profiles remain readable; obsolete
 `keys` fields are ignored and omitted on the next profile-store write, including
 recent-session updates. Newly written version-2 stores require an updated app;
 older versions that require version 1 cannot read them.
 Schema-3 stores can also be read. They contain separate saved setup definitions;
-saving is available through the live Setup menu; restoration is pending. Older builds that
+saving and local/Source restoration are available through Setup/session review. Older builds that
 accept only schema 1/2 cannot read schema 3, and there is no silent downgrade.
 A malformed setup record puts an otherwise valid schema-3 store into read-only
 recovery: usable connections remain available, but all writes, including recents,
@@ -732,13 +733,36 @@ setup** saves that snapshot separately and never changes the connection profile.
 unsaved edits are excluded. Deleting a profile also deletes its saved setup after
 confirmation. Replacing the connection retains the setup.
 
-Setup restoration is not available in this checkpoint. Reopening a profile starts
-the usual fresh workspace. Saving over its skipped setup requires **Replace
-setup** confirmation; hidden old definitions are discarded, not merged. The
-Unresolved/Restoration pages report this limitation. Review GDB breakpoints lists
-cached observations; explicit import is pending and backend-only entries are
-excluded from saving. Uncertain or conflicting managed breakpoint changes block
-saving until recovery support is implemented or the session closes.
+Reopening an associated saved profile adds a setup-restoration review before
+starting. **Restore saved setup** defaults on. Review the scope, connection
+differences and any local ELF/relative-path launch-context change, then start.
+Changed configuration or ELF metadata during review requires another confirmation.
+Matching local metadata does not verify firmware identity. Clear the checkbox to
+start with the current workspace; saving over that skipped setup requires
+**Replace setup** confirmation and discards hidden old definitions without merging.
+
+Local pane/tab/Memory/Watch definitions restore before initialization/source
+settings, followed by bounded Source reopening. Lower views start minimized;
+Memory stays unread and Watches grant no read permission. Missing pins retain
+identity/order/selection, show `!` and an unavailable message, and contain no old
+source text. **Setup → Unresolved setup entries** offers Retry/Remove. Repair
+source lookup settings and refresh the GDB catalog with Choose source file before
+retrying when needed. Unsupported saved Watch expressions remain inert and removable.
+
+A running target is left running while restoration awaits a stop. Use Pause
+explicitly. Active restoration blocks execution, Reset, Console and debugger
+context/configuration changes; local navigation and close remain available.
+**Restoration information → Cancel restoration** stops further dispatch without
+rollback. Cancel requested remains distinct from canceled until in-flight work
+settles. Save waits for active work to settle.
+
+Code-breakpoint installation remains pending in this checkpoint. Saved enabled
+intent is shown as awaiting stop or unresolved, never installed. Review and
+acknowledge unresolved enabled definitions before execution; the unchanged set
+does not reprompt. Retained definitions count toward limits and survive partial
+saves; Remove is an unsaved change. Review GDB breakpoints lists cached observations;
+explicit import/reconciliation is pending and backend-only entries are excluded.
+Uncertain/conflicting managed breakpoint changes continue to block saving.
 
 Runtime hits and remaining ignore counts do not change saved configured counts
 or the asterisk. Saving waits for active source-setting and breakpoint work to

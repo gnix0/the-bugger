@@ -18,4 +18,10 @@ const TbSetup *tb_setup_capture_current(const TbSetupCapture *capture);
 bool tb_setup_capture_dirty(const TbSetupCapture *capture);
 bool tb_setup_capture_saved(TbSetupCapture *capture);
 bool tb_setup_capture_baseline(TbSetupCapture *capture, const TbSetup *saved);
+/* Fresh-session local definitions. Breakpoints remain retained/uninstalled. */
+bool tb_setup_capture_restore(TbSetupCapture *capture, const TbSetup *saved, TbLayout *layout,
+                              TbDemo *workspace, TbCode *code, TbMemory *memory, TbVariables *variables);
+size_t tb_setup_capture_retained(const TbSetupCapture *capture);
+const TbSetupBreak *tb_setup_capture_retained_break(const TbSetupCapture *capture, size_t index);
+bool tb_setup_capture_remove_break(TbSetupCapture *capture, uint64_t identity);
 #endif

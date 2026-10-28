@@ -25,11 +25,11 @@ struct TbBreakpoints {
     TbWatchMode watch_mode;
     TbGdbGeneration watch_generation;
     char managed[TB_BREAK_ROWS][32]; size_t managed_count;
-    ConfiguredBreak definitions[TB_BREAK_ROWS]; size_t definition_count;
+    ConfiguredBreak definitions[TB_BREAK_ROWS]; size_t definition_count, definition_reserved;
     TbBreakDefinition pending_definition;
     char edit_id[32]; DefinitionEdit edit;
     uint64_t definition_serial;
-    bool definition_uncertain;
+    bool definition_uncertain, interlock;
 };
 size_t tb_break_definition_count(const TbBreakpoints *b) { return b->definition_count; }
 const TbBreakDefinition *tb_break_definition(const TbBreakpoints *b, size_t i)
@@ -129,8 +129,12 @@ static bool issue(TbBreakpoints *b, BreakJob job, const char *operation, const c
     if (!b->waiting) { b->job = BREAK_NONE; message(b, "Breakpoint request unavailable; retry while stopped."); }
     return b->waiting;
 }
+void tb_break_interlock(TbBreakpoints *b, bool active) { b->interlock = active; }
+void tb_break_definition_reserve(TbBreakpoints *b, size_t retained)
+{ b->definition_reserved = retained <= TB_BREAK_ROWS ? retained : TB_BREAK_ROWS; }
 static bool allowed(TbBreakpoints *b)
 {
+    if (b->interlock) { message(b, "Wait for setup restoration to settle."); return false; }
     TbGdbState state = tb_gdb_state(b->gdb);
     if (b->waiting || tb_break_busy(b) || (state != TB_GDB_READY && state != TB_GDB_STOPPED)) {
         message(b, "Breakpoint operation needs an idle, loaded/stopped debugger."); return false;
@@ -154,7 +158,7 @@ static size_t location_args(TbBreakLocation location, const char *args[], size_t
 bool tb_break_add_at(TbBreakpoints *b, TbBreakLocation location, bool hardware)
 {
     if (!allowed(b) || !location_valid(location)) { return false; }
-    if (b->definition_count == TB_BREAK_ROWS) { message(b, "At most 256 configured code breakpoints are supported."); return false; }
+    if (b->definition_count + b->definition_reserved >= TB_BREAK_ROWS) { message(b, "At most 256 configured code breakpoints are supported."); return false; }
     const char *args[6]; char line[24]; size_t n = 0; args[n++] = "-f";
     if (hardware) { args[n++] = "-h"; }
     n = location_args(location, args, n, line);

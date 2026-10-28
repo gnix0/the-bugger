@@ -9,6 +9,7 @@
 #include "session.h"
 #include "profiles.h"
 #include "setup_capture.h"
+#include "setup_restore.h"
 
 #include <curses.h>
 #include <errno.h>
@@ -30,7 +31,7 @@ typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
                SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT, DATA_WATCH_INPUT,
                CONFIG_MENU, THEMES, THEME_PREVIEW, KEYBINDS, PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM, SCRIPT_LIST, SCRIPT_FILTER,
                MEMORY_RANGES, MEMORY_RANGE, MEMORY_CONSENT, MEMORY_RANGE_INPUT, MMIO_SETUP, IMAGE_REVIEW,
-               SETUP_MENU, SETUP_SAVE, SETUP_INFO } Page;
+               SETUP_MENU, SETUP_SAVE, SETUP_INFO, SETUP_RESTORE_REVIEW } Page;
 typedef enum { RANGE_ADD, RANGE_PREVIOUS, RANGE_NEXT, RANGE_BEGIN, RANGE_END,
                RANGE_POLICY, RANGE_WIDTH, RANGE_RISKS, RANGE_AUTHORIZE, RANGE_CONFIRM,
                RANGE_REVOKE, RANGE_REVIEW_PREVIOUS, RANGE_REVIEW_NEXT, RANGE_BROWSE,
@@ -144,8 +145,15 @@ typedef struct {
     char setup_profile[TB_PROFILE_NAME], launch_directory[TB_SETUP_PATH];
     bool setup_skipped;
     int setup_information, setup_offset;
+    TbSetupRestore *restoration;
+    TbSetup *restore_definition;
+    TbProfile *restore_connection;
+    char restore_directory[TB_SETUP_PATH], restore_saved_directory[TB_SETUP_PATH];
+    char restore_stamp[256], restore_saved_stamp[256];
+    bool restore_selected, restore_confirmed;
 } App;
 
+static bool start_session(App *app);
 static bool profile_capture(App *app);
 static bool profile_load(App *app, const TbProfile *profile);
 static void draw_profiles(App *app);
@@ -156,7 +164,7 @@ static void draw_scripts(App *app);
 static bool prepare_server(App *app);
 static void draw_setup(App *app);
 static bool setup_capture(App *app);
-static void setup_activate(App *app, int action);
+static void setup_activate(App *app, int action, int entry);
 
 static bool editing_page(const App *app)
 {
@@ -1094,6 +1102,10 @@ static void source_tab_strip(App *app, TbCode *code, int pane, TbRect rect)
             (void)snprintf(raw_label, sizeof raw_label, "%c%.*s/%.10s", tab == active ? '[' : ' ',
                            (int)(parent_end - parent) > 5 ? 5 : (int)(parent_end - parent), parent, name);
         } else { (void)snprintf(raw_label, sizeof raw_label, "%c%.16s", tab == active ? '[' : ' ', name); }
+        if (tb_code_tab_unavailable(code, pane, tab)) {
+            char unavailable[24]; (void)snprintf(unavailable, sizeof unavailable, "%c!%.15s", raw_label[0], raw_label + 1);
+            memcpy(raw_label, unavailable, sizeof raw_label);
+        }
         tb_code_safe(label, sizeof label, raw_label, strlen(raw_label));
         button(app, y, x, 18, label, CODE_SOURCE_TAB, (int)tab, pane); x += 18;
         if (tab == active) { button(app, y, x, 3, "x  ", CODE_SOURCE_CLOSE, (int)tab, pane); x += 3; }
@@ -2367,7 +2379,7 @@ static void draw_page(App *app)
     } else if (app->page == CONFIGURE || app->page == REVIEW) {
         draw_form(app, app->page == REVIEW);
     } else if (app->page == SCRIPT_LIST) { draw_scripts(app);
-    } else if (app->page == SETUP_MENU || app->page == SETUP_SAVE || app->page == SETUP_INFO) { draw_setup(app);
+    } else if (app->page == SETUP_MENU || app->page == SETUP_SAVE || app->page == SETUP_INFO || app->page == SETUP_RESTORE_REVIEW) { draw_setup(app);
     } else if (app->page == CODE_MENU) {
         draw_code_menu(app);
     } else if (app->page == IMAGE_REVIEW) {
@@ -2828,7 +2840,7 @@ static bool setup_capture(App *app)
 static bool setup_available(App *app)
 {
     TbSessionState state = tb_session_state(app->debugger);
-    if (!app->setup || state == TB_SESSION_STARTING || state == TB_SESSION_CLOSING || state == TB_SESSION_FAILED ||
+    if (tb_setup_restore_active(app->restoration) || !app->setup || state == TB_SESSION_STARTING || state == TB_SESSION_CLOSING || state == TB_SESSION_FAILED ||
         tb_code_settings_busy(tb_session_code(app->debugger))) {
         status(app, "Wait for session/source configuration to settle before saving setup."); return false;
     }
@@ -2840,15 +2852,16 @@ static bool setup_available(App *app)
 typedef struct { App *app; TbRect card; int logical, visible; } SetupText;
 static int setup_chunk(const char *text, int width)
 {
-    size_t at = 0, length = strlen(text); int cells = 0; mbstate_t state = {0};
+    size_t at = 0, space = 0, length = strlen(text); int cells = 0; mbstate_t state = {0};
     while (at < length) {
         wchar_t character; size_t bytes = mbrtowc(&character, text + at, length - at, &state); int columns;
         if (bytes == (size_t)-1 || bytes == (size_t)-2) { state = (mbstate_t){0}; bytes = 1; columns = 4; }
         else { columns = wcwidth(character); if (columns < 0) { columns = 4; } }
         if (cells + columns > width || at + bytes >= 512) { break; }
+        if (text[at] == ' ') { space = at; }
         at += bytes; cells += columns;
     }
-    return (int)at;
+    return (int)(at < length && space ? space : at);
 }
 static void setup_text(SetupText *r, const char *text)
 {
@@ -2911,13 +2924,37 @@ static void setup_differences(SetupText *r, const TbProfile *a, const TbProfile 
         }
     }
 }
+static bool setup_prepare_restore(App *app)
+{
+    if (!profile_capture(app)) { return false; }
+    if (!app->restore_connection) { app->restore_connection = malloc(sizeof *app->restore_connection); }
+    if (!app->setup_review_connection) { app->setup_review_connection = malloc(sizeof *app->setup_review_connection); }
+    free(app->restore_definition); app->restore_definition = tb_profiles_setup(app->profiles, app->profile->name);
+    if (!app->restore_connection || !app->setup_review_connection || !app->restore_definition ||
+        !getcwd(app->restore_directory, sizeof app->restore_directory) ||
+        !tb_profiles_setup_connection(app->profiles, app->profile->name, app->restore_connection, app->restore_saved_directory)) {
+        status(app, "Cannot prepare saved setup review. Saved data is unchanged."); return false;
+    }
+    *app->setup_review_connection = *app->profile;
+    tb_profile_image_stamp(app->profile, app->restore_directory, app->restore_stamp);
+    (void)tb_profiles_setup_stamp(app->profiles, app->profile->name, app->restore_saved_stamp);
+    app->restore_selected = true; app->setup_offset = 0; return true;
+}
+static void setup_entry_actions(SetupText *text, int retry, int remove, int entry)
+{
+    int row = text->logical++ - text->app->setup_offset;
+    if (row < 0 || row >= text->visible) { return; }
+    int y = text->card.y + 3 + row, x = text->card.x + 2;
+    if (retry) { button(text->app, y, x, 12, "[ Retry ]", SETUP_ACTION, retry, entry); x += 14; }
+    button(text->app, y, x, 12, "[ Remove ]", SETUP_ACTION, remove, entry);
+}
 static void draw_setup(App *app)
 {
-    draw_header(app, app->page == SETUP_MENU ? "Setup" : app->page == SETUP_SAVE ? "Save setup review" : "Setup information");
+    draw_header(app, app->page == SETUP_RESTORE_REVIEW ? "Session setup restoration review" : app->page == SETUP_MENU ? "Setup" : app->page == SETUP_SAVE ? "Save setup review" : "Setup information");
     TbRect card = menu_card(100, app->page == SETUP_MENU ? 12 : 25); int left = card.x + 2, width = card.w - 4;
-    const TbSetup *s = tb_setup_capture_current(app->setup);
-    const TbProfile *associated = tb_profiles_find(app->profiles, app->setup_profile);
-    char line[256]; (void)snprintf(line, sizeof line, "Profile: %s", associated ? app->setup_profile : "none - save a connection profile first");
+    const TbSetup *s = app->page == SETUP_RESTORE_REVIEW ? app->restore_definition : tb_setup_capture_current(app->setup);
+    const TbProfile *associated = tb_profiles_find(app->profiles, app->page == SETUP_RESTORE_REVIEW ? app->profile->name : app->setup_profile);
+    char line[256]; (void)snprintf(line, sizeof line, "Profile: %s", associated ? associated->name : "none - save a connection profile first");
     tb_text(card.y, left, width, TB_CYAN, A_BOLD, line);
     if (app->page == SETUP_MENU) {
         button(app, card.y + 2, left, width, tb_setup_capture_dirty(app->setup) ? "Save setup*" : "Save setup", SETUP_ACTION, 1, 0);
@@ -2934,7 +2971,23 @@ static void draw_setup(App *app)
         tb_text(card.y + 1, left, width, TB_MUTED, 0, line);
     }
     SetupText text = {app, card, 0, card.h - 7};
-    if (app->page == SETUP_SAVE) {
+    if (app->page == SETUP_RESTORE_REVIEW) {
+        setup_text(&text, "Scope: pane splits/proportions, tabs, Source pins, Memory settings, Watch roots and saved code-breakpoint intent.");
+        setup_text(&text, "No samples, stopped context, permissions or lower overlays are restored. Memory remains unread; Watches require Read.");
+        setup_text(&text, "Code-breakpoint installation is pending implementation. Enabled definitions remain unresolved and require acknowledgment before execution.");
+        if (app->restore_connection && app->setup_review_connection) { setup_differences(&text, app->setup_review_connection, app->restore_connection); }
+        if (strcmp(app->restore_directory, app->restore_saved_directory) != 0 &&
+            (tb_profile_relative_paths(app->profile) || tb_profile_relative_paths(app->restore_connection))) {
+            setup_text(&text, "Relative-path launch context changed. Renew consent before restoring.");
+            setup_pair(&text, "Launch context", app->restore_directory, app->restore_saved_directory);
+        }
+        if (strcmp(app->restore_stamp, app->restore_saved_stamp) != 0 || !*app->restore_saved_stamp || strcmp(app->restore_stamp, "unavailable") == 0) {
+            setup_text(&text, "ELF metadata changed or is unavailable. Renew consent before restoring.");
+        }
+        setup_text(&text, "Matching settings/local ELF metadata do not establish firmware identity. Starting below confirms this review.");
+        button(app, card.y + card.h - 4, left, width, app->restore_selected ? "[x] Restore saved setup" : "[ ] Restore saved setup", SETUP_ACTION, 6, 0);
+        button(app, card.y + card.h - 2, left, 19, "[ Start session ]", SETUP_ACTION, 7, 0);
+    } else if (app->page == SETUP_SAVE) {
         if (app->setup_skipped) { setup_text(&text, "Saved setup was not restored. Replace discards its hidden definitions; nothing is merged."); }
         if (!associated) { setup_text(&text, "Save setup requires an associated saved connection profile."); }
         else {
@@ -2953,17 +3006,64 @@ static void draw_setup(App *app)
             setup_text(&text, line);
         }
     } else {
-        setup_text(&text, app->setup_skipped ? "Saved setup was skipped. Automatic restoration is not available yet." : "No setup restoration has been attempted in this session.");
-        setup_text(&text, "There is no active restoration or unresolved restoration queue. Source, Watch and breakpoint recovery controls remain pending.");
+        setup_text(&text, app->setup_skipped ? "Saved setup was deliberately skipped. Save requires explicit replacement; hidden definitions are not merged." : tb_setup_restore_status(app->restoration));
+        if (app->setup_information == 2) {
+            TbCode *code = tb_session_code(app->debugger); unsigned entries = 0;
+            for (int pane = 0; pane < TB_MAX_PANES; ++pane) {
+                for (size_t tab = 1; tab < tb_code_tab_count(code, pane); ++tab) {
+                    if (!tb_code_tab_unavailable(code, pane, tab)) { continue; }
+                    const TbCodeFile *file = tb_code_tab_file(code, pane, tab);
+                    (void)snprintf(line, sizeof line, "Source pane %d: %.200s | unavailable", pane + 1, file->file); setup_text(&text, line);
+                    setup_entry_actions(&text, 9, 10, pane * TB_CODE_TABS + (int)tab); ++entries;
+                }
+            }
+            TbVariables *variables = tb_session_variables(app->debugger);
+            for (size_t i = 0; i < tb_variables_definitions(variables); ++i) {
+                TbWatchDefinition w; if (!tb_variables_definition(variables, i, &w) || tb_memory_expression(w.expression)) { continue; }
+                (void)snprintf(line, sizeof line, "Watch: %.200s | unsupported saved expression", w.expression); setup_text(&text, line);
+                setup_entry_actions(&text, 0, 13, (int)i); ++entries;
+            }
+            for (size_t i = 0; i < tb_setup_capture_retained(app->setup); ++i) {
+                const TbSetupBreak *b = tb_setup_capture_retained_break(app->setup, i);
+                (void)snprintf(line, sizeof line, "Breakpoint %llu | %s | %s | %.140s", (unsigned long long)b->id,
+                    b->enabled ? "enabled intent" : "disabled intent", tb_session_state(app->debugger) == TB_SESSION_RUNNING ? "awaiting stop" : "unresolved; installation pending", *b->source ? b->source : b->location);
+                setup_text(&text, line); setup_entry_actions(&text, 0, 11, (int)i); ++entries;
+            }
+            if (!entries) { setup_text(&text, "No retained unresolved Source, Watch or breakpoint entries."); }
+        } else {
+            setup_text(&text, "Local definitions are restored before connection/symbols, source settings, then bounded Source reopening. Missing files retain identity/order/selection and no prior contents.");
+            setup_text(&text, "Code-breakpoint installation and explicit import/reconciliation remain pending. Saved enabled intent never means an installed breakpoint.");
+        }
+        if (tb_setup_restore_active(app->restoration) || strstr(tb_setup_restore_status(app->restoration), "Awaiting stop")) {
+            int row = text.logical++ - app->setup_offset;
+            if (row >= 0 && row < text.visible) { button(app, card.y + 3 + row, left, width, "[ Cancel restoration ]", SETUP_ACTION, 8, 0); }
+        }
+        if (tb_setup_restore_acknowledgment(app->restoration)) {
+            setup_text(&text, "Enabled saved breakpoints are unresolved. Acknowledgment permits execution without claiming they are installed.");
+            int row = text.logical++ - app->setup_offset;
+            if (row >= 0 && row < text.visible) { button(app, card.y + 3 + row, left, width, "[ Acknowledge failures ]", SETUP_ACTION, 12, 0); }
+        }
         if (!tb_break_definitions_ready(tb_session_breakpoints(app->debugger))) { setup_text(&text, "Breakpoint work or external/uncertain managed changes prevent saving. Advanced reconciliation is not implemented yet."); }
     }
     button(app, card.y + card.h - 3, left, 12, "Previous", SETUP_ACTION, -1, 0);
     if (app->setup_offset + text.visible < text.logical) { button(app, card.y + card.h - 3, left + 14, 12, "Next", SETUP_ACTION, -2, 0); }
     button(app, card.y + card.h - 2, card.x + card.w - 16, 14, "[ Back ]", BACK, 0, 0);
 }
-static void setup_activate(App *app, int action)
+static void setup_activate(App *app, int action, int entry)
 {
-    if (!app->live) { return; }
+    if (action == 6 && app->page == SETUP_RESTORE_REVIEW) { app->restore_selected = !app->restore_selected; return; }
+    if (action == 7 && app->page == SETUP_RESTORE_REVIEW) {
+        char directory[TB_SETUP_PATH], stamp[256];
+        if (!profile_capture(app) || !getcwd(directory, sizeof directory)) { return; }
+        tb_profile_image_stamp(app->profile, directory, stamp);
+        if (tb_profile_differences(app->profile, app->setup_review_connection) || strcmp(directory, app->restore_directory) || strcmp(stamp, app->restore_stamp)) {
+            if (setup_prepare_restore(app)) { status(app, "Connection or ELF changed during review. Review again before starting."); } return;
+        }
+        app->restore_confirmed = true;
+        if (start_session(app)) { page_result(app, WORKSPACE); }
+        return;
+    }
+    if (!app->live && app->page != SETUP_RESTORE_REVIEW) { return; }
     if (action < 0) {
         int amount = LINES - 14; if (amount < 1) { amount = 1; }
         app->setup_offset += action == -1 ? -amount : amount; if (app->setup_offset < 0) { app->setup_offset = 0; } return;
@@ -2980,6 +3080,29 @@ static void setup_activate(App *app, int action)
         page(app, SETUP_SAVE); app->setup_offset = 0; return;
     }
     if (action >= 2 && action <= 4) { app->setup_information = action; app->setup_offset = 0; page(app, SETUP_INFO); return; }
+    if (action == 8) { tb_setup_restore_cancel(app->restoration, app->debugger); return; }
+    if (action == 9 || action == 10) {
+        int pane = entry / TB_CODE_TABS; size_t tab = (size_t)(entry % TB_CODE_TABS); TbCode *code = tb_session_code(app->debugger);
+        if (tb_setup_restore_active(app->restoration)) { status(app, "Wait for restoration to settle before retry/removal."); return; }
+        bool okay = action == 9 ? tb_code_tab_retry(code, pane, tab) : tb_code_tab_close(code, pane, tab);
+        if (action == 9 && !okay && !tb_code_files_ready(code)) { status(app, "Wait for the current source catalog; use Choose source file to refresh it."); }
+        else { status(app, okay ? "Source definition updated; debugger execution unchanged." : "Source still unavailable; correct source lookup settings, refresh the catalog and Retry."); }
+        (void)setup_capture(app); return;
+    }
+    if (action == 11) {
+        if (tb_setup_restore_active(app->restoration)) { return; }
+        const TbSetupBreak *b = entry >= 0 ? tb_setup_capture_retained_break(app->setup, (size_t)entry) : NULL;
+        if (b) { (void)tb_setup_capture_remove_break(app->setup, b->id); (void)setup_capture(app); }
+        return;
+    }
+    if (action == 13 && !tb_setup_restore_active(app->restoration)) {
+        TbVariables *variables = tb_session_variables(app->debugger); TbWatchDefinition w;
+        if (entry >= 0 && tb_variables_definition(variables, (size_t)entry, &w)) {
+            (void)tb_variables_remove_definition(variables, w.identity); (void)setup_capture(app);
+        }
+        return;
+    }
+    if (action == 12) { tb_setup_restore_acknowledge(app->restoration); tb_setup_restore_pump(app->restoration, app->setup, app->debugger); return; }
     if (action == 5) {
         if (!tb_profiles_find(app->profiles, app->setup_profile) || !setup_available(app) || !setup_capture(app)) { return; }
         TbProfile snapshot = *app->session_profile; if (!profile_sources(app, &snapshot)) { return; }
@@ -3310,8 +3433,29 @@ static bool start_session(App *app)
     memset(app->command_input, 0, sizeof app->command_input); memset(app->command_cursor, 0, sizeof app->command_cursor);
     memset(app->source_tabs, 0, sizeof app->source_tabs);
     memset(app->source_revision, 0, sizeof app->source_revision);
+    tb_setup_restore_destroy(app->restoration); app->restoration = tb_setup_restore_create();
     app->live = true; app->previewed = true;
+    if (app->restore_confirmed && app->restore_selected && (!app->restore_definition || !app->restoration)) {
+        tb_session_close(app->debugger); status(app, "Cannot allocate restoration progress; closing session. Saved setup preserved."); return false;
+    }
+    if (app->restore_confirmed && app->restore_selected && app->restore_definition && app->restoration) {
+        if (tb_setup_capture_restore(app->setup, app->restore_definition, &app->layout, &app->demo,
+                                    tb_session_code(app->debugger), tb_session_memory(app->debugger), tb_session_variables(app->debugger))) {
+            for (int i = 0; i < TB_MAX_PANES; ++i) {
+                if (app->restore_definition->panes[i].used) {
+                    (void)mbstowcs(app->memory_input[i], app->restore_definition->panes[i].memory_expression, FIELD_SIZE);
+                    app->memory_cursor[i] = wcslen(app->memory_input[i]);
+                }
+            }
+            app->setup_skipped = false; tb_setup_restore_begin(app->restoration);
+            tb_session_setup_interlock(app->debugger, true, false);
+        } else {
+            tb_session_close(app->debugger); status(app, "Cannot restore local definitions; closing session. Saved setup preserved."); return false;
+        }
+    }
+    app->restore_confirmed = false; app->fullscreen_source = -1;
     reset_lower(app);
+    app->execution_pane = app->demo.pane; app->instruction_mode = false; code_focus(app, app->demo.pane);
     (void)setup_capture(app);
     for (int i = 0; i < TB_MAX_PANES; ++i) { app->follow_log[i] = true; }
     status(app, tb_session_message(app->debugger));
@@ -3336,7 +3480,7 @@ static void request_leave(App *app, bool quit)
 static void activate(App *app, Control control)
 {
     switch (control.kind) {
-    case SETUP_ACTION: setup_activate(app, control.value); break;
+    case SETUP_ACTION: setup_activate(app, control.value, control.pane); break;
     case CONFIG_OPEN: page(app, CONFIG_MENU); break;
     case KEY_ACTION:
         if (control.value == 0) {
@@ -3422,7 +3566,10 @@ static void activate(App *app, Control control)
         app->review_offset = 0; page(app, REVIEW); break;
     case PREVIEW:
         if (!app->demo_mode) {
-            if (start_session(app)) { page_result(app, WORKSPACE); }
+            app->restore_confirmed = false;
+            if (tb_profiles_has_setup(app->profiles, app->profile->name)) {
+                if (setup_prepare_restore(app)) { page(app, SETUP_RESTORE_REVIEW); }
+            } else if (start_session(app)) { page_result(app, WORKSPACE); }
             break;
         }
         app->live = false;
@@ -3432,6 +3579,7 @@ static void activate(App *app, Control control)
         page_result(app, WORKSPACE);
         break;
     case BACK:
+        if (app->page == SETUP_RESTORE_REVIEW) { app->restore_confirmed = false; page(app, REVIEW); break; }
         if (app->page == SETUP_MENU) { page(app, WORKSPACE); break; }
         if (app->page == SETUP_SAVE || app->page == SETUP_INFO) { page(app, SETUP_MENU); break; }
         if (app->page == IMAGE_REVIEW) { page(app, CODE_MENU); break; }
@@ -3477,6 +3625,7 @@ static void activate(App *app, Control control)
     }
     case TOOL:
         if (app->live) {
+            if (control.value != TB_PAUSE && tb_setup_restore_active(app->restoration)) { status(app, "Wait for active setup restoration; Pause and close remain available."); break; }
             if (control.value == TB_RESET && tb_session_capabilities(app->debugger)->openocd) { page(app, RESET_CONFIRM); break; }
             if (control.value == TB_BREAKPOINT) { (void)toggle_breakpoint(app); break; }
             bool okay = control.value == TB_CONTINUE ? tb_session_continue(app->debugger) :
@@ -4461,7 +4610,7 @@ static void key_event(App *app, wint_t key, bool special)
             activate(app, (Control){.kind = BACK}); return;
         }
         if (app->page == PROFILE_LIST || app->page == PROFILE_OPTIONS || app->page == PROFILE_ITEMS || app->page == PROFILE_TEXT || app->page == PROFILE_CONFIRM ||
-            app->page == SETUP_MENU || app->page == SETUP_SAVE || app->page == SETUP_INFO) {
+            app->page == SETUP_MENU || app->page == SETUP_SAVE || app->page == SETUP_INFO || app->page == SETUP_RESTORE_REVIEW) {
             activate(app, (Control){.kind = BACK}); return;
         }
         if (app->page == MEMORY_RANGES || app->page == MEMORY_RANGE || app->page == MEMORY_CONSENT || app->page == MEMORY_RANGE_INPUT || app->page == MMIO_SETUP || app->page == IMAGE_REVIEW) {
@@ -4705,6 +4854,10 @@ int tb_tui_run(bool demo)
             }
             if (app.debugger) {
                 tb_session_pump(app.debugger, 0);
+                const char *before_restore = tb_setup_restore_status(app.restoration);
+                bool before_active = tb_setup_restore_active(app.restoration);
+                tb_setup_restore_pump(app.restoration, app.setup, app.debugger);
+                if (app.live && (before_restore != tb_setup_restore_status(app.restoration) || before_active != tb_setup_restore_active(app.restoration))) { draw(&app); }
                 if (app.recent_pending) {
                     TbSessionState state = tb_session_state(app.debugger);
                     if (state == TB_SESSION_READY || state == TB_SESSION_STOPPED) {
@@ -4756,6 +4909,7 @@ int tb_tui_run(bool demo)
         free(app.server_plan); free(app.catalog);
         tb_profiles_destroy(app.profiles); free(app.profile); free(app.session_profile); tb_setup_capture_destroy(app.setup);
         free(app.setup_review); free(app.setup_review_connection);
+        free(app.restore_definition); free(app.restore_connection); tb_setup_restore_destroy(app.restoration);
     }
     for (int i = 0; i < 3; ++i) { (void)sigaction(signals[i], &saved[i], NULL); }
     return result;

@@ -23,6 +23,8 @@ typedef struct {
 size_t tb_break_definition_count(const TbBreakpoints *breakpoints);
 const TbBreakDefinition *tb_break_definition(const TbBreakpoints *breakpoints, size_t index);
 bool tb_break_definitions_ready(const TbBreakpoints *breakpoints);
+void tb_break_interlock(TbBreakpoints *breakpoints, bool active);
+void tb_break_definition_reserve(TbBreakpoints *breakpoints, size_t retained);
 typedef struct { const char *text, *source; unsigned line; } TbBreakLocation;
 TbBreakpoints *tb_break_create(TbGdb *gdb);
 void tb_break_destroy(TbBreakpoints *breakpoints);

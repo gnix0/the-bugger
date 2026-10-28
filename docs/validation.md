@@ -7,7 +7,7 @@ Commands, results, revisions and acceptance records for The Bugger.
 Latest release: [v0.1.3](#v013-release-preparation).
 Current development: [RISC-V validation for v0.1.4](#v014-task-21--risc-v-hardware-validation),
 using ESP32-C6FH4, accepted before F01 implementation. F01 currently has a
-storage, definition capture and Save setup controls; full restoration remains incomplete.
+storage/save controls and local/Source restoration with consent/interlocks; code-breakpoint installation/import/reconciliation remain incomplete.
 
 Entries are chronological. Raw logs are stored under ignored `build/`; summaries
 and references below retain the results, including failures and unrun checks.
@@ -2894,3 +2894,72 @@ The patch and new source copies are retained beside them.
 - `git diff --check`: PASS. All 173 local Markdown file links resolve.
 These are local host results, not hosted Ubuntu results. Owner manual review,
 physical ARM/Xtensa/RV32 restoration and full F01 acceptance remain unrun.
+
+
+## F01 — local/Source restoration and consent checkpoint
+
+2026-10-28. **Implemented; awaiting user acceptance; F01 incomplete.** The session
+review defaults saved-setup restoration on, shows scope/active connection differences
+and renews review for local ELF metadata or relative-path launch-context changes.
+Local split/tab/Memory/Watch definitions restore before initialization/source
+settings and bounded Source reopening. Missing pins keep identity/order/selection
+without prior contents; current resolved paths remain separate from saved identities.
+Unresolved entries can be inspected/removed; Source Retry uses the current catalog.
+Unsupported saved Watch expressions remain inert and removable.
+
+Active work interlocks execution, Console, reset and debugger context/configuration
+changes. Running targets await explicit Pause; cancellation distinguishes requested
+from settled completion without rollback. Saved code-breakpoint definitions remain
+uninstalled/retained, reserve capacity and survive partial saves. Enabled unresolved
+intent requires acknowledgment, with no repeat for the unchanged set. Breakpoint
+installation/attribute verification, address approval/provenance, explicit import
+and uncertain-mutation reconciliation remain pending. No physical restoration
+result or full F01 acceptance is claimed.
+
+### Local checks
+
+- Focused definition/store/source-setting checks: PASS (`focused-model.log`).
+  Added ELF metadata absence/malformed-field coverage and local file stamp/relative
+  path checks pass in `focused-final-tmux.log`.
+- Actual native coordinator checks: PASS (`focused-native-final.log`, exit 0).
+  Coverage includes seven panes, tab selection, relocated/missing Source identities,
+  no duplicate on explicit reopen, Memory/Watch permission exclusions, unsupported
+  saved expressions, retained breakpoint capacity, partial saves/removal,
+  execution/Console/context/source-setting interlocks, failure acknowledgment,
+  cancellation with an actual in-flight catalog query and running-target deferral.
+- Direct native UI: PASS (`focused-native-wrapped.log`). Default restoration review,
+  ELF renewal, selected missing Source, partial saves retaining breakpoint/Watch
+  definitions, explicit removal and unchanged-failure acknowledgment are exercised.
+- Isolated real tmux workflow: PASS (`focused-final-tmux.log`, exit 0), including
+  restoration controls and the existing 48/80/123/124/152/160 width assertions with
+  long custom shortcuts.
+- Existing code-model regression plus duplicate-name/relocated-pin cases: PASS
+  (`focused-code-final.log`, exit 0), including refusal to infer a unique match from
+  an incomplete catalog. This is an explicitly synthetic MI peer; it establishes
+  parsing/identity behavior, not physical GDB/server results.
+- The first native coordinator run exposed explicit source-catalog requests waiting
+  for hidden/stale selected-frame readiness. The application now dispatches explicit
+  metadata-only catalog queries independently of frame readiness. Original failure:
+  `focused-native.log`; corrected run: `focused-native-catalog.log`.
+- The first UI restoration fixture searched for a phrase split across a hard-wrapped
+  line (`focused-tui-restore.log`). Setup text now wraps at word boundaries while
+  retaining UTF-8 boundaries; corrected native/tmux runs passed.
+
+- The first fresh fortified baseline in `build/f01-restore-ci-20261028` passed,
+  exit 0 (`test-ci.log`, `test-ci.exit`). Final startup-focus and Source matching
+  fixes required a new baseline rather than treating that earlier run as final.
+- Final fresh fortified baseline outside the sandbox: PASS, exit 0.
+  `TERM=xterm-256color make BUILD_DIR=build/f01-restore-ci-final-20261028 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+  Full output/status: `build/f01-restore-evidence/test-ci-final.log` and
+  `test-ci-final.exit`. The complete default/native/tmux/localhost-remote/offline
+  OpenOCD baseline includes existing text-entry/Enter/Backspace, context-selection
+  and terminal-restoration assertions. The compact saved-setup review is also
+  checked at 48×18 in direct/tmux workflows.
+- Final code/test/build hashes match `tested-tree-final.sha256`. Environment is
+  recorded in `environment.log`; the patch/new source copies are retained beside
+  the full logs. Host: Arch Linux x86-64, GCC 16.2.1, GDB 18.1, tmux 3.8.
+- `git diff --check`: PASS; all 173 local Markdown file links resolve.
+
+Raw artifacts are under `build/f01-restore-evidence/`.
+These are local host checks, not hosted Ubuntu results. Owner manual restoration
+acceptance, hosted checks and physical ARM/Xtensa/RV32 restoration remain unrun.

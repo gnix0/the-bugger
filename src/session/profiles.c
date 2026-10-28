@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -90,6 +91,35 @@ uint32_t tb_profile_differences(const TbProfile *a, const TbProfile *b)
         }
     }
     return changes;
+}
+static bool relative_path(const char *path) { return *path && *path != '/'; }
+bool tb_profile_relative_paths(const TbProfile *p)
+{
+    if (relative_path(p->executable) || (!p->kind && !p->attach && relative_path(p->directory)) ||
+        (strchr(p->gdb, '/') && relative_path(p->gdb))) { return true; }
+    for (size_t i = 0; i < p->directory_count; ++i) { if (relative_path(p->directories[i])) { return true; } }
+    for (size_t i = 0; i < p->rule_count; ++i) { if (relative_path(p->rules[i].to)) { return true; } }
+    if (p->kind != 1 || !p->start_server) { return false; }
+    if (strchr(p->openocd, '/') && relative_path(p->openocd)) { return true; }
+    for (size_t i = 0; i < p->search.count; ++i) { if (relative_path(p->search.values[i])) { return true; } }
+    if (p->scripts.count) {
+        for (size_t i = 0; i < p->scripts.count; ++i) { if (relative_path(p->scripts.values[i])) { return true; } }
+    } else if (p->adapter_target ? relative_path(p->adapter) || relative_path(p->target) : relative_path(p->board)) { return true; }
+    return false;
+}
+void tb_profile_image_stamp(const TbProfile *p, const char *directory, char stamp[256])
+{
+    if (!*p->executable) { (void)snprintf(stamp, 256, "none"); return; }
+    char path[TB_SETUP_PATH + TB_PROFILE_PATH];
+    int n = snprintf(path, sizeof path, "%s%s%s", p->executable[0] == '/' ? "" : directory,
+                     p->executable[0] == '/' ? "" : "/", p->executable);
+    struct stat st;
+    if (n < 0 || (size_t)n >= sizeof path || stat(path, &st) != 0 || !S_ISREG(st.st_mode)) {
+        (void)snprintf(stamp, 256, "unavailable"); return;
+    }
+    (void)snprintf(stamp, 256, "file:%ju:%ju:%jd:%jd:%ld:%jd:%ld", (uintmax_t)st.st_dev,
+                   (uintmax_t)st.st_ino, (intmax_t)st.st_size, (intmax_t)st.st_mtim.tv_sec,
+                   st.st_mtim.tv_nsec, (intmax_t)st.st_ctim.tv_sec, st.st_ctim.tv_nsec);
 }
 bool tb_profile_valid(const TbProfile *p)
 {
@@ -311,10 +341,14 @@ bool tb_profiles_load(TbProfiles *p)
         bool seen[TB_PROFILES] = {0};
         for (size_t i = 0; i < count; ++i) {
             json_object *record = json_object_array_get_idx(setups, i);
-            static const char *const record_names[] = {"profile", "connection", "launch_directory", "definition"};
+            static const char *const record_names[] = {"profile", "connection", "launch_directory", "definition", "elf_metadata"};
+            json_object *metadata = NULL; bool has_metadata = json_object_object_get_ex(record, "elf_metadata", &metadata);
+            char stamp[256];
             char name[TB_PROFILE_NAME], directory[TB_SETUP_PATH]; TbProfile connection = {0};
             json_object *definition = member(record, "definition", json_type_object);
-            bool valid = fields(record, record_names, 4) && string_get(record, "profile", name, sizeof name) &&
+            bool valid = fields(record, record_names, has_metadata ? 5 : 4) &&
+                         (!has_metadata || string_get(record, "elf_metadata", stamp, sizeof stamp)) &&
+                         string_get(record, "profile", name, sizeof name) &&
                          string_get(record, "launch_directory", directory, sizeof directory) && *directory == '/' &&
                          profile_get(member(record, "connection", json_type_object), &connection);
             size_t index = 0;
@@ -487,6 +521,11 @@ bool tb_profiles_setup_connection(const TbProfiles *p, const char *name, TbProfi
     return i < p->count && p->setups[i] && profile_get(member(p->setups[i], "connection", json_type_object), connection) &&
            string_get(p->setups[i], "launch_directory", directory, TB_SETUP_PATH);
 }
+bool tb_profiles_setup_stamp(const TbProfiles *p, const char *name, char stamp[256])
+{
+    size_t i = profile_index(p, name); stamp[0] = 0;
+    return i < p->count && p->setups[i] && string_get(p->setups[i], "elf_metadata", stamp, 256);
+}
 bool tb_profiles_save_setup(TbProfiles *p, const char *name, const TbSetup *setup, const TbProfile *connection, const char *directory)
 {
     size_t i = profile_index(p, name);
@@ -494,8 +533,9 @@ bool tb_profiles_save_setup(TbProfiles *p, const char *name, const TbSetup *setu
     if (!tb_setup_valid(setup) || !tb_profile_valid(connection) || !directory || *directory != '/' || !clean(directory, TB_SETUP_PATH, false)) {
         return fail(p, "Invalid setup definitions or connection snapshot.");
     }
+    char stamp[256]; tb_profile_image_stamp(connection, directory, stamp);
     json_object *record = json_object_new_object();
-    if (!record || !add(record, "profile", json_object_new_string(name)) || !add(record, "connection", profile_make(connection)) ||
+    if (!record || !add(record, "elf_metadata", json_object_new_string(stamp)) || !add(record, "profile", json_object_new_string(name)) || !add(record, "connection", profile_make(connection)) ||
         !add(record, "launch_directory", json_object_new_string(directory)) || !add(record, "definition", tb_setup_encode(setup))) {
         json_object_put(record); return fail(p, "Setup allocation/serialization failed.");
     }

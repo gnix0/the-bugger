@@ -50,6 +50,9 @@ const TbSessionCapabilities *tb_session_capabilities(const TbSession *session);
 TbSessionKind tb_session_kind(const TbSession *session);
 bool tb_session_destroy(TbSession *native); /* Refuses a live debugger. */
 bool tb_session_start(TbSession *native, const TbSessionConfig *config);
+/* Local coordination only. Pause/close remain available. Failure acknowledgment
+ * gates execution but does not imply that an unresolved breakpoint is installed. */
+void tb_session_setup_interlock(TbSession *session, bool active, bool unacknowledged);
 bool tb_session_continue(TbSession *native);
 bool tb_session_pause(TbSession *native);
 typedef enum { TB_STEP_OVER, TB_STEP_INTO, TB_STEP_OUT } TbStep;
