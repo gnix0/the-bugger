@@ -79,7 +79,11 @@ records remain in the [validation records](../docs/validation.md).
 - `test-setup-capture` / `make test-setup-capture`: metadata-only definitions,
   stable lifecycle identities, transient exclusions and active connection comparison.
   Included in `make test`.
-- `make test-setup-tmux`: native profile/setup save workflow through an isolated
+- `make test-setup-restore`: actual native local/Source restoration, retained
+  breakpoint intent/limits, Memory/Watch permission exclusions, partial saves,
+  interlocks/acknowledgment, in-flight cancellation and running-target deferral.
+  Included in `make test-native`.
+- `make test-setup-tmux`: native profile/setup save/restore workflow through an isolated
   tmux server, including narrow toolbar geometry with long custom shortcut labels.
   Included in `make test-tmux`; requires GDB/ptrace and tmux.
 - `test-profiles-tui` / `make test-m13-tui`: file-only live launcher/profile CRUD,

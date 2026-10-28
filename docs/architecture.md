@@ -1053,7 +1053,10 @@ hardware allocations, temporary breakpoints or lower-overlay state are present.
 
 Schema 3 adds a separate `setups` array. Each record contains `profile` (the
 associated saved name), `connection` (a connection snapshot), `launch_directory`
-(the absolute launch context) and `definition`. The connection snapshot does not
+(the absolute launch context), `definition` and optional `elf_metadata` (local
+file identity/size/timestamps at save). Older schema-3 records without that metadata
+remain readable and require renewed review. Metadata is neither firmware identity
+nor live-byte verification. The connection snapshot does not
 replace connection-profile data. Setup transactions require an existing profile;
 profile replacement retains its setup, duplication copies only saved definitions
 independently, and deletion removes the associated record in the same transaction.
@@ -1089,9 +1092,36 @@ ignore counts do not alter definitions. Temporary/data/backend-only breakpoints
 are excluded. Detected external conflicts and uncertain managed mutations block
 saving; advanced reconciliation and explicit backend import remain pending.
 
-Compatibility consent, restoration coordination, unresolved-entry recovery and
-breakpoint import/reconciliation remain unimplemented. Saving does not restore
-or dispatch saved definitions to the debugger.
+`tui/setup_restore.{h,c}` coordinates local/Source restoration. Session Review
+adds a saved-setup review with restoration enabled by default. It displays scope
+and active parsed connection differences, relative-path launch-context changes
+and local ELF metadata changes/unavailability. Starting confirms that review;
+a change before dispatch requires another review. Literal paths and aliases are
+not speculatively normalized, and inactive fields/PID/environment overrides are
+excluded. Local metadata matching does not establish firmware identity.
+
+Local splits/tabs/Memory/Watch definitions precede normal initialization and
+existing source-setting restoration. Source pins start unavailable, retaining
+original identity/order/selection. A bounded catalog stage resolves through GDB;
+Source reopening handles one pin per pump; ambiguous/incomplete catalogs cannot
+justify a relocated-file match. Resolved paths are separate from saved
+pin identities. Missing pins show no former contents. Retry uses the current
+catalog after source lookup repair; removal changes the draft and is never
+reconciled back into it. Restored Watches retain unsupported expressions as inert,
+removable definitions. Memory remains unconfigured/unread until explicit Go/Read.
+
+Running targets retain local definitions and await an explicit stop. Active work
+interlocks execution, Console, reset and debugger context/configuration changes;
+Pause/close and local navigation remain available. Cancellation stops further
+coordinator/source-setting dispatch without rollback and distinguishes a request
+from completion while work remains in flight. Save waits for active work to settle.
+Lower views start minimized and no fullscreen, sample or permission is restored.
+
+Code-breakpoint installation and import/reconciliation remain pending. Saved
+breakpoint definitions remain retained/uninstalled, reserve capacity within the
+256-definition limit and participate in partial saves by identity. Enabled retained
+definitions require acknowledgment before execution; unchanged failure sets do
+not reprompt. This does not mark them installed or allocate hardware.
 
 Writes use an owned regular file, nonblocking advisory lock, stale-writer stamp
 check, private temporary file, fsync, atomic rename and directory fsync. Corrupt,

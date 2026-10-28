@@ -89,6 +89,8 @@ bool tb_memory_refresh(TbMemory *memory, int view);
 bool tb_memory_page(TbMemory *memory, int view, int direction);
 bool tb_memory_browse(TbMemory *memory, int view, int direction);
 void tb_memory_regions(TbMemory *memory, const TbMemoryRegion *regions, size_t count);
+/* Fresh-view metadata only: no address, sample or permission is restored. */
+bool tb_memory_definition(TbMemory *memory, int view, unsigned bytes, unsigned grouping);
 bool tb_memory_length(TbMemory *memory, int view, unsigned bytes);
 bool tb_memory_group(TbMemory *memory, int view, unsigned bytes);
 /* Metadata is supplied by a session adapter, never inferred from the host. */

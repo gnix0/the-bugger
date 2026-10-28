@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
     unsigned memory_mode = 0;
     unsigned mmio_mode = strcmp(mode, "remote-mmio-slow") == 0 ? 1 : 0, mmio_reads = 0;
     bool mmio_peer = strcmp(mode, "mmio") == 0 || strcmp(mode, "context-mmio") == 0 || strncmp(mode, "remote-mmio", 11) == 0;
-    bool code_page_error = false;
+    bool code_page_error = false, code_duplicate_source = false, code_limited_sources = false;
     unsigned code_bad_reply = 0;
     char variable_name[64] = {0}; unsigned variable_reads = 0, variable_children = 0, variable_deletes = 0;
     unsigned variable_mode = 0;
@@ -396,7 +396,14 @@ int main(int argc, char *argv[])
         } else if (strncmp(mode, "context-code", 12) == 0 && strcmp(command, "-file-list-exec-source-files\n") == 0) {
             (void)printf("%s^done,files=[{file=\"unit.c\",fullname=", token);
             quoted(getenv("TB_FAKE_SOURCE") ? getenv("TB_FAKE_SOURCE") : "/missing.c");
-            puts("},{file=\"duplicate.c\",fullname=\"/not/here/duplicate.c\"},{file=\"relative-unresolved.c\"}]");
+            fputs("},{file=\"duplicate.c\",fullname=\"/not/here/duplicate.c\"},{file=\"relative-unresolved.c\"}", stdout);
+            if (code_duplicate_source) { fputs(",{file=\"duplicate.c\",fullname=", stdout); quoted(getenv("TB_FAKE_SOURCE2")); fputs("}", stdout); }
+            if (code_limited_sources) { for (unsigned i = 0; i < 257; ++i) { fputs(",{file=\"filler.c\",fullname=\"/not/real.c\"}", stdout); } }
+            puts("]");
+        } else if (strncmp(mode, "context-code", 12) == 0 && strcmp(command, "-code-limited-sources\n") == 0) {
+            code_limited_sources = true; reply(token, "^done");
+        } else if (strncmp(mode, "context-code", 12) == 0 && strcmp(command, "-code-duplicate-source\n") == 0) {
+            code_duplicate_source = true; reply(token, "^done");
         } else if (strncmp(mode, "context-code", 12) == 0 && strcmp(command, "-code-page-error\n") == 0) {
             code_page_error = true; reply(token, "^done");
         } else if (strncmp(mode, "context-code", 12) == 0 && strncmp(command, "-code-bad-reply ", 16) == 0) {

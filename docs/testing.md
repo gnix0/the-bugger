@@ -560,17 +560,48 @@ Manual capture/save review with a disposable configuration:
 2. Create a code breakpoint using the frontend. Set a condition and explicit
    ignore count, then run through hits. Saving must retain the original configured
    count and location. Temporary run-to and Console-created breakpoints are excluded.
-3. Close/reopen the profile. Restoration is pending, so expect a fresh workspace
-   with minimized lower views. Cancel Replace setup: the saved definitions remain.
-   Confirm replacement: hidden old definitions disappear; the connection profile
-   remains unchanged. Duplicate the profile with unsaved edits and verify the copy
-   contains only its saved connection/setup.
+3. Close/reopen the profile. Expect Restore saved setup selected in the additional
+   session review, showing scope/connection differences and any ELF/context change.
+   Start and verify split/tab/Source selection, Memory settings and Watch formats;
+   lower views must remain minimized, with no Memory/Watch read permission.
+   Repeat with restoration unchecked. Cancel Replace setup: saved definitions
+   remain. Confirm replacement: hidden old definitions disappear; the connection
+   profile remains unchanged. Duplication excludes unsaved edits.
 4. Repeat in a direct terminal and tmux at the widths above. Inspect Setup,
    Session/Quit, action names, focus, text entry, Escape and shortcut operation.
 
-Restoration consent, bounded backend restoration, unresolved-entry handling,
-explicit breakpoint import/reconciliation and physical restoration acceptance
-remain unimplemented and unverified.
+`make test-setup-restore` uses an actual native fixture to check local split/tab
+restoration, selected missing pins without prior contents, stable partial saves,
+Memory/Watch definitions without permissions, retained enabled breakpoint intent,
+capacity reservation, acknowledgment, an in-flight catalog cancellation and
+running-target deferral until explicit Pause. It is included in `test-native`.
+The direct/tmux profile workflows also cover default restoration consent, local
+ELF metadata renewal, partial saves and explicit unresolved Source removal.
+Definition/store checks retain legacy schema-3 records without metadata and reject
+malformed metadata into read-only recovery.
+
+Additional manual restoration checks:
+
+1. Save a setup with two Source pins, selecting the second. Move/remove that file
+   before reopening. The selected missing pin must remain in order, with `!`, no
+   prior contents and explicit Retry/Remove under Setup. Repair its source lookup,
+   refresh the source catalog and Retry; the same entry must resolve without a
+   duplicate. Remove it and save: reopening must not resurrect it.
+2. Save enabled code-breakpoint intent, then reopen. Installation is pending in
+   this checkpoint: expect unresolved/awaiting stop, never installed. Execution
+   must require acknowledgment. Acknowledging and later stopping again must not
+   reprompt for the unchanged set. Partial saving retains its original definition.
+3. While restoration is active, try execution, Reset, Console and thread/frame or
+   source-setting changes. They must be blocked; local navigation/Pause/close
+   remain available. Cancel during in-flight work: expect Cancel requested until
+   settlement, then canceled, without rollback or further coordinator dispatch.
+4. With an explicitly authorized disposable running target, reopen a saved setup.
+   It must stay running and await a stop. Pause explicitly; pending work must run
+   before execution/configuration changes become available. Native host tests do
+   not establish this behavior on physical ARM/Xtensa/RV32 setups.
+
+Code-breakpoint installation/attribute verification, address approval/provenance,
+explicit import/reconciliation and physical restoration acceptance remain pending.
 
 ## Hardware data watchpoints
 

@@ -2,6 +2,7 @@
 #include "profiles.h"
 #include "../support/check.h"
 #include <string.h>
+#include <unistd.h>
 static void event(void *user, const TbGdbEvent *record) { (void)user; (void)record; }
 
 int main(void)
@@ -62,6 +63,14 @@ int main(void)
     b->scripts.count = 1; (void)snprintf(b->scripts.values[0], TB_PROFILE_WORD, "board.cfg"); CHECK(tb_profile_differences(a, b) == TB_PROFILE_SCRIPTS);
     a->start_server = b->start_server = false; CHECK(!tb_profile_differences(a, b));
     (void)snprintf(b->endpoint, sizeof b->endpoint, "127.0.0.1:3333"); CHECK(tb_profile_differences(a, b) == TB_PROFILE_ENDPOINT);
+    char file[] = "/tmp/the-bugger-setup-stamp-XXXXXX", before[256], after[256];
+    int fd = mkstemp(file); CHECK(fd >= 0); CHECK(write(fd, "ELF metadata", 12) == 12 && close(fd) == 0);
+    tb_profile_defaults(a, 0); (void)snprintf(a->executable, sizeof a->executable, "%s", file);
+    CHECK(!tb_profile_relative_paths(a)); tb_profile_image_stamp(a, "/", before);
+    CHECK(strncmp(before, "file:", 5) == 0); CHECK(unlink(file) == 0);
+    tb_profile_image_stamp(a, "/", after); CHECK(strcmp(after, "unavailable") == 0 && strcmp(before, after));
+    (void)snprintf(a->executable, sizeof a->executable, "./firmware.elf"); CHECK(tb_profile_relative_paths(a));
+    a->executable[0] = 0; a->attach = true; (void)snprintf(a->directory, sizeof a->directory, "inactive"); CHECK(!tb_profile_relative_paths(a));
     free(a); free(b); tb_setup_capture_destroy(c); tb_break_destroy(breaks); tb_variables_destroy(variables);
     tb_memory_destroy(memory); tb_code_destroy(code); tb_context_destroy(context); CHECK(tb_gdb_destroy(gdb));
     puts("PASS setup capture identities, removed/reused entries, transient exclusions, skipped definitions, bounds, active connection differences and zero target reads");

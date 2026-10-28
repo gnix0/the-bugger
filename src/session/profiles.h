@@ -30,6 +30,9 @@ enum { TB_PROFILE_MODE = 1, TB_PROFILE_TOOLS = 2, TB_PROFILE_ARGUMENTS = 4,
 /* Parsed active fields only; names, inactive controls and unused array slots
  * are not connection differences. Paths and endpoint aliases stay literal. */
 uint32_t tb_profile_differences(const TbProfile *session, const TbProfile *saved);
+/* Local metadata for renewed restoration consent, never firmware identity. */
+void tb_profile_image_stamp(const TbProfile *profile, const char *launch_directory, char stamp[256]);
+bool tb_profile_relative_paths(const TbProfile *profile);
 TbProfiles *tb_profiles_create(void);
 void tb_profiles_destroy(TbProfiles *profiles);
 bool tb_profiles_load(TbProfiles *profiles);
@@ -45,6 +48,7 @@ bool tb_profiles_has_setup(const TbProfiles *profiles, const char *name);
 TbSetup *tb_profiles_setup(const TbProfiles *profiles, const char *name);
 bool tb_profiles_setup_connection(const TbProfiles *profiles, const char *name,
                                  TbProfile *connection, char directory[TB_SETUP_PATH]);
+bool tb_profiles_setup_stamp(const TbProfiles *profiles, const char *name, char stamp[256]);
 bool tb_profiles_save_setup(TbProfiles *profiles, const char *name, const TbSetup *setup,
                             const TbProfile *connection, const char *launch_directory);
 /* Copies only saved definitions, never a session draft or recency. */

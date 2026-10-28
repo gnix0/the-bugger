@@ -79,6 +79,63 @@ static void setup_review(void)
     }
     CHECK(false);
 }
+static void restored_setup(const char *binary, TbProfiles *store)
+{
+    TbSetup *saved = tb_profiles_setup(store, "saved copy"); CHECK(saved && saved->panes[0].source_count == 1);
+    saved->panes[0].source_count = 2;
+    TbSetupSource *missing = &saved->panes[0].sources[1]; missing->id = saved->next_id++;
+    (void)snprintf(missing->file, sizeof missing->file, "missing-saved-source.c");
+    (void)snprintf(missing->full, sizeof missing->full, "/missing-saved-source.c");
+    saved->panes[0].source_selected = missing->id;
+    saved->panes[3].memory_bytes = 96; saved->panes[3].memory_group = 4;
+    (void)snprintf(saved->panes[3].memory_expression, 256, "&saved_memory");
+    saved->watch_count = 2;
+    saved->watches[0] = (TbSetupWatch){.id = saved->next_id++, .expression = "saved_watch", .format = 1};
+    saved->watches[1] = (TbSetupWatch){.id = saved->next_id++, .expression = "unsafe_call()", .format = 2};
+    saved->break_count = 1;
+    saved->breaks[0] = (TbSetupBreak){.id = saved->next_id++, .location = "main", .condition = "1", .enabled = true, .ignore_set = true, .ignore = 2, .hardware = true};
+    char directory[TB_SETUP_PATH]; CHECK(getcwd(directory, sizeof directory));
+    CHECK(tb_profiles_save_setup(store, "saved copy", saved, tb_profiles_find(store, "saved copy"), directory));
+    json_object *root = json_object_from_file(tb_profiles_path(store)); CHECK(root);
+    json_object *setups = NULL; CHECK(json_object_object_get_ex(root, "setups", &setups));
+    for (size_t i = 0; i < json_object_array_length(setups); ++i) {
+        json_object *record = json_object_array_get_idx(setups, i), *name = NULL; CHECK(json_object_object_get_ex(record, "profile", &name));
+        if (strcmp(json_object_get_string(name), "saved copy") == 0) {
+            CHECK(json_object_object_add(record, "elf_metadata", json_object_new_string("previous-local-file")) == 0);
+        }
+    }
+    CHECK(json_object_to_file_ext(tb_profiles_path(store), root, JSON_C_TO_STRING_PRETTY) == 0); json_object_put(root);
+    CHECK(tb_profiles_load(store));
+    start(binary); click("[ Config ]"); click("Profiles"); click("saved copy"); click("Review session"); click("Start native");
+    test_terminal_expect(&term, "[x] Restore saved setup"); test_terminal_expect(&term, "ELF metadata changed");
+    test_terminal_expect(&term, "code-breakpoint intent");
+    test_terminal_resize(&term, 18, 48); test_terminal_expect(&term, "Restore saved setup");
+    test_terminal_expect(&term, "[ Start session ]"); test_terminal_expect(&term, "[ Back ]");
+    test_terminal_resize(&term, 44, 160); test_terminal_expect(&term, "ELF metadata changed");
+    click("[ Start session ]"); test_terminal_expect(&term, "LIVE | Loaded");
+    test_terminal_expect(&term, "Saved Source unavailable");
+    setup_review(); test_terminal_expect(&term, "2 Watches | 1 code breakpoints"); click("[ Save setup ]");
+    test_terminal_expect(&term, "Setup saved. Connection profile unchanged."); CHECK(!test_terminal_find(&term, "Save setup*", NULL, NULL));
+    CHECK(tb_profiles_load(store)); TbSetup *partial = tb_profiles_setup(store, "saved copy"); CHECK(partial && tb_setup_equal(partial, saved)); free(partial);
+    click("Unresolved setup entries"); test_terminal_expect(&term, "missing-saved-source.c"); test_terminal_expect(&term, "unsupported saved expression");
+    test_terminal_expect(&term, "enabled intent"); test_terminal_expect(&term, "unresolved; installation pending");
+    test_terminal_expect(&term, "Acknowledge failures"); click("Acknowledge failures");
+    CHECK(!test_terminal_find(&term, "Acknowledge failures", NULL, NULL));
+    click("[ Back ]"); click("[ Back ]"); click("Continue"); test_terminal_expect(&term, "LIVE | Running");
+    click("Pause"); test_terminal_expect(&term, "LIVE | Stopped"); click("Setup"); click("Unresolved setup entries");
+    CHECK(!test_terminal_find(&term, "Acknowledge failures", NULL, NULL));
+    /* Remove the Source entry by its row-specific control, then verify retained
+     * breakpoint/Watch definitions remain and removal makes the draft dirty. */
+    int x, y; CHECK(test_terminal_find(&term, "missing-saved-source.c", &x, &y));
+    const char *remove = strstr(term.cells[y + 1], "[ Remove ]"); CHECK(remove); x = (int)(remove - term.cells[y + 1]) + 2;
+    char mouse[80]; (void)snprintf(mouse, sizeof mouse, "\033[<0;%d;%dM\033[<0;%d;%dm", x, y + 2, x, y + 2);
+    test_terminal_send(&term, mouse); settle(); CHECK(!test_terminal_find(&term, "missing-saved-source.c", NULL, NULL));
+    click("[ Back ]"); test_terminal_expect(&term, "Save setup*"); click("Save setup"); click("[ Save setup ]");
+    CHECK(tb_profiles_load(store)); partial = tb_profiles_setup(store, "saved copy");
+    CHECK(partial && partial->panes[0].source_count == 1 && partial->break_count == 1 && partial->breaks[0].id == saved->breaks[0].id && partial->watch_count == 2); free(partial);
+    click("[ Back ]"); click("Session"); click("Close session"); test_terminal_expect(&term, "[ Config ]"); stop(); free(saved);
+    puts("PASS F01 restore review/default consent/ELF renewal, missing Source selection, partial saves, retained breakpoint/Watch definitions, failure acknowledgment and explicit removal");
+}
 static void live_setup(const char *binary, const char *fixture, TbProfiles *store)
 {
     const char *root = getenv("XDG_CONFIG_HOME"); char preference[1024], source_directory[1024];
@@ -137,7 +194,9 @@ static void live_setup(const char *binary, const char *fixture, TbProfiles *stor
     click("[ Duplicate ]"); input("saved copy"); test_terminal_expect(&term, "Unsaved draft unchanged.");
     CHECK(tb_profiles_load(store) && tb_profiles_find(store, "saved copy")->directory_count == 0);
     TbSetup *copy = tb_profiles_setup(store, "saved copy"); CHECK(copy && tb_setup_equal(copy, saved)); free(copy);
-    back(); click("Review session"); click("Start native"); test_terminal_expect(&term, "LIVE | Loaded");
+    back(); click("Review session"); click("Start native");
+    test_terminal_expect(&term, "[x] Restore saved setup"); click("Restore saved setup"); click("[ Start session ]");
+    test_terminal_expect(&term, "LIVE | Loaded");
     setup_review(); test_terminal_expect(&term, "Replace discards"); test_terminal_expect(&term, "Source directory"); back(); test_terminal_expect(&term, "Restoration information");
     CHECK(tb_profiles_load(store)); TbSetup *preserved = tb_profiles_setup(store, "on demand"); CHECK(preserved && tb_setup_equal(saved, preserved)); free(preserved);
     click("Save setup"); test_terminal_expect(&term, "Save setup review"); click("[ Replace setup ]"); test_terminal_expect(&term, "Setup saved. Connection profile unchanged.");
@@ -145,6 +204,7 @@ static void live_setup(const char *binary, const char *fixture, TbProfiles *stor
     CHECK(memcmp(profile, tb_profiles_find(store, "on demand"), sizeof *profile) == 0);
     copy = tb_profiles_setup(store, "saved copy"); CHECK(copy && tb_setup_equal(copy, saved)); free(copy);
     click("[ Back ]"); click("Session"); click("Close session"); test_terminal_expect(&term, "[ Config ]"); stop();
+    restored_setup(binary, store);
     CHECK(tb_profiles_load(store) && tb_profiles_remove(store, "on demand") && tb_profiles_remove(store, "saved copy")); free(saved); free(profile); CHECK(unlink(preference) == 0 && rmdir(source_directory) == 0);
     puts("PASS F01 live saving/profile association, pinned identity, dirty state, skipped replacement, profile preservation and toolbar widths with long shortcuts");
 }

@@ -11,7 +11,7 @@ enum { COOKIE_BASE = 6000 };
 struct TbContext {
     TbGdb *gdb;
     TbContextSnapshot snapshot, next;
-    bool visible_threads, visible_frames, required, dirty, invalidate, waiting, failed;
+    bool visible_threads, visible_frames, required, dirty, invalidate, waiting, failed, interlock;
     bool select_thread, select_frame, registers_required, memory_required, variables_required;
     char desired_thread[32], selection_error[192];
     int desired_frame, first_frame;
@@ -354,8 +354,11 @@ void tb_context_pump(TbContext *context)
     } else if (context->query) { publish(context); }
 }
 
+void tb_context_interlock(TbContext *context, bool active) { context->interlock = active; }
+bool tb_context_interlocked(const TbContext *context) { return context->interlock; }
 bool tb_context_select_thread(TbContext *context, const char *id)
 {
+    if (context->interlock) { return false; }
     if (!id || tb_gdb_state(context->gdb) != TB_GDB_STOPPED) { return false; }
     bool found = false;
     for (size_t i = 0; i < context->snapshot.thread_count; ++i) {
@@ -369,6 +372,7 @@ bool tb_context_select_thread(TbContext *context, const char *id)
 }
 bool tb_context_select_frame(TbContext *context, int level)
 {
+    if (context->interlock) { return false; }
     if (context->snapshot.stale || context->select_thread ||
         (context->waiting && context->query == SELECT_THREAD) ||
         tb_gdb_state(context->gdb) != TB_GDB_STOPPED) { return false; }

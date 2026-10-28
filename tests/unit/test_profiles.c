@@ -102,6 +102,15 @@ static void setup_checks(TbProfiles *store)
     free(saved); saved = read_file(tb_profiles_path(store));
     json_object *root = json_tokener_parse(saved), *setups = NULL; CHECK(root);
     CHECK(json_object_object_get_ex(root, "setups", &setups));
+    json_object *legacy_record = json_object_array_get_idx(setups, 0); char stamp[256];
+    CHECK(tb_profiles_setup_stamp(copy, "profile-0", stamp) && *stamp);
+    json_object_object_del(legacy_record, "elf_metadata");
+    write_file(tb_profiles_path(store), json_object_to_json_string(root));
+    CHECK(tb_profiles_load(copy) && !tb_profiles_read_only(copy) && !tb_profiles_setup_stamp(copy, "profile-0", stamp));
+    CHECK(json_object_object_add(legacy_record, "elf_metadata", json_object_new_int(3)) == 0);
+    write_file(tb_profiles_path(store), json_object_to_json_string(root));
+    CHECK(tb_profiles_load(copy) && tb_profiles_read_only(copy) && !tb_profiles_has_setup(copy, "profile-0"));
+    CHECK(json_object_object_add(legacy_record, "elf_metadata", json_object_new_string("unavailable")) == 0);
     CHECK(json_object_array_add(setups, json_object_new_object()) == 0);
     CHECK(json_object_array_add(setups, NULL) == 0);
     write_file(tb_profiles_path(store), json_object_to_json_string(root)); json_object_put(root);

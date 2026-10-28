@@ -310,6 +310,27 @@ static void run(const char *peer, const char *mode)
     CHECK(tb_code_tab_select(code, 0, 0) && view->source_follow && view->line_count == 3);
     CHECK(tb_code_tab_close(code, 0, 2) && tb_code_tab_close(code, 0, 1) && tb_code_tab_count(code, 0) == 1);
     CHECK(!tb_code_open(code, 0, 9999));
+    if (strcmp(mode, "context-code") == 0) {
+        command(gdb, "-code-duplicate-source"); tb_code_request_files(code);
+        uint64_t catalog_end = tb_gdb_now_ms() + 3000;
+        while ((!tb_code_files_ready(code) || tb_code_file_count(code) != 4) && tb_gdb_now_ms() < catalog_end) { pump(gdb); }
+        CHECK(tb_code_file_count(code) == 4);
+        TbCodeFile ambiguous = {.file = "duplicate.c", .full = "/former/duplicate.c"};
+        CHECK(tb_code_tab_restore(code, 1, &ambiguous) && !tb_code_tab_retry(code, 1, 1));
+        CHECK(tb_code_open(code, 1, 3) && tb_code_tab_count(code, 1) == 3 && tb_code_tab_unavailable(code, 1, 1));
+        CHECK(!tb_code_tab_retry(code, 1, 1));
+        TbCodeFile relocated = {.file = "unit.c", .full = "/former/unit.c"};
+        CHECK(tb_code_tab_restore(code, 1, &relocated) && tb_code_tab_retry(code, 1, 3));
+        CHECK(tb_code_open(code, 1, 0) && tb_code_tab_count(code, 1) == 4);
+        CHECK(strcmp(tb_code_tab_file(code, 1, 3)->full, "/former/unit.c") == 0);
+        tb_code_clear(code, 1);
+        command(gdb, "-code-limited-sources"); tb_code_request_files(code); catalog_end = tb_gdb_now_ms() + 3000;
+        while ((!tb_code_files_ready(code) || !tb_code_files_limited(code)) && tb_gdb_now_ms() < catalog_end) { pump(gdb); }
+        CHECK(tb_code_files_limited(code));
+        CHECK(tb_code_tab_restore(code, 1, &relocated) && !tb_code_tab_retry(code, 1, 1));
+        CHECK(tb_code_open(code, 1, 0) && tb_code_tab_count(code, 1) == 3 && tb_code_tab_unavailable(code, 1, 1));
+        tb_code_clear(code, 1);
+    }
     for (int i = 0; i < 20; ++i) { pump(gdb); }
     unsigned idle = completions;
     for (int i = 0; i < 20; ++i) { pump(gdb); }

@@ -10,7 +10,13 @@
   frontend-created code-breakpoint intent without values or permissions. Save
   review shows connection differences and confirms replacement of skipped setups;
   profile duplication copies saved data independently. Runtime hits do not change
-  configured ignore counts. Session restoration and backend import remain pending.
+  configured ignore counts.
+- Reviewed local/Source setup restoration with stable missing-file identities,
+  Memory/Watch definitions without samples or permissions, running-target deferral,
+  cancellation and active-work interlocks. Review detects active configuration,
+  relative-path context and local ELF metadata changes. Saved code breakpoints
+  remain explicitly unresolved; installation and backend import/reconciliation
+  are pending.
 - Physical RISC-V RV32 validation (test device: ESP32-C6FH4, built-in
   USB/JTAG) using the shared
   embedded fixture, core-context OpenOCD configuration and target-compatible
