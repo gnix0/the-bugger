@@ -1194,7 +1194,7 @@ It does not substitute for inspecting the rendered interface.
 2. Restore Memory, Locals and Console with their titles or `^` controls. Each
    should cover its column, leaving primary geometry and browsing state intact.
    Drag Memory's top grip; Locals and Console must keep their own heights.
-3. Minimize/restore a group with `v`/`^`. Confirm tabs, selection, drafts and
+3. Minimize/restore a group with `_`/`^`. Confirm tabs, selection, drafts and
    preferred height survive. Try keyboard pane IDs/cycling and resize mode;
    Tab selects visible dividers, arrows resize, Enter/Escape finishes.
 4. Shrink to 80x24. Open groups overlap across the workspace. The most recently
@@ -1412,7 +1412,7 @@ Prepare the Linux x86-64 host distribution from a reviewed checkout:
 
 ```sh
 make release
-(cd build/dist/v0.1.2 && sha256sum --check SHA256SUMS)
+(cd build/dist/v0.1.3 && sha256sum --check SHA256SUMS)
 ```
 
 The [packaging procedure](maintaining.md#linux-x86-64-release-artifacts) describes
@@ -1442,10 +1442,11 @@ a listening socket does not establish successful target examination.
 
 ## Every-release regression matrix
 
-Apply the explicit [v0.1.0 physical RISC-V deferral](requirements.md#release-acceptance);
-it does not turn unverified hardware into supported hardware. Before every other
-release (including patches), record actual commands, results and
-release acceptance for the minimum matrix below. Exact ESP/probe setup is not a
+Apply the explicit [version-specific physical RISC-V deferrals](requirements.md#release-acceptance):
+v0.1.0 deferred it, and the owner separately deferred v0.1.3 RISC-V validation to
+v0.1.4. Neither is a hardware support claim or a general waiver for future
+releases. Record actual commands, results and release acceptance for the
+applicable matrix below. Exact ESP/probe setup is not a
 P00 prerequisite; fill it in when conducting the tests. Tool/server paths stay
 editable; OpenOCD is not a requirement for every architecture.
 
@@ -1454,7 +1455,7 @@ editable; OpenOCD is not a requirement for every architecture.
 | Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | M05–M14 accepted; GCC/Clang native and tmux regressions plus full default/native sanitizers passed at M14. Per-release evidence and release acceptance remain required |
 | STM32 / ARM | NUCLEO-F446RE fixture via GDB/OpenOCD; halt/step/break/watch, real code/register/RAM/variables, reset/disconnect/cleanup | M17 physical core/API/TUI/tmux PASS; exact setup and exclusions in validation records |
 | ESP32 / Xtensa | Validation board via appropriate GDB/server; applicable core workflow and cleanup | M17 ESP32-S3 physical core/API/TUI/tmux PASS; other boards require evidence |
-| ESP32 / RISC-V | Validation board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED; physical acceptance deferred for v0.1.0, no hardware support claim |
+| ESP32 / RISC-V | Validation board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED; physical acceptance deferred for v0.1.0 and separately v0.1.3 to v0.1.4; no hardware support claim |
 | QEMU ARM / RISC-V | Supplementary reproducible native/guest runs where available | UNVERIFIED; not a physical-board substitute |
 
 For each release, capture the actual setup/version, relevant fixture/source

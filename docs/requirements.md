@@ -1,7 +1,7 @@
 # Product requirements
 
-This specification describes the v0.1.0 target, not the availability of every
-feature today. [Roadmap status](roadmap.md#implementation-status) distinguishes
+This specification retains the v0.1.0 baseline and approved post-release
+extensions. It does not make every planned feature available today. [Roadmap status](roadmap.md#implementation-status) distinguishes
 completed implementation from pending integration and hardware validation.
 The [interface specification](requirements.md#interface-constraints) defines presentation and
 interaction; [architecture](architecture.md) defines the implemented boundaries.
@@ -136,10 +136,12 @@ Performance numbers are targets to measure, not grounds for hiding failures. The
    The v0.1.0 validated matrix is native Linux x86-64, NUCLEO-F446RE/ARM and
    ESP32-S3/Xtensa. Physical RISC-V acceptance is explicitly deferred for this
    release, remains UNVERIFIED, and supplies no hardware compatibility claim.
-   Later releases retain the full matrix unless separately reviewed. QEMU adds
-   coverage without substituting for boards. Target-specific features list
-   their actual supported setups.
-7. Final end-to-end validation and release authorization follow the [maintainer release procedure](maintaining.md#release-procedure). The release version is **`v0.1.0`**, without a prerelease suffix.
+   Later releases retain the full matrix unless separately reviewed. For
+   v0.1.3, the owner explicitly deferred physical ESP/RISC-V validation to
+   v0.1.4; it remains UNVERIFIED and is not a support claim. Native, STM32/ARM
+   and ESP32-S3/Xtensa release checks remain required. QEMU adds coverage without
+   substituting for boards. Target-specific features list their actual setups.
+7. Final end-to-end validation and release authorization follow the [maintainer release procedure](maintaining.md#release-procedure). The original baseline release was **`v0.1.0`**, without a prerelease suffix; the current release target is recorded in the roadmap and version header.
 
 
 ## Release exclusions
@@ -340,9 +342,9 @@ Inputs: host, port, GDB executable, optional symbol-bearing ELF and remote proto
 
 ## Approved v0.1.3 browsing work
 
-This section specifies approved work in progress, not a claim that the current
-build implements it. Current behavior is described in [usage](usage.md); progress
-and remaining validation gates are in [the roadmap](roadmap.md).
+This section specifies the implemented, owner-accepted v0.1.3 browsing scope.
+Current controls and limits are described in [usage](usage.md); release and
+future-work status are in [the roadmap](roadmap.md).
 
 The Bugger's behavior is defined by its own requirements. References to another
 debugger or editor are examples for discussion and research, not requirements

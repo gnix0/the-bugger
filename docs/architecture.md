@@ -715,8 +715,9 @@ row's position, adjusted by the requested upward scroll, when it appears in the
 combined result. A full older window uses its end instead. This avoids a one-row
 result collapsing the display or jumping it to the far end of the retained data.
 Mixed failures fall back independently per pane to assembly. Source text is
-interleaved when its exact file matches the cached source; other source groups
-keep their file/line labels with an explicit unavailable-text message. Current
+interleaved from the active Source file or bounded, lazily loaded cross-file
+annotations. Missing/evicted text retains file/line attribution and an explicit
+unavailable-text message. Current
 x86 targets reported by GDB as i386-family explicitly select AT&T syntax.
 
 Address navigation accepts hexadecimal addresses or simple identifiers/qualified
@@ -1134,8 +1135,10 @@ are late reviewed candidates; native correctness/maintenance remains continuous.
   Existing-server mode never owns the server. Managed OpenOCD lifecycle and
   named STM32/S3 target behavior have [M17 evidence](validation.md#m17--physical-board-validation);
   this does not establish behavior for other scripts, probes or boards.
-- The native code index uses process maps and mapped ELF images. Remote runtime image identity/relocation remain unverified; configured ELF
-  metadata is not independent proof of the loaded firmware. Remote metadata
+- The native code index verifies backing-file mappings through process maps.
+  Remote configured-ELF/load-bias review records a user declaration; automatic
+  remote image identity and nonuniform relocation remain unverified. Neither
+  declaration nor native mapping evidence proves live-byte equality. Remote metadata
   queries supply width/units and preserve unknown byte order without guessing. Initial Memory uses octet addressing and at most 64-bit addresses.
 - Call Stack argument discovery is names-only. Explicit argument reads and native
   frame-print suppression have M14 native/terminal automated coverage. Metadata

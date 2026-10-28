@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-28
+
 ### Changed
 
 - Disassembly distinguishes unverified ELF metadata, user-confirmed remote
@@ -31,6 +33,9 @@
 
 ### Fixed
 
+- Release inspector models before their GDB controller during session cleanup,
+  preventing a Memory/MMIO use-after-free on exit. Keep variable baseline copies
+  bounded in strict fortified sanitizer builds.
 - Confine rendered text to its assigned terminal row and display-cell width,
   escaping control/invalid bytes instead of allowing ncurses to expand them
   into adjacent content. Preserve complete printable wide characters.

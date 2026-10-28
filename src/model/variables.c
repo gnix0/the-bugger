@@ -491,7 +491,7 @@ static void invalidate(TbVariables *v, const TbContextSnapshot *s)
             if (!identity) { n->baseline_ok = false; }
             else if (new_stop) {
                 n->baseline_ok = n->canonical_ok && n->sampled.stop == v->generation.stop;
-                if (n->baseline_ok) { (void)snprintf(n->baseline, sizeof n->baseline, "%s", n->canonical); }
+                if (n->baseline_ok) { memcpy(n->baseline, n->canonical, sizeof n->baseline); }
             }
             n->row.fresh = n->row.changed = n->row.format_pending = false;
             if (!identity) { n->canonical_ok = false; n->row.type[0] = 0; }

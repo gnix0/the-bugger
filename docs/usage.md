@@ -4,8 +4,9 @@ The current development build supports native Linux and existing remote
 GDB-server sessions, plus reviewed OpenOCD startup and target actions. Physical
 validation covers NUCLEO-F446RE and ESP32-S3 with the
 [recorded configurations](validation.md#m17--physical-board-validation).
-This guide describes v0.1.1, including themes, Source fullscreen and spatial
-keyboard navigation added since the first public release, v0.1.0.
+This guide describes v0.1.3, including independent lower overlays, retained
+Disassembly/Memory browsing and explicit, setup-gated MMIO sampling. Themes,
+Source fullscreen and spatial keyboard navigation remain available.
 See [build and first session](../README.md#build-and-first-session) for prerequisites.
 
 ## Native Linux sessions

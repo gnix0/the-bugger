@@ -225,6 +225,12 @@ int main(int argc, char **argv)
     }
     CHECK(hit);
     CHECK(tb_break_remove(b, owned_watch)); breaks(); owned_watch[0] = 0;
+    before = context()->generation.stop;
+    CHECK(tb_session_continue(session));
+    uint64_t running_end = tb_gdb_now_ms() + 3000;
+    while (tb_session_state(session) != TB_SESSION_RUNNING && tb_gdb_now_ms() < running_end) { pump(); }
+    CHECK(tb_session_state(session) == TB_SESSION_RUNNING);
+    CHECK(tb_session_pause(session)); stop(before);
     uint32_t value = counter(); disconnect(true); CHECK(poll(NULL, 0, 500) == 0);
     CHECK(tb_session_start(session, &config)); tb_context_visible(tb_session_context(session), true, true); stop(0);
     uint32_t resumed = counter(); CHECK(resumed != value);
@@ -239,6 +245,6 @@ int main(int argc, char **argv)
     CHECK(tb_session_save_log(session, log_path()));
     disconnect(false);
     CHECK(tb_session_destroy(session)); session = NULL; free(server_plan); server_plan = NULL;
-    puts("PASS M17 actual board shared session, source context, PC/register agreement, independent SRAM/Flash reads, explicit locals/aggregate and caller selection, source/instruction step/Step Out, hardware break/watch, proven resume/leave-halted disconnect");
+    puts("PASS M17 actual board shared session, source context, PC/register agreement, independent SRAM/Flash reads, explicit locals/aggregate and caller selection, source/instruction step/Step Out, hardware break/watch, explicit continue/pause, proven resume/leave-halted disconnect");
     return 0;
 }

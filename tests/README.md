@@ -224,7 +224,8 @@ evidence. M04's C fake peer tests controller behavior without launching a target
 real native C/C++ fixtures are in `fixtures/native/`, with separate M05
 `make test-native` and `make sanitize-native` checks. M14 records native
 integration acceptance; real board evidence remains M17. Every release retests native
-x86-64 and the STM32/ARM validation, ESP32/Xtensa and ESP32/RISC-V hardware;
+x86-64 and the STM32/ARM validation, ESP32/Xtensa and ESP32/RISC-V hardware,
+subject to the explicitly recorded version-specific RISC-V deferrals;
 QEMU ARM/RISC-V adds coverage where available and never replaces board evidence.
 After v0.1.0, native tests remain the regression foundation while new feature
 acceptance emphasizes embedded capabilities and physical failure/recovery paths.
