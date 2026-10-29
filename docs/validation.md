@@ -3235,3 +3235,41 @@ No release/tag/asset publication is established by local preparation. The three
 upload files are the versioned Linux x86-64 archive, matching source archive and
 `SHA256SUMS`; final identities are in `build/dist/v0.1.4/SHA256SUMS`. GitHub's two
 automatic source snapshots are separate and contain no packaged host binary.
+
+
+### v0.1.4 PR35 — hosted analyzer compatibility
+
+2026-10-29. The maintainer reported a hosted Ubuntu24.04 Static analysis failure
+with clang-tidy18.1.3 on release-preparation revision `b314360`. Its
+`bugprone-sizeof-expression` check rejected the pointer-array element size in
+profile deletion's `memmove`. Prior local clang-tidy23.1.3 success did not
+establish compatibility with the hosted analyzer. The reported diagnostic is
+retained as an excerpt in
+`build/v014-ci-sizeof-fix-evidence/reported-ci-diagnostic.txt`.
+
+Deletion now shifts setup pointers through typed assignments, transferring the
+same retained JSON references and clearing the final slot. No analyzer rule,
+workflow requirement or existing assertion is weakened. The profile regression
+now deletes a middle profile with a saved setup and verifies that the following
+profile retains its independently saved definition both immediately and after
+reload; last-profile removal remains covered.
+
+Focused fortified profile/store checks and all78 test-source compilation pass.
+Current correction evidence is under `build/v014-ci-sizeof-fix-evidence/`:
+`focused.log/.exit`, `test-compilation.log/.exit`, `compile-command.json` and
+`environment.log`. Local analysis passes, exit0 (`make analyze`, `analysis.log/.exit`).
+The final fresh complete baseline passes, exit0:
+`TERM=xterm-256color make BUILD_DIR=build/v014-ci-sizeof-fix CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+Full log, exit status and exact invocation are in `test-ci.log`, `test-ci.exit`
+and `command.json`. `tested-tree.sha256` identifies the starting tree; final
+code and packaged source identities are checked separately in `final-check.log`
+and `release-tree.sha256`. These are local results. The installed analyzer is
+23.1.3; version18 is not installed, and the hosted PR rerun remains pending.
+
+The hardened release executable was rebuilt. CLI, PTY, workspace and isolated
+tmux checks pass outside the checkout (`binary-*.log/.exit`). Regenerated
+v0.1.4 archives retain the same three-file distribution layout; checksums and
+source completeness are verified in `artifact-check.log`, and an independent
+build of the final source archive is logged in `source-build.log/.exit`.
+Use the regenerated `build/dist/v0.1.4/` files for publication. No additional
+physical check or firmware operation was made for this local persistence correction.

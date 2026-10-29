@@ -489,7 +489,7 @@ bool tb_profiles_remove(TbProfiles *p, const char *name)
     TbProfiles *next = clone(p); if (!next) { return false; }
     memmove(&next->items[index], &next->items[index + 1], (next->count - index - 1) * sizeof next->items[0]);
     json_object_put(next->setups[index]);
-    memmove((void *)&next->setups[index], (const void *)&next->setups[index + 1], (next->count - index - 1) * sizeof next->setups[0]);
+    for (size_t i = index; i + 1 < next->count; ++i) { next->setups[i] = next->setups[i + 1]; }
     next->setups[next->count - 1] = NULL;
     --next->count; recent_remove(next, name); return transaction(p, next);
 }

@@ -90,10 +90,16 @@ static void setup_checks(TbProfiles *store)
     CHECK(tb_profiles_setup_connection(copy, "profile-0", snapshot, directory));
     CHECK(strcmp(directory, "/launch directory") == 0 && memcmp(snapshot, p, sizeof *p) == 0);
     CHECK(tb_profiles_duplicate(store, "profile-0", "independent"));
+    CHECK(tb_profiles_duplicate(store, "profile-0", "following"));
     s->breaks[0].enabled = false;
     CHECK(tb_profiles_save_setup(store, "profile-0", s, p, "/launch directory"));
     decoded = tb_profiles_setup(store, "independent"); CHECK(decoded && decoded->breaks[0].enabled); free(decoded);
     CHECK(tb_profiles_remove(store, "independent")); CHECK(!tb_profiles_setup(store, "independent"));
+    /* Removing a middle profile transfers the following setup's ownership. */
+    decoded = tb_profiles_setup(store, "following"); CHECK(decoded && decoded->breaks[0].enabled); free(decoded);
+    CHECK(tb_profiles_load(copy));
+    decoded = tb_profiles_setup(copy, "following"); CHECK(decoded && decoded->breaks[0].enabled); free(decoded);
+    CHECK(tb_profiles_remove(store, "following"));
     /* Replacing connection data preserves the independently saved setup. */
     *snapshot = *p; (void)snprintf(snapshot->gdb, sizeof snapshot->gdb, "other-gdb");
     CHECK(tb_profiles_put(store, snapshot, true)); decoded = tb_profiles_setup(store, "profile-0");
