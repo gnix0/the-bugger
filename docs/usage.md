@@ -700,7 +700,7 @@ arrays are literal, with no shell evaluation.
 
 Profiles exclude PID, environment overrides and runtime values; Attach requires
 a current PID. Workspace/Source/Memory/Watch definitions can restore through the
-saved-setup review; code-breakpoint installation remains pending (F01). Remote
+saved-setup review, including verified code-breakpoint configuration (F01). Remote
 definitions retain endpoint/tool/protocol choices for reviewed connection.
 OpenOCD profiles retain script choices and require explicit startup review.
 Profiles exclude keybinds and themes. Version-1 profiles remain readable; obsolete
@@ -708,7 +708,7 @@ Profiles exclude keybinds and themes. Version-1 profiles remain readable; obsole
 recent-session updates. Newly written version-2 stores require an updated app;
 older versions that require version 1 cannot read them.
 Schema-3 stores can also be read. They contain separate saved setup definitions;
-saving and local/Source restoration are available through Setup/session review. Older builds that
+saving and restoration are available through Setup/session review. Older builds that
 accept only schema 1/2 cannot read schema 3, and there is no silent downgrade.
 A malformed setup record puts an otherwise valid schema-3 store into read-only
 recovery: usable connections remain available, but all writes, including recents,
@@ -756,14 +756,35 @@ context/configuration changes; local navigation and close remain available.
 rollback. Cancel requested remains distinct from canceled until in-flight work
 settles. Save waits for active work to settle.
 
-Code-breakpoint installation remains pending in this checkpoint. Saved enabled
-intent is shown as awaiting stop or unresolved, never installed. Review and
-acknowledge unresolved enabled definitions before execution; the unchanged set
-does not reprompt. Retained definitions count toward limits and survive partial
-saves; Remove is an unsaved change. Review GDB breakpoints lists cached observations;
-explicit import/reconciliation is pending and backend-only entries are excluded.
-Uncertain/conflicting managed breakpoint changes continue to block saving.
+Code breakpoints restore disabled. Conditions, explicitly configured ignore counts
+and Require hardware policy must verify before an enabled definition is enabled.
+Pending symbolic and multiple locations retain their original definitions; GDB
+resolves them again. A successful configuration does not guarantee physical
+hardware allocation. Failures remain disabled/unresolved and retained for partial
+saves. Enabled failures require acknowledgment before execution; an unchanged
+failure set does not reprompt. Retry reuses a known disabled partial location.
+Remove changes the unsaved definition and does not delete a partial GDB location.
 
+Literal addresses require explicit current-session approval through the explained
+Retry control unless a current native executable mapping matches saved file
+identity, mapped range and load bias. Remote addresses always need approval.
+Mapping provenance is metadata, not live-byte or firmware verification. No remote
+checksum transport is used. Approvals are never saved.
+
+An uncertain mutation pauses restoration for one metadata-only reconciliation
+query. It never repeats the mutation or assumes rollback. Incomplete/ambiguous
+results retain the execution interlock; use **Retry metadata reconciliation** or
+close the session. Cancellation also waits for uncertain in-flight work to settle.
+
+**Review GDB breakpoints** refreshes the metadata listing. Review a complete
+supported definition and choose new Default/Require hardware and ignore-count
+intent explicitly before including it in the unsaved draft. Observed hardware,
+hits and remaining counts are shown separately; historical policy/counts are
+never inferred. Import does not change GDB. Unsupported command lists/restrictions,
+incomplete entries and temporary/data breakpoints are excluded whole, with reasons.
+Already included entries cannot be imported twice. External managed changes block
+saving until reviewed or the entire managed definition is explicitly excluded;
+exclusion leaves GDB unchanged.
 Runtime hits and remaining ignore counts do not change saved configured counts
 or the asterisk. Saving waits for active source-setting and breakpoint work to
 settle. Memory/Watch capture grants no read permission and requests no values.

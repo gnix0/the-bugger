@@ -198,10 +198,22 @@ int main(int argc, char *argv[])
         CHECK(tb_break_remove(b, id)); idle(n); CHECK(tb_break_count(b) == 0);
     }
     close_session(n);
-    n = start(argv[2], NULL); b = tb_native_breakpoints(n); CHECK(tb_break_add(b, "m08_overload", false)); idle(n);
+    n = start(argv[2], NULL); b = tb_native_breakpoints(n);
+    TbSetupBreak restored = {.id = 1, .location = "m08_overload", .condition = "1", .enabled = true, .ignore_set = true, .ignore = 2};
+    CHECK(tb_break_restore(b, &restored, false)); idle(n);
+    const TbBreakRestoration *progress = tb_break_restoration(b, 1);
+    if (!progress || progress->state != TB_RESTORE_INSTALLED) { fprintf(stderr, "Multiple-location restore: %s / %s\n", progress ? progress->reason : "missing", tb_break_message(b)); }
+    CHECK(progress && progress->state == TB_RESTORE_INSTALLED);
+    CHECK(tb_break_definition_count(b) == 1 && !strcmp(tb_break_definition(b, 0)->location, "m08_overload") && tb_break_definition(b, 0)->ignore == 2);
     CHECK(tb_break_count(b) == 3 && tb_break_row(b, 0)->multiple && tb_break_row(b, 1)->child && tb_break_row(b, 2)->child);
     CHECK(tb_break_enable(b, tb_break_row(b, 1)->id, false)); idle(n); CHECK(!tb_break_row(b, 1)->enabled);
-    (void)snprintf(id, sizeof id, "%s", tb_break_row(b, 0)->id); CHECK(tb_break_remove(b, id)); idle(n); CHECK(tb_break_count(b) == 0); close_session(n);
+    (void)snprintf(id, sizeof id, "%s", tb_break_row(b, 0)->id); CHECK(tb_break_remove(b, id)); idle(n); CHECK(tb_break_count(b) == 0);
+    CHECK(!tb_break_restoration(b, 1));
+    restored = (TbSetupBreak){.id = 2, .source = "tests/fixtures/native/breakpoints.cpp", .line = 7, .enabled = false, .ignore_set = true};
+    CHECK(tb_break_restore(b, &restored, false)); idle(n);
+    CHECK(tb_break_restoration(b, 2)->state == TB_RESTORE_INSTALLED && !tb_break_row(b, 0)->enabled);
+    CHECK(tb_break_definition(b, 0)->line == 7 && !strcmp(tb_break_definition(b, 0)->source, restored.source) && tb_break_definition(b, 0)->ignore_set);
+    close_session(n);
     n = start(argv[1], argv[3]); b = tb_native_breakpoints(n); CHECK(tb_break_add(b, "m08_future", false)); idle(n); CHECK(tb_break_row(b, 0)->pending);
     previous = tb_context_snapshot(tb_native_context(n))->generation.stop;
     CHECK(tb_native_continue(n)); stop(n, previous);

@@ -10,6 +10,7 @@
 #include "profiles.h"
 #include "setup_capture.h"
 #include "setup_restore.h"
+#include "images.h"
 
 #include <curses.h>
 #include <errno.h>
@@ -145,6 +146,10 @@ typedef struct {
     char setup_profile[TB_PROFILE_NAME], launch_directory[TB_SETUP_PATH];
     bool setup_skipped;
     int setup_information, setup_offset;
+    TbBreakDefinition import_definition;
+    char import_backend[32];
+    uint64_t import_revision;
+    int import_hardware, import_ignore;
     TbSetupRestore *restoration;
     TbSetup *restore_definition;
     TbProfile *restore_connection;
@@ -2974,7 +2979,7 @@ static void draw_setup(App *app)
     if (app->page == SETUP_RESTORE_REVIEW) {
         setup_text(&text, "Scope: pane splits/proportions, tabs, Source pins, Memory settings, Watch roots and saved code-breakpoint intent.");
         setup_text(&text, "No samples, stopped context, permissions or lower overlays are restored. Memory remains unread; Watches require Read.");
-        setup_text(&text, "Code-breakpoint installation is pending implementation. Enabled definitions remain unresolved and require acknowledgment before execution.");
+        setup_text(&text, "Code breakpoints are created disabled and verified before enabling. Literal addresses require matching native mapping metadata or explicit current-session approval.");
         if (app->restore_connection && app->setup_review_connection) { setup_differences(&text, app->setup_review_connection, app->restore_connection); }
         if (strcmp(app->restore_directory, app->restore_saved_directory) != 0 &&
             (tb_profile_relative_paths(app->profile) || tb_profile_relative_paths(app->restore_connection))) {
@@ -2997,14 +3002,46 @@ static void draw_setup(App *app)
         }
         if (associated && s) { button(app, card.y + card.h - 2, left, 18, app->setup_skipped ? "[ Replace setup ]" : "[ Save setup ]", SETUP_ACTION, 5, 0); }
         else { button(app, card.y + card.h - 2, left, 18, "[ Save profile ]", PROFILE_OPEN, 2, 0); }
+    } else if (app->setup_information == 5) {
+        setup_text(&text, "Review the complete supported definition. Import changes only the unsaved setup draft; no GDB breakpoint is created or changed.");
+        TbBreakpoints *b = tb_session_breakpoints(app->debugger);
+        setup_text(&text, *app->import_definition.source ? app->import_definition.source : app->import_definition.location);
+        if (*app->import_definition.source) { (void)snprintf(line, sizeof line, "Original source line: %u", app->import_definition.line); setup_text(&text, line); }
+        setup_text(&text, app->import_definition.enabled ? "Enabled intent: yes" : "Enabled intent: no");
+        setup_text(&text, "Condition:"); setup_text(&text, *app->import_definition.condition ? app->import_definition.condition : "none");
+        const TbBreakpoint *observed = NULL;
+        for (size_t i = 0; i < tb_break_count(b); ++i) { if (!strcmp(tb_break_row(b, i)->id, app->import_backend)) { observed = tb_break_row(b, i); break; } }
+        if (observed) {
+            (void)snprintf(line, sizeof line, "Observed implementation: %s; remaining ignore count: %u; hits: %llu", observed->hardware ? "hardware" : "software", observed->ignore, (unsigned long long)observed->hits); setup_text(&text, line);
+        }
+        setup_text(&text, "Choose new hardware policy and ignore-count intent explicitly. Observations do not establish historical configuration intent.");
+        int row = text.logical++ - app->setup_offset;
+        if (row >= 0 && row < text.visible) { button(app, card.y + 3 + row, left, width, app->import_hardware < 0 ? "Hardware policy: choose Default / Require hardware" : app->import_hardware ? "Hardware policy: Require hardware" : "Hardware policy: Default", SETUP_ACTION, 17, 0); }
+        row = text.logical++ - app->setup_offset;
+        if (row >= 0 && row < text.visible) { button(app, card.y + 3 + row, left, width, app->import_ignore < 0 ? "Ignore count: choose none / new configured count" : app->import_ignore ? "Ignore count: configure the reviewed remaining count" : "Ignore count: none", SETUP_ACTION, 18, 0); }
+        row = text.logical++ - app->setup_offset;
+        if (row >= 0 && row < text.visible) { button(app, card.y + 3 + row, left, width, "[ Include reviewed definition ]", SETUP_ACTION, 19, 0); }
     } else if (app->setup_information == 4) {
-        setup_text(&text, "Cached GDB entries may be stale and are not configured intent. Explicit import is not implemented yet; backend-only entries are excluded from saves.");
+        setup_text(&text, "Import requires a complete current listing and explicit decisions. Unsupported entries are excluded whole. Managed external changes require review.");
         TbBreakpoints *b = tb_session_breakpoints(app->debugger);
         for (size_t i = 0; i < tb_break_count(b); ++i) {
-            const TbBreakpoint *row = tb_break_row(b, i); if (row->child || row->temporary || row->watchpoint) { continue; }
+            const TbBreakpoint *row = tb_break_row(b, i); if (row->child) { continue; }
             (void)snprintf(line, sizeof line, "#%s | %s | observed %s | %.120s", row->id, row->enabled ? "enabled" : "disabled", row->hardware ? "hardware" : "software", row->location);
             setup_text(&text, line);
+            TbBreakDefinition definition;
+            if (tb_break_importable(b, row->id, &definition) && (!tb_break_owned(b, row->id) || tb_break_managed(b, row->id))) {
+                int logical = text.logical++ - app->setup_offset;
+                if (logical >= 0 && logical < text.visible) { button(app, card.y + 3 + logical, left, width, tb_break_managed(b, row->id) ? "[ Review managed definition ]" : "[ Review for import ]", SETUP_ACTION, 16, (int)i); }
+            } else { setup_text(&text, *row->unsupported ? row->unsupported : "Already retained/imported, temporary, or listing is not complete/current."); }
         }
+        for (size_t i = 0; i < tb_break_definition_count(b); ++i) {
+            const char *conflict = tb_break_conflict(b, i); if (!conflict) { continue; }
+            (void)snprintf(line, sizeof line, "Managed #%s changed externally or is absent. Review it above, or exclude its entire saved definition. GDB is unchanged.", conflict); setup_text(&text, line);
+            int logical = text.logical++ - app->setup_offset;
+            if (logical >= 0 && logical < text.visible) { button(app, card.y + 3 + logical, left, width, "[ Exclude managed definition ]", SETUP_ACTION, 21, (int)i); }
+        }
+        int row = text.logical++ - app->setup_offset;
+        if (row >= 0 && row < text.visible) { button(app, card.y + 3 + row, left, width, "[ Refresh metadata ]", SETUP_ACTION, 20, 0); }
     } else {
         setup_text(&text, app->setup_skipped ? "Saved setup was deliberately skipped. Save requires explicit replacement; hidden definitions are not merged." : tb_setup_restore_status(app->restoration));
         if (app->setup_information == 2) {
@@ -3026,13 +3063,17 @@ static void draw_setup(App *app)
             for (size_t i = 0; i < tb_setup_capture_retained(app->setup); ++i) {
                 const TbSetupBreak *b = tb_setup_capture_retained_break(app->setup, i);
                 (void)snprintf(line, sizeof line, "Breakpoint %llu | %s | %s | %.140s", (unsigned long long)b->id,
-                    b->enabled ? "enabled intent" : "disabled intent", tb_session_state(app->debugger) == TB_SESSION_RUNNING ? "awaiting stop" : "unresolved; installation pending", *b->source ? b->source : b->location);
-                setup_text(&text, line); setup_entry_actions(&text, 0, 11, (int)i); ++entries;
+                    b->enabled ? "enabled intent" : "disabled intent", tb_break_restoration(tb_session_breakpoints(app->debugger), b->id) ? tb_break_restore_state(tb_break_restoration(tb_session_breakpoints(app->debugger), b->id)->state) : tb_session_state(app->debugger) == TB_SESSION_RUNNING ? "awaiting stop" : "pending", *b->source ? b->source : b->location);
+                setup_text(&text, line);
+                const TbBreakRestoration *progress = tb_break_restoration(tb_session_breakpoints(app->debugger), b->id);
+                if (progress && *progress->reason) { setup_text(&text, progress->reason); }
+                if (progress && progress->state == TB_RESTORE_ADDRESS) { setup_text(&text, "Retry explicitly approves this address in the current session only."); }
+                setup_entry_actions(&text, progress && progress->state != TB_RESTORE_DRAFT && progress->state != TB_RESTORE_UNCERTAIN ? 14 : 0, 11, (int)i); ++entries;
             }
             if (!entries) { setup_text(&text, "No retained unresolved Source, Watch or breakpoint entries."); }
         } else {
             setup_text(&text, "Local definitions are restored before connection/symbols, source settings, then bounded Source reopening. Missing files retain identity/order/selection and no prior contents.");
-            setup_text(&text, "Code-breakpoint installation and explicit import/reconciliation remain pending. Saved enabled intent never means an installed breakpoint.");
+            setup_text(&text, "Breakpoints restore disabled, then condition/ignore count/hardware policy are verified before enable. Saved enabled intent never means successful installation. Matching native mapping metadata is provenance, not live-byte or firmware verification.");
         }
         if (tb_setup_restore_active(app->restoration) || strstr(tb_setup_restore_status(app->restoration), "Awaiting stop")) {
             int row = text.logical++ - app->setup_offset;
@@ -3043,7 +3084,11 @@ static void draw_setup(App *app)
             int row = text.logical++ - app->setup_offset;
             if (row >= 0 && row < text.visible) { button(app, card.y + 3 + row, left, width, "[ Acknowledge failures ]", SETUP_ACTION, 12, 0); }
         }
-        if (!tb_break_definitions_ready(tb_session_breakpoints(app->debugger))) { setup_text(&text, "Breakpoint work or external/uncertain managed changes prevent saving. Advanced reconciliation is not implemented yet."); }
+        if (!tb_break_definitions_ready(tb_session_breakpoints(app->debugger))) { setup_text(&text, "Breakpoint work or external/uncertain managed changes prevent saving. Review managed definitions or reconcile uncertainty."); }
+    }
+    if (app->debugger && tb_break_restoration_uncertain(tb_session_breakpoints(app->debugger))) {
+        int row = text.logical++ - app->setup_offset;
+        if (row >= 0 && row < text.visible) { button(app, card.y + 3 + row, left, width, "[ Retry metadata reconciliation ]", SETUP_ACTION, 15, 0); }
     }
     button(app, card.y + card.h - 3, left, 12, "Previous", SETUP_ACTION, -1, 0);
     if (app->setup_offset + text.visible < text.logical) { button(app, card.y + card.h - 3, left + 14, 12, "Next", SETUP_ACTION, -2, 0); }
@@ -3079,7 +3124,7 @@ static void setup_activate(App *app, int action, int entry)
         if (!profile_sources(app, app->setup_review_connection)) { return; }
         page(app, SETUP_SAVE); app->setup_offset = 0; return;
     }
-    if (action >= 2 && action <= 4) { app->setup_information = action; app->setup_offset = 0; page(app, SETUP_INFO); return; }
+    if (action >= 2 && action <= 4) { if (action == 4) { tb_break_refresh(tb_session_breakpoints(app->debugger)); } app->setup_information = action; app->setup_offset = 0; page(app, SETUP_INFO); return; }
     if (action == 8) { tb_setup_restore_cancel(app->restoration, app->debugger); return; }
     if (action == 9 || action == 10) {
         int pane = entry / TB_CODE_TABS; size_t tab = (size_t)(entry % TB_CODE_TABS); TbCode *code = tb_session_code(app->debugger);
@@ -3092,7 +3137,7 @@ static void setup_activate(App *app, int action, int entry)
     if (action == 11) {
         if (tb_setup_restore_active(app->restoration)) { return; }
         const TbSetupBreak *b = entry >= 0 ? tb_setup_capture_retained_break(app->setup, (size_t)entry) : NULL;
-        if (b) { (void)tb_setup_capture_remove_break(app->setup, b->id); (void)setup_capture(app); }
+        if (b) { uint64_t id = b->id; (void)tb_setup_capture_remove_break(app->setup, id); tb_break_restore_forget(tb_session_breakpoints(app->debugger), id); (void)setup_capture(app); }
         return;
     }
     if (action == 13 && !tb_setup_restore_active(app->restoration)) {
@@ -3101,6 +3146,50 @@ static void setup_activate(App *app, int action, int entry)
             (void)tb_variables_remove_definition(variables, w.identity); (void)setup_capture(app);
         }
         return;
+    }
+    if (action == 14 && !tb_setup_restore_active(app->restoration)) {
+        const TbSetupBreak *definition = entry >= 0 ? tb_setup_capture_retained_break(app->setup, (size_t)entry) : NULL;
+        if (definition) { (void)tb_break_restore(tb_session_breakpoints(app->debugger), definition, true); tb_setup_restore_pump(app->restoration, app->setup, app->debugger); }
+        return;
+    }
+    if (action == 15) { (void)tb_break_reconcile(tb_session_breakpoints(app->debugger)); return; }
+    if (action == 20) { tb_break_refresh(tb_session_breakpoints(app->debugger)); return; }
+    if (action == 21) {
+        TbBreakpoints *b = tb_session_breakpoints(app->debugger); const TbBreakDefinition *d = entry >= 0 ? tb_break_definition(b, (size_t)entry) : NULL;
+        if (d && tb_break_discard_intent(b, d->identity)) { (void)setup_capture(app); status(app, "Entire managed definition excluded from the unsaved draft; GDB unchanged."); }
+        else { status(app, "Wait for a complete current breakpoint listing before exclusion."); }
+        return;
+    }
+    if (action == 16) {
+        TbBreakpoints *b = tb_session_breakpoints(app->debugger); const TbBreakpoint *row = entry >= 0 ? tb_break_row(b, (size_t)entry) : NULL;
+        if (!row || !tb_break_importable(b, row->id, &app->import_definition) || (tb_break_owned(b, row->id) && !tb_break_managed(b, row->id))) { status(app, "Refresh the complete breakpoint listing before review."); return; }
+        (void)snprintf(app->import_backend, sizeof app->import_backend, "%s", row->id); app->import_revision = tb_break_revision(b);
+        app->import_hardware = app->import_ignore = -1; app->import_definition.ignore = row->ignore;
+        app->setup_information = 5; app->setup_offset = 0; return;
+    }
+    if (action == 17) { app->import_hardware = app->import_hardware < 0 ? 0 : !app->import_hardware; return; }
+    if (action == 18) { app->import_ignore = app->import_ignore < 0 ? 0 : !app->import_ignore; return; }
+    if (action == 19) {
+        TbBreakpoints *b = tb_session_breakpoints(app->debugger); TbBreakDefinition current;
+        if (app->import_hardware < 0 || app->import_ignore < 0) { status(app, "Choose hardware and ignore-count intent before inclusion."); return; }
+        if (tb_setup_restore_active(app->restoration) || app->import_revision != tb_break_revision(b) || !tb_break_importable(b, app->import_backend, &current)) { status(app, "Breakpoint metadata changed; refresh and review again."); return; }
+        app->import_definition.hardware = app->import_hardware != 0; app->import_definition.ignore_set = app->import_ignore != 0;
+        if (!app->import_ignore) { app->import_definition.ignore = 0; }
+        if (tb_break_managed(b, app->import_backend)) {
+            if (!tb_break_review_intent(b, app->import_backend, &app->import_definition)) { status(app, "Reviewed intent does not match current supported attributes; resolve the external change before saving."); return; }
+        } else {
+            if (tb_break_owned(b, app->import_backend)) { status(app, "Breakpoint is already included."); return; }
+            TbSetupBreak candidate = {0}; uint64_t address; memcpy(candidate.location, app->import_definition.location, sizeof candidate.location);
+            if (tb_session_kind(app->debugger) == TB_SESSION_LOCAL && tb_session_state(app->debugger) == TB_SESSION_STOPPED && tb_break_literal(&candidate, &address) && address) {
+                (void)tb_images_native_mapping(tb_session_target_pid(app->debugger), address, &app->import_definition.mapping);
+            }
+            uint64_t id = tb_setup_capture_import_break(app->setup, &app->import_definition);
+            if (!id || !tb_break_restore_draft(b, id, app->import_backend)) {
+                if (id) { (void)tb_setup_capture_remove_break(app->setup, id); (void)setup_capture(app); }
+                status(app, "Cannot include definition; the saved-entry limit or allocation failed."); return;
+            }
+        }
+        (void)setup_capture(app); app->setup_information = 4; app->setup_offset = 0; status(app, "Reviewed definition included in the unsaved setup draft."); return;
     }
     if (action == 12) { tb_setup_restore_acknowledge(app->restoration); tb_setup_restore_pump(app->restoration, app->setup, app->debugger); return; }
     if (action == 5) {

@@ -668,7 +668,7 @@ static bool target_action(TbSession *s, int action)
 {
     if (action != 1 && setup_blocked(s, true)) { return false; }
     if (register_read_pending(s)) { return false; }
-    if (!s->capabilities.openocd || !s->configured || (action != 1 && tb_code_restoring(s->code)) || tb_break_busy(s->breakpoints) || s->waiting || s->want_close || s->target_action ||
+    if (!s->capabilities.openocd || !s->configured || (action != 1 && tb_code_restoring(s->code)) || (action != 1 && tb_break_busy(s->breakpoints)) || s->waiting || s->want_close || s->target_action ||
         (s->state != TB_SESSION_STOPPED && s->state != TB_SESSION_RUNNING)) {
         diagnostic(s, "OpenOCD action unavailable; connect a target and wait for pending operations."); return false;
     }
@@ -886,6 +886,7 @@ void tb_session_pump(TbSession *native, int wait_ms)
         tb_code_native(native->code, native->target_pid, native->executable);
         memory_metadata(native);
     }
+    tb_break_native(native->breakpoints, native->kind == TB_SESSION_LOCAL ? native->target_pid : 0);
     TbGdbState gdb = tb_gdb_state(native->gdb);
     if (gdb == TB_GDB_DISCONNECTED) {
         if (native->kind != TB_SESSION_LOCAL && native->capabilities.connected) {

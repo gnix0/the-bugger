@@ -22,7 +22,12 @@ typedef struct {
 typedef struct { bool used; int pane, first, second, ratio, direction; } TbSetupNode;
 typedef struct { uint64_t id; char expression[256]; int format; } TbSetupWatch;
 typedef struct {
+    char path[TB_SETUP_PATH], identity[256];
+    uint64_t bias, begin, end;
+} TbSetupMapping;
+typedef struct {
     uint64_t id;
+    TbSetupMapping mapping;
     char location[TB_SETUP_LOCATION], source[TB_SETUP_PATH], condition[512];
     unsigned line, ignore;
     bool enabled, ignore_set, hardware;

@@ -91,9 +91,22 @@ bool tb_setup_capture_update(TbSetupCapture *c, const TbLayout *layout, const Tb
         size_t prior = c->current ? key_index(c->breaks, c->current->break_count, b->identity) : 0;
         d->id = c->current && prior < c->current->break_count ? c->current->breaks[prior].id : allocate_id(s);
         memcpy(d->location, b->location, sizeof d->location); memcpy(d->source, b->source, sizeof d->source); memcpy(d->condition, b->condition, sizeof d->condition);
-        d->line = b->line; d->ignore = b->ignore; d->enabled = b->enabled; d->ignore_set = b->ignore_set; d->hardware = b->hardware; break_keys[i] = b->identity;
+        d->mapping = b->mapping; d->line = b->line; d->ignore = b->ignore; d->enabled = b->enabled; d->ignore_set = b->ignore_set; d->hardware = b->hardware; break_keys[i] = b->identity;
     }
     for (size_t i = 0; i < c->retained_count; ++i) { s->breaks[s->break_count++] = c->retained[i]; }
+    /* Keep prior definition order while installed and retained entries merge. */
+    if (old) {
+        size_t destination = 0;
+        for (size_t i = 0; i < old->break_count; ++i) {
+            for (size_t j = destination; j < s->break_count; ++j) {
+                if (s->breaks[j].id != old->breaks[i].id) { continue; }
+                TbSetupBreak entry = s->breaks[j]; uint64_t key = break_keys[j];
+                memmove(&s->breaks[destination + 1], &s->breaks[destination], (j - destination) * sizeof entry);
+                memmove(&break_keys[destination + 1], &break_keys[destination], (j - destination) * sizeof key);
+                s->breaks[destination] = entry; break_keys[destination++] = key; break;
+            }
+        }
+    }
     if (!tb_setup_valid(s)) { return false; }
     /* Allocate both work buffers before publishing the first draft. */
     if (!c->current) { c->current = malloc(sizeof *c->current); if (!c->current) { return false; } }
@@ -156,4 +169,24 @@ bool tb_setup_capture_restore(TbSetupCapture *c, const TbSetup *s, TbLayout *lay
         c->watches[i] = definition.identity;
     }
     return true;
+}
+
+bool tb_setup_capture_adopt_break(TbSetupCapture *c, uint64_t id, uint64_t model)
+{
+    if (!c || !c->current || !model) { return false; }
+    for (size_t i = 0; i < c->current->break_count; ++i) {
+        if (c->current->breaks[i].id == id) { c->breaks[i] = model; return tb_setup_capture_remove_break(c, id); }
+    }
+    return false;
+}
+uint64_t tb_setup_capture_import_break(TbSetupCapture *c, const TbBreakDefinition *d)
+{
+    if (!c || !c->current || c->current->break_count >= TB_SETUP_BREAKS || !d) { return 0; }
+    TbSetupBreak *retained = realloc(c->retained, (c->retained_count + 1) * sizeof *retained);
+    if (!retained) { return 0; } c->retained = retained;
+    TbSetupBreak entry = {.id = allocate_id(c->current), .mapping = d->mapping, .line = d->line, .ignore = d->ignore,
+        .enabled = d->enabled, .ignore_set = d->ignore_set, .hardware = d->hardware};
+    memcpy(entry.location, d->location, sizeof entry.location); memcpy(entry.source, d->source, sizeof entry.source); memcpy(entry.condition, d->condition, sizeof entry.condition);
+    if (!entry.id) { return 0; }
+    c->retained[c->retained_count++] = entry; c->current->breaks[c->current->break_count++] = entry; return entry.id;
 }

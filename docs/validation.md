@@ -2898,7 +2898,7 @@ physical ARM/Xtensa/RV32 restoration and full F01 acceptance remain unrun.
 
 ## F01 — local/Source restoration and consent checkpoint
 
-2026-10-28. **Implemented; awaiting user acceptance; F01 incomplete.** The session
+2026-10-28. **Accepted checkpoint; F01 incomplete.** The session
 review defaults saved-setup restoration on, shows scope/active connection differences
 and renews review for local ELF metadata or relative-path launch-context changes.
 Local split/tab/Memory/Watch definitions restore before initialization/source
@@ -2961,5 +2961,91 @@ result or full F01 acceptance is claimed.
 - `git diff --check`: PASS; all 173 local Markdown file links resolve.
 
 Raw artifacts are under `build/f01-restore-evidence/`.
-These are local host checks, not hosted Ubuntu results. Owner manual restoration
-acceptance, hosted checks and physical ARM/Xtensa/RV32 restoration remain unrun.
+These are local host checks, not hosted Ubuntu results. The maintainer accepted
+this checkpoint on 2026-10-28. No additional manual execution results were reported;
+hosted checks and physical ARM/Xtensa/RV32 restoration remain unrun. Full F01
+acceptance remains outstanding.
+
+## F01 — verified breakpoint restoration and review
+
+2026-10-28. **Implemented; automated-verified locally; awaiting user acceptance.**
+The remaining F01 implementation restores supported code breakpoints disabled,
+applies/verifies condition, explicitly configured ignore count and hardware policy,
+and verifies enabled intent only after configuration succeeds. Runtime progress
+and GDB IDs remain separate from saved definitions. Installed/retained entries
+merge by setup identity without changing order or dirty state; deletion releases
+runtime ledger capacity. Partial locations retry without duplicate insertion;
+confirmed absence permits a new explicit retry.
+
+Native literal-address reuse requires current procfs executable mapping, reliable
+backing-file identity, mapped range and matching ELF load bias. Other addresses
+require current-session approval. Optional schema-3 mapping provenance preserves
+full 64-bit addresses; legacy records remain readable. No image confirmation,
+read permission, live-byte/firmware identity or remote checksum is inferred.
+
+Explicit complete-definition import requires new hardware/count decisions and
+changes only the unsaved draft. Unsupported command lists/restrictions are excluded
+whole. External managed changes require review or whole-definition exclusion.
+Uncertain mutations pause the queue for one metadata-only reconciliation query;
+incomplete/ambiguous results preserve the execution interlock and offer explicit
+query retry or close. No uncertain mutation is repeated. Cancellation waits for
+in-flight settlement and retains applied configuration without rollback.
+
+### Focused host evidence
+
+Artifacts are under `build/f01-break-evidence/`; tests use disposable local
+fixtures and isolated tmux servers, with no physical target access.
+
+- Definition/store/capture checks: PASS (`f01-break-model.log`). This includes
+  actual encoding bounds and full-width mapping-provenance round trips.
+- Synthetic MI restoration guards: PASS (`f01-break-bounds.log`), including
+  disabled-first intermediate states, condition/ignore errors, hardware mismatch,
+  timeout with complete/incomplete reconciliation, cancellation, existing-ID
+  rejection, malformed-baseline bounds, absence/retry and duplicate prevention.
+  This peer does not establish real-server or physical behavior.
+- Actual native restoration: PASS (`f01-break-address.log`), including pending
+  symbolic definitions/counts, partial failure and identity merging, no restored
+  Memory/Watch permissions, failure acknowledgment, cancellation and running-target
+  deferral. Matching native mapping reuse, changed-bias refusal and explicit
+  current-session approval all pass without changing the saved definition.
+- Actual GDB overload/file-line checks: PASS (`f01-break-native-original.log`).
+  Multiple locations preserve their symbolic definition, original file/line and
+  disabled intent verify, and existing hardware/resource/hit/ignore/run-to tests
+  remain passing. The final full baseline includes runtime-ledger deletion checks.
+- Actual backend-only import through isolated tmux: PASS
+  (`f01-break-import-tmux.log`), including mandatory decisions, unsaved import,
+  duplicate exclusion, save/removal, unchanged-failure acknowledgment and toolbar
+  widths 48/80/123/124/152/160 with long shortcuts. The full baseline also runs the
+  direct-terminal workflow and existing text-entry/focus/terminal-restoration tests.
+- Native metadata inspection found GDB's command-list extension
+  `script={"silent"}` (`native-command-list-metadata.log`). The parser now accepts
+  only the command-string tuple extension, preserving ordinary strict tuples and
+  bounds. The whole unsupported breakpoint is excluded rather than losing the
+  complete listing. Parser/allocation checks and matching synthetic exclusion:
+  PASS (`f01-script-model.log`, `f01-script-exclusion.log`).
+- Earlier native mapping assertions failed because the fixture had not requested
+  frame metadata (`f01-break-native.log`, `f01-break-native2.log`,
+  `f01-native-debug.log`). The fixture now requests/waits for that metadata;
+  assertions were preserved. Corrected native runs pass.
+
+### Complete host baseline
+
+The first fresh fortified baseline passed, exit 0:
+`TERM=xterm-256color make BUILD_DIR=build/f01-break-ci-20261028 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+Full log/status: `test-ci.log`, `test-ci.exit`. Subsequent ownership, bounds and
+actual-GDB script syntax corrections required a fresh final baseline; this earlier
+success is not substituted for verification of the final tree.
+
+The subsequent baseline in `build/f01-break-ci-final-20261028` predates the
+command-list parser correction; its log/status are retained as `test-ci-final.*`.
+The final-tree baseline uses
+`TERM=xterm-256color make BUILD_DIR=build/f01-break-ci-verified-20261028 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+Result: **PASS, exit 0**, including default/native/direct-terminal/tmux, actual
+localhost-remote and offline OpenOCD suites (`test-ci-verified.log`,
+`test-ci-verified.exit`). The prior post-ownership baseline also passed, exit 0.
+`tested-code-final.sha256` identifies the unchanged source/test/build/workflow snapshot (`tested-code-check.log`);
+`environment.log` records Arch Linux x86-64, GCC 16.2.1, GDB 18.1, tmux 3.8 and
+the flags. Whitespace checks pass, and all 162 local file links in the reviewed
+Markdown documents resolve. These are local Arch Linux x86-64 host checks, not hosted Ubuntu results. No additional
+owner manual or physical ARM/Xtensa/RV32 restoration result is claimed. Owner
+acceptance and physical reopening/restoration remain outstanding; F02–F05 and release preparation have not begun.

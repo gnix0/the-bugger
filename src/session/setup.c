@@ -2,6 +2,7 @@
 #include "setup.h"
 
 #include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -85,6 +86,7 @@ bool tb_setup_valid(const TbSetup *s)
         const TbSetupBreak *b = &s->breaks[i];
         if (!identity(b->id, s->next_id, ids, &count) || !text_valid(b->location, sizeof b->location, *b->source != 0) ||
             !text_valid(b->source, sizeof b->source, true) || !text_valid(b->condition, sizeof b->condition, true) ||
+            (*b->mapping.path && (!text_valid(b->mapping.path, sizeof b->mapping.path, false) || !text_valid(b->mapping.identity, sizeof b->mapping.identity, false) || b->mapping.begin >= b->mapping.end)) ||
             ((*b->source != 0) != (b->line != 0)) || (!b->ignore_set && b->ignore)) { return false; }
     }
     return true;
@@ -92,15 +94,17 @@ bool tb_setup_valid(const TbSetup *s)
 
 /* The descriptor codec keeps integer bounds and mandatory field checking in one
  * place. Arrays and ownership are handled explicitly below. */
-typedef enum { NUMBER, FLAG, STRING } Kind;
+typedef enum { NUMBER, FLAG, STRING, HEX } Kind;
 typedef struct { const char *name; size_t offset, size; Kind kind; uint64_t max; } Field;
 #define NUM(T, n, m) {#n, offsetof(T, n), sizeof(((T *)0)->n), NUMBER, m}
+#define HEXNUM(T, n) {#n, offsetof(T, n), sizeof(((T *)0)->n), HEX, UINT64_MAX}
 #define STR(T, n) {#n, offsetof(T, n), sizeof(((T *)0)->n), STRING, 0}
 #define BOOL(T, n) {#n, offsetof(T, n), sizeof(((T *)0)->n), FLAG, 0}
 static const Field source_fields[] = {NUM(TbSetupSource, id, INT64_MAX), STR(TbSetupSource, file), STR(TbSetupSource, full)};
 static const Field watch_fields[] = {NUM(TbSetupWatch, id, INT64_MAX), STR(TbSetupWatch, expression), NUM(TbSetupWatch, format, 4)};
 static const Field break_fields[] = {NUM(TbSetupBreak, id, INT64_MAX), STR(TbSetupBreak, location), STR(TbSetupBreak, source), STR(TbSetupBreak, condition),
     NUM(TbSetupBreak, line, UINT_MAX), NUM(TbSetupBreak, ignore, UINT_MAX), BOOL(TbSetupBreak, enabled), BOOL(TbSetupBreak, ignore_set), BOOL(TbSetupBreak, hardware)};
+static const Field mapping_fields[] = {STR(TbSetupMapping, path), STR(TbSetupMapping, identity), HEXNUM(TbSetupMapping, bias), HEXNUM(TbSetupMapping, begin), HEXNUM(TbSetupMapping, end)};
 static const Field pane_fields[] = {NUM(TbSetupPane, id, INT64_MAX), NUM(TbSetupPane, selected, TB_SETUP_VIEWS - 1), NUM(TbSetupPane, source_selected, INT64_MAX),
     STR(TbSetupPane, memory_expression), NUM(TbSetupPane, memory_bytes, 1024), NUM(TbSetupPane, memory_group, 8)};
 static bool add(json_object *o, const char *name, json_object *v)
@@ -117,6 +121,7 @@ static json_object *encode_fields(const void *data, const Field *fields, size_t 
     for (size_t i = 0; i < count; ++i) {
         const Field *f = &fields[i]; const char *p = (const char *)data + f->offset; json_object *v;
         if (f->kind == STRING) { v = json_object_new_string(p); }
+        else if (f->kind == HEX) { char hex[17]; uint64_t n; memcpy(&n, p, sizeof n); (void)snprintf(hex, sizeof hex, "%016llx", (unsigned long long)n); v = json_object_new_string(hex); }
         else if (f->kind == FLAG) { v = json_object_new_boolean(*(const bool *)p); }
         else {
             uint64_t n = 0;
@@ -138,6 +143,14 @@ static bool decode_fields(json_object *o, void *data, const Field *fields, size_
             if (!json_object_is_type(v, json_type_string)) { return false; }
             const char *s = json_object_get_string(v); size_t n = (size_t)json_object_get_string_len(v);
             if (n >= f->size || strlen(s) != n || !text_valid(s, f->size, true)) { return false; } memcpy(p, s, n + 1);
+        } else if (f->kind == HEX) {
+            if (!json_object_is_type(v, json_type_string) || json_object_get_string_len(v) != 16) { return false; }
+            const char *hex = json_object_get_string(v); uint64_t n = 0;
+            for (size_t j = 0; j < 16; ++j) {
+                unsigned char c = (unsigned char)hex[j]; unsigned digit = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : 16;
+                if (digit == 16) { return false; } n = n * 16 + digit;
+            }
+            memcpy(p, &n, sizeof n);
         } else if (f->kind == FLAG) {
             if (!json_object_is_type(v, json_type_boolean)) { return false; } *(bool *)p = json_object_get_boolean(v) != 0;
         } else {
@@ -197,7 +210,11 @@ json_object *tb_setup_encode(const TbSetup *s)
         if (ok) { ok = append(panes, v); } else { json_object_put(v); }
     }
     for (size_t i = 0; ok && i < s->watch_count; ++i) { ok = append(watches, encode_fields(&s->watches[i], watch_fields, COUNT(watch_fields))); }
-    for (size_t i = 0; ok && i < s->break_count; ++i) { ok = append(breaks, encode_fields(&s->breaks[i], break_fields, COUNT(break_fields))); }
+    for (size_t i = 0; ok && i < s->break_count; ++i) {
+        json_object *v = encode_fields(&s->breaks[i], break_fields, COUNT(break_fields));
+        ok = v && (!*s->breaks[i].mapping.path || add(v, "mapping", encode_fields(&s->breaks[i].mapping, mapping_fields, COUNT(mapping_fields))));
+        if (ok) { ok = append(breaks, v); } else { json_object_put(v); }
+    }
     ok = ok && add(o, "next_id", json_object_new_int64((int64_t)s->next_id)) && add(o, "row_ratio", json_object_new_int(s->row_ratio)) &&
          add(o, "columns", integers(s->columns, 3)) && add(o, "roots", integers(s->roots, 6));
     if (ok) { ok = add(o, "nodes", nodes); nodes = NULL; }
@@ -241,7 +258,12 @@ TbSetup *tb_setup_decode(json_object *o)
     if (ok) {
         s->watch_count = json_object_array_length(watches); s->break_count = json_object_array_length(breaks);
         for (size_t i = 0; ok && i < s->watch_count; ++i) { ok = decode_fields(json_object_array_get_idx(watches, i), &s->watches[i], watch_fields, COUNT(watch_fields), 0); }
-        for (size_t i = 0; ok && i < s->break_count; ++i) { ok = decode_fields(json_object_array_get_idx(breaks, i), &s->breaks[i], break_fields, COUNT(break_fields), 0); }
+        for (size_t i = 0; ok && i < s->break_count; ++i) {
+            json_object *v = json_object_array_get_idx(breaks, i), *mapping = NULL;
+            bool present = v && json_object_object_get_ex(v, "mapping", &mapping);
+            ok = decode_fields(v, &s->breaks[i], break_fields, COUNT(break_fields), present ? 1 : 0) &&
+                (!present || (decode_fields(mapping, &s->breaks[i].mapping, mapping_fields, COUNT(mapping_fields), 0) && *s->breaks[i].mapping.path));
+        }
     }
     if (!ok || !tb_setup_valid(s)) { free(s); return NULL; } return s;
 }

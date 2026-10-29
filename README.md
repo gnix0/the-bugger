@@ -4,8 +4,7 @@
   <img src="docs/assets/base_layout.png" alt="The Bugger debugging workspace">
 </p>
 
-A terminal-native GDB frontend written in C17 for embedded firmware development,
-with native Linux debugging support.
+A lightweight, full-featured TUI for embedded debugging.
 
 ## Current capabilities and limitations
 
@@ -23,8 +22,9 @@ Configure themes, keybinds and optional Vim-like input under **Config**.
 Catppuccin Macchiato is the default; RGB-capable tmux sessions retain theme colors.
 Connection profiles are separate from personal preferences. The live Setup menu
 saves workspace definitions separately. Reviewed workspace/Source restoration,
-Memory settings and Watch definitions are available in v0.1.4 development;
-saved code-breakpoint installation is pending. See [setup saving/restoration](docs/usage.md#saving-a-setup).
+Memory settings, Watch definitions and verified code-breakpoint restoration are
+available in v0.1.4 development, with explicit import and unresolved-entry review.
+See [setup saving/restoration](docs/usage.md#saving-a-setup).
 
 Memory and variable inspection are read-only. Explicit-width MMIO sampling is
 available for the validated STM32/OpenOCD setup; navigation never samples MMIO.

@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "setup_restore.h"
+#include "images.h"
 #include "../support/check.h"
 #include <string.h>
 #include <unistd.h>
@@ -54,7 +55,8 @@ int main(int argc, char **argv)
     (void)snprintf(saved->panes[added].memory_expression, 256, "&fixture_buffer"); expressions[added] = saved->panes[added].memory_expression;
     saved->watch_count = 2; saved->watches[0] = (TbSetupWatch){.id = saved->next_id++, .expression = "fixture_counter", .format = TB_VARIABLE_HEX};
     saved->watches[1] = (TbSetupWatch){.id = saved->next_id++, .expression = "unsafe_call()", .format = TB_VARIABLE_DECIMAL};
-    saved->break_count = 1; saved->breaks[0] = (TbSetupBreak){.id = saved->next_id++, .location = "fixture_tick", .enabled = true, .ignore_set = true, .ignore = 2};
+    saved->break_count = 2; saved->breaks[1] = (TbSetupBreak){.id = saved->next_id++, .location = "missing_saved_f01_symbol", .condition = "1", .enabled = true, .ignore_set = true, .ignore = 3};
+    saved->breaks[0] = (TbSetupBreak){.id = saved->next_id++, .location = "main", .condition = "(", .enabled = true, .ignore_set = true, .ignore = 2};
     CHECK(tb_setup_valid(saved)); tb_setup_capture_destroy(c); c = tb_setup_capture_create(saved); CHECK(c);
     CHECK(tb_setup_capture_restore(c, saved, &layout, &workspace, code, memory, variables));
     CHECK(layout.overlays && layout.count == 7 && !layout.lower_open[0]);
@@ -78,7 +80,9 @@ int main(int argc, char **argv)
     CHECK(known < tb_code_file_count(code) && tb_code_open(code, 0, known));
     CHECK(tb_code_tab_count(code, 0) == 3 && !strcmp(tb_code_tab_file(code, 0, 1)->full, "/former/source/session.c"));
     CHECK(tb_code_tab_select(code, 0, 2));
-    CHECK(tb_break_definition_count(tb_session_breakpoints(owned)) == 0 && tb_setup_capture_retained(c) == 1);
+    CHECK(tb_break_definition_count(tb_session_breakpoints(owned)) == 1 && tb_setup_capture_retained(c) == 1);
+    const TbBreakDefinition *installed = tb_break_definition(tb_session_breakpoints(owned), 0);
+    CHECK(installed && !strcmp(installed->location, "missing_saved_f01_symbol") && installed->ignore == 3 && installed->ignore_set && installed->enabled);
     CHECK(CAPTURE() && !tb_setup_capture_dirty(c));
     tb_break_definition_reserve(tb_session_breakpoints(owned), TB_SETUP_BREAKS);
     CHECK(!tb_break_add(tb_session_breakpoints(owned), "main", false));
@@ -86,15 +90,38 @@ int main(int argc, char **argv)
     tb_setup_restore_acknowledge(r); tb_setup_restore_pump(r, c, owned); CHECK(!tb_setup_restore_acknowledgment(r));
     CHECK(tb_session_console(owned, "start")); wait_state(TB_SESSION_STOPPED);
     CHECK(!tb_variables_read(variables, TB_VARIABLE_WATCHES, 1));
+    tb_context_visible(tb_session_context(owned), true, true);
+    uint64_t context_end = tb_gdb_now_ms() + 4000;
+    while ((!tb_context_snapshot(tb_session_context(owned))->ready || tb_context_snapshot(tb_session_context(owned))->stale) && tb_gdb_now_ms() < context_end) { tb_session_pump(owned, 5); }
+    uint64_t address = strtoull(tb_context_snapshot(tb_session_context(owned))->selected.address, NULL, 16);
+    TbSetupMapping mapping, changed; CHECK(address && tb_images_native_mapping(tb_session_target_pid(owned), address, &mapping));
+    CHECK(tb_images_mapping_equal(&mapping, &mapping, address)); changed = mapping; ++changed.bias; CHECK(!tb_images_mapping_equal(&mapping, &changed, address));
+    changed = mapping; changed.identity[0] = changed.identity[0] == 'x' ? 'y' : 'x'; CHECK(!tb_images_mapping_equal(&mapping, &changed, address));
+    CHECK(!tb_images_mapping_equal(&mapping, &mapping, mapping.end));
     CHECK(!tb_memory_view(memory, added)->configured && !tb_memory_view(memory, added)->pending);
     tb_setup_restore_pump(r, c, owned); CHECK(!tb_setup_restore_acknowledgment(r));
     CHECK(tb_code_tab_close(code, 0, 2) && tb_setup_capture_remove_break(c, saved->breaks[0].id));
-    CHECK(CAPTURE() && tb_setup_capture_dirty(c) && tb_setup_capture_current(c)->break_count == 0);
+    CHECK(CAPTURE() && tb_setup_capture_dirty(c) && tb_setup_capture_current(c)->break_count == 1);
     CHECK(tb_setup_capture_current(c)->panes[0].sources[0].id == saved->panes[0].sources[0].id);
     TbWatchDefinition unsupported; CHECK(tb_variables_definition(variables, 1, &unsupported));
     CHECK(tb_variables_remove_definition(variables, unsupported.identity));
     CHECK(CAPTURE() && tb_setup_capture_current(c)->watch_count == 1 && tb_setup_capture_current(c)->watches[0].id == saved->watches[0].id);
     CHECK(tb_setup_capture_saved(c)); CHECK(CAPTURE() && !tb_setup_capture_dirty(c));
+    /* Current native provenance permits address reuse without saved permissions.
+     * A changed bias requires explicit approval even in this same process. */
+    TbBreakDefinition literal = {.mapping = mapping, .enabled = false};
+    (void)snprintf(literal.location, sizeof literal.location, "*0x%llx", (unsigned long long)address);
+    uint64_t literal_id = tb_setup_capture_import_break(c, &literal); CHECK(literal_id && CAPTURE());
+    CHECK(tb_setup_capture_saved(c)); tb_setup_restore_begin(r); settle(r, c);
+    CHECK(tb_break_restoration(tb_session_breakpoints(owned), literal_id)->state == TB_RESTORE_INSTALLED);
+    CHECK(CAPTURE() && !tb_setup_capture_dirty(c));
+    ++literal.mapping.bias; uint64_t changed_id = tb_setup_capture_import_break(c, &literal); CHECK(changed_id && CAPTURE());
+    CHECK(tb_setup_capture_saved(c)); tb_setup_restore_begin(r); settle(r, c);
+    CHECK(tb_break_restoration(tb_session_breakpoints(owned), changed_id)->state == TB_RESTORE_ADDRESS);
+    CHECK(tb_setup_capture_retained(c) == 1 && CAPTURE() && !tb_setup_capture_dirty(c));
+    CHECK(tb_break_restore(tb_session_breakpoints(owned), tb_setup_capture_retained_break(c, 0), true));
+    tb_setup_restore_pump(r, c, owned); settle(r, c);
+    CHECK(tb_setup_capture_retained(c) == 0 && CAPTURE() && !tb_setup_capture_dirty(c));
     /* An actual request remains in flight until the next controller pump.
      * Cancel must keep the interlock until that completion is consumed. */
     tb_setup_restore_begin(r); tb_code_request_files(code);
