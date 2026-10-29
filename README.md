@@ -13,7 +13,7 @@ to native Linux **x86-64** programs. Physical testing covers these embedded
 architectures using STM32 NUCLEO-F446RE, ESP32-S3 and ESP32-C6FH4 respectively.
 See the [validation records](docs/validation.md) for configurations and results.
 
-The tiled workspace provides source and mixed disassembly, registers, memory,
+The tiled workspace provides source and mixed disassembly, registers, Memory/Stack,
 locals/watches, threads/frames, code breakpoints, hardware watchpoints, stepping
 and GDB Console. Lower panes start minimized and expand with independent heights.
 Source tabs, fullscreen and cached browsing keep large programs navigable.
@@ -30,8 +30,12 @@ Memory and variable inspection are read-only. Explicit-width MMIO sampling is
 available for the validated STM32/OpenOCD setup; navigation never samples MMIO.
 See [Memory inspection](docs/usage.md#memory-inspection) for access controls.
 
-The latest release is **v0.1.4**. The next planned feature is the dedicated
-Stack view (F02), targeting **v0.1.5**.
+The latest release is **v0.1.4**. Development builds add the dedicated
+[Stack inspector](docs/usage.md#stack-inspection) (F02), targeting **v0.1.5**;
+acceptance and release validation remain pending.
+The v0.1.5 target also adds compact Call Stack entries with cached Details,
+aligned Stack columns and input/rendering refinements. F6 is Pause/Halt in fresh
+defaults; existing personal bindings remain unchanged.
 
 ## Build and first session
 

@@ -7,6 +7,7 @@
 #include "breakpoints.h"
 #include "registers.h"
 #include "memory.h"
+#include "stack.h"
 #include "variables.h"
 #include "openocd.h"
 
@@ -90,6 +91,7 @@ TbCode *tb_session_code(TbSession *native);
 TbBreakpoints *tb_session_breakpoints(TbSession *native);
 TbRegisters *tb_session_registers(TbSession *native);
 TbMemory *tb_session_memory(TbSession *native);
+TbStack *tb_session_stack(TbSession *session);
 TbVariables *tb_session_variables(TbSession *native);
 bool tb_session_run_to(TbSession *native, const char *location);
 bool tb_session_run_at(TbSession *native, TbBreakLocation location);

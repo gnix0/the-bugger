@@ -35,6 +35,7 @@ struct TbSession {
     TbBreakpoints *breakpoints;
     TbRegisters *registers;
     TbMemory *memory;
+    TbStack *stack;
     TbVariables *variables;
     TbSessionState state;
     bool attach, configured, waiting, completed, success, want_close, failed, reply_cancelled;
@@ -132,6 +133,7 @@ static void configuration_changed(TbSession *session)
     ++session->mmio_configuration;
     (void)tb_memory_backend_set(session->memory, NULL);
     tb_code_image_invalidate(session->code);
+    if (session->stack) { tb_stack_invalidate(session->stack); }
 }
 
 bool tb_session_words(const char *input, TbSessionWords *words, char *error, size_t capacity)
@@ -189,6 +191,7 @@ static void emit(void *context, const TbGdbEvent *event)
     ++native->revision;
     if (tb_break_event(native->breakpoints, event)) { return; }
     if (tb_registers_event(native->registers, event)) { return; }
+    if (native->stack && tb_stack_event(native->stack, event)) { return; }
     if (tb_memory_event(native->memory, event)) { return; }
     if (tb_variables_event(native->variables, event)) { return; }
     if (tb_code_event(native->code, event)) { return; }
@@ -330,6 +333,8 @@ TbSession *tb_session_create(void)
         tb_break_destroy(native->breakpoints); tb_code_destroy(native->code);
         tb_context_destroy(native->context); (void)tb_gdb_destroy(native->gdb); free(native); return NULL;
     }
+    native->stack = tb_stack_create(native->gdb, native->context, native->memory, tb_code_cache(native->code));
+    if (!native->stack) { (void)tb_session_destroy(native); return NULL; }
     native->server = tb_openocd_create(server_log, native);
     if (!native->server) { (void)tb_session_destroy(native); return NULL; }
     return native;
@@ -350,6 +355,7 @@ bool tb_session_destroy(TbSession *native)
     native->server = NULL;
     /* Memory releases its MMIO reservation through the still-live controller.
      * Disconnected, reaped and drained above means destroy cannot emit replies. */
+    tb_stack_destroy(native->stack); native->stack = NULL;
     tb_memory_destroy(native->memory); native->memory = NULL;
     if (!tb_gdb_destroy(native->gdb)) { return false; }
     tb_variables_destroy(native->variables); tb_registers_destroy(native->registers); tb_break_destroy(native->breakpoints); tb_code_destroy(native->code); tb_context_destroy(native->context); close_fds(native); free(native); return true;
@@ -462,6 +468,7 @@ bool tb_session_start(TbSession *native, const TbSessionConfig *config)
     tb_break_reset(native->breakpoints);
     tb_registers_reset(native->registers);
     tb_memory_reset(native->memory);
+    tb_stack_reset(native->stack);
     tb_variables_reset(native->variables);
     native->memory_pid = 0; native->memory_stop = 0;
     tb_memory_target(native->memory, native->kind == TB_SESSION_LOCAL, 64);
@@ -964,7 +971,10 @@ void tb_session_pump(TbSession *native, int wait_ms)
         if (snapshot->ready && !snapshot->stale && *snapshot->selected.architecture) {
             (void)snprintf(native->capabilities.architecture, sizeof native->capabilities.architecture, "%s", snapshot->selected.architecture);
         }
-        tb_code_pump(native->code); tb_registers_pump(native->registers); tb_memory_pump(native->memory); tb_variables_pump(native->variables);
+        tb_stack_target(native->stack, native->capabilities.octet_addressing, native->capabilities.address_bits,
+                        native->capabilities.byte_order, native->capabilities.architecture);
+        tb_code_pump(native->code); tb_registers_pump(native->registers); tb_stack_pump(native->stack);
+        tb_memory_pump(native->memory); tb_variables_pump(native->variables);
         }
     }
     if (strcmp(native->code_message, tb_code_message(native->code)) != 0) {
@@ -997,7 +1007,7 @@ const char *tb_session_state_name(const TbSession *native)
     return names[native->state];
 }
 const char *tb_session_message(const TbSession *native) { return native->message; }
-uint64_t tb_session_revision(const TbSession *native) { return native->revision + tb_context_revision(native->context) + tb_code_revision(native->code) + tb_break_revision(native->breakpoints) + tb_registers_revision(native->registers) + tb_memory_revision(native->memory) + tb_variables_revision(native->variables); }
+uint64_t tb_session_revision(const TbSession *native) { return native->revision + tb_context_revision(native->context) + tb_code_revision(native->code) + tb_break_revision(native->breakpoints) + tb_registers_revision(native->registers) + tb_memory_revision(native->memory) + tb_stack_revision(native->stack) + tb_variables_revision(native->variables); }
 TbRegisters *tb_session_registers(TbSession *native) { return native->registers; }
 TbMemory *tb_session_memory(TbSession *native) { return native->memory; }
 TbVariables *tb_session_variables(TbSession *native) { return native->variables; }
@@ -1137,3 +1147,5 @@ static void remote_setup(TbSession *session)
         diagnostic(session, "Connected to existing GDB server. No server ownership; unknown memory regions require explicit reads.");
     }
 }
+
+TbStack *tb_session_stack(TbSession *session) { return session->stack; }

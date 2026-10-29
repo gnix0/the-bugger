@@ -6,6 +6,8 @@ int main(void)
 {
     int keys[TB_BIND_COUNT]; tb_keybind_defaults(keys);
     CHECK(tb_keybinds_valid(keys) && keys[TB_BIND_CONTINUE] == 5);
+    CHECK(keys[TB_BIND_PAUSE] == 6 && keys[TB_BIND_BREAKPOINT] == 9 &&
+          keys[TB_BIND_OVER] == 10 && keys[TB_BIND_INTO] == 11 && keys[TB_BIND_OUT] == 23);
     CHECK(keys[TB_BIND_LEFT] == 0 && keys[TB_BIND_CONTENT_LEFT] == 0);
     CHECK(tb_keybind_vim(keys, true) && keys[TB_BIND_LEFT] == 256 + 'h');
     keys[TB_BIND_UP] = 256 + 'w';

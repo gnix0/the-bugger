@@ -436,3 +436,97 @@ Acceptance requires model/TUI regressions, bounded-allocation and eviction check
 zero frontend MMIO requests from permission/navigation actions, failure/late-reply handling,
 the fresh fortified host baseline, and separately authorized real backend/physical
 width validation. Both browsing views require maintainer review before release.
+
+## Approved F02 Stack inspection
+
+The dedicated Stack tab is a read-only raw-byte inspector. Its anchor is the
+globally selected thread's innermost, frame-0 GDB-reported SP; selecting a caller
+never moves that anchor. Unavailable SP remains unavailable, without PC, frame
+pointer or CFA substitution. Visible views share matching frame-0 metadata;
+hidden views and unavailable metadata do not cause repeated background queries.
+
+Each view starts with a 128-byte requested window, SP−64 through SP+63. Explicit
+sizes are 1–1024 bytes. Following starts at SP−floor(size/2); unsigned numeric
+navigation chooses a window start, and signed numeric navigation chooses an SP
+offset. Check complete target-width/arithmetic bounds and reject overflow,
+without alignment, expansion or clipping. Browsing suspends following; Follow SP
+restores it. Thread selection restores following and an unread viewport.
+Navigation, grouping, sizing, focus, resize and cached inspection never read bytes.
+Only explicit Read/Refresh acquires a window through the existing Memory policy.
+No automatic MMIO access or new permission category is introduced.
+
+Present one logical 1/2/4/8-byte group per row, complete addresses, signed offsets
+from a currently valid frame-0 SP, raw values and explicit point annotations.
+Default grouping uses established target width/order and otherwise bytes.
+Preserve missing bytes and incomplete trailing groups without invented numbers;
+a number resembling an address is not a pointer. Minimum-width panes retain
+vertical navigation, horizontal panning/clipping indicators and complete read-free
+row details. Samples retain thread lifetime and session/stop/context provenance;
+resume/context changes make them stale. Other-thread history is available only
+through deliberate cached inspection and never receives the current thread's SP
+offsets or point annotations.
+
+Explicit annotation actions query either the selected frame's GDB-reported SP
+(separate from frame zero; callers may be reconstructed), or one eligible entry
+from a Stack-local names-only locals/arguments picker. Use explicit thread/frame
+options without debugger selection changes. MI frame `addr` is a code address,
+not SP. An address point establishes no storage extent, stack membership or
+ownership. References may identify referents; register-only, optimized, piecewise,
+ambiguous and unsupported locations receive explanations.
+
+Before each variable-address query, confirm `may-call-functions off`. If enabled,
+review and explicitly confirm the session-wide change, then verify it; never
+silently toggle or restore it. Controlled C address-of operations and quoted
+symbol lookup avoid overloaded operations and macro substitution. Reject
+unsupported/ambiguous names; no free-form expressions, variable objects or
+background address probing. GDB can still perform internal reads. Invalidate
+points on resume and relevant context/image/configuration changes. Retain at
+most 32 points per view, one annotation chain at a time, with explicit removal
+and no replacement when full.
+
+Numeric half-open declared intervals and growth direction are independent per
+view and thread lifetime, session-only. Termination/session end clears them;
+reused numeric IDs never inherit declarations. Conservatively invalidate
+associations when continuity cannot be established. Declarations grant no access
+permission or verified ownership. Verified bounds remain unknown absent
+authoritative per-thread evidence. Mappings, ABI conventions, adjacent frame SPs
+and isolated linker symbols do not prove usable bounds.
+
+With fresh SP in the closed endpoint span, label only **SP displacement from
+declared start**: high−SP for downward growth, SP−low for upward growth. Zero at
+the declared starting endpoint does not make that endpoint readable. Outside
+the span, report the relationship only. Never report utilization, measured usage,
+high-water marks, fullness, overflow or safety margins.
+
+Stack clients have separate Memory state, permissions and histories, one shared
+active byte-read operation, the existing shared 4 MiB cache and 1024-byte limit.
+Capture/validate context, thread/view lifetime and operation revisions before
+dispatch and completion. Use bounded nonblocking MI with three-second deadlines;
+cancellation stops further dispatch/rejects canceled results without interrupting
+the target. Outstanding cancellation and timeout never prove backend cancellation.
+No automatic retries, speculative unwinding, RTOS discovery, halt/resume, editing,
+flashing or new verification transports. Stack state is session-only; F01 retains
+tab/layout restoration without new setup fields.
+
+## v0.1.5 inspection interactions
+
+- Keep F5/F9/F10/F11/Shift+F11 and separate Continue/Pause actions. Fresh defaults
+  assign F6 Pause/Halt. Preserve saved bindings and the existing preference format.
+  Debugger function keys work in focused ordinary fields and Vim Normal mode;
+  Insert protects typing. Fixed Tab/Shift+Tab traverses controls without optional
+  Next/Previous control assignments.
+- Escape leaves editing, content focus, menus/details or fullscreen; it never
+  closes a debugging session. Default q closes the session to the launcher;
+  Ctrl+Q quits the application after closure, with distinct confirmation text.
+- Stack address, SP-offset and raw-value columns align independently of offset
+  string length. Scrolling and caller selection must not clear the whole screen
+  or expose an alternate-screen transition. Compatible terminals use synchronized
+  presentation; fallback output and terminal restoration remain supported.
+- Compact Call Stack entries use function and basename/line. Pane-local Details
+  copies highlighted frame metadata without selecting it or querying GDB; wrap
+  and scroll long fields, mark missing/stale data, and preserve list navigation
+  on Escape. Source/Register caller context changes remain GDB-authoritative;
+  Stack retains its frame-zero anchor.
+- Expanded lower groups retain top minimize/menu controls and omit duplicate
+  bottom docks. Use available chrome spacing while retaining primary pane
+  positions/sizes and compact navigation. No workspace-schema change is needed.

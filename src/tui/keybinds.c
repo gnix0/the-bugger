@@ -6,7 +6,7 @@
 void tb_keybind_defaults(int keys[TB_BIND_COUNT])
 {
     memset(keys, 0, sizeof(int) * TB_BIND_COUNT);
-    keys[TB_BIND_CONTINUE] = 5; keys[TB_BIND_OVER] = 10; keys[TB_BIND_INTO] = 11;
+    keys[TB_BIND_CONTINUE] = 5; keys[TB_BIND_PAUSE] = 6; keys[TB_BIND_OVER] = 10; keys[TB_BIND_INTO] = 11;
     keys[TB_BIND_OUT] = 23; keys[TB_BIND_BREAKPOINT] = 9;
     keys[TB_BIND_PREVIOUS_PANE] = 256 + '['; keys[TB_BIND_NEXT_PANE] = 256 + ']';
     for (int i = 0; i < 9; ++i) { keys[TB_BIND_PANE_1 + i] = 256 + '1' + i; }

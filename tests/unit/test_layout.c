@@ -91,12 +91,12 @@ static void overlays(void)
     layout.lower_height[0] = 12; layout.lower_height[1] = 9;
     CHECK(tb_layout_arrange(&layout, area, 3));
     CHECK(memcmp(upper, layout.panes, sizeof upper) == 0);
-    CHECK(layout.panes[3].h == 12 && layout.panes[4].h == 9);
+    CHECK(layout.panes[3].h == 13 && layout.panes[4].h == 10);
     int divider = tb_layout_divider_at(&layout, layout.panes[3].x, layout.panes[3].y - 1);
     CHECK(divider >= 0 && layout.dividers[divider].node == -4);
     CHECK(tb_layout_move_divider(&layout, divider, layout.panes[3].y - 4));
     CHECK(tb_layout_arrange(&layout, area, 3));
-    CHECK(layout.panes[3].h == 15 && layout.panes[4].h == 9);
+    CHECK(layout.panes[3].h == 16 && layout.panes[4].h == 10);
     CHECK(memcmp(upper, layout.panes, sizeof upper) == 0);
     CHECK(tb_layout_pane_at(&layout, layout.panes[3].x, layout.panes[3].y) == 3);
     CHECK(tb_layout_pane_at(&layout, upper[0].x, upper[0].y) == 0);

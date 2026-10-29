@@ -231,10 +231,19 @@ int main(int argc, char *argv[])
     if (stress) { render_stress(argv[1], argv[2], stress); return 0; }
     TestTerminal term;
     start(&term, argv[1], argv[2], true);
+    const int toggle_widths[] = {48, 80, 123, 124, 160};
+    for (size_t i = 0; i < sizeof toggle_widths / sizeof toggle_widths[0]; ++i) {
+        test_terminal_resize(&term, 24, toggle_widths[i]);
+        test_terminal_lower(&term, 2, false);
+        CHECK(!test_terminal_find(&term, "Command", NULL, NULL));
+        test_terminal_lower(&term, 2, true);
+        test_terminal_expect(&term, "Command");
+    }
+    test_terminal_resize(&term, 44, 140);
     inline_console(&term);
     if (getenv("TB_CONSOLE_TEST_TMUX")) {
         test_terminal_send(&term, "\021");
-        test_terminal_expect(&term, "Close native session?");
+        test_terminal_expect(&term, "Quit application?");
         test_terminal_click(&term, "Close session");
         test_terminal_stop(&term, 0);
         puts("PASS inline Console through isolated real tmux, with session and terminal cleanup");
