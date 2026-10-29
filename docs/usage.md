@@ -608,6 +608,10 @@ families resets that row to the family's initial variant (Macchiato for Catppucc
 | Nightfox | nightfox, dayfox, dawnfox, duskfox, nordfox, terafox, carbonfox |
 | Gruvbox Material | dark/light × medium, hard, soft; material foreground |
 | Monokai Pro | pro, classic, machine, octagon, ristretto, spectrum, light |
+| Gruber Darker | dark |
+| Zenburn | dark |
+| Modus | operandi, vivendi; each also has -tinted, -deuteranopia, -tritanopia |
+| Solarized | dark, light |
 
 **Preview** temporarily applies the draft to a simulated workspace. It does not
 start a debugger, read a target or save preferences. **Back** or Escape returns
@@ -626,7 +630,9 @@ silently overwritten. A stale writer must restart before saving.
 
 The palettes are adapted to semantic roles, with contrast adjustments where
 needed; 8-color/monochrome terminals cannot reproduce all palette differences.
-No Neovim or Lua installation is needed. Upstream revisions and licenses are in
+The 49 palettes across eleven families need no editor installation. Modus color-deficiency
+variants retain semantic color substitutions. Terminal adaptations do not inherit
+upstream accessibility certification. Upstream revisions and licenses are in
 [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES). Custom palette files remain planned
 under F44.
 

@@ -3324,3 +3324,39 @@ complete; no tag rewrite is required for content correctness.
 This closes the F01/v0.1.4 release gate. It does not add unreported owner visual,
 physical-unplug, MMIO, sanitizer or timing results to the earlier evidence.
 F02 is the next planned feature, targeting v0.1.5; implementation has not begun.
+
+## Additional theme families — 2026-10-29
+
+Twelve semantic palette adaptations add Gruber Darker, Zenburn, Modus
+Operandi/Vivendi (standard, tinted, deuteranopia and tritanopia) and Solarized
+dark/light. The catalogue has 49 palettes across eleven families. Macchiato,
+existing preference identifiers and schema remain unchanged. Exact upstream
+revisions, authors, source files, mapping adjustments and MIT/GPL notices are in
+`THIRD_PARTY_NOTICES`; distribution packaging already includes that file and
+the full GPLv3 `LICENSE` in both source and binary archives.
+
+Agent-run on Linux x86-64, Arch kernel 7.2.11-arch1-1, GCC 16.2.1,
+GDB 18.1 and tmux 3.8, with TERM=xterm-256color:
+
+- `make BUILD_DIR=build/themes-focused-20261029 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes`:
+  PASS. All identifiers round-trip through preferences; 49 previews including
+  narrow rendering, family wrapping, dependent variant selection and canceled
+  preview persistence; RGB contrast and direct/256/8-color/monochrome checks.
+  Full log: `build/themes-evidence/focused.log`.
+- `TERM=xterm-256color make BUILD_DIR=build/themes-ci-20261029 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`:
+  PASS, exit 0. Complete local host baseline, including native GDB, isolated
+  tmux, localhost remote and non-hardware OpenOCD checks. Full log:
+  `build/themes-evidence/test-ci.log`; exact tested base/diff and tool environment:
+  `environment.txt` and `tested-tree.patch` in the same directory. The final
+  documentation result update is retained in `final-tree.patch`.
+- `git diff --check`: PASS. Packaging inspection confirms `LICENSE` and
+  `THIRD_PARTY_NOTICES` are installed in the binary archive and included among
+  tracked source files. No distribution was prepared or published.
+
+State: automated-verified locally. Hosted Ubuntu checks and manual appearance
+review are unrun for this tree.
+
+Numerical contrast and PTY checks do not establish terminal visual quality or
+upstream accessibility certification. Manual appearance review follows
+[Themes and configuration](testing.md#themes-and-configuration). No physical
+target checks or release publication are established by this theme work.

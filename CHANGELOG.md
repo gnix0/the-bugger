@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- Gruber Darker, Zenburn, eight Modus variants and Solarized dark/light themes,
+  bringing the catalogue to 49 palettes across eleven families. Includes
+  upstream provenance and license notices; Macchiato remains the default.
+
 ## [0.1.4] - 2026-10-29
 
 ### Added

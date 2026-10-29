@@ -176,8 +176,8 @@ paths. No saved layout, new session backend or target-access policy is introduce
 
 `src/tui/theme.{h,c}` defines the built-in palette catalog, stable family/variant
 identifiers and semantic curses pairs. Catppuccin Macchiato is the default;
-All seven families, including Monokai Pro, remain selectable. The
-37 palettes use shared workspace/panel/raised/selection surfaces and semantic
+All eleven families remain selectable. The
+49 palettes use shared workspace/panel/raised/selection surfaces and semantic
 foregrounds. Muted/accent colors are adjusted toward text where required for
 contrast. RGB roles map to direct color, nearest xterm 256-color entries, or
 existing 8-color/monochrome fallbacks. If quantization merges a foreground with
@@ -217,7 +217,9 @@ uncertain crash durability, not as a rolled-back save.
 
 The catalog adapts the referenced upstream palettes; it does not embed Neovim or
 execute Lua. [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES) retains exact upstream
-revisions and MIT notices and accompanies the binary distribution.
+revisions, authors and MIT/GPL notices and accompanies the binary distribution
+with the GPLv3 text in LICENSE. Modus color-deficiency variants preserve upstream
+semantic substitutions; terminal adaptations carry no accessibility certification.
 
 ## Data flow and invariants
 
