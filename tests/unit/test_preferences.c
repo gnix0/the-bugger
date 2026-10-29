@@ -29,6 +29,11 @@ int main(void)
     CHECK(tb_preferences_load(&second) && second.palette == tb_theme_find("rose-pine", "dawn"));
     CHECK(tb_preferences_save(&second, tb_theme_find("monokai-pro", "classic")));
     CHECK(tb_preferences_load(&first) && first.palette == tb_theme_find("monokai-pro", "classic"));
+    for (size_t i = 0; i < tb_theme_count(); ++i) {
+        CHECK(tb_preferences_save(&first, i));
+        CHECK(tb_preferences_load(&first) && first.palette == i);
+    }
+    CHECK(tb_preferences_save(&first, tb_theme_find("monokai-pro", "classic")));
     int keys[TB_BIND_COUNT]; tb_keybind_defaults(keys); keys[TB_BIND_CONTINUE] = 6;
     CHECK(tb_preferences_save_keys(&first, keys));
     CHECK(tb_preferences_load(&second) && second.keys[TB_BIND_CONTINUE] == 6);

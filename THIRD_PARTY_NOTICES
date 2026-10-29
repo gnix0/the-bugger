@@ -2,7 +2,8 @@ Third-party palette notices
 ===========================
 
 The Bugger adapts these color palettes to its own semantic UI roles.
-No Neovim or Lua runtime is required.
+No editor runtime is required. GPL-3.0-or-later palette adaptations use the
+GNU GPL version 3 text in LICENSE, included with source and binary distributions.
 
 
 catppuccin/nvim
@@ -365,3 +366,125 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+rexim/gruber-darker-theme — Gruber Darker adaptation
+Revision: 2e9f99c41fe8ef0557e9ea0f3b94ef50c68b5557
+Source: gruber-darker-theme.el
+https://github.com/rexim/gruber-darker-theme/blob/2e9f99c41fe8ef0557e9ea0f3b94ef50c68b5557/gruber-darker-theme.el
+Author: Alexey Kutepov (rexim)
+Copyright (C) 2013-2016 Alexey Kutepov a.k.a rexim
+Copyright (C) 2009-2010 Jason R. Blevins
+Original Gruber Dark: John Gruber; Emacs Gruber Darker: Jason Blevins;
+deftheme adaptation and extensions: Alexey Kutepov.
+License: MIT
+
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation
+files (the "Software"), to deal in the Software without
+restriction, including without limitation the rights to use, copy,
+modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+bbatsov/zenburn-emacs — palette adaptations
+Revision: 5b251bb01aa1d64055a50ea68ea4f4c060336705
+Sources: zenburn-theme.el
+https://github.com/bbatsov/zenburn-emacs/tree/5b251bb01aa1d64055a50ea68ea4f4c060336705
+Author: Bozhidar Batsov
+Copyright (C) 2011-2026 Bozhidar Batsov
+Original Vim Zenburn: Jani Nurminen.
+License: GPL-3.0-or-later
+
+These sources are free software; you can redistribute them and/or modify
+them under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+They are distributed in the hope that they will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See LICENSE
+for the complete GNU General Public License version 3 text.
+
+
+protesilaos/modus-themes — palette adaptations
+Revision: b1647b2980f4f27c3c81ac1531d992a14fefd06a
+Sources: modus-themes.el and modus-{operandi,vivendi}{,-tinted,-deuteranopia,-tritanopia}-theme.el
+https://github.com/protesilaos/modus-themes/tree/b1647b2980f4f27c3c81ac1531d992a14fefd06a
+Author: Protesilaos Stavrou
+Copyright (C) 2019-2026 Free Software Foundation, Inc.
+License: GPL-3.0-or-later
+
+These sources are free software; you can redistribute them and/or modify
+them under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+They are distributed in the hope that they will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See LICENSE
+for the complete GNU General Public License version 3 text.
+
+
+bbatsov/solarized-emacs — palette adaptations
+Revision: d8bc6f72dc3e3800a2119bae9733c333d215b04d
+Sources: solarized-theme.el, solarized-palettes.el
+https://github.com/bbatsov/solarized-emacs/tree/d8bc6f72dc3e3800a2119bae9733c333d215b04d
+Authors: Bozhidar Batsov and Thomas Frössman
+Copyright (C) 2011-2025 Bozhidar Batsov
+Original Solarized: Ethan Schoonover.
+License: GPL-3.0-or-later
+
+These sources are free software; you can redistribute them and/or modify
+them under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+They are distributed in the hope that they will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See LICENSE
+for the complete GNU General Public License version 3 text.
+
+Adaptations in The Bugger
+------------------------
+The thirteen roles, in table order, are workspace, panel, raised surface,
+selection, border, text, muted, attention, success, warning, key, type and
+context. Role names in code retain the historical pink/green/orange/yellow/
+purple/cyan spelling; they do not require those hues.
+
+Gruber uses bg-1/bg/bg+1/bg+2/bg+3, fg, niagara, red, green, brown, yellow,
+wisteria and quartz. Zenburn uses bg-1/bg/bg+05/bg+1/bg+3, fg, fg-05, red,
+green, orange, yellow, magenta and cyan.
+
+Modus uses bg-dim/bg-main/bg-inactive/bg-active/border, fg-main/fg-dim,
+err/info/warning and yellow/magenta/cyan. Deuteranopia replaces the final
+three roles with yellow-cooler/blue-warmer/cyan-faint; its err/info mappings
+use yellow-warmer/blue. Tritanopia uses red-cooler/magenta/cyan-faint and
+upstream red-warmer/cyan for err/info. This retains the variants' semantic
+color substitutions instead of restoring the standard red/green roles.
+
+Solarized uses canonical dark/light base surfaces and accents from
+solarized-palettes.el. Dark panel/raised/selection use base02 over base03;
+light panel uses base3 with base2 surfaces. Border and muted use base01/base1
+in dark and base1/base01 in light; text uses base0/base00. Attention, success,
+warning, key, type and context use red, green, orange, yellow, violet and cyan.
+
+For all four families, foregrounds are blended toward text as necessary to
+meet the existing 4.5:1 text and 3:1 accent/muted surface checks (text itself
+moves toward black/white when needed). These are terminal role adaptations,
+not unmodified upstream editor themes. Terminal quantization and UI pairings
+do not inherit upstream accessibility certification. Non-color indicators and
+8-color/monochrome fallbacks remain part of the interface.

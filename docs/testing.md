@@ -157,7 +157,7 @@ Manual review:
 The same PTY checks assert right-aligned help and compact centered session forms.
 `make test-keybinds` checks the short-terminal scrollbar, track paging, thumb drag
 to the final rows and disappearance when all bindings fit. The render unit test
-checks footer backgrounds against the workspace color for all 37 palettes;
+checks footer backgrounds against the workspace color for all 49 palettes;
 existing direct/256/8-color/monochrome and real-tmux checks remain in the baseline.
 The native Console TUI suite also checks centered close-confirmation controls.
 
@@ -274,7 +274,7 @@ make test-m13-tui
 additionally builds its ordinary native fixture but does not start GDB unless
 using the separate native target.
 
-Automated checks cover all 37 palettes and their identifiers, RGB text contrast
+Automated checks cover all 49 palettes and their identifiers, RGB text contrast
 of at least 4.5:1 and muted/accent contrast of at least 3:1 against catalog
 surfaces, direct/256/8-color/monochrome pairs, semantic source/register rendering,
 execution-only highlighting and scrollbars. Preference tests cover default,
