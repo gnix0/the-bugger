@@ -100,13 +100,13 @@ static void lower_overlays(const char *binary)
     test_terminal_resize(&term, 24, 80);
     test_terminal_expect(&term, "Sample log / no commands executed");
     CHECK(!test_terminal_find(&term, "HEX bytes / ASCII", NULL, NULL));
-    /* The taller Memory header is still exposed above Console. */
-    test_terminal_click(&term, "Memory");
+    /* Pane selection raises an open group without requiring a duplicate dock. */
+    test_terminal_send(&term, "4");
     test_terminal_expect(&term, "HEX bytes / ASCII");
-    click_at(&term, term.cols - 20, term.rows - 3);
+    test_terminal_send(&term, "6");
     test_terminal_expect(&term, "Sample log / no commands executed");
-    /* A dock title brings the already-open group to the front. */
-    click_at(&term, 2, term.rows - 3);
+    /* Open groups use their header and pane selection, without duplicate docks. */
+    test_terminal_send(&term, "4");
     test_terminal_expect(&term, "HEX bytes / ASCII");
     CHECK(!test_terminal_find(&term, "Sample log / no commands executed", NULL, NULL));
     test_terminal_lower(&term, 0, false);

@@ -9,7 +9,10 @@ implemented features or hardware support claims. See [architecture](architecture
 v0.1.4 is published. F01 is accepted and shipped; host/physical validation,
 hosted PR checks, uploaded artifact verification and branch synchronization are
 complete. The next feature is F02, the dedicated Stack view for v0.1.5; its
-scope and acceptance plan remain to be reviewed.
+approved scope is in [requirements](requirements.md#approved-f02-stack-inspection).
+Implementation and the original host/STM32 checks are complete, including the
+extended-remote runner. Inspection UX corrections are implemented and locally host/stress verified.
+Owner manual acceptance and release validation remain pending.
 
 | Task | Scope | Current state |
 |---|---|---|
@@ -19,6 +22,7 @@ scope and acceptance plan remain to be reviewed.
 | 1.5 | Prepare v0.1.3 | Published; uploaded artifacts verified |
 | 2.1 | Validate ESP RISC-V hardware for v0.1.4 | Accepted; recorded RISC-V RV32 hardware checks use ESP32-C6FH4 |
 | F01 | Setup restoration for v0.1.4 | Accepted and shipped; host/physical checks and published artifacts verified |
+| F02 | Dedicated Stack inspection and inspection UX for v0.1.5 | Implemented; local host/stress checks pass, owner acceptance pending |
 | 2.4 | Release v0.1.4 | Published; hosted checks passed, uploaded artifacts verified and branch synchronization complete |
 
 Current controls are in [usage](usage.md); the accepted browsing scope is in
@@ -253,7 +257,7 @@ the native/STM32/Xtensa/RISC-V regression gate.
 | Gate / expected target | Objective, scope and prerequisites | Automated tests | Objective manual acceptance |
 |---|---|---|---|
 | F01 / v0.1.4 | Rich setup restoration: workspace/tabs/Memory settings/watches/code-breakpoint definitions; basic profiles first; exclude runtime values/temp breakpoints/old hardware allocations. | Round-trip/migration/corruption/missing files/unresolved breakpoints/terminal size. | Reopen setup without presenting saved values as live. |
-| F02 / v0.1.5 | Dedicated Stack: raw contents, SP offsets, available variable/frame annotations and bounds/usage when known; context/Memory first; no invented high-water measurement. | Native/ARM stacks, unknown bounds, unreadable data/optimized locations. | Follow known SP and distinguish available annotations/bounds from unknown information. |
+| F02 / v0.1.5 | Dedicated Stack: raw contents, SP offsets, available variable/frame annotations and explicit point annotations and per-thread declared bounds/SP displacement; context/Memory first; verified bounds unknown without authoritative evidence; no usage/high-water inference. | Native/ARM stacks, unknown bounds, unreadable data/optimized locations. | Follow known SP and distinguish available annotations/bounds from unknown information. |
 | F03 / v0.2.0 | Locals/Watches editing after M15 capability/read-policy validation; deliberate stopped writes with bounded footprint, no automatic writes or unsafe aggregate rereads. | Conversion/scope/optimized/read-only/error/refresh. | Deliberately edit a target value and verify it. |
 | F04 / v0.2.0 | Memory editing after M15/M16 lifecycle/capabilities; exact width/endian and isolated RAM first. No implicit Flash programming or peripheral writes. | Bounds/partial writes/encoding/failures/refresh. | Verify exact bytes and visible failed writes. |
 | F05 / v0.2.0 | CPU-register editing after M15 discovery/capabilities; stopped target only, no peripheral editor or guessed writable registers. | Writable/read-only/unavailable, generic IDs and refresh. | Change an appropriate fixture register and verify backend result. |

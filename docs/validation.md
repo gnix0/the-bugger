@@ -3360,3 +3360,196 @@ Numerical contrast and PTY checks do not establish terminal visual quality or
 upstream accessibility certification. Manual appearance review follows
 [Themes and configuration](testing.md#themes-and-configuration). No physical
 target checks or release publication are established by this theme work.
+
+## F02 Stack inspection — 2026-10-29
+
+State: implemented; awaiting-user. The dedicated model, explicit Memory-backed
+reads, raw grouped rows/provenance, frame-zero SP following, read-free navigation,
+guarded address points and per-view/thread-lifetime declared displacement are
+implemented. Verified bounds remain unknown. F01's saved-setup schema is unchanged.
+No editing, speculative unwinding, RTOS discovery, automatic halt/resume, flash,
+reset or new transport is introduced.
+
+Local host: Linux x86-64, Arch kernel 7.2.11-arch1-1, GCC 16.2.1, GDB 18.1,
+tmux 3.8; TERM=xterm-256color and CPPFLAGS=-D_FORTIFY_SOURCE=3.
+
+| Execution | Result and retained evidence |
+|---|---|
+| Agent: `make BUILD_DIR=build/f02-focused-20261029 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-stack test-stack-native` | PASS, authored MI and actual debug/optimized/stripped/multithread GDB; `build/f02-evidence/model-native-final.log` |
+| Agent: focused existing context/Memory checks | PASS; `build/f02-evidence/context-memory.log` |
+| Owner: `TERM=xterm-256color make BUILD_DIR=build/f02-focused-20261029 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-stack-tui test-stack-tmux` | Both PASS, reported in CLI; minimum 20-column panes, widths 48/80/123/124/160, paginated guard/details, bounds and cleanup |
+| Owner: `TERM=xterm-256color make BUILD_DIR=build/f02-ci-owner-20261029 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci` | Saved log reaches the final passing OpenOCD target, no failure markers; `build/f02-evidence/test-ci-owner.log`. Shell exit status was not separately captured. Includes all registered Stack and existing host suites; not a hosted Ubuntu result |
+| Agent and owner: opt-in STM32 runner | PASS before extended-remote correction; evidence below |
+| Extended-remote physical correction | Unrun at first delivery; subsequent owner evidence below records PASS |
+
+Focused development failures remain in `build/f02-evidence/`: `model.log`,
+`model-2.log`, `native.log` and `tui*.log`. Investigation corrected test
+expectations and asynchronous terminal settling, plus a stale annotation-error
+message in the application. The final narrow-pane assertion locates the active
+Stack label without requiring the clipped inactive Memory label; clipping,
+horizontal pan and complete-details assertions remain. Owner execution confirms
+both direct PTY and tmux cases pass after that correction.
+
+Physical setup: ARM/Cortex-M on NUCLEO-F446RE, ST-LINK/V2.1 serial
+`066CFF495154787867161137`, ARM GDB 18.1 and OpenOCD
+`0.12.0-01004-g9ea7f3d64-dirty`. Matching retained ELF:
+`build/v0.1.4-release-host/m17/stm32f446re/firmware.elf`, SHA-256
+`280a2227549f11dd7022c6f0d727501c5bb0c471fb52ac1374dd65872e73f23f`.
+The owner reported unchanged programmed firmware; these checks do not establish
+a fresh byte-for-byte comparison of live Flash and ELF.
+
+Commands: the serial-selected OpenOCD command and opt-in runner invocation in
+[Stack procedures](testing.md#stack-inspection-f02), using
+`BUILD_DIR=build/f02-focused-20261029`. Agent evidence is `stm32-openocd.log`,
+`stm32-check.log`, `stm32-session.log`; owner evidence is
+`stm32-openocd-final.log`, `stm32-check-final.log`, `stm32-session-final.log`,
+all under `build/f02-evidence/`. Owner run: frame-zero SP `0x2001ffe0`, unread
+128-byte window `0x2001ffa0`, successful explicit 32-byte SRAM acquisition,
+caller SP separation, manual step/refollow, guarded address query and leave-halted
+disconnect. `current` was register-only (`r4`), correctly explained rather than
+given an invented address. Declared `[0x20000000,0x20020000)` downward yielded
+32-byte **SP displacement from declared start**, with verified bounds unknown.
+Neither run flashed or reset. The original runner used `remote`; the subsequent
+one-line correction selects existing `TB_SESSION_EXTENDED_REMOTE`. Subsequent
+owner logs `stm32-openocd-extended.log`, `stm32-check-extended.log` and
+`stm32-session-extended.log` record PASS: frame-zero SP `0x2001ffd0`, exact
+32-byte SRAM sampling, explained register-only `input` (`r4`), and 48-byte
+SP displacement. The owner also completed the fresh baseline in
+`build/f02-ci-delivery-20261029`; `test-ci-delivery.log` and
+`test-ci-delivery.exit` record PASS, exit 0. These results precede the inspection
+UX refinements below; they do not establish their manual visual acceptance.
+
+The delivery snapshot is `build/f02-evidence/delivery-tree.sha256.json` and
+`delivery-tree.patch`; it includes the subsequent extended-remote correction,
+so it is not presented as an exact snapshot of the earlier owner test run.
+Hosted Ubuntu checks, physical Xtensa/RV32 F02 checks, and owner visual acceptance
+are unrun. Automated hardware evidence does not establish visual acceptance or
+the complete release regression matrix. No F02 release or publication occurred.
+
+## v0.1.5 inspection UX corrections — 2026-10-29
+
+State: implemented; awaiting-user. The UI/CLI target version is 0.1.5; this is
+not a publication record. Changes include function-key dispatch with retained
+Command focus in ordinary/Vim Normal input, separate F6 Pause/Halt defaults,
+distinct Escape/session-close/application-quit handling, aligned Stack columns,
+compact Call Stack entries and pane-local cached frame Details. Details wraps
+available metadata without selecting a debugger frame or requesting new values.
+Shorter fresh stacks clamp absent highlighted rows locally, without selecting GDB.
+
+Expanded lower groups retain their top minimize/menu row and use the old dock
+row for content. Primary pane geometry remains unchanged. Whole-row terminal
+spacing cannot implement fractional padding: wide tiled/fullscreen workspaces
+reuse the old pre-pane blank row between toolbar and status, and single-line
+workspace footers leave the last row blank. Compact selectors and other pages
+retain their established geometry. Source's reported caller line and Registers'
+caller values remain GDB-authoritative; Stack retains frame-zero anchoring.
+
+Presentation brackets compatible terminal frames in synchronized-update mode,
+flushes the begin marker before ncurses descriptor output, disables interrupted
+or insert/delete optimized refreshes, and sets the cursor once after composition.
+A bounded pre-change wheel capture found neither a full-screen clear nor an
+alternate-screen exit; it did not establish that the shell was exposed. Stream
+checks now verify synchronized text writes and no full clear/alternate exit
+during caller inspection, and preserve untouched Source cells during wheel/drag.
+Physical terminal appearance remains an owner check.
+
+Agent-run focused evidence under `build/ui-polish-evidence/`:
+
+| Check | Result / log |
+|---|---|
+| Strict build, authored Stack MI, keybinds and navigation | PASS; `focused-3.log`, `focused-build-11.log`, `native-vim-1.log` |
+| Stack direct PTY / isolated tmux, wheel/drag, untouched cells, narrow details | PASS; `focused-6.log` |
+| Native GDB Command/Enter/Backspace/drafts, Console minimize at 48/80/123/124/160, close/quit and terminal cleanup, direct and tmux | PASS; `console-2.log` |
+| Actual GDB custom bindings and Vim Command Normal F5/F6, Insert protection and Escape recovery, direct and tmux | PASS; `native-vim-1.log` |
+| Layout, saved custom F6/None preference slots, pane overlays, resize and navigation | PASS; `model-workspace-1.log` (unit results), `workspace-3.log` (complete workspace result) |
+| Native cached frame Details / stale contexts / Escape restoration | PASS direct in `details-3.log`; final tmux PASS in `details-tmux-4.log` |
+| Existing theme/configuration geometry after workspace-only footer fix | PASS; `footer-scope.log` |
+| Profile restoration and toolbar spacing with primary pane geometry assertions | PASS; `profiles-spacing-2.log` |
+| Final Stack model/native, tmux frame Details and direct Stack UI checks | PASS; `final-focused.log`, exit 0 |
+| All C test sources, strict fortified compilation | PASS, exit 0; `compile-all.log` |
+| Rendering stress, direct PTY and isolated tmux | PASS, 30 seconds / 91 rounds each; `render-stress-direct-3.log`, `render-stress-tmux.log` |
+| Complete fresh fortified baseline | PASS agent and owner, exit 0; commands and artifacts below |
+
+The host environment is Linux x86-64, Arch kernel 7.2.11-arch1-1, GCC 16.2.1,
+GDB 18.1 and tmux 3.8; exact versions/TERM/flags are in `environment.txt`.
+The final agent baseline command was:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/v015-ui-ci-20261029-6 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+PASS, exit 0. `command-6.txt`, `tested-tree-6.sha256.json`,
+`tested-tree-6.patch` and `tested-tree-6.tar.gz` identify the exact input tree,
+including untracked feature sources. `test-ci-6.log` retains full output and
+`test-ci-6.exit` records the result under `build/ui-polish-evidence/`.
+
+The owner independently ran the complete fresh fortified baseline in
+`build/v015-owner-20261029T174801Z`, with the same TERM and CPPFLAGS:
+PASS, exit 0. Its full `test-ci.log` and `test-ci.exit` are retained in that
+build directory. Source/tests match the final agent snapshot; only documentation
+result updates followed. `final-tree.sha256.json` and `final-tree.patch` retain
+those result updates. These are local host results, not hosted Ubuntu checks.
+
+Investigation failures are preserved. `focused-1.log` caught a leftover numeric
+expectation after moving the custom remapping example from F6 to F7. A sandboxed
+native run in `focused-2.log` could not execute the fixture/pidfd workflow;
+subsequent native runs used the host's authorized process facilities. Close-test
+timeouts exposed ambiguous title/body matches for the Close session label;
+button labeling was made distinct and pending close requests are idempotent.
+`model-workspace-1.log` / `workspace-2.log` retain old dock assumptions and stale
+test coordinates after divider movement; tests now locate the actual expanded
+header. `details-2.log` caught an absent highlighted row after a shorter stack;
+the application clamps it. The tmux portion of `details-3.log` matched another
+pane's stale text before Escape finished; the harness now waits for Details to
+close. Existing application assertions remain in place.
+
+The first full baseline (`build/v015-ui-ci-20261029`, `test-ci.log`, exit 2 in
+`test-ci.exit`) caught the existing configuration-footer position assertion.
+The application change was restricted to workspace footers, preserving that
+assertion and all original configuration geometry. No failure log was overwritten.
+
+No additional hardware operation or hosted check was run for these UX changes.
+The preceding STM32 evidence remains limited to its recorded tree and core Stack
+workflow. Xtensa/RV32 F02, the complete release matrix, manual appearance review
+and publication remain outstanding.
+
+The second full baseline (`build/v015-ui-ci-20261029-2`, `test-ci-2.log`,
+exit 2) reached the native F01 profile suite. Its toolbar assertion encoded the
+old immediate status-row position and conflicted with the requested spacing.
+The test now checks the new notice row and additionally asserts the original
+Source/Disassembly/Registers header row, preserving the primary geometry
+protection. This changes the expected spacing; it does not remove the assertion.
+
+Static analysis with clang-tidy 23.1.3 initially reported adjacent numeric
+parameter domains and signed-byte assembly (`analyze.log`, `analyze-2.log`).
+Frame-detail geometry now uses the existing rectangle type; deliberate distinct
+model indices have local parameter-domain explanations. Grouped bytes use bounded
+unsigned multiply/add assembly. No analyzer rule was disabled globally.
+The final analysis passed, exit 0 (`analyze-4.log`, `analyze-4.exit`).
+Hosted Ubuntu analysis remains unrun for this tree.
+
+The optional 30-second rendering stress check caught a real compact-overlay
+paint defect (`render-stress-direct-2.log`, diagnostic screen in
+`render-diagnostic-2.log`): collapsed neighboring dock bars overpainted the
+expanded Console footer. Covered docks now skip painting, matching input
+visibility. The original Save Log geometry assertion is unchanged. The initial
+stress invocation preceded runner creation and exited 127
+(`render-stress-direct.log`); it is not counted as an application result.
+All test sources compile with strict fortified flags, exit 0
+(`compile-all-command.txt`, `compile-all.log`, `compile-all.exit`).
+
+The corrected rendering stress checks passed directly and through isolated tmux,
+30 seconds and 91 rounds each, exit 0 (`render-stress-direct-3.log/.exit`,
+`render-stress-tmux.log/.exit`). They exercise real native output, wheel scrolling,
+stepping, repeated resizing, fixed Console controls and terminal cleanup.
+The third full baseline completed with exit 0 (`test-ci-3.log/.exit`), before
+the final unsigned byte-assembly and covered-dock corrections; it is retained
+as intermediate evidence rather than substituted for the final tree baseline.
+
+The fourth baseline also passed, exit 0 (`test-ci-4.log/.exit`), before the
+covered-dock correction. The fifth baseline (`test-ci-5.log/.exit`, exit 2)
+exposed a helper expectation that minimized docks must remain visible under
+another full-width compact overlay. The helper now requires the expanded title
+to disappear when the dock is occluded. The subsequent navigation and direct/tmux
+Stack checks passed (`covered-dock-focused.log/.exit`, exit 0), followed by both
+complete final baselines above. Application assertions remain unchanged.

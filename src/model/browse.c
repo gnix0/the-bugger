@@ -107,3 +107,14 @@ bool tb_browse_neighbor(TbBrowseCache *cache, TbBrowseKey key, int direction, Tb
     }
     return found(cache, best, sample);
 }
+
+bool tb_browse_history(TbBrowseCache *cache, TbBrowseKey key, int direction, TbBrowseSample *sample)
+{
+    if (!cache || !sample || !direction) { return false; }
+    Entry *best = NULL;
+    for (Entry *entry = cache->first; entry; entry = entry->next) {
+        if (!owner(entry->key, key) || (direction < 0 ? entry->key.begin >= key.begin : entry->key.begin <= key.begin)) { continue; }
+        if (!best || (direction < 0 ? entry->key.begin > best->key.begin : entry->key.begin < best->key.begin)) { best = entry; }
+    }
+    return found(cache, best, sample);
+}

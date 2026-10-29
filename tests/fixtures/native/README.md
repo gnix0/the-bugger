@@ -111,6 +111,17 @@ fixture to print debugger status. To test pending resolution, add `m08_future`
 before running with the library's absolute path as the Launch argument.
 Targets remain uninstrumented; all frontend/harness code remains C.
 
+## Stack targets (F02)
+
+The focused `test-stack-native` and `test-stack-tui` targets build `stack.cpp`
+as `stack-fixture` (-g3 -O0), `stack-fixture-optimized` (-g3 -O2) and a stripped
+copy. Recursive calls stop at `stack_checkpoint`; volatile locals, a reference
+and an object with an overloaded address operator exercise reported locations.
+A macro sharing the object's name checks that controlled quoted-symbol queries
+do not expand macros. `stack_calls` records accidental inferior operator calls.
+The fixture uses C++ only as target code; the frontend and harnesses remain C.
+The existing `context.c` fixture supplies actual multithread Stack cases.
+
 ## Variable and data-watchpoint targets
 
 `variables-fixture`, `variables-fixture-cpp` and `variables-fixture-optimized`

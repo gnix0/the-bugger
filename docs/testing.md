@@ -46,6 +46,73 @@ The [suite catalog](../tests/README.md) lists individual binaries; fixture READM
 specify authored data and target behavior. Record results in the [validation register](validation.md) and raw logs under
 ignored `build/`.
 
+## Stack inspection (F02)
+
+The UI regression cases also cover the v0.1.5 inspection refinements:
+
+- Keybind unit/preferences tests preserve F5/F9/F10/F11/Shift+F11, add F6 Pause,
+  and retain saved custom F6 and explicitly unbound Pause slots. The existing
+  Keybinds PTY suite uses F7 for its remapping case so it does not collide with
+  the new default. Its actual-GDB direct/tmux runs check Command retained in Vim
+  Normal, F5 Continue/F6 Pause, Insert protection and Escape recovery.
+- Native Console PTYs open/minimize the Console group at widths
+  48/80/123/124/160 before exercising existing text-entry, Backspace, draft,
+  session-close and terminal-restoration cases. Workspace tests use exposed
+  headers/pane selection after removal of expanded dock duplicates.
+- The native Context PTY checks compact frame entries, explicit argument values
+  in wrapped Details, highlighted-versus-selected frame separation and Escape
+  restoration. The VT reader counts full-screen clears, alternate-screen exits,
+  synchronized frames and unsynchronized text writes during caller inspection.
+- Stack PTYs wheel and drag the scrollbar while comparing untouched Source
+  cells, checking no full-screen clear or alternate-screen exit. Direct output
+  must keep text writes inside synchronized frames. tmux performs its own outer
+  presentation, so its outer stream is checked separately from inner brackets.
+
+Manual appearance review must repeat wheel/drag and caller selection on the
+actual terminal/tmux setup. Stream/model assertions do not measure physical
+display refresh or prove that every terminal supports synchronized output.
+
+Focused host checks use the same compiler flags and fixtures as the complete
+baseline:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/stack-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-stack test-stack-native test-stack-tui test-stack-tmux
+```
+
+`test-stack` exercises an authored MI peer: explicit byte acquisition, exact
+boundaries, holes, endian/grouping, unavailable anchors, thread lifetimes,
+history, declarations, guarded points, stale replies, cancellation and deadlines.
+`test-stack-native` uses actual GDB with recursive C++ debug/optimized/stripped
+fixtures and the multithread context fixture. It checks caller/frame-zero SP
+separation, references, an overloaded address operator and a macro-name trap.
+Direct PTY and isolated tmux checks cover explicit Read, navigation/refollow,
+guard disclosure, declaration inputs, paginated provenance/details, 20-column
+panes and terminal widths 48/80/123/124/160. These targets are registered in
+`test`, `test-native` and `test-tmux`; they do not replace `test-ci`.
+
+The physical runner is opt-in and never dispatched by `test-ci`. It requires
+an already-programmed matching STM32 fixture, an explicitly selected probe and
+authorization to halt/run/step and sample 32 SRAM bytes. Build the runner with
+`make BUILD_DIR=build/stack-focused build/stack-focused/test-stack-board`.
+For the NUCLEO-F446RE test setup, start an owned server and run separately:
+
+```sh
+openocd -c 'adapter serial 066CFF495154787867161137' \
+  -f tests/fixtures/embedded/openocd/nucleo-f446re.cfg
+TB_STACK_BOARD_LOG="$PWD/build/stack-focused/stm32-session.log" \
+  build/stack-focused/test-stack-board arm-none-eabi-gdb 127.0.0.1:3333 \
+  "$PWD/build/v0.1.4-release-host/m17/stm32f446re/firmware.elf"
+```
+
+Substitute the actual authorized probe and matching ELF. The runner connects with
+`extended-remote`, as recommended by OpenOCD. It checks the
+frame-zero/caller distinction, exact SRAM sampling, guarded variable address
+queries (including explained unsupported locations), manual step/refollow and
+declared displacement. It disconnects leaving the target halted; it does not
+flash or reset. Stop only the test-owned OpenOCD afterward. This establishes no
+Xtensa/RV32 outcome or visual acceptance; those remain separate physical checks.
+
 ## Rendering stability stress
 
 The native TUI and localhost-remote harnesses provide an opt-in, bounded stress
@@ -1305,8 +1372,9 @@ It does not substitute for inspecting the rendered interface.
    preferred height survive. Try keyboard pane IDs/cycling and resize mode;
    Tab selects visible dividers, arrows resize, Enter/Escape finishes.
 4. Shrink to 80x24. Open groups overlap across the workspace. The most recently
-   focused one is on top. Click an exposed part of another group or its dock
-   title to raise it. Covered controls must not receive clicks or wheel input.
+   focused one is on top. Click an exposed header or select the pane to raise
+   another open group. Expanded groups have no duplicate bottom dock. Covered
+   controls must not receive clicks or wheel input.
 5. Restore 140x44 and confirm independent preferred heights return. Enter/leave
    Source fullscreen; restore must retain dock visibility, tabs and split trees.
 6. Close/start another session. Expect all lower groups minimized and default

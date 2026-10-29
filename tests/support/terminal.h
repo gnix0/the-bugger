@@ -14,6 +14,9 @@ typedef struct {
     int master, slave, rows, cols, x, y, escape;
     int scroll_top, scroll_bottom;
     int saved_x, saved_y;
+    int lower_columns[3], lower_column_width;
+    unsigned full_clears, alternate_exits, synchronized_frames, unsynchronized_writes;
+    bool synchronized_update;
     struct termios original;
     char cells[TEST_ROWS][TEST_COLS + 1];
     bool reverse, inverse[TEST_ROWS][TEST_COLS];
@@ -32,7 +35,7 @@ void test_terminal_pump(TestTerminal *term, int milliseconds);
 bool test_terminal_find(const TestTerminal *term, const char *text, int *x, int *y);
 void test_terminal_expect(TestTerminal *term, const char *text);
 void test_terminal_click(TestTerminal *term, const char *text);
-/* Explicitly open/minimize a lower group through its persistent dock control. */
+/* Open through a collapsed dock; minimize through the expanded pane header. */
 void test_terminal_lower(TestTerminal *term, int lower, bool open);
 void test_terminal_resize(TestTerminal *term, int rows, int cols);
 void test_terminal_stop(TestTerminal *term, int signal_number);

@@ -18,7 +18,7 @@ JSON_CFLAGS := $(shell $(PKG_CONFIG) --cflags json-c 2>/dev/null)
 PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session -Isrc/model $(NCURSES_CFLAGS) $(ELF_CFLAGS) $(JSON_CFLAGS)
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/tui/editor.c src/tui/terminal.c src/tui/setup_capture.c src/tui/setup_restore.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/session.c src/session/openocd.c src/session/profiles.c src/session/setup.c src/model/context.c src/model/code.c src/model/browse.c src/model/monitor.c src/model/mmio.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
+SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/tui/editor.c src/tui/terminal.c src/tui/setup_capture.c src/tui/setup_restore.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/session.c src/session/openocd.c src/session/profiles.c src/session/setup.c src/model/context.c src/model/code.c src/model/browse.c src/model/monitor.c src/model/mmio.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/stack.c src/model/variables.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -149,7 +149,7 @@ $(BUILD_DIR)/code-fixture-relocated: tests/fixtures/native/relocated/main.c test
 
 fixtures: $(BUILD_DIR)/code-fixture $(BUILD_DIR)/code-fixture-optimized $(BUILD_DIR)/code-fixture-stripped $(BUILD_DIR)/code-fixture-cpp $(BUILD_DIR)/code-fixture-relocated
 
-NATIVE_OBJECTS = $(BUILD_DIR)/src/session/native.o $(BUILD_DIR)/src/session/session.o $(BUILD_DIR)/src/session/openocd.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/browse.o $(BUILD_DIR)/src/model/monitor.o $(BUILD_DIR)/src/model/mmio.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/model/breakpoints.o $(BUILD_DIR)/src/model/registers.o $(BUILD_DIR)/src/model/memory.o $(BUILD_DIR)/src/model/variables.o
+NATIVE_OBJECTS = $(BUILD_DIR)/src/session/native.o $(BUILD_DIR)/src/session/session.o $(BUILD_DIR)/src/session/openocd.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/browse.o $(BUILD_DIR)/src/model/monitor.o $(BUILD_DIR)/src/model/mmio.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/model/breakpoints.o $(BUILD_DIR)/src/model/registers.o $(BUILD_DIR)/src/model/memory.o $(BUILD_DIR)/src/model/stack.o $(BUILD_DIR)/src/model/variables.o
 
 $(BUILD_DIR)/test-native-words: $(BUILD_DIR)/tests/unit/test_native_words.o $(NATIVE_OBJECTS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
@@ -759,3 +759,64 @@ $(BUILD_DIR)/test-setup-board-tui: $(BUILD_DIR)/tests/integration/test_setup_boa
 	$(CC) $(LDFLAGS) -o $@ $^ $(JSON_LIBS) $(ELF_LIBS) $(LDLIBS)
 
 -include $(BUILD_DIR)/tests/integration/test_setup_board_tui.d
+
+$(BUILD_DIR)/test-stack: $(BUILD_DIR)/tests/integration/test_stack.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-stack
+test-stack: $(BUILD_DIR)/test-stack
+	$(BUILD_DIR)/test-stack
+
+test: test-stack
+
+-include $(BUILD_DIR)/tests/integration/test_stack.d
+
+$(BUILD_DIR)/stack-fixture: tests/fixtures/native/stack.cpp
+	mkdir -p $(BUILD_DIR)
+	$(CXX) -std=c++17 -O0 -g3 -Wall -Wextra -Werror -o $@ $<
+
+$(BUILD_DIR)/stack-fixture-stripped: $(BUILD_DIR)/stack-fixture
+	cp $< $@
+	strip --strip-all $@
+
+$(BUILD_DIR)/test-stack-native: $(BUILD_DIR)/tests/integration/test_stack_native.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-stack-native
+test-stack-native: all $(BUILD_DIR)/stack-fixture $(BUILD_DIR)/stack-fixture-stripped $(BUILD_DIR)/stack-fixture-optimized $(BUILD_DIR)/context-fixture $(BUILD_DIR)/test-stack-native
+	$(BUILD_DIR)/test-stack-native $(abspath $(BUILD_DIR)/stack-fixture) $(abspath $(BUILD_DIR)/stack-fixture-stripped) $(abspath $(BUILD_DIR)/stack-fixture-optimized) $(abspath $(BUILD_DIR)/context-fixture)
+
+test-native: test-stack-native
+
+-include $(BUILD_DIR)/tests/integration/test_stack_native.d
+
+$(BUILD_DIR)/stack-fixture-optimized: tests/fixtures/native/stack.cpp
+	mkdir -p $(BUILD_DIR)
+	$(CXX) -std=c++17 -O2 -g3 -Wall -Wextra -Werror -o $@ $<
+
+$(BUILD_DIR)/test-stack-tui: $(BUILD_DIR)/tests/integration/test_stack_tui.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-stack-tui test-stack-tmux
+test-stack-tui: all $(BUILD_DIR)/stack-fixture $(BUILD_DIR)/test-stack-tui
+	$(BUILD_DIR)/test-stack-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/stack-fixture)
+
+test-stack-tmux: all $(BUILD_DIR)/stack-fixture $(BUILD_DIR)/test-stack-tui
+	TB_STACK_TEST_TMUX=1 $(BUILD_DIR)/test-stack-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/stack-fixture)
+
+test-native: test-stack-tui
+test-tmux: test-stack-tmux
+
+.PHONY: test-context-tmux
+test-context-tmux: all $(BUILD_DIR)/test-context-tui $(BUILD_DIR)/context-fixture
+	TB_CONTEXT_TEST_TMUX=1 $(BUILD_DIR)/test-context-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/context-fixture)
+
+test-tmux: test-context-tmux
+
+-include $(BUILD_DIR)/tests/integration/test_stack_tui.d
+
+# Explicit physical F02 runner; never executed by test-ci.
+$(BUILD_DIR)/test-stack-board: $(BUILD_DIR)/tests/integration/test_stack_board.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+-include $(BUILD_DIR)/tests/integration/test_stack_board.d
