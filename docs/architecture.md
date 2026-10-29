@@ -2,19 +2,15 @@
 
 ## Overview
 
-The product is embedded-first, with shared target-neutral inspectors. Linux is
-the frontend host, not the universal target OS. Native and existing remote-server integration are accepted
-through M15. M16's reviewed OpenOCD management is also accepted;
-M17 records physical validation on NUCLEO-F446RE and ESP32-S3. Known integration
-gaps are listed below and in the roadmap.
+The Linux frontend shares target-neutral models between native launch/attach
+and remote GDB sessions. OpenOCD management handles reviewed startup and target
+actions. [Validation records](validation.md) cover the tested architectures.
 
 `src/main.c` handles help/version and starts the terminal application.
 `src/tui/app.c` owns startup/configuration/review/workspace pages, keyboard
 and mouse controls, form editing and terminal lifetime. Rendering and theme
 selection are in separate files. `src/tui/demo.c` owns explicitly simulated
 sample data, demo actions and tabs. The layout module owns tiled geometry.
-These samples are never
-debugger-domain state and must be replaced by live data in real sessions.
 
 The build and tests are C17 with strict warnings; Make is the only build driver.
 C tests use POSIX pipes, processes and PTYs.  Application libraries are ncursesw and libelf (ELF metadata
@@ -24,11 +20,8 @@ and existing remote GDB-server sessions through the TUI. Console/output and Cont
 live. Source/Disassembly and stepping use the code model; Call Stack and Threads
 use the selected-context model. Code breakpoints and Run to Selected use the
 breakpoint model, which now also provides M12 hardware data watchpoints.
-CPU Registers, Memory and Locals/Watches use the inspection models described below. Other
-inspection views have explicit unavailable messages. Explicit --demo
-retains simulated presentation separately. OpenOCD management is implemented and accepted at M16.
-Remote connections use the shared inspectors and preserve capability limitations.
-Profiles retain a review step before connection. Keybinds are separate personal preferences.
+CPU Registers, Memory and Locals/Watches use the inspection models described below. Unavailable views are labelled. Profiles require review before connection;
+keybinds are separate personal preferences.
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
 descriptors together, redrawing after input or session revisions. Idle waits are
@@ -100,8 +93,7 @@ terminfo supplies exact RGB values. `src/tui/terminal.c` selects matching
 through `COLORTERM=truecolor`/`24bit`, terminfo `RGB`/`Tc`, or both `setrgbf` and
 `setrgbb`. The tmux mapping is restricted to its tmux/screen TERM names and a
 nonempty TMUX environment. Explicit direct-color TERM descriptions already work.
-This uses ncurses' existing terminfo reader before screen initialization; it adds
-no subprocess, terminal-query parser or rendering backend. Missing direct entries
+Capability selection uses ncurses' terminfo reader before screen initialization. Missing direct entries
 fall back to the original TERM. NO_COLOR remains authoritative. The app never
 rewrites TERM, changes terminal palette slots or modifies tmux configuration.
 These capability signals follow the established conventions described by
@@ -118,17 +110,13 @@ described below.
 Tab activation promotes the active tab to the left. Focus follows its identity
 as rendering promotes it to the first position. Mouse input suppresses the
 additional inverse keyboard-focus marker;
-keyboard input restores it. This prevents the old numeric control index from
-highlighting/activating a different tab after reordering. The active-tab theme
+keyboard input restores it.  The active-tab theme
 and monochrome selection indicator remain intact.
 
 The launcher uses the existing render/theme primitives: a bounded
 card centered in the usable terminal area, full-row hit regions including choice
 descriptions, simple ASCII icons/chevrons and a compact height below 28 rows.
-No image assets, new dependency, animation or background work is needed. It keeps
-native-vs-preview availability, profile review and q/Ctrl+Q policy
-explicit; session configuration and the debugging workspace are unchanged.
-
+Profile review and q/Ctrl+Q handling use the same controls as session setup.
 
 Menu footer guidance is derived from the current page rather than stored as a
 persistent launcher status. Page navigation clears transient notices; explicit
@@ -147,8 +135,7 @@ Session-form height includes the wrapped explanatory note and the action rows,
 with one empty row around the primary action row when height permits. Compact
 forms retain field scrolling and configuration state. Native/Embedded forms add
 one row after their initial setup selector and before the final Start OpenOCD
-selector. The spacing from Start OpenOCD to script browsing is unchanged. Installed-script browsing controls
-have equal one-row gaps above and below when height permits. Those gaps collapse
+selector. Script-browsing controls have equal one-row gaps above and below when space permits. Those gaps collapse
 in compact rendering; field hit rectangles and carets follow the rendered rows.
 
 Keybinds adds an overflow-only one-cell `|`/`#` bar beside its tables. It shares
@@ -927,7 +914,6 @@ partial reads; the frontend preserves the exact reported bytes/validity rather
 than reconstructing inaccessible memory. Scalar address conversion suppresses
 character-pointer string printing. User calls/writes/casts remain rejected.
 
-
 ## Locals and Watches
 
 `src/model/variables.{h,c}` owns separate shared Locals/Watches trees; panes
@@ -1028,8 +1014,10 @@ leaves PID empty. Environment overrides are session-only.
 
 Storage is `$XDG_CONFIG_HOME/the-bugger/profiles.json`, falling back to
 `$HOME/.config/the-bugger/profiles.json` for missing/relative XDG configuration.
-Loading absent data creates nothing. json-c reads version-1 or version-2 UTF-8
-JSON and writes version 2, at most 1 MiB, 16 profiles and 8 recent names.
+Loading absent data creates nothing. json-c reads version-1, version-2 or
+version-3 UTF-8 JSON, at most 1 MiB, 16 profiles and 8 recent names.
+Connection-only stores continue to write version 2; saving the first setup
+definition writes version 3 atomically. Loading never migrates a store.
 Root fields are `version`,
 `profiles` and `recent`. Every profile requires the following fields; unknown
 fields/types/versions and duplicate names are rejected. Version-1 `keys` fields
@@ -1047,9 +1035,123 @@ cannot read newly written version-2 stores.
 
 Names hold up to 63 bytes; paths/source prefixes up to 1023, endpoint up to 255.
 JSON quoting is not shell execution; arguments/scripts remain arrays.
-The format deliberately excludes personal keys/themes, PID, environment overrides, geometry/tabs,
+Connection profile definitions exclude personal keys/themes, PID, environment overrides, geometry/tabs,
 watch/breakpoint definitions, region grants, values and temporary backend state.
 F01 and F12 own later restoration/sharing and schema evolution.
+
+### Setup definitions and saving (F01)
+
+`session/setup.{h,c}` defines bounded, independently owned setup definitions.
+The model contains split nodes, column/row proportions, pane view membership and
+selection, Source context-role selection or pinned-file identity, Memory
+expression/count/grouping, Watch expressions/formats and code-breakpoint intent.
+Nonzero setup-local identities are unique across panes and retained entries;
+zero Source selection denotes the stopped-context role. Validation rejects
+cycles, shared nodes/leaves, unreachable used nodes, invalid selections, duplicate
+identities and overflowing limits. No sampled data, permissions, debugger IDs,
+hardware allocations, temporary breakpoints or lower-overlay state are present.
+
+Schema 3 adds a separate `setups` array. Each record contains `profile` (the
+associated saved name), `connection` (a connection snapshot), `launch_directory`
+(the absolute launch context), `definition` and optional `elf_metadata` (local
+file identity/size/timestamps at save). Older schema-3 records without that metadata
+remain readable and require renewed review. Metadata is neither firmware identity
+nor live-byte verification. The connection snapshot does not
+replace connection-profile data. Setup transactions require an existing profile;
+profile replacement retains its setup, duplication copies only saved definitions
+independently, and deletion removes the associated record in the same transaction.
+All encoded connections and setups together must fit the existing 1 MiB limit;
+an oversized save preserves both the file and the previous in-memory definitions.
+
+Readable schema-3 stores with malformed setup records expose valid connection
+profiles and accepted setup records in read-only recovery. Duplicate setup
+associations reject the ambiguous records. Invalid JSON, unsupported versions and
+invalid connection records reject the store. Recovery blocks every transaction,
+including recents, until a repaired file loads successfully. The Profiles header
+indicates read-only mode; Reload reports recovery rather than successful repair.
+Schema-1/2 builds cannot read schema 3; there is no downgrade operation.
+
+`tui/setup_capture.{h,c}` captures metadata only. Pane lifecycle identities and
+model-local Watch/breakpoint identities map to stable setup-local entries; Source
+selection uses the context role or a pinned identity. Resize, samples, permissions,
+fullscreen and lower-overlay geometry do not change the definition. Memory saves
+the visible expression draft, byte count and grouping without reading it.
+
+The live Setup menu reviews the current definition and the effective session
+connection against its associated saved profile. Active parsed fields are compared
+in order, preserving case and literal paths. Inactive fields, names and formatting
+are excluded. Save setup writes the definition and connection snapshot only;
+Save profile remains a separate operation. Review detects changes before committing.
+Skipped saved definitions require explicit replacement and are never merged into
+the current draft. Profile duplication copies saved data independently.
+
+Code-breakpoint configured intent is separate from observed GDB rows. Successful
+frontend mutations retain original locations, enabled intent, conditions, explicit
+ignore counts and Default/Require hardware policy. Hits and declining remaining
+ignore counts do not alter definitions. Temporary/data/backend-only breakpoints
+are excluded. Detected external conflicts and uncertain managed mutations block
+saving until explicit complete-definition review/exclusion or bounded metadata reconciliation.
+
+`tui/setup_restore.{h,c}` coordinates bounded setup restoration. Session Review
+adds a saved-setup review with restoration enabled by default. It displays scope
+and active parsed connection differences, relative-path launch-context changes
+and local ELF metadata changes/unavailability. Starting confirms that review;
+a change before dispatch requires another review. Literal paths and aliases are
+not speculatively normalized, and inactive fields/PID/environment overrides are
+excluded. Local metadata matching does not establish firmware identity.
+
+Local splits/tabs/Memory/Watch definitions precede normal initialization and
+existing source-setting restoration. Source pins start unavailable, retaining
+original identity/order/selection. A bounded catalog stage resolves through GDB;
+Source reopening handles one pin per pump; ambiguous/incomplete catalogs cannot
+justify a relocated-file match. Resolved paths are separate from saved
+pin identities. Missing pins show no former contents. Retry uses the current
+catalog after source lookup repair; removal changes the draft and is never
+reconciled back into it. Restored Watches retain unsupported expressions as inert,
+removable definitions. Memory remains unconfigured/unread until explicit Go/Read.
+
+Running targets retain local definitions and await an explicit stop. Active work
+interlocks execution, Console, reset and debugger context/configuration changes;
+Pause/close and local navigation remain available. Cancellation stops further
+coordinator/source-setting dispatch without rollback and distinguishes a request
+from completion while work remains in flight. Save waits for active work to settle.
+Lower views start minimized and no fullscreen, sample or permission is restored.
+
+`model/breakpoints.c` owns a bounded runtime restoration ledger keyed by setup
+identity, separate from serialized definitions. Insertions use disabled locations;
+condition and configured ignore count are applied, and a complete metadata listing
+verifies original location, supported attributes and Require hardware before
+enabling. A second listing verifies the enabled result. Failed attributes never
+produce installed intent. Known disabled partial entries retry configuration only
+after metadata verification, without another insertion. Pending/multiple locations
+remain debugger configuration rather than promises of resolved addresses or
+physical hardware allocation.
+
+Literal addresses reuse automatically only when fresh native procfs executable
+mapping metadata and ELF load segments establish the same backing-file identity,
+range and bias as the optional saved `mapping` object. Addresses/bias are encoded
+as fixed-width hexadecimal strings, preserving all 64 bits. Older schema-3
+breakpoint records without mapping remain readable. Other addresses require
+current-session approval; approval and image confirmations are never serialized.
+Remote checksum/live-byte verification is outside F01.
+
+After uncertain mutations, one metadata-only query reconciles complete current
+listings against the creation baseline or known backend identity and supported
+attributes. Ambiguous additions, incomplete/stale listings or failed queries retain
+uncertainty and execution interlocks. No mutation is repeated. Explicit retry only
+reissues reconciliation. Cancellation stops mutations, waits for in-flight results
+and permits necessary metadata settlement without rollback.
+
+Installed definitions adopt their retained setup identity, preserving order and
+dirty-state accuracy. Retained failures reserve the same 256-entry capacity and
+survive partial saves. Enabled failures require acknowledgment once per unchanged
+failure set. Explicit backend review/import requires a complete current listing,
+rejects unsupported entries whole, and requires new hardware/count decisions.
+Imports enter an unsaved retained draft without backend mutation or inferred
+historical intent. The MI parser accepts GDB's bounded `script={"command",...}`
+string-tuple extension so unsupported command lists can be excluded as whole
+entries while other entries remain reviewable; command strings are never run. External managed changes require review or whole-definition
+exclusion; runtime hits/declining ignore counts never rewrite configured intent.
 
 Writes use an owned regular file, nonblocking advisory lock, stale-writer stamp
 check, private temporary file, fsync, atomic rename and directory fsync. Corrupt,
@@ -1093,7 +1195,6 @@ M16/M17 validation.
 See [M14 checks](testing.md#native-integration-and-hardening) for reproducible
 coverage and the [validation register](validation.md) for recorded outcomes.
 
-
 ## Extension boundaries
 
 The [future sequence](roadmap.md#release-progression-and-priority-changes)
@@ -1131,9 +1232,16 @@ are late reviewed candidates; native correctness/maintenance remains continuous.
 
 ## Known limitations and integration gaps
 
+The [RISC-V validation](validation.md#v014-task-21--risc-v-hardware-validation)
+exercises the existing structured-MI session/models with `riscv:rv32`; no new
+frontend transport or decoder is introduced. The named setup uses OpenOCD
+hardware-thread awareness for verified reset context. This does not add an LP-core,
+FreeRTOS task model or C6 MMIO adapter. Backend checksum and optional ROM-symbol
+limits are described in the [RISC-V procedure](testing.md#risc-v-hardware-validation).
+
 - Shared sessions isolate local PTY/pidfd/proc ownership from remote target IDs.
   Existing-server mode never owns the server. Managed OpenOCD lifecycle and
-  named STM32/S3 target behavior have [M17 evidence](validation.md#m17--physical-board-validation);
+  ARM/Cortex-M and Xtensa workflows (tested on STM32/S3) have [M17 evidence](validation.md#m17--physical-board-validation);
   this does not establish behavior for other scripts, probes or boards.
 - The native code index verifies backing-file mappings through process maps.
   Remote configured-ELF/load-bias review records a user declaration; automatic
@@ -1149,8 +1257,10 @@ are late reviewed candidates; native correctness/maintenance remains continuous.
   values require deliberate operations. Target descriptions and SVD readability
   alone cannot establish that MMIO access is free of side effects.
 - Localhost GDB/gdbserver has focused automated coverage. Physical validation
-  covers the named NUCLEO-F446RE and ESP32-S3 setups only; other targets and
-  optional acquisition capabilities require separate evidence.
+  covers ARM/Cortex-M, Xtensa and RISC-V RV32 workflows using NUCLEO-F446RE,
+  ESP32-S3 and ESP32-C6FH4 respectively. Those devices identify the tested
+  configurations; architecture support does not establish every device's optional
+  acquisition capabilities.
   See [hardware validation](testing.md#every-release-regression-matrix). Register
   groups have an ungrouped fallback; specialized views remain planned.
 

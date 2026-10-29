@@ -6,71 +6,47 @@ implemented features or hardware support claims. See [architecture](architecture
 
 ## Current development sequence
 
-The owner has approved the following v0.1.3 sequence. These extend the accepted
-M00–M18 baseline; the table distinguishes implemented, accepted work from release
-publication.
+v0.1.3 is released. RISC-V hardware validation and F01 implementation are accepted;
+v0.1.4 host/physical regression and artifact checks pass locally; final visual
+review, hosted PR checks and release acceptance/publication remain.
 
 | Task | Scope | Current state |
 |---|---|---|
-| 0 | Initialize the execution record and consolidate documentation | Complete, including the Task 1.3 ASM_MEM consolidation |
-| 1.1 | Correct rendering corruption and failed Disassembly navigation | Implemented, host/stress verified and owner accepted |
-| 1.2 | Initially minimized lower panes with independently resizable overlays | Implemented, host/stress verified and owner accepted |
-| 1.3 | Disassembly/Memory browsing and explicit MMIO access | Implemented, host verified and owner accepted; named physical evidence remains scoped |
-| 1.5 | Prepare v0.1.3 | Local validation/documentation/artifacts complete; owner publication through protected branches pending |
+| 1.1 | Correct rendering corruption and failed Disassembly navigation | Implemented, host/stress verified and accepted |
+| 1.2 | Initially minimized lower panes with independently resizable overlays | Implemented, host/stress verified and accepted |
+| 1.3 | Disassembly/Memory browsing and explicit MMIO access | Implemented, host verified and accepted |
+| 1.5 | Prepare v0.1.3 | Published; uploaded artifacts verified |
+| 2.1 | Validate ESP RISC-V hardware for v0.1.4 | Accepted; recorded RISC-V RV32 hardware checks use ESP32-C6FH4 |
+| F01 | Setup restoration for v0.1.4 | Implementation accepted; host/physical checks passed; final release acceptance pending |
 
-The approved public scope is in the
-[browsing requirements](requirements.md#approved-v013-browsing-work).
-The canonical owner execution record is `~/TODO.md`; the former `~/ASM_MEM.md`
-was consolidated into that record and maintained requirements during Task 1.3,
-with the documentation audit completed before its code changes. Temporary
-permissions are scoped per Memory view, never inferred from a successful read,
-and never authorize background MMIO reads. These browsing behaviors are
-implemented; current controls and limits are documented in [usage](usage.md). Release preparation does not establish publication.
+Current controls are in [usage](usage.md); the accepted browsing scope is in
+[requirements](requirements.md#approved-v013-browsing-work).
 
-Later owner-planned milestones are v0.1.4 physical ESP RISC-V validation, an
-approved shortlist of remaining roadmap work, real-world use, documentation and
-owner-led formatting/maintainability review; v0.2.x emphasizes stabilization and
-UX, followed by the owner's exclusive build-system review and then an approved
-testing strategy. Existing F identifiers/scopes are retained. Their older version
-targets below require reconciliation in Task 2.2, not automatic implementation.
-Physical RISC-V is explicitly deferred for v0.1.3 to v0.1.4 and remains unverified;
-this grants no additional hardware-support claim. Other release checks remain.
+Remaining v0.1.4 work is physical restoration/release regression, release-specific
+documentation, artifacts and final acceptance. F02 targets v0.1.5; F03–F05 target
+v0.2.0, each retaining separate planning and acceptance gates. After those features
+and stabilization, complete several-day real-world evaluation and fixes, the
+comprehensive documentation review, agreed formatting conventions/`.editorconfig`
+with controlled application, and owner-led codebase/maintainability review.
+These precede the owner-exclusive build-system review, agreed testing-strategy
+work and final v0.2.0 publication.
+
+Physical RISC-V validation was deferred for v0.1.3. Task2.1 now records real
+RISC-V RV32 checks using ESP32-C6FH4 as the test device. Acceptance adds no new
+physical results or waiver of later release regression.
 
 ## Implementation status
 
-M00–M17 and the documented pane corrections are accepted. M17 physically validates
-NUCLEO-F446RE/ARM and ESP32-S3/Xtensa. M18 release packaging and automated checks
-form the recorded first-release evidence. v0.1.0 was published on 2026-10-20,
-as reported by the maintainer; physical RISC-V acceptance remains explicitly
-deferred for that release. F19 built-in themes is accepted as early post-release
-work through the reported implementation commit. The original always-on h/j/k/l navigation shipped with v0.1.1. Its opt-in
-replacement and limited single-line Normal/Insert editing are accepted through
-the owner-committed implementation as a shared UI refinement, not a new gate.
-Source fullscreen is another accepted shared UI addition: a temporary
-rendering override with retained tiles, not an F06 organization redesign.
-Spatial control navigation and deliberate content focus are accepted through
-implementation commit `53b1e5a`; they do not add a roadmap gate or change F06
-scope. These shared UI additions and F19 are included in v0.1.1 preparation.
-v0.1.1 publication was reported by the owner. The v0.1.2 baseline collects
-the Source tabs, content-pane transfers, inline Console,
-terminal-size warning, personal Keybinds, opt-in Vim input and tmux RGB correction.
-Historical preparation records retain their original host/artifact results and
-outstanding physical checks; preparation alone is not publication or acceptance.
-Other F gates remain planned.
-Multi-file Source tabs are an accepted shared UI enhancement. They do not add a roadmap gate or change the embedded-first priorities.
-Ctrl+direction transfer of content focus is another shared UI enhancement
-accepted, using the existing pane geometry and navigation rules.
-Inline GDB command entry below Console output is accepted as a
-shared UI refinement; serial acquisition remains the separate planned F13 gate.
-Config → Keybinds is accepted through the owner-reported merged implementation, with
-responsive direct-capture tables, undo/confirmation and personal bindings stored
-with themes and excluded from
-connection profiles. Legacy profile bindings are ignored; subsequent writes use
-the key-free version-2 format. This does not implement F01/F12 profile sharing.
-The integrated v0.1.0 release-preparation revision is
-`ad606dc6d7af7a3384401fb97e7c328ea1d8b62b`. Acceptance records, observed hashes,
-failures and test evidence are in [validation records](validation.md).
-M09's implementation hash is not recorded; acceptance alone does not supply it.
+M00–M18 form the accepted v0.1.0 baseline. Physical ARM/Cortex-M and Xtensa
+validation used NUCLEO-F446RE and ESP32-S3; Task2.1 adds RISC-V RV32 using
+ESP32-C6FH4. RISC-V was deferred for v0.1.0 and v0.1.3.
+
+Accepted post-release work includes themes, Source fullscreen, spatial navigation
+(`53b1e5a`), multi-file Source tabs, inline Console, personal keybinds, Vim-like
+input, tmux RGB, rendering fixes, lower overlays and browsing history. Release
+contents are in [CHANGELOG](../CHANGELOG.md); results are in
+[validation records](validation.md). F01 implementation is accepted; the other future gates
+remain planned.
 
 | Milestone | Deliverable | State | Commit / release reference |
 |---|---|---|---|
@@ -96,9 +72,9 @@ M09's implementation hash is not recorded; acceptance alone does not supply it.
 | M16 | OpenOCD wizard/lifecycle/actions | accepted | `18e460ddd4cbc897409e2879c03ed0fc983212df` |
 | M17 | NUCLEO-F446RE and ESP32-S3 validation | accepted | `f568bd2482b2309e3534ebc8e197854ada37bf77` |
 | M18 | v0.1.0 release evidence/acceptance | accepted; published | v0.1.0; `ad606dc6d7af7a3384401fb97e7c328ea1d8b62b` (preparation) |
-| F19 | Config, built-in themes and variants | accepted; v0.1.1 preparation | [Recorded checks](validation.md#f19--themes-and-configuration) |
-| F01–F18, F20–F47 | Independent versioned future gates below | planned | — |
-
+| F19 | Config, built-in themes and variants | accepted; shipped in v0.1.1 | [Recorded checks](validation.md#f19--themes-and-configuration) |
+| F01 | Setup restoration | implementation accepted; physical checks passed; final release acceptance pending | `a460648` |
+| F02–F18, F20–F47 | Independent versioned future gates below | planned | — |
 
 ## Development priorities
 
@@ -161,7 +137,7 @@ summarized above and in the [usage guide](usage.md).
 | M14 / M05–M13 | Native integration/acceptance and failure hardening; no new feature family. | Complete C/C++ native suite, optimized/stripped/attach, repeated sessions/output floods, cleanup, sanitizers and measured UI/idle behavior. | Complete native live workflow directly/in tmux, splits, watchpoints, source recovery, profiles and Save Log. FR-02/03 and native release evidence. |
 | M15 / M14 | Generic remote/extended-remote with optional symbols; no OpenOCD ownership in existing-server mode. | Real external gdbserver, disconnect/reconnect/refused/timeout, missing symbols, architecture mismatch and external survival. | Debug through external endpoint and disconnect without terminating its server. FR-05/16. |
 | M16 / M15 | OpenOCD catalog/filter, board/advanced ordered argv, managed server, Reset/Halt and disconnect choices; no Load/Flash UI. | Discovery/order/no duplicated dependencies, paths, readiness/timeout/busy ports, fake-server failures, profiles and ownership. | Review exact scripts/argv; recover missing/bad setup; inspect actions/logs. No hardware claim from offline tests. FR-04/18/30. |
-| M17 / M14–M16 | Real NUCLEO-F446RE/ARM and ESP32-S3/Xtensa acceptance with reproducible fixtures; no automatic programming or unspecified-board claim. The every-release matrix below remains separate. | Firmware fixture builds, architecture MI regressions and applicable native suites; QEMU ARM/RISC-V runs as supplementary coverage when available. | Program fixtures externally; validate halt/step/break/watch, source/assembly/registers/RAM/locals, cleanup and disconnect on real boards. FR-15/31. |
+| M17 / M14–M16 | Real ARM/Cortex-M and Xtensa acceptance (NUCLEO-F446RE and ESP32-S3 fixtures) with reproducible fixtures; no automatic programming or unspecified-board claim. The every-release matrix below remains separate. | Firmware fixture builds, architecture MI regressions and applicable native suites; QEMU ARM/RISC-V runs as supplementary coverage when available. | Program fixtures externally; validate halt/step/break/watch, source/assembly/registers/RAM/locals, cleanup and disconnect on real boards. FR-15/31. |
 | M18 / M14 and physically validated M17 | Release evidence, compatibility, docs and remaining defects; no deferred features. | Clean GCC/Clang, suites/sanitizers/analysis/tmux, stress and FR/NFR evidence audit. | README clean-checkout workflow, per-release matrix below, final release acceptance and license/provenance finalization under the [release procedure](maintaining.md#release-procedure). |
 
 M13’s row records its original accepted scope. Current personal keybinds have
@@ -183,7 +159,6 @@ No additional feature family or milestone renumbering is introduced.
 | M16 | Backend-specific OpenOCD setup, capability-dependent Reset/Halt and disconnect target-state policy; installed script discovery and argv review. | No symbol load flashes/resets/resumes; duplicate-script/USB/port/timeout failure tests; only owned server cleanup; unsupported state transitions diagnosed. |
 | M17 | Validate target metadata/actions on NUCLEO-F446RE and ESP32-S3. | Real source/assembly/registers/RAM/Flash/locals/break/watch evidence, reset/disconnect choices and no speculative peripheral reads; native regression preserved. |
 | M18 | Audit actual capability matrix and host-vs-target limits. | All release-blocking evidence and release acceptance; no unrun board marked supported. |
-
 
 ## Release validation
 
@@ -272,7 +247,6 @@ support claims or feature removal. Optional
 hardware-dependent candidates can move past v1.0.0 only through explicit scope review,
 without blocking unrelated supported workflows. Every shipped release retains
 the native/STM32/Xtensa/RISC-V regression gate.
-
 
 
 | Gate / expected target | Objective, scope and prerequisites | Automated tests | Objective manual acceptance |

@@ -14,6 +14,7 @@ typedef struct {
     int parent;
     bool used, wanted, read, expand, evaluate, evaluate_explicit, failed, canonical_ok, baseline_ok;
     TbGdbGeneration sampled;
+    uint64_t identity;
 } Node;
 typedef struct {
     Node nodes[TB_VARIABLE_NODES];
@@ -189,6 +190,9 @@ bool tb_variables_read(TbVariables *v, TbVariableView view, size_t row)
     if (!n || !stopped(v) || v->waiting || *v->prune) { return false; }
     Tree *t = &v->trees[view];
     while (n->parent >= 0) { n = &t->nodes[n->parent]; }
+    if (!tb_memory_expression(n->expression)) {
+        (void)snprintf(t->error, sizeof t->error, "Unsupported saved expression; remove it and add a supported Watch."); return false;
+    }
     retire(v, n->object); n->object[0] = 0;
     children_remove(t, (int)(n - t->nodes));
     n->read = true; n->failed = false; n->row.fresh = false;
@@ -238,19 +242,58 @@ bool tb_variables_format(TbVariables *v, TbVariableView view, size_t row)
     n->evaluate = n->evaluate_explicit = true; n->row.format_pending = true;
     n->failed = false; ++v->revision; return true;
 }
-bool tb_variables_watch(TbVariables *v, const char *expression)
+static bool watch_definition(TbVariables *v, const char *expression, bool restored)
 {
     Tree *t = &v->trees[TB_VARIABLE_WATCHES];
-    if (!tb_memory_expression(expression)) {
+    if (!expression || !*expression || strlen(expression) >= sizeof t->nodes[0].expression || (!restored && !tb_memory_expression(expression))) {
         (void)snprintf(t->error, sizeof t->error, "Use a name, member, constant index or simple offset; calls and mutations are rejected."); return false;
     }
     if (v->waiting) { (void)snprintf(t->error, sizeof t->error, "Wait for the current variable operation."); return false; }
     int i = allocate(t, -1); if (i < 0) { (void)snprintf(t->error, sizeof t->error, "Watch/node limit reached (64 roots, 256 rows); collapse children or remove a watch."); return false; }
     Node *n = &t->nodes[i]; (void)snprintf(n->row.name, sizeof n->row.name, "%s", expression);
     (void)snprintf(n->expression, sizeof n->expression, "%s", expression);
-    (void)snprintf(n->key, sizeof n->key, "w:%llu", (unsigned long long)++v->serial);
+    n->identity = ++v->serial;
+    (void)snprintf(n->key, sizeof n->key, "w:%llu", (unsigned long long)n->identity);
     /* Adding a name does not grant a value read; Read is an explicit action. */
     order(t); t->error[0] = 0; ++v->revision; return true;
+}
+bool tb_variables_watch(TbVariables *v, const char *expression) { return watch_definition(v, expression, false); }
+bool tb_variables_restore_watch(TbVariables *v, const char *expression, TbVariableFormat format)
+{
+    if (format < 0 || format >= TB_VARIABLE_FORMATS || !watch_definition(v, expression, true)) { return false; }
+    Tree *t = &v->trees[TB_VARIABLE_WATCHES];
+    for (size_t i = 0; i < TB_VARIABLE_NODES; ++i) {
+        Node *n = &t->nodes[i];
+        if (n->used && n->parent < 0 && n->identity == v->serial) { n->row.format = format; return true; }
+    }
+    return false;
+}
+size_t tb_variables_definitions(const TbVariables *v)
+{
+    size_t count = 0; const Tree *t = &v->trees[TB_VARIABLE_WATCHES];
+    for (size_t i = 0; i < t->count; ++i) { count += t->nodes[t->order[i]].parent < 0; }
+    return count;
+}
+bool tb_variables_definition(const TbVariables *v, size_t index, TbWatchDefinition *out)
+{
+    const Tree *t = &v->trees[TB_VARIABLE_WATCHES];
+    for (size_t i = 0; i < t->count; ++i) {
+        const Node *n = &t->nodes[t->order[i]];
+        if (n->parent >= 0) { continue; }
+        if (index--) { continue; }
+        out->identity = n->identity; out->format = n->row.format;
+        memcpy(out->expression, n->expression, sizeof out->expression); return true;
+    }
+    return false;
+}
+bool tb_variables_remove_definition(TbVariables *v, uint64_t identity)
+{
+    Tree *t = &v->trees[TB_VARIABLE_WATCHES];
+    for (size_t row = 0; row < t->count; ++row) {
+        const Node *n = &t->nodes[t->order[row]];
+        if (n->parent < 0 && n->identity == identity) { return tb_variables_remove(v, row); }
+    }
+    return false;
 }
 bool tb_variables_remove(TbVariables *v, size_t row)
 {
@@ -558,6 +601,9 @@ void tb_variables_pump(TbVariables *v)
         for (size_t row = 0; row < t->count; ++row) {
             int i = t->order[row]; Node *n = &t->nodes[i];
             if ((!n->wanted && !n->read && !n->expand && !n->evaluate) || n->failed) { continue; }
+            if (n->parent < 0 && !tb_memory_expression(n->expression)) {
+                (void)snprintf(n->row.value, sizeof n->row.value, "Unsupported saved expression"); continue;
+            }
             v->view = j; v->node = i;
             if (!*n->object && n->parent < 0 && !n->row.fresh && allowed(v, n, TB_VARIABLE_CREATE, n->read)) {
                 if (v->owned_count == OWNED_MAX) { (void)snprintf(t->error, sizeof t->error, "Variable-object ownership limit reached."); return; }

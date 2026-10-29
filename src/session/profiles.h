@@ -2,6 +2,8 @@
 #define THE_BUGGER_PROFILES_H
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
+#include "setup.h"
 
 enum { TB_PROFILES = 16, TB_PROFILE_NAME = 64, TB_PROFILE_PATH = 1024,
        TB_PROFILE_WORDS = 32, TB_PROFILE_WORD = 512, TB_PROFILE_SOURCES = 8,
@@ -22,6 +24,21 @@ typedef struct {
 typedef struct TbProfiles TbProfiles;
 void tb_profile_defaults(TbProfile *profile, int kind);
 bool tb_profile_valid(const TbProfile *profile);
+#define TB_PROFILE_MODE UINT32_C(1)
+#define TB_PROFILE_TOOLS UINT32_C(2)
+#define TB_PROFILE_ARGUMENTS UINT32_C(4)
+#define TB_PROFILE_SCRIPTS UINT32_C(8)
+#define TB_PROFILE_SEARCH UINT32_C(16)
+#define TB_PROFILE_ENDPOINT UINT32_C(32)
+#define TB_PROFILE_ELF UINT32_C(64)
+#define TB_PROFILE_DIRECTORY UINT32_C(128)
+#define TB_PROFILE_SOURCE UINT32_C(256)
+/* Parsed active fields only; names, inactive controls and unused array slots
+ * are not connection differences. Paths and endpoint aliases stay literal. */
+uint32_t tb_profile_differences(const TbProfile *session, const TbProfile *saved);
+/* Local metadata for renewed restoration consent, never firmware identity. */
+void tb_profile_image_stamp(const TbProfile *profile, const char *launch_directory, char stamp[256]);
+bool tb_profile_relative_paths(const TbProfile *profile);
 TbProfiles *tb_profiles_create(void);
 void tb_profiles_destroy(TbProfiles *profiles);
 bool tb_profiles_load(TbProfiles *profiles);
@@ -31,6 +48,17 @@ const TbProfile *tb_profiles_find(const TbProfiles *profiles, const char *name);
 const char *tb_profiles_recent(const TbProfiles *profiles, size_t index);
 const char *tb_profiles_error(const TbProfiles *profiles);
 const char *tb_profiles_path(const TbProfiles *profiles);
+bool tb_profiles_read_only(const TbProfiles *profiles);
+bool tb_profiles_has_setup(const TbProfiles *profiles, const char *name);
+/* Returned definitions are independently owned; free after use. */
+TbSetup *tb_profiles_setup(const TbProfiles *profiles, const char *name);
+bool tb_profiles_setup_connection(const TbProfiles *profiles, const char *name,
+                                 TbProfile *connection, char directory[TB_SETUP_PATH]);
+bool tb_profiles_setup_stamp(const TbProfiles *profiles, const char *name, char stamp[256]);
+bool tb_profiles_save_setup(TbProfiles *profiles, const char *name, const TbSetup *setup,
+                            const TbProfile *connection, const char *launch_directory);
+/* Copies only saved definitions, never a session draft or recency. */
+bool tb_profiles_duplicate(TbProfiles *profiles, const char *name, const char *new_name);
 /* Atomic whole-file transactions; failures retain the previous in-memory data.
  * Put requires explicit replacement consent for an existing name. */
 bool tb_profiles_put(TbProfiles *profiles, const TbProfile *profile, bool replace);

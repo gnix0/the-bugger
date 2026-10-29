@@ -1,13 +1,12 @@
 # Native session fixtures
 
-These small programs are debug targets authored for the native integration/inspection suites, not fake debugger
-engines or hardware evidence. `make fixtures` creates:
+These programs are debug targets for the native integration and inspection suites. `make fixtures` creates:
 
 - `build/memory-fixture` from `memory.c` (M10): two initialized 2048-byte buffers,
   an explicitly unmapped boundary and two `memory_checkpoint` calls around a
   buffer change. Use inline Memory Go on `&memory_buffer` / `&memory_other` after
   Console `start`. To inspect partial data, break at `memory_checkpoint`, Continue
-  and inspect `memory_edge`. These are real Linux target bytes, not embedded proof.
+  and inspect `memory_edge`. These are Linux target bytes.
 
 - `build/debug-fixture` from `session.c`: prints its PID, working directory,
   argument values, THE_BUGGER_TEST, stdout/stderr markers and ticks.
@@ -87,8 +86,7 @@ distinct LEFT/RIGHT markers. `code-fixture-relocated` uses an absolute
 Source recovery must use explicit directories/substitute-path rules and retain
 the correct full file identity. The C integration test copies this tree into a
 temporary path containing spaces, quotes and shell metacharacters, verifies GDB
-lookup/order/replacement/clear, and removes its owned files. Targets are always
-uninstrumented; sanitizer runtimes remain in the frontend and C harnesses.
+lookup/order/replacement/clear, and removes its owned files. Sanitizer runtimes remain in the frontend and C harnesses.
 
 ## Code-breakpoint targets (M08)
 

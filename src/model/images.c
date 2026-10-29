@@ -283,11 +283,13 @@ static bool map_number(char **cursor, const char *limit, uint64_t *out, char sep
     if (!digits || *cursor >= limit) { return false; }
     *out = value; ++*cursor; return true;
 }
-void tb_images_native(TbImages *images, pid_t pid, const char *executable, uint64_t pc)
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): native PID and target PC are distinct mapping lookup inputs.
+static bool native_mapping(TbImages *images, pid_t pid, uint64_t pc, TbSetupMapping *mapping)
 {
-    if (pid <= 1) { return; }
+    if (pid <= 1) { return false; }
+    bool found = false;
     char maps[64]; (void)snprintf(maps, sizeof maps, "/proc/%ld/maps", (long)pid);
-    FILE *file = fopen(maps, "re"); if (!file) { return; }
+    FILE *file = fopen(maps, "re"); if (!file) { return false; }
     char line[8192]; unsigned lines = 0;
     while (fgets(line, sizeof line, file) && ++lines <= 4096) {
         if (!strchr(line, '\n')) { continue; }
@@ -326,11 +328,32 @@ void tb_images_native(TbImages *images, pid_t pid, const char *executable, uint6
             }
         }
         if (elf) { (void)elf_end(elf); } (void)close(fd);
-        if (mapped) {
-            TbImageReview review;
-            if (tb_images_review(images, path, bias, &review)) { (void)tb_images_confirm(images, &review, TB_IMAGE_BACKEND_VERIFIED); }
+        if (mapped && strlen(path) < TB_SETUP_PATH) {
+            struct stat current;
+            if (stat(path, &current) == 0 && same_file(&info, &current)) {
+                found = true;
+                if (mapping) {
+                    *mapping = (TbSetupMapping){.bias = bias, .begin = low, .end = high};
+                    (void)snprintf(mapping->path, sizeof mapping->path, "%s", path);
+                    (void)snprintf(mapping->identity, sizeof mapping->identity, "%llu:%llu:%lld:%lld:%ld:%lld:%ld",
+                        (unsigned long long)info.st_dev, (unsigned long long)info.st_ino, (long long)info.st_size,
+                        (long long)info.st_mtim.tv_sec, info.st_mtim.tv_nsec, (long long)info.st_ctim.tv_sec, info.st_ctim.tv_nsec);
+                }
+                if (images) { TbImageReview review;
+                    if (tb_images_review(images, path, bias, &review)) { (void)tb_images_confirm(images, &review, TB_IMAGE_BACKEND_VERIFIED); }
+                }
+            }
         }
         break;
     }
-    (void)fclose(file); (void)executable;
+    (void)fclose(file); return found;
+}
+void tb_images_native(TbImages *images, pid_t pid, const char *executable, uint64_t pc)
+{ (void)executable; (void)native_mapping(images, pid, pc, NULL); }
+bool tb_images_native_mapping(pid_t pid, uint64_t address, TbSetupMapping *mapping)
+{ return mapping && native_mapping(NULL, pid, address, mapping); }
+bool tb_images_mapping_equal(const TbSetupMapping *a, const TbSetupMapping *b, uint64_t address)
+{
+    return a && b && *a->path && *a->identity && !strcmp(a->path, b->path) && !strcmp(a->identity, b->identity) &&
+        a->bias == b->bias && a->begin == b->begin && a->end == b->end && address >= a->begin && address < a->end;
 }

@@ -41,6 +41,15 @@ records remain in the [validation records](../docs/validation.md).
   `TB_BOARD_TMUX=1` for its isolated tmux workflow. See the
   [fixture guide](fixtures/embedded/README.md) and
   [physical procedures](../docs/testing.md#physical-board-core-workflow-m17).
+- `test-setup-board`: opt-in physical profile-store round trip and definition
+  restoration through actual GDB, including partial failure, hardware policy,
+  address approval, unchanged dirty state, running deferral and cancellation.
+  It accepts explicit code/Watch/RAM identities from already-programmed firmware.
+- `test-setup-board-tui`: opt-in physical review/restore/acknowledge/save/reopen
+  through a private profile store, with actual hardware breakpoint hits, missing
+  Source pins and narrow-terminal controls. `TB_BOARD_TMUX=1` selects isolated
+  tmux. Neither runner is dispatched by `test-ci`; see the
+  [F01 physical procedure](../docs/testing.md#f01-physical-restoration).
 
 - `test-openocd` / `make test-m16-model`: metadata catalog and bounded literal
   argument planning, board/advanced/explicit script ordering, search paths and
@@ -76,13 +85,28 @@ records remain in the [validation records](../docs/validation.md).
   arguments/scripts/paths, key validation, private atomic failures, stale writers,
   corrupt-file preservation, recents/deletion/bounds and asynchronous source
   restore order/failure/no-retry behavior.
+- `test-setup-capture` / `make test-setup-capture`: metadata-only definitions,
+  stable lifecycle identities, transient exclusions and active connection comparison.
+  Included in `make test`.
+- `test-setup-breakpoints` (in `make test`): synthetic MI disabled-first
+  restoration, condition/ignore failures, hardware verification, cancellation,
+  bounded complete/incomplete reconciliation, duplicate prevention and unsupported
+  import exclusion. Actual native overload/file-line restoration is in
+  `make test-m08-native`; native backend import is also checked directly/in tmux.
+- `make test-setup-restore`: actual native local/Source restoration, retained
+  breakpoint intent/limits, Memory/Watch permission exclusions, partial saves,
+  interlocks/acknowledgment, in-flight cancellation and running-target deferral.
+  Included in `make test-native`.
+- `make test-setup-tmux`: native profile/setup save/restore workflow through an isolated
+  tmux server, including narrow toolbar geometry with long custom shortcut labels.
+  Included in `make test-tmux`; requires GDB/ptrace and tmux.
 - `test-profiles-tui` / `make test-m13-tui`: file-only live launcher/profile CRUD,
   review, source options, remaps and inert remote/OpenOCD definitions, using an
   isolated XDG directory and no inferior. Included in `make test`.
 - `test-profiles-native` plus `test-profiles-tui --native` /
   `make test-m13-native`: actual GDB source restore, relocated duplicate-basename
   breakpoint resolution, execution interlock, saved native reopen/remapped actions,
-  recents and cleanup. Included in `make test-native`; GDB/ptrace required. See
+  recents, Setup save/association/replacement/duplication and cleanup. Included in `make test-native`; GDB/ptrace required. See
   [M13 procedures](../docs/testing.md#profiles-and-source-settings).
 
 - `test-watchpoints` / `make test-m12-model`: hardware type reconciliation,
@@ -217,13 +241,16 @@ LeakSanitizer needs execution outside ptrace-based execution environments. No ch
 is disabled to obtain a pass. `make analyze` runs clang-tidy over application
 sources. See `docs/testing.md` for commands and the manual/tmux checklist.
 
-UI/layout tests alone establish presentation evidence, not live debugging or complete
-FR-06/07/08/09/10/11/12/13/14/15/16/17 acceptance. M03's synthetic GDB/MI corpus
+UI/layout tests cover presentation; live debugging uses separate integration
+and physical tests. M03's synthetic GDB/MI corpus
 is in `fixtures/mi/` with a provenance README; it establishes NFR-04 parser
 evidence. M04's C fake peer tests controller behavior without launching a target;
 real native C/C++ fixtures are in `fixtures/native/`, with separate M05
 `make test-native` and `make sanitize-native` checks. M14 records native
-integration acceptance; real board evidence remains M17. Every release retests native
+integration acceptance; real board evidence includes M17 and the
+[RISC-V Task2.1 checks](../docs/testing.md#risc-v-hardware-validation). The board runner
+requires a decoded checkpoint instruction at the stopped PC, rejecting raw-data
+pseudo-operations in the known fixture. Every release retests native
 x86-64 and the STM32/ARM validation, ESP32/Xtensa and ESP32/RISC-V hardware,
 subject to the explicitly recorded version-specific RISC-V deferrals;
 QEMU ARM/RISC-V adds coverage where available and never replaces board evidence.

@@ -76,6 +76,13 @@ size_t tb_code_tab_active(const TbCode *code, int view);
 const TbCodeFile *tb_code_tab_file(const TbCode *code, int view, size_t tab);
 bool tb_code_tab_select(TbCode *code, int view, size_t tab);
 bool tb_code_tab_close(TbCode *code, int view, size_t tab);
+/* Definition-only restore: pins start unavailable and retain their original
+ * identity. Retry resolves through the current GDB catalog before local reads. */
+bool tb_code_tab_restore(TbCode *code, int view, const TbCodeFile *file);
+bool tb_code_tab_retry(TbCode *code, int view, size_t tab);
+bool tb_code_tab_unavailable(const TbCode *code, int view, size_t tab);
+bool tb_code_files_ready(const TbCode *code);
+bool tb_code_catalog_pending(const TbCode *code);
 /* Clear a closed/reused pane, including its browsing history and request identity. */
 void tb_code_clear(TbCode *code, int view);
 void tb_code_tab_reset(TbCode *code, int view);
@@ -103,6 +110,8 @@ bool tb_code_clear_settings(TbCode *code);
 bool tb_code_restore_settings(TbCode *code, const char *const directories[], size_t count,
                               const TbSourceRule *rules, size_t rule_count);
 bool tb_code_restoring(const TbCode *code);
+bool tb_code_settings_busy(const TbCode *code);
+void tb_code_cancel_settings(TbCode *code);
 size_t tb_code_directory_count(const TbCode *code);
 const char *tb_code_directory(const TbCode *code, size_t index);
 size_t tb_code_rule_count(const TbCode *code);

@@ -375,6 +375,13 @@ bool tb_memory_address(TbMemory *m, int id, const char *expression)
     (void)snprintf(v->data.expression, sizeof v->data.expression, "%s", expression);
     v->data.configured = true; v->data.offset = 0; return tb_memory_refresh(m, id);
 }
+bool tb_memory_definition(TbMemory *m, int id, unsigned bytes, unsigned grouping)
+{
+    if (!valid_view(id) || !bytes || bytes > TB_MEMORY_BYTES ||
+        (grouping != 1 && grouping != 2 && grouping != 4 && grouping != 8)) { return false; }
+    tb_memory_clear(m, id); m->views[id].data.length = bytes; m->views[id].data.grouping = grouping;
+    ++m->revision; return true;
+}
 bool tb_memory_length(TbMemory *m, int id, unsigned bytes)
 {
     if (!valid_view(id) || !bytes || bytes > TB_MEMORY_BYTES) { return false; }

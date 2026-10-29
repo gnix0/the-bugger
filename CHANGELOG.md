@@ -2,6 +2,49 @@
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-29
+
+### Added
+
+- One saved setup per connection profile, with atomic save/duplication/deletion
+  and read-only recovery for malformed setup records.
+- Live Setup menu captures and saves pane/tab/Source/Memory/Watch definitions and
+  frontend-created code-breakpoint intent without values or permissions. Save
+  review shows connection differences and confirms replacement of skipped setups;
+  profile duplication copies saved data independently. Runtime hits do not change
+  configured ignore counts.
+- Reviewed local/Source setup restoration with stable missing-file identities,
+  Memory/Watch definitions without samples or permissions, running-target deferral,
+  cancellation and active-work interlocks. Review detects active configuration,
+  relative-path context and local ELF metadata changes. Code breakpoints restore disabled, verify required attributes before enable,
+  and retain partial failures. Literal addresses require matching native mapping
+  provenance or current-session approval. Complete supported backend definitions
+  can be explicitly reviewed/imported; uncertain mutations use bounded metadata
+  reconciliation without repeating the mutation.
+- Physical RISC-V RV32 validation (test device: ESP32-C6FH4, built-in
+  USB/JTAG) using the shared
+  embedded fixture, core-context OpenOCD configuration and target-compatible
+  GDB. Checks cover source/disassembly, registers, explicit memory/variables,
+  stepping, hardware break/watchpoints, execution/reset and disconnect.
+- Board validation checks actual decoded instructions and opcode bytes at the
+  stopped PC, including aligned 2/4-byte RISC-V instructions. Documented confirmed
+  OpenOCD checksum and optional ROM-symbol decoding limitations separately from
+  the working debugger workflow.
+
+### Fixed
+
+- Setup text wrapping makes bounded progress in narrow review pages. Resolve
+  static-analysis diagnostics in setup comparison, persistence and breakpoint review.
+
+### Compatibility
+
+- Saving a setup writes profile-store schema 3. Older builds cannot read this
+  store. Loading schema 1/2 alone does not migrate it; no silent downgrade is
+  provided. Retain a backup before saving if older builds are still needed.
+- Saved definitions exclude sampled values, runtime breakpoint IDs, read
+  permissions and image confirmations. Restoring a setup does not establish
+  firmware identity or read Memory/Watch values.
+
 ## [0.1.3] - 2026-10-28
 
 ### Changed
@@ -144,9 +187,6 @@
 - Catppuccin Macchiato is the default when no valid appearance preference exists;
   Monokai Pro remains selectable. The six-pane workspace and target behavior
   are unchanged.
-- Routine contributions combine implementation, tests and relevant documentation.
-  Exact implementation hashes are recorded at release or when an investigation
-  requires them; historical evidence and owner-controlled Git operations remain.
 
 ## [0.1.0] - 2026-10-20
 

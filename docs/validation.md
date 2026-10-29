@@ -1,44 +1,18 @@
 # Validation records
 
-This is the project evidence register: implementation references, acceptance
-states, executed checks, significant failures and unresolved validation limits.
-It complements the [roadmap](roadmap.md), [test procedures](testing.md) and
-[architecture](architecture.md). Procedures describe how to test; entries here
-state what was actually recorded. No workflow transcript or superseded agent
-instructions are required to interpret the results.
+Commands, results, revisions and acceptance records for The Bugger.
 
 ## Current evidence boundary
 
-The [v0.1.3 release-preparation record](#v013-release-preparation) is the current
-release snapshot. Entries below are chronological evidence: their original
-pending states and failures are retained rather than rewritten as fresh results.
+Latest release: [v0.1.3](#v013-release-preparation).
+Current candidate: v0.1.4, with accepted F01 storage, saving, restoration,
+breakpoint import and reconciliation. The
+[release checks](#v014-release-preparation) distinguish physical/host evidence
+from final acceptance and publication. Earlier checkpoint exclusions below
+describe their original trees.
 
-M00–M18 and the listed corrections form the first-release baseline. The maintainer
-reported v0.1.0 published on 2026-10-20. Historical preparation entries below retain
-their original pending states and test boundaries; publication does not supply
-missing individual manual outcomes or new hardware evidence. F19 is accepted
-through the maintainer-reported implementation commit. F19 and the accepted
-shared navigation/fullscreen work are included in v0.1.1 preparation; publication
-and fresh release-matrix validation are not implied by implementation acceptance.
-
-M14 records passing GCC/Clang default/native/tmux suites,
-slow watchpoint recovery, full default/native ASan/UBSan with leak detection and
-full-project static analysis. These results do not establish physical embedded
-compatibility or measured terminal input-to-redraw latency. M15 now records
-passing GCC/Clang default/native/remote/tmux regressions, full default/native/remote
-ASan/UBSan with leak detection and full-project static analysis. M15 is accepted
-through its implementation commit; individual manual outcomes were not separately
-reported. M16 records passing GCC/Clang regressions, sanitizer/leak checks and static
-analysis, including focused offline OpenOCD lifecycle coverage. M17 records
-physical NUCLEO-F446RE/ARM and ESP32-S3/Xtensa workflows with sanitizer and
-terminal/tmux coverage. Other physical targets remain unverified. QEMU coverage
-is supplementary and currently unverified.
-
-Log paths identify the original local artifacts, which are ignored/disposable;
-the command/result summaries below are the durable record. Unreported runs and
-failed environment checks remain distinct from PASS. Acceptance does not imply
-that every checklist step was separately reported. No tests were rerun to
-restructure these records.
+Entries are chronological. Raw logs are stored under ignored `build/`; summaries
+and references below retain the results, including failures and unrun checks.
 
 ## Implementation references and acceptance
 
@@ -66,8 +40,7 @@ restructure these records.
 | M16 | OpenOCD wizard/lifecycle/actions | accepted | `18e460ddd4cbc897409e2879c03ed0fc983212df` |
 | M17 | NUCLEO-F446RE and ESP32-S3 validation | accepted | `f568bd2482b2309e3534ebc8e197854ada37bf77` |
 | M18 | v0.1.0 release evidence/acceptance | accepted; published | v0.1.0; preparation revision recorded below |
-| F19 | Themes, variants and Config | accepted; unreleased | [Focused checks](#f19--themes-and-configuration); implementation committed per maintainer report |
-
+| F19 | Themes, variants and Config | accepted; shipped in v0.1.1 | [Focused checks](#f19--themes-and-configuration); implementation committed per maintainer report |
 
 ### Full recorded commit identifiers
 
@@ -313,17 +286,17 @@ The first native test failed selecting frame 1 because it assumed a caller above
 
 | Command / evidence source | Outcome |
 |---|---|
-| Agent: strict `make -j4 all` and focused register/native/TUI executable builds | PASS; `/tmp/the-bugger-m09-build.log` and terminal output |
-| Agent: `build/test-registers "$PWD/build/fake-mi"` | PASS; synthetic x86/ARM names, sparse IDs, 600-name cap, long/unavailable values, formats, stale replies, frame/thread baselines, errors and bounded idle/running/hidden work |
-| Agent: `git diff --check` before final code delivery | PASS |
-| Owner: first `make test-m09-native` | FAILED at caller-frame selection: test assumed a caller above main |
-| Owner: corrected `make test-m09-native`, reported "All set" | PASS reported; real-GDB and PTY focused acceptance |
+| Local: strict `make -j4 all` and focused register/native/TUI executable builds | PASS; `/tmp/the-bugger-m09-build.log` and terminal output |
+| Local: `build/test-registers "$PWD/build/fake-mi"` | PASS; synthetic x86/ARM names, sparse IDs, 600-name cap, long/unavailable values, formats, stale replies, frame/thread baselines, errors and bounded idle/running/hidden work |
+| Local: `git diff --check` before final code delivery | PASS |
+| Maintainer: first `make test-m09-native` | FAILED at caller-frame selection: test assumed a caller above main |
+| Maintainer: corrected `make test-m09-native`, reported "All set" | PASS reported; real-GDB and PTY focused acceptance |
 
 ## M10
 
 Earlier test assumptions failed on GDB partial-read boundary behavior, transient status text, pane hit regions and a source-only assertion matching unrelated STALE state. The corrected inline viewer and adapter-supplied region/byte-order model passed the listed focused/regression checks. Explicit Go/Refresh and unknown/MMIO boundaries remain deliberate; native results do not prove peripheral safety.
 
-| Agent-run command | Result and evidence |
+| Local command | Result and evidence |
 |---|---|
 | `make -s -j4 all build/test-memory build/fake-mi build/test-memory-native build/test-memory-tui` | PASS, strict GCC C17 build |
 | `make test-m10-model test-m10-native` | PASS, `/tmp/the-bugger-m10-inline-focused.log`; inline Go/Enter, scalar expressions, hex/ASCII, bounded keyboard/wheel browsing, independent drafts, target-neutral region/byte-order cases and native partial reads |
@@ -338,7 +311,7 @@ Recorded acceptance: 2026-10-18.
 
 Failed native assertions exposed change-baseline invalidation and C++ access-group expansion assumptions. TUI failures involved demo startup, redraw waits and raw-output capture exhaustion; the bounded reader and completed-operation checks were corrected. A type-buffer initialization defect and style findings were fixed before final focused runs. Full-project analysis still reports Memory/native-map/older TUI findings assigned to M14; a focused variables-module pass does not clear them.
 
-| Agent-run command | Result and evidence |
+| Local command | Result and evidence |
 |---|---|
 | `make test-m11-model test-m11-native` | PASS after the final initialization fix; `build/m11-final.log`. C peer policy/bounds/stale/cleanup cases, actual GDB C/C++/optimized fixtures and live TUI actions. Strict compiler warnings enabled. |
 | `make test test-native` | PASS; `build/m11-regression.log`. Full existing unit/PTY/native regressions, before the final variable-type buffer initialization correction; focused tests were repeated afterward. |
@@ -356,17 +329,17 @@ Acceptance preceded individually reported transcripts for some requested suites.
 
 | Evidence | Result |
 |---|---|
-| Agent: strict `make -s -j4 all test-m12-model build/test-watchpoints-native build/test-watchpoints-tui build/test-break-tui` | PASS; C17 warning-clean build and focused C peer tests. Covers three modes, width/overflow validation, hits/scope expiry, fallback/downgrade removal, resource errors, context races, malformed replies, uncertain ownership and blocked cleanup without retry spin. Native/TUI binaries were compiled, not executed by the agent. |
-| Agent: no-inferior GDB/MI syntax probe for `-break-watch --language c missing_symbol` | GDB accepted the command/options and returned the expected missing-symbol-table error; no target ran. Not hardware evidence. |
-| Agent: `git diff --check` | PASS at implementation delivery; repeated for documentation handoff. |
-| Owner command supplied: `make test-m12-native test-m12-slow` | Execution/result not individually reported before acceptance. Native hardware/TUI paths and delayed-reply/timeout recovery have tests, but no PASS transcript is claimed here. |
-| Owner command supplied: `make test test-native test-tmux` | Execution/result not individually reported before acceptance. |
+| Local: strict `make -s -j4 all test-m12-model build/test-watchpoints-native build/test-watchpoints-tui build/test-break-tui` | PASS; C17 warning-clean build and focused C peer tests. Covers three modes, width/overflow validation, hits/scope expiry, fallback/downgrade removal, resource errors, context races, malformed replies, uncertain ownership and blocked cleanup without retry spin. Native/TUI binaries were compiled, not executed locally. |
+| Local: no-inferior GDB/MI syntax probe for `-break-watch --language c missing_symbol` | GDB accepted the command/options and returned the expected missing-symbol-table error; no target ran. Not hardware evidence. |
+| Local: `git diff --check` | PASS at implementation delivery; repeated for documentation handoff. |
+| Maintainer command supplied: `make test-m12-native test-m12-slow` | Execution/result not individually reported before acceptance. Native hardware/TUI paths and delayed-reply/timeout recovery have tests, but no PASS transcript is claimed here. |
+| Maintainer command supplied: `make test test-native test-tmux` | Execution/result not individually reported before acceptance. |
 
 ## M13
 
 Initial broad runs passed default/profile-native tests but failed M12 TUI targeting: upper-pane Actions during redraw, the Memory column heading instead of input, and a body hint instead of Manage. The final helper selects the intended controls and waits for live bytes without weakening application safety. The final full regression and focused ASan/UBSan runs passed. The first sandbox native attempt was blocked by ptrace, not counted as PASS. Full-project analysis and physical embedded evidence remain pending.
 
-| Agent-run command | Result / evidence |
+| Local command | Result / evidence |
 |---|---|
 | `make test-m13-model` | PASS; strict GCC build, JSON/XDG/atomic failure/CRUD/keys/bounds and fake-MI ordered source restore/error/interlock coverage. |
 | `make test-m12-tui` | First sandbox attempt blocked by ptrace; outside sandbox reproduced the Manage misclick. PASS after final helper correction; actual live watchpoint creation, hits, management, Memory and variable actions. |
@@ -382,7 +355,7 @@ Accepted through implementation commit `1dee59f33323d37af9739ce846f1a676ea56d2d5
 were not separately reported; acceptance does not supply unrecorded measurements
 or physical hardware results.
 
-The first owner-run integrated test failed because the harness expected Continue
+The first maintainer-run integrated test failed because the harness expected Continue
 to stop at main. Continue correctly runs until a real stop. The harness now
 requests `start` explicitly and includes retained logs in stop-timeout diagnostics;
 application stop/read assertions are preserved. A sandbox rerun was blocked by
@@ -401,17 +374,17 @@ also guards a possibly missing profile. The request-policy inventory is in
 
 | Execution | Result / scope |
 |---|---|
-| Agent: strict `make -s -j4 all build/test-context build/fake-mi build/test-native-words build/test-acceptance-native build/test-context-native build/test-context-tui` | PASS; C17 build. Native/terminal binaries compiled, not executed. |
-| Agent: `make -s test-m14-model` | PASS; names-only argument encodings, unsolicited values ignored, selected-frame read, overlapping/hidden/running denial, missing/error replies, refresh/resume obsolescence and no idle retries. |
-| Agent: `build/test-native-words` after adding actual `/proc/self/maps` validation | PASS; real host stack mapping recognized, malformed/overflow/truncated/device/unknown-special mappings rejected. No inferior launched. |
-| Agent: focused clang-tidy on `context.c`, `memory.c`, `native.c` and `app.c`, using the repository analyzer/bugprone checks and warnings as errors | PASS after corrections; logs `/tmp/the-bugger-m14-analyze.log`, `/tmp/the-bugger-m14-context-analyze.log`, `/tmp/the-bugger-m14-tui-analyze.log`. Initial focused runs found arithmetic conversions, possible null profile access and a nested stream-read error path; these were corrected. This is not a full-project analyzer pass. |
-| Agent: local documentation link/anchor/fence check and `git diff --check` | PASS; 93 local links/anchors before this evidence/roadmap update. |
-| Agent: `make -s test test-native test-tmux test-m12-slow analyze` | Default/native/tmux and slow recovery goals PASS; `build/m14-regression.log`. The command then failed on the analyzer's adjacent watchpoint width/mode API warning. Existing validated API retained with a narrowly justified local suppression. |
-| Agent: `make -s analyze` after that correction | PASS; full project, warnings as errors; `build/m14-analyze.log`. Clears the outstanding full-project analyzer gate for these changes. |
-| Agent: `make -s CC=clang CXX=clang++ BUILD_DIR=build/m14-clang test test-native test-tmux` | Default tests PASS; initial native run failed on the harness's assumption that optimized recursive frames always retain argument metadata. Direct GDB MI inspection confirmed `args=[]` for Clang's optimized recursive frame and a named depth argument in tail_bridge. Test now selects a frame with reported depth metadata and retains required name/value/invalidation assertions. `build/m14-clang.log`. |
-| Agent: `make -s CC=clang CXX=clang++ BUILD_DIR=build/m14-clang test-native test-tmux` after that correction | PASS; `build/m14-clang-native.log`. Actual C/C++/optimized/stripped/attach, context/read-policy, native integration and isolated tmux coverage. |
-| Agent: corrected GCC `build/test-context-native` against recursive/optimized/stripped fixtures | PASS; `build/m14-context-native.log`; verifies the compiler-portable assertion retains GCC coverage. |
-| Agent: `ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 make -s CC=clang CXX=clang++ BUILD_DIR=build/m14-sanitize CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test test-native` | PASS; full default/native ASan/UBSan and leak-detection matrix, including repeated integrated C/C++ sessions and actual terminal interaction; `build/m14-sanitize.log`. |
+| Local: strict `make -s -j4 all build/test-context build/fake-mi build/test-native-words build/test-acceptance-native build/test-context-native build/test-context-tui` | PASS; C17 build. Native/terminal binaries compiled, not executed. |
+| Local: `make -s test-m14-model` | PASS; names-only argument encodings, unsolicited values ignored, selected-frame read, overlapping/hidden/running denial, missing/error replies, refresh/resume obsolescence and no idle retries. |
+| Local: `build/test-native-words` after adding actual `/proc/self/maps` validation | PASS; real host stack mapping recognized, malformed/overflow/truncated/device/unknown-special mappings rejected. No inferior launched. |
+| Local: focused clang-tidy on `context.c`, `memory.c`, `native.c` and `app.c`, using the repository analyzer/bugprone checks and warnings as errors | PASS after corrections; logs `/tmp/the-bugger-m14-analyze.log`, `/tmp/the-bugger-m14-context-analyze.log`, `/tmp/the-bugger-m14-tui-analyze.log`. Initial focused runs found arithmetic conversions, possible null profile access and a nested stream-read error path; these were corrected. This is not a full-project analyzer pass. |
+| Local: local documentation link/anchor/fence check and `git diff --check` | PASS; 93 local links/anchors before this evidence/roadmap update. |
+| Local: `make -s test test-native test-tmux test-m12-slow analyze` | Default/native/tmux and slow recovery goals PASS; `build/m14-regression.log`. The command then failed on the analyzer's adjacent watchpoint width/mode API warning. Existing validated API retained with a narrowly justified local suppression. |
+| Local: `make -s analyze` after that correction | PASS; full project, warnings as errors; `build/m14-analyze.log`. Clears the outstanding full-project analyzer gate for these changes. |
+| Local: `make -s CC=clang CXX=clang++ BUILD_DIR=build/m14-clang test test-native test-tmux` | Default tests PASS; initial native run failed on the harness's assumption that optimized recursive frames always retain argument metadata. Direct GDB MI inspection confirmed `args=[]` for Clang's optimized recursive frame and a named depth argument in tail_bridge. Test now selects a frame with reported depth metadata and retains required name/value/invalidation assertions. `build/m14-clang.log`. |
+| Local: `make -s CC=clang CXX=clang++ BUILD_DIR=build/m14-clang test-native test-tmux` after that correction | PASS; `build/m14-clang-native.log`. Actual C/C++/optimized/stripped/attach, context/read-policy, native integration and isolated tmux coverage. |
+| Local: corrected GCC `build/test-context-native` against recursive/optimized/stripped fixtures | PASS; `build/m14-context-native.log`; verifies the compiler-portable assertion retains GCC coverage. |
+| Local: `ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 make -s CC=clang CXX=clang++ BUILD_DIR=build/m14-sanitize CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test test-native` | PASS; full default/native ASan/UBSan and leak-detection matrix, including repeated integrated C/C++ sessions and actual terminal interaction; `build/m14-sanitize.log`. |
 | Acceptance / physical hardware | Accepted through the implementation commit. Individual manual outcomes were not separately reported. No embedded hardware result claimed. |
 
 The integrated native test participates in `make test-native`. Runtime measurements
@@ -420,7 +393,6 @@ GDB CPU. Test host: Intel Core i5-8265U, Linux 7.2.9-arch1-1 x86-64, GCC 16.2.1,
 Clang 23.1.1, GDB 18.1 and tmux 3.8. The direct/tmux manual procedure remains
 available for reproduction; individual outcomes and terminal input-to-redraw
 measurements were not separately reported. Hardware limitations remain unchanged.
-
 
 ## M15 — existing remote server
 
@@ -436,7 +408,7 @@ explicit capability/unknown-region handling. Server IDs never become local PIDs.
 Metadata mismatch/refusal/timeout/uncertain disconnect closes only owned GDB.
 Remote inferior loss revokes Memory evidence and stops inspector pumping.
 
-Focused checks executed by the coding agent:
+Local focused checks:
 
 | Command | Result and boundary |
 |---|---|
@@ -470,7 +442,7 @@ assertions remain intact and the final actual run passes.
 Quick documentation checks passed: local Markdown link targets, balanced code
 fences, retained M00–M18/F01–F47 identifiers and `git diff --check`.
 
-Full regression validation executed by the coding agent after the final fixes:
+Local regression checks after the final fixes:
 
 | Command | Result / local artifact |
 |---|---|
@@ -491,12 +463,11 @@ localhost GDB/gdbserver setup. Configured ELF metadata does not verify runtime f
 relocation; default remote region evidence is empty. Explicit bounded inspection
 remains available while automatic unknown/MMIO reads remain denied.
 
-
 ## M16 — OpenOCD wizard, lifecycle and actions
 
 Status: **accepted** through implementation commit
 `18e460ddd4cbc897409e2879c03ed0fc983212df`. Commit/push was reported by the
-repository owner. Individual manual checklist outcomes were not separately
+repository maintainer. Individual manual checklist outcomes were not separately
 reported. Physical-board compatibility remains M17.
 
 Implemented bounded installed-script browsing/filtering, reviewed literal argv,
@@ -508,7 +479,7 @@ PC from structured metadata. Pending operations interlock execution. Errors leav
 inspection unavailable and target disposition unverified. Close offers halted or
 resume policy, with backend/script limitations and owned-only cleanup.
 
-Focused checks executed by the coding agent:
+Local focused checks:
 
 | Check | Result / boundary |
 |---|---|
@@ -536,7 +507,7 @@ listener is not proof of target readiness. Physical reset/halt/disconnect behavi
 RAM/Flash correctness and probe-loss recovery remain UNVERIFIED until M17's named
 board/probe/GDB/server checks. No automatic MMIO authorization is inferred.
 
-Regression validation executed by the coding agent on Linux 7.2.9-arch1-1
+Local regression checks on Linux 7.2.9-arch1-1
 x86-64, GCC 16.2.1, Clang 23.1.1, GDB/gdbserver 18.1, tmux 3.8 and OpenOCD
 0.12.0-01004-g9ea7f3d64-dirty:
 
@@ -569,7 +540,7 @@ physical-board results remain UNVERIFIED.
 
 Status: **accepted** through implementation commit
 `f568bd2482b2309e3534ebc8e197854ada37bf77`; implementation commit/push was
-reported by the repository owner. Final scope covers NUCLEO-F446RE/ARM and
+reported by the repository maintainer. Final scope covers NUCLEO-F446RE/ARM and
 ESP32-S3/Xtensa. The broader manual acceptance session is deferred to M18;
 individual manual checklist outcomes are not inferred from this acceptance.
 The every-release matrix and v0.1.0 release acceptance remain separate.
@@ -602,7 +573,7 @@ Recorded SHA-256 identities:
 
 ### Executed validation
 
-All checks below were executed by the coding agent. Host: Linux
+Local test host: Linux
 7.2.9-arch1-1 x86-64, GCC 16.2.1, Clang 23.1.1 and tmux 3.8.
 The hardware runner commands and manual procedures are in
 [testing](testing.md#physical-board-core-workflow-m17).
@@ -676,7 +647,7 @@ RISC-V hardware compatibility or waive future release requirements.
 
 ### Executed checks
 
-The coding agent ran these checks with authorization for M18. Host: Linux
+M18 test host: Linux
 7.2.9-arch1-1 x86-64, glibc 2.44, GCC 16.2.1, Clang 23.1.1, GDB/gdbserver 18.1,
 tmux 3.8. Instrumented target fixtures remain excluded from sanitizer flags;
 frontend and harness leak detection stays enabled.
@@ -747,7 +718,7 @@ The initial release artifact is host-specific and dynamically linked, not a
 universal Linux binary. Runtime firmware identity is not automatically verified
 by the frontend. Optional LED behavior, physical probe removal/recovery, exhaustive
 manual appearance and other boards remain outside the recorded passing evidence.
-Final manual/release acceptance and owner-controlled Git/publication remain pending.
+Final manual/release acceptance and maintainer-controlled Git/publication remain pending.
 
 ### CI and contribution finalization
 
@@ -769,7 +740,7 @@ Contributor guidance now describes `develop` integration, stable `main`, feature
 fix, release and hotfix branches, merge-commit traceability and CI review.
 The approved finalization sequence combines pending release preparation, CI,
 security policy and documentation in the first commit, followed by a separate
-owner-created release commit. Final release acceptance/publication is pending.
+maintainer-created release commit. Final release acceptance/publication is pending.
 
 ### CI failure reproduction and toolchain correction
 
@@ -809,7 +780,7 @@ Ubuntu's CET/PLT layout required additional scrolling. Its replacement uses a
 bounded search while retaining the mandatory gap marker, menu roundtrip and
 viewport assertions; the actual section layout was checked before changing it.
 
-Final agent-run verification:
+Final local verification:
 
 - Arch/GCC 16: before the freshness correction, the complete configured suite
   with `_FORTIFY_SOURCE=3` passed,
@@ -841,19 +812,18 @@ acceptance remain pending.
 
 ### Final distribution preparation
 
-The repository owner reported `make release` passing on the integrated `develop`
+The repository maintainer reported `make release` passing on the integrated `develop`
 revision above: the hardened executable built, reported `the-bugger 0.1.0`, and
 the packaging command prepared `build/dist/`. These generated archives are
 ignored distribution outputs; they are uploaded as release assets rather than
 committed to Git. A clean working tree after packaging is expected.
 
 The release documentation identifies v0.1.0 in the changelog and links the actual
-preparation revision. Final owner release acceptance, hosted confirmation and
-tag/publication remain separate from successful packaging. The agent refreshed
-the archives after the tracked release notes and verified their SHA-256 checksums.
+preparation revision. Final maintainer release acceptance, hosted confirmation and
+tag/publication remain separate from successful packaging. The archives were rebuilt after the release notes and their SHA-256 checksums
+verified.
 The source archive contains those final tracked notes. Later content changes
 require another `make release` before publication.
-
 
 ## F19 — Themes and configuration
 
@@ -870,7 +840,7 @@ remains selectable. Upstream revisions/licenses are retained in
 `THIRD_PARTY_NOTICES`, also included in binary packaging. Custom themes and
 workspace redesign remain outside F19.
 
-Agent-run implementation checks:
+Local implementation checks:
 
 | Check | Recorded result |
 |---|---|
@@ -911,7 +881,7 @@ the actual arrow dispatch for controls, scrolling, tab changes and resizing.
 Text fields consume literal characters first, including file-filter page reset.
 No modes, extra Vim commands, target operations or configuration switch are added.
 
-Agent-run checks:
+Local checks:
 
 - Strict `make -j2 all build/test-navigation`: PASS.
 - `build/test-navigation "$PWD/build/the-bugger"`: PASS. Paired real demo PTYs
@@ -929,7 +899,6 @@ Artifacts: `build/test-navigation`, `/tmp/tb-navigation-build.log` and
 matrices, physical hardware and manual acceptance were not run for this change.
 The [manual steps](testing.md#letter-key-navigation) remain to be reviewed.
 
-
 ## ESP fixture warning policy
 
 Accepted through the subsequent implementation commit; unreleased. The root
@@ -940,7 +909,7 @@ policy: private `-Wall -Wextra -Werror` plus error-category overrides for inheri
 unused-function, unused-variable, unused-but-set-variable,
 deprecated-declarations and extra-warning exceptions. SDK components are unchanged.
 
-Agent-run focused verification:
+Local focused verification:
 
 - Isolated CMake configure including the actual component file: PASS. Target
   options contain the strict flags; an unrelated target receives none. This
@@ -971,7 +940,7 @@ header/footer. Restore, workspace Escape/q and keyboard activation return to the
 existing split tree and tabs. Hidden pane selectors, tabs and divider hit regions
 are inactive. This does not implement saved layouts or expand F06.
 
-Agent-run focused checks:
+Local focused checks:
 
 - Strict `make -j2 all build/test-fullscreen build/code-fixture` build and final
   rebuild: PASS, with the existing `-Wall -Wextra -Wpedantic -Werror` policy.
@@ -1003,7 +972,6 @@ and manual visual acceptance were not run for this change. Follow the
 [manual fullscreen procedure](testing.md#source-fullscreen); focused native
 success does not establish embedded hardware compatibility.
 
-
 ## Spatial control navigation
 
 Accepted through implementation commit `53b1e5a`; included in v0.1.1 preparation.
@@ -1016,7 +984,7 @@ outside-pane/control click returns to controls. Fullscreen restoration and
 per-view navigation retain their existing behavior. No target-read authorization,
 layout structure, protocol or dependency changes are included.
 
-Agent-run focused checks:
+Local focused checks:
 
 - Strict build with the repository warning-as-error policy: PASS.
 - Paired `build/test-navigation` PTYs: PASS for toolbar directions/edges,
@@ -1047,7 +1015,7 @@ existing terminal helper, fixed its input simulation. Early directional checks
 also exposed a diagonal horizontal focus jump; restricting horizontal movement
 to the visual row resolved that application behavior.
 
-Final agent-run regression, explicitly authorized for this task:
+Final local regression, explicitly authorized for this task:
 
 ```sh
 make test test-native test-tmux test-m15-native test-m16-server test-m16-tui test-m16-openocd
@@ -1072,7 +1040,6 @@ Hardware and sanitizer/compiler matrices were not run for this task and remain
 separate release checks. These host tests do not establish new board compatibility.
 Manual review follows the
 [spatial navigation procedure](testing.md#spatial-control-and-content-navigation).
-
 
 ## v0.1.1 release preparation
 
@@ -1099,7 +1066,7 @@ now points to this register. Previously recorded broad runtime/static-analysis
 results for `53b1e5a` remain in the spatial-navigation section above; they are
 not relabeled as newly executed release checks.
 
-Agent-run preparation checks:
+Local preparation checks:
 
 - `make -j2 all build/test-cli build/test-tui`, CLI and launcher/terminal tests:
   PASS with the existing strict C17 warning-as-error policy; version is `0.1.1`.
@@ -1134,7 +1101,7 @@ make Registers visible before the stop event reached the model. The test now
 waits for the controller's new stopped generation before revealing Registers;
 the fake peer can hold that event after acknowledging the command to exercise
 the ordering explicitly. The register model and its change-marker assertion are
-unchanged. Agent-run `make -s test-m09-model`, a separate fortified
+unchanged. Local `make -s test-m09-model`, a separate fortified
 `make -s BUILD_DIR=build/ci-register CPPFLAGS=-D_FORTIFY_SOURCE=3 test-m09-model`,
 and `make -s test-controller` passed. The failed hosted run remains a failure;
 broader post-fix CI evidence is pending.
@@ -1147,8 +1114,7 @@ Artifacts to attach after final release acceptance:
 
 The source hash is embedded in the binary archive's `BUILD-INFO.txt`; the external
 checksum asset records both final archive hashes. Rebuild after any subsequent
-source/documentation edits. Private, ignored `AGENTS.md` is excluded from the
-source archive. Older v0.1.0 archives may coexist in the output directory and are
+source/documentation edits. Older v0.1.0 archives may coexist in the output directory and are
 not v0.1.1 assets.
 
 Current local artifacts include `/tmp/v011-build.log`, `/tmp/v011-package.log`,
@@ -1172,7 +1138,7 @@ retain a Current tab and up to seven GDB-known files. Opened tabs remain pinned
 across stops; the active file is read through the existing bounded local source
 loader. Full path identity distinguishes duplicate basenames.
 
-Agent-run focused checks on 2026-10-24:
+Local focused checks on 2026-10-24:
 
 - `make -s all build/test-code` and `build/test-code "$PWD/build/fake-mi"`:
   PASS, including pinned-file stop retention, duplicate-open selection, close,
@@ -1211,7 +1177,7 @@ the relocated-source workflow with both explicit opening orders. Content,
 full-path identity, stop retention, source mapping, breakpoint and close
 assertions remain. Application code is unchanged by this correction.
 
-Agent-run `make -s BUILD_DIR=build/ci-source-order CPPFLAGS=-D_FORTIFY_SOURCE=3
+Local `make -s BUILD_DIR=build/ci-source-order CPPFLAGS=-D_FORTIFY_SOURCE=3
 build/ci-source-order/test-code-native` passed with strict warnings. Running that
 binary with the six fixture/source arguments recorded above passed outside the
 sandbox, including left-first and right-first tab opening. `git diff --check`
@@ -1229,7 +1195,7 @@ panes. Source/Disassembly transfers update stepping mode without moving executio
 Legacy Ctrl+H/J input overlaps Backspace/line feed; those bytes are treated as
 pane movement only while workspace content focus is active.
 
-Agent-run focused checks:
+Local focused checks:
 
 - `make -s all build/test-navigation build/test-code-tui build/test-fullscreen`:
   PASS with the existing C17 warning-as-error policy.
@@ -1272,7 +1238,7 @@ list; workflow triggers, job count and the analysis job remain unchanged.
 Local code/test/build preflight now requires this complete baseline in a fresh
 fortified build directory rather than only selected focused tests.
 
-Agent-run verification of the uncommitted fix based on
+Local verification of the uncommitted fix based on
 `f591e631f2e85dc3c79c4a9a9e0240fbbba1a5ce`:
 
 ```sh
@@ -1297,13 +1263,13 @@ fresh sanitizer/compiler/hardware matrices were not run for this correction.
 
 ## Inline GDB Console command entry
 
-Implemented for owner review on 2026-10-24; acceptance and physical-board manual
+Implemented for maintainer review on 2026-10-24; acceptance and physical-board manual
 checks are not implied. The separate command screen is replaced by a bounded
 pane-local field below Console output, with Enter/Send, retained rejected drafts,
 Escape to leave editing and unchanged deliberate GDB/MI dispatch. Save Log keeps
 its destination dialog. Output scrollbars exclude the new input row.
 
-Agent-run focused native and code TUI checks passed with real GDB, including
+Local focused native and code TUI checks passed with real GDB, including
 actual command output/errors, Source/Disassembly PC assertions, horizontal log
 scrolling, keyboard-only access, pane-local drafts and compact resizing. The
 new focused Console case also passed through an isolated real tmux server using
@@ -1351,21 +1317,21 @@ The tested source/build snapshot comparison, relative documentation file-link
 checks and `git diff --check` passed.
 
 Handoff correction: the isolated test build initially left the usual
-`build/the-bugger` executable stale, so the owner still saw the old Command page.
-Agent rebuilt it with `make all` (exit 0), then reran the native TUI runner against
-that exact default executable (exit 0), including inline entry and cleanup.
+`build/the-bugger` executable stale, so the maintainer still saw the old Command page.
+Rebuilding with `make all` and rerunning the native TUI runner against that
+executable both passed, including inline entry and cleanup.
 Logs: `build/console-inline-default-build.log` and
 `build/console-inline-default-native.log`. Restart the application to use the
 rebuilt executable; an already-running process retains its previous code.
 
 ## Terminal-size warning correction
 
-Implemented for owner review on 2026-10-25. The warning below 48 columns or
+Implemented for maintainer review on 2026-10-25. The warning below 48 columns or
 18 rows now says `Terminal too small` in both demo and live sessions, shows
 `Current: COLSxROWS`, and retains the existing minimum/state/quit instructions.
 No layout threshold or target-control behavior changed.
 
-Agent-run focused TUI and native TUI checks passed against the rebuilt normal
+Local focused TUI and native TUI checks passed against the rebuilt normal
 `build/the-bugger`. Coverage includes 15x5, width-only and height-only failures,
 recovery at exactly 48x18, retained command drafts and a running native target
 remaining running after warning/recovery. Logs:
@@ -1402,7 +1368,7 @@ The tested source snapshot, relative documentation file links and
 
 ## Personal Keybinds configuration
 
-Implemented for owner review on 2026-10-25; **AWAITING USER ACCEPTANCE**.
+Implemented for maintainer review on 2026-10-25; **AWAITING USER ACCEPTANCE**.
 Config → Keybinds edits 30 personal debugger/navigation actions with staged
 validation, Back cancellation, Defaults and Save. Bindings share global
 `preferences.json` with themes, preserving each other on writes. Connection
@@ -1411,7 +1377,7 @@ keys are ignored; subsequent writes (including recents) use key-free version 2.
 Older apps requiring version 1 cannot read those new stores. Terminal interception
 still varies; fixed arrows/Ctrl+arrows, Tab/Shift+Tab, Escape and Ctrl+Q remain.
 
-Agent-run focused checks passed: key parsing/matching/defaults; duplicate/reserved
+Local focused checks passed: key parsing/matching/defaults; duplicate/reserved
 keys; preference persistence, corrupt-file preservation and stale writers;
 legacy-profile compatibility and key-free writes; centered editor, draft
 save/cancel/defaults, compact/monochrome, literal fields and theme independence;
@@ -1479,7 +1445,7 @@ make BUILD_DIR=build/keybinds-test-compilation CPPFLAGS=-D_FORTIFY_SOURCE=3 "${o
 
 ## Keybinds tables and direct capture revision
 
-The initial selector/text-entry design above was not accepted. The owner requested
+The initial selector/text-entry design above was not accepted. The maintainer requested
 this replacement on 2026-10-25; status remains **AWAITING USER ACCEPTANCE**.
 Config → Keybinds now shows Action/Key tables, side by side at ≥112 columns and
 one scrollable table below that threshold. Key cells capture actual keypresses,
@@ -1489,7 +1455,7 @@ of defaults. Restore Defaults and discard/quit with unsaved changes require
 confirmation; only Save persists. Inactive buttons have no focus/hit rectangles
 or action side effects. Personal preferences and profile separation are unchanged.
 
-The expanded agent-run focused table test passed in
+The expanded local focused table test passed in
 `build/keybinds-table-focused-5.log`. It checks border-only capture emphasis,
 Escape cancellation, Delete clearing, reserved/conflicting keys, keyboard Enter
 capture, inactive screen/file no-ops, undo, all warning/cancel/confirm paths,
@@ -1571,7 +1537,7 @@ changing their behavior. The 112-column two-table threshold is unchanged.
 One blank line now separates the instructions and table headings; row capacity
 accounts for that padding at the 48×18 minimum.
 
-Agent-run focused capture/table tests passed, exit 0, after rebuilding the normal
+Local focused capture/table tests passed, exit 0, after rebuilding the normal
 `build/the-bugger`; logs: `build/keybinds-spacing-padding-build.log` and
 `build/keybinds-spacing-padding-focused.log`. This preserves capture, borders,
 undo, inactive-button no-ops, confirmations, all rows, responsive transitions,
@@ -1604,7 +1570,7 @@ hashes are `build/keybinds-spacing-padding-delivery-tree.json`.
 
 ## Opt-in Vim-like input — 2026-10-25
 
-State: implemented, awaiting user acceptance. The owner selected Normal on field
+State: implemented, awaiting user acceptance. The maintainer selected Normal on field
 entry. Vim-like navigation is now opt-in in Config → Keybinds, with a personal
 boolean independent of profiles. New/legacy preferences default off; legacy stock
 aliases alone are cleared without rewriting the file. Custom assignments and
@@ -1612,7 +1578,7 @@ appearance are preserved. Toggle/Undo/discard/Restore Defaults/Save share the
 existing draft transaction. Normal/Insert field editing adds explicit footer
 and edge feedback without target operations on mode changes.
 
-Agent-run development checks compiled with GCC 16.2.1, C17, strict warnings and
+Local development checks compiled with GCC 16.2.1, C17, strict warnings and
 `CPPFLAGS=-D_FORTIFY_SOURCE=3` under `build/vim-focused`. `test-editor`, preference
 unit checks, `test-keybinds` and `test-navigation` passed after fixes. The first
 navigation run exposed a real cursor bug: rendering an unfocused empty field
@@ -1627,7 +1593,7 @@ Focused logs: `build/vim-evidence/initial-build.log`,
 also requested nonexistent `test-preferences`; the actual unit binary was built
 and executed explicitly. No application assertion was removed to hide a failure.
 
-Full baseline command (agent-run, outside the sandbox for ptrace, sockets and tmux):
+Full baseline command (local, outside the sandbox for ptrace, sockets and tmux):
 
 ```sh
 TERM=xterm-256color make BUILD_DIR=build/vim-ci-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
@@ -1659,7 +1625,7 @@ old default assumption: it sent Ctrl+H without enabling Vim-like input. The test
 now uses fixed Ctrl+Left, retaining its source-stepping and unchanged-PC
 assertions. Opt-in Ctrl+H coverage remains in navigation and custom keybind tests.
 The failure log is `build/vim-evidence/test-ci-default-alias-failure.log`.
-A subsequent complete retry was interrupted when the owner's desktop session
+A subsequent complete retry was interrupted when the maintainer's desktop session
 ended, during the remote test; `test-ci-session-interrupted.log` preserves that
 partial run. A read-only host process audit found no surviving test/debugger
 processes before restarting. The complete baseline was restarted in the same
@@ -1670,10 +1636,10 @@ cases and actual OpenOCD pre-initialization script checks. Native coverage inclu
 context selection, text-entry/Enter/Backspace, source stepping, terminal restoration
 and cleanup. New mode checks passed directly and through real tmux. A final
 read-only host process audit found no surviving test/frontend/GDB/gdbserver/
-OpenOCD/tmux processes. `git diff --check` passed. Status remains awaiting owner
+OpenOCD/tmux processes. `git diff --check` passed. Status remains awaiting maintainer
 manual review and acceptance; this is local host evidence, not a hosted CI result.
 
-After explicit owner permission, agent-run
+Local
 `make BUILD_DIR=build/vim-input-analysis analyze` passed with clang-tidy 23.1.3
 (`build/vim-evidence/analysis.log`); project diagnostics were not suppressed to
 obtain success. Fortified compilation of every `tests/{unit,integration,support}/*.c`
@@ -1682,17 +1648,17 @@ step (`build/vim-evidence/test-compilation.log`). Local host success does not es
 physical-board validation. No hardware, sanitizer or additional compiler matrix
 was run. `make all` rebuilt the ordinary review binary at `build/the-bugger`
 (`build/vim-evidence/review-build.log`). Final manual review uses the
-[opt-in walkthrough](testing.md#opt-in-vim-like-input); no owner manual acceptance
+[opt-in walkthrough](testing.md#opt-in-vim-like-input); no maintainer manual acceptance
 is recorded. Full Vim editor emulation remains excluded.
 
 ## tmux RGB theme rendering — 2026-10-25
 
-The owner reported that Macchiato backgrounds differed inside tmux despite a
+The maintainer reported that Macchiato backgrounds differed inside tmux despite a
 working `tmux-256color`/`Tc` configuration. The app selected Alacritty direct
 color outside tmux but kept the 256-color description inside it, quantizing
-subtle blue-gray surfaces. The owner subsequently confirmed that the focused
+subtle blue-gray surfaces. The maintainer subsequently confirmed that the focused
 executable (`build/tmux-color-focused/the-bugger`) corrected the visual issue in
-their own tmux setup. This is an owner-reported visual check, not a full hardware
+their own tmux setup. This is an maintainer-reported visual check, not a full hardware
 or release-matrix result.
 
 Implementation uses ncurses terminfo and conventional RGB advertisements:
@@ -1704,7 +1670,7 @@ user tmux configuration or server options are changed. A preliminary subprocess
 probe was replaced during development with the smaller existing-library approach
 following review of Neovim, Notcurses, tmux and ncurses primary documentation.
 
-Agent-run focused checks passed with GCC 16.2.1 and fortification under
+Local focused checks passed with GCC 16.2.1 and fortification under
 `build/tmux-color-focused`: `test-terminal-description` and `test-tmux-colors`.
 The real tmux test uses an isolated server and the reported `*:Tc` override;
 it checks exact Macchiato workspace/panel/raised background RGB values and
@@ -1718,7 +1684,7 @@ would remove it from tmux children. Current tmux sets that variable itself, so
 the fixture now removes it explicitly only for its app process. Application
 assertions and real color comparisons remain intact.
 
-Fresh full host baseline (agent-run outside sandbox for ptrace, sockets and tmux):
+Fresh full host baseline (local outside sandbox for ptrace, sockets and tmux):
 
 ```sh
 TERM=xterm-256color make BUILD_DIR=build/tmux-color-ci-20261025 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
@@ -1736,7 +1702,7 @@ passed. The final read-only host process audit found no surviving frontend,
 test, GDB, gdbserver, OpenOCD or tmux processes. `git diff --check` passed.
 This is automated local host evidence; hosted Ubuntu execution remains unverified.
 
-With explicit owner permission, `make BUILD_DIR=build/tmux-color-analysis analyze`
+`make BUILD_DIR=build/tmux-color-analysis analyze`
 passed with clang-tidy 23.1.3 (`build/tmux-color-evidence/analysis.log`).
 Fortified compilation of every C test/support object passed (exit 0); its log is
 `build/tmux-color-evidence/test-compilation.log`. The ordinary review executable
@@ -1748,15 +1714,15 @@ capable outer terminal; the application cannot supply absent terminal capability
 
 ## v0.1.2 release preparation — 2026-10-25
 
-Status: prepared and locally verified; awaiting owner acceptance, not published
-or release-approved. The owner
+Status: prepared and locally verified; awaiting maintainer acceptance, not published
+or release-approved. The maintainer
 confirmed the tmux visual correction and merged the preceding work. Preparation
-uses the owner's existing `chore/prep_v0.1.2_release` branch, based on
+uses the maintainer's existing `chore/prep_v0.1.2_release` branch, based on
 `f2d085e78552b933f792330a1ed07d0bea5c7761`. The version and dated changelog now
 identify 0.1.2. A version directory is the default distribution destination;
 `RELEASE_DIST_DIR` remains an explicit override. This prevents one release's
 checksum file from replacing another version's checksum file. Existing
-`build/dist/v0.1.0/` and `v0.1.1/` artifacts are preserved. The owner's preliminary
+`build/dist/v0.1.0/` and `v0.1.1/` artifacts are preserved. The maintainer's preliminary
 `make release` invocation used the old 0.1.1 version; those root-level outputs
 are not v0.1.2 artifacts and were not relabeled.
 
@@ -1776,11 +1742,11 @@ Included implementation references, read from actual local history at preparatio
 | tmux RGB rendering | `f2d085e78552b933f792330a1ed07d0bea5c7761` |
 
 The final release-preparation commit and resulting main/tag commit remain
-owner-controlled; no hash is invented for an uncreated commit. The preceding
+maintainer-controlled; no hash is invented for an uncreated commit. The preceding
 rendering feature's source analysis passed on this production code; preparation
 changes the version, distribution destination and release documentation.
 
-Agent-run local checks passed (exit 0):
+Local checks passed (exit 0):
 
 - Fresh fortified baseline:
   `TERM=xterm-256color make BUILD_DIR=build/v0.1.2-ci CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
@@ -1824,7 +1790,7 @@ filenames in documentation and local preparation do not establish publication.
 
 Release limitations remain explicit: local host tests do not establish hosted
 Ubuntu success or fresh physical-board results. Fresh STM32/ARM, ESP32/Xtensa
-and ESP32/RISC-V release-matrix evidence, required PR checks and final owner
+and ESP32/RISC-V release-matrix evidence, required PR checks and final maintainer
 release acceptance remain outstanding. M17 is historical board evidence, and
 the v0.1.0 physical RISC-V deferral does not automatically apply to v0.1.2.
 No hardware, sanitizer or additional compiler matrix was run during preparation.
@@ -1833,7 +1799,7 @@ do not establish compatibility with older distributions.
 
 ## Contextual menu footers — 2026-10-25
 
-Status: automated-verified; awaiting user acceptance. The owner supplied an existing fix branch.
+Status: automated-verified; awaiting user acceptance. The maintainer supplied an existing fix branch.
 
 The launcher instruction was stored as a global status and leaked into Config,
 Themes, Profiles and session forms. Keybinds already cleared that particular
@@ -1846,7 +1812,7 @@ replacing menu guidance. The mouse fallback warning no longer says DEMO in
 ordinary sessions. This changes presentation only, not input bindings, stored
 preferences, session ownership or target operations.
 
-Agent-run evidence:
+Local evidence:
 
 - The expanded PTY regression fails against the previous ordinary executable:
   Config still shows `Choose native launch/attach` instead of configuration
@@ -1873,9 +1839,9 @@ Agent-run evidence:
   `b01ca65cecfc0c001335e7a7f8182864409e54fa603800a80a6ebcc641606ba6`.
 
 Environment: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1 (20260810), GDB 18.1,
-tmux 3.8. These are agent-run local host results, not hosted Ubuntu results.
+tmux 3.8. These are local host results, not hosted Ubuntu results.
 No physical hardware, sanitizer/compiler matrix or new static-analysis run is
-claimed. Manual menu/terminal review remains with the owner.
+claimed. Manual menu/terminal review remains with the maintainer.
 
 The ordinary review executable was rebuilt with `make all`
 (`build/footer-evidence/review-build.log`). The test input manifest still matches
@@ -1887,7 +1853,7 @@ are retained in `build/footer-evidence/tracked-tree.sha256` and `final-tree.patc
 ## Footer layout, scrolling and centered screens — 2026-10-25
 
 Status: automated-verified; awaiting user acceptance.
-This extends the footer-context fix following the owner's screenshots and manual
+This extends the footer-context fix following the maintainer's screenshots and manual
 review. The previous context-only results above remain historical evidence for
 that earlier tree, not a substitute for this expanded layout check.
 
@@ -1906,7 +1872,7 @@ short forms retain scrolling. Reset and disconnect dialogs wrap their text and
 keep centered controls. Source-catalog paging uses the actual rendered row count.
 No debugger command, target-access policy, ownership or persistence format changes.
 
-Agent-run checks and retained logs:
+Local checks and retained logs:
 
 - Strict fortified focused builds initially caught local shadowed/redefined
   width variables during coordinate conversion. Those compile failures are
@@ -1941,8 +1907,7 @@ Agent-run checks and retained logs:
 - Static analysis initially flagged adjacent line-count/style parameters in the
   paragraph helper (`analysis.log`). Its text argument now separates those
   parameters; matching callers were updated without changing rendering behavior.
-  No suppression was added. With explicit owner permission,
-  `make BUILD_DIR=build/footer-layout-analysis analyze` PASS (exit 0),
+  No suppression was added.   `make BUILD_DIR=build/footer-layout-analysis analyze` PASS (exit 0),
   clang-tidy 23.1.3 (`analysis-final.log`).
 - After that interface cleanup, the complete fortified `test-ci` command above
   was repeated with unchanged flags in the task build directory; Make rebuilt
@@ -1969,7 +1934,7 @@ gdbserver, OpenOCD or tmux processes (`process-audit-final.log`).
 
 ## Footer/button visual follow-up — 2026-10-25
 
-Owner feedback identified extra strokes around scrolled Keybinds cells, an empty
+Maintainer feedback identified extra strokes around scrolled Keybinds cells, an empty
 row below a combined footer, and uneven/clipped action labels. The selected cell
 border no longer applies underline to box-drawing glyphs; bold/color emphasis
 and border-only capture remain. The terminal test reader now tracks SGR underline
@@ -1979,7 +1944,7 @@ centers padding, full-row choices stay left aligned, Memory Options fits, and
 session profile actions have spacing and separate narrow-screen rows. Wide
 footers now occupy the last row; narrow footers retain the last two rows.
 
-Agent-run checks and evidence are retained in `build/button-scroll-evidence/`:
+Local checks and evidence are retained in `build/button-scroll-evidence/`:
 
 - Development focused check:
   `TERM=xterm-256color make BUILD_DIR=build/button-scroll-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes test-keybinds`:
@@ -1994,14 +1959,14 @@ Agent-run checks and evidence are retained in `build/button-scroll-evidence/`:
   terminal restoration, live Keybinds and isolated tmux runs, RGB rendering,
   localhost remote sessions and offline/real OpenOCD checks without hardware.
 - `make all`: PASS, exit 0 (`review-build.log`); `build/the-bugger` is the ordinary
-  executable for owner visual review.
+  executable for maintainer visual review.
 
 Exact source/test/build/workflow inputs: `test-inputs.sha256`, SHA-256
 `e620875c83bab8e0f1444796f036f0ce793111491c8c9db981fd248081feea5c`.
 Environment: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1, tmux 3.8,
 clang-tidy 23.1.3 (`environment.log`). These are local host checks; hosted Ubuntu
-and owner visual acceptance remain separate. No hardware, sanitizer or compiler
-matrix is claimed. Status: awaiting owner visual acceptance after final checks.
+and maintainer visual acceptance remain separate. No hardware, sanitizer or compiler
+matrix is claimed. Status: awaiting maintainer visual acceptance after final checks.
 
 Final input verification and `git diff --check` passed. The read-only process
 audit found no surviving processes associated with this task baseline
@@ -2010,7 +1975,7 @@ audit found no surviving processes associated with this task baseline
 
 ## Complete session-form notes and spacing — 2026-10-25
 
-Owner review found the primary form actions adjacent to the explanatory note,
+Maintainer review found the primary form actions adjacent to the explanatory note,
 plus clipped Embedded/GDB-server instructions. All three setup forms now measure
 and wrap the entire note before placing actions. At ordinary terminal heights,
 one empty row separates the note from Review/Back and one separates the primary
@@ -2050,7 +2015,7 @@ the earlier new-test assertion failure is identified by `test-inputs-first.sha25
 (`868a84e70bbacf888958290ae5526f15cdab9636f697dd3fafabb6e7e80b7996`).
 The local host remains Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1,
 tmux 3.8 and clang-tidy 23.1.3. Local execution does not establish hosted Ubuntu
-or physical-target results. Owner visual acceptance remains pending.
+or physical-target results. Maintainer visual acceptance remains pending.
 
 Final input verification, `git diff --check` and task process cleanup passed
 (`input-verification.log`, `process-audit.log`). Final tracked-tree hashes and
@@ -2058,7 +2023,7 @@ patch are retained in `tracked-tree.sha256` and `final-tree.patch`.
 
 ## v0.1.3 Task 1.1 — rendering and failed code requests
 
-Status: **accepted** through the owner's subsequent manual-check report and
+Status: **accepted** through the maintainer's subsequent manual-check report and
 v0.1.3 release-preparation instruction. The original implementation authorization
 allowed local commits and continuation with review deferred; it did not itself
 establish physical acceptance, hosted-CI evidence or publication. Work is on the local `feature/v0.1.3` branch.
@@ -2099,7 +2064,7 @@ glibc 2.44, GCC 16.2.1, GDB 18.1 and tmux 3.8; complete versions are in
 | Static analysis | PASS, `make BUILD_DIR=build/rendering-stability-analysis analyze`, clang-tidy 23.1.3, `analysis.log`, exit 0 |
 | CI analysis-job test compilation | PASS, all 65 unit/integration/support C sources with fortification, `test-compilation.log`, exit 0 |
 | Documentation consistency | PASS: 77 local file/heading links in the four modified general/technical/testing documents |
-| Owner STM32/direct-terminal/tmux visual acceptance | NOT RUN; the original reported STM32 corruption has not been reproduced or attributed to these fixes |
+| Maintainer STM32/direct-terminal/tmux visual acceptance | NOT RUN; the original reported STM32 corruption has not been reproduced or attributed to these fixes |
 
 The final baseline command was `TERM=xterm-256color make
 BUILD_DIR=build/rendering-stability-ci-final CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
@@ -2120,7 +2085,7 @@ An initial new cell-test assertion also incorrectly expected OK instead of the
 five-character return from `mvinnstr`; correcting that return-value expectation
 did not change its cell-boundary assertions.
 
-Owner review remains:
+Maintainer review remains:
 
 1. Use the tested binary and the native debug fixture with `--render-stress` as
    its arguments. Continue, scroll the log, pause/step and resize between compact
@@ -2129,7 +2094,7 @@ Owner review remains:
 2. While stopped on the native fixture, navigate Disassembly to `0x0`. Expect an
    access error with the prior listing retained, and usable subsequent navigation
    and Return to stopped context. Execution must remain unchanged by browsing.
-3. After authorizing the exact physical operations, revisit the owner's STM32
+3. After authorizing the exact physical operations, revisit the maintainer's STM32
    blinky/output scenario in Alacritty directly and through tmux. Record the exact
    output producer, firmware and actions; no new MMIO read commands are implied
    by this checklist. Report any surviving corruption before acceptance.
@@ -2140,14 +2105,14 @@ Task 1.3 MMIO protocol/width capabilities remain unimplemented and unverified.
 
 ## Profiles action-row alignment — 2026-10-25
 
-Owner review found New remote touching New OpenOCD, with creation and reload
+Maintainer review found New remote touching New OpenOCD, with creation and reload
 controls on different rows. Config → Profiles now places New native, New OpenOCD,
 New remote and Reload file together on the bottom row, with padded labels and
 separate hit rectangles. Back remains aligned right. Below 78 columns, the four
 left actions wrap into two rows; the card reserves the additional action row
 and pages profile entries within the remaining space.
 
-Agent-run evidence is retained in `build/profile-actions-evidence/`:
+Local evidence is retained in `build/profile-actions-evidence/`:
 
 - `TERM=xterm-256color make BUILD_DIR=build/profile-actions-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes`:
   PASS, exit 0 (`focused.log`). New checks inspect the common bottom-row geometry,
@@ -2164,12 +2129,12 @@ Agent-run evidence is retained in `build/profile-actions-evidence/`:
 The source/test/build/workflow input manifest is `test-inputs.sha256`, SHA-256
 `1eb97e15f580de5cb875bf1f5a0799ef31ced5be07ef108d8be2ea4ed5e008bd`.
 Host: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1, tmux 3.8,
-clang-tidy 23.1.3. These are local results; hosted Ubuntu and owner visual
+clang-tidy 23.1.3. These are local results; hosted Ubuntu and maintainer visual
 acceptance remain separate. No physical-target validation is claimed.
 
 ## Setup selector and script-browse spacing — 2026-10-25
 
-Owner feedback additionally requested minimal separation after Mode/OpenOCD setup
+Maintainer feedback additionally requested minimal separation after Mode/OpenOCD setup
 and a centered Browse boards row. At ordinary heights Native/Embedded forms add
 one blank row after the initial selector. Embedded script-browse controls now
 have equal one-row gaps above and below, including adapter/target mode. Compact
@@ -2207,7 +2172,7 @@ Exact source/test/build/workflow manifest: `test-inputs.sha256`, SHA-256
 `e840f2cda397518a4ce46b349ed501b890bbc27d42d7d32f000e880ce2f99a4a`.
 Host remains Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1, tmux 3.8,
 clang-tidy 23.1.3. Local host evidence does not establish hosted Ubuntu or
-physical-target success. Owner visual acceptance remains pending.
+physical-target success. Maintainer visual acceptance remains pending.
 
 Final manifest verification, `git diff --check` and process cleanup passed
 (`input-verification.log`, `process-audit.log`). Final tracked-tree hashes and
@@ -2215,17 +2180,17 @@ patch are retained in `tracked-tree.sha256` and `final-tree.patch`.
 
 ## Final Start OpenOCD and Console control gaps — 2026-10-25
 
-Owner clarification requested padding above Start OpenOCD, preserving its distance
+Maintainer clarification requested padding above Start OpenOCD, preserving its distance
 to Browse boards. The final toggle now has one empty row after OpenOCD binary,
 matching the setup selector's separation. Existing script-browse and note gaps
 remain unchanged; compact forms collapse all optional gaps.
 
-The owner also requested separation between the live Console Command/Send row
+The maintainer also requested separation between the live Console Command/Send row
 and Save Log. Panes at least nine rows high reserve one empty row between those
 controls. A shared row reservation positions the command field, log viewport and
 horizontal scrollbar together; smaller panes keep their prior compact geometry.
 
-Agent evidence:
+Local evidence:
 
 - `TERM=xterm-256color make BUILD_DIR=build/form-field-gaps-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes`:
   PASS, exit 0 before the independent Console adjustment; log
@@ -2244,14 +2209,14 @@ Agent evidence:
 - Authorized `make BUILD_DIR=build/footer-layout-analysis analyze`:
   final combined-tree PASS, exit 0 (`build/console-final-gap-evidence/analysis.log`).
 - `make all`: PASS, exit 0 (`build/console-final-gap-evidence/review-build.log`),
-  `build/the-bugger` rebuilt for owner review.
+  `build/the-bugger` rebuilt for maintainer review.
 
 Final source/test/build/workflow manifest:
 `build/console-final-gap-evidence/test-inputs.sha256`, SHA-256
 `428a20ef17873f98f093b81ea7c60105375b597221a64492d2e3ced3b03441bc`.
 Environment remains Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1,
 tmux 3.8 and clang-tidy 23.1.3. Local host results do not establish hosted Ubuntu
-or physical-target validation. Owner visual acceptance remains pending.
+or physical-target validation. Maintainer visual acceptance remains pending.
 
 Final input verification, `git diff --check` and task process cleanup passed
 (`input-verification.log`, `process-audit.log`). Final tracked-tree hashes and
@@ -2259,12 +2224,12 @@ patch are retained in `tracked-tree.sha256` and `final-tree.patch`.
 
 ## v0.1.3 Task 1.2 — lower dock and independent overlays
 
-State: **accepted** through the owner's subsequent manual-check report and
+State: **accepted** through the maintainer's subsequent manual-check report and
 v0.1.3 release-preparation instruction. Initial local commit/continuation
 permission alone did not establish acceptance or publication.
 
 The three lower root groups start minimized directly above the footer. Titles
-and `^` restore them, `_` minimizes them (the owner's later correction to the
+and `^` restore them, `_` minimizes them (the maintainer's later correction to the
 original `v` indicator), and separate top grips resize their
 session-only heights. Primary rectangles and split trees remain intact. Compact
 or oversized lower split groups span the workspace; most recent focus controls
@@ -2343,14 +2308,9 @@ Manual review procedure: [lower overlays](testing.md#lower-dock-and-independent-
 
 ## v0.1.3 Task 1.3 — documentation consolidation
 
-Documentation subtask complete; browsing implementation and physical/monitor
-validation remain open. The meaningful requirements from the temporary owner
-`ASM_MEM.md` were reconciled with the approved specification in the canonical
-`~/TODO.md` and the maintained [browsing requirements](requirements.md#approved-v013-browsing-work).
-The canonical crosswalk retains the investigation/approval obligations, direct
-Go-to objective, Disassembly/Memory distinctions, predictable hardware access,
-independent product identity, reference/license preservation and acceptance gates.
-The temporary source was removed only after that preservation review.
+The [browsing requirements](requirements.md#approved-v013-browsing-work)
+were consolidated before implementation. Browsing and physical/monitor validation
+were still pending at this checkpoint.
 
 The audit covered tracked Markdown references and `THIRD_PARTY_NOTICES`. Rewrote
 the remaining IAR/C-SPY product-definition comparison as dense coordinated
@@ -2366,14 +2326,14 @@ byte-for-byte unchanged; `git diff --check`. Evidence:
 `build/browsing-documentation-evidence/review.log`. No application matrix was
 rerun for these documentation-only edits. Approved browsing behavior is explicitly
 labeled in progress; parser tests, prior text probes and local host results do
-not establish MMIO protocol reliability, physical widths or owner acceptance.
+not establish MMIO protocol reliability, physical widths or maintainer acceptance.
 
 ## Task 1.3 OpenOCD transport and width evidence — in progress
 
-Agent-run, authorized physical observations used STM32F446 (device ID 0x421),
+Local, authorized physical observations used STM32F446 (device ID 0x421),
 ST-LINK V2J48M35/API v2, `openocd -f board/st_nucleo_f4.cfg`, OpenOCD
 0.12.0-01004-g9ea7f3d64-dirty and arm-none-eabi-gdb 18.1 on the Arch Linux host.
-Only agent-owned OpenOCD instances were stopped. No flash, reset, register-write
+Only test-owned OpenOCD instances were stopped. No flash, reset, register-write
 or resume command was sent. Connecting halted firmware; server configuration
 controls disconnect behavior.
 
@@ -2398,11 +2358,11 @@ controls disconnect behavior.
 The frontend guarantees no automatic frontend retry, including after timeout or
 uncertain outcome. User-confirmed setup metadata is not automatic verification
 or proof that a register is safe. Product MMIO integration, full Task 1.3
-acceptance, owner visual/hardware review and release approval remain outstanding.
+acceptance, maintainer visual/hardware review and release approval remain outstanding.
 
 ### Browsing foundation host checkpoint
 
-The agent-run Arch Linux host baseline passed on the frozen input tree preserved
+The local Arch Linux host baseline passed on the frozen input tree preserved
 in `build/browsing-evidence/verified-tree.tar.gz` and
 `verified-inputs.sha256` (parent revision 0242eac):
 
@@ -2428,7 +2388,7 @@ historical provenance followed by a fresh Return to Stop, and require the gap
 label in a narrow pane. The renderer puts that label before the address range
 and shares row mapping with horizontal-width calculation.
 
-This is local host evidence, not hosted Ubuntu CI or owner visual acceptance.
+This is local host evidence, not hosted Ubuntu CI or maintainer visual acceptance.
 Task 1.3 remains in progress: production MMIO integration and target-bound setup
 confirmation UI/session wiring, mapping trust and remaining reconstruction work
 are not delivered by this checkpoint. No release is authorized.
@@ -2446,7 +2406,7 @@ have reached hardware. Close waits for them within its existing bounded policy.
 Timeouts/uncertain frames never retry; exact late-token reconciliation or a new
 connection is required. Full transport diagnostics remain in Console.
 
-Agent-run local Arch host checks on frozen source inputs, parent 38b6cfe:
+Local Arch host checks on frozen source inputs, parent 38b6cfe:
 
 ```sh
 TERM=xterm-256color make BUILD_DIR=build/mmio-verified-ci CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
@@ -2481,7 +2441,7 @@ matching adapter sizes 1/2/4, count one. RM0390 7.4/7.4.6 permits these widths;
 ODR has no documented read-clear effect. No explicit flash/reset/write/resume
 command was issued. Connection itself produced additional core/debug/flash
 metadata/PC accesses. This is not a bus trace, an exactly-once claim, or proof
-that arbitrary adapters/firmware honor these widths. Only the agent-owned server
+that arbitrary adapters/firmware honor these widths. Only the test-owned server
 was started/stopped; no external server was replaced or terminated. Evidence:
 `build/mmio-protocol-evidence/production-client.log`, `production-openocd.log`
 and `production-probe-run.log`. The opt-in physical test is not executed by CI.
@@ -2498,15 +2458,15 @@ end and correctly received invalid bounds; its corrected sequence enlarges end
 first. None of those failed runs is counted as a pass.
 
 This completes a production MMIO checkpoint, not Task 1.3. Mapping trust,
-remaining bounded reconstruction requirements and owner hardware/visual review
+remaining bounded reconstruction requirements and maintainer hardware/visual review
 remain. No release or complete interactive hardware acceptance is claimed.
 
 ## Task 1.3 ELF trust and bounded reconstruction
 
-State: **accepted**. Owner subsequently reported that the manual tests performed
+State: **accepted**. Maintainer subsequently reported that the manual tests performed
 passed and resumed ownership. Exact additional device/setup coverage was not
 specified; this does not expand the recorded physical matrix. Current follow-up
-changes are to remain uncommitted at the owner's request. Owner previously
+changes are to remain uncommitted at the maintainer's request. Maintainer previously
 authorized implementation, local commits and continued1.x work with review deferred. This record does not grant release
 permission.
 
@@ -2529,7 +2489,7 @@ Trusted-mapping feedback uses ELF:native / ELF:user / ELF:? in the pane footer;
 selected-frame/file context remains visible. Manual headers use sampled source
 attribution or an address-window label, never an unrelated selected caller.
 
-Agent-run focused results on Arch Linux x86-64, kernel 7.2.11-arch1-1, glibc2.44,
+Local focused results on Arch Linux x86-64, kernel 7.2.11-arch1-1, glibc2.44,
 GCC16.2.1, GDB18.1, tmux3.8 and clang-tidy23.1.3:
 
 - PASS authored Code/image model cases: forty forward expansions with actual
@@ -2585,19 +2545,17 @@ nonuniform relocation or general F33 multi-image controls. No SVD register
 identity, Read Span, writes, polling or unvalidated MMIO backend was introduced.
 The previously recorded production physical MMIO transport/width evidence remains
 specific to that STM32F446/ST-LINK/OpenOCD setup. This phase adds no new physical
-claim. Owner reports manual workflow checks passed; release acceptance remains
+claim. Maintainer reports manual workflow checks passed; release acceptance remains
 outstanding, including any required matrix evidence not explicitly reported.
 Review procedures are in [ELF trust and reconstruction](testing.md#elf-mapping-trust-and-bounded-reconstruction)
 and [MMIO](testing.md#openocd-mmio-protocol-gate-task-13).
 
 ## v0.1.3 release preparation
 
-Date: 2026-10-28. The owner accepted the implemented Tasks 1.1–1.3 and
+Date: 2026-10-28. The maintainer accepted the implemented Tasks 1.1–1.3 and
 reported STM32 manual checks passing, then authorized S3 physical validation,
 all-document review, artifact preparation and the finishing local commit.
-Publication remains owner-controlled; this record does not claim a published
-release. Tasks 2.x require new owner authorization. The canceled runtime-font
-work is excluded. Physical ESP/RISC-V validation is explicitly deferred to
+The release-preparation scope covers Tasks 1.1–1.3. Physical ESP/RISC-V validation is explicitly deferred to
 v0.1.4, remains UNVERIFIED and confers no hardware support claim.
 
 Implementation references, preserving their existing history:
@@ -2653,16 +2611,16 @@ application assertions.
 
 | Target | Evidence and boundary |
 |---|---|
-| STM32 / ARM | PASS, owner-reported manual checks for this release. Prior actual production STM32F446/ST-LINK/OpenOCD MMIO framing/8/16/32-bit evidence remains scoped to the recorded setup above; no new scripted STM32 run is claimed here. |
-| ESP32-S3 / Xtensa | PASS, agent-run physical backend, direct PTY and isolated tmux, plus ASan/UBSan/leak backend and tmux runs described below. |
-| ESP / RISC-V | UNVERIFIED; explicit owner deferral to v0.1.4. |
+| STM32 / ARM | PASS, maintainer-reported manual checks for this release. Prior actual production STM32F446/ST-LINK/OpenOCD MMIO framing/8/16/32-bit evidence remains scoped to the recorded setup above; no new scripted STM32 run is claimed here. |
+| ESP32-S3 / Xtensa | PASS, local physical backend, direct PTY and isolated tmux, plus ASan/UBSan/leak backend and tmux runs described below. |
+| ESP / RISC-V | UNVERIFIED; explicit maintainer deferral to v0.1.4. |
 | QEMU | Not run in this release pass; supplementary, not hardware evidence. |
 
 S3 setup: ESP32-S3(QFN56) revision0.2, dual Xtensa LX7, native USB/JTAG
 serial84:FC:E6:64:27:EC, ESP-IDF6.1, Xtensa GDB17.1_20260402 and Espressif
 OpenOCDv0.12.0-esp32-20260703 with the authored `openocd/esp32s3.cfg`
 hardware-thread configuration. The initial flashed image differed from the
-acceptance fixture. Under the owner's authorized build/flash/test procedure,
+acceptance fixture. Under the maintainer's authorized build/flash/test procedure,
 flashed only that identified USB device; standard bootloader/partition/application
 hash verification passed. Fresh GDB comparisons of `.flash.text` and
 `.flash.rodata` matched (`s3-image-identity-final.log`). No eFuse/security change.
@@ -2700,7 +2658,7 @@ These runs do not assert every manual profile/unplug scenario or arbitrary S3
 MMIO support. The STM32-specific MMIO width adapter remains gated to its validated
 setup; no S3 MMIO capability is inferred from successful SRAM reads.
 
-Only agent-owned OpenOCD instances were stopped. SIGINT was ignored by the first
+Only test-owned OpenOCD instances were stopped. SIGINT was ignored by the first
 plain child, which remained during successful flashing; SIGTERM stopped it.
 Fresh owned instances served the final tests and were stopped with SIGTERM.
 The board was left halted under the tested disconnect policy, with no debugger
@@ -2710,7 +2668,7 @@ or server intentionally left running.
 
 All tracked Markdown documentation was reviewed for current behavior, version,
 status, links, release boundaries and third-party notices. Current guides now
-cover v0.1.3; dated validation snapshots remain historical evidence. The owner's
+cover v0.1.3; dated validation snapshots remain historical evidence. The maintainer's
 updated workspace screenshot is retained; the obsolete v0.1.0 launcher image
 is no longer presented as the current README interface. Theme provenance,
 GPLv3 and `THIRD_PARTY_NOTICES` remain intact.
@@ -2724,8 +2682,8 @@ Distribution verification and exact final checksum evidence accompany
 
 These are separate uploads, in addition to GitHub's two automatic source
 snapshots. The latter do not contain the packaged host executable. Final
-publication and hosted PR checks remain owner actions. Locally prepared files
-are not evidence of a published release. The owner's push/PR into `develop`,
+publication and hosted PR checks remain maintainer actions. Locally prepared files
+are not evidence of a published release. The maintainer's push/PR into `develop`,
 then GitHub `develop` → `main` release PR, required checks/review, squash merge
 and tag/release on the resulting `main` commit remain the release sequence.
 
@@ -2746,3 +2704,572 @@ after recording these results; checksum and exact-source checks were repeated.
 Archive hashes are in the delivered `SHA256SUMS`, avoiding a self-referential
 checksum inside the source archive itself. All15 tracked Markdown files passed
 183 local-link /119 heading-anchor checks (`documentation-check.log`).
+
+## v0.1.4 Task 2.1 — RISC-V hardware validation
+
+2026-10-28. Automated verification passed; accepted by subsequent continuation
+to Task2.2. This status update adds no new physical test results.
+The task adds a core-context OpenOCD fixture configuration and a board assertion
+requiring a decoded instruction with opcode bytes at the stopped PC. Frontend
+runtime code is unchanged.
+
+### Setup and image identity
+
+| Component | Tested configuration |
+|---|---|
+| Architecture | RISC-V RV32, HP core |
+| Test device | ESP32-C6FH4 revision0.0, 160MHz, 4MiB Flash; USB/JTAG serial40:4C:CA:43:5D:FC |
+| Host | Arch Linux x86-64, kernel7.2.11, glibc2.44, GCC16.2.1, tmux3.8, clang-tidy23.1.3 |
+| Firmware | Shared ESP-IDF6.1 fixture, RISC-V GCC15.2.0_20251204, -Og -g3, isolated build/v0.1.4-c6 |
+| Debugger | riscv32-esp-elf-gdb17.1_20260402 |
+| Server | Espressif OpenOCDv0.12.0-esp32-20260703, matching scripts, default24MHz clock, hwthread awareness |
+
+The maintainer flashed the fixture through UART, then connected native USB/JTAG.
+USB access/udev rules, packages, runtime libraries and tool/script paths checked
+successfully; no system changes were required.
+
+ELF SHA-256: `a9a8f4fe66b51d79b061becef89fa818b0b6059ed7fa5510bcd8c8500538b508`.
+`build/v0.1.4-evidence/c6-firmware.sha256` records all programmed image identities.
+Full `.flash.text` (81,044 bytes) and `.flash.rodata` (35,560 bytes) dumps matched
+the ELF sections byte for byte. The captured transfer used ordinary memory reads,
+not `qCRC`: `c6-byte-comparison-final.log`, its remote log and
+`c6-byte-identity-final-result.log`.
+
+### Diagnosed backend limitations
+
+- **Checksum crash:** `compare-sections .flash.text` sent
+  `qCRC:42000020,13c94` and crashed OpenOCD, both in ROM and after the official
+  startup reached `app_main` on a direct USB port. The release's
+  [RISC-V checksum helper](https://github.com/espressif/openocd-esp32/blob/v0.12.0-esp32-20260703/src/target/riscv/riscv.c)
+  passes null algorithm information to the
+  [Espressif runner](https://github.com/espressif/openocd-esp32/blob/v0.12.0-esp32-20260703/src/target/espressif/esp_riscv.c),
+  which dereferences it. The core dump confirms the null dereference.
+  Standard byte dumps matched both sections without that path. The Bugger does
+  not issue `qCRC`. Logs: `c6-crc-remote.log`, `openocd-crash-backtrace.log`,
+  `openocd-crash-registers.log`. OpenOCD itself was not patched.
+- **ROM symbols:** adding `esp32c6_rev0_rom.elf` (ROM package20241011) changed
+  application disassembly to `.word`; application and bootloader symbols alone
+  decoded correctly. Controlled log: `c6-symbol-decode-control.log`.
+  The Bugger does not automatically load this ROM file.
+- **Reset context:** default FreeRTOS awareness lost task contexts on reset,
+  failing fresh-stop verification. Changing only to `ESP_RTOS hwthread` passed
+  the full backend run. Logs: `c6-board-official.log`, `c6-board-hwthread.log`.
+  The final fixture configuration retains this setting and the verification guard.
+- **Earlier transport failures:** USB serial flashing failed in `c6-flash.log`
+  and `c6-flash-rom.log`; earlier hub-connected JTAG logs contain USB pipe errors.
+  The final direct-port runs had no transport errors. Their cause was not
+  established; the independently reproduced checksum crash is a separate defect.
+
+### Executed checks
+
+Logs below are in `build/v0.1.4-evidence/`.
+
+| Check | Result | Logs |
+|---|---|---|
+| Physical backend, normal and ASan/UBSan/leak | PASS | c6-board-final.log, c6-board-asan.log |
+| Direct TUI, normal and ASan/UBSan/leak | PASS | c6-tui-final.log, c6-tui-asan.log |
+| Isolated tmux TUI, normal and ASan/UBSan/leak | PASS | c6-tmux-final.log, c6-tmux-asan.log |
+| Fresh full fortified host test-ci | PASS, exit0 | test-ci-final.log |
+| Static analysis | PASS, exit0 | analysis.log |
+| Fortified compilation, all73 C test sources | PASS, exit0 | test-compilation.log |
+
+Physical checks covered source/disassembly, PC/SP/registers, explicit SRAM/Flash
+and local/aggregate inspection, frame selection, source/instruction stepping,
+Step Out, hardware break/watchpoints, Continue/Pause, reset and reconnection.
+Resume advanced the counter1→9; leave-halted retained it. The checkpoint decoded
+as a 2-byte `addi sp,sp,-16`. TUI checks covered connection review, instruction
+step, inline SRAM, Reset cancellation, resizing and terminal cleanup.
+
+Commands and sanitizer flags are in the local logs and
+[reproduction procedure](testing.md#risc-v-hardware-validation). Host baseline:
+`TERM=xterm-256color make BUILD_DIR=build/v0.1.4-ci-final CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+Analysis: `make BUILD_DIR=build/v0.1.4-analysis analyze`.
+The earlier interrupted host run is retained separately. These are local Arch
+results; hosted Ubuntu checks await the PR.
+
+The device was left halted and test-owned OpenOCD stopped. Maintainer visual,
+profile-reopen and physical-unplug checks remain unreported. LP-core/RTOS
+inspection and C6 MMIO sampling are outside this gate; no fresh physical ARM or
+Xtensa run was made. Documentation links/anchors and whitespace were checked
+before the authorized finishing commit.
+
+The published v0.1.3 binary/source/checksum uploads were also downloaded and
+matched the approved artifacts (`v0.1.3-published-assets.log`).
+
+## F01 — setup-definition storage checkpoint
+
+2026-10-28. **Implemented foundation; F01 incomplete.** The working tree adds
+bounded setup definitions, schema-3 profile transactions and read-only recovery
+indication. Capture/save controls, compatibility consent, restoration coordination,
+breakpoint intent/import/reconciliation and physical restoration acceptance are
+not implemented. This checkpoint does not establish F01 acceptance.
+
+The definition codec checks the split forest, setup-local identities, selected
+view/source identity and existing capacity limits. Setup transactions preserve
+separate connection profiles and snapshots, deep-copy saved duplication and
+remove associated records atomically. Malformed setup records retain usable
+connections in read-only recovery; ambiguous duplicate associations are rejected.
+The full encoded store retains its 1 MiB bound.
+
+### Local checks
+
+Environment: Arch Linux x86-64, kernel 7.2.11, GCC 16.2.1, GDB 18.1 and tmux 3.8.
+Full versions and the code-tree snapshot are retained in
+`build/f01-evidence/tree-and-environment.log` and `final-tree.log`.
+
+- Focused fortified `build/f01-focused/test-profiles`: PASS, including round trips,
+  selected identities, invalid forests, duplication independence, replacement,
+  deletion, stale writers, malformed/null/duplicate record recovery and oversized
+  encoded saves preserving disk bytes and previous definitions. Definition
+  equality ignores allocator progress and unused layout fields.
+- `TERM=xterm-256color make BUILD_DIR=build/f01-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-m13-tui`:
+  PASS. Existing create/edit/reopen/delete coverage remains. New PTY checks confirm
+  usable connection review during recovery, blocked saves, a visible READ ONLY
+  indication at 48 columns and successful repair/reload.
+- The initial fortified baseline in `build/f01-ci-20261028` failed at the existing
+  native-register test: the fixture exited during startup with code 127 inside
+  the sandbox. The unchanged focused check passed outside the sandbox. Preserve
+  the original assertion and logs: `test-ci.log`, `test-ci.exit` and
+  `registers-unsandboxed.log` under `build/f01-evidence/`.
+- The unsandboxed baseline in `build/f01-ci-host-20261028` passed on the earlier
+  storage tree. Subsequent equality, duplicate-recovery and narrow-header fixes
+  required a new full baseline on the final code tree.
+- Final fortified baseline outside the sandbox: PASS, exit 0. Command:
+  `TERM=xterm-256color make BUILD_DIR=build/f01-ci-final-20261028 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+  Full output and exit status: `build/f01-evidence/test-ci-final.log` and
+  `test-ci-final.exit`.
+  A final POSIX-feature lint annotation produced a byte-identical `setup.o`;
+  the rebuild/comparison evidence is retained with the logs.
+- `git diff --check`: PASS. All 172 local file links in the 15 tracked Markdown
+  files resolve.
+
+These are local host checks, not hosted Ubuntu results. Owner manual review of
+[storage recovery](testing.md#f01-setup-definition-storage), hosted CI and physical
+F01 checks remain unrun. No board operations or Git mutations were performed.
+
+
+## F01 — definition capture and Save setup checkpoint
+
+2026-10-28. **Implemented; F01 incomplete.** Live metadata capture now saves
+pane/split/tab definitions, Source role/pinned identities, Memory drafts/settings,
+Watch roots/formats and frontend-managed code-breakpoint intent. Save review
+requires a saved profile, displays active connection differences and confirms
+replacement of skipped setups without merging hidden definitions. Connection
+profiles remain separate; duplication copies only saved connection/setup records.
+Toolbar controls retain the prior row count at narrow widths and long key labels.
+Restoration/consent, unresolved-entry recovery and explicit breakpoint
+import/reconciliation remain pending. No physical restoration result is claimed.
+
+### Local checks
+
+Environment and exact tested source/test/build hashes:
+`build/f01-capture-evidence/environment.log` and `tested-tree.sha256`.
+The patch and new source copies are retained beside them.
+
+- Focused capture/profile/source-setting tests: PASS (`focused-model.log`).
+  Capture grants no permissions and reads no values; lifecycle identities,
+  transient exclusions, skipped replacement and parsed active-field comparison
+  are exercised.
+- Actual native breakpoint model/TUI tests: PASS (`focused-breakpoints.log`).
+  Configured ignore counts and identities survive hits and declining remaining
+  counts; temporary run-to is excluded and successful frontend edits update intent.
+- Direct-terminal native save workflow: PASS
+  (`focused-profiles-native-repaired-fixture.log`). An earlier fixture used a
+  nonexistent source directory, which the application correctly rejected; the
+  expected difference could not appear. The repaired fixture creates a real
+  temporary directory with spaces. The failing assertion/log are retained in
+  `focused-profiles-native-final.log`.
+- Isolated tmux native save workflow: PASS
+  (`focused-setup-tmux-bounded-resize.log`, exit 0). Checks cover association,
+  saved duplication, connection preservation, Source selected identity, skipped
+  replacement and widths 48/80/123/124/152/160 with long custom shortcut labels.
+  Initial tmux failures are retained: the harness now waits for deferred Escape
+  navigation and for application resize geometry after tmux's outer resize;
+  the toolbar row assertion is unchanged.
+
+- Full fresh fortified baseline outside the sandbox: PASS, exit 0.
+  `TERM=xterm-256color make BUILD_DIR=build/f01-capture-ci-20261028 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+  Full output/status: `build/f01-capture-evidence/test-ci.log` and `test-ci.exit`.
+  This includes existing text-entry/Enter/Backspace, context, terminal cleanup,
+  native/tmux, actual localhost remote and offline OpenOCD coverage. Final
+  source/test/build hashes match the tested snapshot.
+- `git diff --check`: PASS. All 173 local Markdown file links resolve.
+These are local host results, not hosted Ubuntu results. Owner manual review,
+physical ARM/Xtensa/RV32 restoration and full F01 acceptance remain unrun.
+
+
+## F01 — local/Source restoration and consent checkpoint
+
+2026-10-28. **Accepted checkpoint; F01 incomplete.** The session
+review defaults saved-setup restoration on, shows scope/active connection differences
+and renews review for local ELF metadata or relative-path launch-context changes.
+Local split/tab/Memory/Watch definitions restore before initialization/source
+settings and bounded Source reopening. Missing pins keep identity/order/selection
+without prior contents; current resolved paths remain separate from saved identities.
+Unresolved entries can be inspected/removed; Source Retry uses the current catalog.
+Unsupported saved Watch expressions remain inert and removable.
+
+Active work interlocks execution, Console, reset and debugger context/configuration
+changes. Running targets await explicit Pause; cancellation distinguishes requested
+from settled completion without rollback. Saved code-breakpoint definitions remain
+uninstalled/retained, reserve capacity and survive partial saves. Enabled unresolved
+intent requires acknowledgment, with no repeat for the unchanged set. Breakpoint
+installation/attribute verification, address approval/provenance, explicit import
+and uncertain-mutation reconciliation remain pending. No physical restoration
+result or full F01 acceptance is claimed.
+
+### Local checks
+
+- Focused definition/store/source-setting checks: PASS (`focused-model.log`).
+  Added ELF metadata absence/malformed-field coverage and local file stamp/relative
+  path checks pass in `focused-final-tmux.log`.
+- Actual native coordinator checks: PASS (`focused-native-final.log`, exit 0).
+  Coverage includes seven panes, tab selection, relocated/missing Source identities,
+  no duplicate on explicit reopen, Memory/Watch permission exclusions, unsupported
+  saved expressions, retained breakpoint capacity, partial saves/removal,
+  execution/Console/context/source-setting interlocks, failure acknowledgment,
+  cancellation with an actual in-flight catalog query and running-target deferral.
+- Direct native UI: PASS (`focused-native-wrapped.log`). Default restoration review,
+  ELF renewal, selected missing Source, partial saves retaining breakpoint/Watch
+  definitions, explicit removal and unchanged-failure acknowledgment are exercised.
+- Isolated real tmux workflow: PASS (`focused-final-tmux.log`, exit 0), including
+  restoration controls and the existing 48/80/123/124/152/160 width assertions with
+  long custom shortcuts.
+- Existing code-model regression plus duplicate-name/relocated-pin cases: PASS
+  (`focused-code-final.log`, exit 0), including refusal to infer a unique match from
+  an incomplete catalog. This is an explicitly synthetic MI peer; it establishes
+  parsing/identity behavior, not physical GDB/server results.
+- The first native coordinator run exposed explicit source-catalog requests waiting
+  for hidden/stale selected-frame readiness. The application now dispatches explicit
+  metadata-only catalog queries independently of frame readiness. Original failure:
+  `focused-native.log`; corrected run: `focused-native-catalog.log`.
+- The first UI restoration fixture searched for a phrase split across a hard-wrapped
+  line (`focused-tui-restore.log`). Setup text now wraps at word boundaries while
+  retaining UTF-8 boundaries; corrected native/tmux runs passed.
+
+- The first fresh fortified baseline in `build/f01-restore-ci-20261028` passed,
+  exit 0 (`test-ci.log`, `test-ci.exit`). Final startup-focus and Source matching
+  fixes required a new baseline rather than treating that earlier run as final.
+- Final fresh fortified baseline outside the sandbox: PASS, exit 0.
+  `TERM=xterm-256color make BUILD_DIR=build/f01-restore-ci-final-20261028 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+  Full output/status: `build/f01-restore-evidence/test-ci-final.log` and
+  `test-ci-final.exit`. The complete default/native/tmux/localhost-remote/offline
+  OpenOCD baseline includes existing text-entry/Enter/Backspace, context-selection
+  and terminal-restoration assertions. The compact saved-setup review is also
+  checked at 48×18 in direct/tmux workflows.
+- Final code/test/build hashes match `tested-tree-final.sha256`. Environment is
+  recorded in `environment.log`; the patch/new source copies are retained beside
+  the full logs. Host: Arch Linux x86-64, GCC 16.2.1, GDB 18.1, tmux 3.8.
+- `git diff --check`: PASS; all 173 local Markdown file links resolve.
+
+Raw artifacts are under `build/f01-restore-evidence/`.
+These are local host checks, not hosted Ubuntu results. The maintainer accepted
+this checkpoint on 2026-10-28. No additional manual execution results were reported;
+hosted checks and physical ARM/Xtensa/RV32 restoration remain unrun. Full F01
+acceptance remains outstanding.
+
+## F01 — verified breakpoint restoration and review
+
+2026-10-28. **Implemented; automated-verified locally; awaiting user acceptance.**
+The remaining F01 implementation restores supported code breakpoints disabled,
+applies/verifies condition, explicitly configured ignore count and hardware policy,
+and verifies enabled intent only after configuration succeeds. Runtime progress
+and GDB IDs remain separate from saved definitions. Installed/retained entries
+merge by setup identity without changing order or dirty state; deletion releases
+runtime ledger capacity. Partial locations retry without duplicate insertion;
+confirmed absence permits a new explicit retry.
+
+Native literal-address reuse requires current procfs executable mapping, reliable
+backing-file identity, mapped range and matching ELF load bias. Other addresses
+require current-session approval. Optional schema-3 mapping provenance preserves
+full 64-bit addresses; legacy records remain readable. No image confirmation,
+read permission, live-byte/firmware identity or remote checksum is inferred.
+
+Explicit complete-definition import requires new hardware/count decisions and
+changes only the unsaved draft. Unsupported command lists/restrictions are excluded
+whole. External managed changes require review or whole-definition exclusion.
+Uncertain mutations pause the queue for one metadata-only reconciliation query;
+incomplete/ambiguous results preserve the execution interlock and offer explicit
+query retry or close. No uncertain mutation is repeated. Cancellation waits for
+in-flight settlement and retains applied configuration without rollback.
+
+### Focused host evidence
+
+Artifacts are under `build/f01-break-evidence/`; tests use disposable local
+fixtures and isolated tmux servers, with no physical target access.
+
+- Definition/store/capture checks: PASS (`f01-break-model.log`). This includes
+  actual encoding bounds and full-width mapping-provenance round trips.
+- Synthetic MI restoration guards: PASS (`f01-break-bounds.log`), including
+  disabled-first intermediate states, condition/ignore errors, hardware mismatch,
+  timeout with complete/incomplete reconciliation, cancellation, existing-ID
+  rejection, malformed-baseline bounds, absence/retry and duplicate prevention.
+  This peer does not establish real-server or physical behavior.
+- Actual native restoration: PASS (`f01-break-address.log`), including pending
+  symbolic definitions/counts, partial failure and identity merging, no restored
+  Memory/Watch permissions, failure acknowledgment, cancellation and running-target
+  deferral. Matching native mapping reuse, changed-bias refusal and explicit
+  current-session approval all pass without changing the saved definition.
+- Actual GDB overload/file-line checks: PASS (`f01-break-native-original.log`).
+  Multiple locations preserve their symbolic definition, original file/line and
+  disabled intent verify, and existing hardware/resource/hit/ignore/run-to tests
+  remain passing. The final full baseline includes runtime-ledger deletion checks.
+- Actual backend-only import through isolated tmux: PASS
+  (`f01-break-import-tmux.log`), including mandatory decisions, unsaved import,
+  duplicate exclusion, save/removal, unchanged-failure acknowledgment and toolbar
+  widths 48/80/123/124/152/160 with long shortcuts. The full baseline also runs the
+  direct-terminal workflow and existing text-entry/focus/terminal-restoration tests.
+- Native metadata inspection found GDB's command-list extension
+  `script={"silent"}` (`native-command-list-metadata.log`). The parser now accepts
+  only the command-string tuple extension, preserving ordinary strict tuples and
+  bounds. The whole unsupported breakpoint is excluded rather than losing the
+  complete listing. Parser/allocation checks and matching synthetic exclusion:
+  PASS (`f01-script-model.log`, `f01-script-exclusion.log`).
+- Earlier native mapping assertions failed because the fixture had not requested
+  frame metadata (`f01-break-native.log`, `f01-break-native2.log`,
+  `f01-native-debug.log`). The fixture now requests/waits for that metadata;
+  assertions were preserved. Corrected native runs pass.
+
+### Complete host baseline
+
+The first fresh fortified baseline passed, exit 0:
+`TERM=xterm-256color make BUILD_DIR=build/f01-break-ci-20261028 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+Full log/status: `test-ci.log`, `test-ci.exit`. Subsequent ownership, bounds and
+actual-GDB script syntax corrections required a fresh final baseline; this earlier
+success is not substituted for verification of the final tree.
+
+The subsequent baseline in `build/f01-break-ci-final-20261028` predates the
+command-list parser correction; its log/status are retained as `test-ci-final.*`.
+The final-tree baseline uses
+`TERM=xterm-256color make BUILD_DIR=build/f01-break-ci-verified-20261028 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+Result: **PASS, exit 0**, including default/native/direct-terminal/tmux, actual
+localhost-remote and offline OpenOCD suites (`test-ci-verified.log`,
+`test-ci-verified.exit`). The prior post-ownership baseline also passed, exit 0.
+`tested-code-final.sha256` identifies the unchanged source/test/build/workflow snapshot (`tested-code-check.log`);
+`environment.log` records Arch Linux x86-64, GCC 16.2.1, GDB 18.1, tmux 3.8 and
+the flags. Whitespace checks pass, and all 162 local file links in the reviewed
+Markdown documents resolve. These are local Arch Linux x86-64 host checks, not hosted Ubuntu results. No additional
+owner manual or physical ARM/Xtensa/RV32 restoration result is claimed. Owner
+acceptance and physical reopening/restoration remain outstanding; F02–F05 and release preparation have not begun.
+
+
+## v0.1.4 release preparation
+
+2026-10-28–29. **Release candidate; final acceptance and publication pending.**
+F01 implementation was accepted before this release pass. Implementation revisions:
+`52bd788` (definition storage), `250cb59` (capture/save), `095bbc9`
+(local/Source restoration), `a460648b1a89917cee44d220d1a57f8103b18cf5`
+(verified code-breakpoint restoration/import/reconciliation). RISC-V Task2.1:
+`9c35c30`. The preparation changes the version to 0.1.4 and adds two explicit
+physical setup runners, their build registration and release-specific records.
+No F02–F05 implementation or build-system review is included.
+
+### Physical identity and regression
+
+Logs are retained under `build/v0.1.4-release-evidence/`. Commands for the ESP
+runs are in `s3-test-commands.json` and `c6-test-commands.json`; server argv and
+serials are in `*-openocd-command.json`. The initial pass used retained firmware;
+the subsequently authorized ARM fixture programming is recorded below.
+Explicit test actions include halt, continue, stepping, break/watch and reset.
+
+| Architecture / test setup | Firmware identity and tools | Results |
+|---|---|---|
+| ARM/Cortex-M4 / NUCLEO-F446RE, ST-LINK serial 066CFF495154787867161137 | Existing `learning/stm32/ld_startup/ld_startup.elf`; ARM GDB18.1, system OpenOCD0.12.0-01004-g9ea7f3d64-dirty | PASS existing-image core subset and F01 backend/direct/tmux |
+| Xtensa / ESP32-S3 rev0.2, USB/JTAG serial 84:FC:E6:64:27:EC | Retained shared ESP-IDF fixture `build/v0.1.3-s3/the_bugger_m17.elf`; Xtensa GDB17.1_20260402, matching Espressif OpenOCD0.12.0-esp32-20260703 | PASS core backend/direct/tmux and F01 backend/direct/tmux |
+| RISC-V RV32 / ESP32-C6FH4 rev0.0, USB/JTAG serial 40:4C:CA:43:5D:FC | Retained shared fixture `build/v0.1.4-c6/the_bugger_m17.elf`; RISC-V GDB17.1_20260402, matching Espressif OpenOCD0.12.0-esp32-20260703, default24MHz | PASS all six checks after direct USB reconnection |
+
+ELF SHA-256 values:
+
+- ARM: `83738fefd0f8c9a67c572d05cceb274c0210ffa47b63a19767969facdb13dbf7`.
+- Xtensa: `dd42dab971b4f5ecad0395b1b3e6e01f0abf6a56ec4e293a0f0ee0fd9a41602f`.
+- RV32: `a9a8f4fe66b51d79b061becef89fa818b0b6059ed7fa5510bcd8c8500538b508`.
+
+Read-only byte dumps matched ARM's entire 628-byte `.text`, Xtensa's 69,222-byte
+`.flash.text` and 38,376-byte `.flash.rodata`, and RV32's 81,044-byte `.flash.text`
+and 35,560-byte `.flash.rodata`. See `arm-byte-identity-result.log`,
+`s3-byte-identity-after-boot.json` and `c6-byte-identity-after-boot.json`.
+These are bounded section comparisons, not proof of every firmware byte or runtime
+state. No `qCRC`/`compare-sections` was used; the prior C6 backend limitation remains.
+
+ARM used the retained blink firmware, not a newly flashed M17 fixture. Its current
+checks cover source/disassembly, decoded stopped instruction, PC/SP agreement,
+source/instruction steps, explicit SRAM, actual hardware local watchpoint, reset,
+resume advancement and leave-halted retention. At that point, shared-fixture aggregate, Flash
+string, nested caller and Step Out checks had not run on ARM; the follow-up below
+closes that gap. Its initial F01 backend/direct/tmux checks also passed. No fresh MMIO sampling,
+physical unplug recovery or owner visual result is claimed.
+
+F01 checks on each architecture cover actual saved-profile reopening, split/tab
+and Source identity, retained unavailable pins, Memory/Watch definitions without
+read permission, configured ignore count, verified Require hardware intent,
+invalid-condition failure remaining disabled, unapproved remote address retention,
+partial-save/dirty fidelity, explicit retry without duplication, removal, running
+restoration deferral and in-flight cancellation. Terminal runs cover failure
+acknowledgment, actual hardware breakpoint hit, unchanged failure-set behavior,
+save/reopen and widths48/80/123/124/160 in direct terminals and isolated tmux.
+
+Passing physical logs/status (all exit0):
+
+- ARM: `arm-setup-corrected.*`, `arm-setup-tui.*`,
+  `arm-setup-tmux-corrected.*`; backend session detail under matching prefixes.
+- Xtensa: `s3-core.*`, `s3-setup.*`, `s3-setup-tui.*`, `s3-core-tui.*`,
+  `s3-setup-tmux.*`, `s3-core-tmux.*`.
+- RV32: `c6-core-direct.*`, `c6-setup-direct.*`, `c6-setup-tui-direct.*`,
+  `c6-core-tui-direct.*`, `c6-setup-tmux-direct.*`, `c6-core-tmux-direct.*`.
+
+Earlier failures remain retained:
+
+- ARM source stepping started inside the retained firmware's one-line million-
+  iteration loop and timed out. Starting at adjacent line26 permits the same
+  assertion to complete; `arm-setup.log` retains the failure.
+- ARM tmux resize left the test clicking the prior Review geometry. Waiting for
+  actual current geometry fixed synchronization; application assertions remain.
+  Failure: `arm-setup-tmux.log`; correction: `arm-setup-tmux-corrected.log`.
+- Initial ESP dumps while in reset/startup did not reflect application mappings.
+  Explicit reset/halt and a temporary hardware stop at `app_main` produced matching
+  sections (`*-identity-after-boot.*`). The initially considered ARM CubeIDE ELF
+  did not match; it was rejected without executing it or changing firmware.
+- Initial C6 core Step Out timed out with OpenOCD reporting an unexpected reset,
+  USB pipe errors and invalid mapping/context. A test-owned server restart at
+  2MHz still failed transport. After the owner reconnected directly, identity and
+  all six checks passed at the original24MHz, without USB errors in that server
+  log. The failed `c6-core.*`, `c6-core-restarted.*`, `c6-openocd*.log` remain;
+  the cause beyond the observed transport failure is not established.
+
+Targets were left halted; only test-owned servers were stopped. Ownership-checked
+PID/argv cleanup is recorded in `server-cleanup.json`. No external server was killed.
+Initial physical results precede the release's static-analysis corrections; final
+host checks cover those changes. The follow-up ARM fixture checks below also run
+the final code; Xtensa/RV32 were not rerun after those corrections.
+
+
+### ARM shared-fixture follow-up
+
+After the initial existing-image pass, the maintainer explicitly requested the
+remaining fixtures and authorized programming ARM and leaving that fixture installed.
+The default M17 image does not configure GPIO. Xtensa/RV32 were not programmed.
+Before programming, the complete 512KiB ARM Flash was read into
+`arm-original-flash.bin`; its first628 bytes matched the previously verified blink
+image. Backup SHA-256:
+`42f8dcfa92881eca331c48e8e144170a7fd3b05480ca26e9e861b5c251b696de`.
+
+`arm-fixture-program-command.json` records exact argv and the selected ST-LINK
+serial. OpenOCD `program … verify reset exit` passed, exit0
+(`arm-fixture-program.log/.exit`). Programmed ELF:
+`build/v0.1.4-release-host/m17/stm32f446re/firmware.elf`, SHA-256
+`280a2227549f11dd7022c6f0d727501c5bb0c471fb52ac1374dd65872e73f23f`.
+Default/LED ELF offline checks and actual offline ARM GDB lookup passed
+(`arm-fixture-offline.log`); only the default image was programmed/executed.
+
+All six final-code physical runs passed, exit0: `arm-fixture-core.*`,
+`arm-fixture-setup.*`, `arm-fixture-setup-tui.*`, `arm-fixture-core-tui.*`,
+`arm-fixture-setup-tmux.*`, `arm-fixture-core-tmux.*`. Exact arguments and
+per-test environment are in `arm-fixture-test-commands.json`. The full core run
+now covers explicit aggregate/local and independent SRAM/Flash reads, caller
+selection, source/instruction step and Step Out, real hardware break/watch,
+Continue/Pause, reset and reconnect. Resume advanced the counter8→15; leave-halted
+retained15. F01 checks also pass against this image. The target was left halted
+with the fixture installed, and only its test-owned server was stopped; cleanup
+was appended to `server-cleanup.json`. This closes the initial ARM fixture-specific
+coverage gap without claiming new MMIO, unplug, timing or owner visual evidence.
+
+### Final host and distribution checks
+
+Local environment: Arch Linux x86-64, kernel7.2.11, glibc2.44, GCC16.2.1,
+GDB18.1, tmux3.8 and clang-tidy23.1.3 (`environment.log`). These are local
+results, not hosted Ubuntu PR results.
+
+- Focused profile/store/capture and bounded breakpoint checks: PASS, exit0
+  (`focused-final.log/.exit`). The first focused invocation used a nonexistent
+  target after its earlier checks passed; retained as `focused-corrections.*`.
+- Static analysis: PASS, exit0 (`analysis-final.log/.exit`), using
+  `make BUILD_DIR=build/v0.1.4-release-analysis analyze`.
+  The initial analysis found37 diagnostics. Corrections make string comparisons
+  explicit, use unsigned difference flags, preserve typed JSON ownership, combine
+  equivalent reconciliation branches and bound setup text wrapping with forward
+  progress. Narrow annotations document intentional API parameter roles and the
+  single application object's field grouping. No analysis rule was disabled
+  globally. An intermediate edit briefly broke compilation and was corrected;
+  `analysis-corrected.*` retains that failure.
+- All78 C test sources compile fortified: PASS, exit0 (`test-compilation.*`);
+  exact objects/command are in `analysis-commands.json`.
+- Final fresh full baseline: **PASS, exit0**:
+  `TERM=xterm-256color make BUILD_DIR=build/v0.1.4-release-ci-final CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+  Full log/status/command: `test-ci-final.log`, `test-ci-final.exit`,
+  `test-ci-final-command.json`. Default/native/direct/tmux, actual localhost
+  remote and offline OpenOCD suites all ran. The earlier baseline also passed,
+  but predates the static-analysis corrections and is not substituted for this one.
+  `tested-final-tree.sha256` identifies the starting snapshot; `final-code-check.log`
+  verifies unchanged final code/test/build/workflow files. Final documentation and
+  packaged source are identified by `release-tree.sha256` and artifact manifests.
+- Hardened optimized binary: PASS (`release-build.*`), with PIE, stack protector,
+  FORTIFY3, non-executable stack and full RELRO/now (`artifact-structure.log`).
+  Direct libraries are ncursesw6, libelf1, json-c5 and libc6. The executable uses
+  GLIBC symbols through2.38; this is not a universal older-distribution guarantee.
+- Extracted binary CLI, PTY, workspace and isolated tmux: PASS (`artifact-cli.*`,
+  `artifact-tui.*`, `artifact-workspace.*`, `artifact-tmux-corrected.*`). The first
+  tmux test could not write its expected `build/` capture in the external working
+  directory; creating that output directory fixed the harness precondition without
+  changing its assertions. The original failure remains in `artifact-tmux.*`.
+- Source archive builds independently outside the checkout and reports0.1.4:
+  PASS (`artifact-source-build.*`). Invalid packaging inputs are rejected before
+  creating distribution files (`artifact-rejections.log`). Final archives include
+  both new physical tests even before their implementation commit.
+
+### Release requirement assessment
+
+| Scope | Current evidence / boundary |
+|---|---|
+| FR-01–14,16–30 | Full host suites cover startup/configuration, native launch/attach, literal argv, optional server ownership, execution controls, source/disassembly, registers, memory, lazy variables, frames/threads, breaks/watchpoints, layout/input/themes, logs and profiles. Three-board applicable core/TUI checks add physical results; they do not establish every backend capability on every target. |
+| FR-15,31 | Current ARM full shared-fixture pass plus Xtensa/RV32 core/F01 backend/direct/tmux passes; exact images/tools/commands above. Prior RISC-V release deferrals are historical, not used for this candidate. |
+| NFR-01,12 | Strict fortified C17 build, all test-source compilation, independent source archive build and traceable snapshots/artifacts. Hosted Ubuntu checks remain pending. |
+| NFR-02 | Bounded restoration dispatch/cancellation and responsive terminal tests; no fresh latency/CPU benchmark or numerical performance claim. |
+| NFR-03,04 | Complete parser/recovery/lifecycle/error and terminal-restoration baseline; no fresh sanitizer/stress matrix or physical unplug claim. Historical sanitizer evidence remains separate. |
+| NFR-05,10,11 | Automated mouse/key/focus, direct/tmux, resize, monochrome/color and textual error-state checks; final visual/usability acceptance remains manual. |
+| NFR-06,07 | Pre-dispatch value authorization, literal argv, disabled-first verification, hardware-only failure semantics, target-neutral models and three actual architectures. No restored read permission or firmware identity is inferred. Only separately approved ARM programming occurred. |
+| NFR-08 | Retained errors, partial/uncertain breakpoint failures, cancellation and recovery tested; raw failures are preserved. |
+| NFR-09 | Existing module boundaries retained; only necessary physical-test registration added. The broader maintenance and owner-exclusive build-system reviews remain future gates. |
+
+Final release acceptance, owner visual review and hosted PR checks remain pending.
+No release/tag/asset publication is established by local preparation. The three
+upload files are the versioned Linux x86-64 archive, matching source archive and
+`SHA256SUMS`; final identities are in `build/dist/v0.1.4/SHA256SUMS`. GitHub's two
+automatic source snapshots are separate and contain no packaged host binary.
+
+
+### v0.1.4 PR35 — hosted analyzer compatibility
+
+2026-10-29. The maintainer reported a hosted Ubuntu24.04 Static analysis failure
+with clang-tidy18.1.3 on release-preparation revision `b314360`. Its
+`bugprone-sizeof-expression` check rejected the pointer-array element size in
+profile deletion's `memmove`. Prior local clang-tidy23.1.3 success did not
+establish compatibility with the hosted analyzer. The reported diagnostic is
+retained as an excerpt in
+`build/v014-ci-sizeof-fix-evidence/reported-ci-diagnostic.txt`.
+
+Deletion now shifts setup pointers through typed assignments, transferring the
+same retained JSON references and clearing the final slot. No analyzer rule,
+workflow requirement or existing assertion is weakened. The profile regression
+now deletes a middle profile with a saved setup and verifies that the following
+profile retains its independently saved definition both immediately and after
+reload; last-profile removal remains covered.
+
+Focused fortified profile/store checks and all78 test-source compilation pass.
+Current correction evidence is under `build/v014-ci-sizeof-fix-evidence/`:
+`focused.log/.exit`, `test-compilation.log/.exit`, `compile-command.json` and
+`environment.log`. Local analysis passes, exit0 (`make analyze`, `analysis.log/.exit`).
+The final fresh complete baseline passes, exit0:
+`TERM=xterm-256color make BUILD_DIR=build/v014-ci-sizeof-fix CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+Full log, exit status and exact invocation are in `test-ci.log`, `test-ci.exit`
+and `command.json`. `tested-tree.sha256` identifies the starting tree; final
+code and packaged source identities are checked separately in `final-check.log`
+and `release-tree.sha256`. These are local results. The installed analyzer is
+23.1.3; version18 is not installed, and the hosted PR rerun remains pending.
+
+The hardened release executable was rebuilt. CLI, PTY, workspace and isolated
+tmux checks pass outside the checkout (`binary-*.log/.exit`). Regenerated
+v0.1.4 archives retain the same three-file distribution layout; checksums and
+source completeness are verified in `artifact-check.log`, and an independent
+build of the final source archive is logged in `source-build.log/.exit`.
+Use the regenerated `build/dist/v0.1.4/` files for publication. No additional
+physical check or firmware operation was made for this local persistence correction.

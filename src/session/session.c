@@ -19,6 +19,7 @@
 typedef enum { JOB_NONE, JOB_SETUP, JOB_RUN, JOB_PAUSE, JOB_CONSOLE,
                JOB_INTERRUPT_CLOSE, JOB_RELEASE, JOB_REMOTE_CONNECT, JOB_REMOTE_UNITS, JOB_REMOTE_WIDTH, JOB_REMOTE_ENDIAN, JOB_REMOTE_FRAME, JOB_REMOTE_DISCONNECT, JOB_TARGET, JOB_CLOSE_POLICY, JOB_TARGET_FLUSH } Job;
 struct TbSession {
+    bool setup_active, setup_unacknowledged;
     TbGdb *gdb;
     TbOpenOcd *server;
     bool close_resume, close_prepared, target_uncertain;
@@ -436,6 +437,7 @@ bool tb_session_start(TbSession *native, const TbSessionConfig *config)
     close_fds(native);
     native->first = native->count = 0;
     memset(native->partial_length, 0, sizeof native->partial_length);
+    native->setup_active = native->setup_unacknowledged = false;
     native->want_close = native->configured = native->waiting = native->completed = false;
     native->alive = native->owned = native->launch_requested = native->recovery_sent = false;
     native->stage = 0; native->job = JOB_NONE;
@@ -508,8 +510,20 @@ static bool register_read_pending(TbSession *native)
     diagnostic(native, "Wait for the explicit register read to finish before changing debugger state."); return true;
 }
 
+void tb_session_setup_interlock(TbSession *s, bool active, bool unacknowledged)
+{
+    s->setup_active = active; s->setup_unacknowledged = unacknowledged;
+    tb_context_interlock(s->context, active); tb_break_interlock(s->breakpoints, active);
+}
+static bool setup_blocked(TbSession *s, bool execution)
+{
+    if (!s->setup_active && !(execution && s->setup_unacknowledged)) { return false; }
+    diagnostic(s, s->setup_active ? "Wait for active setup restoration; Pause and close remain available." :
+               "Acknowledge unresolved enabled setup breakpoints in Setup before execution."); return true;
+}
 bool tb_session_continue(TbSession *native)
 {
+    if (setup_blocked(native, true)) { return false; }
     if (register_read_pending(native)) { return false; }
     if (tb_code_restoring(native->code)) { diagnostic(native, "Wait for profile source settings to finish applying."); return false; }
     if (native->waiting || native->want_close || native->target_action || !native->configured || tb_break_busy(native->breakpoints)) { return false; }
@@ -533,6 +547,7 @@ bool tb_session_pause(TbSession *native)
 
 bool tb_session_step(TbSession *native, TbStep step, bool instruction)
 {
+    if (setup_blocked(native, true)) { return false; }
     if (register_read_pending(native)) { return false; }
     if (tb_code_restoring(native->code)) { diagnostic(native, "Wait for profile source settings to finish applying."); return false; }
     const TbContextSnapshot *context = tb_context_snapshot(native->context);
@@ -551,6 +566,7 @@ bool tb_session_step(TbSession *native, TbStep step, bool instruction)
 
 bool tb_session_console(TbSession *native, const char *command)
 {
+    if (setup_blocked(native, true)) { return false; }
     if (register_read_pending(native)) { return false; }
     if (tb_code_restoring(native->code)) { diagnostic(native, "Wait for profile source settings to finish applying."); return false; }
     if (tb_break_busy(native->breakpoints)) { diagnostic(native, "Wait for the pending breakpoint operation."); return false; }
@@ -650,8 +666,9 @@ void tb_session_close(TbSession *native)
 
 static bool target_action(TbSession *s, int action)
 {
+    if (action != 1 && setup_blocked(s, true)) { return false; }
     if (register_read_pending(s)) { return false; }
-    if (!s->capabilities.openocd || !s->configured || tb_code_restoring(s->code) || tb_break_busy(s->breakpoints) || s->waiting || s->want_close || s->target_action ||
+    if (!s->capabilities.openocd || !s->configured || (action != 1 && tb_code_restoring(s->code)) || (action != 1 && tb_break_busy(s->breakpoints)) || s->waiting || s->want_close || s->target_action ||
         (s->state != TB_SESSION_STOPPED && s->state != TB_SESSION_RUNNING)) {
         diagnostic(s, "OpenOCD action unavailable; connect a target and wait for pending operations."); return false;
     }
@@ -869,6 +886,7 @@ void tb_session_pump(TbSession *native, int wait_ms)
         tb_code_native(native->code, native->target_pid, native->executable);
         memory_metadata(native);
     }
+    tb_break_native(native->breakpoints, native->kind == TB_SESSION_LOCAL ? native->target_pid : 0);
     TbGdbState gdb = tb_gdb_state(native->gdb);
     if (gdb == TB_GDB_DISCONNECTED) {
         if (native->kind != TB_SESSION_LOCAL && native->capabilities.connected) {
@@ -993,6 +1011,7 @@ TbCode *tb_session_code(TbSession *native) { return native->code; }
 TbBreakpoints *tb_session_breakpoints(TbSession *native) { return native->breakpoints; }
 bool tb_session_run_at(TbSession *native, TbBreakLocation location)
 {
+    if (setup_blocked(native, true)) { return false; }
     if (register_read_pending(native)) { return false; }
     const TbContextSnapshot *context = tb_context_snapshot(native->context);
     if (native->waiting || native->want_close || native->target_action || native->state != TB_SESSION_STOPPED || context->stale || !context->ready) {

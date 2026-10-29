@@ -185,7 +185,7 @@ const TbMiValue *tb_mi_find(const TbMiValue *values, const char *name)
     return NULL;
 }
 
-static TbMiValue *value_parse(Parse *parse, size_t depth);
+static TbMiValue *value_parse(Parse *parse, size_t depth, bool script);
 
 static TbMiValue *entry_parse(Parse *parse, bool named, size_t depth)
 {
@@ -199,13 +199,13 @@ static TbMiValue *entry_parse(Parse *parse, bool named, size_t depth)
             return NULL;
         }
     }
-    TbMiValue *value = value_parse(parse, depth);
+    TbMiValue *value = value_parse(parse, depth, name && strcmp(name, "script") == 0);
     if (value == NULL) { free(name); }
     else { value->name = name; }
     return value;
 }
 
-static TbMiValue *value_parse(Parse *parse, size_t depth)
+static TbMiValue *value_parse(Parse *parse, size_t depth, bool script)
 {
     if (parse->values == TB_MI_MAX_VALUES) {
         fail(parse, TB_MI_LIMIT, parse->at, "record exceeds value-count limit");
@@ -238,14 +238,20 @@ static TbMiValue *value_parse(Parse *parse, size_t depth)
         char close = marker == '{' ? '}' : ']';
         if (take(parse, close)) { return value; }
         /* MI lists contain either values or results, never a mixture. Tuples
-         * contain results. Empty containers retain their tuple/list kind. */
-        bool named = marker == '{' || (parse->at < parse->length &&
+         * contain results. GDB emits breakpoint script={"command",...} as
+         * an extension; accept only strings there, retaining the whole field.
+         * Empty containers retain their tuple/list kind. */
+        bool script_values = script && marker == '{' && parse->at < parse->length && parse->data[parse->at] == '"';
+        bool named = (marker == '{' && !script_values) || (parse->at < parse->length &&
                      parse->data[parse->at] != '"' && parse->data[parse->at] != '{' &&
                      parse->data[parse->at] != '[');
         TbMiValue **tail = &value->children;
         while (true) {
             TbMiValue *child = entry_parse(parse, named, depth + 1);
             if (child == NULL) { break; }
+            if (script_values && child->type != TB_MI_STRING) {
+                values_free(child); fail(parse, TB_MI_INVALID, parse->at, "expected breakpoint command string"); break;
+            }
             *tail = child;
             tail = &child->next;
             if (take(parse, close)) { return value; }

@@ -32,6 +32,10 @@ typedef bool (*TbVariableAuthorize)(void *user, TbGdbGeneration generation,
                                    const char *expression, TbVariableRead operation,
                                    unsigned first, unsigned count, TbVariableAccess *access);
 typedef struct TbVariables TbVariables;
+typedef struct { uint64_t identity; char expression[256]; TbVariableFormat format; } TbWatchDefinition;
+/* Root definitions only; no values, permissions or backend objects. */
+size_t tb_variables_definitions(const TbVariables *variables);
+bool tb_variables_definition(const TbVariables *variables, size_t index, TbWatchDefinition *definition);
 TbVariables *tb_variables_create(TbGdb *gdb, TbContext *context);
 /* Destroy/reset after session shutdown; live root cleanup runs in pump. */
 void tb_variables_destroy(TbVariables *variables);
@@ -51,7 +55,10 @@ bool tb_variables_toggle(TbVariables *variables, TbVariableView view, size_t row
 bool tb_variables_page(TbVariables *variables, TbVariableView view, size_t row, int direction);
 bool tb_variables_format(TbVariables *variables, TbVariableView view, size_t row);
 bool tb_variables_watch(TbVariables *variables, const char *expression);
+/* Fresh root definition only, preserving format without granting a read. */
+bool tb_variables_restore_watch(TbVariables *variables, const char *expression, TbVariableFormat format);
 bool tb_variables_remove(TbVariables *variables, size_t row);
+bool tb_variables_remove_definition(TbVariables *variables, uint64_t identity);
 bool tb_variables_names(TbVariables *variables);
 bool tb_variables_stale(const TbVariables *variables, TbVariableView view);
 bool tb_variables_limited(const TbVariables *variables, TbVariableView view);

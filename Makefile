@@ -18,7 +18,7 @@ JSON_CFLAGS := $(shell $(PKG_CONFIG) --cflags json-c 2>/dev/null)
 PROJECT_CPPFLAGS := -Iinclude -Isrc/tui -Isrc/layout -Isrc/gdb -Isrc/session -Isrc/model $(NCURSES_CFLAGS) $(ELF_CFLAGS) $(JSON_CFLAGS)
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/tui/editor.c src/tui/terminal.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/session.c src/session/openocd.c src/session/profiles.c src/model/context.c src/model/code.c src/model/browse.c src/model/monitor.c src/model/mmio.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
+SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/tui/editor.c src/tui/terminal.c src/tui/setup_capture.c src/tui/setup_restore.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/session.c src/session/openocd.c src/session/profiles.c src/session/setup.c src/model/context.c src/model/code.c src/model/browse.c src/model/monitor.c src/model/mmio.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/variables.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -205,6 +205,7 @@ test: all test-mi test-controller $(BUILD_DIR)/test-code $(BUILD_DIR)/test-conte
 	$(BUILD_DIR)/test-memory $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-variables $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-breakpoints $(abspath $(BUILD_DIR)/fake-mi)
+	$(BUILD_DIR)/test-setup-breakpoints $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-code $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-context $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-native-words
@@ -234,6 +235,11 @@ test: $(BUILD_DIR)/test-images
 
 $(BUILD_DIR)/test-breakpoints: $(BUILD_DIR)/tests/integration/test_breakpoints.o $(BUILD_DIR)/src/model/breakpoints.o $(BUILD_DIR)/src/model/memory.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/browse.o $(BUILD_DIR)/src/model/monitor.o $(BUILD_DIR)/src/model/mmio.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+$(BUILD_DIR)/test-setup-breakpoints: $(BUILD_DIR)/tests/integration/test_setup_breakpoints.o $(BUILD_DIR)/src/model/breakpoints.o $(BUILD_DIR)/src/model/memory.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/browse.o $(BUILD_DIR)/src/model/monitor.o $(BUILD_DIR)/src/model/mmio.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+test: $(BUILD_DIR)/test-setup-breakpoints
 
 test: $(BUILD_DIR)/test-breakpoints
 
@@ -371,7 +377,7 @@ $(BUILD_DIR)/test-watchpoints: $(BUILD_DIR)/tests/integration/test_watchpoints.o
 test-m12-model: $(BUILD_DIR)/test-watchpoints $(BUILD_DIR)/fake-mi
 	$(BUILD_DIR)/test-watchpoints $(abspath $(BUILD_DIR)/fake-mi)
 
-$(BUILD_DIR)/test-profiles: $(BUILD_DIR)/tests/unit/test_profiles.o $(BUILD_DIR)/src/session/profiles.o
+$(BUILD_DIR)/test-profiles: $(BUILD_DIR)/tests/unit/test_profiles.o $(BUILD_DIR)/src/session/profiles.o $(BUILD_DIR)/src/session/setup.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(JSON_LIBS) $(LDLIBS)
 
 .PHONY: test-m13-model
@@ -383,21 +389,44 @@ test-m13-model: $(BUILD_DIR)/test-profiles $(BUILD_DIR)/test-profile-sources $(B
 	$(BUILD_DIR)/test-profile-sources $(abspath $(BUILD_DIR)/fake-mi)
 
 test: test-m13-model
--include $(BUILD_DIR)/tests/unit/test_profiles.d $(BUILD_DIR)/tests/integration/test_profile_sources.d
+$(BUILD_DIR)/test-setup-capture: $(BUILD_DIR)/tests/unit/test_setup_capture.o $(BUILD_DIR)/src/tui/setup_capture.o $(BUILD_DIR)/src/session/setup.o $(BUILD_DIR)/src/session/profiles.o $(BUILD_DIR)/src/layout/layout.o $(BUILD_DIR)/src/tui/demo.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(JSON_LIBS) $(ELF_LIBS) $(LDLIBS)
 
-$(BUILD_DIR)/test-profiles-tui: $(BUILD_DIR)/tests/integration/test_profiles_tui.o $(BUILD_DIR)/tests/support/terminal.o $(BUILD_DIR)/src/session/profiles.o
+.PHONY: test-setup-capture
+test-setup-capture: $(BUILD_DIR)/test-setup-capture
+	$(BUILD_DIR)/test-setup-capture
+
+test: test-setup-capture
+.PHONY: test-setup-tmux
+test-setup-tmux: all $(BUILD_DIR)/test-profiles-tui $(BUILD_DIR)/debug-fixture
+	TB_PROFILE_SETUP_TMUX=1 $(BUILD_DIR)/test-profiles-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/debug-fixture) --native
+
+test-tmux: test-setup-tmux
+-include $(BUILD_DIR)/tests/unit/test_setup_capture.d $(BUILD_DIR)/tests/unit/test_setup_restore.d $(BUILD_DIR)/tests/unit/test_profiles.d $(BUILD_DIR)/tests/integration/test_profile_sources.d
+
+$(BUILD_DIR)/test-profiles-tui: $(BUILD_DIR)/tests/integration/test_profiles_tui.o $(BUILD_DIR)/tests/support/terminal.o $(BUILD_DIR)/src/session/profiles.o $(BUILD_DIR)/src/session/setup.o $(BUILD_DIR)/src/tui/keybinds.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(JSON_LIBS) $(LDLIBS)
 
 .PHONY: test-m13-tui test-m13-native
 test-m13-tui: all $(BUILD_DIR)/test-profiles-tui $(BUILD_DIR)/debug-fixture
 	$(BUILD_DIR)/test-profiles-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/debug-fixture)
 
-$(BUILD_DIR)/test-profiles-native: $(BUILD_DIR)/tests/integration/test_profiles_native.o $(BUILD_DIR)/src/session/profiles.o $(NATIVE_OBJECTS)
+$(BUILD_DIR)/test-profiles-native: $(BUILD_DIR)/tests/integration/test_profiles_native.o $(BUILD_DIR)/src/session/profiles.o $(BUILD_DIR)/src/session/setup.o $(NATIVE_OBJECTS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(JSON_LIBS) $(ELF_LIBS) $(LDLIBS)
 
 test-m13-native: all $(BUILD_DIR)/test-profiles-native $(BUILD_DIR)/test-profiles-tui $(BUILD_DIR)/debug-fixture $(BUILD_DIR)/code-fixture-relocated
 	$(BUILD_DIR)/test-profiles-native $(abspath $(BUILD_DIR)/code-fixture-relocated) $(abspath tests/fixtures/native/relocated)
 	$(BUILD_DIR)/test-profiles-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/debug-fixture) --native
+
+$(BUILD_DIR)/test-setup-restore: $(BUILD_DIR)/tests/integration/test_setup_restore.o $(BUILD_DIR)/src/tui/setup_restore.o $(BUILD_DIR)/src/tui/setup_capture.o $(BUILD_DIR)/src/session/setup.o $(BUILD_DIR)/src/layout/layout.o $(BUILD_DIR)/src/tui/demo.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(JSON_LIBS) $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-setup-restore
+test-setup-restore: all $(BUILD_DIR)/test-setup-restore $(BUILD_DIR)/debug-fixture
+	$(BUILD_DIR)/test-setup-restore $(abspath $(BUILD_DIR)/debug-fixture) $(abspath tests/fixtures/native/session.c)
+
+test-native: test-setup-restore
+-include $(BUILD_DIR)/tests/integration/test_setup_restore.d
 
 test-native: test-m13-native
 -include $(BUILD_DIR)/tests/integration/test_profiles_tui.d $(BUILD_DIR)/tests/integration/test_profiles_native.d
@@ -467,7 +496,7 @@ clean:
 -include $(BUILD_DIR)/tests/integration/test_context_native.d
 -include $(BUILD_DIR)/tests/integration/test_context_tui.d
 -include $(BUILD_DIR)/tests/integration/test_code.d $(BUILD_DIR)/tests/integration/test_code_native.d $(BUILD_DIR)/tests/integration/test_code_tui.d
--include $(BUILD_DIR)/tests/unit/test_images.d $(BUILD_DIR)/tests/integration/test_breakpoints.d
+-include $(BUILD_DIR)/tests/unit/test_images.d $(BUILD_DIR)/tests/integration/test_breakpoints.d $(BUILD_DIR)/tests/integration/test_setup_breakpoints.d
 -include $(BUILD_DIR)/tests/integration/test_break_native.d $(BUILD_DIR)/tests/integration/test_break_tui.d
 
 .PHONY: test-m14-model test-m14-native
@@ -627,7 +656,7 @@ $(BUILD_DIR)/test-keybinds: $(BUILD_DIR)/tests/unit/test_keybinds.o $(BUILD_DIR)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 .PHONY: test-keybinds
-$(BUILD_DIR)/test-keybinds-tui: $(BUILD_DIR)/tests/integration/test_keybinds_tui.o $(BUILD_DIR)/tests/support/terminal.o $(BUILD_DIR)/src/tui/preferences.o $(BUILD_DIR)/src/tui/keybinds.o $(BUILD_DIR)/src/tui/theme.o $(BUILD_DIR)/src/session/profiles.o
+$(BUILD_DIR)/test-keybinds-tui: $(BUILD_DIR)/tests/integration/test_keybinds_tui.o $(BUILD_DIR)/tests/support/terminal.o $(BUILD_DIR)/src/tui/preferences.o $(BUILD_DIR)/src/tui/keybinds.o $(BUILD_DIR)/src/tui/theme.o $(BUILD_DIR)/src/session/profiles.o $(BUILD_DIR)/src/session/setup.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(NCURSES_LIBS) $(JSON_LIBS) $(LDLIBS)
 
 test-keybinds: all $(BUILD_DIR)/test-keybinds $(BUILD_DIR)/test-keybinds-tui
@@ -719,3 +748,14 @@ $(BUILD_DIR)/test-mmio-hardware: $(BUILD_DIR)/tests/integration/test_mmio_hardwa
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 -include $(BUILD_DIR)/tests/integration/test_mmio.d $(BUILD_DIR)/tests/integration/test_mmio_memory.d $(BUILD_DIR)/tests/integration/test_mmio_tui.d
+
+# Explicit physical setup validation; never run by test-ci.
+$(BUILD_DIR)/test-setup-board: $(BUILD_DIR)/tests/integration/test_setup_board.o $(BUILD_DIR)/src/tui/setup_restore.o $(BUILD_DIR)/src/tui/setup_capture.o $(BUILD_DIR)/src/session/setup.o $(BUILD_DIR)/src/session/profiles.o $(BUILD_DIR)/src/layout/layout.o $(BUILD_DIR)/src/tui/demo.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(JSON_LIBS) $(ELF_LIBS) $(LDLIBS)
+
+-include $(BUILD_DIR)/tests/integration/test_setup_board.d
+
+$(BUILD_DIR)/test-setup-board-tui: $(BUILD_DIR)/tests/integration/test_setup_board_tui.o $(BUILD_DIR)/tests/support/terminal.o $(BUILD_DIR)/src/tui/setup_capture.o $(BUILD_DIR)/src/session/profiles.o $(BUILD_DIR)/src/session/setup.o $(BUILD_DIR)/src/layout/layout.o $(BUILD_DIR)/src/tui/demo.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(JSON_LIBS) $(ELF_LIBS) $(LDLIBS)
+
+-include $(BUILD_DIR)/tests/integration/test_setup_board_tui.d

@@ -29,7 +29,7 @@ typedef enum { TB_MI_STRING, TB_MI_TUPLE, TB_MI_LIST } TbMiType;
 
 typedef struct TbMiValue {
     TbMiType type;
-    char *name;                 /* NULL for unnamed list elements. */
+    char *name;                 /* NULL for unnamed list/script elements. */
     TbMiString string;          /* Only for TB_MI_STRING. */
     struct TbMiValue *children; /* Ordered tuple/list entries. */
     struct TbMiValue *next;     /* Duplicate names are preserved. */

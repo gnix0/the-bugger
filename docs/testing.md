@@ -25,16 +25,14 @@ Use a fresh `BUILD_DIR` when changing compilers/flags. `make clean` removes igno
 format, shadow and prototype checks. Project-owned ESP-IDF fixture sources also
 explicitly use `-Wall -Wextra -Werror`, with private category overrides for SDK
 warning-as-error exceptions; SDK components keep their own policy. See the
-[fixture build instructions](../tests/fixtures/embedded/README.md#esp32-s3).
+[fixture build instructions](../tests/fixtures/embedded/README.md#xtensa-fixture).
 Sanitizer targets instrument the frontend
 and C harnesses; targets debugged by GDB stay uninstrumented because LeakSanitizer
-cannot operate in a deliberately ptraced target. Sanitizers run with leak checking;
-no suppression or disabled check turns an environment failure into PASS.
+cannot operate in a deliberately ptraced target. Sanitizers run with leak checking.
 
 `make analyze` enables clang-analyzer and bugprone checks and fails on warnings.
 The Annex K replacement recommendation is excluded because Linux libc does not
-provide those optional `_s` functions. Missing tools and ptrace/socket restrictions
-are recorded as limitations or failed runs, not silently skipped passes.
+provide those optional `_s` functions. Record missing tools and ptrace/socket restrictions.
 
 | Layer | Entry points | Evidence boundary |
 |---|---|---|
@@ -45,12 +43,8 @@ are recorded as limitations or failed runs, not silently skipped passes.
 | Physical embedded | M17 and per-feature fixtures | Named board/probe/server/toolchain, capability and recovery evidence |
 
 The [suite catalog](../tests/README.md) lists individual binaries; fixture READMEs
-specify authored data and target behavior. Procedures below describe expected
-behavior, not proof that a particular run passed. Historical executions, blocked
-checks and exact evidence are in the [ledger](validation.md). Store logs
-under ignored `build/`; record durable result summaries separately. M14 includes
-a full-project analyzer pass; focused checks alone never establish that result
-for subsequent changes.
+specify authored data and target behavior. Record results in the [validation register](validation.md) and raw logs under
+ignored `build/`.
 
 ## Rendering stability stress
 
@@ -92,8 +86,7 @@ and **Static analysis** on Ubuntu 24.04. They run `make test-ci` and `make analy
 respectively. `test-ci` shares the complete host target list between local
 preflight and CI: `test test-native test-tmux test-m15-native test-m16-server
 test-m16-tui test-m16-openocd`.
-GDB/ptrace, PTYs and localhost sockets must work on the runner. Failures stay
-failures; required assertions are not skipped to obtain green status. Test and
+GDB/ptrace, PTYs and localhost sockets must work on the runner. Preserve failing assertions during diagnosis. Test and
 analysis logs are retained as workflow artifacts for seven days. Both jobs compile
 test code with `_FORTIFY_SOURCE=3`; the Ubuntu 24.04 job compiles every unit,
 integration and support C test source in addition to analysis. Local reproduction
@@ -120,8 +113,7 @@ Triggers cover pull requests and manual dispatch. Automatic push runs are
 disabled, so each PR update schedules one Tests job and one Static analysis job.
 There are no path filters that would leave required checks absent on docs-only
 pull requests. Hardware access, sanitizers, slow-recovery cases and artifact
-packaging remain separately documented checks. No hardware claim follows from
-hosted OpenOCD tests that terminate before adapter initialization.
+packaging remain separately documented checks. Hosted OpenOCD tests stop before adapter initialization.
 
 ## Validation strategy
 
@@ -525,6 +517,125 @@ No remote/hardware compatibility follows this checklist. Persisted definitions
 are not permissions to perform target operations; M15/M16 must test their actual
 application and lifecycle separately. F01 owns workspace/watch/breakpoint restore.
 
+### F01 setup-definition storage
+
+`make test-m13-model` includes definition/store foundation checks: setup-local
+identities, Source role/identity selection, tree cycles, round trips, connection
+snapshot separation, independent saved duplication, profile replacement/deletion,
+schema-3 read-only recovery and stale-writer detection after a setup transaction.
+It encodes a maximum 256-breakpoint definition containing escaped long locations,
+checks that its actual encoding exceeds 1 MiB, and verifies save failure preserves
+both disk bytes and the prior in-memory setup. Legacy schema checks remain in
+the same suite. These checks do not establish workspace restoration.
+
+Manual storage recovery review, using a disposable config directory:
+
+1. Start with a temporary `XDG_CONFIG_HOME`, save a native connection profile,
+   then close the application. Keep the profile file for recovery testing.
+2. In that file, change `version` to `3` and add `"setups": [{}]` at the root,
+   preserving `profiles` and `recent`. Start again. Config → Profiles must show
+   **READ ONLY** and still list the saved connection. Loading it must reach
+   configuration; Save profile must fail without replacing the file.
+3. Change `setups` to an empty array and select Reload file. The read-only
+   indication must disappear; profile saves work again. Merely loading must not
+   downgrade version 3. Repeat at 48×18 and through tmux.
+
+`make test-setup-capture` checks metadata-only capture, stable pane/Watch/Source
+identities, explicit removal, reused pane slots, transient exclusions, oversized
+drafts, skipped-definition replacement and active connection comparison.
+`make test-m13-native` adds live association/save review, pinned Source selection,
+profile preservation and independent saved duplication. `make test-setup-tmux`
+repeats the profile workflow through an isolated tmux server; `test-tmux` includes
+it. Both direct and tmux runs check widths 48, 80, 123, 124, 152 and 160 with long
+custom shortcut labels, preserving action names and the former toolbar row count.
+`make test-m08-native` verifies configured breakpoint intent across actual hits,
+remaining-ignore decline and frontend edits, excluding temporary run-to entries.
+
+Manual capture/save review with a disposable configuration:
+
+1. Start a native session without a saved profile. Change pane splits/tabs, pin a
+   Source file, add a Watch and edit Memory settings without reading. Save setup
+   must offer Save profile. Save the profile, then review/save the setup. The
+   asterisk must clear; no Memory/Watch read is granted.
+2. Create a code breakpoint using the frontend. Set a condition and explicit
+   ignore count, then run through hits. Saving must retain the original configured
+   count and location. Temporary run-to and Console-created breakpoints are excluded.
+3. Close/reopen the profile. Expect Restore saved setup selected in the additional
+   session review, showing scope/connection differences and any ELF/context change.
+   Start and verify split/tab/Source selection, Memory settings and Watch formats;
+   lower views must remain minimized, with no Memory/Watch read permission.
+   Repeat with restoration unchecked. Cancel Replace setup: saved definitions
+   remain. Confirm replacement: hidden old definitions disappear; the connection
+   profile remains unchanged. Duplication excludes unsaved edits.
+4. Repeat in a direct terminal and tmux at the widths above. Inspect Setup,
+   Session/Quit, action names, focus, text entry, Escape and shortcut operation.
+
+`make test-setup-restore` uses an actual native fixture to check local split/tab
+restoration, selected missing pins without prior contents, stable partial saves,
+Memory/Watch definitions without permissions, retained enabled breakpoint intent,
+capacity reservation, acknowledgment, an in-flight catalog cancellation and
+running-target deferral until explicit Pause. It is included in `test-native`.
+The direct/tmux profile workflows also cover default restoration consent, local
+ELF metadata renewal, partial saves and explicit unresolved Source removal.
+Definition/store checks retain legacy schema-3 records without metadata and reject
+malformed metadata into read-only recovery.
+
+Additional manual restoration checks:
+
+1. Save a setup with two Source pins, selecting the second. Move/remove that file
+   before reopening. The selected missing pin must remain in order, with `!`, no
+   prior contents and explicit Retry/Remove under Setup. Repair its source lookup,
+   refresh the source catalog and Retry; the same entry must resolve without a
+   duplicate. Remove it and save: reopening must not resurrect it.
+2. Save enabled code-breakpoint intent, then reopen. Expect disabled creation,
+   attribute verification, then enabled installation. An invalid condition or
+   failed ignore/hardware requirement must remain a restoration failure. Execution
+   must require acknowledgment for failed enabled definitions. Acknowledging and later stopping again must not
+   reprompt for the unchanged set. Partial saving retains its original definition.
+3. While restoration is active, try execution, Reset, Console and thread/frame or
+   source-setting changes. They must be blocked; local navigation/Pause/close
+   remain available. Cancel during in-flight work: expect Cancel requested until
+   settlement, then canceled, without rollback or further coordinator dispatch.
+4. With an explicitly authorized disposable running target, reopen a saved setup.
+   It must stay running and await a stop. Pause explicitly; pending work must run
+   before execution/configuration changes become available. Native host tests do
+   not establish this behavior on physical ARM/Xtensa/RV32 setups.
+
+`test-setup-breakpoints` (included in `make test`) uses an explicitly synthetic
+MI peer for disabled-first intermediate states, condition/ignore-count failures,
+retry without duplicate insertion, required-hardware mismatch, one bounded
+reconciliation query, incomplete-listing interlocks, cancellation and whole-entry
+command-list/thread-restriction exclusion. This is model evidence, not a board
+or real-server result. `test-setup-restore` also checks an actual native pending
+symbol with its configured count, partial-failure merging without a dirty change,
+and current procfs/ELF mapping identity/bias/range comparisons, automatic matching
+address reuse, changed-bias refusal and explicit current-session address approval. Schema tests round
+trip full-width mapping addresses. Direct/tmux workflows review and import a real
+GDB backend-only breakpoint only after explicit hardware/count decisions, save the
+unsaved draft and remove it without duplicate inclusion.
+
+Additional manual breakpoint checks:
+
+1. Save/reopen a symbolic and file-line breakpoint with a condition and configured
+   ignore count. Verify original definitions, disabled-first progress, eventual
+   installation and no dirty change from hits or declining remaining counts.
+2. Use an invalid condition in a saved definition. Location creation may succeed,
+   but it must stay disabled/unresolved. Acknowledge the failure, then verify no
+   repeat for that unchanged set. Retry must reuse its known disabled location.
+3. Reopen literal addresses: matching stopped native mapping metadata may reuse;
+   changed identity/bias or remote addresses require current-session approval.
+   Approval never persists, and no firmware/live-byte verification is claimed.
+4. Cancel while a breakpoint operation is in flight. Expect Cancel requested until
+   settlement, no rollback and no subsequent mutation. For uncertain results,
+   incomplete reconciliation must preserve the interlock; retry queries only.
+5. Create a backend-only code breakpoint in Console. Review it, choose hardware
+   policy and new count intent, then include/save. Unsupported command lists or
+   thread/task restrictions must exclude the entire entry. Change a managed
+   breakpoint externally; review or explicitly exclude its full definition.
+
+Owner manual acceptance and physical ARM/Xtensa/RV32 reopening/restoration remain
+outstanding. Use disposable fixtures for physical checks.
+
 ## Hardware data watchpoints
 
 Coverage: M12; FR-25 and NFR-03/04/05/06/07/09/10. Native results do not establish
@@ -665,7 +776,6 @@ register/context agreement, OpenOCD errors/disconnect and controlled peripheral
 behavior; repeat applicable workflows on ESP32 Xtensa/RISC-V. All are
 UNVERIFIED until actual recorded evidence, regardless of simulated MI success.
 
-
 ## CPU registers
 
 Coverage: M09; FR-08/20 and selected-context correctness.
@@ -688,7 +798,6 @@ Coverage: M09; FR-08/20 and selected-context correctness.
 Focused commands: `make test-m09-model` for synthetic model coverage,
 `make test-m09-native` for actual GDB and PTY. They are also included in `make test`
 and `make test-native` respectively; sanitizer targets inherit those suites.
-
 
 ## Disassembly browsing and code breakpoints
 
@@ -885,7 +994,6 @@ Manual acceptance, directly and inside tmux:
 
 Physical embedded compatibility and managed reset recovery remain
 M16–M17 work; native tests do not establish those results.
-
 
 ## Call Stack and Threads
 
@@ -1185,7 +1293,6 @@ checks alone do not satisfy the visual gate.
 `tests/unit/test_render.c` inspects ncurses cells and exact direct-color pairs.
 It does not substitute for inspecting the rendered interface.
 
-
 ## Lower dock and independent overlays
 
 1. Start a demo or live session at 140x44. Expect three primary groups and three
@@ -1295,9 +1402,10 @@ extended-color parameters when interpreting inverse attributes. Physical appeara
 
 ## Physical-board core workflow (M17)
 
-M17 validates NUCLEO-F446RE with its onboard ST-LINK and ESP32-S3 with native
-USB/JTAG. These results do not imply support for unnamed boards, probes or
-architectures. Build instructions and non-destructive defaults are in the
+M17 validates ARM/Cortex-M and Xtensa debugging on real hardware, using
+NUCLEO-F446RE with ST-LINK and ESP32-S3 with native USB/JTAG respectively.
+Task2.1 adds the [RISC-V core workflow](#risc-v-hardware-validation).
+ Build instructions and non-destructive defaults are in the
 [embedded fixture guide](../tests/fixtures/embedded/README.md).
 
 Build offline without connecting or programming:
@@ -1373,10 +1481,89 @@ Unperformed manual steps are not implied by automated terminal checks.
 
 Subject to the explicit v0.1.0 physical RISC-V deferral, exercise the same applicable core workflow on the ESP32 validation/Xtensa and ESP32/RISC-V boards through the appropriate GDB/server. Native x86-64 is always retested. Exact board/probe details are recorded with actual evidence, not required during planning. QEMU ARM/RISC-V guest/native tests are supplementary when available. This is validation coverage, not an in-product simulator or a promise that hardware-specific features work on every target. See the [release matrix](#every-release-regression-matrix).
 
+## F01 physical restoration
 
-### Embedded startup debugging check
+These opt-in runners use already-programmed firmware and an external debugger
+server. They never flash. Review the exact ELF, source, code location, Watch
+expression and bounded RAM expression before connecting. Use a disposable
+session without other debugger clients or preexisting breakpoints.
 
-This is a procedure for additional evidence, not a newly recorded M17 pass.
+```sh
+make all build/test-setup-board build/test-setup-board-tui
+TB_SETUP_BOARD_LOG="$PWD/build/m17/setup-session" \
+  build/test-setup-board "$GDB" "$ENDPOINT" "$ELF" "$ARCH" \
+  "$CODE_LOCATION" "$WATCH_EXPRESSION" "$SOURCE_PATH" "$MEMORY_EXPRESSION"
+build/test-setup-board-tui "$PWD/build/the-bugger" "$GDB" "$ENDPOINT" \
+  "$ELF" "$CODE_LOCATION" "$WATCH_EXPRESSION" "$MEMORY_EXPRESSION"
+TB_BOARD_TMUX=1 build/test-setup-board-tui "$PWD/build/the-bugger" \
+  "$GDB" "$ENDPOINT" "$ELF" "$CODE_LOCATION" "$WATCH_EXPRESSION" \
+  "$MEMORY_EXPRESSION"
+```
+
+For the shared Xtensa/RV32 fixture, use `fixture_checkpoint`, `fixture_counter`,
+`tests/fixtures/embedded/workload.c` (absolute path) and `&fixture_buffer`.
+`ARCH` is `xtensa` or `riscv`. Give every backend invocation a fresh log prefix.
+The backend checks split/tab identity, retained missing Source selection, partial
+save fidelity, no restored Memory/Watch permissions, disabled-first breakpoint
+configuration, invalid-condition failure, configured ignore count, Require hardware,
+unapproved remote addresses, retry without duplication, explicit removal, running
+deferral and in-flight cancellation. It leaves the target halted.
+
+For `ARCH=arm`, the existing-image variant also checks decoded PC/registers,
+source/instruction steps, an explicit RAM word, hardware data watchpoint, reset
+and resume/leave-halted disconnect. Set `TB_SETUP_BOARD_STEP_LOCATION` to a reviewed
+source line outside a long single-line loop; the main code location must place
+the supplied Watch/RAM object in scope. This variant does not substitute for
+aggregate/Flash/caller checks requiring the shared fixture.
+
+The terminal runner uses a private profile store and exercises actual Session
+Review, enabled-failure acknowledgment, Save setup and repeated reopening. It
+checks Setup/Session/Quit at widths 48/80/123/124/160. Run directly and in isolated
+tmux; these automated checks do not establish owner visual or unplug acceptance.
+
+## RISC-V hardware validation
+
+Task2.1 validates the shared RISC-V RV32 workflow on physical hardware, using
+ESP32-C6FH4 as the test device and the existing board runners.
+The [fixture guide](../tests/fixtures/embedded/README.md#risc-v-fixture) covers building
+and the UART/native-USB distinction. In the matching activated ESP-IDF environment:
+
+```sh
+make all build/test-board build/test-board-tui
+mkdir -p build/m17
+openocd -f tests/fixtures/embedded/openocd/esp32c6.cfg
+# In a second terminal, also with the ESP-IDF environment activated:
+TB_BOARD_LOG=build/m17/c6-session-new.log build/test-board \
+  riscv32-esp-elf-gdb 127.0.0.1:3333 \
+  "$PWD/build/m17/esp32c6/the_bugger_m17.elf" riscv --reset-halt
+build/test-board-tui "$PWD/build/the-bugger" riscv32-esp-elf-gdb \
+  127.0.0.1:3333 "$PWD/build/m17/esp32c6/the_bugger_m17.elf"
+```
+
+Build the host runners as in the core workflow, create the log directory and
+use a fresh log path. Set `TB_BOARD_TMUX=1` for the isolated tmux TUI run.
+Tests deliberately control execution/reset and read known fixture objects; they
+never flash. The checkpoint must have a decoded instruction and opcode bytes at the stopped
+PC; the RISC-V fixture checks 2/4-byte instruction alignment. Manually check
+profile reopen, visual appearance and physical unplug/recovery.
+
+Known tool issues for this setup:
+
+- OpenOCD `v0.12.0-esp32-20260703` crashes on the C6 `qCRC` path used by
+  `compare-sections`. Verify image identity with GDB
+  `dump binary memory FILE START END`, then compare each dumped section with
+  its ELF bytes. Obtain exact bounds from that ELF.
+- RISC-V GDB `17.1_20260402` displays application instructions as `.word` after
+  loading `esp32c6_rev0_rom.elf` from ROM package20241011. Application and
+  bootloader symbols decode correctly; avoid adding that ROM file for this setup.
+- Reset destroys FreeRTOS task contexts. The fixture's `ESP_RTOS hwthread`
+  setting keeps a CPU context available for fresh-stop verification.
+
+[Validation records](validation.md#v014-task-21--risc-v-hardware-validation)
+contain the reproductions and results.
+
+## Embedded startup debugging check
+
 Use the [startup walkthrough](usage.md#debugging-embedded-startup-code) with an
 already-programmed disposable fixture and matching ELF. Record board/core, reset
 wiring, probe, GDB/OpenOCD versions, scripts/arguments and firmware identity.
@@ -1412,7 +1599,7 @@ Prepare the Linux x86-64 host distribution from a reviewed checkout:
 
 ```sh
 make release
-(cd build/dist/v0.1.3 && sha256sum --check SHA256SUMS)
+(cd build/dist/v0.1.4 && sha256sum --check SHA256SUMS)
 ```
 
 The [packaging procedure](maintaining.md#linux-x86-64-release-artifacts) describes
@@ -1443,7 +1630,7 @@ a listening socket does not establish successful target examination.
 ## Every-release regression matrix
 
 Apply the explicit [version-specific physical RISC-V deferrals](requirements.md#release-acceptance):
-v0.1.0 deferred it, and the owner separately deferred v0.1.3 RISC-V validation to
+v0.1.0 deferred it, and the maintainer separately deferred v0.1.3 RISC-V validation to
 v0.1.4. Neither is a hardware support claim or a general waiver for future
 releases. Record actual commands, results and release acceptance for the
 applicable matrix below. Exact ESP/probe setup is not a
@@ -1453,9 +1640,9 @@ editable; OpenOCD is not a requirement for every architecture.
 | Environment | Minimum evidence | Current live evidence |
 |---|---|---|
 | Native Linux x86-64 | Launch/attach, stepping both modes, AT&T, code/data breaks, registers, RAM, variables/frames/threads, output/log/profile, cleanup | M05–M14 accepted; GCC/Clang native and tmux regressions plus full default/native sanitizers passed at M14. Per-release evidence and release acceptance remain required |
-| STM32 / ARM | NUCLEO-F446RE fixture via GDB/OpenOCD; halt/step/break/watch, real code/register/RAM/variables, reset/disconnect/cleanup | M17 physical core/API/TUI/tmux PASS; exact setup and exclusions in validation records |
-| ESP32 / Xtensa | Validation board via appropriate GDB/server; applicable core workflow and cleanup | M17 ESP32-S3 physical core/API/TUI/tmux PASS; other boards require evidence |
-| ESP32 / RISC-V | Validation board via appropriate GDB/server; applicable core workflow and cleanup | UNVERIFIED; physical acceptance deferred for v0.1.0 and separately v0.1.3 to v0.1.4; no hardware support claim |
+| ARM / Cortex-M | NUCLEO-F446RE fixture via GDB/OpenOCD; halt/step/break/watch, real code/register/RAM/variables, reset/disconnect/cleanup | M17 physical core/API/TUI/tmux PASS; exact setup and exclusions in validation records |
+| Xtensa | Validation board via appropriate GDB/server; applicable core workflow and cleanup | M17 ESP32-S3 physical core/API/TUI/tmux PASS; other boards require evidence |
+| RISC-V RV32 | Validation board via appropriate GDB/server; applicable core workflow and cleanup | Accepted ESP32-C6FH4 core/API/TUI evidence in Task2.1. Historical release deferrals remain recorded; other targets need evidence |
 | QEMU ARM / RISC-V | Supplementary reproducible native/guest runs where available | UNVERIFIED; not a physical-board substitute |
 
 For each release, capture the actual setup/version, relevant fixture/source
@@ -1708,7 +1895,6 @@ Interactive MMIO review on that setup:
    block further MMIO and cause no automatic retry. Reconnection or an exact late
    completion is required as documented; do not inject arbitrary faults on hardware.
 
-
 ## ELF mapping trust and bounded reconstruction
 
 `make test` includes image-model revision/identity checks, authored Code-model
@@ -1743,5 +1929,5 @@ label and Console invalidation. It is not a physical ARM validation.
 The shared 4 MiB allocation check includes cached listings, source annotations,
 anchor payloads and entry headers. Fixed active views and bounded temporary
 reconstruction buffers are separate from that retained-history pool. Actual
-terminal appearance, hardware-image correspondence and owner acceptance remain
+terminal appearance, hardware-image correspondence and maintainer acceptance remain
 separate checks.

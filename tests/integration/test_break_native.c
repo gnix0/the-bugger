@@ -118,12 +118,18 @@ int main(int argc, char *argv[])
     CHECK(argc == 4); TbNative *n = start(argv[1], NULL); TbBreakpoints *b = tb_native_breakpoints(n);
     browsing(n); idle(n);
     CHECK(tb_break_add(b, "m08_tick", false)); idle(n); CHECK(tb_break_count(b) == 1);
+    CHECK(tb_break_definitions_ready(b) && tb_break_definition_count(b) == 1);
+    const TbBreakDefinition *definition = tb_break_definition(b, 0);
+    CHECK(definition && strcmp(definition->location, "m08_tick") == 0 && definition->enabled && !definition->hardware && !definition->ignore_set);
+    uint64_t definition_identity = definition->identity;
     char id[32]; (void)snprintf(id, sizeof id, "%s", tb_break_row(b, 0)->id);
     CHECK(tb_break_condition(b, id, "value == 3")); idle(n); CHECK(strcmp(tb_break_row(b, 0)->condition, "value == 3") == 0);
     CHECK(tb_break_ignore(b, id, "2")); idle(n); CHECK(tb_break_row(b, 0)->ignore == 2);
+    CHECK(definition->ignore_set && definition->ignore == 2);
     CHECK(!tb_break_ignore(b, id, "-1") && !tb_break_ignore(b, id, "4294967296"));
     CHECK(tb_break_ignore(b, id, "0")); idle(n);
     CHECK(tb_break_enable(b, id, false)); idle(n); CHECK(!tb_break_row(b, 0)->enabled);
+    CHECK(!definition->enabled);
     CHECK(tb_break_enable(b, id, true)); idle(n); CHECK(tb_break_row(b, 0)->enabled);
     uint64_t previous = tb_context_snapshot(tb_native_context(n))->generation.stop;
     CHECK(tb_native_continue(n)); stop(n, previous);
@@ -133,7 +139,9 @@ int main(int argc, char *argv[])
     CHECK(tb_break_ignore(b, id, "2")); idle(n);
     previous = tb_context_snapshot(tb_native_context(n))->generation.stop;
     CHECK(tb_native_continue(n)); stop(n, previous); CHECK(tb_break_row(b, 0)->ignore == 0);
+    CHECK(definition->identity == definition_identity && definition->ignore == 2 && tb_break_definitions_ready(b));
     CHECK(tb_break_condition(b, id, "value +")); idle(n); CHECK(!*tb_break_row(b, 0)->condition && *tb_break_message(b));
+    CHECK(!*definition->condition && definition->ignore == 2);
     CHECK(tb_break_condition(b, id, "value >= 8")); idle(n); CHECK(tb_break_ignore(b, id, "2")); idle(n);
     previous = tb_context_snapshot(tb_native_context(n))->generation.stop;
     CHECK(tb_native_continue(n)); stop(n, previous); CHECK(tb_break_row(b, 0)->ignore == 0);
@@ -141,10 +149,13 @@ int main(int argc, char *argv[])
     CHECK(tb_break_add(b, "m08_not_loaded_yet", false)); idle(n); CHECK(tb_break_count(b) == 2 && tb_break_row(b, 1)->pending);
     char pending[32]; (void)snprintf(pending, sizeof pending, "%s", tb_break_row(b, 1)->id);
     CHECK(tb_break_remove(b, pending)); idle(n); CHECK(tb_break_count(b) == 1);
+    CHECK(tb_break_definition_count(b) == 1);
     previous = tb_context_snapshot(tb_native_context(n))->generation.stop;
     CHECK(tb_native_run_to(n, "main")); stop(n, previous); /* existing tick breakpoint intervenes */
     CHECK(tb_break_count(b) == 1 && strcmp(tb_break_row(b, 0)->id, id) == 0);
+    CHECK(tb_break_definition_count(b) == 1 && definition->identity == definition_identity);
     CHECK(tb_break_remove(b, id)); idle(n); CHECK(tb_break_count(b) == 0);
+    CHECK(tb_break_definition_count(b) == 0);
     const TbCodeView *view = tb_code_view(tb_native_code(n), 0); uint64_t revision = view->assembly_revision;
     tb_code_return(tb_native_code(n), 0); code_ready(n, revision); CHECK(view->instruction_count > 1);
     char location[64]; (void)snprintf(location, sizeof location, "*%s", view->instructions[1].address);
@@ -187,10 +198,22 @@ int main(int argc, char *argv[])
         CHECK(tb_break_remove(b, id)); idle(n); CHECK(tb_break_count(b) == 0);
     }
     close_session(n);
-    n = start(argv[2], NULL); b = tb_native_breakpoints(n); CHECK(tb_break_add(b, "m08_overload", false)); idle(n);
+    n = start(argv[2], NULL); b = tb_native_breakpoints(n);
+    TbSetupBreak restored = {.id = 1, .location = "m08_overload", .condition = "1", .enabled = true, .ignore_set = true, .ignore = 2};
+    CHECK(tb_break_restore(b, &restored, false)); idle(n);
+    const TbBreakRestoration *progress = tb_break_restoration(b, 1);
+    if (!progress || progress->state != TB_RESTORE_INSTALLED) { fprintf(stderr, "Multiple-location restore: %s / %s\n", progress ? progress->reason : "missing", tb_break_message(b)); }
+    CHECK(progress && progress->state == TB_RESTORE_INSTALLED);
+    CHECK(tb_break_definition_count(b) == 1 && !strcmp(tb_break_definition(b, 0)->location, "m08_overload") && tb_break_definition(b, 0)->ignore == 2);
     CHECK(tb_break_count(b) == 3 && tb_break_row(b, 0)->multiple && tb_break_row(b, 1)->child && tb_break_row(b, 2)->child);
     CHECK(tb_break_enable(b, tb_break_row(b, 1)->id, false)); idle(n); CHECK(!tb_break_row(b, 1)->enabled);
-    (void)snprintf(id, sizeof id, "%s", tb_break_row(b, 0)->id); CHECK(tb_break_remove(b, id)); idle(n); CHECK(tb_break_count(b) == 0); close_session(n);
+    (void)snprintf(id, sizeof id, "%s", tb_break_row(b, 0)->id); CHECK(tb_break_remove(b, id)); idle(n); CHECK(tb_break_count(b) == 0);
+    CHECK(!tb_break_restoration(b, 1));
+    restored = (TbSetupBreak){.id = 2, .source = "tests/fixtures/native/breakpoints.cpp", .line = 7, .enabled = false, .ignore_set = true};
+    CHECK(tb_break_restore(b, &restored, false)); idle(n);
+    CHECK(tb_break_restoration(b, 2)->state == TB_RESTORE_INSTALLED && !tb_break_row(b, 0)->enabled);
+    CHECK(tb_break_definition(b, 0)->line == 7 && !strcmp(tb_break_definition(b, 0)->source, restored.source) && tb_break_definition(b, 0)->ignore_set);
+    close_session(n);
     n = start(argv[1], argv[3]); b = tb_native_breakpoints(n); CHECK(tb_break_add(b, "m08_future", false)); idle(n); CHECK(tb_break_row(b, 0)->pending);
     previous = tb_context_snapshot(tb_native_context(n))->generation.stop;
     CHECK(tb_native_continue(n)); stop(n, previous);

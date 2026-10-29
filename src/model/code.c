@@ -45,6 +45,8 @@ typedef struct {
     char file_key[TB_CODE_PATH];
     TbCodeFile tabs[TB_CODE_TABS - 1];
     size_t tab_count, tab_active;
+    bool restored[TB_CODE_TABS - 1], unavailable[TB_CODE_TABS - 1];
+    char resolved[TB_CODE_TABS - 1][TB_CODE_PATH];
 } View;
 struct TbCode {
     TbGdb *gdb; TbContext *context;
@@ -54,7 +56,7 @@ struct TbCode {
     char executable[TB_CODE_PATH];
     View views[TB_CODE_VIEWS];
     TbCodeFile files[TB_CODE_FILES]; size_t file_count;
-    bool files_dirty, files_limited, waiting, flavor_done, images_dirty;
+    bool files_dirty, files_limited, waiting, flavor_done, images_dirty, files_requested;
     CodeJob job, settings_job;
     int active;
     uint64_t revision;
@@ -71,6 +73,11 @@ struct TbCode {
     TbSourceRule restore_rules[TB_CODE_RULES]; size_t restore_count, restore_rule;
     bool restoring;
 };
+bool tb_code_settings_busy(const TbCode *code)
+{
+    return code->restoring || code->settings_job != CODE_NONE ||
+        (code->waiting && code->job >= CODE_DIRECTORY && code->job <= CODE_CLEAR_DIRS);
+}
 static void listing_store(TbCode *code, int id);
 
 void tb_code_safe(char *out, size_t capacity, const char *bytes, size_t length)
@@ -296,7 +303,10 @@ const char *tb_code_message(const TbCode *code) { return code->message; }
 size_t tb_code_file_count(const TbCode *code) { return code->file_count; }
 const TbCodeFile *tb_code_file(const TbCode *code, size_t index) { return index < code->file_count ? &code->files[index] : NULL; }
 bool tb_code_files_limited(const TbCode *code) { return code->files_limited; }
-void tb_code_request_files(TbCode *code) { code->files_dirty = true; ++code->revision; }
+bool tb_code_catalog_pending(const TbCode *code) { return code->waiting && code->job == CODE_FILES; }
+bool tb_code_files_ready(const TbCode *code)
+{ return !code->files_dirty && !(code->waiting && code->job == CODE_FILES); }
+void tb_code_request_files(TbCode *code) { code->files_dirty = code->files_requested = true; ++code->revision; }
 void tb_code_visible(TbCode *code, int id, bool source, bool assembly)
 {
     if (!valid_view(id)) { return; }
@@ -313,6 +323,9 @@ static void source_load(View *view)
     free(view->source); free(view->offsets); view->source = NULL; view->offsets = NULL;
     view->source_length = view->data.line_count = 0; view->data.truncated = false;
     view->data.source_error[0] = '\0'; view->source_dirty = false; ++view->data.source_revision;
+    if (view->tab_active && view->restored[view->tab_active - 1] && view->unavailable[view->tab_active - 1]) {
+        (void)snprintf(view->data.source_error, sizeof view->data.source_error, "Saved Source unavailable. Setup > Unresolved setup entries offers Retry or Remove."); return;
+    }
     if (!*view->data.path) {
         (void)snprintf(view->data.source_error, sizeof view->data.source_error, "No source mapping from GDB; use Files or assembly."); return;
     }
@@ -445,18 +458,63 @@ bool tb_code_open(TbCode *code, int id, size_t file)
     size_t tab = 1;
     for (; tab < view->tab_count; ++tab) {
         const TbCodeFile *opened = &view->tabs[tab - 1];
-        if (strcmp(opened->file, chosen->file) == 0 && strcmp(opened->full, chosen->full) == 0) { break; }
+        if (strcmp(opened->file, chosen->file) != 0) { continue; }
+        bool same = strcmp(opened->full, chosen->full) == 0;
+        if (!same && view->restored[tab - 1]) {
+            size_t matches = 0;
+            for (size_t i = 0; i < code->file_count; ++i) { matches += strcmp(opened->file, code->files[i].file) == 0; }
+            same = (matches == 1 && !code->files_limited) || (*view->resolved[tab - 1] && strcmp(view->resolved[tab - 1], chosen->full) == 0);
+        }
+        if (same) { break; }
     }
     if (tab == view->tab_count) {
         if (view->tab_count == TB_CODE_TABS) { message(code, "Source tab limit reached; close a file tab first."); return false; }
-        view->tabs[tab - 1] = *chosen; ++view->tab_count;
+        view->tabs[tab - 1] = *chosen; view->restored[tab - 1] = view->unavailable[tab - 1] = false;
+        view->resolved[tab - 1][0] = 0; ++view->tab_count;
     }
+    if (view->restored[tab - 1]) { (void)snprintf(view->resolved[tab - 1], TB_CODE_PATH, "%s", path); }
+    view->unavailable[tab - 1] = false;
     view->tab_active = tab;
     (void)snprintf(view->data.path, sizeof view->data.path, "%s", path);
     memmove(view->file_key, chosen->file, sizeof view->file_key);
     view->data.source_follow = false; view->source_dirty = true;
     source_load(view); ++code->revision;
     message(code, *view->data.source_error ? view->data.source_error : "Source opened; execution unchanged."); return true;
+}
+bool tb_code_tab_restore(TbCode *code, int id, const TbCodeFile *file)
+{
+    if (!valid_view(id) || !file || !*file->file || strnlen(file->file, TB_CODE_PATH) == TB_CODE_PATH ||
+        strnlen(file->full, TB_CODE_PATH) == TB_CODE_PATH) { return false; }
+    View *view = &code->views[id]; if (view->tab_count == TB_CODE_TABS) { return false; }
+    size_t slot = view->tab_count++ - 1; view->tabs[slot] = *file;
+    view->restored[slot] = view->unavailable[slot] = true; view->resolved[slot][0] = 0;
+    ++code->revision; return true;
+}
+bool tb_code_tab_unavailable(const TbCode *code, int id, size_t tab)
+{ return valid_view(id) && tab && tab < code->views[id].tab_count && code->views[id].unavailable[tab - 1]; }
+bool tb_code_tab_retry(TbCode *code, int id, size_t tab)
+{
+    if (!valid_view(id) || !tab || tab >= code->views[id].tab_count || !tb_code_files_ready(code)) { return false; }
+    View *view = &code->views[id]; size_t slot = tab - 1;
+    if (!view->restored[slot]) { return !view->unavailable[slot]; }
+    const TbCodeFile *saved = &view->tabs[slot], *chosen = NULL; size_t matches = 0; bool exact = false;
+    for (size_t i = 0; i < code->file_count; ++i) {
+        if (strcmp(saved->file, code->files[i].file) != 0) { continue; }
+        ++matches; chosen = &code->files[i];
+        if (*saved->full && strcmp(saved->full, chosen->full) == 0) { matches = 1; exact = true; break; }
+    }
+    struct stat info;
+    bool available = matches == 1 && (exact || !code->files_limited) && chosen && chosen->full[0] == '/' &&
+        stat(chosen->full, &info) == 0 && S_ISREG(info.st_mode);
+    view->unavailable[slot] = !available;
+    if (available) { (void)snprintf(view->resolved[slot], TB_CODE_PATH, "%s", chosen->full); }
+    else { view->resolved[slot][0] = 0; }
+    if (view->tab_active == tab) {
+        (void)snprintf(view->data.path, sizeof view->data.path, "%s", available ? view->resolved[slot] : (*saved->full ? saved->full : saved->file));
+        view->source_dirty = true; source_load(view);
+        if (*view->data.source_error) { view->unavailable[slot] = true; available = false; }
+    }
+    ++code->revision; return available;
 }
 size_t tb_code_tab_count(const TbCode *code, int id) { return valid_view(id) ? code->views[id].tab_count : 0; }
 size_t tb_code_tab_active(const TbCode *code, int id) { return valid_view(id) ? code->views[id].tab_active : 0; }
@@ -477,11 +535,13 @@ bool tb_code_tab_select(TbCode *code, int id, size_t tab)
         view->file_key[0] = '\0';
     } else {
         const TbCodeFile *file = &view->tabs[tab - 1];
-        (void)snprintf(view->data.path, sizeof view->data.path, "%s", *file->full ? file->full : file->file);
+        (void)snprintf(view->data.path, sizeof view->data.path, "%s",
+                       view->restored[tab - 1] && !view->unavailable[tab - 1] ? view->resolved[tab - 1] : *file->full ? file->full : file->file);
         memmove(view->file_key, file->file, sizeof view->file_key);
     }
-    view->source_dirty = true; source_load(view); ++code->revision;
-    return true;
+    view->source_dirty = true; source_load(view);
+    if (tab && view->restored[tab - 1] && *view->data.source_error) { view->unavailable[tab - 1] = true; }
+    ++code->revision; return true;
 }
 bool tb_code_tab_close(TbCode *code, int id, size_t tab)
 {
@@ -490,6 +550,9 @@ bool tb_code_tab_close(TbCode *code, int id, size_t tab)
     if (tab == view->tab_active && !tb_code_tab_select(code, id, tab == 1 ? 0 : tab - 1)) { return false; }
     if (tab + 1 < view->tab_count) {
         memmove(&view->tabs[tab - 1], &view->tabs[tab], (view->tab_count - tab - 1) * sizeof view->tabs[0]);
+        memmove(&view->restored[tab - 1], &view->restored[tab], (view->tab_count - tab - 1) * sizeof view->restored[0]);
+        memmove(&view->unavailable[tab - 1], &view->unavailable[tab], (view->tab_count - tab - 1) * sizeof view->unavailable[0]);
+        memmove(view->resolved[tab - 1], view->resolved[tab], (view->tab_count - tab - 1) * sizeof view->resolved[0]);
     }
     --view->tab_count;
     if (view->tab_active > tab) { --view->tab_active; }
@@ -591,17 +654,17 @@ static void files_parse(TbCode *code, const TbMiRecord *record)
 {
     code->file_count = 0; code->files_limited = false;
     const TbMiValue *list = tb_mi_find(record->results, "files");
-    if (!list || list->type != TB_MI_LIST) { message(code, "GDB returned no source-file catalog."); return; }
+    if (!list || list->type != TB_MI_LIST) { code->files_limited = true; message(code, "GDB returned no source-file catalog."); return; }
     for (const TbMiValue *item = list->children; item; item = item->next) {
         if (code->file_count == TB_CODE_FILES) { code->files_limited = true; break; }
         TbCodeFile *file = &code->files[code->file_count];
-        if (!raw(file->file, sizeof file->file, tb_mi_find(item->children, "file"))) { continue; }
+        if (!raw(file->file, sizeof file->file, tb_mi_find(item->children, "file"))) { code->files_limited = true; continue; }
         (void)raw(file->full, sizeof file->full, tb_mi_find(item->children, "fullname"));
         ++code->file_count;
     }
     for (int id = 0; id < TB_CODE_VIEWS; ++id) {
         View *view = &code->views[id];
-        if (view->data.source_follow || !*view->file_key) { continue; }
+        if (view->data.source_follow || !*view->file_key || (view->tab_active && view->restored[view->tab_active - 1])) { continue; }
         size_t found = 0, index = 0;
         for (size_t i = 0; i < code->file_count; ++i) {
             if (strcmp(code->files[i].file, view->file_key) == 0) { ++found; index = i; }
@@ -612,7 +675,7 @@ static void files_parse(TbCode *code, const TbMiRecord *record)
             view->source_dirty = true;
         }
     }
-    message(code, code->files_limited ? "Source catalog limited to first 256 GDB files." : "GDB source-file catalog refreshed.");
+    message(code, code->files_limited ? "Source catalog incomplete or limited to 256 files; use exact identities." : "GDB source-file catalog refreshed.");
 }
 static void invalidate_sources(TbCode *code)
 {
@@ -925,10 +988,14 @@ void tb_code_pump(TbCode *code)
         if (view->data.stale != stale) { view->data.stale = stale; ++code->revision; }
         mixed_sources(code, i);
     }
-    if (code->waiting || !required) { return; }
+    if (code->waiting || (!required && !code->files_requested)) { return; }
+    if (code->files_requested && (tb_gdb_state(code->gdb) == TB_GDB_READY || stopped)) {
+        code->files_dirty = code->files_requested = false;
+        (void)request(code, CODE_FILES, "-file-list-exec-source-files", NULL, 0, TB_GDB_SESSION); return;
+    }
     if (!stopped) {
         if (tb_gdb_state(code->gdb) == TB_GDB_READY && code->files_dirty) {
-            code->files_dirty = false;
+            code->files_dirty = code->files_requested = false;
             (void)request(code, CODE_FILES, "-file-list-exec-source-files", NULL, 0, TB_GDB_SESSION);
         }
         return;
@@ -983,7 +1050,7 @@ void tb_code_pump(TbCode *code)
         (void)request(code, CODE_FLAVOR, "-gdb-set", args, 2, TB_GDB_CONTEXT); return;
     }
     if (code->files_dirty) {
-        code->files_dirty = false;
+        code->files_dirty = code->files_requested = false;
         (void)request(code, CODE_FILES, "-file-list-exec-source-files", NULL, 0, TB_GDB_CONTEXT); return;
     }
     for (int i = 0; i < TB_CODE_VIEWS; ++i) {
@@ -1289,8 +1356,10 @@ static bool path_valid(const char *path)
 {
     return path && *path && strlen(path) < TB_CODE_PATH && !strchr(path, '\n') && !strchr(path, '\r');
 }
+void tb_code_cancel_settings(TbCode *code) { code->restoring = false; ++code->revision; }
 bool tb_code_add_directory(TbCode *code, const char *path)
 {
+    if (tb_context_interlocked(code->context) && !code->restoring) { return false; }
     bool existing = false;
     if (path) { for (size_t i = 0; i < code->directory_count; ++i) { existing = existing || strcmp(path, code->directories[i]) == 0; } }
     if (code->waiting || code->settings_job != CODE_NONE || !path_valid(path) || (code->directory_count == TB_CODE_RULES && !existing)) { message(code, "Wait for GDB; use a directory path (at most eight overrides)."); return false; }
@@ -1325,6 +1394,7 @@ static bool cli_quote(char *out, size_t capacity, const char *text)
 }
 bool tb_code_add_rule(TbCode *code, const char *from, const char *to)
 {
+    if (tb_context_interlocked(code->context) && !code->restoring) { return false; }
     bool existing = false;
     if (from) { for (size_t i = 0; i < code->rule_count; ++i) { existing = existing || strcmp(from, code->rules[i].from) == 0; } }
     if (code->waiting || code->settings_job != CODE_NONE || !path_valid(from) || !path_valid(to) || (code->rule_count == TB_CODE_RULES && !existing)) { message(code, "Wait for GDB; provide both prefixes (at most eight mappings)."); return false; }
@@ -1337,6 +1407,7 @@ bool tb_code_add_rule(TbCode *code, const char *from, const char *to)
 }
 bool tb_code_clear_settings(TbCode *code)
 {
+    if (tb_context_interlocked(code->context)) { return false; }
     if (code->waiting || code->settings_job != CODE_NONE) { return false; }
     const char *const args[] = {"console", "unset substitute-path"};
     return request(code, CODE_CLEAR_RULES, "-interpreter-exec", args, 2, TB_GDB_SESSION);

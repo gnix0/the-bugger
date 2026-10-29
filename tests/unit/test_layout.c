@@ -30,6 +30,8 @@ static void invariants(const TbLayout *layout, int focus)
     TbRect area = layout->area;
     for (int i = 0; i < TB_MAX_PANES; ++i) {
         CHECK(panes[i] == tb_layout_has_pane(layout, i));
+        CHECK(panes[i] == (layout->identities[i] != 0));
+        for (int j = 0; panes[i] && j < i; ++j) { CHECK(layout->identities[j] != layout->identities[i]); }
         if (panes[i]) { ++live; }
         TbRect r = layout->panes[i];
         if (r.w == 0 || r.h == 0) { continue; }

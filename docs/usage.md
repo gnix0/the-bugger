@@ -1,13 +1,18 @@
 # Using The Bugger
 
-The current development build supports native Linux and existing remote
-GDB-server sessions, plus reviewed OpenOCD startup and target actions. Physical
-validation covers NUCLEO-F446RE and ESP32-S3 with the
-[recorded configurations](validation.md#m17--physical-board-validation).
-This guide describes v0.1.3, including independent lower overlays, retained
-Disassembly/Memory browsing and explicit, setup-gated MMIO sampling. Themes,
-Source fullscreen and spatial keyboard navigation remain available.
+The shared workspace supports native Linux x86-64 and embedded ARM/Cortex-M,
+Xtensa and 32-bit RISC-V through a target-compatible GDB/server. Physical checks
+exercise ARM/Cortex-M on STM32 NUCLEO-F446RE, Xtensa on ESP32-S3 and RISC-V RV32
+on ESP32-C6FH4. See [validation records](validation.md) for the test configurations.
+This guide covers the current development build, including the v0.1.3 workspace
+and v0.1.4 RISC-V setup.
 See [build and first session](../README.md#build-and-first-session) for prerequisites.
+
+For RISC-V (tested on ESP32-C6FH4), select `riscv32-esp-elf-gdb`, the matching
+application ELF and `tests/fixtures/embedded/openocd/esp32c6.cfg` in Embedded
+target setup. Use the board's native USB/JTAG connector for debugging. This
+configuration keeps CPU context available across reset; it does not implement
+FreeRTOS task inspection. See the [RISC-V setup and tool limitations](testing.md#risc-v-hardware-validation).
 
 ## Native Linux sessions
 
@@ -686,7 +691,7 @@ a profile require confirmation. Launcher **Config → Profiles** loads a configu
 review; selection alone does not launch tools. Successful saved native sessions
 appear in recents. Source settings restore before execution; errors remain visible.
 
-Profiles write version-2 JSON at `$XDG_CONFIG_HOME/the-bugger/profiles.json`, or
+Connection-only stores write version-2 JSON at `$XDG_CONFIG_HOME/the-bugger/profiles.json`, or
 `$HOME/.config/the-bugger/profiles.json` when XDG configuration is absent/relative.
 Storage is bounded to 16 named profiles and 8 recent entries with private atomic
 writes. Corrupt files are preserved; repair/reload instead of silently overwriting
@@ -694,15 +699,97 @@ them. Concurrent stale writers must reload. Paths and ordered argument/script
 arrays are literal, with no shell evaluation.
 
 Profiles exclude PID, environment overrides and runtime values; Attach requires
-a current PID. Workspace/tabs, Memory locations, watches and breakpoints are not
-restored yet (F01). Remote definitions retain endpoint/tool/protocol choices for reviewed connection.
+a current PID. Workspace/Source/Memory/Watch definitions can restore through the
+saved-setup review, including verified code-breakpoint configuration (F01). Remote
+definitions retain endpoint/tool/protocol choices for reviewed connection.
 OpenOCD profiles retain script choices and require explicit startup review.
 Profiles exclude keybinds and themes. Version-1 profiles remain readable; obsolete
 `keys` fields are ignored and omitted on the next profile-store write, including
 recent-session updates. Newly written version-2 stores require an updated app;
 older versions that require version 1 cannot read them.
+Schema-3 stores can also be read. They contain separate saved setup definitions;
+saving and restoration are available through Setup/session review. Older builds that
+accept only schema 1/2 cannot read schema 3, and there is no silent downgrade.
+A malformed setup record puts an otherwise valid schema-3 store into read-only
+recovery: usable connections remain available, but all writes, including recents,
+are blocked. **Config → Profiles** indicates read-only mode. Repair the file,
+then choose **Reload file**; successful recovery requires a fully valid store.
 See the [format](architecture.md#profiles-and-source-restoration) and
 [walkthrough](testing.md#profiles-and-source-settings).
+
+## Saving a setup
+
+In a live session, choose **Setup → Save setup** beside Session/Quit. The asterisk
+marks changed persistable definitions. Saving requires an associated saved
+connection profile; the review provides **Save profile** when one is needed.
+It saves pane splits/proportions, tab membership/order/selection, Source context
+role and pinned files, Memory expressions/count/grouping, Watch roots/formats and
+supported frontend-created code-breakpoint definitions. Values, permissions,
+temporary/data breakpoints, fullscreen and lower-overlay state are excluded.
+
+Review shows effective connection differences from the saved profile. **Save
+setup** saves that snapshot separately and never changes the connection profile.
+**Profile... → Duplicate** copies the saved connection and setup independently;
+unsaved edits are excluded. Deleting a profile also deletes its saved setup after
+confirmation. Replacing the connection retains the setup.
+
+Reopening an associated saved profile adds a setup-restoration review before
+starting. **Restore saved setup** defaults on. Review the scope, connection
+differences and any local ELF/relative-path launch-context change, then start.
+Changed configuration or ELF metadata during review requires another confirmation.
+Matching local metadata does not verify firmware identity. Clear the checkbox to
+start with the current workspace; saving over that skipped setup requires
+**Replace setup** confirmation and discards hidden old definitions without merging.
+
+Local pane/tab/Memory/Watch definitions restore before initialization/source
+settings, followed by bounded Source reopening. Lower views start minimized;
+Memory stays unread and Watches grant no read permission. Missing pins retain
+identity/order/selection, show `!` and an unavailable message, and contain no old
+source text. **Setup → Unresolved setup entries** offers Retry/Remove. Repair
+source lookup settings and refresh the GDB catalog with Choose source file before
+retrying when needed. Unsupported saved Watch expressions remain inert and removable.
+
+A running target is left running while restoration awaits a stop. Use Pause
+explicitly. Active restoration blocks execution, Reset, Console and debugger
+context/configuration changes; local navigation and close remain available.
+**Restoration information → Cancel restoration** stops further dispatch without
+rollback. Cancel requested remains distinct from canceled until in-flight work
+settles. Save waits for active work to settle.
+
+Code breakpoints restore disabled. Conditions, explicitly configured ignore counts
+and Require hardware policy must verify before an enabled definition is enabled.
+Pending symbolic and multiple locations retain their original definitions; GDB
+resolves them again. A successful configuration does not guarantee physical
+hardware allocation. Failures remain disabled/unresolved and retained for partial
+saves. Enabled failures require acknowledgment before execution; an unchanged
+failure set does not reprompt. Retry reuses a known disabled partial location.
+Remove changes the unsaved definition and does not delete a partial GDB location.
+
+Literal addresses require explicit current-session approval through the explained
+Retry control unless a current native executable mapping matches saved file
+identity, mapped range and load bias. Remote addresses always need approval.
+Mapping provenance is metadata, not live-byte or firmware verification. No remote
+checksum transport is used. Approvals are never saved.
+
+An uncertain mutation pauses restoration for one metadata-only reconciliation
+query. It never repeats the mutation or assumes rollback. Incomplete/ambiguous
+results retain the execution interlock; use **Retry metadata reconciliation** or
+close the session. Cancellation also waits for uncertain in-flight work to settle.
+
+**Review GDB breakpoints** refreshes the metadata listing. Review a complete
+supported definition and choose new Default/Require hardware and ignore-count
+intent explicitly before including it in the unsaved draft. Observed hardware,
+hits and remaining counts are shown separately; historical policy/counts are
+never inferred. Import does not change GDB. Unsupported command lists/restrictions,
+incomplete entries and temporary/data breakpoints are excluded whole, with reasons.
+Already included entries cannot be imported twice. External managed changes block
+saving until reviewed or the entire managed definition is explicitly excluded;
+exclusion leaves GDB unchanged.
+Runtime hits and remaining ignore counts do not change saved configured counts
+or the asterisk. Saving waits for active source-setting and breakpoint work to
+settle. Memory/Watch capture grants no read permission and requests no values.
+Toolbar hints disappear from right to left when needed to keep the existing row
+count; action names and configured shortcuts continue to work.
 
 ## Troubleshooting and known limits
 
