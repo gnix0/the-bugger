@@ -4,12 +4,12 @@ Commands, results, revisions and acceptance records for The Bugger.
 
 ## Current evidence boundary
 
-Latest release: [v0.1.3](#v013-release-preparation).
-Current candidate: v0.1.4, with accepted F01 storage, saving, restoration,
-breakpoint import and reconciliation. The
-[release checks](#v014-release-preparation) distinguish physical/host evidence
-from final acceptance and publication. Earlier checkpoint exclusions below
-describe their original trees.
+Latest release: [v0.1.4](#v014-publication), published and accepted. F01 storage,
+saving, restoration, breakpoint import and reconciliation are shipped. Uploaded
+distribution files match the approved artifacts, hosted release checks passed,
+and branch synchronization is complete. F02 remains planned for v0.1.5.
+Earlier checkpoint exclusions and pending states below describe their original
+trees; the publication record closes the v0.1.4 release gate.
 
 Entries are chronological. Raw logs are stored under ignored `build/`; summaries
 and references below retain the results, including failures and unrun checks.
@@ -41,6 +41,7 @@ and references below retain the results, including failures and unrun checks.
 | M17 | NUCLEO-F446RE and ESP32-S3 validation | accepted | `f568bd2482b2309e3534ebc8e197854ada37bf77` |
 | M18 | v0.1.0 release evidence/acceptance | accepted; published | v0.1.0; preparation revision recorded below |
 | F19 | Themes, variants and Config | accepted; shipped in v0.1.1 | [Focused checks](#f19--themes-and-configuration); implementation committed per maintainer report |
+| F01 | Saved setup restoration | accepted; shipped in v0.1.4 | `a460648`; [publication and verification](#v014-publication) |
 
 ### Full recorded commit identifiers
 
@@ -3273,3 +3274,53 @@ source completeness are verified in `artifact-check.log`, and an independent
 build of the final source archive is logged in `source-build.log/.exit`.
 Use the regenerated `build/dist/v0.1.4/` files for publication. No additional
 physical check or firmware operation was made for this local persistence correction.
+
+
+## v0.1.4 publication
+
+2026-10-29. **Accepted, published and verified.** The maintainer reported
+publication of [v0.1.4](https://github.com/gnix0/the-bugger/releases/tag/v0.1.4).
+Read-only downloads verified all three uploaded distribution files against the
+approved regenerated artifacts. Their byte counts and SHA-256 values match;
+the uploaded checksum file also validates both archives.
+
+| Uploaded asset | Bytes | SHA-256 |
+|---|---:|---|
+| `the-bugger-v0.1.4-linux-x86_64.tar.gz` | 314955 | `e688feb17fb5d3d4342624114b3b116d5a277978f752e993b076037393a27a3c` |
+| `the-bugger-v0.1.4-source.tar.gz` | 1145377 | `53ad479a415e233cdab4177fb60f1c0aa824f482a9dbb71fbea6049e9fca8cd0` |
+| `SHA256SUMS` | 202 | `c334442664c888f0d6ba1bb765540d8b6c30b04654b7466677a75080d62e748c` |
+
+GitHub's automatic source ZIP/tar links are present separately, for five release
+assets in total. Those automatic snapshots are not the uploaded distribution
+archives. Evidence is retained in `build/v014-publication-verification/`:
+`verification.json`, `corrected-release.json`, `corrected-verification.json`,
+`tree-verification.json`, downloaded assets and `hosted-pr-results.json`.
+
+Hosted checks were inspected directly, separately from the earlier local runs:
+
+| PR / purpose | Tests | Static analysis |
+|---|---|---|
+| [35: feature integration](https://github.com/gnix0/the-bugger/pull/35) | [PASS](https://github.com/gnix0/the-bugger/actions/runs/40814357617/job/123251843883) | [PASS](https://github.com/gnix0/the-bugger/actions/runs/40814357617/job/123251844109) |
+| [36: release merge](https://github.com/gnix0/the-bugger/pull/36) | [PASS](https://github.com/gnix0/the-bugger/actions/runs/40816107319/job/123257420852) | [PASS](https://github.com/gnix0/the-bugger/actions/runs/40816107319/job/123257421119) |
+| [37: branch synchronization](https://github.com/gnix0/the-bugger/pull/37) | [PASS](https://github.com/gnix0/the-bugger/actions/runs/40817612590/job/123262281581) | [PASS](https://github.com/gnix0/the-bugger/actions/runs/40817612590/job/123262281926) |
+
+The feature PR head is `f1794611d2216c0527b99f120bcd66bdbfefb36b`; its hosted
+analysis success closes the earlier clang-tidy18 compatibility failure.
+Release tag `v0.1.4` points to
+`2248bd7350f618483f8cb9fff9912e44d81d5298`. The release merge into `main` is
+`82d05f837554fbb99eb3504f0af745e6604cf8ee`. The release metadata's target is
+`main`, but the existing tag remains on the preceding integration commit.
+Both commits have the exact tree
+`ac6065c99569c9b73b629d0300901fc9a1668487`; there is no released-file difference.
+No published tag or asset was changed by verification.
+
+The maintainer completed the `main` to `develop` synchronization through PR37,
+merge commit `56d1cedaae60f53706dbec750b5557da4eb63c3a`. Subsequent local
+inspection found a clean working tree on `develop`, synchronized local/tracking
+branches and identical `main`/`develop`/`v0.1.4` file trees. Local archive checksums
+also passed. Publication, uploaded-asset verification and synchronization are
+complete; no tag rewrite is required for content correctness.
+
+This closes the F01/v0.1.4 release gate. It does not add unreported owner visual,
+physical-unplug, MMIO, sanitizer or timing results to the earlier evidence.
+F02 is the next planned feature, targeting v0.1.5; implementation has not begun.

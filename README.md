@@ -23,14 +23,15 @@ Catppuccin Macchiato is the default; RGB-capable tmux sessions retain theme colo
 Connection profiles are separate from personal preferences. The live Setup menu
 saves workspace definitions separately. Reviewed workspace/Source restoration,
 Memory settings, Watch definitions and verified code-breakpoint restoration are
-included in the v0.1.4 release candidate, with explicit import and unresolved-entry review.
+available in v0.1.4, with explicit import and unresolved-entry review.
 See [setup saving/restoration](docs/usage.md#saving-a-setup).
 
 Memory and variable inspection are read-only. Explicit-width MMIO sampling is
 available for the validated STM32/OpenOCD setup; navigation never samples MMIO.
 See [Memory inspection](docs/usage.md#memory-inspection) for access controls.
 
-The latest release is **v0.1.3**; development is on **v0.1.4**.
+The latest release is **v0.1.4**. The next planned feature is the dedicated
+Stack view (F02), targeting **v0.1.5**.
 
 ## Build and first session
 
