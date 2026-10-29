@@ -283,6 +283,7 @@ static bool map_number(char **cursor, const char *limit, uint64_t *out, char sep
     if (!digits || *cursor >= limit) { return false; }
     *out = value; ++*cursor; return true;
 }
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): native PID and target PC are distinct mapping lookup inputs.
 static bool native_mapping(TbImages *images, pid_t pid, uint64_t pc, TbSetupMapping *mapping)
 {
     if (pid <= 1) { return false; }

@@ -171,6 +171,7 @@ bool tb_setup_capture_restore(TbSetupCapture *c, const TbSetup *s, TbLayout *lay
     return true;
 }
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): setup-local and model-local identities belong to separate namespaces.
 bool tb_setup_capture_adopt_break(TbSetupCapture *c, uint64_t id, uint64_t model)
 {
     if (!c || !c->current || !model) { return false; }

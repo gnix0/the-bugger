@@ -378,12 +378,12 @@ static void parse_row(TbBreakpoints *b, const TbMiValue *tuple, const TbBreakpoi
         (!tb_mi_find(fields, "cond") || field_text(row.condition, sizeof row.condition, tb_mi_find(fields, "cond"))) &&
         (!tb_mi_find(fields, "ignore") || field_unsigned(tb_mi_find(fields, "ignore"), UINT32_MAX, &checked)) &&
         supported_fields(fields, row.unsupported);
-    if (row.definition_complete && row.location[0] == '-' && strncmp(row.location, "-source ", 8)) {
+    if (row.definition_complete && row.location[0] == '-' && strncmp(row.location, "-source ", 8) != 0) {
         row.definition_complete = false; (void)snprintf(row.unsupported, sizeof row.unsupported, "Unsupported explicit original-location syntax; entire entry excluded.");
     }
     if (!row.definition_complete && !*row.unsupported) { (void)snprintf(row.unsupported, sizeof row.unsupported, "Incomplete or unsupported code-breakpoint definition."); }
     if (parent && (!supported_fields(fields, row.unsupported) || tb_mi_find(fields, "cond") || tb_mi_find(fields, "ignore") ||
-        (strcmp(enabled, "y") && strcmp(enabled, "n")) || (parent->enabled && strcmp(enabled, "y")))) {
+        (strcmp(enabled, "y") != 0 && strcmp(enabled, "n") != 0) || (parent->enabled && strcmp(enabled, "y") != 0))) {
         if (!*row.unsupported) { (void)snprintf(row.unsupported, sizeof row.unsupported, "Unsupported or incomplete per-location attributes."); }
         for (size_t i = 0; i < b->count; ++i) {
             if (strcmp(b->rows[i].id, parent->id) == 0) { b->rows[i].definition_complete = false; memcpy(b->rows[i].unsupported, row.unsupported, sizeof row.unsupported); }
@@ -933,7 +933,6 @@ static void restore_reconciled(TbBreakpoints *b)
     bool match = row->definition_complete && location_matches(&r->definition, row) && (!r->definition.hardware || row->hardware);
     if (b->uncertain_step == RESTORE_INSERT) { match = match && !row->enabled && !*row->condition && !row->ignore; }
     else if (b->uncertain_step == RESTORE_CONDITION) { match = match && !row->enabled && strcmp(row->condition, r->definition.condition) == 0; }
-    else if (b->uncertain_step == RESTORE_IGNORE) { match = attributes(&r->definition, row, false); }
     else if (b->uncertain_step == RESTORE_ENABLE || b->uncertain_step == RESTORE_VERIFY_ENABLED) { match = attributes(&r->definition, row, true); }
     else { match = attributes(&r->definition, row, false); }
     if (!match) { message(b, "Restoration mutation remains uncertain; requested state is not an unambiguous match. Retry reconciliation or close."); return; }
@@ -1031,7 +1030,7 @@ bool tb_break_review_intent(TbBreakpoints *b, const char *id, const TbBreakDefin
 {
     const TbBreakpoint *row = row_id(b, id); size_t i = configured_index(b, id);
     if (b->definition_uncertain || i == b->definition_count || !row || !row->definition_complete || !b->listing_complete || b->dirty || b->waiting ||
-        row->enabled != d->enabled || strcmp(row->condition, d->condition) || (d->hardware && !row->hardware) || row->ignore != (d->ignore_set ? d->ignore : 0)) { return false; }
+        row->enabled != d->enabled || strcmp(row->condition, d->condition) != 0 || (d->hardware && !row->hardware) || row->ignore != (d->ignore_set ? d->ignore : 0)) { return false; }
     uint64_t identity = b->definitions[i].data.identity;
     TbBreakDefinition reviewed = *d;
     if (definition_location(&b->definitions[i].data, row)) {

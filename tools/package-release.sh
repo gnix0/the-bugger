@@ -28,9 +28,10 @@ install -m 755 -- "$binary" "$work/$name/the-bugger"
 strip --strip-debug -- "$work/$name/the-bugger"
 install -m 644 LICENSE "$work/$name/LICENSE"
 install -m 644 THIRD_PARTY_NOTICES "$work/$name/THIRD_PARTY_NOTICES"
-# Include new packaging infrastructure before its implementation commit, too.
+# Include required release sources while they await their implementation commit.
 git ls-files -z > "$work/files"
-printf 'tools/package-release.sh\0' >> "$work/files"
+printf '%s\0' tools/package-release.sh tests/integration/test_setup_board.c \
+    tests/integration/test_setup_board_tui.c >> "$work/files"
 sort -zu "$work/files" -o "$work/files"
 epoch=${SOURCE_DATE_EPOCH:-0}
 [[ $epoch =~ ^[0-9]+$ ]] || { echo 'SOURCE_DATE_EPOCH must be a nonnegative integer' >&2; exit 1; }
@@ -68,9 +69,14 @@ Or add /usr/share/openocd/scripts through Profile / OpenOCD search directories
 when using that system installation.
 Inspect configuration scripts before connecting; initialization can affect hardware.
 
-Verified physical workflows: NUCLEO-F446RE with onboard ST-LINK and ESP32-S3
-with native USB/JTAG, using the configurations documented in the source archive.
+Physical workflows cover ARM/Cortex-M (NUCLEO-F446RE with onboard ST-LINK),
+Xtensa (ESP32-S3) and RISC-V RV32 (ESP32-C6FH4), with the configurations and
+capability-specific results documented in the source archive.
 No compatibility claim is made for unverified targets or tools.
+
+Saving a setup writes profile-store schema 3. Older builds cannot read that
+store; retain a backup before saving if an older build is still needed.
+Loading an older store alone does not migrate it. No automatic downgrade exists.
 
 Licensed under GPLv3; see LICENSE. Full build instructions, user documentation,
 tests and corresponding source accompany this binary in the source archive.

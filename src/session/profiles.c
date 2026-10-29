@@ -459,7 +459,8 @@ static bool transaction(TbProfiles *p, TbProfiles *next)
     next->error[0] = 0; bool ok = save(next);
     if (ok) {
         for (size_t i = 0; i < TB_PROFILES; ++i) { json_object_put(p->setups[i]); }
-        memcpy(p, next, sizeof *p); memset(next->setups, 0, sizeof next->setups);
+        memcpy(p, next, sizeof *p);
+        for (size_t i = 0; i < TB_PROFILES; ++i) { next->setups[i] = NULL; }
     } else { (void)fail(p, next->error); }
     tb_profiles_destroy(next); return ok;
 }
@@ -488,7 +489,7 @@ bool tb_profiles_remove(TbProfiles *p, const char *name)
     TbProfiles *next = clone(p); if (!next) { return false; }
     memmove(&next->items[index], &next->items[index + 1], (next->count - index - 1) * sizeof next->items[0]);
     json_object_put(next->setups[index]);
-    memmove(&next->setups[index], &next->setups[index + 1], (next->count - index - 1) * sizeof next->setups[0]);
+    memmove((void *)&next->setups[index], (const void *)&next->setups[index + 1], (next->count - index - 1) * sizeof next->setups[0]);
     next->setups[next->count - 1] = NULL;
     --next->count; recent_remove(next, name); return transaction(p, next);
 }
@@ -543,6 +544,7 @@ bool tb_profiles_save_setup(TbProfiles *p, const char *name, const TbSetup *setu
     json_object_put(next->setups[i]); next->setups[i] = record; next->schema3 = true;
     return transaction(p, next);
 }
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): source and destination profile names are distinct named API roles.
 bool tb_profiles_duplicate(TbProfiles *p, const char *name, const char *new_name)
 {
     size_t i = profile_index(p, name);
