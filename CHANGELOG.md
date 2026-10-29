@@ -2,10 +2,12 @@
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-29
+
 ### Added
 
-- Setup-definition storage foundation with separate schema-3 records, atomic
-  save/duplicate/delete APIs and read-only recovery for malformed setup records.
+- One saved setup per connection profile, with atomic save/duplication/deletion
+  and read-only recovery for malformed setup records.
 - Live Setup menu captures and saves pane/tab/Source/Memory/Watch definitions and
   frontend-created code-breakpoint intent without values or permissions. Save
   review shows connection differences and confirms replacement of skipped setups;
@@ -22,12 +24,26 @@
 - Physical RISC-V RV32 validation (test device: ESP32-C6FH4, built-in
   USB/JTAG) using the shared
   embedded fixture, core-context OpenOCD configuration and target-compatible
-  GDB. Record source/disassembly, registers, explicit memory/variables,
-  stepping, hardware break/watchpoints, execution/reset and disconnect results.
+  GDB. Checks cover source/disassembly, registers, explicit memory/variables,
+  stepping, hardware break/watchpoints, execution/reset and disconnect.
 - Board validation checks actual decoded instructions and opcode bytes at the
-  stopped PC, including aligned 2/4-byte RISC-V instructions. Document confirmed
+  stopped PC, including aligned 2/4-byte RISC-V instructions. Documented confirmed
   OpenOCD checksum and optional ROM-symbol decoding limitations separately from
   the working debugger workflow.
+
+### Fixed
+
+- Setup text wrapping makes bounded progress in narrow review pages. Resolve
+  static-analysis diagnostics in setup comparison, persistence and breakpoint review.
+
+### Compatibility
+
+- Saving a setup writes profile-store schema 3. Older builds cannot read this
+  store. Loading schema 1/2 alone does not migrate it; no silent downgrade is
+  provided. Retain a backup before saving if older builds are still needed.
+- Saved definitions exclude sampled values, runtime breakpoint IDs, read
+  permissions and image confirmations. Restoring a setup does not establish
+  firmware identity or read Memory/Watch values.
 
 ## [0.1.3] - 2026-10-28
 

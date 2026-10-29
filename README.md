@@ -23,7 +23,7 @@ Catppuccin Macchiato is the default; RGB-capable tmux sessions retain theme colo
 Connection profiles are separate from personal preferences. The live Setup menu
 saves workspace definitions separately. Reviewed workspace/Source restoration,
 Memory settings, Watch definitions and verified code-breakpoint restoration are
-available in v0.1.4 development, with explicit import and unresolved-entry review.
+included in the v0.1.4 release candidate, with explicit import and unresolved-entry review.
 See [setup saving/restoration](docs/usage.md#saving-a-setup).
 
 Memory and variable inspection are read-only. Explicit-width MMIO sampling is

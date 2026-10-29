@@ -1481,6 +1481,46 @@ Unperformed manual steps are not implied by automated terminal checks.
 
 Subject to the explicit v0.1.0 physical RISC-V deferral, exercise the same applicable core workflow on the ESP32 validation/Xtensa and ESP32/RISC-V boards through the appropriate GDB/server. Native x86-64 is always retested. Exact board/probe details are recorded with actual evidence, not required during planning. QEMU ARM/RISC-V guest/native tests are supplementary when available. This is validation coverage, not an in-product simulator or a promise that hardware-specific features work on every target. See the [release matrix](#every-release-regression-matrix).
 
+## F01 physical restoration
+
+These opt-in runners use already-programmed firmware and an external debugger
+server. They never flash. Review the exact ELF, source, code location, Watch
+expression and bounded RAM expression before connecting. Use a disposable
+session without other debugger clients or preexisting breakpoints.
+
+```sh
+make all build/test-setup-board build/test-setup-board-tui
+TB_SETUP_BOARD_LOG="$PWD/build/m17/setup-session" \
+  build/test-setup-board "$GDB" "$ENDPOINT" "$ELF" "$ARCH" \
+  "$CODE_LOCATION" "$WATCH_EXPRESSION" "$SOURCE_PATH" "$MEMORY_EXPRESSION"
+build/test-setup-board-tui "$PWD/build/the-bugger" "$GDB" "$ENDPOINT" \
+  "$ELF" "$CODE_LOCATION" "$WATCH_EXPRESSION" "$MEMORY_EXPRESSION"
+TB_BOARD_TMUX=1 build/test-setup-board-tui "$PWD/build/the-bugger" \
+  "$GDB" "$ENDPOINT" "$ELF" "$CODE_LOCATION" "$WATCH_EXPRESSION" \
+  "$MEMORY_EXPRESSION"
+```
+
+For the shared Xtensa/RV32 fixture, use `fixture_checkpoint`, `fixture_counter`,
+`tests/fixtures/embedded/workload.c` (absolute path) and `&fixture_buffer`.
+`ARCH` is `xtensa` or `riscv`. Give every backend invocation a fresh log prefix.
+The backend checks split/tab identity, retained missing Source selection, partial
+save fidelity, no restored Memory/Watch permissions, disabled-first breakpoint
+configuration, invalid-condition failure, configured ignore count, Require hardware,
+unapproved remote addresses, retry without duplication, explicit removal, running
+deferral and in-flight cancellation. It leaves the target halted.
+
+For `ARCH=arm`, the existing-image variant also checks decoded PC/registers,
+source/instruction steps, an explicit RAM word, hardware data watchpoint, reset
+and resume/leave-halted disconnect. Set `TB_SETUP_BOARD_STEP_LOCATION` to a reviewed
+source line outside a long single-line loop; the main code location must place
+the supplied Watch/RAM object in scope. This variant does not substitute for
+aggregate/Flash/caller checks requiring the shared fixture.
+
+The terminal runner uses a private profile store and exercises actual Session
+Review, enabled-failure acknowledgment, Save setup and repeated reopening. It
+checks Setup/Session/Quit at widths 48/80/123/124/160. Run directly and in isolated
+tmux; these automated checks do not establish owner visual or unplug acceptance.
+
 ## RISC-V hardware validation
 
 Task2.1 validates the shared RISC-V RV32 workflow on physical hardware, using
@@ -1559,7 +1599,7 @@ Prepare the Linux x86-64 host distribution from a reviewed checkout:
 
 ```sh
 make release
-(cd build/dist/v0.1.3 && sha256sum --check SHA256SUMS)
+(cd build/dist/v0.1.4 && sha256sum --check SHA256SUMS)
 ```
 
 The [packaging procedure](maintaining.md#linux-x86-64-release-artifacts) describes

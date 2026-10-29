@@ -748,3 +748,14 @@ $(BUILD_DIR)/test-mmio-hardware: $(BUILD_DIR)/tests/integration/test_mmio_hardwa
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 -include $(BUILD_DIR)/tests/integration/test_mmio.d $(BUILD_DIR)/tests/integration/test_mmio_memory.d $(BUILD_DIR)/tests/integration/test_mmio_tui.d
+
+# Explicit physical setup validation; never run by test-ci.
+$(BUILD_DIR)/test-setup-board: $(BUILD_DIR)/tests/integration/test_setup_board.o $(BUILD_DIR)/src/tui/setup_restore.o $(BUILD_DIR)/src/tui/setup_capture.o $(BUILD_DIR)/src/session/setup.o $(BUILD_DIR)/src/session/profiles.o $(BUILD_DIR)/src/layout/layout.o $(BUILD_DIR)/src/tui/demo.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(JSON_LIBS) $(ELF_LIBS) $(LDLIBS)
+
+-include $(BUILD_DIR)/tests/integration/test_setup_board.d
+
+$(BUILD_DIR)/test-setup-board-tui: $(BUILD_DIR)/tests/integration/test_setup_board_tui.o $(BUILD_DIR)/tests/support/terminal.o $(BUILD_DIR)/src/tui/setup_capture.o $(BUILD_DIR)/src/session/profiles.o $(BUILD_DIR)/src/session/setup.o $(BUILD_DIR)/src/layout/layout.o $(BUILD_DIR)/src/tui/demo.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(JSON_LIBS) $(ELF_LIBS) $(LDLIBS)
+
+-include $(BUILD_DIR)/tests/integration/test_setup_board_tui.d

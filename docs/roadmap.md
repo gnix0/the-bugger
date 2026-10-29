@@ -6,7 +6,9 @@ implemented features or hardware support claims. See [architecture](architecture
 
 ## Current development sequence
 
-v0.1.3 is released. RISC-V hardware validation is accepted; F01 is in progress.
+v0.1.3 is released. RISC-V hardware validation and F01 implementation are accepted;
+v0.1.4 host/physical regression and artifact checks pass locally; final visual
+review, hosted PR checks and release acceptance/publication remain.
 
 | Task | Scope | Current state |
 |---|---|---|
@@ -15,16 +17,19 @@ v0.1.3 is released. RISC-V hardware validation is accepted; F01 is in progress.
 | 1.3 | Disassembly/Memory browsing and explicit MMIO access | Implemented, host verified and accepted |
 | 1.5 | Prepare v0.1.3 | Published; uploaded artifacts verified |
 | 2.1 | Validate ESP RISC-V hardware for v0.1.4 | Accepted; recorded RISC-V RV32 hardware checks use ESP32-C6FH4 |
-| F01 | Setup restoration for v0.1.4 | Implementation host-verified; owner manual and physical restoration acceptance outstanding |
+| F01 | Setup restoration for v0.1.4 | Implementation accepted; host/physical checks passed; final release acceptance pending |
 
 Current controls are in [usage](usage.md); the accepted browsing scope is in
 [requirements](requirements.md#approved-v013-browsing-work).
 
-Remaining v0.1.4 work includes F01, real-world evaluation, documentation,
-formatting and owner-led maintenance. F02–F05 retain separate planning and
-acceptance gates and their version targets below. Final stabilization,
-owner-exclusive build-system review and testing-strategy work precede v0.2.0
-publication.
+Remaining v0.1.4 work is physical restoration/release regression, release-specific
+documentation, artifacts and final acceptance. F02 targets v0.1.5; F03–F05 target
+v0.2.0, each retaining separate planning and acceptance gates. After those features
+and stabilization, complete several-day real-world evaluation and fixes, the
+comprehensive documentation review, agreed formatting conventions/`.editorconfig`
+with controlled application, and owner-led codebase/maintainability review.
+These precede the owner-exclusive build-system review, agreed testing-strategy
+work and final v0.2.0 publication.
 
 Physical RISC-V validation was deferred for v0.1.3. Task2.1 now records real
 RISC-V RV32 checks using ESP32-C6FH4 as the test device. Acceptance adds no new
@@ -40,7 +45,7 @@ Accepted post-release work includes themes, Source fullscreen, spatial navigatio
 (`53b1e5a`), multi-file Source tabs, inline Console, personal keybinds, Vim-like
 input, tmux RGB, rendering fixes, lower overlays and browsing history. Release
 contents are in [CHANGELOG](../CHANGELOG.md); results are in
-[validation records](validation.md). F01 is in progress; the other future gates
+[validation records](validation.md). F01 implementation is accepted; the other future gates
 remain planned.
 
 | Milestone | Deliverable | State | Commit / release reference |
@@ -68,7 +73,7 @@ remain planned.
 | M17 | NUCLEO-F446RE and ESP32-S3 validation | accepted | `f568bd2482b2309e3534ebc8e197854ada37bf77` |
 | M18 | v0.1.0 release evidence/acceptance | accepted; published | v0.1.0; `ad606dc6d7af7a3384401fb97e7c328ea1d8b62b` (preparation) |
 | F19 | Config, built-in themes and variants | accepted; shipped in v0.1.1 | [Recorded checks](validation.md#f19--themes-and-configuration) |
-| F01 | Setup restoration | implemented and host-verified; owner manual/physical acceptance outstanding | — |
+| F01 | Setup restoration | implementation accepted; physical checks passed; final release acceptance pending | `a460648` |
 | F02–F18, F20–F47 | Independent versioned future gates below | planned | — |
 
 ## Development priorities

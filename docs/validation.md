@@ -5,9 +5,11 @@ Commands, results, revisions and acceptance records for The Bugger.
 ## Current evidence boundary
 
 Latest release: [v0.1.3](#v013-release-preparation).
-Current development: [RISC-V validation for v0.1.4](#v014-task-21--risc-v-hardware-validation),
-using ESP32-C6FH4, accepted before F01 implementation. F01 currently has a
-storage/save controls and local/Source restoration with consent/interlocks; code-breakpoint installation/import/reconciliation remain incomplete.
+Current candidate: v0.1.4, with accepted F01 storage, saving, restoration,
+breakpoint import and reconciliation. The
+[release checks](#v014-release-preparation) distinguish physical/host evidence
+from final acceptance and publication. Earlier checkpoint exclusions below
+describe their original trees.
 
 Entries are chronological. Raw logs are stored under ignored `build/`; summaries
 and references below retain the results, including failures and unrun checks.
@@ -3049,3 +3051,187 @@ the flags. Whitespace checks pass, and all 162 local file links in the reviewed
 Markdown documents resolve. These are local Arch Linux x86-64 host checks, not hosted Ubuntu results. No additional
 owner manual or physical ARM/Xtensa/RV32 restoration result is claimed. Owner
 acceptance and physical reopening/restoration remain outstanding; F02–F05 and release preparation have not begun.
+
+
+## v0.1.4 release preparation
+
+2026-10-28–29. **Release candidate; final acceptance and publication pending.**
+F01 implementation was accepted before this release pass. Implementation revisions:
+`52bd788` (definition storage), `250cb59` (capture/save), `095bbc9`
+(local/Source restoration), `a460648b1a89917cee44d220d1a57f8103b18cf5`
+(verified code-breakpoint restoration/import/reconciliation). RISC-V Task2.1:
+`9c35c30`. The preparation changes the version to 0.1.4 and adds two explicit
+physical setup runners, their build registration and release-specific records.
+No F02–F05 implementation or build-system review is included.
+
+### Physical identity and regression
+
+Logs are retained under `build/v0.1.4-release-evidence/`. Commands for the ESP
+runs are in `s3-test-commands.json` and `c6-test-commands.json`; server argv and
+serials are in `*-openocd-command.json`. The initial pass used retained firmware;
+the subsequently authorized ARM fixture programming is recorded below.
+Explicit test actions include halt, continue, stepping, break/watch and reset.
+
+| Architecture / test setup | Firmware identity and tools | Results |
+|---|---|---|
+| ARM/Cortex-M4 / NUCLEO-F446RE, ST-LINK serial 066CFF495154787867161137 | Existing `learning/stm32/ld_startup/ld_startup.elf`; ARM GDB18.1, system OpenOCD0.12.0-01004-g9ea7f3d64-dirty | PASS existing-image core subset and F01 backend/direct/tmux |
+| Xtensa / ESP32-S3 rev0.2, USB/JTAG serial 84:FC:E6:64:27:EC | Retained shared ESP-IDF fixture `build/v0.1.3-s3/the_bugger_m17.elf`; Xtensa GDB17.1_20260402, matching Espressif OpenOCD0.12.0-esp32-20260703 | PASS core backend/direct/tmux and F01 backend/direct/tmux |
+| RISC-V RV32 / ESP32-C6FH4 rev0.0, USB/JTAG serial 40:4C:CA:43:5D:FC | Retained shared fixture `build/v0.1.4-c6/the_bugger_m17.elf`; RISC-V GDB17.1_20260402, matching Espressif OpenOCD0.12.0-esp32-20260703, default24MHz | PASS all six checks after direct USB reconnection |
+
+ELF SHA-256 values:
+
+- ARM: `83738fefd0f8c9a67c572d05cceb274c0210ffa47b63a19767969facdb13dbf7`.
+- Xtensa: `dd42dab971b4f5ecad0395b1b3e6e01f0abf6a56ec4e293a0f0ee0fd9a41602f`.
+- RV32: `a9a8f4fe66b51d79b061becef89fa818b0b6059ed7fa5510bcd8c8500538b508`.
+
+Read-only byte dumps matched ARM's entire 628-byte `.text`, Xtensa's 69,222-byte
+`.flash.text` and 38,376-byte `.flash.rodata`, and RV32's 81,044-byte `.flash.text`
+and 35,560-byte `.flash.rodata`. See `arm-byte-identity-result.log`,
+`s3-byte-identity-after-boot.json` and `c6-byte-identity-after-boot.json`.
+These are bounded section comparisons, not proof of every firmware byte or runtime
+state. No `qCRC`/`compare-sections` was used; the prior C6 backend limitation remains.
+
+ARM used the retained blink firmware, not a newly flashed M17 fixture. Its current
+checks cover source/disassembly, decoded stopped instruction, PC/SP agreement,
+source/instruction steps, explicit SRAM, actual hardware local watchpoint, reset,
+resume advancement and leave-halted retention. At that point, shared-fixture aggregate, Flash
+string, nested caller and Step Out checks had not run on ARM; the follow-up below
+closes that gap. Its initial F01 backend/direct/tmux checks also passed. No fresh MMIO sampling,
+physical unplug recovery or owner visual result is claimed.
+
+F01 checks on each architecture cover actual saved-profile reopening, split/tab
+and Source identity, retained unavailable pins, Memory/Watch definitions without
+read permission, configured ignore count, verified Require hardware intent,
+invalid-condition failure remaining disabled, unapproved remote address retention,
+partial-save/dirty fidelity, explicit retry without duplication, removal, running
+restoration deferral and in-flight cancellation. Terminal runs cover failure
+acknowledgment, actual hardware breakpoint hit, unchanged failure-set behavior,
+save/reopen and widths48/80/123/124/160 in direct terminals and isolated tmux.
+
+Passing physical logs/status (all exit0):
+
+- ARM: `arm-setup-corrected.*`, `arm-setup-tui.*`,
+  `arm-setup-tmux-corrected.*`; backend session detail under matching prefixes.
+- Xtensa: `s3-core.*`, `s3-setup.*`, `s3-setup-tui.*`, `s3-core-tui.*`,
+  `s3-setup-tmux.*`, `s3-core-tmux.*`.
+- RV32: `c6-core-direct.*`, `c6-setup-direct.*`, `c6-setup-tui-direct.*`,
+  `c6-core-tui-direct.*`, `c6-setup-tmux-direct.*`, `c6-core-tmux-direct.*`.
+
+Earlier failures remain retained:
+
+- ARM source stepping started inside the retained firmware's one-line million-
+  iteration loop and timed out. Starting at adjacent line26 permits the same
+  assertion to complete; `arm-setup.log` retains the failure.
+- ARM tmux resize left the test clicking the prior Review geometry. Waiting for
+  actual current geometry fixed synchronization; application assertions remain.
+  Failure: `arm-setup-tmux.log`; correction: `arm-setup-tmux-corrected.log`.
+- Initial ESP dumps while in reset/startup did not reflect application mappings.
+  Explicit reset/halt and a temporary hardware stop at `app_main` produced matching
+  sections (`*-identity-after-boot.*`). The initially considered ARM CubeIDE ELF
+  did not match; it was rejected without executing it or changing firmware.
+- Initial C6 core Step Out timed out with OpenOCD reporting an unexpected reset,
+  USB pipe errors and invalid mapping/context. A test-owned server restart at
+  2MHz still failed transport. After the owner reconnected directly, identity and
+  all six checks passed at the original24MHz, without USB errors in that server
+  log. The failed `c6-core.*`, `c6-core-restarted.*`, `c6-openocd*.log` remain;
+  the cause beyond the observed transport failure is not established.
+
+Targets were left halted; only test-owned servers were stopped. Ownership-checked
+PID/argv cleanup is recorded in `server-cleanup.json`. No external server was killed.
+Initial physical results precede the release's static-analysis corrections; final
+host checks cover those changes. The follow-up ARM fixture checks below also run
+the final code; Xtensa/RV32 were not rerun after those corrections.
+
+
+### ARM shared-fixture follow-up
+
+After the initial existing-image pass, the maintainer explicitly requested the
+remaining fixtures and authorized programming ARM and leaving that fixture installed.
+The default M17 image does not configure GPIO. Xtensa/RV32 were not programmed.
+Before programming, the complete 512KiB ARM Flash was read into
+`arm-original-flash.bin`; its first628 bytes matched the previously verified blink
+image. Backup SHA-256:
+`42f8dcfa92881eca331c48e8e144170a7fd3b05480ca26e9e861b5c251b696de`.
+
+`arm-fixture-program-command.json` records exact argv and the selected ST-LINK
+serial. OpenOCD `program … verify reset exit` passed, exit0
+(`arm-fixture-program.log/.exit`). Programmed ELF:
+`build/v0.1.4-release-host/m17/stm32f446re/firmware.elf`, SHA-256
+`280a2227549f11dd7022c6f0d727501c5bb0c471fb52ac1374dd65872e73f23f`.
+Default/LED ELF offline checks and actual offline ARM GDB lookup passed
+(`arm-fixture-offline.log`); only the default image was programmed/executed.
+
+All six final-code physical runs passed, exit0: `arm-fixture-core.*`,
+`arm-fixture-setup.*`, `arm-fixture-setup-tui.*`, `arm-fixture-core-tui.*`,
+`arm-fixture-setup-tmux.*`, `arm-fixture-core-tmux.*`. Exact arguments and
+per-test environment are in `arm-fixture-test-commands.json`. The full core run
+now covers explicit aggregate/local and independent SRAM/Flash reads, caller
+selection, source/instruction step and Step Out, real hardware break/watch,
+Continue/Pause, reset and reconnect. Resume advanced the counter8→15; leave-halted
+retained15. F01 checks also pass against this image. The target was left halted
+with the fixture installed, and only its test-owned server was stopped; cleanup
+was appended to `server-cleanup.json`. This closes the initial ARM fixture-specific
+coverage gap without claiming new MMIO, unplug, timing or owner visual evidence.
+
+### Final host and distribution checks
+
+Local environment: Arch Linux x86-64, kernel7.2.11, glibc2.44, GCC16.2.1,
+GDB18.1, tmux3.8 and clang-tidy23.1.3 (`environment.log`). These are local
+results, not hosted Ubuntu PR results.
+
+- Focused profile/store/capture and bounded breakpoint checks: PASS, exit0
+  (`focused-final.log/.exit`). The first focused invocation used a nonexistent
+  target after its earlier checks passed; retained as `focused-corrections.*`.
+- Static analysis: PASS, exit0 (`analysis-final.log/.exit`), using
+  `make BUILD_DIR=build/v0.1.4-release-analysis analyze`.
+  The initial analysis found37 diagnostics. Corrections make string comparisons
+  explicit, use unsigned difference flags, preserve typed JSON ownership, combine
+  equivalent reconciliation branches and bound setup text wrapping with forward
+  progress. Narrow annotations document intentional API parameter roles and the
+  single application object's field grouping. No analysis rule was disabled
+  globally. An intermediate edit briefly broke compilation and was corrected;
+  `analysis-corrected.*` retains that failure.
+- All78 C test sources compile fortified: PASS, exit0 (`test-compilation.*`);
+  exact objects/command are in `analysis-commands.json`.
+- Final fresh full baseline: **PASS, exit0**:
+  `TERM=xterm-256color make BUILD_DIR=build/v0.1.4-release-ci-final CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`.
+  Full log/status/command: `test-ci-final.log`, `test-ci-final.exit`,
+  `test-ci-final-command.json`. Default/native/direct/tmux, actual localhost
+  remote and offline OpenOCD suites all ran. The earlier baseline also passed,
+  but predates the static-analysis corrections and is not substituted for this one.
+  `tested-final-tree.sha256` identifies the starting snapshot; `final-code-check.log`
+  verifies unchanged final code/test/build/workflow files. Final documentation and
+  packaged source are identified by `release-tree.sha256` and artifact manifests.
+- Hardened optimized binary: PASS (`release-build.*`), with PIE, stack protector,
+  FORTIFY3, non-executable stack and full RELRO/now (`artifact-structure.log`).
+  Direct libraries are ncursesw6, libelf1, json-c5 and libc6. The executable uses
+  GLIBC symbols through2.38; this is not a universal older-distribution guarantee.
+- Extracted binary CLI, PTY, workspace and isolated tmux: PASS (`artifact-cli.*`,
+  `artifact-tui.*`, `artifact-workspace.*`, `artifact-tmux-corrected.*`). The first
+  tmux test could not write its expected `build/` capture in the external working
+  directory; creating that output directory fixed the harness precondition without
+  changing its assertions. The original failure remains in `artifact-tmux.*`.
+- Source archive builds independently outside the checkout and reports0.1.4:
+  PASS (`artifact-source-build.*`). Invalid packaging inputs are rejected before
+  creating distribution files (`artifact-rejections.log`). Final archives include
+  both new physical tests even before their implementation commit.
+
+### Release requirement assessment
+
+| Scope | Current evidence / boundary |
+|---|---|
+| FR-01–14,16–30 | Full host suites cover startup/configuration, native launch/attach, literal argv, optional server ownership, execution controls, source/disassembly, registers, memory, lazy variables, frames/threads, breaks/watchpoints, layout/input/themes, logs and profiles. Three-board applicable core/TUI checks add physical results; they do not establish every backend capability on every target. |
+| FR-15,31 | Current ARM full shared-fixture pass plus Xtensa/RV32 core/F01 backend/direct/tmux passes; exact images/tools/commands above. Prior RISC-V release deferrals are historical, not used for this candidate. |
+| NFR-01,12 | Strict fortified C17 build, all test-source compilation, independent source archive build and traceable snapshots/artifacts. Hosted Ubuntu checks remain pending. |
+| NFR-02 | Bounded restoration dispatch/cancellation and responsive terminal tests; no fresh latency/CPU benchmark or numerical performance claim. |
+| NFR-03,04 | Complete parser/recovery/lifecycle/error and terminal-restoration baseline; no fresh sanitizer/stress matrix or physical unplug claim. Historical sanitizer evidence remains separate. |
+| NFR-05,10,11 | Automated mouse/key/focus, direct/tmux, resize, monochrome/color and textual error-state checks; final visual/usability acceptance remains manual. |
+| NFR-06,07 | Pre-dispatch value authorization, literal argv, disabled-first verification, hardware-only failure semantics, target-neutral models and three actual architectures. No restored read permission or firmware identity is inferred. Only separately approved ARM programming occurred. |
+| NFR-08 | Retained errors, partial/uncertain breakpoint failures, cancellation and recovery tested; raw failures are preserved. |
+| NFR-09 | Existing module boundaries retained; only necessary physical-test registration added. The broader maintenance and owner-exclusive build-system reviews remain future gates. |
+
+Final release acceptance, owner visual review and hosted PR checks remain pending.
+No release/tag/asset publication is established by local preparation. The three
+upload files are the versioned Linux x86-64 archive, matching source archive and
+`SHA256SUMS`; final identities are in `build/dist/v0.1.4/SHA256SUMS`. GitHub's two
+automatic source snapshots are separate and contain no packaged host binary.

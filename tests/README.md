@@ -41,6 +41,15 @@ records remain in the [validation records](../docs/validation.md).
   `TB_BOARD_TMUX=1` for its isolated tmux workflow. See the
   [fixture guide](fixtures/embedded/README.md) and
   [physical procedures](../docs/testing.md#physical-board-core-workflow-m17).
+- `test-setup-board`: opt-in physical profile-store round trip and definition
+  restoration through actual GDB, including partial failure, hardware policy,
+  address approval, unchanged dirty state, running deferral and cancellation.
+  It accepts explicit code/Watch/RAM identities from already-programmed firmware.
+- `test-setup-board-tui`: opt-in physical review/restore/acknowledge/save/reopen
+  through a private profile store, with actual hardware breakpoint hits, missing
+  Source pins and narrow-terminal controls. `TB_BOARD_TMUX=1` selects isolated
+  tmux. Neither runner is dispatched by `test-ci`; see the
+  [F01 physical procedure](../docs/testing.md#f01-physical-restoration).
 
 - `test-openocd` / `make test-m16-model`: metadata catalog and bounded literal
   argument planning, board/advanced/explicit script ordering, search paths and

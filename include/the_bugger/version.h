@@ -2,6 +2,6 @@
 #define THE_BUGGER_VERSION_H
 
 /* Target version; release readiness is tracked separately in docs/validation.md. */
-#define THE_BUGGER_VERSION "0.1.3"
+#define THE_BUGGER_VERSION "0.1.4"
 
 #endif

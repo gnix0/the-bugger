@@ -24,9 +24,15 @@ typedef struct {
 typedef struct TbProfiles TbProfiles;
 void tb_profile_defaults(TbProfile *profile, int kind);
 bool tb_profile_valid(const TbProfile *profile);
-enum { TB_PROFILE_MODE = 1, TB_PROFILE_TOOLS = 2, TB_PROFILE_ARGUMENTS = 4,
-       TB_PROFILE_SCRIPTS = 8, TB_PROFILE_SEARCH = 16, TB_PROFILE_ENDPOINT = 32,
-       TB_PROFILE_ELF = 64, TB_PROFILE_DIRECTORY = 128, TB_PROFILE_SOURCE = 256 };
+#define TB_PROFILE_MODE UINT32_C(1)
+#define TB_PROFILE_TOOLS UINT32_C(2)
+#define TB_PROFILE_ARGUMENTS UINT32_C(4)
+#define TB_PROFILE_SCRIPTS UINT32_C(8)
+#define TB_PROFILE_SEARCH UINT32_C(16)
+#define TB_PROFILE_ENDPOINT UINT32_C(32)
+#define TB_PROFILE_ELF UINT32_C(64)
+#define TB_PROFILE_DIRECTORY UINT32_C(128)
+#define TB_PROFILE_SOURCE UINT32_C(256)
 /* Parsed active fields only; names, inactive controls and unused array slots
  * are not connection differences. Paths and endpoint aliases stay literal. */
 uint32_t tb_profile_differences(const TbProfile *session, const TbProfile *saved);

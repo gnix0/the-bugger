@@ -69,6 +69,7 @@ typedef struct {
     bool toggle;
 } Field;
 
+// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): one heap-owned application object; field grouping follows subsystem ownership.
 typedef struct {
     Page page;
     TbDemo demo;
@@ -169,6 +170,7 @@ static void draw_scripts(App *app);
 static bool prepare_server(App *app);
 static void draw_setup(App *app);
 static bool setup_capture(App *app);
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): action code and entry index come from separate control fields.
 static void setup_activate(App *app, int action, int entry);
 
 static bool editing_page(const App *app)
@@ -2872,13 +2874,18 @@ static void setup_text(SetupText *r, const char *text)
 {
     int width = r->card.w - 4;
     do {
+        size_t remaining = strlen(text);
         int count = setup_chunk(text, width); char part[512];
+        if (count <= 0 && remaining) { count = 1; }
+        if ((size_t)count > remaining) { count = (int)remaining; }
         (void)snprintf(part, sizeof part, "%.*s", count, text);
         int row = r->logical++ - r->app->setup_offset;
         if (row >= 0 && row < r->visible) { tb_text(r->card.y + 3 + row, r->card.x + 2, width, TB_PANEL, 0, part); }
-        text += count; while (*text == ' ') { ++text; }
+        text += count; remaining -= (size_t)count;
+        while (remaining && *text == ' ') { ++text; --remaining; }
     } while (*text);
 }
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): display label, session value and saved value have named presentation roles.
 static void setup_pair(SetupText *r, const char *label, const char *session, const char *saved)
 {
     if (strcmp(session, saved) == 0) { return; }
@@ -3094,6 +3101,7 @@ static void draw_setup(App *app)
     if (app->setup_offset + text.visible < text.logical) { button(app, card.y + card.h - 3, left + 14, 12, "Next", SETUP_ACTION, -2, 0); }
     button(app, card.y + card.h - 2, card.x + card.w - 16, 14, "[ Back ]", BACK, 0, 0);
 }
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): action code and entry index come from separate control fields.
 static void setup_activate(App *app, int action, int entry)
 {
     if (action == 6 && app->page == SETUP_RESTORE_REVIEW) { app->restore_selected = !app->restore_selected; return; }
@@ -3101,7 +3109,7 @@ static void setup_activate(App *app, int action, int entry)
         char directory[TB_SETUP_PATH], stamp[256];
         if (!profile_capture(app) || !getcwd(directory, sizeof directory)) { return; }
         tb_profile_image_stamp(app->profile, directory, stamp);
-        if (tb_profile_differences(app->profile, app->setup_review_connection) || strcmp(directory, app->restore_directory) || strcmp(stamp, app->restore_stamp)) {
+        if (tb_profile_differences(app->profile, app->setup_review_connection) || strcmp(directory, app->restore_directory) != 0 || strcmp(stamp, app->restore_stamp) != 0) {
             if (setup_prepare_restore(app)) { status(app, "Connection or ELF changed during review. Review again before starting."); } return;
         }
         app->restore_confirmed = true;
