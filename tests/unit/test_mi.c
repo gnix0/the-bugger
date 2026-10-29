@@ -130,6 +130,13 @@ static void escapes(void)
 
 static void malformed(void)
 {
+    TbMiRecord *script = parse_ok("^done,bkpt={number=\"1\",script={\"silent\",\"printf 1\"},original-location=\"main\"}");
+    const TbMiValue *commands = field(field(script->results, "bkpt")->children, "script");
+    CHECK(commands->type == TB_MI_TUPLE && commands->children && !commands->children->name);
+    string_is(&commands->children->string, "silent"); string_is(&commands->children->next->string, "printf 1");
+    tb_mi_record_free(script);
+    invalid("^done,script={\"silent\",{}}", TB_MI_INVALID);
+    invalid("^done,script={\"silent\",command=\"other\"}", TB_MI_INVALID);
     const char *const cases[] = {
         "", " ", "^", "123", "123?", "done", ".",
         "^done,", "^done,x", "^done,x=", "^done,x=12", "^done,=tx",

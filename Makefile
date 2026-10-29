@@ -205,6 +205,7 @@ test: all test-mi test-controller $(BUILD_DIR)/test-code $(BUILD_DIR)/test-conte
 	$(BUILD_DIR)/test-memory $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-variables $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-breakpoints $(abspath $(BUILD_DIR)/fake-mi)
+	$(BUILD_DIR)/test-setup-breakpoints $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-code $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-context $(abspath $(BUILD_DIR)/fake-mi)
 	$(BUILD_DIR)/test-native-words
@@ -234,6 +235,11 @@ test: $(BUILD_DIR)/test-images
 
 $(BUILD_DIR)/test-breakpoints: $(BUILD_DIR)/tests/integration/test_breakpoints.o $(BUILD_DIR)/src/model/breakpoints.o $(BUILD_DIR)/src/model/memory.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/browse.o $(BUILD_DIR)/src/model/monitor.o $(BUILD_DIR)/src/model/mmio.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+$(BUILD_DIR)/test-setup-breakpoints: $(BUILD_DIR)/tests/integration/test_setup_breakpoints.o $(BUILD_DIR)/src/model/breakpoints.o $(BUILD_DIR)/src/model/memory.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/browse.o $(BUILD_DIR)/src/model/monitor.o $(BUILD_DIR)/src/model/mmio.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+test: $(BUILD_DIR)/test-setup-breakpoints
 
 test: $(BUILD_DIR)/test-breakpoints
 
@@ -490,7 +496,7 @@ clean:
 -include $(BUILD_DIR)/tests/integration/test_context_native.d
 -include $(BUILD_DIR)/tests/integration/test_context_tui.d
 -include $(BUILD_DIR)/tests/integration/test_code.d $(BUILD_DIR)/tests/integration/test_code_native.d $(BUILD_DIR)/tests/integration/test_code_tui.d
--include $(BUILD_DIR)/tests/unit/test_images.d $(BUILD_DIR)/tests/integration/test_breakpoints.d
+-include $(BUILD_DIR)/tests/unit/test_images.d $(BUILD_DIR)/tests/integration/test_breakpoints.d $(BUILD_DIR)/tests/integration/test_setup_breakpoints.d
 -include $(BUILD_DIR)/tests/integration/test_break_native.d $(BUILD_DIR)/tests/integration/test_break_tui.d
 
 .PHONY: test-m14-model test-m14-native

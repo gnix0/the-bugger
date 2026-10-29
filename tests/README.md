@@ -79,6 +79,11 @@ records remain in the [validation records](../docs/validation.md).
 - `test-setup-capture` / `make test-setup-capture`: metadata-only definitions,
   stable lifecycle identities, transient exclusions and active connection comparison.
   Included in `make test`.
+- `test-setup-breakpoints` (in `make test`): synthetic MI disabled-first
+  restoration, condition/ignore failures, hardware verification, cancellation,
+  bounded complete/incomplete reconciliation, duplicate prevention and unsupported
+  import exclusion. Actual native overload/file-line restoration is in
+  `make test-m08-native`; native backend import is also checked directly/in tmux.
 - `make test-setup-restore`: actual native local/Source restoration, retained
   breakpoint intent/limits, Memory/Watch permission exclusions, partial saves,
   interlocks/acknowledgment, in-flight cancellation and running-target deferral.

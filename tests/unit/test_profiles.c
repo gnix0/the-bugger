@@ -64,6 +64,7 @@ static void setup_checks(TbProfiles *store)
     s->break_count = 1; s->breaks[0] = (TbSetupBreak){.id = s->next_id++, .enabled = true, .ignore_set = true, .ignore = 13, .hardware = true};
     (void)snprintf(s->breaks[0].location, TB_SETUP_LOCATION, "a_symbol");
     (void)snprintf(s->breaks[0].condition, 512, "value == 3");
+    s->breaks[0].mapping = (TbSetupMapping){.path = "/native/image", .identity = "reliable-current-file-identity", .bias = UINT64_MAX - 4096, .begin = UINT64_MAX - 1024, .end = UINT64_MAX};
     json_object *encoded = tb_setup_encode(s); CHECK(encoded);
     TbSetup *decoded = tb_setup_decode(encoded); CHECK(decoded && tb_setup_equal(s, decoded));
     ++decoded->next_id; decoded->nodes[63].ratio = 123; decoded->nodes[0].ratio = 456;

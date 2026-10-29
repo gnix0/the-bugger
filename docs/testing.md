@@ -587,9 +587,10 @@ Additional manual restoration checks:
    prior contents and explicit Retry/Remove under Setup. Repair its source lookup,
    refresh the source catalog and Retry; the same entry must resolve without a
    duplicate. Remove it and save: reopening must not resurrect it.
-2. Save enabled code-breakpoint intent, then reopen. Installation is pending in
-   this checkpoint: expect unresolved/awaiting stop, never installed. Execution
-   must require acknowledgment. Acknowledging and later stopping again must not
+2. Save enabled code-breakpoint intent, then reopen. Expect disabled creation,
+   attribute verification, then enabled installation. An invalid condition or
+   failed ignore/hardware requirement must remain a restoration failure. Execution
+   must require acknowledgment for failed enabled definitions. Acknowledging and later stopping again must not
    reprompt for the unchanged set. Partial saving retains its original definition.
 3. While restoration is active, try execution, Reset, Console and thread/frame or
    source-setting changes. They must be blocked; local navigation/Pause/close
@@ -600,8 +601,40 @@ Additional manual restoration checks:
    before execution/configuration changes become available. Native host tests do
    not establish this behavior on physical ARM/Xtensa/RV32 setups.
 
-Code-breakpoint installation/attribute verification, address approval/provenance,
-explicit import/reconciliation and physical restoration acceptance remain pending.
+`test-setup-breakpoints` (included in `make test`) uses an explicitly synthetic
+MI peer for disabled-first intermediate states, condition/ignore-count failures,
+retry without duplicate insertion, required-hardware mismatch, one bounded
+reconciliation query, incomplete-listing interlocks, cancellation and whole-entry
+command-list/thread-restriction exclusion. This is model evidence, not a board
+or real-server result. `test-setup-restore` also checks an actual native pending
+symbol with its configured count, partial-failure merging without a dirty change,
+and current procfs/ELF mapping identity/bias/range comparisons, automatic matching
+address reuse, changed-bias refusal and explicit current-session address approval. Schema tests round
+trip full-width mapping addresses. Direct/tmux workflows review and import a real
+GDB backend-only breakpoint only after explicit hardware/count decisions, save the
+unsaved draft and remove it without duplicate inclusion.
+
+Additional manual breakpoint checks:
+
+1. Save/reopen a symbolic and file-line breakpoint with a condition and configured
+   ignore count. Verify original definitions, disabled-first progress, eventual
+   installation and no dirty change from hits or declining remaining counts.
+2. Use an invalid condition in a saved definition. Location creation may succeed,
+   but it must stay disabled/unresolved. Acknowledge the failure, then verify no
+   repeat for that unchanged set. Retry must reuse its known disabled location.
+3. Reopen literal addresses: matching stopped native mapping metadata may reuse;
+   changed identity/bias or remote addresses require current-session approval.
+   Approval never persists, and no firmware/live-byte verification is claimed.
+4. Cancel while a breakpoint operation is in flight. Expect Cancel requested until
+   settlement, no rollback and no subsequent mutation. For uncertain results,
+   incomplete reconciliation must preserve the interlock; retry queries only.
+5. Create a backend-only code breakpoint in Console. Review it, choose hardware
+   policy and new count intent, then include/save. Unsupported command lists or
+   thread/task restrictions must exclude the entire entry. Change a managed
+   breakpoint externally; review or explicitly exclude its full definition.
+
+Owner manual acceptance and physical ARM/Xtensa/RV32 reopening/restoration remain
+outstanding. Use disposable fixtures for physical checks.
 
 ## Hardware data watchpoints
 

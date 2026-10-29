@@ -118,7 +118,7 @@ static void restored_setup(const char *binary, TbProfiles *store)
     test_terminal_expect(&term, "Setup saved. Connection profile unchanged."); CHECK(!test_terminal_find(&term, "Save setup*", NULL, NULL));
     CHECK(tb_profiles_load(store)); TbSetup *partial = tb_profiles_setup(store, "saved copy"); CHECK(partial && tb_setup_equal(partial, saved)); free(partial);
     click("Unresolved setup entries"); test_terminal_expect(&term, "missing-saved-source.c"); test_terminal_expect(&term, "unsupported saved expression");
-    test_terminal_expect(&term, "enabled intent"); test_terminal_expect(&term, "unresolved; installation pending");
+    test_terminal_expect(&term, "enabled intent"); test_terminal_expect(&term, "unresolved");
     test_terminal_expect(&term, "Acknowledge failures"); click("Acknowledge failures");
     CHECK(!test_terminal_find(&term, "Acknowledge failures", NULL, NULL));
     click("[ Back ]"); click("[ Back ]"); click("Continue"); test_terminal_expect(&term, "LIVE | Running");
@@ -230,6 +230,30 @@ static void recovery(const char *binary, const char *path)
     click("remote definition"); save("remote definition", true); stop();
     puts("PASS F01 schema-3 read-only recovery, valid connection review, blocked save, 48-column indication and repaired reload");
 }
+static void import_setup(const char *binary, const char *fixture, TbProfiles *store)
+{
+    start(binary); test_terminal_send(&term, "\r"); test_terminal_expect(&term, "Executable / ELF");
+    test_terminal_send(&term, "\t\025"); test_terminal_send(&term, fixture);
+    click("Review session"); click("Start native"); test_terminal_expect(&term, "LIVE | Loaded");
+    test_terminal_lower(&term, 2, true); click("Command"); test_terminal_send(&term, "break main\r");
+    test_terminal_expect(&term, "Breakpoint 1"); click("Setup"); click("Review GDB breakpoints");
+    test_terminal_expect(&term, "Review for import"); click("Review for import");
+    click("Include reviewed definition"); test_terminal_expect(&term, "Choose hardware and ignore-count intent");
+    click("Hardware policy: choose"); test_terminal_expect(&term, "Hardware policy: Default");
+    click("Ignore count: choose"); test_terminal_expect(&term, "Ignore count: none");
+    click("Include reviewed definition"); test_terminal_expect(&term, "included in the unsaved setup draft");
+    CHECK(!test_terminal_find(&term, "Review for import", NULL, NULL));
+    click("[ Back ]"); test_terminal_expect(&term, "Save setup*");
+    save("imported definition", false); click("Save setup"); click("[ Save setup ]");
+    test_terminal_expect(&term, "Setup saved. Connection profile unchanged.");
+    CHECK(tb_profiles_load(store)); TbSetup *saved = tb_profiles_setup(store, "imported definition");
+    CHECK(saved && saved->break_count == 1 && !strcmp(saved->breaks[0].location, "main") && !saved->breaks[0].hardware && !saved->breaks[0].ignore_set); free(saved);
+    click("Unresolved setup entries"); test_terminal_expect(&term, "imported draft; not restored");
+    CHECK(!test_terminal_find(&term, "Acknowledge failures", NULL, NULL)); click("[ Remove ]");
+    click("[ Back ]"); test_terminal_expect(&term, "Save setup*"); click("[ Back ]");
+    click("Session"); click("Close session"); test_terminal_expect(&term, "[ Config ]"); stop();
+    puts("PASS F01 actual GDB backend-only breakpoint review, explicit hardware/count decisions, unsaved import without duplicate, save and draft removal (direct/tmux)");
+}
 int main(int argc, char **argv)
 {
     CHECK(argc == 3 || (argc == 4 && strcmp(argv[3], "--native") == 0)); CHECK(atexit(cleanup) == 0);
@@ -282,7 +306,7 @@ int main(int argc, char **argv)
     if (argc == 4) { CHECK(strcmp(tb_profiles_recent(store, 0), "native saved") == 0); }
     start(argv[1]); click("[ Config ]"); click("Profiles"); click("native saved"); click("[ Delete ]"); click("[ Confirm ]"); stop();
     CHECK(tb_profiles_load(store) && tb_profiles_count(store) == 2 && !tb_profiles_find(store, "native saved"));
-    if (argc == 4) { live_setup(argv[1], argv[2], store); }
+    if (argc == 4) { live_setup(argv[1], argv[2], store); import_setup(argv[1], argv[2], store); }
     const char *path = tb_profiles_path(store); recovery(argv[1], path); CHECK(unlink(path) == 0);
     char directory[512], lock[512]; (void)snprintf(directory, sizeof directory, "%s/the-bugger", root); (void)snprintf(lock, sizeof lock, "%s/the-bugger/.lock", root);
     CHECK(unlink(lock) == 0); CHECK(rmdir(directory) == 0); CHECK(rmdir(root) == 0); tb_profiles_destroy(store);

@@ -78,6 +78,8 @@ int main(int argc, char *argv[])
     size_t capacity = 0;
     char held[32] = {0};
     unsigned setup = 0;
+    unsigned f01_case = 0, f01_inserts = 0, f01_enables = 0, f01_queries = 0, f01_ignore = 0;
+    bool f01_exists = false, f01_enabled = false, f01_condition = false, f01_hardware = false;
     int selected_thread = 7, selected_frame = 0;
     bool context_held = false, thread_exited = false, arguments_held = false;
     int held_argument_level = -1;
@@ -91,7 +93,40 @@ int main(int argc, char *argv[])
         char token[32];
         memcpy(token, line, digits); token[digits] = '\0';
         char *command = line + digits;
-        if (mmio_peer && strncmp(command, "-mmio-mode ", 11) == 0) {
+        if (!strcmp(mode, "f01") && !strncmp(command, "-fcase ", 7)) {
+            f01_case = (unsigned)strtoul(command + 7 + (command[7] == '"'), NULL, 10);
+            if (f01_case == 9) { f01_exists = true; }
+            if (f01_case == 11) { f01_exists = false; }
+            reply(token, "^done");
+        } else if (!strcmp(mode, "f01") && !strcmp(command, "-fstats\n")) {
+            (void)printf("%s^done,inserts=\"%u\",enables=\"%u\",queries=\"%u\"\n", token, f01_inserts, f01_enables, f01_queries);
+        } else if (!strcmp(mode, "f01") && !strcmp(command, "-break-list\n")) {
+            ++f01_queries;
+            if (f01_case == 10) { reply(token, "^done,BreakpointTable={nr_rows=\"0\",body=\"malformed\"}"); continue; }
+            (void)printf("%s^done,BreakpointTable={nr_rows=\"%u\",body=[", token, f01_case == 4 ? 9 : f01_exists ? 1 : 0);
+            if (f01_exists) {
+                (void)printf("bkpt={number=\"1\",type=\"%s\",disp=\"keep\",enabled=\"%s\",addr=\"<PENDING>\",pending=\"main\",original-location=\"main\",times=\"3\",ignore=\"%u\"", f01_hardware ? "hw breakpoint" : "breakpoint", f01_enabled ? "y" : "n", f01_ignore);
+                if (f01_condition) { fputs(",cond=\"1\"", stdout); }
+                if (f01_case == 5) { fputs(",script={\"silent\"}", stdout); }
+                if (f01_case == 6) { fputs(",thread=\"2\"", stdout); }
+                fputs("}", stdout);
+            }
+            puts("]}");
+        } else if (!strcmp(mode, "f01") && !strncmp(command, "-break-insert ", 14)) {
+            ++f01_inserts;
+            if (!strstr(command, "-d ")) { free(line); return 93; }
+            f01_exists = true; f01_enabled = false; f01_condition = false; f01_ignore = 0;
+            f01_hardware = strstr(command, "-h ") != NULL && f01_case != 7;
+            if (f01_case != 3 && f01_case != 4) { reply(token, "^done,bkpt={number=\"1\"}"); }
+        } else if (!strcmp(mode, "f01") && !strncmp(command, "-break-condition ", 17)) {
+            if (f01_case == 1) { reply(token, "^error,msg=\"FAKE invalid condition\""); }
+            else { f01_condition = true; reply(token, "^done"); }
+        } else if (!strcmp(mode, "f01") && !strncmp(command, "-break-after ", 13)) {
+            if (f01_case == 2) { reply(token, "^error,msg=\"FAKE ignore count rejected\""); }
+            else { f01_ignore = 2; reply(token, "^done"); }
+        } else if (!strcmp(mode, "f01") && !strncmp(command, "-break-enable ", 14)) {
+            ++f01_enables; f01_enabled = true; reply(token, "^done");
+        } else if (mmio_peer && strncmp(command, "-mmio-mode ", 11) == 0) {
             mmio_mode = (unsigned)strtoul(command + 11, NULL, 10); reply(token, "^done");
         } else if (mmio_peer && strcmp(command, "-mmio-stats\n") == 0) {
             (void)printf("%s^done,reads=\"%u\"\n", token, mmio_reads);

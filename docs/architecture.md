@@ -1090,9 +1090,9 @@ frontend mutations retain original locations, enabled intent, conditions, explic
 ignore counts and Default/Require hardware policy. Hits and declining remaining
 ignore counts do not alter definitions. Temporary/data/backend-only breakpoints
 are excluded. Detected external conflicts and uncertain managed mutations block
-saving; advanced reconciliation and explicit backend import remain pending.
+saving until explicit complete-definition review/exclusion or bounded metadata reconciliation.
 
-`tui/setup_restore.{h,c}` coordinates local/Source restoration. Session Review
+`tui/setup_restore.{h,c}` coordinates bounded setup restoration. Session Review
 adds a saved-setup review with restoration enabled by default. It displays scope
 and active parsed connection differences, relative-path launch-context changes
 and local ELF metadata changes/unavailability. Starting confirms that review;
@@ -1117,11 +1117,41 @@ coordinator/source-setting dispatch without rollback and distinguishes a request
 from completion while work remains in flight. Save waits for active work to settle.
 Lower views start minimized and no fullscreen, sample or permission is restored.
 
-Code-breakpoint installation and import/reconciliation remain pending. Saved
-breakpoint definitions remain retained/uninstalled, reserve capacity within the
-256-definition limit and participate in partial saves by identity. Enabled retained
-definitions require acknowledgment before execution; unchanged failure sets do
-not reprompt. This does not mark them installed or allocate hardware.
+`model/breakpoints.c` owns a bounded runtime restoration ledger keyed by setup
+identity, separate from serialized definitions. Insertions use disabled locations;
+condition and configured ignore count are applied, and a complete metadata listing
+verifies original location, supported attributes and Require hardware before
+enabling. A second listing verifies the enabled result. Failed attributes never
+produce installed intent. Known disabled partial entries retry configuration only
+after metadata verification, without another insertion. Pending/multiple locations
+remain debugger configuration rather than promises of resolved addresses or
+physical hardware allocation.
+
+Literal addresses reuse automatically only when fresh native procfs executable
+mapping metadata and ELF load segments establish the same backing-file identity,
+range and bias as the optional saved `mapping` object. Addresses/bias are encoded
+as fixed-width hexadecimal strings, preserving all 64 bits. Older schema-3
+breakpoint records without mapping remain readable. Other addresses require
+current-session approval; approval and image confirmations are never serialized.
+Remote checksum/live-byte verification is outside F01.
+
+After uncertain mutations, one metadata-only query reconciles complete current
+listings against the creation baseline or known backend identity and supported
+attributes. Ambiguous additions, incomplete/stale listings or failed queries retain
+uncertainty and execution interlocks. No mutation is repeated. Explicit retry only
+reissues reconciliation. Cancellation stops mutations, waits for in-flight results
+and permits necessary metadata settlement without rollback.
+
+Installed definitions adopt their retained setup identity, preserving order and
+dirty-state accuracy. Retained failures reserve the same 256-entry capacity and
+survive partial saves. Enabled failures require acknowledgment once per unchanged
+failure set. Explicit backend review/import requires a complete current listing,
+rejects unsupported entries whole, and requires new hardware/count decisions.
+Imports enter an unsaved retained draft without backend mutation or inferred
+historical intent. The MI parser accepts GDB's bounded `script={"command",...}`
+string-tuple extension so unsupported command lists can be excluded as whole
+entries while other entries remain reviewable; command strings are never run. External managed changes require review or whole-definition
+exclusion; runtime hits/declining ignore counts never rewrite configured intent.
 
 Writes use an owned regular file, nonblocking advisory lock, stale-writer stamp
 check, private temporary file, fsync, atomic rename and directory fsync. Corrupt,

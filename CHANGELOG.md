@@ -14,9 +14,11 @@
 - Reviewed local/Source setup restoration with stable missing-file identities,
   Memory/Watch definitions without samples or permissions, running-target deferral,
   cancellation and active-work interlocks. Review detects active configuration,
-  relative-path context and local ELF metadata changes. Saved code breakpoints
-  remain explicitly unresolved; installation and backend import/reconciliation
-  are pending.
+  relative-path context and local ELF metadata changes. Code breakpoints restore disabled, verify required attributes before enable,
+  and retain partial failures. Literal addresses require matching native mapping
+  provenance or current-session approval. Complete supported backend definitions
+  can be explicitly reviewed/imported; uncertain mutations use bounded metadata
+  reconciliation without repeating the mutation.
 - Physical RISC-V RV32 validation (test device: ESP32-C6FH4, built-in
   USB/JTAG) using the shared
   embedded fixture, core-context OpenOCD configuration and target-compatible

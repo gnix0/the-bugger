@@ -23,5 +23,7 @@ bool tb_setup_capture_restore(TbSetupCapture *capture, const TbSetup *saved, TbL
                               TbDemo *workspace, TbCode *code, TbMemory *memory, TbVariables *variables);
 size_t tb_setup_capture_retained(const TbSetupCapture *capture);
 const TbSetupBreak *tb_setup_capture_retained_break(const TbSetupCapture *capture, size_t index);
+bool tb_setup_capture_adopt_break(TbSetupCapture *capture, uint64_t identity, uint64_t model_identity);
+uint64_t tb_setup_capture_import_break(TbSetupCapture *capture, const TbBreakDefinition *definition);
 bool tb_setup_capture_remove_break(TbSetupCapture *capture, uint64_t identity);
 #endif
