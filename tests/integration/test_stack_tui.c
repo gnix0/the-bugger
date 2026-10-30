@@ -99,7 +99,17 @@ int main(int argc, char **argv)
     test_terminal_expect(&t, "Selected-frame SP point retained");
     option(&t, "Query local/argument names"); test_terminal_expect(&t, "Stack local/argument names");
     click(&t, "object (query address)"); test_terminal_expect(&t, "may-call-functions is ON");
+    int review_y, back_y;
+    CHECK(test_terminal_find(&t, "Review session-wide no-call change", NULL, &review_y));
+    CHECK(test_terminal_find(&t, "[ Back ]", NULL, &back_y));
+    CHECK(back_y >= review_y + 2); /* A blank row separates the action and navigation. */
     click(&t, "Review session-wide no-call change"); test_terminal_expect(&t, "Disable inferior calls session-wide?");
+    int explanation_y, confirm_y;
+    CHECK(test_terminal_find(&t, "The variable-address query is blocked", NULL, &explanation_y));
+    CHECK(test_terminal_find(&t, "Disable calls session-wide and query", NULL, &confirm_y));
+    CHECK(test_terminal_find(&t, "[ Back ]", NULL, &back_y));
+    CHECK(back_y >= confirm_y + 2);
+    CHECK(abs(explanation_y + back_y - (t.rows - 1)) <= 4); /* Center the complete group. */
     for (int i = 0; i < 12 && !test_terminal_find(&t, "Disable calls session-wide and query", NULL, NULL); ++i) { click(&t, "Next"); }
     click(&t, "Disable calls session-wide and query"); test_terminal_expect(&t, "Variable address point retained");
     option(&t, "Selected row: complete details");

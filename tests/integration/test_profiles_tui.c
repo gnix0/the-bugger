@@ -164,7 +164,7 @@ static void live_setup(const char *binary, const char *fixture, TbProfiles *stor
             CHECK(test_terminal_find(&term, names[i], NULL, NULL));
         }
         int actual = -1;
-        int notice_row = y + 1 + (cols >= 124 ? 1 : 0);
+        int notice_row = y + 2 + (cols >= 124 ? 1 : 0);
         /* tmux resizes its pane after updating the outer terminal. Wait for
          * the application geometry, not the first partial refresh. */
         for (int wait = 0; wait < 500; ++wait) {
@@ -176,15 +176,16 @@ static void live_setup(const char *binary, const char *fixture, TbProfiles *stor
             for (int row = 0; row < 8; ++row) { fprintf(stderr, "%s\n", term.cells[row]); }
         }
         CHECK(actual == notice_row);
-        /* Spacing consumes existing chrome, never another pane row. */
-        CHECK(test_terminal_find(&term, "Source  Symbols", NULL, &actual) && actual == y + 4);
+        CHECK(strspn(term.cells[0], " ") == (size_t)cols);
+        /* One top margin row moves the toolbar and pane headers down once. */
+        CHECK(test_terminal_find(&term, "Source  Symbols", NULL, &actual) && actual == y + 5);
         if (cols >= 124) {
-            CHECK(test_terminal_find(&term, "Disassembly  Call Stack", NULL, &actual) && actual == y + 4);
-            CHECK(test_terminal_find(&term, "Registers  Peripherals", NULL, &actual) && actual == y + 4);
+            CHECK(test_terminal_find(&term, "Disassembly  Call Stack", NULL, &actual) && actual == y + 5);
+            CHECK(test_terminal_find(&term, "Registers  Peripherals", NULL, &actual) && actual == y + 5);
         }
-        CHECK(test_terminal_find(&term, "Setup", NULL, &actual) && actual == 0);
-        CHECK(test_terminal_find(&term, "Session", NULL, &actual) && actual == 0);
-        CHECK(test_terminal_find(&term, "Quit", NULL, &actual) && actual == 0);
+        CHECK(test_terminal_find(&term, "Setup", NULL, &actual) && actual == 1);
+        CHECK(test_terminal_find(&term, "Session", NULL, &actual) && actual == 1);
+        CHECK(test_terminal_find(&term, "Quit", NULL, &actual) && actual == 1);
     }
     click("Actions"); click("Choose source file"); test_terminal_expect(&term, "GDB source files");
     test_terminal_send(&term, "session.c\r"); settle(); click("tests/fixtures/native/session.c");

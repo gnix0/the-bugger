@@ -1999,3 +1999,22 @@ anchor payloads and entry headers. Fixed active views and bounded temporary
 reconstruction buffers are separate from that retained-history pool. Actual
 terminal appearance, hardware-image correspondence and maintainer acceptance remain
 separate checks.
+
+### Inspection UI correction coverage
+
+The Console PTY suite exercises minimize/reopen at widths 48/80/123/124/160 and
+224/240/280/320, directly and through isolated tmux, including a fragmented SGR
+report and malformed-coordinate rejection. The context suites check same-frame
+and same-thread selection without invalidating freshness or argument snapshots.
+Stack UI checks cover separated no-call action/navigation rows and centered
+complete reviews; profile UI checks assert the one-row workspace top margin.
+These cases are included in `test-ci`; coverage describes assertions, not results.
+
+Frame-switch PTY coverage repeats different-frame and same-frame clicks directly
+and through isolated tmux. `TB_CONTEXT_DELAY=1` routes actual GDB replies through
+a test-owned relay with delayed frame/register metadata. Assertions preserve
+Source cells and old frame labels while waiting, then require coherent replacement
+and removal of existing-footer feedback. `TB_CONTEXT_TIMEOUT=1` additionally
+checks a metadata timeout and rejected late reply. These modes run through
+`test-native` and `test-context-tmux`, both included in `test-ci`. The relay does
+not synthesize GDB results.

@@ -67,7 +67,9 @@ static void run_case(const char *binary, const char *mode)
         CHECK(strstr(snapshot->frames[0].arguments, "depth=<read required>"));
         CHECK(strstr(snapshot->frames[1].arguments, "depth=<read required>"));
         CHECK(!snapshot->frames[1].arguments_read);
+        unsigned before_selection = completions;
         CHECK(tb_context_select_frame(context, 1)); fresh(gdb);
+        CHECK(completions == before_selection + 2); /* Select + current metadata; no inventory/frame-list refresh. */
         CHECK(tb_context_read_arguments(context));
         CHECK(!tb_context_read_arguments(context)); /* No overlapping reads. */
         if (strcmp(mode, "context-args-stale") == 0 || strcmp(mode, "context-args-resume") == 0) {
@@ -94,6 +96,15 @@ static void run_case(const char *binary, const char *mode)
                 CHECK(!snapshot->frames[0].arguments_read);
             }
         }
+        /* Selecting the current context preserves values and freshness. */
+        uint64_t revision = tb_context_revision(context);
+        TbGdbGeneration generation = tb_gdb_generation(gdb);
+        bool arguments_read = snapshot->frames[1].arguments_read;
+        CHECK(tb_context_select_frame(context, snapshot->selected.level));
+        CHECK(tb_context_select_thread(context, snapshot->selected_thread));
+        CHECK(tb_context_revision(context) == revision && !snapshot->stale);
+        CHECK(tb_gdb_generation(gdb).context == generation.context);
+        CHECK(snapshot->frames[1].arguments_read == arguments_read);
         tb_context_visible(context, false, false);
         CHECK(!tb_context_read_arguments(context));
         tb_context_visible(context, true, true); fresh(gdb);

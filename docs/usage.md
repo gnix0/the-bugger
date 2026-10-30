@@ -249,6 +249,12 @@ Registers shows that frame's GDB-reported values. Stack retains its frame-zero
 anchor; selecting a caller neither reads Stack bytes nor adds an SP annotation.
 `>` marks selection, and `*` marks the stopped thread's innermost frame.
 
+When selecting a different Call Stack frame, the previous panes retain their
+original frame labels until replacement data is ready. Longer changes show
+“Switching to frame #…” in the existing footer. Pane-local actions resume when
+the replacement appears; errors use the usual error display. Selecting the
+already-current frame leaves its displayed values unchanged.
+
 **Refresh** reloads stopped context. **Frames >** and **< Frames** page through
 32 frames at a time; resize a narrow pane to expose its paging controls.
 Add `--deep` as the fixture's Launch argument to exercise multiple pages.
@@ -945,3 +951,9 @@ or leaving a mode never sends a command or reads target memory. Ctrl+Q retains
 session-close confirmation. Raw keybind capture is independent of field modes.
 These are single-line conveniences, not a full Vim editor: counts, operators,
 registers, macros and multiline editing are not implemented.
+
+Stack options keep the no-call review action separate from Back/Previous/Next.
+The complete no-call explanation and buttons are centered when they fit;
+smaller terminals retain paginated text. The workspace has one blank top row,
+using one row from the top of the debugging area. Reselecting the current fresh
+Call Stack frame retains its context and displayed values.

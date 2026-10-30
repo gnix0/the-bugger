@@ -27,6 +27,7 @@ TbRegisterFormat tb_registers_get_format(const TbRegisters *registers);
 const char *tb_registers_format_name(TbRegisterFormat format);
 size_t tb_registers_count(const TbRegisters *registers);
 const TbRegister *tb_registers_row(const TbRegisters *registers, size_t row);
+bool tb_registers_settled(const TbRegisters *registers);
 bool tb_registers_stale(const TbRegisters *registers);
 bool tb_registers_limited(const TbRegisters *registers);
 const char *tb_registers_error(const TbRegisters *registers);

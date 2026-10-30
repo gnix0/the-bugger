@@ -387,10 +387,13 @@ is painted; compact Prev/Next controls and `[`/`]` reach every retained pane.
 Returning to sufficient dimensions restores the tree. Resizing a terminal during
 a drag cancels that drag to avoid applying obsolete coordinates.
 
-The UI maps gutter hit tests to layout operations. ncurses parses mouse input;
-for terminals advertising an xterm-compatible `kmous`, the application explicitly
-enables held-button motion mode 1002 and disables it at shutdown. The installed
-ncurses XM capability otherwise enables click mode alone. Keyboard resize mode
+The UI maps gutter hit tests to layout operations. For terminals advertising an
+xterm-compatible `kmous`, it enables SGR coordinates (1006) and held-button motion
+(1002), disabling both on exit. A dedicated key prefix consumes decimal SGR
+packets incrementally with a 32-byte bound and 250 ms deadline; malformed reports
+are discarded. ncurses retains legacy mouse-event decoding. This avoids legacy
+223-column coordinate limits in tmux descriptions without replacing their color
+or keyboard capabilities. Keyboard resize mode
 selects the same dividers and uses the same constrained coordinate updates.
 Physical mouse appearance/usability requires manual validation, even
 when the PTY and real tmux forwarding tests pass.
@@ -1009,11 +1012,31 @@ and [tmux changes](https://github.com/tmux/tmux/blob/master/CHANGES).
 
 Expanded lower overlays include their former dock row; their top tab row owns
 minimize/menu controls. Collapsed docks remain, with hit tests respecting any
-full-width overlay covering them. Primary pane rectangles and saved definitions
-are unchanged. Wide tiled/fullscreen workspace chrome reuses the old pre-pane
-blank row to separate toolbar and status; compact selectors retain that space.
+full-width overlay covering them. The workspace toolbar starts one row below
+the terminal top. The debugging area starts one row lower and loses exactly that
+row of height; horizontal geometry and saved definitions are unchanged. Wide
+tiled/fullscreen chrome retains its toolbar/status gap; compact selectors retain
+their own row.
 Single-line workspace footers leave the last row blank, without shrinking pane
-geometry. Launcher/configuration/dialog footers keep their established placement.
+geometry further. Launcher/configuration/dialog footers keep their established placement.
+
+Selecting the already-current fresh frame/thread is a no-op: context generations,
+retained argument values and inspector freshness remain unchanged. Real context
+changes still invalidate stale data. Stack dialogs separate content, primary
+actions and navigation with blank rows where space permits; a complete no-call
+explanation/action group is vertically centered when it fits.
+
+Frame-only selection retains the thread inventory and frame list and requests
+only frame selection and selected-frame metadata. Generation checks still
+invalidate frame-dependent models immediately. The presentation retains bounded
+copies of the previously rendered panes, including their original frame labels,
+until visible source/disassembly, registers and variable names have settled.
+Replacement panes appear together; retained cells never become model data or
+acquire the new frame label. Pane-local actions are suspended while their old
+cells are displayed. Resume, unrelated invalidation, layout changes or context
+failure discard the retained presentation. After 150 ms, the existing footer
+shows the destination frame; this threshold delays feedback only, never requests.
+Errors use the existing error presentation.
 
 ## Locals and Watches
 

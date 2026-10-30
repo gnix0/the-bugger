@@ -26,6 +26,15 @@
 
 ### Fixed
 
+- Frame changes retain the previous labelled panes until replacement data is
+  ready, avoiding transient stale/clearing flashes. Slow changes report progress
+  in the existing footer; frame lists no longer refresh on frame-only selection.
+
+- Reselecting the current frame/thread preserves context freshness and retained
+  values. SGR mouse coordinates support wide tmux minimize/menu hit targets.
+- Stack dialogs separate actions/navigation and center complete no-call reviews.
+  The workspace toolbar has a one-row top margin.
+
 - Escape no longer closes a debugging session. Session close and application quit
   have distinct confirmations, and repeated close requests preserve their destination.
 - Compatible terminal/tmux updates use synchronized frames with bounded curses

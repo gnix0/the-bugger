@@ -32,7 +32,8 @@ See [Memory inspection](docs/usage.md#memory-inspection) for access controls.
 
 The latest release is **v0.1.4**. Development builds add the dedicated
 [Stack inspector](docs/usage.md#stack-inspection) (F02), targeting **v0.1.5**;
-acceptance and release validation remain pending.
+implementation and three-target physical/manual validation are accepted;
+release preparation remains pending.
 The v0.1.5 target also adds compact Call Stack entries with cached Details,
 aligned Stack columns and input/rendering refinements. F6 is Pause/Halt in fresh
 defaults; existing personal bindings remain unchanged.

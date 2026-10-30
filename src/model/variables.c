@@ -164,6 +164,13 @@ const TbVariable *tb_variables_row(const TbVariables *v, TbVariableView view, si
     if (view < 0 || view >= TB_VARIABLE_VIEWS || row >= v->trees[view].count) { return NULL; }
     return &v->trees[view].nodes[v->trees[view].order[row]].row;
 }
+bool tb_variables_settled(const TbVariables *v, TbVariableView view)
+{
+    if (view < 0 || view >= TB_VARIABLE_VIEWS || !stopped(v)) { return false; }
+    const Tree *t = &v->trees[view];
+    return (v->cleanup_failed || *t->error || view != TB_VARIABLE_LOCALS || t->names_ready || t->names_failed) &&
+        (!v->waiting || v->view != (int)view);
+}
 bool tb_variables_stale(const TbVariables *v, TbVariableView view)
 {
     if (view < 0 || view >= TB_VARIABLE_VIEWS || !stopped(v)) { return true; }
