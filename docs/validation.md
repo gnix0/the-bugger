@@ -3707,3 +3707,23 @@ The owner confirmed `docs/assets/dashboard.png` was deliberately deleted after
 its README reference was removed. Preserve that deletion in the owner commit;
 it is not a missing asset to restore. Package after that commit so the tracked
 source inventory excludes the deleted image.
+
+## Hosted profile/tmux resize assertion — 2026-10-30
+
+Hosted Tests failed at `test_profiles_tui.c:181` while checking the Source header
+row in the profile toolbar-width case. Earlier native/context/frame-delay checks
+in that run passed; the overall hosted baseline did not. The harness waited only
+for the notice row before asserting other geometry, allowing a partial outer
+tmux redraw to reach the later assertions. It now waits for the entire asserted
+geometry together: notice, pane headers, toolbar controls and blank top margin.
+Expected rows, widths and the existing bounded wait are unchanged. Failure output
+includes the full screen. Application code and physical behavior are unchanged.
+
+Agent-run focused results: original tmux runner passed one local attempt;
+corrected direct and isolated-tmux profile runners both passed, exit 0. The
+hosted-only timing failure was not reproduced locally. Logs, exit records,
+commands and tool environment are in `build/profile-tmux-geometry-evidence/`.
+The runner was rebuilt with `CPPFLAGS=-D_FORTIFY_SOURCE=3` against the previously
+validated `build/frame-return-owner-20261029T222103Z` application and fixture.
+Whitespace review passed. The full baseline was not rerun locally; hosted rerun
+is pending and must establish whether this resolves the reported CI failure.
