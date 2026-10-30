@@ -231,10 +231,42 @@ int main(int argc, char *argv[])
     if (stress) { render_stress(argv[1], argv[2], stress); return 0; }
     TestTerminal term;
     start(&term, argv[1], argv[2], true);
+    const int toggle_widths[] = {48, 80, 123, 124, 160, 224, 240, 280, 320};
+    for (size_t i = 0; i < sizeof toggle_widths / sizeof toggle_widths[0]; ++i) {
+        test_terminal_resize(&term, 24, toggle_widths[i]);
+        test_terminal_lower(&term, 2, false);
+        CHECK(!test_terminal_find(&term, "Command", NULL, NULL));
+        test_terminal_lower(&term, 2, true);
+        test_terminal_expect(&term, "Command");
+        if (toggle_widths[i] == 320) {
+            int header_y; CHECK(test_terminal_find(&term, "Console  Breakpoints", NULL, &header_y));
+            char packet[64];
+            test_terminal_send(&term, "\033[<0;"); /* Deliberately fragmented SGR report. */
+            test_terminal_pump(&term, 10);
+            (void)snprintf(packet, sizeof packet, "%d;%dM", term.cols - 7, header_y + 1);
+            test_terminal_send(&term, packet);
+            (void)snprintf(packet, sizeof packet, "\033[<0;%d;%dm", term.cols - 7, header_y + 1);
+            test_terminal_send(&term, packet);
+            /* A pump reads one output chunk, not a completed screen update. */
+            long long deadline = stress_now() + 5000;
+            while (test_terminal_find(&term, "Command", NULL, NULL) && stress_now() < deadline) {
+                test_terminal_pump(&term, 10);
+            }
+            if (test_terminal_find(&term, "Command", NULL, NULL)) {
+                fprintf(stderr, "Fragmented minimize at %d columns, header row %d did not finish:\n", term.cols, header_y);
+                for (int row = 0; row < term.rows; ++row) { fprintf(stderr, "%s\n", term.cells[row]); }
+            }
+            CHECK(!test_terminal_find(&term, "Command", NULL, NULL));
+            test_terminal_lower(&term, 2, true); test_terminal_expect(&term, "Command");
+            test_terminal_send(&term, "\033[<0;999999999999999999999999999999999;1M");
+            test_terminal_expect(&term, "Command"); /* Reject malformed coordinates, preserve the pane. */
+        }
+    }
+    test_terminal_resize(&term, 44, 140);
     inline_console(&term);
     if (getenv("TB_CONSOLE_TEST_TMUX")) {
         test_terminal_send(&term, "\021");
-        test_terminal_expect(&term, "Close native session?");
+        test_terminal_expect(&term, "Quit application?");
         test_terminal_click(&term, "Close session");
         test_terminal_stop(&term, 0);
         puts("PASS inline Console through isolated real tmux, with session and terminal cleanup");

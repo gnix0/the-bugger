@@ -22,12 +22,30 @@ records remain in the [validation records](../docs/validation.md).
   compact rendering and literal field editing. Included in `make test`; no
   debugger required. See [navigation procedures](../docs/testing.md#letter-key-navigation).
 
-- `make test-themes`: global appearance preferences, all 37 theme palettes and
+- `make test-themes`: global appearance preferences, all 49 theme palettes and
   a Config/Themes PTY flow; included in `make test`. `test-preferences` checks
   defaults, private atomic saves, stale writers and invalid-file preservation.
   `test-render` checks contrast and direct/256/8-color/monochrome fallbacks.
   `test-themes-tui` checks every preview, dependent variants, Back/Save/restart,
   keyboard/mouse and compact rendering. See the [theme procedure](../docs/testing.md#themes-and-configuration).
+
+- `make test-stack`: bounded authored-MI Stack model, explicit reads, policies,
+  cache/provenance, lifetimes, annotations, declarations and asynchronous failure
+  checks; included in `make test`.
+- `make test-stack-native`: actual GDB recursive C++ debug/optimized/stripped and
+  multithread fixtures, frame-zero/caller SP, references and guarded address-of;
+  included in `make test-native`.
+- `make test-stack-tui test-stack-tmux`: direct PTY and isolated tmux Stack
+  controls, disclosure, details, bounds, narrow panes and cleanup. Registered in
+  `test-native` and `test-tmux` respectively.
+- `make test-context-tmux`: actual-GDB compact Call Stack, cached Details,
+  explicit arguments, selection/scroll restoration, stale context and cleanup
+  through isolated tmux; included in `test-tmux`. The direct Context PTY is in
+  `test-native`; its output checks synchronized updates without screen clearing.
+- `test-stack-board`: opt-in physical ARM runner with an existing programmed
+  fixture and external server; explicit 32-byte SRAM acquisition, SP points,
+  guarded variable query and leave-halted disconnect, without flash/reset.
+  See [Stack procedures](../docs/testing.md#stack-inspection-f02).
 
 - `make test-m17-offline`: optional ARM cross-build, ELF vectors/SRAM/stack/DWARF
   checks and actual ARM GDB offline source/disassembly lookup; builds the opt-in
@@ -359,7 +377,7 @@ for native milestone acceptance. ptrace/pidfd/LeakSanitizer restrictions are
 reported as failures, not silently skipped or disabled. The fixture's optional
 per-process attach permission does not modify Yama or system configuration.
 
-`unit/test_render.c` checks all 37 adapted palettes, contrast, direct/256/8-color
+`unit/test_render.c` checks all 49 adapted palettes, contrast, direct/256/8-color
 and monochrome pairs, semantic source/register colors, selected rows and the
 monochrome active-tab indicator using temporary-file ncurses screens. It needs
 `xterm-direct`, `xterm-256color`, `xterm` and `vt100` terminfo,

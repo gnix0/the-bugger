@@ -8,15 +8,18 @@
 typedef enum { QUERY_NONE, QUERY_THREADS, QUERY_CURRENT, QUERY_FRAMES, QUERY_ARGUMENTS,
                SELECT_THREAD, SELECT_FRAME, READ_ARGUMENTS } Query;
 enum { COOKIE_BASE = 6000 };
+typedef struct { char id[32], target[128]; uint64_t identity; } ThreadLife;
 struct TbContext {
     TbGdb *gdb;
     TbContextSnapshot snapshot, next;
     bool visible_threads, visible_frames, required, dirty, invalidate, waiting, failed, interlock;
-    bool select_thread, select_frame, registers_required, memory_required, variables_required;
+    bool select_thread, select_frame, frame_only, registers_required, memory_required, variables_required;
     char desired_thread[32], selection_error[192];
     int desired_frame, first_frame;
     Query query;
-    uint64_t revision;
+    uint64_t revision, next_lifetime;
+    bool stack_required;
+    ThreadLife lives[TB_CONTEXT_THREADS];
 };
 
 /* Render-safe owned bytes; MI strings may include NUL/control characters. */
@@ -90,9 +93,11 @@ uint64_t tb_context_revision(const TbContext *context) { return context->revisio
 
 static void stale(TbContext *context)
 {
+    context->frame_only = false;
     context->dirty = true; context->snapshot.stale = true;
     context->snapshot.refreshing = tb_gdb_state(context->gdb) == TB_GDB_STOPPED; ++context->revision;
 }
+bool tb_context_frame_pending(const TbContext *context) { return context->frame_only; }
 void tb_context_refresh(TbContext *context)
 {
     tb_gdb_context_changed(context->gdb); stale(context);
@@ -123,17 +128,74 @@ void tb_context_variables(TbContext *context, bool required)
     context->variables_required = required;
 }
 
+static ThreadLife *life(TbContext *context, const char *id, bool create)
+{
+    ThreadLife *empty = NULL;
+    for (size_t i = 0; i < TB_CONTEXT_THREADS; ++i) {
+        ThreadLife *entry = &context->lives[i];
+        if (entry->identity && strcmp(entry->id, id) == 0) { return entry; }
+        if (!entry->identity && !empty) { empty = entry; }
+    }
+    if (!create || !empty || !*id) { return NULL; }
+    (void)snprintf(empty->id, sizeof empty->id, "%s", id);
+    empty->identity = ++context->next_lifetime;
+    return empty;
+}
+uint64_t tb_context_thread_lifetime(const TbContext *context, const char *id)
+{
+    if (!id || !*id) { return 0; }
+    for (size_t i = 0; i < TB_CONTEXT_THREADS; ++i) {
+        if (context->lives[i].identity && strcmp(context->lives[i].id, id) == 0) { return context->lives[i].identity; }
+    }
+    return 0;
+}
+bool tb_context_lifetime_live(const TbContext *context, uint64_t identity)
+{
+    if (!identity) { return false; }
+    for (size_t i = 0; i < TB_CONTEXT_THREADS; ++i) { if (context->lives[i].identity == identity) { return true; } }
+    return false;
+}
+void tb_context_stack(TbContext *context, bool required)
+{
+    if (required && !context->stack_required && !context->snapshot.ready) { stale(context); }
+    context->stack_required = required;
+}
+/* A complete validated inventory can retain associations. Partial/malformed
+ * inventories cannot prove continuity, so declarations lose association. */
+static void inventory(TbContext *context, bool valid)
+{
+    TbContextSnapshot *next = &context->next;
+    if (!valid || next->threads_limited) { memset(context->lives, 0, sizeof context->lives); return; }
+    for (size_t i = 0; i < TB_CONTEXT_THREADS; ++i) {
+        ThreadLife *entry = &context->lives[i]; bool found = false;
+        for (size_t j = 0; j < next->thread_count; ++j) {
+            if (strcmp(entry->id, next->threads[j].id) == 0) { found = true; break; }
+        }
+        if (!found) { memset(entry, 0, sizeof *entry); }
+    }
+    for (size_t i = 0; i < next->thread_count; ++i) {
+        TbThread *thread = &next->threads[i]; ThreadLife *entry = life(context, thread->id, true);
+        if (!entry) { continue; }
+        if (*entry->target && *thread->target && strcmp(entry->target, thread->target) != 0) {
+            entry->identity = ++context->next_lifetime;
+        }
+        (void)snprintf(entry->target, sizeof entry->target, "%s", thread->target);
+        thread->lifetime = entry->identity;
+    }
+}
+
 static void parse_threads(TbContext *context, const TbMiRecord *record)
 {
     TbContextSnapshot *next = &context->next;
     const TbMiValue *list = tb_mi_find(record->results, "threads");
     if (!list || list->type != TB_MI_LIST) {
-        (void)snprintf(next->error, sizeof next->error, "GDB returned no structured thread list."); return;
+        (void)snprintf(next->error, sizeof next->error, "GDB returned no structured thread list."); inventory(context, false); return;
     }
     text(next->selected_thread, sizeof next->selected_thread, tb_mi_find(record->results, "current-thread-id"));
+    bool valid = true;
     for (const TbMiValue *item = list->children; item; item = item->next) {
         if (next->thread_count == TB_CONTEXT_THREADS) { next->threads_limited = true; break; }
-        if (item->type != TB_MI_TUPLE || number(tb_mi_find(item->children, "id")) <= 0) { continue; }
+        if (item->type != TB_MI_TUPLE || number(tb_mi_find(item->children, "id")) <= 0) { valid = false; continue; }
         TbThread *thread = &next->threads[next->thread_count++];
         text(thread->id, sizeof thread->id, tb_mi_find(item->children, "id"));
         text(thread->target, sizeof thread->target, tb_mi_find(item->children, "target-id"));
@@ -141,6 +203,10 @@ static void parse_threads(TbContext *context, const TbMiRecord *record)
         text(thread->state, sizeof thread->state, tb_mi_find(item->children, "state"));
         frame(&thread->frame, tb_mi_find(item->children, "frame"));
     }
+    for (size_t i = 0; i < next->thread_count; ++i) {
+        for (size_t j = 0; j < i; ++j) { if (strcmp(next->threads[i].id, next->threads[j].id) == 0) { valid = false; } }
+    }
+    inventory(context, valid);
     if (!next->selected_thread[0]) {
         (void)snprintf(next->error, sizeof next->error, "GDB did not identify a selected thread.");
     }
@@ -190,6 +256,7 @@ static void parse_arguments(TbContextSnapshot *snapshot, const TbMiRecord *recor
                 if (written < 0 || (size_t)written >= sizeof out->arguments - used) { break; }
                 used += (size_t)written;
             }
+            if (!values) { memcpy(out->argument_names, out->arguments, sizeof out->argument_names); }
         }
     }
     if (values && !matched) {
@@ -246,6 +313,19 @@ bool tb_context_event(TbContext *context, const TbGdbEvent *event)
         return true;
     }
     const TbMiRecord *record = event->record;
+    if (event->kind == TB_GDB_RECORD && record && record->kind == TB_MI_NOTIFY) {
+        if (strcmp(record->klass, "thread-created") == 0 || strcmp(record->klass, "thread-exited") == 0) {
+            char id[32]; text(id, sizeof id, tb_mi_find(record->results, "id"));
+            ThreadLife *entry = life(context, id, false);
+            if (entry) { memset(entry, 0, sizeof *entry); }
+            if (strcmp(record->klass, "thread-created") == 0) { (void)life(context, id, true); }
+        } else if (strcmp(record->klass, "thread-group-exited") == 0 || strcmp(record->klass, "thread-group-started") == 0) {
+            memset(context->lives, 0, sizeof context->lives);
+        }
+    }
+    if (event->kind == TB_GDB_STATE && (tb_gdb_state(context->gdb) == TB_GDB_DISCONNECTED || tb_gdb_state(context->gdb) == TB_GDB_EXITED)) {
+        memset(context->lives, 0, sizeof context->lives);
+    }
     if (event->kind == TB_GDB_RECONCILED && record) {
         char current[32]; text(current, sizeof current, tb_mi_find(record->results, "current-thread-id"));
         const TbMiValue *threads = tb_mi_find(record->results, "threads");
@@ -315,7 +395,7 @@ void tb_context_pump(TbContext *context)
         context->invalidate = false; tb_gdb_context_changed(context->gdb);
     }
     if (tb_gdb_state(context->gdb) != TB_GDB_STOPPED || context->waiting ||
-        (!context->visible_threads && !context->visible_frames && !context->required && !context->registers_required && !context->memory_required && !context->variables_required)) { return; }
+        (!context->visible_threads && !context->visible_frames && !context->required && !context->registers_required && !context->memory_required && !context->variables_required && !context->stack_required)) { return; }
     if (context->select_thread) {
         context->select_thread = false;
         const char *const args[] = {context->desired_thread};
@@ -326,6 +406,25 @@ void tb_context_pump(TbContext *context)
         char level[24]; (void)snprintf(level, sizeof level, "%d", context->desired_frame);
         const char *const args[] = {level};
         (void)issue(context, SELECT_FRAME, "-stack-select-frame", args, 1); return;
+    }
+    if (context->frame_only && context->query == SELECT_FRAME) {
+        /* Same thread/stop: keep inventory and frame metadata, invalidate values. */
+        context->next = context->snapshot;
+        context->next.error[0] = context->next.arguments_error[0] = 0;
+        memset(&context->next.selected, 0, sizeof context->next.selected);
+        context->next.selected.level = context->next.selected.line = -1;
+        for (size_t i = 0; i < context->next.frame_count; ++i) {
+            TbFrame *f = &context->next.frames[i];
+            memcpy(f->arguments, f->argument_names, sizeof f->arguments); f->arguments_read = false;
+        }
+        context->dirty = false;
+        (void)issue(context, QUERY_CURRENT, "-stack-info-frame", NULL, 0); return;
+    }
+    if (context->frame_only && context->query == QUERY_CURRENT) {
+        if (context->next.selected.level >= 0 && context->next.selected.level != context->desired_frame) {
+            (void)snprintf(context->next.error, sizeof context->next.error, "GDB selected a different frame; showing its reported context.");
+        }
+        context->frame_only = false; publish(context); return;
     }
     if (context->dirty || context->query >= SELECT_THREAD) {
         context->dirty = false;
@@ -356,7 +455,14 @@ void tb_context_pump(TbContext *context)
 
 void tb_context_interlock(TbContext *context, bool active) { context->interlock = active; }
 bool tb_context_interlocked(const TbContext *context) { return context->interlock; }
-bool tb_context_select_thread(TbContext *context, const char *id)
+static bool selection_current(const TbContext *context)
+{
+    TbGdbGeneration a = context->snapshot.generation, b = tb_gdb_generation(context->gdb);
+    return context->snapshot.ready && !context->snapshot.stale &&
+        !context->select_thread && !context->select_frame &&
+        a.session == b.session && a.stop == b.stop && a.context == b.context;
+}
+static bool select_thread(TbContext *context, const char *id, bool return_stopped)
 {
     if (context->interlock) { return false; }
     if (!id || tb_gdb_state(context->gdb) != TB_GDB_STOPPED) { return false; }
@@ -365,10 +471,20 @@ bool tb_context_select_thread(TbContext *context, const char *id)
         if (strcmp(context->snapshot.threads[i].id, id) == 0) { found = true; break; }
     }
     if (!found) { return false; }
+    if (selection_current(context) && strcmp(context->snapshot.selected_thread, id) == 0 &&
+        (!return_stopped || context->snapshot.selected.level == 0)) { return true; }
     (void)snprintf(context->desired_thread, sizeof context->desired_thread, "%s", id);
     context->select_thread = true; context->select_frame = false;
     context->first_frame = 0; context->selection_error[0] = '\0';
     tb_context_refresh(context); return true;
+}
+bool tb_context_select_thread(TbContext *context, const char *id)
+{
+    return select_thread(context, id, false);
+}
+bool tb_context_return_stopped(TbContext *context)
+{
+    return select_thread(context, context->snapshot.stopped_thread, true);
 }
 bool tb_context_select_frame(TbContext *context, int level)
 {
@@ -381,8 +497,10 @@ bool tb_context_select_frame(TbContext *context, int level)
         if (context->snapshot.frames[i].level == level) { found = true; break; }
     }
     if (!found) { return false; }
+    if (selection_current(context) && context->snapshot.selected.level == level) { return true; }
     context->desired_frame = level; context->select_frame = true;
-    context->selection_error[0] = '\0'; tb_context_refresh(context); return true;
+    context->selection_error[0] = '\0'; tb_context_refresh(context);
+    context->frame_only = true; return true;
 }
 bool tb_context_page(TbContext *context, int direction)
 {

@@ -185,7 +185,9 @@ static bool arrange_overlays(TbLayout *layout, TbRect area, int focused)
         if (!layout->lower_height[lower]) { layout->lower_height[lower] = clamp(primary.h * 3800 / 10000, TB_MIN_PANE_HEIGHT, maximum); }
         int height = clamp(layout->lower_height[lower], TB_MIN_PANE_HEIGHT, maximum);
         TbRect m = minimum(layout, layout->roots[lower + 3]);
-        TbRect r = {layout->lower_bars[lower].x, primary.y + primary.h - height, widths[lower], height};
+        /* An expanded pane owns its former dock row; its header already
+         * provides minimize/menu controls. Keep its top and primary geometry. */
+        TbRect r = {layout->lower_bars[lower].x, primary.y + primary.h - height, widths[lower], height + 1};
         if (!layout->tiled || m.w > r.w) { r.x = primary.x; r.w = primary.w; }
         layout->lower_areas[lower] = (TbRect){r.x, r.y - 1, r.w, r.h + 1};
         layout->dividers[layout->divider_count++] =

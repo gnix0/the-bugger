@@ -92,6 +92,16 @@ bool tb_registers_stale(const TbRegisters *r)
     const TbContextSnapshot *s = tb_context_snapshot(r->context);
     return tb_gdb_state(r->gdb) != TB_GDB_STOPPED || s->stale || !s->ready || !same(r->generation, s->generation);
 }
+bool tb_registers_settled(const TbRegisters *r)
+{
+    if (tb_registers_stale(r) || r->waiting) { return false; }
+    if (r->names_failed) { return true; }
+    if (!r->names_ready) { return false; }
+    for (size_t i = 0; i < r->count; ++i) {
+        if (r->wanted[i] && !r->rows[i].fresh && !r->failed[i]) { return false; }
+    }
+    return true;
+}
 bool tb_registers_limited(const TbRegisters *r) { return r->limited; }
 const char *tb_registers_error(const TbRegisters *r) { return r->error; }
 uint64_t tb_registers_revision(const TbRegisters *r) { return r->revision; }
@@ -191,7 +201,7 @@ void tb_registers_pump(TbRegisters *r)
             }
             r->rows[i].fresh = r->rows[i].changed = false; r->failed[i] = false;
             r->canonical_fresh[i] = false;
-            if (!identity) { r->canonical_ok[i] = false; }
+            if (!identity) { r->canonical_ok[i] = false; r->rows[i].value[0] = 0; }
         }
         if (r->generation.session != s->generation.session || strcmp(r->architecture, s->selected.architecture) != 0) {
             r->names_ready = false; r->count = 0;

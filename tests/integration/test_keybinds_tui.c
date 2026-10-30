@@ -195,13 +195,13 @@ static void native_bindings(const char *binary, const char *fixture)
     click("[ Config ]"); click("Profiles"); click("Shared connection");
     click("Review session"); click("Start native");
     test_terminal_expect(&term, "LIVE | Loaded");
-    test_terminal_expect(&term, "Continue F6"); test_terminal_expect(&term, "Pause p");
+    test_terminal_expect(&term, "Continue F7"); test_terminal_expect(&term, "Pause p");
     test_terminal_lower(&term, 2, true);
     click("Command"); test_terminal_send(&term, "echo wasdbnp\\n\r");
     test_terminal_expect(&term, "[gdb] wasdbnp");
     test_terminal_send(&term, "start\r"); test_terminal_expect(&term, "LIVE | Stopped");
     click("Source");
-    test_terminal_send(&term, "\033[17~"); test_terminal_expect(&term, "LIVE | Running");
+    test_terminal_send(&term, "\033[18~"); test_terminal_expect(&term, "LIVE | Running");
     test_terminal_expect(&term, "FIXTURE PID=");
     test_terminal_send(&term, "p"); test_terminal_expect(&term, "LIVE | Stopped");
     int x, y; CHECK(test_terminal_find(&term, "Source", &x, &y));
@@ -210,7 +210,7 @@ static void native_bindings(const char *binary, const char *fixture)
     (void)snprintf(mouse, sizeof mouse, "\033[<0;%d;%dm", x + 12, y + 4); test_terminal_send(&term, mouse);
     test_terminal_send(&term, "\006"); test_terminal_expect(&term, "instruction stepping");
     test_terminal_send(&term, "\010"); test_terminal_expect(&term, "source stepping");
-    test_terminal_send(&term, "\021"); test_terminal_expect(&term, "Close native session?");
+    test_terminal_send(&term, "\021"); test_terminal_expect(&term, "Quit application?");
     click("Close session"); stop();
     puts("PASS global shortcuts after shared profile load, real Continue/Pause, content-pane transfer and protected Console input");
 }
@@ -263,6 +263,16 @@ static void vim_input(const char *binary, const char *fixture)
         test_terminal_send(&term, "istart\r"); test_terminal_expect(&term, "VIM INSERT");
         test_terminal_expect(&term, "LIVE | Stopped");
         test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
+        vim_stage = "function keys with Command retained in Normal";
+        test_terminal_send(&term, "\033[15~"); test_terminal_expect(&term, "LIVE | Running");
+        test_terminal_expect(&term, "FIXTURE PID=");
+        test_terminal_send(&term, "\033[17~"); test_terminal_expect(&term, "LIVE | Stopped");
+        test_terminal_expect(&term, "VIM NORMAL");
+        test_terminal_send(&term, "i\033[15~"); settle();
+        test_terminal_expect(&term, "VIM INSERT"); test_terminal_expect(&term, "LIVE | Stopped");
+        test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
+        test_terminal_send(&term, "\033[15~"); test_terminal_expect(&term, "LIVE | Running");
+        test_terminal_send(&term, "\033[17~"); test_terminal_expect(&term, "LIVE | Stopped");
         leave_vim_field();
         test_terminal_lower(&term, 0, true);
         int x, y; CHECK(test_terminal_find(&term, "Address", &x, &y));
@@ -279,7 +289,7 @@ static void vim_input(const char *binary, const char *fixture)
         test_terminal_send(&term, "i\025/tmp/not-written-vim-test"); test_terminal_expect(&term, "VIM INSERT");
         test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
         test_terminal_send(&term, "\033"); test_terminal_expect(&term, "LIVE | Stopped");
-        test_terminal_send(&term, "\021"); test_terminal_expect(&term, "Close native session?");
+        test_terminal_send(&term, "\021"); test_terminal_expect(&term, "Quit application?");
         click("Close session"); stop();
     }
     puts("PASS opt-in Vim toggle/undo/save/reload, Normal entry, literal Insert, editing, focus/resize, inline fields and Escape/submit cleanup");
@@ -313,21 +323,21 @@ int main(int argc, char **argv)
     resize_keys(60, 112); CHECK(headers() == 2);
     test_terminal_send(&term, "\033"); test_terminal_expect(&term, "Capture cancelled.");
     test_terminal_send(&term, "\r"); test_terminal_expect(&term, "Press a key");
-    test_terminal_send(&term, "\033[17~"); test_terminal_expect(&term, "Binding captured.");
+    test_terminal_send(&term, "\033[18~"); test_terminal_expect(&term, "Binding captured.");
     CHECK(tb_preferences_load(&prefs) && !prefs.existed);
     click("[ Undo ]"); test_terminal_expect(&term, "Last change undone");
     inactive("[ Undo ]"); inactive("[ Save ]"); inactive("[ Restore Defaults ]");
-    bind_action(TB_BIND_CONTINUE, "F6");
+    bind_action(TB_BIND_CONTINUE, "F7");
     click("[ Back ]"); test_terminal_expect(&term, "Unsaved keybind changes");
-    click("[ Cancel ]"); test_terminal_expect(&term, "F6");
+    click("[ Cancel ]"); test_terminal_expect(&term, "F7");
     test_terminal_send(&term, "q"); test_terminal_expect(&term, "Unsaved keybind changes");
-    test_terminal_send(&term, "\033"); test_terminal_expect(&term, "F6");
+    test_terminal_send(&term, "\033"); test_terminal_expect(&term, "F7");
     test_terminal_send(&term, "\021"); test_terminal_expect(&term, "Discard and quit");
     click("[ Cancel ]"); click("[ Back ]"); click("[ Discard changes ]");
     test_terminal_expect(&term, "Configuration");
     CHECK(tb_preferences_load(&prefs) && !prefs.existed && prefs.keys[TB_BIND_CONTINUE] == 5);
     click("[ Back ]"); open_keys();
-    bind_action(TB_BIND_CONTINUE, "F6"); bind_action(TB_BIND_PAUSE, "p");
+    bind_action(TB_BIND_CONTINUE, "F7"); bind_action(TB_BIND_PAUSE, "p");
     edit("None"); test_terminal_expect(&term, "Binding captured.");
     click("[ Undo ]"); test_terminal_expect(&term, "Last change undone");
     bind_action(TB_BIND_LEFT, "a"); bind_action(TB_BIND_DOWN, "s");
@@ -337,7 +347,7 @@ int main(int argc, char **argv)
     bind_action(TB_BIND_NEXT_PANE, "n"); bind_action(TB_BIND_PANE_1 + 2, "r");
     bind_action(TB_BIND_BACK, "b"); bind_action(TB_BIND_NEXT_CONTROL, "Ctrl+N");
     click("[ Save ]"); test_terminal_expect(&term, "Keybinds saved."); stop();
-    CHECK(tb_preferences_load(&prefs) && prefs.keys[TB_BIND_CONTINUE] == 6 && prefs.keys[TB_BIND_UP] == 256 + 'w');
+    CHECK(tb_preferences_load(&prefs) && prefs.keys[TB_BIND_CONTINUE] == 7 && prefs.keys[TB_BIND_UP] == 256 + 'w');
     CHECK(prefs.keys[TB_BIND_PAUSE] == 256 + 'p' && prefs.keys[TB_BIND_LEFT] == 256 + 'a');
     CHECK(prefs.keys[TB_BIND_DOWN] == 256 + 's' && prefs.keys[TB_BIND_RIGHT] == 256 + 'd');
     CHECK(prefs.keys[TB_BIND_CONTENT_RIGHT] == -6 && prefs.keys[TB_BIND_NEXT_PANE] == 256 + 'n');
@@ -349,14 +359,14 @@ int main(int argc, char **argv)
     start(argv[1], "mono"); test_terminal_resize(&term, 60, 140);
     for (int i = 0; i < (argc == 3 ? 4 : 3); ++i) { test_terminal_send(&term, "\016"); }
     test_terminal_send(&term, "\r"); test_terminal_expect(&term, "Configuration");
-    click("Keybinds"); selected = 0; test_terminal_expect(&term, "F6");
+    click("Keybinds"); selected = 0; test_terminal_expect(&term, "F7");
     inactive("[ Undo ]"); inactive("[ Save ]");
     click("[ Restore Defaults ]"); test_terminal_expect(&term, "Restore default keybinds?");
-    click("[ Cancel ]"); test_terminal_expect(&term, "F6");
+    click("[ Cancel ]"); test_terminal_expect(&term, "F7");
     click("[ Restore Defaults ]"); click("[ Restore Defaults ]");
     test_terminal_expect(&term, "Defaults restored in draft");
     inactive("[ Restore Defaults ]");
-    click("[ Undo ]"); test_terminal_expect(&term, "F6"); inactive("[ Save ]");
+    click("[ Undo ]"); test_terminal_expect(&term, "F7"); inactive("[ Save ]");
     resize_keys(60, 111); CHECK(headers() == 1);
     test_terminal_send(&term, "\033[<65;10;10M"); settle();
     test_terminal_expect(&term, "Restore Defaults");

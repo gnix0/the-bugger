@@ -924,6 +924,15 @@ static void follow_address(const TbCode *code, View *view, uint64_t address)
     uint64_t anchor = address;
     view->data.anchor = anchor; view->origin_tried = anchor != address;
 }
+bool tb_code_settled(const TbCode *code, int id)
+{
+    if (id < 0 || id >= TB_CODE_VIEWS) { return false; }
+    const View *v = &code->views[id];
+    const TbContextSnapshot *c = tb_context_snapshot(code->context);
+    return c->ready && !c->stale && !v->data.stale && generation_equal(v->generation, c->generation) &&
+        !v->source_dirty && (!v->visible_assembly || (!v->assembly_dirty && !v->precontext)) &&
+        !(code->waiting && code->active == id);
+}
 void tb_code_pump(TbCode *code)
 {
     if (code->settings_job) {
@@ -1157,7 +1166,7 @@ bool tb_code_follow_frame(TbCode *code, int id) { return assembly_follow(code, i
 bool tb_code_stopped(TbCode *code)
 {
     const TbContextSnapshot *context = tb_context_snapshot(code->context);
-    if (!*context->stopped_thread || !tb_context_select_thread(code->context, context->stopped_thread)) {
+    if (!*context->stopped_thread || !tb_context_return_stopped(code->context)) {
         message(code, "Original stopped thread is unavailable; pause and refresh context."); return false;
     }
     for (int i = 0; i < TB_CODE_VIEWS; ++i) { tb_code_return(code, i); }

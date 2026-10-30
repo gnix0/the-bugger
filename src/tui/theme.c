@@ -7,7 +7,7 @@
 /* Owned by this module for the lifetime of the single curses screen. */
 static bool theme_color;
 
-/* Adapted role palettes; upstream revisions and MIT notices: THIRD_PARTY_NOTICES. */
+/* Adapted role palettes; upstream revisions and license notices: THIRD_PARTY_NOTICES. */
 static const TbPalette palettes[] = {
     {"catppuccin", "latte", true,
      {0xdce0e8, 0xeff1f5, 0xccd0da, 0xbcc0cc, 0xacb0be, 0x4a4d67, 0x65687f, 0xd11039, 0x45734b, 0x9b573e, 0x80644c, 0x8739ec, 0x2f6f98}},
@@ -83,15 +83,40 @@ static const TbPalette palettes[] = {
      {0x191919, 0x222222, 0x363537, 0x363537, 0x525053, 0xf7f1ff, 0x8b888f, 0xfc618d, 0x7bd88f, 0xfd9353, 0xfce566, 0x948ae3, 0x5ad4e6}},
     {"monokai-pro", "light", true,
      {0xede7e5, 0xfaf4f2, 0xd3cdcc, 0xd3cdcc, 0xbfb9ba, 0x29242a, 0x777275, 0xc7426a, 0x27825b, 0xbc5430, 0xa36412, 0x7058be, 0x1e7d96}},
+    /* Emacs palette adaptations; see THIRD_PARTY_NOTICES for role mapping. */
+    {"gruber-darker", "dark", false,
+     {0x101010, 0x181818, 0x282828, 0x453d41, 0x484848, 0xe4e4ef, 0x96a6c8, 0xf24e57, 0x73c936, 0xcc8c3c, 0xffdd33, 0x9e95c7, 0x95a99f}},
+    {"zenburn", "dark", false,
+     {0x2b2b2b, 0x3f3f3f, 0x494949, 0x4f4f4f, 0x6f6f6f, 0xdcdccc, 0x9e9e95, 0xcc9393, 0x87a586, 0xdfaf8f, 0xf0dfaf, 0xdc8cc3, 0x93e0e3}},
+    {"modus", "operandi", true,
+     {0xf2f2f2, 0xffffff, 0xe0e0e0, 0xc4c4c4, 0x9f9f9f, 0x000000, 0x595959, 0xa60000, 0x005f5f, 0x884900, 0x6f5500, 0x721045, 0x005e8b}},
+    {"modus", "vivendi", false,
+     {0x1e1e1e, 0x000000, 0x303030, 0x535353, 0x646464, 0xffffff, 0xa2a2a2, 0xff7974, 0x6ae4b9, 0xfec43f, 0xd0bc00, 0xfeacd0, 0x00d3d0}},
+    {"modus", "operandi-tinted", true,
+     {0xefe9dd, 0xfbf7f0, 0xdfd5cf, 0xc9b9b0, 0x9f9690, 0x000000, 0x595959, 0xa60000, 0x006300, 0x6d5000, 0x6d5000, 0x721045, 0x00598b}},
+    {"modus", "vivendi-tinted", false,
+     {0x1d2235, 0x0d0e1c, 0x2b3045, 0x4a4f69, 0x61647a, 0xffffff, 0x9f9f9f, 0xff726d, 0x11c777, 0xd0bc00, 0xd0bc00, 0xfeacd0, 0x00d3d0}},
+    {"modus", "operandi-deuteranopia", true,
+     {0xf2f2f2, 0xffffff, 0xe0e0e0, 0xc4c4c4, 0x9f9f9f, 0x000000, 0x595959, 0x973300, 0x0031a9, 0x695500, 0x77492f, 0x3548cf, 0x005077}},
+    {"modus", "vivendi-deuteranopia", false,
+     {0x1e1e1e, 0x000000, 0x303030, 0x535353, 0x646464, 0xffffff, 0xa2a2a2, 0xffa00f, 0x2fafff, 0xcabf00, 0xd8af7a, 0x79a8ff, 0x9ac8e0}},
+    {"modus", "operandi-tritanopia", true,
+     {0xf2f2f2, 0xffffff, 0xe0e0e0, 0xc4c4c4, 0x9f9f9f, 0x000000, 0x595959, 0xb21100, 0x005e8b, 0x721045, 0xa0132f, 0x721045, 0x004f5f}},
+    {"modus", "vivendi-tritanopia", false,
+     {0x1e1e1e, 0x000000, 0x303030, 0x535353, 0x646464, 0xffffff, 0xa2a2a2, 0xff7b59, 0x00d3d0, 0xfeacd0, 0xff7f86, 0xfeacd0, 0x7fdbdf}},
+    {"solarized", "dark", false,
+     {0x002b36, 0x073642, 0x073642, 0x073642, 0x586e75, 0x8b9b9d, 0x93a1a1, 0xba5e5d, 0x859900, 0xba613b, 0xb58900, 0x6d73c2, 0x2aa198}},
+    {"solarized", "light", true,
+     {0xeee8d5, 0xfdf6e3, 0xeee8d5, 0xeee8d5, 0x93a1a1, 0x586c73, 0x586e75, 0xdc322f, 0x7a8e1b, 0xcb4b16, 0xa0821a, 0x6c71c4, 0x37928e}},
 };
 
 /* Muted/accent colors are blended toward text where needed for legibility. */
 static size_t active_palette = 2; /* Catppuccin Macchiato. */
 static const char *const families[] = {
-    "catppuccin", "everforest", "tokyonight", "rose-pine", "nightfox", "gruvbox", "monokai-pro"
+    "catppuccin", "everforest", "tokyonight", "rose-pine", "nightfox", "gruvbox", "monokai-pro", "gruber-darker", "zenburn", "modus", "solarized"
 };
 static const char *const names[] = {
-    "Catppuccin", "Everforest", "Tokyo Night", "Rose Pine", "Nightfox", "Gruvbox Material", "Monokai Pro"
+    "Catppuccin", "Everforest", "Tokyo Night", "Rose Pine", "Nightfox", "Gruvbox Material", "Monokai Pro", "Gruber Darker", "Zenburn", "Modus", "Solarized"
 };
 size_t tb_theme_count(void) { return sizeof palettes / sizeof palettes[0]; }
 size_t tb_theme_family_count(void) { return sizeof families / sizeof families[0]; }

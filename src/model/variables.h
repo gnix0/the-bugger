@@ -60,6 +60,7 @@ bool tb_variables_restore_watch(TbVariables *variables, const char *expression, 
 bool tb_variables_remove(TbVariables *variables, size_t row);
 bool tb_variables_remove_definition(TbVariables *variables, uint64_t identity);
 bool tb_variables_names(TbVariables *variables);
+bool tb_variables_settled(const TbVariables *variables, TbVariableView view);
 bool tb_variables_stale(const TbVariables *variables, TbVariableView view);
 bool tb_variables_limited(const TbVariables *variables, TbVariableView view);
 const char *tb_variables_error(const TbVariables *variables, TbVariableView view);

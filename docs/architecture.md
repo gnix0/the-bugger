@@ -176,8 +176,8 @@ paths. No saved layout, new session backend or target-access policy is introduce
 
 `src/tui/theme.{h,c}` defines the built-in palette catalog, stable family/variant
 identifiers and semantic curses pairs. Catppuccin Macchiato is the default;
-All seven families, including Monokai Pro, remain selectable. The
-37 palettes use shared workspace/panel/raised/selection surfaces and semantic
+All eleven families remain selectable. The
+49 palettes use shared workspace/panel/raised/selection surfaces and semantic
 foregrounds. Muted/accent colors are adjusted toward text where required for
 contrast. RGB roles map to direct color, nearest xterm 256-color entries, or
 existing 8-color/monochrome fallbacks. If quantization merges a foreground with
@@ -217,7 +217,9 @@ uncertain crash durability, not as a rolled-back save.
 
 The catalog adapts the referenced upstream palettes; it does not embed Neovim or
 execute Lua. [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES) retains exact upstream
-revisions and MIT notices and accompanies the binary distribution.
+revisions, authors and MIT/GPL notices and accompanies the binary distribution
+with the GPLv3 text in LICENSE. Modus color-deficiency variants preserve upstream
+semantic substitutions; terminal adaptations carry no accessibility certification.
 
 ## Data flow and invariants
 
@@ -385,10 +387,13 @@ is painted; compact Prev/Next controls and `[`/`]` reach every retained pane.
 Returning to sufficient dimensions restores the tree. Resizing a terminal during
 a drag cancels that drag to avoid applying obsolete coordinates.
 
-The UI maps gutter hit tests to layout operations. ncurses parses mouse input;
-for terminals advertising an xterm-compatible `kmous`, the application explicitly
-enables held-button motion mode 1002 and disables it at shutdown. The installed
-ncurses XM capability otherwise enables click mode alone. Keyboard resize mode
+The UI maps gutter hit tests to layout operations. For terminals advertising an
+xterm-compatible `kmous`, it enables SGR coordinates (1006) and held-button motion
+(1002), disabling both on exit. A dedicated key prefix consumes decimal SGR
+packets incrementally with a 32-byte bound and 250 ms deadline; malformed reports
+are discarded. ncurses retains legacy mouse-event decoding. This avoids legacy
+223-column coordinate limits in tmux descriptions without replacing their color
+or keyboard capabilities. Keyboard resize mode
 selects the same dividers and uses the same constrained coordinate updates.
 Physical mouse appearance/usability requires manual validation, even
 when the PTY and real tmux forwarding tests pass.
@@ -593,6 +598,14 @@ floating windows or editor modes. Workspace organization remains F06; custom
 themes remain F44. F19's built-in themes affect presentation only.
 
 ## Selected context, Call Stack and Threads
+
+The Call Stack list renders compact function and basename/line entries. Its
+pane-local Details action copies one highlighted `TbFrame`, thread and context
+generation into a session-only snapshot. It does not call context selection,
+argument acquisition or the MI controller. The pane wraps complete retained
+fields, keeps a separate details offset and marks snapshots stale when context
+changes. Escape/Frames restores the list's row, vertical offset and horizontal
+position. New sessions and reused pane slots clear snapshots.
 
 `src/model/context.{h,c}` owns a bounded debugger snapshot independently of curses
 and target architecture. The native session owns this model and passes controller
@@ -913,6 +926,117 @@ not fabricated values. GDB memory reads may use heuristic
 partial reads; the frontend preserves the exact reported bytes/validity rather
 than reconstructing inaccessible memory. Scalar address conversion suppresses
 character-pointer string printing. User calls/writes/casts remain rejected.
+
+## Stack inspector
+
+`model/stack.{h,c}` owns 32 independent Stack views, raw samples, navigation,
+point annotations and per-thread declarations. Context maintains monotonic
+session-local thread-lifetime identities from create/exit notifications and
+validated complete inventories. Numeric ID reuse or changed target identity
+gets a new lifetime. Malformed/truncated inventories invalidate association
+conservatively; declarations for departed lifetimes are removed.
+
+Each Stack pane uses a reserved independent client in Memory's existing
+scheduler, outside its 32 ordinary pane IDs. All 64 clients share one active
+byte-read operation, transport validation, target-width checks and ordinary/MMIO
+policy. Stack clients accept only exact numeric windows and explicit thread/
+frame-zero read context; they never call Memory's read-triggering paging path.
+Permissions remain client-local. Bounds declarations are not authorization.
+`TB_BROWSE_STACK_BYTES` and `TB_BROWSE_STACK` distinguish transport cache and
+Stack sample history from ordinary Memory ownership. History entries, including
+provenance/header allocations, share the session's existing lazy 4 MiB pool.
+Active fixed-size view snapshots remain separate from retained-history allocation.
+
+One context-matching frame-0 register sample serves visible Stack views.
+Discovery uses reported register IDs: `sp`, x86 `rsp`/`esp`, or Xtensa `a1` for
+its reported architecture. Missing/ambiguous IDs or values stay unavailable;
+there is no PC/FP/CFA substitution or frontend unwinding. Automatic acquisition
+is limited to SP metadata, at most once per context attempt; unavailable metadata
+requires explicit Follow SP to retry. No hidden/running byte acquisition occurs.
+Target width/order determines default grouping, otherwise bytes.
+
+The independent annotation chain uses explicit thread/frame options for SP,
+names-only locals/arguments and one controlled C quoted-symbol address-of.
+Every variable-address operation first queries `may-call-functions`; enabled
+settings require explicit session-wide disable plus independent verification.
+No silent restoration, variable objects or free-form expressions are used.
+The 64-name picker rejects duplicate, unsupported and truncated scopes; 32 point
+slots require explicit removal when full. Address points do not prove extent,
+stack membership or ownership. Reference/location evaluation and register
+unwinding can still cause GDB-internal reads. Caller SP is labelled potentially
+reconstructed and never becomes the frame-0 anchor.
+
+Requests retain generation, thread lifetime, view lifetime and operation revision;
+Memory clients also invalidate their outstanding operation on navigation/clear.
+Three-second deadlines and local cancellation do not prove backend cancellation.
+No retry or target interruption is introduced. Raw-byte failures preserve other
+metadata; annotation failures preserve bytes. Relevant context, Console,
+image/library and configuration changes invalidate point annotations. Samples
+remain separately inspectable with original thread/stop/order provenance;
+other-thread history receives no current SP offsets or points.
+
+The TUI adds pane-local Read/Options, selected-row details, horizontal clipping,
+existing scrollbars and paginated actions. Browsing is read-free and suspends
+follow; thread changes restore following with unread content. Declared half-open
+bounds/growth stay per-view/per-thread lifetime and never establish verified
+bounds. Only SP displacement from declared start is computed, including zero at
+an endpoint; out-of-span SP gets a relationship, never usage/fullness. All Stack
+state is session-only; setup capture/restore and its schema are unchanged.
+
+## Input routing and frame presentation
+
+Physical Escape leaves editing/content focus, closes pane-local details/menus
+or restores fullscreen; it never initiates session closure. The configured Back
+action (`q` by default) closes a workspace session, returning to the launcher.
+Ctrl+Q requests application exit after closing. Confirmation text distinguishes
+these destinations; a repeated request during closure cannot reopen confirmation
+or downgrade a pending application exit.
+
+Configured debugger function keys dispatch before the Vim Normal editor and
+ordinary field editing. Vim Insert protects field input; printable aliases stay
+local to fields. Capture, modal confirmations and resize retain their own input
+handling. Fixed Tab/Shift+Tab traverses controls without optional Next/Previous
+control bindings. Fresh defaults add F6 Pause/Halt independently of Continue.
+Saved key arrays retain every slot, including None, without migration or schema
+changes. No existing debugging key is reassigned.
+
+Drawing composes the complete curses virtual screen and presents once through
+`wnoutrefresh`/`doupdate`, with typeahead interruption and insert/delete-line or
+character optimizations disabled. Cursor placement/visibility is decided once
+after composition. Xterm-compatible mouse terminals additionally bracket each
+frame in synchronized-update mode 2026, flushing the begin marker before curses
+can write directly to the descriptor and releasing the frame afterward.
+Compatible terminals lacking that mode retain the curses fallback. Protocol
+references: [Alacritty escape support](https://alacritty.org/misc-alacritty-escapes.html)
+and [tmux changes](https://github.com/tmux/tmux/blob/master/CHANGES).
+
+Expanded lower overlays include their former dock row; their top tab row owns
+minimize/menu controls. Collapsed docks remain, with hit tests respecting any
+full-width overlay covering them. The workspace toolbar starts one row below
+the terminal top. The debugging area starts one row lower and loses exactly that
+row of height; horizontal geometry and saved definitions are unchanged. Wide
+tiled/fullscreen chrome retains its toolbar/status gap; compact selectors retain
+their own row.
+Single-line workspace footers leave the last row blank, without shrinking pane
+geometry further. Launcher/configuration/dialog footers keep their established placement.
+
+Selecting the already-current fresh frame/thread is a no-op: context generations,
+retained argument values and inspector freshness remain unchanged. Real context
+changes still invalidate stale data. Stack dialogs separate content, primary
+actions and navigation with blank rows where space permits; a complete no-call
+explanation/action group is vertically centered when it fits.
+
+Frame-only selection retains the thread inventory and frame list and requests
+only frame selection and selected-frame metadata. Generation checks still
+invalidate frame-dependent models immediately. The presentation retains bounded
+copies of the previously rendered panes, including their original frame labels,
+until visible source/disassembly, registers and variable names have settled.
+Replacement panes appear together; retained cells never become model data or
+acquire the new frame label. Pane-local actions are suspended while their old
+cells are displayed. Resume, unrelated invalidation, layout changes or context
+failure discard the retained presentation. After 150 ms, the existing footer
+shows the destination frame; this threshold delays feedback only, never requests.
+Errors use the existing error presentation.
 
 ## Locals and Watches
 

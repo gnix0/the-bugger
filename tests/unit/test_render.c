@@ -100,7 +100,7 @@ int main(void)
     int default_fg, default_bg;
     CHECK(extended_pair_content(TB_PANEL, &default_fg, &default_bg) == OK);
     CHECK(default_fg == 0xcad3f5 && default_bg == 0x24273a);
-    CHECK(tb_theme_count() == 37 && tb_theme_family_count() == 7);
+    CHECK(tb_theme_count() == 49 && tb_theme_family_count() == 11);
     for (size_t i = 0; i < tb_theme_count(); ++i) {
         const TbPalette *palette = tb_theme_palette(i);
         CHECK(tb_theme_find(palette->family, palette->variant) == i);
@@ -119,6 +119,16 @@ int main(void)
             CHECK(default_fg >= 0 && default_fg <= 0xffffff && default_bg >= 0 && default_bg <= 0xffffff);
             CHECK(default_fg != default_bg);
         }
+    }
+    /* Color-deficiency variants retain their upstream semantic remapping. */
+    for (size_t light = 0; light < 2; ++light) {
+        const char *deut = light ? "operandi-deuteranopia" : "vivendi-deuteranopia";
+        const char *trit = light ? "operandi-tritanopia" : "vivendi-tritanopia";
+        const TbPalette *d = tb_theme_palette(tb_theme_find("modus", deut));
+        const TbPalette *t = tb_theme_palette(tb_theme_find("modus", trit));
+        CHECK(d && t && d->colors[7] != t->colors[7] && d->colors[8] != t->colors[8]);
+        CHECK(d->colors[8] == (light ? 0x0031a9U : 0x2fafffU));
+        CHECK(t->colors[8] == (light ? 0x005e8bU : 0x00d3d0U));
     }
     CHECK(!tb_theme_select(tb_theme_count()));
     CHECK(tb_theme_find("unknown", "unknown") == tb_theme_count());
@@ -191,6 +201,6 @@ int main(void)
         }
         (void)endwin(); delscreen(screen); CHECK(fclose(input) == 0 && fclose(output) == 0);
     }
-    puts("PASS cell/control/UTF-8 text bounds, 37 palettes, contrast, direct/256/8-color/monochrome, execution highlight and scrollbar");
+    puts("PASS cell/control/UTF-8 text bounds, 49 palettes, contrast, direct/256/8-color/monochrome, execution highlight and scrollbar");
     return EXIT_SUCCESS;
 }

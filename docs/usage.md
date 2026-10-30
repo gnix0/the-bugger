@@ -32,7 +32,7 @@ an empty argument and literal metacharacters. An environment entry such as
 Environment overrides are session-only.
 
 The session starts **Loaded**. Click **Continue** or press **F5** to run; click
-**Pause** to interrupt. State and PID come from GDB. Console has an inline
+**Pause** or press **F6** to interrupt (Halt for OpenOCD). State and PID come from GDB. Console has an inline
 **Command** field below its output; **Enter** or **Send** executes through MI. Errors leave
 the session usable. Source/Disassembly and Registers show actual stopped context;
 Memory uses the inline inspector described below; Locals/Watches expose scoped
@@ -91,8 +91,9 @@ Ordinary stepping and navigation preserve setup confirmation; range consent
 still expires independently on resume or context changes.
 Escape leaves the field without sending or discarding the draft. Each Console
 pane retains its own draft across tab changes, dialogs and terminal resizing;
-new sessions and reused split panes start empty. Leave the field before using
-execution key bindings, or click the toolbar action directly. Save Log remains a separate
+new sessions and reused split panes start empty. Configured function-key debugging shortcuts work while the field retains focus,
+including Vim Normal mode. Vim Insert mode protects input; press Escape first,
+then use the shortcut. Printable debugger aliases remain protected in fields. Save Log remains a separate
 file-destination dialog. Command history and multiline command editing are not
 added by this change.
 The current Console sends commands to GDB; it is not a UART terminal. A separate
@@ -229,14 +230,30 @@ flow remains simulated.
 For a live context example, launch `./build/context-fixture`. It deliberately
 stops with two worker threads waiting while main is inside recursive calls.
 Open **Call Stack**, then choose **Threads** in another pane's `...` menu.
-Arguments initially show names with `<read required>`. Select a frame and choose
-**Read Args** to read that frame's simple argument values deliberately. Values
-are invalidated by refresh or context/execution changes; they are not polled.
-Widen a very narrow pane to expose its footer actions.
+Frame entries show the function and compact `filename:line`. Select a frame and
+choose **Read Args** to read its simple argument values deliberately; inspect
+these in **Details**. Values expire on refresh or context/execution changes.
+The pane-local **Details** action copies the highlighted row's available metadata:
+function, arguments, full source path, line, code address, thread and provenance.
+It never selects that frame or sends a query. Use wheel/arrows/Page keys or the
+scrollbar to browse wrapped fields. **Frames** or Escape returns to the list,
+preserving its highlighted row and scroll. Retained details are marked stale
+after context changes. Missing fields say unavailable. Details remains accessible
+in minimum-width panes; widen a narrow pane for the other footer actions.
 Click a row to select its frame/thread, or browse rows with Up/Down and press
 Enter. Selecting a caller changes inspection context without moving execution;
 the **inspected caller** label distinguishes it from the original stop.
+Source highlights GDB's reported caller line (`~`) separately from the stopped
+PC (`>`); recursive callers can legitimately report different call-site lines.
+Registers shows that frame's GDB-reported values. Stack retains its frame-zero
+anchor; selecting a caller neither reads Stack bytes nor adds an SP annotation.
 `>` marks selection, and `*` marks the stopped thread's innermost frame.
+
+When selecting a different Call Stack frame, the previous panes retain their
+original frame labels until replacement data is ready. Longer changes show
+“Switching to frame #…” in the existing footer. Pane-local actions resume when
+the replacement appears; errors use the usual error display. Selecting the
+already-current frame leaves its displayed values unchanged.
 
 **Refresh** reloads stopped context. **Frames >** and **< Frames** page through
 32 frames at a time; resize a narrow pane to expose its paging controls.
@@ -417,6 +434,81 @@ but untrustworthy frame requires reconnection. Diagnostics remain in Console.
 Closing invalidates setup and consent immediately; an already outstanding read
 may have reached hardware and must finish or follow the bounded close policy.
 
+## Stack inspection
+
+Restore the lower Memory group, then select its **Stack** tab. It starts unread
+with a 128-byte requested window centered on the selected thread's frame-0 SP.
+Selecting a caller in Call Stack leaves this anchor at frame zero. SP metadata
+comes from GDB's discovered register identities; unavailable SP is never replaced
+with another address. Verified stack bounds remain **unknown**.
+
+**Read** deliberately requests the exact window while stopped. **Options** offers
+Follow SP, literal address/signed-SP-offset navigation, 1–1024-byte windows,
+1/2/4/8-byte grouping, previous/next windows, cached samples, annotations,
+declarations and cancellation. Settings and navigation read no bytes. Unsigned
+literals such as `0x20001000` choose the window start; `-64`, `+0` and `+0x20`
+are offsets from a fresh frame-0 SP. Overflow is rejected without clipping or
+alignment. Following starts at SP−floor(size/2). Browsing/row selection/panning
+suspends following until **Follow frame-0 SP**; thread changes restore following
+and show unread content. Neither action automatically samples bytes.
+
+Each row is one grouped raw word, with aligned address, signed SP-offset and raw
+value columns, followed by available point annotations. Offset width is stable
+across the complete requested window, including unread rows. Missing bytes use `??`; incomplete groups remain raw bytes
+with an explanation, never a fabricated numeric word. Unknown byte order falls
+back to byte grouping. Numbers carry no pointer interpretation. Arrow/Page keys,
+wheel and one-cell bars navigate; Left/Right pans long rows, with `<`/`>` clipping
+indicators. **Selected row: complete details / provenance**, or Enter on its body,
+opens a paginated read-free page with complete fields and sampling provenance.
+This remains available in 20-column panes.
+
+Samples retain their original thread lifetime and session/stop/context. Stepping,
+resume and context changes make samples stale. **Inspect previous/next cached
+sample** deliberately opens retained history, including other threads, without
+applying another thread's current SP offsets or points. Follow SP or numeric
+navigation leaves history; history cannot be refreshed into the selected thread.
+Caches share the existing bounded pool and can evict old samples.
+
+Two deliberate annotation actions are available:
+
+- **Query selected-frame SP point** reads that frame's GDB-reported SP. It is
+  separate from the frame-0 anchor; callers' values may be reconstructed by GDB.
+- **Query local/argument names** opens a names-only picker. Selecting an eligible
+  name queries one address point, with explicit thread/frame options. Before
+  each query the frontend verifies `may-call-functions off`. If enabled,
+  **Review session-wide no-call change** explains the effect; the final button
+  explicitly disables calls for the entire GDB session, verifies it, then queries.
+  The setting is never silently restored. Cancel leaves an undispatched change
+  untouched; an already-sent setting command can still complete.
+
+The guard does not prevent GDB's internal reads. Quoted C address-of lookup
+avoids macro expansion and C++ overloaded `operator&`; unsupported or ambiguous
+names cannot be queried. Register-only, optimized and unsupported piecewise
+locations remain explanations. A variable address establishes neither storage
+extent, stack membership nor ownership; a reference may identify its referent.
+Points expire on relevant context/image/configuration changes. A view retains
+up to 32 points; **Remove point annotations** explicitly frees slots.
+
+**Declare bounds / growth direction** stores a numeric `[low, high)` interval
+for this view and current thread lifetime. It grants no read permission or
+verified ownership. With fresh SP inside the closed endpoint span, details show
+**SP displacement from declared start**: high−SP downward, SP−low upward.
+An endpoint result of zero does not establish a readable byte. Outside that
+span only the relationship appears. These are declarations, never measured
+usage, high-water marks, fullness or safety margins. Terminated/reused thread IDs
+cannot inherit them.
+
+**Temporary read ranges** uses independent Stack permissions through the existing
+Memory policy. Declared MMIO blocks generic Stack byte reads; Stack has no MMIO
+sampling action. Bounds declarations never authorize reads. **Cancel** stops
+further dispatch and rejects canceled results without interrupting the target;
+while a command is outstanding it says Cancel requested. Timeout is not proof
+of backend cancellation, and nothing retries automatically.
+
+All Stack settings, samples, declarations and points are session-only. Saved
+setups retain Stack tab membership/layout through the existing F01 schema,
+without restoring sampled data, permissions or Stack settings.
+
 ## Code breakpoints and Run to Selected
 
 Click the Source gutter or select a source/instruction row and press **F9**
@@ -463,7 +555,7 @@ and divider controls are hidden. Source scrolling, search/navigation, breakpoint
 controls and source stepping retain their normal behavior. Hidden inspectors
 follow the existing visibility policy rather than starting background reads.
 
-Choose **Restore** in the Source header, press Escape or `q` at control focus,
+Choose **Restore** in the Source header or press Escape at control focus,
 or choose **Actions → Restore tiled workspace** to leave fullscreen. Tab/Enter
 can activate Restore without a mouse. The prior split tree, proportions and tab
 membership are retained, including nested panes and terminal resizing. Pane-switch
@@ -506,8 +598,9 @@ Ctrl+H as Backspace and Ctrl+J as line feed, so those bytes move between panes
 only during content focus; text fields keep their existing editing behavior.
 Enter's carriage return remains a separate activation key.
 
-Escape goes back; the default `q` alias closes/backs out outside text fields and keeps the launcher
-open. **Quit** or `Ctrl+Q` exits the application, confirming active-session closure.
+Escape leaves editing/content focus, closes menus/details or restores fullscreen;
+it never closes a debugging session. The default `q` closes the session and
+returns to the launcher outside text fields, and keeps the launcher open. **Quit** or `Ctrl+Q` exits the application, confirming active-session closure.
 Function keys have visible alternatives. Reset requires reviewed OpenOCD support
 and confirmation; demo actions are explicitly simulated.
 
@@ -526,8 +619,9 @@ The Memory/Stack, Locals/Watches and Console/Breakpoints groups start minimized.
 Click a dock title or `^` to restore a group over the primary views; click `_`
 immediately left of `...` to minimize it. Drag its top edge to adjust its height
 independently. Multiple groups can stay open. Where they overlap, the most
-recently focused group is on top; click an exposed part or its dock title to
-bring another forward. Minimize it to access fully covered content. Heights and
+recently focused group is on top; click an exposed header or select its pane to
+bring another forward. Expanded groups have only the top tab/minimize/menu row;
+the duplicate bottom dock is removed, leaving the action buttons at the bottom. Minimize it to access fully covered content. Heights and
 visibility are session-only; resizing the terminal preserves preferred heights.
 
 Drag one-cell gutters to resize columns or nested splits. Pane actions
@@ -608,6 +702,10 @@ families resets that row to the family's initial variant (Macchiato for Catppucc
 | Nightfox | nightfox, dayfox, dawnfox, duskfox, nordfox, terafox, carbonfox |
 | Gruvbox Material | dark/light × medium, hard, soft; material foreground |
 | Monokai Pro | pro, classic, machine, octagon, ristretto, spectrum, light |
+| Gruber Darker | dark |
+| Zenburn | dark |
+| Modus | operandi, vivendi; each also has -tinted, -deuteranopia, -tritanopia |
+| Solarized | dark, light |
 
 **Preview** temporarily applies the draft to a simulated workspace. It does not
 start a debugger, read a target or save preferences. **Back** or Escape returns
@@ -626,7 +724,9 @@ silently overwritten. A stale writer must restart before saving.
 
 The palettes are adapted to semantic roles, with contrast adjustments where
 needed; 8-color/monochrome terminals cannot reproduce all palette differences.
-No Neovim or Lua installation is needed. Upstream revisions and licenses are in
+The 49 palettes across eleven families need no editor installation. Modus color-deficiency
+variants retain semantic color substitutions. Terminal adaptations do not inherit
+upstream accessibility certification. Upstream revisions and licenses are in
 [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES). Custom palette files remain planned
 under F44.
 
@@ -663,16 +763,18 @@ discard or Restore Defaults.
 The actions include Continue, Pause/Halt, stepping, breakpoint and Reset;
 left/down/up/right movement; spatial content-pane transfers; previous/next pane;
 pane selection 1–9; Back/close session; and additional Quit and control-traversal
-keys. The factory bindings retain F5/F9/F10/F11/Shift+F11, brackets, digits and q.
-Vim-like input optionally supplies h/j/k/l and Ctrl+H/J/K/L. Pause/Halt, Reset and additional shortcuts
-start unbound. Toolbar hints follow the saved debugger bindings. Binding Reset
+keys. The factory bindings retain F5/F9/F10/F11/Shift+F11, brackets, digits and q,
+and assign F6 to the separate Pause/Halt action. Vim-like input optionally
+supplies h/j/k/l and Ctrl+H/J/K/L. Reset and additional shortcuts start unbound.
+Existing saved bindings, including None and custom use of F6, are preserved;
+assign Pause/Halt explicitly in Config to update an existing key map. Toolbar hints follow the saved debugger bindings. Binding Reset
 does not bypass confirmation or make it available on unsupported targets.
 
 Physical arrows, Ctrl+arrows, Tab/Shift+Tab, Escape and Ctrl+Q remain available.
 Duplicate bindings are rejected; unbind an existing action before reusing its
 key. Ctrl+C/I/M/Q/S/Z and Space cannot be assigned. Ctrl+H/J/K/L are assignable
 only to spatial content-pane transfers because terminals can encode them as
-editing characters. Spatial transfer applies only in CONTENT FOCUS. Navigation
+editing characters. Spatial transfer applies only in CONTENT FOCUS. Printable navigation
 and debugger aliases do not intercept literal typing or editing in fields,
 including Memory addresses and Console commands. Terminal/tmux interception can
 still prevent delivery; fixed keys and mouse controls provide alternatives.
@@ -849,3 +951,9 @@ or leaving a mode never sends a command or reads target memory. Ctrl+Q retains
 session-close confirmation. Raw keybind capture is independent of field modes.
 These are single-line conveniences, not a full Vim editor: counts, operators,
 registers, macros and multiline editing are not implemented.
+
+Stack options keep the no-call review action separate from Back/Previous/Next.
+The complete no-call explanation and buttons are centered when they fit;
+smaller terminals retain paginated text. The workspace has one blank top row,
+using one row from the top of the debugging area. Reselecting the current fresh
+Call Stack frame retains its context and displayed values.

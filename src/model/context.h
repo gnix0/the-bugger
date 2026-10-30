@@ -8,12 +8,13 @@ typedef struct {
     int level, line;
     char path[4096]; /* Exact filesystem bytes; file below is a render-safe label. */
     char address[48], function[160], file[384], from[160], architecture[64];
-    char arguments[256];
+    char arguments[256], argument_names[256];
     bool arguments_read;
 } TbFrame;
 typedef struct {
     char id[32], name[96], target[128], state[24];
     TbFrame frame;
+    uint64_t lifetime; /* Session-local identity; numeric ID reuse never inherits it. */
 } TbThread;
 typedef struct {
     TbGdbGeneration generation;
@@ -42,10 +43,15 @@ void tb_context_require(TbContext *context, bool required);
 void tb_context_registers(TbContext *context, bool required);
 void tb_context_memory(TbContext *context, bool required);
 void tb_context_variables(TbContext *context, bool required);
+void tb_context_stack(TbContext *context, bool required);
+uint64_t tb_context_thread_lifetime(const TbContext *context, const char *id);
+bool tb_context_lifetime_live(const TbContext *context, uint64_t lifetime);
 void tb_context_interlock(TbContext *context, bool active);
 bool tb_context_interlocked(const TbContext *context);
+bool tb_context_frame_pending(const TbContext *context);
 void tb_context_refresh(TbContext *context); /* Outside controller callbacks. */
 bool tb_context_select_thread(TbContext *context, const char *id);
+bool tb_context_return_stopped(TbContext *context);
 /* Frame rows must belong to a fresh snapshot, never the previous thread. */
 bool tb_context_select_frame(TbContext *context, int level);
 /* Deliberate value read of the selected frame only. Never repeated automatically.

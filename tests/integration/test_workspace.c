@@ -100,13 +100,13 @@ static void lower_overlays(const char *binary)
     test_terminal_resize(&term, 24, 80);
     test_terminal_expect(&term, "Sample log / no commands executed");
     CHECK(!test_terminal_find(&term, "HEX bytes / ASCII", NULL, NULL));
-    /* The taller Memory header is still exposed above Console. */
-    test_terminal_click(&term, "Memory");
+    /* Pane selection raises an open group without requiring a duplicate dock. */
+    test_terminal_send(&term, "4");
     test_terminal_expect(&term, "HEX bytes / ASCII");
-    click_at(&term, term.cols - 20, term.rows - 3);
+    test_terminal_send(&term, "6");
     test_terminal_expect(&term, "Sample log / no commands executed");
-    /* A dock title brings the already-open group to the front. */
-    click_at(&term, 2, term.rows - 3);
+    /* Open groups use their header and pane selection, without duplicate docks. */
+    test_terminal_send(&term, "4");
     test_terminal_expect(&term, "HEX bytes / ASCII");
     CHECK(!test_terminal_find(&term, "Sample log / no commands executed", NULL, NULL));
     test_terminal_lower(&term, 0, false);
@@ -313,8 +313,8 @@ int main(int argc, char *argv[])
     test_terminal_resize(&term, 18, 80);
     test_terminal_expect(&term, "2 Asm");
     test_terminal_click(&term, "Disassembly");
-    test_terminal_click(&term, "08000436"); /* Last visible row above the dock. */
-    test_terminal_send(&term, "\033OB\033OB");
+    test_terminal_click(&term, "08000434"); /* Last visible row with the top margin. */
+    test_terminal_send(&term, "\033OB\033OB\033OB");
     test_terminal_expect(&term, "0800043A");
     CHECK(!test_terminal_find(&term, "0800042A  B5 10", NULL, NULL));
     test_terminal_stop(&term, 0);

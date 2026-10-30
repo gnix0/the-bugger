@@ -4,7 +4,7 @@
 #include "browse.h"
 
 enum { TB_MEMORY_VIEWS = 32, TB_MEMORY_BYTES = 1024, TB_MEMORY_ROW = 16, TB_MEMORY_REGIONS = 128,
-       TB_MEMORY_RANGES = 16 };
+       TB_MEMORY_CLIENTS = 64, TB_MEMORY_RANGES = 16 };
 /* Established ordinary RAM/ROM only; unknown/MMIO ranges are never implicit. */
 typedef struct { uint64_t begin, end; } TbMemoryRegion;
 typedef enum { TB_MEMORY_UNKNOWN, TB_MEMORY_LITTLE, TB_MEMORY_BIG } TbMemoryOrder;
@@ -104,4 +104,10 @@ void tb_memory_line(const TbMemory *memory, int view, size_t row, char *out, siz
 bool tb_memory_event(TbMemory *memory, const TbGdbEvent *event);
 void tb_memory_pump(TbMemory *memory);
 uint64_t tb_memory_revision(const TbMemory *memory);
+/* Reserved independent clients for Stack; the same scheduler serializes all
+ * byte reads. Client indices never alias ordinary pane Memory state. */
+int tb_memory_stack_client(int pane);
+bool tb_memory_client_read(TbMemory *memory, int client, uint64_t address, unsigned bytes, const char *thread);
+void tb_memory_client_cancel(TbMemory *memory, int client);
+bool tb_memory_client_busy(const TbMemory *memory, int client);
 #endif

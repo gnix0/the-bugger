@@ -2,6 +2,45 @@
 
 ## [Unreleased]
 
+### Added
+
+- Gruber Darker, Zenburn, eight Modus variants and Solarized dark/light themes,
+  bringing the catalogue to 49 palettes across eleven families. Includes
+  upstream provenance and license notices; Macchiato remains the default.
+- Dedicated read-only Stack view with frame-0 SP following, exact explicit byte
+  windows, grouped raw rows, read-free browsing/panning/details and separate
+  cached-sample provenance. Guarded frame/variable address-point queries and
+  per-thread declared bounds expose SP displacement without inferring usage or
+  ownership. Stack state is session-only; saved-setup schema is unchanged.
+
+### Changed
+
+- Compact Call Stack entries show function and filename/line. Pane-local cached
+  Details wraps complete available metadata without selecting a frame or querying
+  GDB; Escape preserves the frame-list selection and scroll.
+- F6 is the factory Pause/Halt binding; existing saved bindings remain unchanged.
+  Debugger function keys work with focused fields in ordinary/Vim Normal mode.
+- Expanded lower panes use their former dock row for content and retain their
+  top minimize/menu controls. Header/footer spacing uses available chrome space
+  without moving the primary panes. UI/CLI target version is v0.1.5.
+
+### Fixed
+
+- Frame changes retain the previous labelled panes until replacement data is
+  ready, avoiding transient stale/clearing flashes. Slow changes report progress
+  in the existing footer; frame lists no longer refresh on frame-only selection.
+
+- Reselecting the current frame/thread preserves context freshness and retained
+  values. SGR mouse coordinates support wide tmux minimize/menu hit targets.
+- Stack dialogs separate actions/navigation and center complete no-call reviews.
+  The workspace toolbar has a one-row top margin.
+
+- Escape no longer closes a debugging session. Session close and application quit
+  have distinct confirmations, and repeated close requests preserve their destination.
+- Compatible terminal/tmux updates use synchronized frames with bounded curses
+  refreshes and stable cursor visibility during wheel/drag/context changes.
+- Stack raw values and unread markers align across different SP-offset lengths.
+
 ## [0.1.4] - 2026-10-29
 
 ### Added

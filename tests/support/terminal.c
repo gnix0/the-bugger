@@ -92,6 +92,11 @@ static void sgr(TestTerminal *term)
 
 static void csi(TestTerminal *term, char command)
 {
+    if (strcmp(term->sequence, "?2026") == 0) {
+        if (command == 'h') { term->synchronized_update = true; }
+        if (command == 'l') { term->synchronized_update = false; ++term->synchronized_frames; }
+    }
+    if (command == 'l' && strcmp(term->sequence, "?1049") == 0) { ++term->alternate_exits; }
     int first = 0, second = 0;
     (void)sscanf(term->sequence, "%d;%d", &first, &second);
     int distance = first == 0 ? 1 : first;
@@ -125,7 +130,7 @@ static void csi(TestTerminal *term, char command)
         scroll_lines(term, term->scroll_top, term->scroll_bottom, command == 'S' ? distance : -distance);
         break;
     case 'J':
-        if (first == 2 || first == 3) { clear_screen(term); }
+        if (first == 2 || first == 3) { ++term->full_clears; clear_screen(term); }
         else {
             memset(term->cells[term->y] + term->x, ' ', (size_t)(term->cols - term->x));
             memset(term->inverse[term->y] + term->x, term->reverse,
@@ -243,6 +248,7 @@ static void consume(TestTerminal *term, unsigned char character)
         return;
     }
     if (character < 32 || character >= 127) { return; }
+    if (!term->synchronized_update) { ++term->unsynchronized_writes; }
     if (term->x >= term->cols) {
         term->x = 0;
         if (term->y < term->rows - 1) { ++term->y; }
@@ -395,38 +401,84 @@ void test_terminal_click(TestTerminal *term, const char *text)
 void test_terminal_lower(TestTerminal *term, int lower, bool open)
 {
     CHECK(lower >= 0 && lower < 3);
-    int row = term->rows - 3, column = -1, found = 0;
-    long long deadline = milliseconds() + 5000;
-    while (milliseconds() < deadline) {
-        found = 0;
-        for (int x = 0; x + 4 < term->cols; ++x) {
-            if ((term->cells[row][x] == '^' || term->cells[row][x] == '_') &&
-                strncmp(term->cells[row] + x + 2, "...", 3) == 0) {
-                if (found++ == lower) { column = x; break; }
+    long long ready = milliseconds() + 100;
+    while (milliseconds() < ready) { test_terminal_pump(term, 5); }
+    int dock = term->rows - 3;
+    if (term->lower_column_width != term->cols) {
+        int available = term->cols - 4;
+        int first = available * 36 / 100, second = available * 34 / 100;
+        term->lower_columns[0] = first - 6;
+        term->lower_columns[1] = first + second - 5;
+        term->lower_columns[2] = term->cols - 8;
+        term->lower_column_width = term->cols;
+    }
+    /* Capture actual divider positions whenever all three docks are visible. */
+    int columns[3], count = 0;
+    for (int y = 3; y < dock; ++y) {
+        const char *at = term->cells[y]; count = 0;
+        while ((at = strstr(at, "...")) != NULL) {
+            if (count < 3) { columns[count] = (int)(at - term->cells[y]) - 2; }
+            ++count; at += 3;
+        }
+        if (count == 3) { memcpy(term->lower_columns, columns, sizeof columns); break; }
+    }
+    count = 0;
+    for (int x = 0; x + 4 < term->cols; ++x) {
+        if (term->cells[dock][x] == '^' && strncmp(term->cells[dock] + x + 2, "...", 3) == 0 && count < 3) { columns[count++] = x; }
+    }
+    if (count == 3) { memcpy(term->lower_columns, columns, sizeof columns); }
+    int column = term->lower_columns[lower], row = dock;
+    bool closed = term->cells[dock][column] == '^';
+    if (closed == !open) { return; }
+    if (!open) {
+        row = -1;
+        for (int y = 3; y < dock; ++y) {
+            if (term->cells[y][column] == '_' && strncmp(term->cells[y] + column + 2, "...", 3) == 0) { row = y; break; }
+        }
+        if (row < 0) {
+            const char *const selectors[] = {"4 Mem", "5 Locals", "6 Log"};
+            if (test_terminal_find(term, selectors[lower], NULL, NULL)) { test_terminal_click(term, selectors[lower]); }
+            column = term->cols - 8;
+            for (int y = 3; y < dock; ++y) {
+                if (term->cells[y][column] == '_' && strncmp(term->cells[y] + column + 2, "...", 3) == 0) { row = y; break; }
             }
         }
-        if (column >= 0) { break; }
-        test_terminal_pump(term, 50);
     }
-    CHECK(column >= 0);
-    if ((term->cells[row][column] == '_') == open) { return; }
+    if (row < 0) {
+        fprintf(stderr, "Cannot locate expanded lower %d at %dx%d, column %d\n", lower, term->cols, term->rows, column);
+        for (int y = 0; y < term->rows; ++y) { fprintf(stderr, "%s\n", term->cells[y]); }
+    }
+    CHECK(row >= 0);
+    char expanded_title[TEST_COLS + 1] = {0};
+    if (!open && column > 4) {
+        size_t length = (size_t)(column - 4);
+        memcpy(expanded_title, term->cells[row] + 4, length);
+        while (length && expanded_title[length - 1] == ' ') { --length; }
+        expanded_title[length] = 0;
+    }
     char input[64];
     (void)snprintf(input, sizeof input, "\033[<0;%d;%dM", column + 1, row + 1);
     test_terminal_send(term, input);
-    long long pressed = milliseconds() + 60;
-    while (milliseconds() < pressed) { test_terminal_pump(term, 5); }
+    long long settle = milliseconds() + 80;
+    while (milliseconds() < settle) { test_terminal_pump(term, 5); }
     (void)snprintf(input, sizeof input, "\033[<0;%d;%dm", column + 1, row + 1);
     test_terminal_send(term, input);
-    deadline = milliseconds() + 5000;
+    long long deadline = milliseconds() + 5000;
+    column = term->lower_columns[lower];
     while (milliseconds() < deadline) {
         test_terminal_pump(term, 20);
-        if (term->cells[row][column] == (open ? '_' : '^')) {
-            long long settle = milliseconds() + 60;
+        /* Another full-width overlay can hide the newly minimized dock.
+         * Its expanded title must disappear even when '^' is not visible. */
+        bool covered_closed = !open && *expanded_title &&
+            test_terminal_find(term, "1 Source", NULL, NULL) &&
+            !test_terminal_find(term, expanded_title, NULL, NULL);
+        if ((term->cells[dock][column] == '^') == !open || covered_closed) {
+            settle = milliseconds() + 80;
             while (milliseconds() < settle) { test_terminal_pump(term, 5); }
             return;
         }
     }
-    fprintf(stderr, "Lower group %d toggle at (%d,%d), wanted %s\n", lower, column, row, open ? "open" : "minimized");
+    fprintf(stderr, "Lower group %d wanted %s\n", lower, open ? "open" : "minimized");
     test_terminal_expect(term, "lower pane toggle did not complete");
 }
 
@@ -454,6 +506,7 @@ void test_terminal_stop(TestTerminal *term, int signal_number)
         test_terminal_pump(term, 50);
     }
     if (!exited) {
+        for (int row = 0; row < term->rows; ++row) { fprintf(stderr, "%s\n", term->cells[row]); }
         (void)kill(term->child, SIGKILL);
         (void)waitpid(term->child, NULL, 0);
         CHECK(false);
