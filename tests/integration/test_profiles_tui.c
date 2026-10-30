@@ -136,6 +136,20 @@ static void restored_setup(const char *binary, TbProfiles *store)
     click("[ Back ]"); click("Session"); click("Close session"); test_terminal_expect(&term, "[ Config ]"); stop(); free(saved);
     puts("PASS F01 restore review/default consent/ELF renewal, missing Source selection, partial saves, retained breakpoint/Watch definitions, failure acknowledgment and explicit removal");
 }
+static bool text_at_row(const char *text, int row)
+{
+    int actual = -1;
+    return test_terminal_find(&term, text, NULL, &actual) && actual == row;
+}
+static bool workspace_geometry(int notice_row, int pane_row, bool tiled)
+{
+    return text_at_row("LIVE NATIVE", notice_row) &&
+        text_at_row("Source  Symbols", pane_row) &&
+        (!tiled || (text_at_row("Disassembly  Call Stack", pane_row) &&
+                    text_at_row("Registers  Peripherals", pane_row))) &&
+        text_at_row("Setup", 1) && text_at_row("Session", 1) && text_at_row("Quit", 1) &&
+        strspn(term.cells[0], " ") == (size_t)term.cols;
+}
 static void live_setup(const char *binary, const char *fixture, TbProfiles *store)
 {
     const char *root = getenv("XDG_CONFIG_HOME"); char preference[1024], source_directory[1024];
@@ -165,17 +179,18 @@ static void live_setup(const char *binary, const char *fixture, TbProfiles *stor
         }
         int actual = -1;
         int notice_row = y + 2 + (cols >= 124 ? 1 : 0);
-        /* tmux resizes its pane after updating the outer terminal. Wait for
-         * the application geometry, not the first partial refresh. */
+        /* The outer tmux redraw can deliver the notice before the pane
+         * headers. Wait for the complete asserted geometry, not one label. */
         for (int wait = 0; wait < 500; ++wait) {
-            if (test_terminal_find(&term, "LIVE NATIVE", NULL, &actual) && actual == notice_row) { break; }
+            if (workspace_geometry(notice_row, y + 5, cols >= 124)) { break; }
             test_terminal_pump(&term, 10);
         }
-        if (actual != notice_row) {
-            fprintf(stderr, "Toolbar width %d: notice row %d, expected %d\n", cols, actual, notice_row);
-            for (int row = 0; row < 8; ++row) { fprintf(stderr, "%s\n", term.cells[row]); }
+        if (!workspace_geometry(notice_row, y + 5, cols >= 124)) {
+            fprintf(stderr, "Toolbar width %d: expected notice row %d and pane row %d\n", cols, notice_row, y + 5);
+            for (int row = 0; row < term.rows; ++row) { fprintf(stderr, "%s\n", term.cells[row]); }
         }
-        CHECK(actual == notice_row);
+        CHECK(workspace_geometry(notice_row, y + 5, cols >= 124));
+        CHECK(test_terminal_find(&term, "LIVE NATIVE", NULL, &actual) && actual == notice_row);
         CHECK(strspn(term.cells[0], " ") == (size_t)cols);
         /* One top margin row moves the toolbar and pane headers down once. */
         CHECK(test_terminal_find(&term, "Source  Symbols", NULL, &actual) && actual == y + 5);
