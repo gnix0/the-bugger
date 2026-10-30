@@ -13,7 +13,7 @@ struct TbContext {
     TbGdb *gdb;
     TbContextSnapshot snapshot, next;
     bool visible_threads, visible_frames, required, dirty, invalidate, waiting, failed, interlock;
-    bool select_thread, select_frame, registers_required, memory_required, variables_required;
+    bool select_thread, select_frame, frame_only, registers_required, memory_required, variables_required;
     char desired_thread[32], selection_error[192];
     int desired_frame, first_frame;
     Query query;
@@ -93,9 +93,11 @@ uint64_t tb_context_revision(const TbContext *context) { return context->revisio
 
 static void stale(TbContext *context)
 {
+    context->frame_only = false;
     context->dirty = true; context->snapshot.stale = true;
     context->snapshot.refreshing = tb_gdb_state(context->gdb) == TB_GDB_STOPPED; ++context->revision;
 }
+bool tb_context_frame_pending(const TbContext *context) { return context->frame_only; }
 void tb_context_refresh(TbContext *context)
 {
     tb_gdb_context_changed(context->gdb); stale(context);
@@ -254,6 +256,7 @@ static void parse_arguments(TbContextSnapshot *snapshot, const TbMiRecord *recor
                 if (written < 0 || (size_t)written >= sizeof out->arguments - used) { break; }
                 used += (size_t)written;
             }
+            if (!values) { memcpy(out->argument_names, out->arguments, sizeof out->argument_names); }
         }
     }
     if (values && !matched) {
@@ -404,6 +407,25 @@ void tb_context_pump(TbContext *context)
         const char *const args[] = {level};
         (void)issue(context, SELECT_FRAME, "-stack-select-frame", args, 1); return;
     }
+    if (context->frame_only && context->query == SELECT_FRAME) {
+        /* Same thread/stop: keep inventory and frame metadata, invalidate values. */
+        context->next = context->snapshot;
+        context->next.error[0] = context->next.arguments_error[0] = 0;
+        memset(&context->next.selected, 0, sizeof context->next.selected);
+        context->next.selected.level = context->next.selected.line = -1;
+        for (size_t i = 0; i < context->next.frame_count; ++i) {
+            TbFrame *f = &context->next.frames[i];
+            memcpy(f->arguments, f->argument_names, sizeof f->arguments); f->arguments_read = false;
+        }
+        context->dirty = false;
+        (void)issue(context, QUERY_CURRENT, "-stack-info-frame", NULL, 0); return;
+    }
+    if (context->frame_only && context->query == QUERY_CURRENT) {
+        if (context->next.selected.level >= 0 && context->next.selected.level != context->desired_frame) {
+            (void)snprintf(context->next.error, sizeof context->next.error, "GDB selected a different frame; showing its reported context.");
+        }
+        context->frame_only = false; publish(context); return;
+    }
     if (context->dirty || context->query >= SELECT_THREAD) {
         context->dirty = false;
         memset(&context->next, 0, sizeof context->next);
@@ -433,7 +455,14 @@ void tb_context_pump(TbContext *context)
 
 void tb_context_interlock(TbContext *context, bool active) { context->interlock = active; }
 bool tb_context_interlocked(const TbContext *context) { return context->interlock; }
-bool tb_context_select_thread(TbContext *context, const char *id)
+static bool selection_current(const TbContext *context)
+{
+    TbGdbGeneration a = context->snapshot.generation, b = tb_gdb_generation(context->gdb);
+    return context->snapshot.ready && !context->snapshot.stale &&
+        !context->select_thread && !context->select_frame &&
+        a.session == b.session && a.stop == b.stop && a.context == b.context;
+}
+static bool select_thread(TbContext *context, const char *id, bool return_stopped)
 {
     if (context->interlock) { return false; }
     if (!id || tb_gdb_state(context->gdb) != TB_GDB_STOPPED) { return false; }
@@ -442,10 +471,20 @@ bool tb_context_select_thread(TbContext *context, const char *id)
         if (strcmp(context->snapshot.threads[i].id, id) == 0) { found = true; break; }
     }
     if (!found) { return false; }
+    if (selection_current(context) && strcmp(context->snapshot.selected_thread, id) == 0 &&
+        (!return_stopped || context->snapshot.selected.level == 0)) { return true; }
     (void)snprintf(context->desired_thread, sizeof context->desired_thread, "%s", id);
     context->select_thread = true; context->select_frame = false;
     context->first_frame = 0; context->selection_error[0] = '\0';
     tb_context_refresh(context); return true;
+}
+bool tb_context_select_thread(TbContext *context, const char *id)
+{
+    return select_thread(context, id, false);
+}
+bool tb_context_return_stopped(TbContext *context)
+{
+    return select_thread(context, context->snapshot.stopped_thread, true);
 }
 bool tb_context_select_frame(TbContext *context, int level)
 {
@@ -458,8 +497,10 @@ bool tb_context_select_frame(TbContext *context, int level)
         if (context->snapshot.frames[i].level == level) { found = true; break; }
     }
     if (!found) { return false; }
+    if (selection_current(context) && context->snapshot.selected.level == level) { return true; }
     context->desired_frame = level; context->select_frame = true;
-    context->selection_error[0] = '\0'; tb_context_refresh(context); return true;
+    context->selection_error[0] = '\0'; tb_context_refresh(context);
+    context->frame_only = true; return true;
 }
 bool tb_context_page(TbContext *context, int direction)
 {

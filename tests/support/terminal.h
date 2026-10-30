@@ -6,7 +6,7 @@
 #include <sys/types.h>
 #include <termios.h>
 
-enum { TEST_ROWS = 64, TEST_COLS = 200, TEST_OUTPUT = 262144 };
+enum { TEST_ROWS = 64, TEST_COLS = 384, TEST_OUTPUT = 262144 };
 
 /* Test-only VT reader for ASCII labels and single-cell UTF-8 box drawing. */
 typedef struct {

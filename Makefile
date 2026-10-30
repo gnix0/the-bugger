@@ -169,6 +169,8 @@ test-native: all $(BUILD_DIR)/test-acceptance-native $(BUILD_DIR)/test-native $(
 	TB_KEYBINDS_TEST_TMUX=1 $(BUILD_DIR)/test-keybinds-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/debug-fixture)
 	$(BUILD_DIR)/test-context-native $(abspath $(BUILD_DIR)/context-fixture) $(abspath $(BUILD_DIR)/context-fixture-optimized) $(abspath $(BUILD_DIR)/context-fixture-stripped)
 	$(BUILD_DIR)/test-context-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/context-fixture)
+	TB_CONTEXT_DELAY=1 $(BUILD_DIR)/test-context-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/context-fixture)
+	TB_CONTEXT_DELAY=1 TB_CONTEXT_TIMEOUT=1 $(BUILD_DIR)/test-context-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/context-fixture)
 	$(BUILD_DIR)/test-code-native $(abspath $(BUILD_DIR)/code-fixture) $(abspath $(BUILD_DIR)/code-fixture-optimized) $(abspath $(BUILD_DIR)/code-fixture-stripped) $(abspath $(BUILD_DIR)/code-fixture-cpp) $(abspath $(BUILD_DIR)/code-fixture-relocated) $(abspath tests/fixtures/native/relocated)
 	$(BUILD_DIR)/test-code-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/code-fixture) $(abspath $(BUILD_DIR)/debug-fixture)
 
@@ -810,6 +812,8 @@ test-tmux: test-stack-tmux
 .PHONY: test-context-tmux
 test-context-tmux: all $(BUILD_DIR)/test-context-tui $(BUILD_DIR)/context-fixture
 	TB_CONTEXT_TEST_TMUX=1 $(BUILD_DIR)/test-context-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/context-fixture)
+	TB_CONTEXT_TEST_TMUX=1 TB_CONTEXT_DELAY=1 $(BUILD_DIR)/test-context-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/context-fixture)
+	TB_CONTEXT_TEST_TMUX=1 TB_CONTEXT_DELAY=1 TB_CONTEXT_TIMEOUT=1 $(BUILD_DIR)/test-context-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/context-fixture)
 
 test-tmux: test-context-tmux
 

@@ -313,8 +313,8 @@ int main(int argc, char *argv[])
     test_terminal_resize(&term, 18, 80);
     test_terminal_expect(&term, "2 Asm");
     test_terminal_click(&term, "Disassembly");
-    test_terminal_click(&term, "08000436"); /* Last visible row above the dock. */
-    test_terminal_send(&term, "\033OB\033OB");
+    test_terminal_click(&term, "08000434"); /* Last visible row with the top margin. */
+    test_terminal_send(&term, "\033OB\033OB\033OB");
     test_terminal_expect(&term, "0800043A");
     CHECK(!test_terminal_find(&term, "0800042A  B5 10", NULL, NULL));
     test_terminal_stop(&term, 0);

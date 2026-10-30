@@ -63,7 +63,8 @@ int main(int argc, char *argv[])
         for (int pane = 0; pane < 6; ++pane) { test_terminal_expect(&term, panes[pane]); }
         int toolbar_row;
         CHECK(test_terminal_find(&term, "Continue F5", NULL, &toolbar_row));
-        CHECK(toolbar_row == 0);
+        CHECK(toolbar_row == 1);
+        CHECK(strspn(term.cells[0], " ") == (size_t)term.cols);
         CHECK(!test_terminal_find(&term, "*Source", NULL, NULL));
         CHECK(!test_terminal_find(&term, "+---", NULL, NULL));
         CHECK(!test_terminal_find(&term, "Source focus", NULL, NULL));

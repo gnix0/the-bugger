@@ -7,7 +7,10 @@ Commands, results, revisions and acceptance records for The Bugger.
 Latest release: [v0.1.4](#v014-publication), published and accepted. F01 storage,
 saving, restoration, breakpoint import and reconciliation are shipped. Uploaded
 distribution files match the approved artifacts, hosted release checks passed,
-and branch synchronization is complete. F02 remains planned for v0.1.5.
+and branch synchronization is complete. F02 and the inspection UX corrections
+are accepted for v0.1.5. The owner reports successful manual validation on
+STM32/Cortex-M, ESP32-S3/Xtensa and ESP32-C6/RISC-V. Hosted release checks,
+artifact verification and publication remain pending.
 Earlier checkpoint exclusions and pending states below describe their original
 trees; the publication record closes the v0.1.4 release gate.
 
@@ -3553,3 +3556,154 @@ another full-width compact overlay. The helper now requires the expanded title
 to disappear when the dock is occluded. The subsequent navigation and direct/tmux
 Stack checks passed (`covered-dock-focused.log/.exit`, exit 0), followed by both
 complete final baselines above. Application assertions remain unchanged.
+
+## F02 manual-review UI corrections — 2026-10-29
+
+State: implemented; unverified. Manual review reported adjacent Stack action and
+navigation rows, top-aligned no-call explanation text, missed/misdirected Console
+minimize clicks in wide tmux sessions, and brief stale labels on current-frame
+reselection. The existing host passes above predate these corrections.
+
+Stack dialogs now reserve separated action/navigation rows and center complete
+no-call review groups. The workspace toolbar moves down one terminal row, taking
+exactly one row from the top of the debugging area. Fresh current-frame/thread
+selection preserves context generation, argument snapshots and inspector data.
+
+Installed tmux terminfo uses legacy `kmous=\E[M`; its coordinate encoding is
+limited to 223 columns. The previous UI suite stopped at 160 columns. Compatible
+terminals now use bounded incremental SGR coordinates while retaining matching
+keyboard/color capabilities. The dedicated decoder follows the existing mouse
+action dispatch. Regression cases extend Console minimize/reopen to 320 columns,
+with fragmented and malformed reports, plus context stability and dialog geometry.
+The underlying protocol distinction is documented in
+[ncurses mouse initialization](https://github.com/mirror/ncurses/blob/master/ncurses/base/lib_mouse.c).
+This identifies an untested protocol boundary; physical tmux behavior still needs
+confirmation against the reported setup.
+
+No build, test, static-analysis, additional stress or hardware run was performed
+for this correction. Whitespace review passed. Existing failure logs and earlier
+passing evidence remain unchanged. Local and hosted verification and owner
+visual acceptance remain outstanding.
+
+The owner-run focused check passed Stack direct/tmux, context tmux and navigation,
+then failed at the new fragmented Console minimize assertion
+(`build/v015-review-fixes-focused/focused.log`). The assertion followed one
+`test_terminal_pump`, which performs a single poll/read rather than waiting for
+the resulting screen state. The harness now waits up to five seconds for Command
+to disappear, retaining the original assertion and adding a failure screen dump.
+The correction and the remaining Console/full-baseline checks are unrun.
+
+The owner fresh baseline in `build/v015-review-ci-20261029T192141Z` failed,
+exit 2, at `test_tui.c`'s retained row-zero toolbar expectation. The requested
+one-row top margin requires row one; that assertion now checks row one and an
+empty row zero. The failure log is preserved; remaining baseline suites were
+not reached. Static analysis completed independently with exit 0
+(`analyze.log`, `analyze.exit` in the same directory); all 904 reported diagnostics
+were suppressed system-header/existing NOLINT diagnostics, with no project error.
+Only the test expectation and this evidence update changed afterward. The
+corrected test and complete baseline remain unrun.
+
+## Frame-transition presentation repair — 2026-10-29
+
+State: awaiting-user. Repeated current-frame selection remains a no-op. Different
+frame selection retains the existing frame list and previous labelled rendered
+panes until replacement inspectors settle. Generation invalidation and request
+authorization remain active. Slow switches use the existing footer after 150 ms;
+context errors discard retained presentation and report the actual failure.
+
+Agent-run focused checks used `TERM=xterm-256color`, fortified C17 objects in
+`build/frame-transition-focused`, real native GDB and isolated tmux. Evidence is
+in `build/frame-transition-evidence`: `build-5.log`/`.exit`,
+`model-final.log`/`.exit`, `registers.log`/`.exit` and `code.log`/`.exit` passed.
+`coherent-direct`, `coherent-tmux`, `coherent-delayed-direct`,
+`coherent-delayed-tmux`, `timeout-direct` and `timeout-tmux` logs/exit files all
+passed. They cover repeated switches, unchanged Source cells and old frame labels
+while pending, coherent replacement, existing-footer feedback, same-frame no-op,
+actual GDB metadata timeout and rejected late replies. Earlier relay-configuration
+failures remain preserved as `delayed-direct.log` and `delayed-tmux.log`; the
+harness initially edited the wrong launcher field and was corrected.
+
+`commands.txt`, `environment.txt`, `tree.patch` and `source-sha256.txt` identify
+the commands, local environment and final source tree. The relay delays real
+replies only; application requests acquire no artificial delay. Delayed/timeout
+modes are now included in the normal native/tmux baseline recipes.
+
+The full fresh `test-ci` baseline and static analysis were left for the owner as
+requested; neither is claimed passed for this tree. Hosted Ubuntu checks, physical
+release validation and owner visual acceptance remain separate and pending.
+
+The subsequent owner-run static analysis failed with 38 ArrayBound errors in
+`app.c`: the transition action guard constrained pane indices for its own access
+but allowed invalid indices to continue into pane-local dispatch. Dispatch now
+rejects out-of-range indices for pane-local control kinds before any such access;
+global controls retain their separate action-index semantics. This correction
+requires fresh verification; no owner baseline success is inferred from the
+analysis excerpt.
+
+Focused `make SOURCES=src/tui/app.c analyze` passed after the bounds guard
+(exit 0; `build/frame-transition-evidence/app-bounds-analysis.log`/`.exit`).
+The owner baseline `build/frame-switch-owner-20261029T215920Z/test-ci.log`
+also failed (exit 2): its 18-row workspace case tried to click instruction
+`08000436`, now below the dock after the accepted one-row top margin. The case
+now clicks the actual last visible instruction `08000434` and moves three rows
+to `0800043A`; endpoint and viewport assertions are retained. That test correction
+and the full baseline/analysis reruns remain unrun.
+
+Owner-run `build/frame-final-20261029T220839Z`: full analysis passed (suppressed
+system-header/existing NOLINT diagnostics only); `test-ci` failed at
+`test_code_native.c:112`. Returning to stopped context reused same-thread
+selection, whose no-op correctly preserves an inspected caller. The explicit
+return-to-stop operation now requests frame-zero thread selection separately;
+ordinary same-thread/frame clicks keep their no-op behavior. The original native
+assertion is unchanged. Verification of this correction remains pending.
+
+## v0.1.5 host regression and acceptance — 2026-10-29
+
+The owner completed the fresh fortified baseline in
+`build/frame-return-owner-20261029T222103Z`, using `TERM=xterm-256color make
+BUILD_DIR=build/frame-return-owner-20261029T222103Z
+CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`. `test-ci.log`/`test-ci.exit` record PASS,
+exit 0. `make analyze` also passed: `analyze.log`/`analyze.exit`, exit 0, with
+only suppressed system-header/existing NOLINT diagnostics. Native return-to-stop,
+frame switching with delayed replies and timeout/late-reply rejection, and
+isolated tmux coverage all passed. Earlier failure records remain historical.
+The owner subsequently approved the delivered correction. F02/inspection UX
+acceptance is complete; this does not establish final release acceptance.
+
+Latest physical F02 evidence remains the earlier STM32 record. No fresh Xtensa
+or RISC-V results for v0.1.5 are reported. The complete current physical release
+matrix, hosted release checks, distribution artifacts/checksums and publication
+remain pending. The version header already reports 0.1.5. Release packaging also
+requires resolving the existing working-tree deletion of
+`docs/assets/dashboard.png`: the current packager enumerates tracked files and
+cannot archive that absent path. That owner change has been preserved.
+
+## v0.1.5 physical manual acceptance — 2026-10-30
+
+Owner-reported PASS on all three release targets following the CLI manual
+procedure: STM32 NUCLEO-F446RE (ARM/Cortex-M), ESP32-S3 (Xtensa) and ESP32-C6
+(RISC-V RV32). The owner reported: “Three targets tested and validated.” This
+closes the pending physical/manual acceptance for F02 and the inspection UX
+corrections; earlier pending statements describe the evidence at those times.
+
+The procedure covered matching fixture/server connection and checkpoint stop;
+Source/Disassembly/Registers, caller selection and cached Call Stack Details;
+Stack explicit sampling, frame-zero anchor/caller points, guarded variable
+addresses, manual navigation/refollow and step invalidation; hardware watchpoint,
+stepping/reset, direct/tmux rendering and Console minimize/reopen, and both
+disconnect policies with external-server survival. Existing shared firmware was
+sufficient; flashing instructions were conditional. No new automated suite or
+application-source change accompanied this report.
+
+Evidence is the owner's CLI report, separate from agent-run checks and the
+owner-run fortified host baseline/analysis above. No per-target transcripts,
+firmware hashes, tool-version captures or reflash choices were supplied for this
+manual round; exact new values and commands are not inferred from older records.
+Historical board/probe/fixture configurations remain in the earlier entries.
+Hosted Ubuntu checks and distribution build/checksum/publication verification
+remain outstanding before release completion.
+
+The owner confirmed `docs/assets/dashboard.png` was deliberately deleted after
+its README reference was removed. Preserve that deletion in the owner commit;
+it is not a missing asset to restore. Package after that commit so the tracked
+source inventory excludes the deleted image.

@@ -8,11 +8,14 @@ implemented features or hardware support claims. See [architecture](architecture
 
 v0.1.4 is published. F01 is accepted and shipped; host/physical validation,
 hosted PR checks, uploaded artifact verification and branch synchronization are
-complete. The next feature is F02, the dedicated Stack view for v0.1.5; its
+complete. F02 is the dedicated Stack view for v0.1.5; its
 approved scope is in [requirements](requirements.md#approved-f02-stack-inspection).
-Implementation and the original host/STM32 checks are complete, including the
-extended-remote runner. Inspection UX corrections are implemented and locally host/stress verified.
-Owner manual acceptance and release validation remain pending.
+F02 and its inspection UX corrections are accepted. The owner-run fresh fortified
+host baseline and static analysis pass, including frame-switch delay/timeout and
+tmux coverage. The owner reports successful physical/manual validation on
+STM32/Cortex-M, ESP32-S3/Xtensa and ESP32-C6/RISC-V. v0.1.5 release preparation
+is next; hosted checks, artifact verification and final release acceptance remain
+pending.
 
 | Task | Scope | Current state |
 |---|---|---|
@@ -22,7 +25,7 @@ Owner manual acceptance and release validation remain pending.
 | 1.5 | Prepare v0.1.3 | Published; uploaded artifacts verified |
 | 2.1 | Validate ESP RISC-V hardware for v0.1.4 | Accepted; recorded RISC-V RV32 hardware checks use ESP32-C6FH4 |
 | F01 | Setup restoration for v0.1.4 | Accepted and shipped; host/physical checks and published artifacts verified |
-| F02 | Dedicated Stack inspection and inspection UX for v0.1.5 | Implemented; local host/stress checks pass, owner acceptance pending |
+| F02 | Dedicated Stack inspection and inspection UX for v0.1.5 | Accepted; owner host and three-target manual validation pass; release preparation pending |
 | 2.4 | Release v0.1.4 | Published; hosted checks passed, uploaded artifacts verified and branch synchronization complete |
 
 Current controls are in [usage](usage.md); the accepted browsing scope is in

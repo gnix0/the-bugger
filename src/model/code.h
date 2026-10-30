@@ -59,6 +59,7 @@ void tb_code_reset(TbCode *code);
 bool tb_code_event(TbCode *code, const TbGdbEvent *event);
 void tb_code_pump(TbCode *code);
 void tb_code_visible(TbCode *code, int view, bool source, bool assembly);
+bool tb_code_settled(const TbCode *code, int view);
 const TbCodeView *tb_code_view(const TbCode *code, int view);
 /* Classify only the displayed instruction slice, never the last fetch request. */
 const char *tb_code_assembly_notice(const TbCode *code, int view, size_t first, size_t count);
