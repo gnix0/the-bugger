@@ -82,6 +82,7 @@ static void message(TbSession *native, const char *text)
 
 static void variable_regions(TbSession *session)
 {
+    tb_variables_target(session->variables, session->capabilities.octet_addressing);
     TbVariableRegion regions[TB_MEMORY_REGIONS];
     for (size_t i = 0; i < session->ordinary_region_count; ++i) {
         regions[i] = (TbVariableRegion){

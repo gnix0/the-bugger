@@ -82,7 +82,8 @@ int main(int argc, char **argv)
     command(gdb, "-variable-stats", 998); CHECK(reads == 0 && children == 0);
     tb_variables_authorizer(variables, proof, NULL);
     const TbVariableRegion safe[] = {{0x1000, 0x2000, TB_VARIABLE_ORDINARY, true}};
-    tb_variables_regions(variables, safe, 1); drain(gdb);
+    tb_variables_regions(variables, safe, 1);
+    tb_variables_target(variables, true); drain(gdb);
     command(gdb, "-variable-stats", 998); CHECK(reads == 0); /* regions alone are not an expression proof */
     proof_complete = true; proof_address = 0x40000000; drain(gdb);
     command(gdb, "-variable-stats", 998); CHECK(reads == 0); /* unknown, not unsafe */
@@ -100,11 +101,13 @@ int main(int argc, char **argv)
     CHECK(tb_variables_edit_begin(variables, TB_VARIABLE_LOCALS, scalar)); drain(gdb);
     CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_READY);
     CHECK(strcmp(tb_variables_edit_old_value(variables), "0x11") == 0);
+    CHECK(!tb_variables_edit_begin(variables, TB_VARIABLE_LOCALS, scalar)); /* active proof cannot be replaced */
     CHECK(!tb_variables_edit_apply(variables, "not-a-number"));
     CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_READY);
     CHECK(!tb_variables_edit_apply(variables, "2147483648"));
     CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_READY);
-    CHECK(tb_variables_edit_apply(variables, "42")); drain(gdb);
+    CHECK(tb_variables_edit_apply(variables, "42"));
+    CHECK(!tb_variables_edit_apply(variables, "43")); drain(gdb);
     CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_ACKNOWLEDGED);
     CHECK(!tb_variables_row(variables, TB_VARIABLE_LOCALS, scalar)->fresh);
     CHECK(strstr(tb_variables_edit_error(variables), "Verify") != NULL);
@@ -116,6 +119,8 @@ int main(int argc, char **argv)
     CHECK(tb_variables_edit_apply(variables, "44")); drain(gdb);
     CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_UNCERTAIN);
     CHECK(!tb_variables_edit_reconcile(variables));
+    CHECK(tb_context_write_blocked(context));
+    CHECK(!tb_context_write_begin(context, 12345));
     command_arg(gdb, "-variable-mode", "0", 999);
     CHECK(tb_variables_read(variables, TB_VARIABLE_LOCALS, scalar)); drain(gdb);
     CHECK(tb_variables_edit_reconcile(variables));
@@ -126,6 +131,28 @@ int main(int argc, char **argv)
     CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_NONE);
     CHECK(strstr(tb_variables_edit_error(variables), "complete proof") != NULL);
     tb_variables_regions(variables, safe, 1);
+    CHECK(tb_variables_edit_begin(variables, TB_VARIABLE_LOCALS, scalar)); drain(gdb);
+    CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_READY);
+    CHECK(tb_variables_edit_apply(variables, "46"));
+    tb_variables_regions(variables, read_only, 1); drain(gdb);
+    CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_NONE);
+    CHECK(strstr(tb_variables_edit_error(variables), "destination") != NULL);
+    tb_variables_regions(variables, safe, 1);
+    /* Target width, boolean conversion and backend path validation. */
+    for (unsigned mode = 8; mode <= 10; ++mode) {
+        char number[8]; (void)snprintf(number, sizeof number, "%u", mode);
+        command_arg(gdb, "-variable-mode", number, 999);
+        CHECK(tb_variables_read(variables, TB_VARIABLE_LOCALS, scalar)); drain(gdb);
+        CHECK(tb_variables_edit_begin(variables, TB_VARIABLE_LOCALS, scalar)); drain(gdb);
+        if (mode == 10) { CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_NONE); continue; }
+        CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_READY);
+        CHECK(!tb_variables_edit_apply(variables, mode == 8 ? "2" : "4294967296"));
+        if (mode == 9) { CHECK(!tb_variables_edit_apply(variables, "-1")); }
+        CHECK(tb_variables_edit_apply(variables, mode == 8 ? "true" : "4294967295"));
+        tb_variables_edit_cancel(variables); /* pre-dispatch cancel must send nothing */
+        CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_NONE);
+    }
+    command_arg(gdb, "-variable-mode", "0", 999);
     command_arg(gdb, "-variable-value", "20", 999);
     command(gdb, "-variable-stats", 998); unsigned formatted_reads = reads;
     /* Native Continue calls this before sending the execution request. Context

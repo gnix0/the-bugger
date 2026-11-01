@@ -22,6 +22,15 @@ static void read_done(TbNative *n, int id, bool success)
         CHECK(false);
     }
 }
+static void write_done(TbNative *n, TbMemory *m, TbMemoryEditState state)
+{
+    uint64_t end = tb_gdb_now_ms() + 5000;
+    while (tb_memory_edit_state(m) == TB_MEMORY_EDIT_PENDING && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
+    CHECK(tb_memory_edit_state(m) == state);
+    const TbContextSnapshot *snapshot = tb_context_snapshot(tb_native_context(n));
+    while (snapshot->stale && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
+    CHECK(snapshot->ready && !snapshot->stale);
+}
 int main(int argc, char **argv)
 {
     CHECK(argc == 2); TbNative *n = tb_native_create(); CHECK(n);
@@ -39,6 +48,17 @@ int main(int argc, char **argv)
     CHECK(tb_memory_length(m, 0, 64)); CHECK(tb_memory_address(m, 0, "&memory_buffer")); read_done(n, 0, true);
     const TbMemoryView *a = tb_memory_view(m, 0), *b = tb_memory_view(m, 1);
     CHECK(a->readable == 64 && memcmp(a->bytes, "THE BUGGER MEMORY", 17) == 0 && !tb_memory_stale(m, 0));
+    CHECK(tb_memory_range_set(m, 0, 0, a->address, a->address + 64, TB_MEMORY_ORDINARY, 0, "Reviewed writable RAM"));
+    CHECK(tb_memory_range_authorize(m, 0, 0));
+    CHECK(tb_memory_edit_begin(m, 0, a->address, 4));
+    CHECK(tb_memory_edit_apply(m, "41424344"));
+    write_done(n, m, TB_MEMORY_EDIT_ACKNOWLEDGED);
+    CHECK(tb_memory_refresh(m, 0)); read_done(n, 0, true); CHECK(memcmp(a->bytes, "ABCD", 4) == 0);
+    CHECK(tb_memory_range_authorize(m, 0, 0));
+    CHECK(tb_memory_edit_begin(m, 0, a->address, 4));
+    CHECK(tb_memory_edit_apply(m, "54484520"));
+    write_done(n, m, TB_MEMORY_EDIT_ACKNOWLEDGED);
+    CHECK(tb_memory_refresh(m, 0)); read_done(n, 0, true); CHECK(memcmp(a->bytes, "THE ", 4) == 0);
     CHECK(tb_memory_length(m, 1, 256)); CHECK(tb_memory_address(m, 1, "&memory_other")); read_done(n, 1, true);
     CHECK(b->address != a->address && memcmp(b->bytes, "INDEPENDENT MEMORY", 18) == 0);
     CHECK(tb_memory_group(m, 0, 4)); char line[160]; tb_memory_line(m, 0, 0, line, sizeof line); CHECK(strstr(line, "20454854"));

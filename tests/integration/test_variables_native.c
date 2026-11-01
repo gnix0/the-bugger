@@ -103,6 +103,24 @@ int main(int argc, char **argv)
               (optimized && !tb_variables_row(v, TB_VARIABLE_LOCALS, stage)->available));
         CHECK(tb_variables_watch(v, "variables_global")); read_row(n, TB_VARIABLE_WATCHES, 0);
         if (!optimized) { CHECK(strcmp(tb_variables_row(v, TB_VARIABLE_WATCHES, 0)->value, "17") == 0); }
+        /* Actual target ABI and storage proof, two deliberate writes with explicit verification. */
+        if (!optimized) {
+            const char *values[] = {"42", "17"};
+            for (size_t edit = 0; edit < 2; ++edit) {
+                CHECK(tb_variables_edit_begin(v, TB_VARIABLE_WATCHES, 0));
+                end = tb_gdb_now_ms() + 5000;
+                while (tb_variables_edit_state(v) == TB_VARIABLE_EDIT_PROBING && tb_gdb_now_ms() < end) { pump(n); }
+                if (tb_variables_edit_state(v) != TB_VARIABLE_EDIT_READY) { fprintf(stderr, "edit proof: %s\n", tb_variables_edit_error(v)); CHECK(false); }
+                CHECK(tb_variables_edit_apply(v, values[edit]));
+                CHECK(!tb_variables_edit_apply(v, values[edit]));
+                end = tb_gdb_now_ms() + 5000;
+                while ((tb_variables_edit_state(v) == TB_VARIABLE_EDIT_PENDING || s->stale) && tb_gdb_now_ms() < end) { pump(n); }
+                CHECK(tb_variables_edit_state(v) == TB_VARIABLE_EDIT_ACKNOWLEDGED);
+                CHECK(!tb_variables_row(v, TB_VARIABLE_WATCHES, 0)->fresh);
+                read_row(n, TB_VARIABLE_WATCHES, 0);
+                CHECK(strcmp(tb_variables_row(v, TB_VARIABLE_WATCHES, 0)->value, values[edit]) == 0);
+            }
+        }
         CHECK(tb_variables_watch(v, "variables_sample")); read_row(n, TB_VARIABLE_WATCHES, 1); expand_members(n, 1);
         require_member(n, "count"); require_member(n, "values");
         size_t values = find(v, TB_VARIABLE_WATCHES, "values"); CHECK(values != SIZE_MAX); expand(n, values);

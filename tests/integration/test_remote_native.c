@@ -116,7 +116,7 @@ int main(int argc, char **argv)
         test_terminal_start_argv(&term, args, "xterm-256color", false);
         test_terminal_click(&term, "Connect to GDB server");
         test_terminal_expect(&term, "GDB endpoint");
-        test_terminal_send(&term, "\025"); test_terminal_send(&term, endpoint);
+        test_terminal_send(&term, "\t\025"); test_terminal_send(&term, endpoint);
         test_terminal_send(&term, "\t\025"); test_terminal_send(&term, argv[1]);
         test_terminal_send(&term, "\t\025gdb");
         test_terminal_click(&term, "Review session");

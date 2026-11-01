@@ -48,6 +48,10 @@ typedef struct {
     uint64_t unit_address;
     unsigned unit_width;
 } TbMemoryView;
+typedef enum {
+    TB_MEMORY_EDIT_NONE, TB_MEMORY_EDIT_READY, TB_MEMORY_EDIT_PENDING,
+    TB_MEMORY_EDIT_ACKNOWLEDGED, TB_MEMORY_EDIT_UNCERTAIN
+} TbMemoryEditState;
 typedef struct TbMemory TbMemory;
 TbMemory *tb_memory_create(TbGdb *gdb, TbContext *context);
 void tb_memory_cache(TbMemory *memory, TbBrowseCache *cache);
@@ -111,4 +115,12 @@ int tb_memory_stack_client(int pane);
 bool tb_memory_client_read(TbMemory *memory, int client, uint64_t address, unsigned bytes, const char *thread);
 void tb_memory_client_cancel(TbMemory *memory, int client);
 bool tb_memory_client_busy(const TbMemory *memory, int client);
+bool tb_memory_edit_begin(TbMemory *memory, int view, uint64_t address, unsigned bytes);
+bool tb_memory_edit_apply(TbMemory *memory, const char *hex);
+void tb_memory_edit_cancel(TbMemory *memory);
+bool tb_memory_edit_reconcile(TbMemory *memory);
+TbMemoryEditState tb_memory_edit_state(const TbMemory *memory);
+const char *tb_memory_edit_error(const TbMemory *memory);
+const char *tb_memory_edit_old(const TbMemory *memory);
+bool tb_memory_edit_destination(const TbMemory *memory, uint64_t *address, unsigned *bytes);
 #endif

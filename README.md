@@ -26,7 +26,9 @@ the integrated Console.
 - **Make the workspace yours:** Arrange, split, and resize panes; navigate between tabs;
 and save connection profiles and workspace layouts for later sessions.
 
-Memory and variable inspectors are read-only. Peripheral reads can still have
+Stopped-target integer/bool and ordinary-RAM edits use explicit review and
+verification; see [deliberate editing](docs/usage.md#deliberate-editing) for limits.
+Peripheral reads can still have
 side effects: MMIO sampling requires explicit access decisions and is available
 for the validated STM32/OpenOCD configuration; navigation never samples MMIO.
 See [Memory access controls](docs/usage.md#memory-inspection) and

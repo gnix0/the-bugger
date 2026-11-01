@@ -957,3 +957,45 @@ The complete no-call explanation and buttons are centered when they fit;
 smaller terminals retain paginated text. The workspace has one blank top row,
 using one row from the top of the debugging area. Reselecting the current fresh
 Call Stack frame retains its context and displayed values.
+
+## Deliberate editing
+
+For a stopped target, explicitly Read a supported integer/bool in Locals or
+Watches, select **Actions → Edit selected integer/bool**, enter a value and
+choose **Review**, then **Apply** or **Cancel**. Integer bounds come from the
+target type's storage size; boolean input accepts `true`, `false`, `1` or `0`.
+Pressing Enter in the field opens review, then applies on the review screen.
+Cancel discards the draft. Escape cancels outside Vim Insert mode; in Insert
+mode, the first Escape returns to Normal. Insert mode keeps input literal.
+
+For Memory, explicitly read ordinary RAM, review its **Temporary ranges** and
+authorize the intended ordinary byte extent. Select the row and choose
+**Options → Edit selected row**. Enter exactly two hexadecimal digits per byte,
+without separators, for the displayed extent (at most 16 bytes). Review the
+address, byte count, old bytes and proposed bytes before Apply. Permission also
+requires affirmative writable-region metadata; an authorized read range alone
+is insufficient. Native Linux derives this metadata from process mappings. A
+remote session without supplied writable-region evidence cannot use either
+editor; no peripheral/Flash permission is inferred from its ELF image.
+
+After acknowledgment, choose **Read** for the original variable or **Refresh**
+for the original Memory extent. A write invalidates the stopped context and its
+temporary grants; reauthorize the ordinary range before another Memory edit. The displayed acknowledgment is not verification.
+Memory and variable snapshots become stale; no automatic read-back verifies the
+edit. An uncertain write
+blocks further edits in both inspectors: explicitly inspect the original
+value/bytes, then use **Reconcile uncertain write** in its Actions/Options menu.
+If the original variable scope is gone, start a new session. No automatic retry,
+rollback, MMIO write, Flash programming or CPU-register editing is performed.
+
+A timed-out, cancelled or otherwise lost write completion requires a new session
+before further edits. A controller with no pending tokens is not proof that the
+backend can no longer complete that mutation. Explicit verification can reconcile
+a completed backend error reply, but cannot clear an unresolved transport.
+
+Fresh connection forms start without sample paths or endpoints. Saved profiles
+retain their values; an empty tool path uses the documented launcher fallback.
+Up/Down follows form rows, Left/Right reaches neighboring actions, and Tab visits
+controls in order. `q` is literal in a text field and Back on non-text controls.
+The installed OpenOCD script list scrolls with arrows, Page Up/Down, mouse wheel
+and Vim `j`/`k` when enabled; Filter and Back remain keyboard accessible.

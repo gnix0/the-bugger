@@ -35,7 +35,7 @@ typedef struct TbVariables TbVariables;
 typedef struct { uint64_t identity; char expression[256]; TbVariableFormat format; } TbWatchDefinition;
 typedef enum {
     TB_VARIABLE_EDIT_NONE, TB_VARIABLE_EDIT_PROBING, TB_VARIABLE_EDIT_READY,
-    TB_VARIABLE_EDIT_ACKNOWLEDGED, TB_VARIABLE_EDIT_UNCERTAIN
+    TB_VARIABLE_EDIT_PENDING, TB_VARIABLE_EDIT_ACKNOWLEDGED, TB_VARIABLE_EDIT_UNCERTAIN
 } TbVariableEditState;
 /* Root definitions only; no values, permissions or backend objects. */
 size_t tb_variables_definitions(const TbVariables *variables);
@@ -48,6 +48,7 @@ void tb_variables_authorizer(TbVariables *variables, TbVariableAuthorize authori
 /* Ordinary is an affirmative no-side-effects classification, not just readable.
  * Unknown/side-effect overlays take precedence. Metadata is adapter-supplied. */
 void tb_variables_regions(TbVariables *variables, const TbVariableRegion *regions, size_t count);
+void tb_variables_target(TbVariables *variables, bool octets);
 void tb_variables_visible(TbVariables *variables, bool locals, bool watches);
 void tb_variables_begin(TbVariables *variables);
 void tb_variables_want(TbVariables *variables, TbVariableView view, size_t first, size_t count);

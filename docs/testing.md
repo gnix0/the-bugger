@@ -2018,3 +2018,49 @@ and removal of existing-footer feedback. `TB_CONTEXT_TIMEOUT=1` additionally
 checks a metadata timeout and rejected late reply. These modes run through
 `test-native` and `test-context-tmux`, both included in `test-ci`. The relay does
 not synthesize GDB results.
+
+## F03–F04 editing and connection navigation
+
+The normal fortified `test-ci` baseline includes conversion/storage/dispatch
+checks in `test-variables` and `test-memory`, real GDB write/read-back in
+`test-variables-native` and `test-memory-native`, and direct/tmux review, cancel,
+Apply, resize and explicit verification. `test-edit-tmux` runs the two inspection
+terminal tests in isolated tmux servers. `test-openocd-tui` exercises a catalog
+larger than its viewport, keyboard/wheel navigation, scrollbar track paging
+and dragging, minimum size and keyboard Filter/Back access. `test-script-tmux`
+repeats this through an isolated tmux server. Both menus are checked for equal
+height and centering across terminal sizes, including resize back to a large
+window. Scrollbars disappear when the filtered results fit.
+
+For manual host review, use a freshly built binary and its matching fixtures:
+
+1. Launch the Variables fixture (`build/<directory>/variables-fixture`), enter
+   `start` in Console, open Watches and add `variables_global`. Read it explicitly.
+   Review an edit to `42`, Cancel, and Read again: the value remains `17`.
+2. Repeat and Apply. The old snapshot becomes stale. Read explicitly: the value
+   is `42`. Restore `17` through another reviewed edit and explicit Read. Repeat
+   with Vim enabled and resize while the draft/review is open.
+3. Launch the Memory fixture (`build/<directory>/memory-fixture`) and enter
+   `start`. Read `&memory_buffer`, authorize the current ordinary range and open
+   Edit selected row. Review the exact address/extent and edit its hexadecimal
+   bytes. Cancel preserves bytes; Apply requires explicit Refresh afterward.
+   Keep the original hex string, reauthorize the ordinary range, and restore it
+   through a second reviewed edit.
+4. In each connection form, put focus on the last field/toggle. Down reaches
+   Review (native/remote) or Browse boards (OpenOCD). Up returns to the previous
+   visual row. Check Tab, literal `q` in fields, and Back outside fields.
+5. Open installed OpenOCD scripts. Scroll beyond one screen, resize to 48×18,
+   use Filter through Tab/Enter, and return through Back. Check track paging
+   and thumb dragging, then filter to one result: the scrollbar disappears.
+   Compare the card height with Config → Keybinds at the same terminal size;
+   both remain centered when resized or maximized. Repeat through tmux.
+   No script executes.
+
+Physical F03/F04 writes are **UNVERIFIED**. Do not substitute host or synthetic
+results for STM32/ESP32 evidence. Use only disposable fixture RAM whose complete
+writable region and target capabilities are supplied by the adapter/session.
+Read-range consent does not create that evidence. A remote TUI session lacking
+writable-region metadata must refuse edits; the current connection forms do not
+let a user invent such metadata. Extending that path needs a separately reviewed
+adapter/fixture procedure before physical write validation. Existing embedded
+inspection, MMIO read and release regression procedures remain applicable.

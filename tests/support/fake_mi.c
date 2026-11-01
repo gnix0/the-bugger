@@ -164,7 +164,7 @@ int main(int argc, char *argv[])
                 }
             } else if (strncmp(command, "-data-evaluate-expression ", 26) == 0) {
                 if (strstr(command, "unsigned char")) { reply(token, strcmp(mode, "remote-wide") == 0 ? "^done,value=\"256\"" : "^done,value=\"0\""); }
-                else if (strstr(command, "sizeof(void*)")) { reply(token, "^done,value=\"4\""); }
+                else if (strstr(command, "sizeof(void*)")) { reply(token, variable_mode == 8 ? "^done,value=\"1\"" : "^done,value=\"4\""); }
                 else { reply(token, "^error,msg=\"Unexpected automatic value evaluation\""); }
             } else if (strcmp(command, "-gdb-show endian\n") == 0) {
                 reply(token, strcmp(mode, "remote-unknown") == 0 ? "^done,value=\"auto\"" : "^done,value=\"big\"");
@@ -321,16 +321,16 @@ int main(int argc, char *argv[])
                 char value[32]; (void)snprintf(value, sizeof value, "%u", variable_value);
                 (void)printf("%s^done,name=\"%s\",numchild=\"%u\",type=\"%s\",value=\"%s\"\n", token, variable_name,
                     strstr(command, "aggregate") ? (variable_mode == 6 ? 1U : 100U) : strstr(command, "pointer") ? 1U : 0U,
-                    strstr(command, "aggregate") ? (variable_mode == 6 ? "Sample" : "int [100]") : strstr(command, "pointer") ? "int *" : "int",
+                    strstr(command, "aggregate") ? (variable_mode == 6 ? "Sample" : "int [100]") : strstr(command, "pointer") ? "int *" : variable_mode == 8 ? "bool" : variable_mode == 9 ? "unsigned long" : "int",
                     strstr(command, "unavailable") ? "<optimized out>" : strstr(command, "pointer") ? "0x40000000" : value);
             }
         } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-show-attributes ", 21) == 0) {
             reply(token, "^done,attr=\"editable\"");
         } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-info-path-expression ", 26) == 0) {
-            reply(token, "^done,path_expr=\"scalar\"");
+            reply(token, variable_mode == 10 ? "^done,path_expr=\"danger()\"" : "^done,path_expr=\"scalar\"");
         } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-data-evaluate-expression ", 26) == 0) {
             if (strstr(command, "&(scalar)")) { reply(token, "^done,value=\"0x1000\""); }
-            else if (strstr(command, "sizeof(scalar)")) { reply(token, "^done,value=\"4\""); }
+            else if (strstr(command, "sizeof(scalar)")) { reply(token, variable_mode == 8 ? "^done,value=\"1\"" : "^done,value=\"4\""); }
             else { reply(token, "^error,msg=\"FAKE unexpected edit expression\""); }
         } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-assign ", 12) == 0) {
             if (variable_mode == 7) { reply(token, "^error,msg=\"FAKE ambiguous assignment\""); }
@@ -385,6 +385,15 @@ int main(int argc, char *argv[])
                 for (unsigned i = 0; i < count; ++i) { (void)printf("%02x", (unsigned)((address + i) & 255)); }
                 puts("\"}]");
                 if (memory_mode == 8) { puts("*stopped,reason=\"end-stepping-range\",thread-id=\"7\",frame={level=\"0\",addr=\"0x1234\",func=\"main\"}"); }
+            }
+        } else if (strcmp(mode, "context-memory") == 0 && strncmp(command, "-data-write-memory-bytes ", 25) == 0) {
+            if (memory_mode == 9) { reply(token, "^error,msg=\"FAKE write rejected\""); }
+            else if (memory_mode == 10) { continue; }
+            else {
+                unsigned long long address; char contents[2049];
+                if (sscanf(command + 25, "%llx %1024s", &address, contents) != 2 ||
+                    !*contents || strlen(contents) % 2 != 0) { free(line); return 21; }
+                reply(token, "^done");
             }
         } else if (strncmp(mode, "context-registers", 17) == 0 && strcmp(command, "-register-change\n") == 0) {
             register_value += 16; reply(token, "^done");

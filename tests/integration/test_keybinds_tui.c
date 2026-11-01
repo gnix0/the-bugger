@@ -134,7 +134,7 @@ static void scrollbar_layout(void)
     test_terminal_expect(&term, "Rows 14-15/15"); clean_key_borders();
     test_terminal_send(&term, "\033[<64;50;10M"); settle(); clean_key_borders();
     test_terminal_send(&term, "\033[<65;50;10M"); settle(); clean_key_borders();
-    resize_keys(64, 160); CHECK(!test_terminal_find(&term, "#", NULL, NULL));
+    resize_keys(90, 160); CHECK(!test_terminal_find(&term, "#", NULL, NULL));
     test_terminal_send(&term, "\033OH"); settle();
     resize_keys(60, 140); selected = 0;
 }

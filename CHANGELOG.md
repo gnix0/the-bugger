@@ -4,6 +4,11 @@
 
 ### Added
 
+- Deliberate integer/bool variable and exact ordinary-RAM byte editing, with
+  target-sized conversion, writable-storage checks, review/cancel, explicit
+  verification and shared uncertainty handling. Flash/MMIO and CPU-register
+  editing remain excluded.
+
 - Gruber Darker, Zenburn, eight Modus variants and Solarized dark/light themes,
   bringing the catalogue to 49 palettes across eleven families. Includes
   upstream provenance and license notices; Macchiato remains the default.
@@ -15,6 +20,13 @@
 
 ### Changed
 
+- Fresh connection forms omit sample values and retain profile defaults.
+  Vertical keyboard navigation follows visual rows; the installed OpenOCD
+  script browser scrolls while preserving Filter/Back focus through redraws
+  and terminal resizing. Keybinds and script browsing share a centered,
+  height-limited card; overflowing script lists support mouse-wheel scrolling,
+  scrollbar track paging and thumb dragging.
+
 - Compact Call Stack entries show function and filename/line. Pane-local cached
   Details wraps complete available metadata without selecting a frame or querying
   GDB; Escape preserves the frame-list selection and scroll.
@@ -25,6 +37,10 @@
   without moving the primary panes. UI/CLI target version is v0.1.5.
 
 ### Fixed
+
+- Profile titles and descriptions stay inside their centered cards; list content
+  is separated from paging controls. Script browsing separates its list from
+  Filter/Back, and Theme Preview retains a top margin.
 
 - Frame changes retain the previous labelled panes until replacement data is
   ready, avoiding transient stale/clearing flashes. Slow changes report progress

@@ -1390,3 +1390,41 @@ limits are described in the [RISC-V procedure](testing.md#risc-v-hardware-valida
 
 The [Memory validation record](validation.md#m10) summarizes the corrections
 and their evidence limits; the roadmap assigns the remaining integration gaps.
+
+## Stopped inspector mutations (F03–F04)
+
+`model/context.c` coordinates one inspector mutation across Variables and Memory.
+An idle-controller reservation belongs to the request cookie. Acquisition checks
+the published stopped generation and marks the shared snapshot stale; release
+runs outside controller callbacks and refreshes the context generation. Memory,
+Stack, Registers, Code and Variables then reject their previous-context samples.
+Automatic variable acquisition is suppressed for the remainder of that stop;
+explicit reads remain available. A later stop starts normal read-policy checks.
+
+Variable drafts retain object/key, thread/frame, target size, address and
+provenance. Attribute/path/address/size probes precede review. Assignment checks
+identity and writable-region proof again immediately before dispatch; a stale
+root, replaced child, context change or revoked region cannot reuse the proof.
+Direct paths exclude pointer/reference traversal and calls. Address conversion
+uses GDB's C language with an integer result, avoiding symbol annotations and
+C++ overloaded address operators. The target's octet capability and reported
+`sizeof` determine accepted integer bounds.
+
+Memory drafts retain view lifetime/version, backend epoch, generation and exact
+old extent. One `-data-write-memory-bytes` request contains the address and exact
+hex bytes, without repeat-count/fill syntax. Intersecting read-only regions deny
+permission, even inside an otherwise writable enclosing region. MMIO views and
+Stack byte clients cannot use this editor.
+
+Callbacks record acknowledgment or uncertainty without dispatching follow-up
+requests. Uncertainty quarantines both editors. Memory reconciliation requires
+an explicit complete valid sample covering the original bytes. Variable
+reconciliation requires an explicit fresh read of the original identity in the
+same stopped thread/frame. An unavailable original destination requires a new
+session; changing selection cannot clear the quarantine. No implicit read-back,
+retry, rollback or refresh of aggregates accompanies a write.
+
+A timed-out, cancelled or otherwise lost write completion requires a new session
+before further edits. A controller with no pending tokens is not proof that the
+backend can no longer complete that mutation. Explicit verification can reconcile
+a completed backend error reply, but cannot clear an unresolved transport.

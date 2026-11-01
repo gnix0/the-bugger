@@ -6,16 +6,14 @@ implemented features or hardware support claims. See [architecture](architecture
 
 ## Current development sequence
 
-v0.1.4 is published. F01 is accepted and shipped; host/physical validation,
-hosted PR checks, uploaded artifact verification and branch synchronization are
-complete. F02 is the dedicated Stack view for v0.1.5; its
-approved scope is in [requirements](requirements.md#approved-f02-stack-inspection).
-F02 and its inspection UX corrections are accepted. The owner-run fresh fortified
-host baseline and static analysis pass, including frame-switch delay/timeout and
-tmux coverage. The owner reports successful physical/manual validation on
-STM32/Cortex-M, ESP32-S3/Xtensa and ESP32-C6/RISC-V. v0.1.5 release preparation
-is next; hosted checks, artifact verification and final release acceptance remain
-pending.
+F01 and F02 are accepted; their historical release and physical evidence remains
+in [validation records](validation.md). The owner reports F03 accepted before
+F04 began. The owner accepted the F03/F04 host safety corrections,
+connection-form/script-list navigation, centered menus and spacing after manual
+review. Fresh fortified host regression and static analysis pass. Remaining F04
+embedded writable-RAM authorization and physical write verification are deferred.
+F05 remains planning-only. Existing read-only hardware results are preserved and
+do not count as write validation.
 
 | Task | Scope | Current state |
 |---|---|---|
@@ -25,7 +23,9 @@ pending.
 | 1.5 | Prepare v0.1.3 | Published; uploaded artifacts verified |
 | 2.1 | Validate ESP RISC-V hardware for v0.1.4 | Accepted; recorded RISC-V RV32 hardware checks use ESP32-C6FH4 |
 | F01 | Setup restoration for v0.1.4 | Accepted and shipped; host/physical checks and published artifacts verified |
-| F02 | Dedicated Stack inspection and inspection UX for v0.1.5 | Accepted; owner host and three-target manual validation pass; release preparation pending |
+| F02 | Dedicated Stack inspection and inspection UX for v0.1.5 | Accepted; owner host and three-target inspection validation pass |
+| F03 | Deliberate integer/bool variable editing | Accepted, including current safety corrections |
+| F04 | Exact ordinary-RAM byte editing and form/script navigation | Host implementation/corrections accepted; embedded authorization and physical writes pending |
 | 2.4 | Release v0.1.4 | Published; hosted checks passed, uploaded artifacts verified and branch synchronization complete |
 
 Current controls are in [usage](usage.md); the accepted browsing scope is in
@@ -53,8 +53,8 @@ Accepted post-release work includes themes, Source fullscreen, spatial navigatio
 (`53b1e5a`), multi-file Source tabs, inline Console, personal keybinds, Vim-like
 input, tmux RGB, rendering fixes, lower overlays and browsing history. Release
 contents are in [CHANGELOG](../CHANGELOG.md); results are in
-[validation records](validation.md). F01 shipped in v0.1.4; the other future gates
-remain planned.
+[validation records](validation.md). F01 shipped in v0.1.4. F02/F03 acceptance and the current F04 gate are
+recorded above; later gates remain planned.
 
 | Milestone | Deliverable | State | Commit / release reference |
 |---|---|---|---|

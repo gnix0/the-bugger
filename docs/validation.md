@@ -3727,3 +3727,145 @@ The runner was rebuilt with `CPPFLAGS=-D_FORTIFY_SOURCE=3` against the previousl
 validated `build/frame-return-owner-20261029T222103Z` application and fixture.
 Whitespace review passed. The full baseline was not rerun locally; hosted rerun
 is pending and must establish whether this resolves the reported CI failure.
+
+## F03/F04 implementation and navigation review — 2026-11-01
+
+The owner handed over accepted F03 work and an unfinished F04/form-navigation
+working tree. This review preserves the requested empty fresh forms, profile
+values, literal text entry, spatial row navigation and scrolling script browser.
+Current corrections and F04 remain awaiting owner acceptance; F05 is not
+implemented. Earlier physical inspection results remain unchanged.
+
+The editing corrections cover target-sized integer/bool conversion, direct
+lvalues, dispatch-time writable-region/identity checks, duplicate Apply,
+pre-dispatch cancellation, shared write serialization, alias invalidation and
+uncertainty across Variables and Memory. A completed backend error requires
+explicit verification before reconciliation. A timeout or lost completion
+requires a new session; removing a pending token does not prove backend
+completion. Native C/C++ write/read-back and direct/tmux review/cancel/Apply
+checks supplement the synthetic policy/timeout cases.
+
+Agent environment: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1, tmux 3.8
+and OpenOCD 0.12.0-01004-g9ea7f3d64-dirty. This is local host evidence, not a
+hosted Ubuntu result. Artifacts are under `build/review-recovery-evidence/`:
+initial `before.patch`, final tested source diff `tested.patch`, base revision,
+tool environment, source manifest, full logs and exit records. The fresh final
+baseline command is:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/recovery-delivery-20261101 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make analyze
+```
+
+The first completed baseline failed the existing MMIO terminal assertion:
+reconciliation had reused the Read-unit action ID. The collision was corrected;
+the retained MMIO assertion then passed in `mmio-fixed.log`. Initial static
+analysis rejected layout/conversion/string-comparison issues; the corrected
+four-file analysis passed in `analyze-focused.log`, exit 0. Failed and interrupted
+runs remain in the artifact directory and are not successful baselines.
+
+Final agent-run results: complete fresh fortified `test-ci` PASS, exit 0
+(`test-ci.log` / `test-ci.exit`), and complete `make analyze` PASS, exit 0
+(`analyze.log` / `analyze.exit`). This includes the preserved MMIO assertions,
+native C/C++ editing, direct/tmux RAM and variable review/cancel/Apply/read-back,
+context delay/timeout, literal input, terminal cleanup, remote lifecycle and
+OpenOCD script navigation. No physical hardware was exercised.
+
+The normal launcher was rebuilt with `make -B CPPFLAGS=-D_FORTIFY_SOURCE=3 all`,
+exit 0 (`default-build.log`). Its SHA-256 matches the tested fresh-build binary
+(`binary.sha256`). `tested-source.sha256` and `source-integrity.log` establish
+unchanged source/build inputs; `delivery.patch` includes the final documentation
+and evidence updates. Whitespace and changed-document local-link checks passed.
+
+Physical F03/F04 writes and hosted checks remain **UNVERIFIED**. Remote sessions without
+explicit writable-region metadata refuse editing; the current connection forms
+do not supply that metadata. Existing read consent, ELF mappings and synthetic
+results are not substitutes for that proof or physical write validation.
+
+### Centered selection menus and script scrollbar — 2026-11-01
+
+Keybinds and installed OpenOCD scripts share a height limit and center within the
+usable terminal area. Large windows retain vertical margins; compact terminals
+keep the actions accessible. The script scrollbar appears only on overflow and
+supports track paging and thumb dragging. Filter/Back focus, keyboard paging and
+mouse-wheel navigation remain available.
+
+Focused agent checks passed with fortification:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/center-menus-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-m16-tui test-script-tmux test-keybinds
+```
+
+The checks compare both menu heights and centering through 256×60, 160×44,
+160×90, 110×28, 48×18 and restored large terminals, directly and through isolated
+tmux. They exercise track paging, dragging to both ends, release outside the
+track, wheel/keyboard navigation and scrollbar removal after filtering.
+
+Artifacts are in `build/center-menus-evidence/`: tested diff, source manifest,
+environment, focused logs and exit records. Early focused failures included
+incomplete PTY-output draining, restricted localhost sockets, tmux configuration
+reuse and applying a direct-process signal-exit expectation to the tmux client.
+The runner was corrected without removing application behavior assertions;
+direct OpenOCD signal cleanup remains covered separately. Full `make analyze`
+passed, exit 0. This is local host evidence; hosted and physical evidence are
+unchanged. Menu appearance and current editing corrections await owner review.
+
+Final follow-up baseline:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/center-menus-ci-20261101 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+PASS, exit 0 (`test-ci.log` / `test-ci.exit`), including the new isolated tmux
+menu target. The workflow's fortified compilation of all unit/integration/support
+C sources also passed, exit 0 (`test-compilation.log` / `.exit`). The default
+launcher was rebuilt with `make -B CPPFLAGS=-D_FORTIFY_SOURCE=3 all`, exit 0;
+`binary.sha256` records its match with the fresh baseline binary.
+`source-integrity.log` confirms unchanged source/build inputs during verification.
+The full final diff is retained as `delivery.patch`; this follow-up does not
+complete F04's embedded authorization or physical write validation.
+
+### Profile, script-list and theme-preview spacing — 2026-11-01
+
+Profiles, profile options and entry lists place their titles/descriptions inside
+centered cards. Empty-list text precedes the paging row with a blank separator;
+populated lists retain the same separation. Installed scripts reserve a blank
+row before Filter/Back. Theme Preview leaves a top margin and separates its two
+header rows from the sample panes. Running-session layout is unchanged.
+
+No new tests were added. An initial strict fortified build and existing theme
+checks passed, but that command ended on an invalid subsequent target name.
+The corrected focused run was stopped at the owner's request to perform checks
+personally. The final text adjustment, complete focused run, fresh full baseline
+and static analysis remain pending for this follow-up. Earlier successful
+baselines above apply to their recorded trees, not these spacing changes.
+Logs are in `build/menu-spacing-evidence/` and the initial run's complete log is
+retained there as `initial-focused.log`.
+
+The owner reported a `test-m13-native` failure in the profile TUI runner's Back
+helper: it required terminal row zero to change after Escape. Centered profile
+cards intentionally leave that row blank. The helper now waits for each call's
+explicit destination text, including when both source and destination have no
+screen-top header. The existing navigation checks are retained. Static review of
+the affected profile/theme/script/keybind tests found no other obsolete header
+or spacing expectations; running-session geometry assertions remain unchanged.
+This correction has not been executed by the agent; owner reruns are pending.
+
+### Owner verification and acceptance — 2026-11-01
+
+The owner ran the corrected tree with:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/menu-spacing-final-20261101T182959Z CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make analyze
+```
+
+Both passed, exit 0. Full owner-run logs and exit records are in
+`build/menu-spacing-final-20261101T182959Z/`. Analysis suppressed 882 non-user
+and 33 NOLINT diagnostics; no unsuppressed diagnostic failed the configured
+checks. This is local host evidence, not hosted CI or physical write evidence.
+The owner then rebuilt the normal launcher, reviewed the menu appearance and
+accepted the host editing corrections, navigation and presentation changes.
+This supersedes the pending-review/rerun states above; the earlier failed and
+interrupted runs remain historical evidence. Remaining F04 embedded writable-RAM
+authorization and physical write validation are deferred, not accepted as complete.

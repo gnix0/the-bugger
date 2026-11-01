@@ -141,6 +141,25 @@ static void ranges(TestTerminal *t)
     }
     test_terminal_expect(t, "Authorize without reading"); test_terminal_click(t, "Authorize without reading");
     test_terminal_expect(t, "AUTHORIZED | temporary");
+    test_terminal_resize(t, 44, 140);
+    test_terminal_click(t, "Back"); test_terminal_click(t, "Back");
+    test_terminal_click(t, "Edit selected row"); test_terminal_expect(t, "Review ordinary RAM edit");
+    test_terminal_send(t, "\02541424344000000000000000000000000\r");
+    test_terminal_expect(t, "[ Apply ]"); test_terminal_click(t, "Cancel");
+    test_terminal_expect(t, "Memory inspection options");
+    test_terminal_click(t, "Edit selected row"); test_terminal_expect(t, "Review ordinary RAM edit");
+    test_terminal_send(t, "\02541424344000000000000000000000000\r"); test_terminal_expect(t, "[ Apply ]");
+    test_terminal_send(t, "\r"); test_terminal_expect(t, "Memory write acknowledged");
+    pane_click(t, "Refresh", 0, true); test_terminal_expect(t, "4241 4443");
+    pane_click(t, "Options", 0, true); test_terminal_click(t, "Temporary ranges");
+    test_terminal_click(t, "1: 0x"); test_terminal_click(t, "Authorize"); test_terminal_click(t, "Authorize without reading");
+    test_terminal_click(t, "Back"); test_terminal_click(t, "Back");
+    test_terminal_click(t, "Edit selected row"); test_terminal_expect(t, "Review ordinary RAM edit");
+    test_terminal_send(t, "\02554484520425547474552204d454d4f52\r"); test_terminal_expect(t, "[ Apply ]");
+    test_terminal_click(t, "Apply"); test_terminal_expect(t, "Memory write acknowledged");
+    pane_click(t, "Refresh", 0, true); test_terminal_expect(t, "4854 2045");
+    pane_click(t, "Options", 0, true); test_terminal_click(t, "Temporary ranges");
+    test_terminal_click(t, "1: 0x");
     test_terminal_click(t, "Revoke"); test_terminal_expect(t, "NOT AUTHORIZED");
     test_terminal_send(t, "\033"); test_terminal_expect(t, "Temporary Memory ranges");
     test_terminal_resize(t, 44, 140);
