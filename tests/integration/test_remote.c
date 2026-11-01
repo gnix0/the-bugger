@@ -51,7 +51,7 @@ static void run(const char *peer, const char *mode)
     CHECK(setenv("TB_FAKE_MODE", mode, 1) == 0);
     TbSession *s = tb_session_create(); CHECK(s);
     TbSessionConfig config = {.kind = TB_SESSION_REMOTE, .gdb = peer, .endpoint = "localhost:3333"};
-    const TbMemoryRegion regions[] = {{0x20000000, 0x20000100}, {0x08000000, 0x08000100}};
+    const TbMemoryRegion regions[] = {{0x20000000, 0x20000100, true}, {0x08000000, 0x08000100, false}};
     if (strcmp(mode, "remote-regions") == 0) {
         config.ordinary_regions = regions; config.ordinary_region_count = 2;
     }

@@ -16,7 +16,7 @@ typedef struct {
 } TbVariable;
 typedef enum { TB_VARIABLE_CREATE, TB_VARIABLE_EVALUATE, TB_VARIABLE_EXPAND } TbVariableRead;
 typedef enum { TB_VARIABLE_UNKNOWN, TB_VARIABLE_ORDINARY, TB_VARIABLE_SIDE_EFFECT } TbVariableRegionKind;
-typedef struct { uint64_t begin, end; TbVariableRegionKind kind; } TbVariableRegion;
+typedef struct { uint64_t begin, end; TbVariableRegionKind kind; bool writable; } TbVariableRegion;
 enum { TB_VARIABLE_READ_SPANS = 8 };
 typedef struct {
     struct { uint64_t address, bytes; } spans[TB_VARIABLE_READ_SPANS];
@@ -33,6 +33,10 @@ typedef bool (*TbVariableAuthorize)(void *user, TbGdbGeneration generation,
                                    unsigned first, unsigned count, TbVariableAccess *access);
 typedef struct TbVariables TbVariables;
 typedef struct { uint64_t identity; char expression[256]; TbVariableFormat format; } TbWatchDefinition;
+typedef enum {
+    TB_VARIABLE_EDIT_NONE, TB_VARIABLE_EDIT_PROBING, TB_VARIABLE_EDIT_READY,
+    TB_VARIABLE_EDIT_ACKNOWLEDGED, TB_VARIABLE_EDIT_UNCERTAIN
+} TbVariableEditState;
 /* Root definitions only; no values, permissions or backend objects. */
 size_t tb_variables_definitions(const TbVariables *variables);
 bool tb_variables_definition(const TbVariables *variables, size_t index, TbWatchDefinition *definition);
@@ -60,6 +64,14 @@ bool tb_variables_restore_watch(TbVariables *variables, const char *expression, 
 bool tb_variables_remove(TbVariables *variables, size_t row);
 bool tb_variables_remove_definition(TbVariables *variables, uint64_t identity);
 bool tb_variables_names(TbVariables *variables);
+bool tb_variables_edit_begin(TbVariables *variables, TbVariableView view, size_t row);
+bool tb_variables_edit_apply(TbVariables *variables, const char *value);
+void tb_variables_edit_cancel(TbVariables *variables);
+bool tb_variables_edit_reconcile(TbVariables *variables);
+TbVariableEditState tb_variables_edit_state(const TbVariables *variables);
+const char *tb_variables_edit_error(const TbVariables *variables);
+const char *tb_variables_edit_old_value(const TbVariables *variables);
+const char *tb_variables_edit_type(const TbVariables *variables);
 bool tb_variables_settled(const TbVariables *variables, TbVariableView view);
 bool tb_variables_stale(const TbVariables *variables, TbVariableView view);
 bool tb_variables_limited(const TbVariables *variables, TbVariableView view);

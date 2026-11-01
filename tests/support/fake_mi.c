@@ -324,6 +324,17 @@ int main(int argc, char *argv[])
                     strstr(command, "aggregate") ? (variable_mode == 6 ? "Sample" : "int [100]") : strstr(command, "pointer") ? "int *" : "int",
                     strstr(command, "unavailable") ? "<optimized out>" : strstr(command, "pointer") ? "0x40000000" : value);
             }
+        } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-show-attributes ", 21) == 0) {
+            reply(token, "^done,attr=\"editable\"");
+        } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-info-path-expression ", 26) == 0) {
+            reply(token, "^done,path_expr=\"scalar\"");
+        } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-data-evaluate-expression ", 26) == 0) {
+            if (strstr(command, "&(scalar)")) { reply(token, "^done,value=\"0x1000\""); }
+            else if (strstr(command, "sizeof(scalar)")) { reply(token, "^done,value=\"4\""); }
+            else { reply(token, "^error,msg=\"FAKE unexpected edit expression\""); }
+        } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-assign ", 12) == 0) {
+            if (variable_mode == 7) { reply(token, "^error,msg=\"FAKE ambiguous assignment\""); }
+            else { reply(token, "^done,value=\"42\""); }
         } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-list-children ", 19) == 0) {
             unsigned first, end; char object[256];
             if (sscanf(command, "-var-list-children --all-values %255s %u %u", object, &first, &end) != 3 || end < first || end - first > 32) { free(line); return 27; }

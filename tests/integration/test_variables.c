@@ -81,14 +81,14 @@ int main(int argc, char **argv)
     CHECK(tb_variables_count(variables, TB_VARIABLE_LOCALS) == 4);
     command(gdb, "-variable-stats", 998); CHECK(reads == 0 && children == 0);
     tb_variables_authorizer(variables, proof, NULL);
-    const TbVariableRegion safe[] = {{0x1000, 0x2000, TB_VARIABLE_ORDINARY}};
+    const TbVariableRegion safe[] = {{0x1000, 0x2000, TB_VARIABLE_ORDINARY, true}};
     tb_variables_regions(variables, safe, 1); drain(gdb);
     command(gdb, "-variable-stats", 998); CHECK(reads == 0); /* regions alone are not an expression proof */
     proof_complete = true; proof_address = 0x40000000; drain(gdb);
     command(gdb, "-variable-stats", 998); CHECK(reads == 0); /* unknown, not unsafe */
     proof_address = UINT64_MAX; drain(gdb); command(gdb, "-variable-stats", 998); CHECK(reads == 0);
     proof_address = 0x1ffe; drain(gdb); command(gdb, "-variable-stats", 998); CHECK(reads == 0); /* entire access, not base only */
-    const TbVariableRegion overlay[] = {{0x1000, 0x2000, TB_VARIABLE_ORDINARY}, {0x1002, 0x1004, TB_VARIABLE_SIDE_EFFECT}};
+    const TbVariableRegion overlay[] = {{0x1000, 0x2000, TB_VARIABLE_ORDINARY, true}, {0x1002, 0x1004, TB_VARIABLE_SIDE_EFFECT, false}};
     proof_address = 0x1000; tb_variables_regions(variables, overlay, 2); drain(gdb);
     command(gdb, "-variable-stats", 998); CHECK(reads == 0); /* deny takes precedence, including partial overlap */
     tb_variables_regions(variables, safe, 1); drain(gdb);
@@ -97,6 +97,35 @@ int main(int argc, char **argv)
     size_t scalar = find(TB_VARIABLE_LOCALS, "scalar");
     CHECK(tb_variables_format(variables, TB_VARIABLE_LOCALS, scalar)); drain(gdb);
     CHECK(!tb_variables_row(variables, TB_VARIABLE_LOCALS, scalar)->format_pending);
+    CHECK(tb_variables_edit_begin(variables, TB_VARIABLE_LOCALS, scalar)); drain(gdb);
+    CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_READY);
+    CHECK(strcmp(tb_variables_edit_old_value(variables), "0x11") == 0);
+    CHECK(!tb_variables_edit_apply(variables, "not-a-number"));
+    CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_READY);
+    CHECK(!tb_variables_edit_apply(variables, "2147483648"));
+    CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_READY);
+    CHECK(tb_variables_edit_apply(variables, "42")); drain(gdb);
+    CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_ACKNOWLEDGED);
+    CHECK(!tb_variables_row(variables, TB_VARIABLE_LOCALS, scalar)->fresh);
+    CHECK(strstr(tb_variables_edit_error(variables), "Verify") != NULL);
+    CHECK(!tb_variables_toggle(variables, TB_VARIABLE_LOCALS, scalar)); /* Expansion never acquires a stale value. */
+    CHECK(!tb_variables_edit_apply(variables, "43"));
+    command_arg(gdb, "-variable-mode", "7", 999);
+    CHECK(tb_variables_read(variables, TB_VARIABLE_LOCALS, scalar)); drain(gdb);
+    CHECK(tb_variables_edit_begin(variables, TB_VARIABLE_LOCALS, scalar)); drain(gdb);
+    CHECK(tb_variables_edit_apply(variables, "44")); drain(gdb);
+    CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_UNCERTAIN);
+    CHECK(!tb_variables_edit_reconcile(variables));
+    command_arg(gdb, "-variable-mode", "0", 999);
+    CHECK(tb_variables_read(variables, TB_VARIABLE_LOCALS, scalar)); drain(gdb);
+    CHECK(tb_variables_edit_reconcile(variables));
+    CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_NONE);
+    const TbVariableRegion read_only[] = {{0x1000, 0x2000, TB_VARIABLE_ORDINARY, false}};
+    tb_variables_regions(variables, read_only, 1);
+    CHECK(tb_variables_edit_begin(variables, TB_VARIABLE_LOCALS, scalar)); drain(gdb);
+    CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_NONE);
+    CHECK(strstr(tb_variables_edit_error(variables), "complete proof") != NULL);
+    tb_variables_regions(variables, safe, 1);
     command_arg(gdb, "-variable-value", "20", 999);
     command(gdb, "-variable-stats", 998); unsigned formatted_reads = reads;
     /* Native Continue calls this before sending the execution request. Context
@@ -111,6 +140,7 @@ int main(int argc, char **argv)
     CHECK(tb_variables_row(variables, TB_VARIABLE_LOCALS, scalar)->changed); /* same-stop refresh retains the prior-stop baseline */
     proof_complete = false;
     size_t aggregate = find(TB_VARIABLE_LOCALS, "aggregate");
+    CHECK(tb_variables_read(variables, TB_VARIABLE_LOCALS, aggregate)); drain(gdb);
     CHECK(tb_variables_toggle(variables, TB_VARIABLE_LOCALS, aggregate)); drain(gdb);
     CHECK(tb_variables_count(variables, TB_VARIABLE_LOCALS) == 36);
     CHECK(tb_variables_row(variables, TB_VARIABLE_LOCALS, aggregate)->expanded);
@@ -118,12 +148,17 @@ int main(int argc, char **argv)
     CHECK(tb_variables_row(variables, TB_VARIABLE_LOCALS, aggregate)->first == 32);
     CHECK(find(TB_VARIABLE_LOCALS, "32") < 36);
     CHECK(tb_variables_page(variables, TB_VARIABLE_LOCALS, aggregate, -1)); drain(gdb);
-    CHECK(find(TB_VARIABLE_LOCALS, "0") < 36);
+    size_t array_element = find(TB_VARIABLE_LOCALS, "0");
+    CHECK(array_element < 36);
+    CHECK(tb_variables_edit_begin(variables, TB_VARIABLE_LOCALS, array_element)); drain(gdb);
+    CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_READY);
+    tb_variables_edit_cancel(variables);
     CHECK(tb_variables_toggle(variables, TB_VARIABLE_LOCALS, aggregate)); drain(gdb);
     CHECK(tb_variables_count(variables, TB_VARIABLE_LOCALS) == 4);
     CHECK(tb_variables_watch(variables, "pointer")); drain(gdb);
     command(gdb, "-variable-stats", 998); unsigned before = reads, before_children = children;
     drain(gdb); command(gdb, "-variable-stats", 998); CHECK(reads == before && children == before_children);
+    CHECK(tb_variables_read(variables, TB_VARIABLE_WATCHES, 0)); drain(gdb);
     CHECK(tb_variables_toggle(variables, TB_VARIABLE_WATCHES, 0)); drain(gdb);
     CHECK(tb_variables_count(variables, TB_VARIABLE_WATCHES) == 2); /* explicit pointer inspection remains available */
     CHECK(tb_variables_format(variables, TB_VARIABLE_WATCHES, 1)); drain(gdb);
@@ -159,6 +194,7 @@ int main(int argc, char **argv)
     CHECK(!strstr(tb_variables_row(variables, TB_VARIABLE_WATCHES, 0)->value, "OBSOLETE"));
     command_arg(gdb, "-variable-mode", "0", 999); command(gdb, "-stop", 999);
     for (unsigned i = 0; i < 8; ++i) {
+        CHECK(tb_variables_read(variables, TB_VARIABLE_LOCALS, aggregate)); drain(gdb);
         CHECK(tb_variables_toggle(variables, TB_VARIABLE_LOCALS, aggregate)); drain(gdb);
         CHECK(tb_variables_count(variables, TB_VARIABLE_LOCALS) <= TB_VARIABLE_NODES);
         CHECK(tb_variables_toggle(variables, TB_VARIABLE_LOCALS, aggregate)); drain(gdb);
@@ -169,6 +205,7 @@ int main(int argc, char **argv)
             CHECK(tb_variables_limited(variables, TB_VARIABLE_WATCHES)); break;
         }
         size_t root = find(TB_VARIABLE_WATCHES, name);
+        CHECK(tb_variables_read(variables, TB_VARIABLE_WATCHES, root)); drain(gdb);
         CHECK(tb_variables_toggle(variables, TB_VARIABLE_WATCHES, root)); drain(gdb);
         CHECK(tb_variables_count(variables, TB_VARIABLE_WATCHES) <= TB_VARIABLE_NODES);
     }
@@ -181,6 +218,7 @@ int main(int argc, char **argv)
     command_arg(gdb, "-variable-mode", "6", 999);
     CHECK(tb_variables_watch(variables, "aggregate_cpp"));
     size_t cpp = find(TB_VARIABLE_WATCHES, "aggregate_cpp");
+    CHECK(tb_variables_read(variables, TB_VARIABLE_WATCHES, cpp)); drain(gdb);
     CHECK(tb_variables_toggle(variables, TB_VARIABLE_WATCHES, cpp)); drain(gdb);
     size_t access = find(TB_VARIABLE_WATCHES, "public");
     CHECK(tb_variables_row(variables, TB_VARIABLE_WATCHES, access)->depth == 1);

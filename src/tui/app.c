@@ -31,7 +31,7 @@ enum { CONTENT_LEFT = 0x1000, CONTENT_DOWN, CONTENT_UP, CONTENT_RIGHT, SGR_MOUSE
 typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
                SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT, DATA_WATCH_INPUT,
                CONFIG_MENU, THEMES, THEME_PREVIEW, KEYBINDS, PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM, SCRIPT_LIST, SCRIPT_FILTER,
-               MEMORY_RANGES, MEMORY_RANGE, MEMORY_CONSENT, MEMORY_RANGE_INPUT, MMIO_SETUP, IMAGE_REVIEW,
+               MEMORY_RANGES, MEMORY_RANGE, MEMORY_CONSENT, MEMORY_RANGE_INPUT, MMIO_SETUP, IMAGE_REVIEW, VARIABLE_EDIT,
                SETUP_MENU, SETUP_SAVE, SETUP_INFO, SETUP_RESTORE_REVIEW,
                STACK_MENU, STACK_INPUT, STACK_DETAILS, STACK_NAMES_PAGE, STACK_POINTS_PAGE, STACK_BOUNDS, STACK_GUARD_PAGE } Page;
 typedef enum { RANGE_ADD, RANGE_PREVIOUS, RANGE_NEXT, RANGE_BEGIN, RANGE_END,
@@ -167,6 +167,7 @@ typedef struct {
     TbOpenOcdPlan *server_plan; TbOpenOcdCatalog *catalog;
     char script_filter[FIELD_SIZE]; int script_kind, script_offset, review_offset;
     bool close_resume;
+    bool variable_edit_confirm;
     Page profile_return;
     int profile_group, profile_selected, profile_offset, profile_text;
     bool profile_replacing, recent_pending;
@@ -207,7 +208,7 @@ static void setup_activate(App *app, int action, int entry);
 
 static bool editing_page(const App *app)
 {
-    return app->page == SCRIPT_FILTER || app->page == SAVE_INPUT || app->page == CODE_INPUT || app->page == CODE_FILES || app->page == BREAK_INPUT || app->page == MEMORY_INPUT || app->page == WATCH_INPUT || app->page == DATA_WATCH_INPUT || app->page == PROFILE_TEXT || app->page == MEMORY_RANGE_INPUT || app->page == STACK_INPUT;
+    return app->page == SCRIPT_FILTER || app->page == SAVE_INPUT || app->page == CODE_INPUT || app->page == CODE_FILES || app->page == BREAK_INPUT || app->page == MEMORY_INPUT || app->page == WATCH_INPUT || app->page == DATA_WATCH_INPUT || app->page == PROFILE_TEXT || app->page == MEMORY_RANGE_INPUT || app->page == STACK_INPUT || app->page == VARIABLE_EDIT;
 }
 
 /* Signal handler communicates only through this flag; cleanup runs normally. */
@@ -296,6 +297,8 @@ static const char *footer_message(const App *app)
     case IMAGE_REVIEW: return "Review the configured ELF and runtime addresses. Confirmation is not byte verification or permission to read memory.";
     case MEMORY_RANGE_INPUT: return "Edit this temporary range; applying an edit revokes its permission. No read is performed.";
     case VARIABLE_MENU: return "Choose an explicit variable inspection action.";
+    case VARIABLE_EDIT: return app->variable_edit_confirm ? "Review the variable edit, then Apply or Cancel." :
+                              "Enter a new integer or boolean value. Enter reviews the edit; Escape cancels.";
     case WATCH_INPUT: return "Add a watch expression; adding does not read memory.";
     case DATA_WATCH_INPUT: return "Configure a hardware data watchpoint before creating it.";
     case SAVE_INPUT: return "Choose a new destination for the retained session log.";
@@ -1098,9 +1101,10 @@ static TbAssemblyColumns assembly_columns(const TbCodeView *view)
 
 static void variable_text(const TbVariable *row, char *text, size_t capacity)
 {
+    char state = row->changed && row->fresh ? '*' : !row->available ? '!' : !row->fresh ? '?' : ' ';
+    char tree = row->expanded ? '-' : row->children ? '+' : ' ';
     (void)snprintf(text, capacity, "%c %*s%c %-24s %-18s %s%s%s%s",
-                   row->changed && row->fresh ? '*' : ' ', (int)row->depth * 2, "",
-                   row->expanded ? '-' : row->children || !row->fresh ? '+' : ' ', row->name,
+                   state, (int)row->depth * 2, "", tree, row->name,
                    row->type, row->value, row->fresh ? "" : " [read required]", row->limited ? " [bounded]" : "",
                    row->format_pending ? " [natural; format read required]" : "");
 }
@@ -1719,7 +1723,7 @@ static void draw_native_pane(App *app, int index, TbRect rect)
         const char *error = tb_variables_error(v, kind);
         bool stale = tb_variables_stale(v, kind);
         char header[160]; const TbContextSnapshot *s = tb_context_snapshot(tb_session_context(app->debugger));
-        (void)snprintf(header, sizeof header, "%s | T%s frame %d | * changed%s",
+        (void)snprintf(header, sizeof header, "%s | T%s frame %d | * changed ? read required ! unavailable%s",
                        tb_session_state(app->debugger) != TB_SESSION_STOPPED || s->stale ? "STALE" : stale ? "READ REQUIRED" : "LIVE",
                        s->selected_thread, s->selected.level, tb_variables_limited(v, kind) ? " | limited" : "");
         tb_text(rect.y + 1, rect.x + 1, rect.w - 2, *error || stale ? TB_ORANGE : TB_MUTED, 0,
@@ -1732,7 +1736,7 @@ static void draw_native_pane(App *app, int index, TbRect rect)
             const TbVariable *value = tb_variables_row(v, kind, (size_t)item); char text[1500];
             variable_text(value, text, sizeof text);
             size_t offset = (size_t)app->horizontal[index][view]; if (offset > strlen(text)) { offset = strlen(text); }
-            TbStyle style = !value->fresh || s->stale || tb_session_state(app->debugger) != TB_SESSION_STOPPED ? TB_MUTED : !value->available ? TB_ORANGE : value->changed ? TB_YELLOW : TB_GREEN;
+            TbStyle style = !value->fresh || s->stale || tb_session_state(app->debugger) != TB_SESSION_STOPPED ? TB_MUTED : !value->available ? TB_ORANGE : value->changed ? TB_YELLOW : TB_PANEL;
             tb_text(rect.y + 3 + row, rect.x + 1, app->body_width[index], style,
                     pane->row[view] == item ? A_UNDERLINE : 0, text + offset);
         }
@@ -2593,7 +2597,46 @@ static void draw_variable_menu(App *app)
         button(app, actions_y + i, left, width, labels[i], VARIABLE_ACTION, i, app->variable_pane);
     }
     if (actions_y + 7 < top + card.h - 1) { button(app, actions_y + 7, left, width, "Hardware data watchpoint...", VARIABLE_ACTION, 7, app->variable_pane); }
+    if (row && actions_y + 8 < top + card.h - 1) {
+        button(app, actions_y + 8, left, width, "Edit selected integer/bool", VARIABLE_ACTION, 10, app->variable_pane);
+    }
     button(app, top + card.h - 1, left, 12, "[ Back ]", BACK, 0, 0);
+}
+
+static void draw_variable_edit(App *app)
+{
+    TbRect card = menu_card(88, 14);
+    int left = card.x + 2, top = card.y, width = card.w - 4;
+    TbVariables *v = tb_session_variables(app->debugger);
+    TbDemoPane *pane = &app->demo.panes[app->variable_pane];
+    TbView view = pane->tabs[pane->active];
+    TbVariableView kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
+    const TbVariable *row = tb_variables_row(v, kind, (size_t)pane->row[view]);
+    char target[512];
+    if (row) {
+        (void)snprintf(target, sizeof target, "%s | %s", row->name, row->type);
+    } else {
+        (void)snprintf(target, sizeof target, "No selected variable");
+    }
+    draw_header(app, app->variable_edit_confirm ? "Review variable edit" : "Edit variable");
+    tb_text(top + 1, left, width, TB_CYAN, 0, target);
+    tb_text(top + 2, left, width, TB_MUTED, 0, "Old value:");
+    tb_text(top + 2, left + 12, width - 12, TB_GREEN, 0, tb_variables_edit_old_value(v));
+    tb_text(top + 3, left, width, TB_MUTED, 0, "New value:");
+    TbRect field = {left + 12, top + 3, width - 12, 1};
+    int index = add_control(app, field, FIELD, 0, 0);
+    wide_text(field.y, field.x, field.w, app->input, 0, index == app->focus);
+    tb_text(top + 5, left, width, TB_MUTED, 0, "Type: ");
+    tb_text(top + 5, left + 6, width - 6, TB_MUTED, 0, tb_variables_edit_type(v));
+    if (*tb_variables_edit_error(v)) {
+        tb_text(top + 6, left, width, TB_ORANGE, 0, tb_variables_edit_error(v));
+    }
+    if (app->variable_edit_confirm) {
+        button(app, top + card.h - 2, left, 12, "[ Apply ]", VARIABLE_ACTION, 8, app->variable_pane);
+    } else {
+        button(app, top + card.h - 2, left, 12, "[ Review ]", INPUT_SUBMIT, 0, 0);
+    }
+    button(app, top + card.h - 2, left + 14, 12, "[ Cancel ]", VARIABLE_ACTION, 9, app->variable_pane);
 }
 
 static void draw_break_menu(App *app)
@@ -2758,6 +2801,8 @@ static void draw_page(App *app)
         draw_memory_ranges(app);
     } else if (app->page == VARIABLE_MENU) {
         draw_variable_menu(app);
+    } else if (app->page == VARIABLE_EDIT) {
+        draw_variable_edit(app);
     } else if (app->page == PROFILE_LIST || app->page == PROFILE_OPTIONS || app->page == PROFILE_ITEMS || app->page == PROFILE_CONFIRM) {
         draw_profiles(app);
     } else if (app->page == CODE_FILES) {
@@ -4160,6 +4205,10 @@ static void activate(App *app, Control control)
             if (app->profile_text == 0) { memcpy(app->profile->name, app->profile_original_name, sizeof app->profile->name); }
             page(app, app->profile_text == 0 ? app->profile_return : PROFILE_ITEMS); break;
         }
+        if (app->page == VARIABLE_EDIT) {
+            tb_variables_edit_cancel(tb_session_variables(app->debugger));
+            page(app, WORKSPACE); break;
+        }
         if (app->page == CODE_MENU || app->page == SOURCE_SETTINGS || app->page == BREAK_MENU || app->page == MEMORY_MENU || app->page == VARIABLE_MENU) { page(app, WORKSPACE); break; }
         if (editing_page(app)) { page(app, WORKSPACE); break; }
         page(app, app->page == REVIEW ? CONFIGURE :
@@ -4264,9 +4313,43 @@ static void activate(App *app, Control control)
         break;
     case VARIABLE_ACTION: {
         app->variable_pane = control.pane;
+        if (app->page == VARIABLE_EDIT) {
+            TbVariables *v = tb_session_variables(app->debugger);
+            if (control.value == 9) {
+                tb_variables_edit_cancel(v); page(app, WORKSPACE);
+            } else if (control.value == 8) {
+                char input[FIELD_SIZE * 4];
+                if (!field_utf8(app->input, input, sizeof input)) {
+                    status(app, "Invalid text encoding.");
+                } else if (!app->variable_edit_confirm && tb_variables_edit_state(v) == TB_VARIABLE_EDIT_READY) {
+                    app->variable_edit_confirm = true;
+                } else if (!app->variable_edit_confirm) {
+                    status(app, *tb_variables_edit_error(v) ? tb_variables_edit_error(v) :
+                           "Edit proof is still pending; review remains unavailable.");
+                } else if (tb_variables_edit_apply(v, input)) {
+                    status(app, "Variable write requested; Verify explicitly to establish the current value.");
+                    page_result(app, WORKSPACE);
+                } else {
+                    status(app, tb_variables_edit_error(v));
+                }
+            }
+            break;
+        }
         TbDemoPane *pane = &app->demo.panes[control.pane]; TbView view = pane->tabs[pane->active];
         TbVariableView kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
         TbVariables *v = tb_session_variables(app->debugger); size_t row = (size_t)pane->row[view];
+        if (control.value == 10) {
+            const TbVariable *selected = tb_variables_row(v, kind, row);
+            if (!selected || !tb_variables_edit_begin(v, kind, row)) {
+                status(app, tb_variables_edit_error(v));
+            } else {
+                size_t length = mbstowcs(app->input, tb_variables_edit_old_value(v), FIELD_SIZE - 1);
+                if (length == (size_t)-1) { length = 0; }
+                app->input[length] = L'\0'; app->cursor = length;
+                app->variable_edit_confirm = false; page(app, VARIABLE_EDIT);
+            }
+            break;
+        }
         if (control.value == 7) {
             const TbVariable *selected = tb_variables_row(v, kind, row);
             /* Backend child display names are not trustworthy C paths. */
@@ -4605,6 +4688,18 @@ static void activate(App *app, Control control)
     case INPUT_SUBMIT: {
         char input[FIELD_SIZE * 4];
         if (!field_utf8(app->input, input, sizeof input)) { status(app, "Invalid text encoding."); break; }
+        if (app->page == VARIABLE_EDIT) {
+            TbVariables *v = tb_session_variables(app->debugger);
+            if (app->variable_edit_confirm) {
+                activate(app, (Control){.kind = VARIABLE_ACTION, .value = 8, .pane = app->variable_pane});
+            } else if (tb_variables_edit_state(v) != TB_VARIABLE_EDIT_READY) {
+                status(app, *tb_variables_edit_error(v) ? tb_variables_edit_error(v) :
+                       "Edit proof is still pending; review remains unavailable.");
+            } else {
+                app->variable_edit_confirm = true;
+            }
+            break;
+        }
         if (app->page == STACK_INPUT) {
             TbStack *stack = tb_session_stack(app->debugger); bool okay = false;
             if (app->stack_input == 1) { okay = tb_stack_navigate(stack, app->stack_pane, input); }
@@ -5062,9 +5157,14 @@ static void mouse_event(App *app, MEVENT event)
                 if (target < scroll.total) { pane->row[view] = target; }
                 if (app->live && target < scroll.total) { select_context_row(app, control.pane); }
                 if (app->live && target < scroll.total && view == TB_SOURCE && event.x < control.rect.x + 2) { (void)toggle_breakpoint(app); }
-                if (app->live && target < scroll.total && (view == TB_LOCALS || view == TB_WATCHES) &&
+                const TbVariable *value = view == TB_LOCALS || view == TB_WATCHES ?
+                    tb_variables_row(tb_session_variables(app->debugger),
+                                     view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES,
+                                     (size_t)target) : NULL;
+                if (app->live && target < scroll.total && value &&
+                    (view == TB_LOCALS || view == TB_WATCHES) && value->fresh &&
                     event.x - control.rect.x + app->horizontal[control.pane][view] <= 3 +
-                    (int)tb_variables_row(tb_session_variables(app->debugger), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES, (size_t)target)->depth * 2) {
+                    (int)value->depth * 2) {
                     activate(app, (Control){.kind = VARIABLE_ACTION, .value = 1, .pane = control.pane});
                 }
                 if (!app->live && target < scroll.total && view == TB_SOURCE && event.x < control.rect.x + 2) {
@@ -5168,6 +5268,16 @@ static void key_event(App *app, wint_t key, bool special)
     }
     sync_field(app);
     bool text_entry = text_control(app, control);
+    if (app->page == REVIEW &&
+        ((special && (key == KEY_UP || key == KEY_DOWN)) ||
+         (!special && app->preferences.vim && !app->field_insert && (key == 'j' || key == 'k')))) {
+        Field list[FORM_FIELDS];
+        int count = fields(app, list);
+        bool down = special ? key == KEY_DOWN : key == 'j';
+        int next = app->form_scroll + (down ? 1 : -1);
+        if (next >= 0 && next < count) { app->form_scroll = next; }
+        return;
+    }
     /* Function keys are commands in ordinary fields and Vim Normal mode.
      * Dispatch before the modal editor, which consumes unrecognized keys. */
     if (app->page == WORKSPACE && app->menu < 0 && !app->resizing &&
@@ -5242,13 +5352,6 @@ static void key_event(App *app, wint_t key, bool special)
                         position + (key == KEY_RIGHT || key == KEY_DOWN ? 1 : -1));
             }
         }
-        return;
-    }
-    if (special && app->page == REVIEW && (key == KEY_UP || key == KEY_DOWN)) {
-        Field list[FORM_FIELDS];
-        int count = fields(app, list);
-        int next = app->form_scroll + (key == KEY_DOWN ? 1 : -1);
-        if (next >= 0 && next < count) { app->form_scroll = next; }
         return;
     }
     if (app->page == KEYBINDS && !app->key_confirm && control.kind == KEY_ACTION) {
