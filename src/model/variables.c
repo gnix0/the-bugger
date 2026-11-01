@@ -46,7 +46,7 @@ struct TbVariables {
     bool edit_signed, edit_bool, edit_complete, edit_unresolved, edit_dispatched, octets;
     char edit_object[256], edit_key[512], edit_thread[32];
     int edit_frame;
-    uint64_t edit_address;
+    uint64_t edit_address, regions_epoch, edit_regions_epoch;
     char edit_path[512], edit_value[128], edit_old[512], edit_type[192], edit_error[192];
     TbGdbGeneration edit_generation;
 };
@@ -218,12 +218,25 @@ void tb_variables_authorizer(TbVariables *v, TbVariableAuthorize authorize, void
 void tb_variables_target(TbVariables *v, bool octets) { v->octets = octets; }
 void tb_variables_regions(TbVariables *v, const TbVariableRegion *regions, size_t count)
 {
+    ++v->regions_epoch;
+    if (v->edit_state == TB_VARIABLE_EDIT_PENDING && v->edit_dispatched) { tb_gdb_context_changed(v->gdb); }
+    if (v->edit_state == TB_VARIABLE_EDIT_READY || v->edit_state == TB_VARIABLE_EDIT_PROBING ||
+        (v->edit_state == TB_VARIABLE_EDIT_PENDING && !v->edit_dispatched)) {
+        v->edit_state = TB_VARIABLE_EDIT_NONE; v->edit_phase = 0;
+        (void)snprintf(v->edit_error, sizeof v->edit_error, "RAM evidence changed; destination proof expired. Review a new edit.");
+    }
+    ++v->revision;
     v->region_count = 0;
     /* Truncated or malformed policy must not accidentally omit a deny overlay. */
     if (count > TB_MEMORY_REGIONS || (count && !regions)) { return; }
     for (size_t i = 0; i < count; ++i) {
         if (regions[i].end <= regions[i].begin || regions[i].kind < TB_VARIABLE_UNKNOWN ||
             regions[i].kind > TB_VARIABLE_SIDE_EFFECT) { return; }
+        for (size_t j = 0; j < i; ++j) {
+            if (regions[i].kind == TB_VARIABLE_ORDINARY && regions[j].kind == TB_VARIABLE_ORDINARY &&
+                regions[i].begin < regions[j].end && regions[j].begin < regions[i].end &&
+                regions[i].writable != regions[j].writable) { return; }
+        }
     }
     if (count) { memcpy(v->regions, regions, count * sizeof *regions); }
     v->region_count = count;
@@ -432,6 +445,7 @@ bool tb_variables_edit_begin(TbVariables *v, TbVariableView view, size_t row)
     (void)snprintf(v->edit_key, sizeof v->edit_key, "%s", n->key);
     (void)snprintf(v->edit_thread, sizeof v->edit_thread, "%s", v->thread); v->edit_frame = v->frame;
     v->edit_view = view; v->edit_node = (int)(n - v->trees[view].nodes);
+    v->edit_regions_epoch = v->regions_epoch;
     v->edit_generation = v->generation; v->edit_state = TB_VARIABLE_EDIT_PROBING;
     v->edit_phase = VAR_EDIT_ATTRIBUTES; v->edit_address = 0; v->edit_bytes = 0;
     v->edit_path[0] = v->edit_value[0] = v->edit_error[0] = 0;
@@ -441,7 +455,7 @@ bool tb_variables_edit_begin(TbVariables *v, TbVariableView view, size_t row)
 }
 bool tb_variables_edit_apply(TbVariables *v, const char *value)
 {
-    if (v->edit_state != TB_VARIABLE_EDIT_READY || !stopped(v) ||
+    if (v->edit_state != TB_VARIABLE_EDIT_READY || v->edit_regions_epoch != v->regions_epoch || !stopped(v) ||
         !same(v->edit_generation, tb_gdb_generation(v->gdb))) {
         (void)snprintf(v->edit_error, sizeof v->edit_error, "Edit proof expired; reopen the edit review.");
         return false;
@@ -593,7 +607,7 @@ bool tb_variables_event(TbVariables *v, const TbGdbEvent *event)
             v->edit_unresolved = !event->record ||
                 (strcmp(event->record->klass, "done") != 0 && strcmp(event->record->klass, "error") != 0);
         }
-        if (!event->record || !same(event->generation, v->edit_generation) ||
+        if (!event->record || v->edit_regions_epoch != v->regions_epoch || !same(event->generation, v->edit_generation) ||
             !same(event->generation, tb_gdb_generation(v->gdb))) {
             if (assignment) {
                 v->edit_phase = 0;
@@ -881,7 +895,7 @@ void tb_variables_pump(TbVariables *v)
             (void)request(v, VAR_EDIT_SIZE, "-data-evaluate-expression", args, count, TB_GDB_CONTEXT);
         } else if (v->edit_phase == VAR_EDIT_ASSIGN) {
             if (!n->used || !n->row.fresh || strcmp(n->object, v->edit_object) != 0 || strcmp(n->key, v->edit_key) != 0 ||
-                !v->octets || !same(v->edit_generation, v->generation) ||
+                !v->octets || v->edit_regions_epoch != v->regions_epoch || !same(v->edit_generation, v->generation) ||
                 !writable_destination(v, v->edit_address, v->edit_bytes)) {
                 v->edit_phase = 0; v->edit_state = TB_VARIABLE_EDIT_NONE;
                 (void)snprintf(v->edit_error, sizeof v->edit_error, "Write destination or context changed; review a new edit.");

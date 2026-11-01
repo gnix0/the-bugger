@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
     bool code_page_error = false, code_duplicate_source = false, code_limited_sources = false;
     unsigned code_bad_reply = 0;
     char variable_name[64] = {0}; unsigned variable_reads = 0, variable_children = 0, variable_deletes = 0;
-    unsigned variable_mode = 0;
+    unsigned variable_mode = 0, variable_writes = 0;
     unsigned variable_value = 17;
     if ((strcmp(mode, "fallback") == 0 || strcmp(mode, "fallback-fail") == 0) &&
         strcmp(argv[3], "--interpreter=mi3") == 0) {
@@ -167,7 +167,7 @@ int main(int argc, char *argv[])
                 else if (strstr(command, "sizeof(void*)")) { reply(token, variable_mode == 8 ? "^done,value=\"1\"" : "^done,value=\"4\""); }
                 else { reply(token, "^error,msg=\"Unexpected automatic value evaluation\""); }
             } else if (strcmp(command, "-gdb-show endian\n") == 0) {
-                reply(token, strcmp(mode, "remote-unknown") == 0 ? "^done,value=\"auto\"" : "^done,value=\"big\"");
+                reply(token, strstr(mode, "-ram") ? "^done,value=\"little\"" : strcmp(mode, "remote-unknown") == 0 ? "^done,value=\"auto\"" : "^done,value=\"big\"");
             } else if (strcmp(command, "-stack-info-frame\n") == 0) {
                 reply(token, remote_resets ? "^done,frame={level=\"0\",addr=\"0x8000200\",func=\"remote_main\",arch=\"arm\"}" : "^done,frame={level=\"0\",addr=\"0x8000100\",func=\"remote_main\",arch=\"arm\"}");
             } else if (strcmp(command, "-thread-info\n") == 0 && !strcmp(mode, "remote-openocd-verify-error")) {
@@ -333,6 +333,8 @@ int main(int argc, char *argv[])
             else if (strstr(command, "sizeof(scalar)")) { reply(token, variable_mode == 8 ? "^done,value=\"1\"" : "^done,value=\"4\""); }
             else { reply(token, "^error,msg=\"FAKE unexpected edit expression\""); }
         } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-assign ", 12) == 0) {
+            if (getenv("TB_FAKE_FORBID_WRITES")) { free(line); return 90; }
+            ++variable_writes;
             if (variable_mode == 7) { reply(token, "^error,msg=\"FAKE ambiguous assignment\""); }
             else { reply(token, "^done,value=\"42\""); }
         } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-list-children ", 19) == 0) {
@@ -362,7 +364,7 @@ int main(int argc, char *argv[])
         } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-delete ", 12) == 0) {
             ++variable_deletes; reply(token, "^done,ndeleted=\"1\"");
         } else if (strcmp(mode, "context-variables") == 0 && strcmp(command, "-variable-stats\n") == 0) {
-            (void)printf("%s^done,reads=\"%u\",children=\"%u\",deletes=\"%u\"\n", token, variable_reads, variable_children, variable_deletes);
+            (void)printf("%s^done,reads=\"%u\",children=\"%u\",deletes=\"%u\",writes=\"%u\"\n", token, variable_reads, variable_children, variable_deletes, variable_writes);
         } else if (strcmp(mode, "context-memory") == 0 && strncmp(command, "-memory-mode ", 13) == 0) {
             memory_mode = (unsigned)strtoul(command + 13, NULL, 10); reply(token, "^done");
         } else if (strcmp(mode, "context-memory") == 0 && strncmp(command, "-data-evaluate-expression ", 26) == 0) {
@@ -387,6 +389,7 @@ int main(int argc, char *argv[])
                 if (memory_mode == 8) { puts("*stopped,reason=\"end-stepping-range\",thread-id=\"7\",frame={level=\"0\",addr=\"0x1234\",func=\"main\"}"); }
             }
         } else if (strcmp(mode, "context-memory") == 0 && strncmp(command, "-data-write-memory-bytes ", 25) == 0) {
+            if (getenv("TB_FAKE_FORBID_WRITES")) { free(line); return 90; }
             if (memory_mode == 9) { reply(token, "^error,msg=\"FAKE write rejected\""); }
             else if (memory_mode == 10) { continue; }
             else {

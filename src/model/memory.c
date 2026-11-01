@@ -26,6 +26,7 @@ struct TbMemory {
     uint64_t backend_session, backend_epoch, register_epoch, register_address, register_lifetime;
     uint64_t edit_lifetime, edit_backend_epoch, edit_version, edit_address;
     TbGdbGeneration request_generation, register_generation, edit_generation;
+    uint64_t regions_epoch, edit_regions_epoch;
     TbMemoryBackend backend;
     TbMemoryRegion regions[TB_MEMORY_REGIONS];
     View views[TB_MEMORY_CLIENTS];
@@ -438,12 +439,42 @@ void tb_memory_order(TbMemory *m, TbMemoryOrder order)
     m->order = order; ++m->revision;
 }
 TbMemoryOrder tb_memory_get_order(const TbMemory *m) { return m->order; }
-void tb_memory_regions(TbMemory *m, const TbMemoryRegion *regions, size_t count)
+bool tb_memory_regions_valid(const TbMemoryRegion *regions, size_t count, unsigned address_bits)
 {
-    m->region_count = 0;
-    for (size_t i = 0; regions && i < count && m->region_count < TB_MEMORY_REGIONS; ++i) {
-        if (regions[i].end > regions[i].begin) { m->regions[m->region_count++] = regions[i]; }
+    if (count > TB_MEMORY_REGIONS || (count && !regions) || address_bits > 64) { return false; }
+    for (size_t i = 0; i < count; ++i) {
+        if (regions[i].begin >= regions[i].end ||
+            (address_bits && address_bits < 64 && regions[i].end > (UINT64_C(1) << address_bits))) { return false; }
+        for (size_t j = 0; j < i; ++j) {
+            if (regions[i].begin < regions[j].end && regions[j].begin < regions[i].end &&
+                regions[i].writable != regions[j].writable) { return false; }
+        }
     }
+    return true;
+}
+bool tb_memory_regions(TbMemory *m, const TbMemoryRegion *regions, size_t count)
+{
+    bool valid = tb_memory_regions_valid(regions, count, m->address_bits);
+    ++m->regions_epoch;
+    if (m->edit_state == TB_MEMORY_EDIT_PENDING) {
+        /* The controller drops obsolete, wholly unsent requests before writing
+         * any bytes. Started mutations retain conservative stale outcomes. */
+        tb_gdb_context_changed(m->gdb);
+    }
+    m->region_count = valid ? count : 0;
+    if (valid && count) { memmove(m->regions, regions, count * sizeof *regions); }
+    for (int i = 0; i < TB_MEMORY_CLIENTS; ++i) {
+        ++m->views[i].version;
+        for (unsigned j = 0; j < TB_MEMORY_RANGES; ++j) {
+            if (m->views[i].ranges[j].policy == TB_MEMORY_ORDINARY) { m->views[i].ranges[j].authorized = false; }
+        }
+    }
+    if (m->edit_state == TB_MEMORY_EDIT_READY) {
+        m->edit_state = TB_MEMORY_EDIT_NONE;
+        (void)snprintf(m->edit_error, sizeof m->edit_error, "RAM evidence changed; review a new edit.");
+    }
+    ++m->revision;
+    return valid;
 }
 bool tb_memory_browse(TbMemory *m, int id, int direction)
 {
@@ -812,6 +843,7 @@ bool tb_memory_edit_begin(TbMemory *m, int id, uint64_t address, unsigned bytes)
         m->edit_old[i] = v->bytes[offset + i];
     }
     m->edit_view = id; m->edit_address = address; m->edit_bytes = bytes;
+    m->edit_regions_epoch = m->regions_epoch;
     m->edit_generation = v->generation; m->edit_state = TB_MEMORY_EDIT_READY;
     m->edit_version = m->views[id].version; m->edit_lifetime = m->views[id].lifetime; m->edit_backend_epoch = m->backend_epoch;
     for (unsigned i = 0; i < bytes; ++i) {
@@ -824,6 +856,7 @@ bool tb_memory_edit_begin(TbMemory *m, int id, uint64_t address, unsigned bytes)
 bool tb_memory_edit_apply(TbMemory *m, const char *encoded)
 {
     if (m->edit_state != TB_MEMORY_EDIT_READY || !encoded ||
+        m->edit_regions_epoch != m->regions_epoch ||
         !same(m->edit_generation, tb_gdb_generation(m->gdb)) ||
         tb_gdb_state(m->gdb) != TB_GDB_STOPPED ||
         m->edit_lifetime != m->views[m->edit_view].lifetime || m->edit_backend_epoch != m->backend_epoch ||

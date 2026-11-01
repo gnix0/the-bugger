@@ -3869,3 +3869,60 @@ accepted the host editing corrections, navigation and presentation changes.
 This supersedes the pending-review/rerun states above; the earlier failed and
 interrupted runs remain historical evidence. Remaining F04 embedded writable-RAM
 authorization and physical write validation are deferred, not accepted as complete.
+
+## F04 user-confirmed STM32F446RE RAM evidence — 2026-11-01
+
+The fixed SRAM-description review binds user-confirmed device identity to a unique
+connection instance, configuration generation and consumed evidence revision.
+It performs no silicon detection. Endpoint, inferior ID, ELF and script selection
+are not device proof. Atomic publication supplies the same eligible SRAM extent
+to Memory and Variables; malformed, excessive, contradictory and unrepresentable
+catalogs are rejected rather than truncated. Replacing evidence, including with
+identical bounds, revokes dependent permissions and drafts. Queued mutations use
+the existing controller's obsolete-generation pipe guard; both model tests use
+peers that fail if a revoked write actually arrives. Started/uncertain operations
+retain shared quarantine independently of evidence confirmation or revocation.
+
+Agent-run focused Memory/Variables/session and isolated tmux review checks passed
+(`wire-focused.log`, exit 0). Native Memory/Variables write/read-back checks passed
+in `native-tmux.log`, exit 0; the final full baseline covers the later pipe-guard
+refinement. Direct review, default Back, compact pagination/resize, confirmation,
+revoke and Console invalidation passed against authored ARM peers. These are
+host/synthetic results, not physical STM32 evidence.
+
+Offline `test-m17-fixture` passed, exit 0 (`fixture-final.log`), for the default
+and LED ELF variants. The fixture now contains a built-in `int`
+`fixture_edit_scalar`; the existing buffer supplies the F04 interior test slice.
+No firmware was flashed and no hardware connection or mutation was performed.
+
+Artifacts are in `build/f04-evidence-logs/`: environment, tested source manifests,
+diffs, logs and exit records. Development failures include invalid Make target
+invocations, an incorrect new assertion that cached browsing requires a current
+region catalog, the fixture check's old five-symbol mask and four explicit
+`memcmp` comparison diagnostics. They were corrected without weakening existing
+application assertions. Earlier baseline attempts were interrupted when later
+refinements superseded their source; they are not passing final baselines.
+
+F04 acceptance remains pending owner review and physical STM32 write/verify.
+
+Final frozen-tree verification:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/f04-evidence-verified-20261101 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make analyze
+```
+
+Both PASS, exit 0 (`test-ci-verified.log` / `.exit`, `analyze-verified.log` /
+`.exit`). The complete baseline includes direct/tmux review and editing, preserved
+input/context/terminal-restoration assertions, native GDB, remote lifecycle and
+offline OpenOCD checks. Fortified compilation of every unit/integration/support C
+source also passed, exit 0 (`compilation-verified.log` / `.exit`). Session checks
+include a consumer capability mismatch: neither model retains a partial grant.
+
+The normal launcher was rebuilt successfully (`default-verified.log`, exit 0).
+`binary-verified.sha256` records its byte-for-byte match with the verified fresh
+build. `verified-tested-source.json`, `source-integrity.log` and `delivery.patch`
+identify the tested inputs and delivered diff; fixture hashes are in
+`fixture.sha256`. Source/build inputs remained unchanged during this final run.
+These are agent-run local Linux results, not hosted Ubuntu or physical results.
+F04 remains awaiting owner review and actual STM32 F03/F04 write/verify evidence.

@@ -44,6 +44,12 @@ The offline test checks both default and LED ELF variants, reset vectors,
 initialized/uninitialized SRAM sections, required symbols and DWARF. Actual ARM
 GDB checks line lookup and disassembly without connecting to a target.
 
+`fixture_edit_scalar` is a plain built-in `int`, initially 17, for deliberate F03
+editing without expanding typedef support. It contributes to an intermediate
+sink calculation; checkpoint stage reporting is unchanged. The existing 64-byte
+`fixture_buffer` supplies an interior F04 test slice and neighboring buffer bytes.
+These fixtures are not evidence of physical write acceptance until exercised.
+
 The default image never configures GPIO. The optional `make fixture-m17-stm32-led`
 image configures PA5 as output and toggles Nucleo LD2. Use it only with PA5 free
 of external circuitry. Its filename is `firmware-led.elf`, deliberately distinct

@@ -10,8 +10,8 @@ F01 and F02 are accepted; their historical release and physical evidence remains
 in [validation records](validation.md). The owner reports F03 accepted before
 F04 began. The owner accepted the F03/F04 host safety corrections,
 connection-form/script-list navigation, centered menus and spacing after manual
-review. Fresh fortified host regression and static analysis pass. Remaining F04
-embedded writable-RAM authorization and physical write verification are deferred.
+review. Fresh fortified host regression and static analysis pass. The narrow user-confirmed STM32F446RE SRAM evidence path is implemented and host
+verified; owner review and physical write verification remain pending.
 F05 remains planning-only. Existing read-only hardware results are preserved and
 do not count as write validation.
 
@@ -25,7 +25,7 @@ do not count as write validation.
 | F01 | Setup restoration for v0.1.4 | Accepted and shipped; host/physical checks and published artifacts verified |
 | F02 | Dedicated Stack inspection and inspection UX for v0.1.5 | Accepted; owner host and three-target inspection validation pass |
 | F03 | Deliberate integer/bool variable editing | Accepted, including current safety corrections |
-| F04 | Exact ordinary-RAM byte editing and form/script navigation | Host implementation/corrections accepted; embedded authorization and physical writes pending |
+| F04 | Exact ordinary-RAM byte editing and form/script navigation | User-confirmed STM32 SRAM path host verified; owner review pending, physical writes unverified |
 | 2.4 | Release v0.1.4 | Published; hosted checks passed, uploaded artifacts verified and branch synchronization complete |
 
 Current controls are in [usage](usage.md); the accepted browsing scope is in

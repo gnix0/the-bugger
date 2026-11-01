@@ -2061,6 +2061,50 @@ results for STM32/ESP32 evidence. Use only disposable fixture RAM whose complete
 writable region and target capabilities are supplied by the adapter/session.
 Read-range consent does not create that evidence. A remote TUI session lacking
 writable-region metadata must refuse edits; the current connection forms do not
-let a user invent such metadata. Extending that path needs a separately reviewed
-adapter/fixture procedure before physical write validation. Existing embedded
-inspection, MMIO read and release regression procedures remain applicable.
+let a user invent such metadata. The fixed STM32F446RE review below supplies
+user-confirmed eligibility; physical write validation remains pending. Existing
+embedded inspection, MMIO read and release regression procedures remain applicable.
+
+
+## STM32F446RE ordinary-RAM evidence
+
+`test-m15-model` exercises authored session confirmation, stale/tampered tokens,
+same-endpoint cross-session rejection, reconnect/reset/Console revocation and
+quarantine preservation. Memory/Variables model tests cover atomic rejection,
+identical-bounds replacement and revocation before dispatch; the Variables peer
+counts assignments to establish that rejected operations send no write.
+`test-mmio-tui` includes the separate ordinary-RAM review, cancellation, 48×18
+pagination, resize and explicit revocation. `test-ram-tmux` repeats that review
+through isolated tmux. These checks are included in `test-ci`.
+
+`make BUILD_DIR=build/<directory> test-m17-fixture` builds the default and LED
+STM32 ELF fixtures and inspects them offline; it never flashes or connects.
+The symbol check includes `fixture_edit_scalar` and its SRAM extent.
+
+For a separately authorized physical acceptance session:
+
+1. Record board/probe, GDB/server versions, firmware/ELF SHA-256 and current
+   connection. Use the matching STM32 fixture with `fixture_edit_scalar`; prepare
+   and flash it externally only when replacing firmware is authorized.
+2. Break at `fixture_checkpoint` and halt. Record the original 64 buffer bytes
+   and scalar. Inspect the device/setup independently, then use **Setup → Review
+   STM32F446RE RAM evidence**. Check the complete description and user-confirmed
+   provenance before confirming. No access occurs in that review.
+3. Explicitly read a 16-byte interior slice, for example `&fixture_buffer[16]`.
+   Add/authorize exactly that ordinary range. Review a chosen hex edit and Cancel:
+   an explicit Refresh must show unchanged bytes. Repeat with Apply, explicitly
+   Refresh, and compare the surrounding bytes inside the buffer. Restore the
+   original bytes through a new authorized review and verify deliberately.
+4. Explicitly Read `fixture_edit_scalar` in Watches. Review/Cancel and then
+   Review/Apply a supported integer. Read to verify and restore its recorded
+   original value through another reviewed assignment.
+5. Check that boundary-crossing, Flash/MMIO/unknown destinations remain ineligible.
+   These refusal checks must send no write; do not attempt speculative target
+   reads merely to prepare an unsafe destination. Use authored peers for forced
+   timeouts/lost replies; do not induce physical transport faults casually.
+6. Revoke evidence, issue a deliberate Console command, reset only when authorized,
+   and reconnect. Old confirmation tokens, range grants and drafts must not be
+   reused. No write permission follows merely from a successful read or a GDB
+   RAM label. Retain logs and distinguish request extent from actual bus width.
+
+Physical F03/F04 write/verify evidence remains **UNVERIFIED** until recorded.

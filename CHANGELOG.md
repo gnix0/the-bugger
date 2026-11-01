@@ -4,6 +4,11 @@
 
 ### Added
 
+- Session-scoped, user-confirmed STM32F446RE main-SRAM eligibility for deliberate
+  Memory and memory-backed variable edits. Connection-bound review, atomic region
+  publication and evidence-generation checks revoke stale permissions without
+  clearing write quarantine. No silicon detection or automatic target access.
+
 - Deliberate integer/bool variable and exact ordinary-RAM byte editing, with
   target-sized conversion, writable-storage checks, review/cancel, explicit
   verification and shared uncertainty handling. Flash/MMIO and CPU-register

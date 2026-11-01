@@ -837,3 +837,9 @@ test-script-tmux: all $(BUILD_DIR)/test-openocd-tui $(BUILD_DIR)/fake-openocd $(
 	TB_OPENOCD_TEST_TMUX=1 $(BUILD_DIR)/test-openocd-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/fake-openocd) $(abspath $(BUILD_DIR)/fake-mi)
 
 test-tmux: test-script-tmux
+
+.PHONY: test-ram-tmux
+test-ram-tmux: all $(BUILD_DIR)/test-mmio-tui $(BUILD_DIR)/fake-mi
+	TB_RAM_TEST_TMUX=1 $(BUILD_DIR)/test-mmio-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/fake-mi)
+
+test-tmux: test-ram-tmux

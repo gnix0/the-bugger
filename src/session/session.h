@@ -41,11 +41,21 @@ typedef struct {
     const char *gdb, *executable, *directory;
     const TbSessionWords *arguments, *environment;
 } TbSessionConfig;
+typedef struct TbSession TbSession;
+/* Fixed device description only. Identity/source are USER-CONFIRMED assertions,
+ * never silicon detection. Tokens bind the exact live connection and policy. */
+typedef struct {
+    uint64_t connection, configuration, evidence;
+    TbMemoryRegion region;
+    char endpoint[256], inferior[32], device[32], source[128];
+} TbSessionRamReview;
+bool tb_session_ram_review(TbSession *session, TbSessionRamReview *review);
+bool tb_session_ram_confirm(TbSession *session, const TbSessionRamReview *review);
+void tb_session_ram_revoke(TbSession *session);
+bool tb_session_ram_confirmed(const TbSession *session);
 typedef enum { TB_SESSION_IDLE, TB_SESSION_STARTING, TB_SESSION_READY,
                TB_SESSION_RUNNING, TB_SESSION_STOPPED, TB_SESSION_EXITED,
                TB_SESSION_CLOSING, TB_SESSION_CLOSED, TB_SESSION_FAILED } TbSessionState;
-typedef struct TbSession TbSession;
-
 TbSession *tb_session_create(void);
 const TbSessionCapabilities *tb_session_capabilities(const TbSession *session);
 TbSessionKind tb_session_kind(const TbSession *session);

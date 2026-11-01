@@ -21,7 +21,7 @@ static void inspect(const char *path)
     CHECK((header.e_entry & 1U) && header.e_entry >= 0x08000000 && header.e_entry < 0x08080000);
     size_t names; CHECK(elf_getshdrstrndx(elf, &names) == 0);
     bool vectors = false, data = false, bss = false, debug = false, lines = false, checkpoint = false;
-    const char *const required[] = {"fixture_flash", "fixture_buffer", "fixture_counter", "fixture_sample", "fixture_pointer"};
+    const char *const required[] = {"fixture_flash", "fixture_buffer", "fixture_counter", "fixture_edit_scalar", "fixture_sample", "fixture_pointer"};
     unsigned found = 0;
     Elf_Scn *section = NULL;
     while ((section = elf_nextscn(elf, section))) {
@@ -50,13 +50,16 @@ static void inspect(const char *path)
                 if (!strcmp(label, "fixture_checkpoint")) {
                     CHECK(GELF_ST_TYPE(symbol.st_info) == STT_FUNC && symbol.st_size > 0); checkpoint = true;
                 }
+                if (!strcmp(label, "fixture_edit_scalar")) {
+                    CHECK(symbol.st_size == 4 && symbol.st_value >= 0x20000000 && symbol.st_value + 4 <= 0x20020000);
+                }
                 for (size_t j = 0; j < sizeof required / sizeof required[0]; ++j) {
                     if (!strcmp(label, required[j])) { CHECK(symbol.st_shndx != SHN_UNDEF); found |= 1U << j; }
                 }
             }
         }
     }
-    CHECK(vectors && data && bss && debug && lines && checkpoint && found == 31);
+    CHECK(vectors && data && bss && debug && lines && checkpoint && found == (1U << (sizeof required / sizeof *required)) - 1U);
     CHECK(elf_end(elf) == 0 && close(fd) == 0);
 }
 int main(int argc, char **argv)

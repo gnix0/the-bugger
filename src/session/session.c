@@ -18,6 +18,7 @@
 
 typedef enum { JOB_NONE, JOB_SETUP, JOB_RUN, JOB_PAUSE, JOB_CONSOLE,
                JOB_INTERRUPT_CLOSE, JOB_RELEASE, JOB_REMOTE_CONNECT, JOB_REMOTE_UNITS, JOB_REMOTE_WIDTH, JOB_REMOTE_ENDIAN, JOB_REMOTE_FRAME, JOB_REMOTE_DISCONNECT, JOB_TARGET, JOB_CLOSE_POLICY, JOB_TARGET_FLUSH } Job;
+static uint64_t connection_serial;
 struct TbSession {
     bool setup_active, setup_unacknowledged;
     TbGdb *gdb;
@@ -44,7 +45,8 @@ struct TbSession {
     int stage, master, slave, pidfd;
     pid_t target_pid, owned_pid;
     uint64_t revision, close_deadline, partial_time[5], recovery_deadline;
-    uint64_t mmio_configuration;
+    uint64_t mmio_configuration, connection, ram_evidence;
+    bool ram_confirmed;
     pid_t memory_pid;
     uint64_t memory_stop;
     char executable[PATH_MAX], directory[PATH_MAX], debugger[PATH_MAX], tty[PATH_MAX];
@@ -141,8 +143,36 @@ static void state_set(TbSession *native, TbSessionState state)
     if (native->state != state) { native->state = state; ++native->revision; }
 }
 
+static bool publish_regions(TbSession *s, const TbMemoryRegion *regions, size_t count)
+{
+    bool valid = (!count || s->capabilities.address_bits) &&
+        tb_memory_regions_valid(regions, count, s->capabilities.address_bits);
+    if (!valid) { regions = NULL; count = 0; }
+    /* Validate the whole catalog before publishing either model. No pump or
+     * callback occurs between these bounded metadata-only replacements. */
+    s->ordinary_region_count = count;
+    if (count) { memmove(s->ordinary_regions, regions, count * sizeof *regions); }
+    if (!tb_memory_regions(s->memory, s->ordinary_regions, count)) {
+        s->ordinary_region_count = 0; valid = false;
+    }
+    variable_regions(s);
+    return valid;
+}
+void tb_session_ram_revoke(TbSession *s)
+{
+    if (!s || s->kind == TB_SESSION_LOCAL) { return; }
+    ++s->ram_evidence; s->ram_confirmed = false;
+    (void)publish_regions(s, NULL, 0);
+    /* Model evidence epochs reject drafts without requests or changes to the
+     * independent context mutation/quarantine state. */
+    ++s->revision;
+}
+bool tb_session_ram_confirmed(const TbSession *s)
+{ return s && s->ram_confirmed && s->capabilities.connected && !s->want_close; }
+
 static void configuration_changed(TbSession *session)
 {
+    if (session->kind != TB_SESSION_LOCAL && session->configured) { tb_session_ram_revoke(session); }
     ++session->mmio_configuration;
     (void)tb_memory_backend_set(session->memory, NULL);
     tb_code_image_invalidate(session->code);
@@ -285,7 +315,7 @@ static void emit(void *context, const TbGdbEvent *event)
         if (native->kind != TB_SESSION_LOCAL) {
             /* A detached/exited inferior is not proof that its server died.
              * Revoke read evidence before any further model work. */
-            native->ordinary_region_count = 0;
+            tb_session_ram_revoke(native);
             tb_memory_target(native->memory, false, 0);
             tb_memory_regions(native->memory, NULL, 0);
             if (!native->want_close) {
@@ -401,16 +431,16 @@ bool tb_session_start(TbSession *native, const TbSessionConfig *config)
     if (config->kind != TB_SESSION_LOCAL && !tb_session_endpoint(config->endpoint)) {
         diagnostic(native, "Use a TCP host:port endpoint (IPv6 in brackets); commands and device paths are not accepted."); return false;
     }
-    if (config->ordinary_region_count > TB_MEMORY_REGIONS || (config->ordinary_region_count && !config->ordinary_regions)) { return false; }
-    for (size_t i = 0; i < config->ordinary_region_count; ++i) {
-        if (config->ordinary_regions[i].begin >= config->ordinary_regions[i].end) { return false; }
-    }
+    if (!tb_memory_regions_valid(config->ordinary_regions, config->ordinary_region_count, 0) ||
+        connection_serial == UINT64_MAX) { return false; }
     if (config->openocd && config->kind == TB_SESSION_LOCAL) { return false; }
     if (config->openocd && config->openocd->start_server &&
         (strnlen(config->openocd->endpoint, sizeof config->openocd->endpoint) == sizeof config->openocd->endpoint ||
          strcmp(config->endpoint, config->openocd->endpoint) != 0)) {
         diagnostic(native, "GDB endpoint must match the reviewed owned-server plan."); return false;
     }
+    native->connection = ++connection_serial;
+    native->ram_confirmed = false; ++native->ram_evidence;
     native->kind = config->kind;
     if (!copy_path(native->endpoint, sizeof native->endpoint, config->endpoint)) { return false; }
     if (!copy_path(native->executable, sizeof native->executable, config->executable) ||
@@ -628,6 +658,35 @@ static bool mmio_review_ready(const TbSession *s)
            tb_gdb_state(s->gdb) == TB_GDB_STOPPED;
 }
 
+bool tb_session_ram_review(TbSession *s, TbSessionRamReview *review)
+{
+    if (!review || !mmio_review_ready(s) || tb_gdb_pending(s->gdb) || s->capabilities.byte_order != TB_MEMORY_LITTLE ||
+        !strstr(s->capabilities.architecture, "arm")) { return false; }
+    TbSessionRamReview candidate = {.connection = s->connection, .configuration = s->mmio_configuration,
+        .evidence = s->ram_evidence, .region = {UINT64_C(0x20000000), UINT64_C(0x20020000), true},
+        .device = "STM32F446RE (user-confirmed)", .source = "ST DS10693: main SRAM; user-confirmed target identity"};
+    (void)snprintf(candidate.endpoint, sizeof candidate.endpoint, "%s", s->endpoint);
+    (void)snprintf(candidate.inferior, sizeof candidate.inferior, "%s", s->capabilities.target_id);
+    *review = candidate; return true;
+}
+bool tb_session_ram_confirm(TbSession *s, const TbSessionRamReview *review)
+{
+    TbSessionRamReview current;
+    if (!review || !tb_session_ram_review(s, &current) ||
+        review->connection != current.connection || review->configuration != current.configuration ||
+        review->evidence != current.evidence || review->region.begin != current.region.begin ||
+        review->region.end != current.region.end || !review->region.writable ||
+        memcmp(review->endpoint, current.endpoint, sizeof current.endpoint) != 0 ||
+        memcmp(review->inferior, current.inferior, sizeof current.inferior) != 0 ||
+        memcmp(review->device, current.device, sizeof current.device) != 0 ||
+        memcmp(review->source, current.source, sizeof current.source) != 0) { return false; }
+    tb_session_ram_revoke(s);
+    if (!publish_regions(s, &current.region, 1)) { return false; }
+    s->ram_confirmed = true;
+    diagnostic(s, "RAM evidence USER-CONFIRMED: STM32F446RE main SRAM. No target access; each edit still requires Review/Apply.");
+    return true;
+}
+
 bool tb_session_mmio_review(TbSession *s, TbMemoryBackend *review)
 {
     if (!review || !mmio_review_ready(s)) { return false; }
@@ -692,6 +751,7 @@ static bool target_action(TbSession *s, int action)
         (s->state != TB_SESSION_STOPPED && s->state != TB_SESSION_RUNNING)) {
         diagnostic(s, "OpenOCD action unavailable; connect a target and wait for pending operations."); return false;
     }
+    if (action == 2) { tb_session_ram_revoke(s); }
     s->target_action = action; s->target_deadline = tb_gdb_now_ms() + 10000;
     tb_context_refresh(s->context);
     if (s->state == TB_SESSION_RUNNING && !issue(s, JOB_PAUSE, "-exec-interrupt", NULL, 0)) { s->target_action = 0; return false; }
@@ -774,7 +834,8 @@ static void process_reply(TbSession *native)
         }
         if ((native->job == JOB_TARGET || native->job == JOB_TARGET_FLUSH || native->job == JOB_PAUSE) && native->target_action) {
             native->target_action = 0; native->alive = false; native->target_uncertain = true;
-            tb_memory_target(native->memory, false, 0); tb_memory_regions(native->memory, NULL, 0);
+            tb_session_ram_revoke(native);
+            tb_memory_target(native->memory, false, 0);
             state_set(native, TB_SESSION_READY);
         }
         if (native->job == JOB_RUN || native->job == JOB_CONSOLE) { native->launch_requested = false; }
@@ -860,20 +921,23 @@ static void memory_metadata(TbSession *native)
     TbMemoryRegion regions[TB_MEMORY_REGIONS]; size_t count = 0;
     (void)snprintf(path, sizeof path, "/proc/%ld/maps", (long)pid); FILE *maps = fopen(path, "re");
     char row[PATH_MAX + 256]; unsigned budget = 4096;
-    bool discard = false;
-    while (maps && budget > 0 && count < TB_MEMORY_REGIONS && fgets(row, sizeof row, maps)) {
+    bool discard = false, invalid = false;
+    while (maps && budget > 0 && fgets(row, sizeof row, maps)) {
         --budget;
         bool complete = strchr(row, '\n') != NULL;
         if (discard) { discard = !complete; continue; }
         if (!complete) { discard = true; continue; }
         TbMemoryRegion region;
-        if (tb_native_memory_region(row, &region)) { regions[count++] = region; }
+        if (tb_native_memory_region(row, &region)) {
+            if (count == TB_MEMORY_REGIONS) { invalid = true; break; }
+            regions[count++] = region;
+        }
     }
-    if (maps) { (void)fclose(maps); }
-    tb_memory_regions(native->memory, regions, count);
-    native->ordinary_region_count = count;
-    memcpy(native->ordinary_regions, regions, count * sizeof regions[0]);
-    variable_regions(native);
+    if (maps) {
+        invalid = invalid || discard || !feof(maps) || ferror(maps);
+        (void)fclose(maps);
+    }
+    (void)publish_regions(native, regions, invalid ? 0 : count);
 }
 
 void tb_session_pump(TbSession *native, int wait_ms)
@@ -902,7 +966,7 @@ void tb_session_pump(TbSession *native, int wait_ms)
         native->remote_metadata_dirty = false; native->configured = false; native->stage = 8;
         native->capabilities.octet_addressing = false; native->capabilities.address_bits = 0;
         native->capabilities.byte_order = TB_MEMORY_UNKNOWN; native->capabilities.architecture[0] = 0;
-        native->ordinary_region_count = 0;
+        tb_session_ram_revoke(native);
         tb_memory_target(native->memory, false, 0); tb_memory_regions(native->memory, NULL, 0);
     }
     if (native->kind == TB_SESSION_LOCAL) {
@@ -914,6 +978,7 @@ void tb_session_pump(TbSession *native, int wait_ms)
     if (gdb == TB_GDB_DISCONNECTED) {
         if (native->kind != TB_SESSION_LOCAL && native->capabilities.connected) {
             native->target_connected = native->capabilities.connected = native->alive = false;
+            tb_session_ram_revoke(native);
             tb_memory_target(native->memory, false, 0);
             tb_memory_regions(native->memory, NULL, 0);
         }
@@ -1156,8 +1221,11 @@ static void remote_setup(TbSession *session)
         }
         tb_memory_target(session->memory, session->capabilities.octet_addressing, session->capabilities.address_bits);
         tb_memory_order(session->memory, session->capabilities.byte_order);
-        tb_memory_regions(session->memory, session->ordinary_regions, session->ordinary_region_count);
-        variable_regions(session);
+        if (!publish_regions(session, session->ordinary_regions, session->ordinary_region_count)) {
+            session->failed = true;
+            diagnostic(session, "Region evidence is not representable by this target; disconnecting.");
+            tb_session_close(session); return;
+        }
         session->configured = true;
         TbGdbState state = tb_gdb_state(session->gdb);
         state_set(session, !session->alive ? TB_SESSION_READY : state == TB_GDB_STOPPED ? TB_SESSION_STOPPED : state == TB_GDB_RUNNING ? TB_SESSION_RUNNING : TB_SESSION_READY);

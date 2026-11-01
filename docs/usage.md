@@ -978,6 +978,22 @@ is insufficient. Native Linux derives this metadata from process mappings. A
 remote session without supplied writable-region evidence cannot use either
 editor; no peripheral/Flash permission is inferred from its ELF image.
 
+For an STM32F446RE, stop the target and choose **Setup → Review STM32F446RE RAM
+evidence**. Review all pages and confirm only if this connection reaches your
+identified board. The description covers main SRAM `[0x20000000, 0x20020000)`
+from ST DS10693. Identity and region binding are **user-confirmed**, never detected
+or hardware-verified. A little-endian, 32-bit ARM target is a compatibility
+prerequisite, not MCU identification. Default Back cancels without confirmation.
+
+This establishes eligibility for both editors, not permission to overwrite live
+stack, heap, DMA buffers or other application state. Choose a disposable buffer;
+Memory still requires separate ordinary-range authorization and every mutation
+requires Review/Apply. Confirmation and revocation request no target access.
+Console commands, reset, reconnect, inferior replacement and configuration or
+connection loss revoke evidence. **Setup → Revoke RAM evidence** revokes it
+explicitly. Replacement invalidates existing reviews even with identical bounds.
+Nothing is saved in profiles/setups, and reconfirming cannot clear write quarantine.
+
 After acknowledgment, choose **Read** for the original variable or **Refresh**
 for the original Memory extent. A write invalidates the stopped context and its
 temporary grants; reauthorize the ordinary range before another Memory edit. The displayed acknowledgment is not verification.

@@ -31,7 +31,7 @@ enum { CONTENT_LEFT = 0x1000, CONTENT_DOWN, CONTENT_UP, CONTENT_RIGHT, SGR_MOUSE
 typedef enum { LAUNCHER, CONFIGURE, REVIEW, WORKSPACE, RESET_CONFIRM,
                SAVE_INPUT, CLOSE_CONFIRM, CODE_MENU, CODE_INPUT, CODE_FILES, SOURCE_SETTINGS, BREAK_MENU, BREAK_INPUT, MEMORY_MENU, MEMORY_INPUT, VARIABLE_MENU, WATCH_INPUT, DATA_WATCH_INPUT,
                CONFIG_MENU, THEMES, THEME_PREVIEW, KEYBINDS, PROFILE_LIST, PROFILE_OPTIONS, PROFILE_ITEMS, PROFILE_TEXT, PROFILE_CONFIRM, SCRIPT_LIST, SCRIPT_FILTER,
-               MEMORY_RANGES, MEMORY_RANGE, MEMORY_CONSENT, MEMORY_RANGE_INPUT, MMIO_SETUP, IMAGE_REVIEW, VARIABLE_EDIT,
+               MEMORY_RANGES, MEMORY_RANGE, MEMORY_CONSENT, MEMORY_RANGE_INPUT, MMIO_SETUP, IMAGE_REVIEW, VARIABLE_EDIT, RAM_REVIEW,
                SETUP_MENU, SETUP_SAVE, SETUP_INFO, SETUP_RESTORE_REVIEW,
                STACK_MENU, STACK_INPUT, STACK_DETAILS, STACK_NAMES_PAGE, STACK_POINTS_PAGE, STACK_BOUNDS, STACK_GUARD_PAGE } Page;
 typedef enum { RANGE_ADD, RANGE_PREVIOUS, RANGE_NEXT, RANGE_BEGIN, RANGE_END,
@@ -50,7 +50,7 @@ typedef enum {
     CODE_ACTIONS, CODE_ACTION, CODE_PAGE, CODE_FILE_PICK, CODE_FILE_PAGE, CODE_SOURCE_TAB, CODE_SOURCE_CLOSE, CODE_SOURCE_CYCLE, HSCROLLBAR, CODE_IMAGE_CONTROL,
     BREAK_OPEN, BREAK_ACTION, REGISTER_REFRESH, REGISTER_FORMAT, MEMORY_ACTION, MEMORY_FIELD, MEMORY_RANGE_ACTION, MEMORY_RANGE_PICK,
     VARIABLE_OPEN, VARIABLE_ACTION, DATA_WATCH_OPTION,
-    PROFILE_OPEN, PROFILE_PICK, PROFILE_ACTION, PROFILE_ITEM, SCRIPT_OPEN, SCRIPT_PICK, SCRIPT_ACTION, REVIEW_PAGE, CLOSE_POLICY, SETUP_ACTION, STACK_ACTION, FRAME_DETAILS
+    PROFILE_OPEN, PROFILE_PICK, PROFILE_ACTION, PROFILE_ITEM, SCRIPT_OPEN, SCRIPT_PICK, SCRIPT_ACTION, REVIEW_PAGE, CLOSE_POLICY, SETUP_ACTION, STACK_ACTION, FRAME_DETAILS, RAM_ACTION
 } ControlKind;
 
 typedef enum { ST_READ, ST_FOLLOW, ST_NAVIGATE, ST_GROUP, ST_SIZE, ST_DETAILS,
@@ -148,6 +148,8 @@ typedef struct {
     unsigned memory_range;
     int memory_range_page, memory_range_rows, memory_range_review;
     RangeAction memory_range_input;
+    TbSessionRamReview ram_review;
+    int ram_offset;
     TbMemoryBackend mmio_review;
     TbCodeImageReview image_review;
     char memory_input_error[192];
@@ -2270,6 +2272,38 @@ static void image_review_text(const char *text, TbRect card, int offset, int *ro
     }
 }
 
+static void draw_ram_review(App *app)
+{
+    TbRect card = menu_card(100, 21), body = card;
+    body.y += 2; body.h -= 2;
+    int row = 0, visible = body.h - 4;
+    char binding[160], endpoint[384];
+    tb_text(card.y, card.x + 2, card.w - 4, TB_PINK, A_BOLD, "STM32F446RE RAM evidence (session only)");
+    (void)snprintf(binding, sizeof binding, "Connection %llu | configuration %llu | evidence %llu",
+        (unsigned long long)app->ram_review.connection, (unsigned long long)app->ram_review.configuration,
+        (unsigned long long)app->ram_review.evidence);
+    (void)snprintf(endpoint, sizeof endpoint, "Endpoint: %s | GDB inferior: %s (not a chip ID)", app->ram_review.endpoint, app->ram_review.inferior);
+    const char *const lines[] = {
+        "USER-CONFIRMED device identity; no automatic detection or hardware verification.", binding, endpoint,
+        "I confirm that this connection reaches my STM32F446RE. Architecture, ELF and target script alone do not establish this.",
+        "Main SRAM: [0x20000000, 0x20020000), 128 KiB. Source: ST DS10693, STM32F446xC/E memory mapping.",
+        "The description and its binding are user-confirmed. SRAM can contain live stack, heap, globals and DMA data; it is not disposable by default.",
+        "Use only an intentionally chosen buffer. OpenOCD's working area is not a disposable test buffer. Flash, MMIO and unknown memory remain ineligible.",
+        "No target read or write occurs here. This grants eligibility, not a mutation: authorize the Memory range separately, then explicitly Review/Apply each edit and Read/Refresh to verify.",
+        "Console commands, reset, reconnect and configuration changes revoke this evidence. Confirmation never clears write quarantine. Evidence is never saved in profiles or setups."
+    };
+    for (size_t i = 0; i < sizeof lines / sizeof *lines; ++i) { image_review_text(lines[i], body, INT_MAX, &row); }
+    int maximum = row > visible ? row - visible : 0;
+    if (app->ram_offset > maximum) { app->ram_offset = maximum; }
+    row = 0;
+    for (size_t i = 0; i < sizeof lines / sizeof *lines; ++i) { image_review_text(lines[i], body, app->ram_offset, &row); }
+    button(app, card.y + card.h - 2, card.x + 2, 10, "[ Back ]", BACK, 0, 0);
+    if (app->ram_offset > 0) { button(app, card.y + card.h - 2, card.x + 14, 10, "Previous", RAM_ACTION, -1, 0); }
+    if (app->ram_offset + visible < row) { button(app, card.y + card.h - 2, card.x + 26, 8, "Next", RAM_ACTION, 1, 0); }
+    else { button(app, card.y + card.h - 1, card.x + 2, card.w - 4, "[ Confirm user-described SRAM ]", RAM_ACTION, 2, 0); }
+    draw_footer(footer_message(app), "Review all pages | Esc back | Ctrl+Q quit app", TB_STATUS_TEXT, TB_HINT_TEXT);
+}
+
 static void draw_image_review(App *app)
 {
     TbRect card = menu_card(100, 20); TbCode *code = tb_session_code(app->debugger);
@@ -2836,6 +2870,8 @@ static void draw_page(App *app)
     } else if (app->page == SETUP_MENU || app->page == SETUP_SAVE || app->page == SETUP_INFO || app->page == SETUP_RESTORE_REVIEW) { draw_setup(app);
     } else if (app->page == CODE_MENU) {
         draw_code_menu(app);
+    } else if (app->page == RAM_REVIEW) {
+        draw_ram_review(app);
     } else if (app->page == IMAGE_REVIEW) {
         draw_image_review(app);
     } else if (app->page == BREAK_MENU) {
@@ -3450,6 +3486,11 @@ static void draw_setup(App *app)
         button(app, card.y + 3, left, width, "Unresolved setup entries", SETUP_ACTION, 2, 0);
         button(app, card.y + 4, left, width, "Restoration information", SETUP_ACTION, 3, 0);
         button(app, card.y + 5, left, width, "Review GDB breakpoints", SETUP_ACTION, 4, 0);
+        if (tb_session_kind(app->debugger) != TB_SESSION_LOCAL) {
+            button(app, card.y + 6, left, width, tb_session_ram_confirmed(app->debugger) ?
+                "RAM evidence: USER-CONFIRMED (review)" : "Review STM32F446RE RAM evidence", RAM_ACTION, 0, 0);
+            if (tb_session_ram_confirmed(app->debugger)) { button(app, card.y + 8, left, width, "Revoke RAM evidence", RAM_ACTION, 3, 0); }
+        }
         if (!associated) { button(app, card.y + 7, left, width, "[ Save profile ]", PROFILE_OPEN, 2, 0); }
         button(app, card.y + card.h - 2, left, 12, "[ Back ]", BACK, 0, 0); return;
     }
@@ -4225,6 +4266,25 @@ static void activate(App *app, Control control)
         app->frame_display.panes[control.pane] && tb_rect_contains(app->frame_display.rectangles[control.pane], control.rect.x, control.rect.y)) { return; }
     if (app->frame_display.active && control.kind == TOOL && control.value == 5) { return; }
     switch (control.kind) {
+    case RAM_ACTION:
+        if (control.value == 0) {
+            if (!tb_session_ram_review(app->debugger, &app->ram_review)) {
+                status(app, "Stop a ready little-endian 32-bit ARM remote target before reviewing SRAM evidence."); break;
+            }
+            app->ram_offset = 0; page(app, RAM_REVIEW);
+        } else if (control.value == 3) {
+            tb_session_ram_revoke(app->debugger); page(app, SETUP_MENU);
+            status(app, "RAM evidence and dependent permissions revoked; write quarantine unchanged.");
+        } else if (control.value == 2) {
+            bool okay = tb_session_ram_confirm(app->debugger, &app->ram_review);
+            page(app, SETUP_MENU);
+            status(app, okay ? "SRAM eligibility USER-CONFIRMED; each edit still requires Review/Apply." :
+                "Connection or evidence changed; open a new review. No target access.");
+        } else {
+            app->ram_offset += control.value * (menu_card(100, 21).h - 6);
+            if (app->ram_offset < 0) { app->ram_offset = 0; }
+        }
+        break;
     case SETUP_ACTION: setup_activate(app, control.value, control.pane); break;
     case CONFIG_OPEN: page(app, CONFIG_MENU); break;
     case KEY_ACTION:
@@ -4336,6 +4396,7 @@ static void activate(App *app, Control control)
         if (app->page == STACK_MENU) { page(app, WORKSPACE); break; }
         if (app->page >= STACK_INPUT && app->page <= STACK_GUARD_PAGE) { page(app, app->page == STACK_INPUT && app->stack_input >= 3 ? STACK_BOUNDS : STACK_MENU); break; }
         if (app->page == SETUP_RESTORE_REVIEW) { app->restore_confirmed = false; page(app, REVIEW); break; }
+        if (app->page == RAM_REVIEW) { page(app, SETUP_MENU); break; }
         if (app->page == SETUP_MENU) { page(app, WORKSPACE); break; }
         if (app->page == SETUP_SAVE || app->page == SETUP_INFO) { page(app, SETUP_MENU); break; }
         if (app->page == IMAGE_REVIEW) { page(app, CODE_MENU); break; }
@@ -5652,7 +5713,7 @@ static void key_event(App *app, wint_t key, bool special)
             activate(app, (Control){.kind = BACK}); return;
         }
         if (app->page == PROFILE_LIST || app->page == PROFILE_OPTIONS || app->page == PROFILE_ITEMS || app->page == PROFILE_TEXT || app->page == PROFILE_CONFIRM ||
-            app->page == SETUP_MENU || app->page == SETUP_SAVE || app->page == SETUP_INFO || app->page == SETUP_RESTORE_REVIEW) {
+            app->page == SETUP_MENU || app->page == SETUP_SAVE || app->page == SETUP_INFO || app->page == SETUP_RESTORE_REVIEW || app->page == RAM_REVIEW) {
             activate(app, (Control){.kind = BACK}); return;
         }
         if (app->page == MEMORY_RANGES || app->page == MEMORY_RANGE || app->page == MEMORY_CONSENT || app->page == MEMORY_RANGE_INPUT || app->page == MMIO_SETUP || app->page == IMAGE_REVIEW) {
