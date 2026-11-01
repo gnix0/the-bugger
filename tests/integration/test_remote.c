@@ -151,6 +151,74 @@ static void run(const char *peer, const char *mode)
     CHECK(tb_session_destroy(s));
     if (strcmp(mode, "remote-mismatch") == 0) { CHECK(unlink(image) == 0); }
 }
+static void ram_ready(TbSession *s)
+{
+    TbSessionRamReview review;
+    uint64_t until = tb_gdb_now_ms() + 4000;
+    tb_memory_visible(tb_session_memory(s), 0, true);
+    while (!tb_session_ram_review(s, &review) && tb_gdb_now_ms() < until) { tb_session_pump(s, 1); }
+    CHECK(tb_session_ram_review(s, &review));
+}
+static void ram_close(TbSession *s)
+{
+    tb_session_close(s);
+    uint64_t until = tb_gdb_now_ms() + 5000;
+    while (tb_session_active(s) && tb_gdb_now_ms() < until) { tb_session_pump(s, 1); }
+    CHECK(!tb_session_active(s) && !tb_session_ram_confirmed(s));
+}
+static void ram_evidence(const char *peer)
+{
+    CHECK(setenv("TB_FAKE_MODE", "remote-openocd-ram", 1) == 0);
+    TbOpenOcdPlan plan = {0}; /* External authored peer; never launches hardware tools. */
+    TbSessionConfig config = {.kind = TB_SESSION_REMOTE, .gdb = peer, .endpoint = "localhost:3333", .openocd = &plan};
+    TbSession *s = tb_session_create(), *other = tb_session_create(); CHECK(s && other);
+    CHECK(tb_session_start(s, &config)); ram_ready(s);
+    CHECK(tb_session_start(other, &config)); ram_ready(other);
+    TbSessionRamReview first, current, tampered;
+    CHECK(tb_session_ram_review(s, &first) && !tb_session_ram_confirmed(s));
+    CHECK(first.region.begin == UINT64_C(0x20000000) && first.region.end == UINT64_C(0x20020000));
+    CHECK(strstr(first.device, "user-confirmed"));
+    CHECK(!tb_session_ram_confirm(other, &first)); /* same endpoint/inferior, different connection */
+    tb_memory_target(tb_session_memory(other), true, 16);
+    CHECK(tb_session_ram_review(other, &current) && !tb_session_ram_confirm(other, &current));
+    CHECK(!tb_session_ram_confirmed(other)); /* no partial publication on a consumer capability mismatch */
+    tb_memory_target(tb_session_memory(other), true, 32);
+    tampered = first; tampered.region.end = UINT64_C(0x40000000);
+    CHECK(!tb_session_ram_confirm(s, &tampered));
+    CHECK(tb_session_ram_confirm(s, &first) && tb_session_ram_confirmed(s));
+    CHECK(!tb_session_ram_confirm(s, &first)); /* evidence token consumed */
+    CHECK(tb_session_ram_review(s, &current));
+    CHECK(tb_session_ram_confirm(s, &current)); /* same numeric bounds, new generation */
+    CHECK(!tb_session_ram_confirm(s, &current));
+    ram_ready(s);
+    CHECK(tb_session_console(s, "echo harmless"));
+    CHECK(!tb_session_ram_confirmed(s) && !tb_session_ram_confirm(s, &first));
+    ram_ready(s); CHECK(tb_session_ram_review(s, &current));
+    CHECK(tb_session_ram_confirm(s, &current)); ram_ready(s);
+    CHECK(tb_session_reset_halt(s)); CHECK(!tb_session_ram_confirmed(s));
+    ram_ready(s); CHECK(tb_session_ram_review(s, &current));
+    CHECK(tb_session_ram_confirm(s, &current)); ram_ready(s);
+    TbContext *context = tb_session_context(s);
+    uint64_t until = tb_gdb_now_ms() + 3000;
+    while (!tb_context_write_begin(context, 99991) && tb_gdb_now_ms() < until) { tb_session_pump(s, 1); }
+    CHECK(tb_context_write_blocked(context));
+    tb_context_write_finish(context, 99991, TB_WRITE_UNRESOLVED);
+    tb_session_ram_revoke(s); ram_ready(s);
+    CHECK(tb_session_ram_review(s, &current) && tb_session_ram_confirm(s, &current));
+    CHECK(tb_context_write_blocked(context) && !tb_context_write_reconcile(context, 99991));
+    ram_close(s); CHECK(tb_session_start(s, &config)); ram_ready(s);
+    CHECK(!tb_session_ram_confirmed(s) && !tb_session_ram_confirm(s, &current));
+    ram_close(s); ram_close(other);
+    CHECK(tb_session_destroy(s) && tb_session_destroy(other));
+    const TbMemoryRegion invalid[] = {{1, 4, true}, {2, 3, false}};
+    config.ordinary_regions = invalid; config.ordinary_region_count = 2;
+    s = tb_session_create(); CHECK(s && !tb_session_start(s, &config));
+    config.ordinary_region_count = TB_MEMORY_REGIONS + 1; CHECK(!tb_session_start(s, &config));
+    const TbMemoryRegion malformed[] = {{1, 4, true}, {8, 7, false}};
+    config.ordinary_regions = malformed; config.ordinary_region_count = 2; CHECK(!tb_session_start(s, &config));
+    CHECK(tb_session_destroy(s));
+    puts("PASS F04 user-confirmed SRAM binding, cross-connection/reconnect rejection, atomic evidence, reset/Console revocation and quarantine preservation (authored peer)");
+}
 int main(int argc, char **argv)
 {
     CHECK(argc == 2);
@@ -162,6 +230,7 @@ int main(int argc, char **argv)
     run(argv[1], "remote-big"); run(argv[1], "remote-unknown"); run(argv[1], "remote-wide"); run(argv[1], "remote-regions");
     run(argv[1], "remote-refused"); run(argv[1], "remote-disconnect-error");
     run(argv[1], "remote-timeout"); run(argv[1], "remote-cancel"); run(argv[1], "remote-drop"); run(argv[1], "remote-mismatch");
+    ram_evidence(argv[1]);
     mmio_close(argv[1], false); mmio_close(argv[1], true);
     CHECK(unsetenv("TB_FAKE_MODE") == 0);
     puts("PASS M15 TCP validation, remote IDs never local PIDs, ARM/big-endian/unknown/wide metadata, no automatic values, refusal and disconnect failure");

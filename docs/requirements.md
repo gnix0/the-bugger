@@ -548,6 +548,14 @@ Review, Apply and Cancel; opening a dialog or changing a draft never writes.
   sample. Both affirmative writable ordinary-region metadata and this view's
   current ordinary-range authorization are required. Readability, ELF section
   flags and a user-created read range alone do not prove writability.
+- A session-scoped STM32F446RE review may establish user-confirmed main-SRAM
+  eligibility from the fixed device description. It does not detect silicon or
+  prove device identity from an architecture, endpoint, inferior ID or script.
+  Confirmation binds the connection instance/configuration and expires on their
+  relevant transitions. No arbitrary map editing or persisted write grants.
+  Region publication is atomic; replacement, including identical bounds, revokes
+  dependent grants and drafts. Both paths recheck the evidence generation at
+  dispatch; changing evidence cannot clear mutation quarantine.
 - Both require a current stopped session/context and serialize one mutation on
   an idle controller. Apply is single-shot; cancellation cannot retract a
   dispatched request. Policy and identity changes invalidate draft permission.

@@ -110,6 +110,33 @@ static void backend_consent(TbGdb *gdb)
     CHECK(tb_memory_backend_set(memory, &reviewed) && tb_memory_backend_confirm(memory, &reviewed));
     tb_memory_clear(memory, 1); tb_memory_visible(memory, 1, true); idle(gdb);
 }
+static void queued_revoke(const char *peer)
+{
+    CHECK(setenv("TB_FAKE_FORBID_WRITES", "1", 1) == 0);
+    CHECK(setenv("TB_FAKE_MODE", "context-memory", 1) == 0);
+    TbGdb *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
+    context = tb_context_create(gdb); memory = tb_memory_create(gdb, context); CHECK(context && memory);
+    CHECK(tb_gdb_start(gdb, peer, 1000));
+    uint64_t until = tb_gdb_now_ms() + 2000;
+    while (tb_gdb_state(gdb) != TB_GDB_READY && tb_gdb_now_ms() < until) { pump(gdb); }
+    CHECK(tb_gdb_state(gdb) == TB_GDB_READY);
+    tb_memory_visible(memory, 0, true); command(gdb, "-stop", NULL); context_ready(gdb);
+    const TbMemoryRegion region = {0x1000, 0x1100, true};
+    CHECK(tb_memory_regions(memory, &region, 1));
+    CHECK(tb_memory_address(memory, 0, "0x1000")); ready(gdb, 0, true);
+    CHECK(tb_memory_range_set(memory, 0, 0, 0x1000, 0x1100, TB_MEMORY_ORDINARY, 0, "Authored RAM"));
+    CHECK(tb_memory_range_authorize(memory, 0, 0));
+    CHECK(tb_memory_edit_begin(memory, 0, 0x1000, 2) && tb_memory_edit_apply(memory, "abcd"));
+    CHECK(tb_gdb_pending(gdb));
+    CHECK(tb_memory_regions(memory, &region, 1)); /* revoke after enqueue, before pipe dispatch */
+    context_ready(gdb);
+    CHECK(tb_gdb_state(gdb) == TB_GDB_STOPPED); /* peer exits immediately if any write arrives */
+    CHECK(tb_context_write_blocked(context));
+    tb_gdb_close(gdb); until = tb_gdb_now_ms() + 2000;
+    while (tb_gdb_state(gdb) != TB_GDB_DISCONNECTED && tb_gdb_now_ms() < until) { pump(gdb); }
+    tb_memory_destroy(memory); tb_context_destroy(context); CHECK(tb_gdb_destroy(gdb));
+    CHECK(unsetenv("TB_FAKE_FORBID_WRITES") == 0 && unsetenv("TB_FAKE_MODE") == 0);
+}
 int main(int argc, char **argv)
 {
     CHECK(argc == 2);
@@ -167,9 +194,23 @@ int main(int argc, char **argv)
     CHECK(tb_memory_edit_state(memory) == TB_MEMORY_EDIT_NONE);
     CHECK(tb_memory_range_authorize(memory, 0, 0));
     const TbMemoryRegion read_only_overlay[] = {{0x1000, 0x2000, true}, {0x1001, 0x1002, false}};
-    tb_memory_regions(memory, read_only_overlay, 2);
+    CHECK(!tb_memory_regions(memory, read_only_overlay, 2));
     CHECK(!tb_memory_edit_begin(memory, 0, 0x1000, 4));
-    tb_memory_regions(memory, ram, 2);
+    CHECK(tb_memory_regions(memory, ram, 2));
+    CHECK(!tb_memory_range_authorized(memory, 0, 0));
+    CHECK(tb_memory_range_authorize(memory, 0, 0));
+    CHECK(tb_memory_edit_begin(memory, 0, 0x1000, 4));
+    CHECK(tb_memory_regions(memory, ram, 2)); /* identical bounds are new evidence */
+    CHECK(!tb_memory_edit_apply(memory, "aabbccdd"));
+    CHECK(!tb_memory_range_authorized(memory, 0, 0));
+    CHECK(!tb_memory_regions(memory, ram, TB_MEMORY_REGIONS + 1));
+    const TbMemoryRegion malformed[] = {{0x1000, 0x1100, true}, {8, 7, false}};
+    CHECK(!tb_memory_regions(memory, malformed, 2));
+    CHECK(tb_memory_range_authorize(memory, 0, 0));
+    CHECK(!tb_memory_edit_begin(memory, 0, 0x1000, 4)); /* no accepted prefix */
+    CHECK(!tb_memory_regions_valid(ram, 2, 16));
+    CHECK(tb_memory_regions(memory, ram, 2));
+    CHECK(tb_memory_range_authorize(memory, 0, 0));
     CHECK(tb_memory_edit_begin(memory, 0, 0x1000, 4));
     CHECK(tb_memory_refresh(memory, 0)); ready(gdb, 0, true);
     CHECK(!tb_memory_edit_apply(memory, "aabbccdd")); /* reviewed sample replaced */
@@ -198,6 +239,8 @@ int main(int argc, char **argv)
     CHECK(tb_memory_refresh(memory, 0)); ready(gdb, 0, true);
     CHECK(!tb_memory_edit_reconcile(memory)); /* timed-out transport can still complete later */
     CHECK(tb_context_write_blocked(context));
+    CHECK(tb_memory_regions(memory, ram, 2));
+    CHECK(tb_context_write_blocked(context)); /* publication cannot clear a lost write */
     CHECK(tb_memory_group(memory, 0, 4)); tb_memory_line(memory, 0, 0, line, sizeof line); CHECK(strstr(line, "03020100")); idle(gdb);
     tb_memory_order(memory, TB_MEMORY_BIG); tb_memory_line(memory, 0, 0, line, sizeof line); CHECK(strstr(line, "00010203"));
     CHECK(tb_memory_group(memory, 0, 8)); tb_memory_line(memory, 0, 0, line, sizeof line); CHECK(strstr(line, "0001020304050607"));
@@ -257,6 +300,7 @@ int main(int argc, char **argv)
     tb_memory_reset(memory); CHECK(!tb_memory_view(memory, 0)->configured && !tb_memory_view(memory, 1)->data_size);
     CHECK(tb_memory_get_order(memory) == TB_MEMORY_UNKNOWN && !tb_memory_browse(memory, 0, 1));
     tb_memory_destroy(memory); tb_context_destroy(context); CHECK(tb_gdb_destroy(gdb)); CHECK(unsetenv("TB_FAKE_MODE") == 0);
+    queued_revoke(argv[1]);
     puts("PASS M10 independent bounded Memory, safe scalar expressions, target byte order, ordinary/unknown/MMIO bounds, hex/ASCII, partial/errors, obsolete replies and session reset without unsolicited reads");
     return EXIT_SUCCESS;
 }

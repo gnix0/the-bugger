@@ -1412,8 +1412,8 @@ C++ overloaded address operators. The target's octet capability and reported
 
 Memory drafts retain view lifetime/version, backend epoch, generation and exact
 old extent. One `-data-write-memory-bytes` request contains the address and exact
-hex bytes, without repeat-count/fill syntax. Intersecting read-only regions deny
-permission, even inside an otherwise writable enclosing region. MMIO views and
+hex bytes, without repeat-count/fill syntax. Contradictory ordinary-region
+catalogs are rejected atomically, including writable/read-only overlaps. MMIO views and
 Stack byte clients cannot use this editor.
 
 Callbacks record acknowledgment or uncertainty without dispatching follow-up
@@ -1428,3 +1428,40 @@ A timed-out, cancelled or otherwise lost write completion requires a new session
 before further edits. A controller with no pending tokens is not proof that the
 backend can no longer complete that mutation. Explicit verification can reconcile
 a completed backend error reply, but cannot clear an unresolved transport.
+
+
+### User-confirmed STM32 SRAM evidence
+
+`TbSessionRamReview` binds the fixed STM32F446RE main-SRAM description to a
+process-unique connection instance, configuration generation and evidence
+revision. Endpoint and GDB inferior ID are displayed context, not device proof.
+The owner asserts the device identity; architecture, ELF and OpenOCD script names
+never select or confirm it automatically. The source is ST DS10693 memory mapping:
+`[0x20000000, 0x20020000)`. Device-specific bounds stay in the session adapter.
+
+The stopped-session review is available for compatible little-endian, octet,
+32-bit ARM remote sessions. Review and confirmation perform no GDB requests.
+Confirm compares every displayed binding against current session state and
+consumes the evidence revision. No profile/schema change or arbitrary map editor
+is involved. Existing `TbSessionConfig` regions remain affirmative adapter input;
+passing them does not label device identity user-confirmed.
+
+Session publication validates the complete catalog before updating Memory and
+Variables together, without pumping between consumers. Excessive, malformed,
+contradictory or unrepresentable catalogs are refused; no accepted prefix is
+published. Native mapping collection also refuses incomplete/overflowed catalogs.
+Each model advances an evidence epoch on every replacement, even identical
+bounds. Memory revokes dependent ordinary-range consent and queued read versions;
+both editors discard untransmitted drafts and recheck the epoch before dispatch.
+If a mutation is already queued, evidence replacement advances the controller
+context generation: its existing pipe-dispatch guard drops wholly unsent stale
+commands. Started commands retain conservative stale/uncertain completion; no
+mutation is retried or treated as rolled back.
+Value authorization remains separate; a region alone does not authorize automatic
+Variables acquisition.
+
+Console, reset, inferior/configuration change and disconnect revoke remote evidence.
+Metadata renegotiation never restores an earlier user confirmation. These paths
+retain the existing mutation reservation, uncertainty and lost-completion state;
+reconfirmation cannot reconcile a write. Eligibility publication is independent
+of context reset and requests no automatic read-back.

@@ -4,6 +4,7 @@
 typedef struct { uint32_t count; uint32_t samples[8]; const char *label; } FixtureSample;
 extern const char fixture_flash[];
 extern char fixture_buffer[64];
+extern int fixture_edit_scalar;
 extern volatile uint32_t fixture_counter, fixture_sink;
 extern FixtureSample fixture_sample;
 extern uint32_t *fixture_pointer;
