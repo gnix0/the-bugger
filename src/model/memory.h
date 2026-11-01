@@ -5,8 +5,9 @@
 
 enum { TB_MEMORY_VIEWS = 32, TB_MEMORY_BYTES = 1024, TB_MEMORY_ROW = 16, TB_MEMORY_REGIONS = 128,
        TB_MEMORY_CLIENTS = 64, TB_MEMORY_RANGES = 16 };
-/* Established ordinary RAM/ROM only; unknown/MMIO ranges are never implicit. */
-typedef struct { uint64_t begin, end; } TbMemoryRegion;
+/* Established ordinary RAM/ROM only; unknown/MMIO ranges are never implicit.
+ * Writable is separate evidence and is never inferred from readability. */
+typedef struct { uint64_t begin, end; bool writable; } TbMemoryRegion;
 typedef enum { TB_MEMORY_UNKNOWN, TB_MEMORY_LITTLE, TB_MEMORY_BIG } TbMemoryOrder;
 typedef enum { TB_MEMORY_ORDINARY, TB_MEMORY_MMIO } TbMemoryPolicy;
 enum { TB_MEMORY_WIDTH8 = 1, TB_MEMORY_WIDTH16 = 2, TB_MEMORY_WIDTH32 = 4 };

@@ -134,12 +134,12 @@ int main(int argc, char **argv)
     const TbMemoryView *a = tb_memory_view(memory, 0), *b = tb_memory_view(memory, 1);
     CHECK(a->address == 0x1000 && a->data_size == 64 && a->readable == 64 && !tb_memory_stale(memory, 0));
     CHECK(!tb_memory_browse(memory, 0, 1)); idle(gdb); CHECK(a->address == 0x1000);
-    const TbMemoryRegion ram[] = {{0x1000, 0x1100}, {0x20000000, 0x20001000}};
+    const TbMemoryRegion ram[] = {{0x1000, 0x1100, true}, {0x20000000, 0x20001000, true}};
     tb_memory_regions(memory, ram, 2);
     CHECK(tb_memory_browse(memory, 0, 1)); ready(gdb, 0, true); CHECK(a->address == 0x1040);
     CHECK(tb_memory_browse(memory, 0, -1)); ready(gdb, 0, true); CHECK(a->address == 0x1000);
     CHECK(!tb_memory_browse(memory, 0, -1)); idle(gdb); CHECK(a->address == 0x1000);
-    const TbMemoryRegion adjacent[] = {{0x1000, 0x1050}, {0x1050, 0x1060}};
+    const TbMemoryRegion adjacent[] = {{0x1000, 0x1050, true}, {0x1050, 0x1060, true}};
     tb_memory_regions(memory, adjacent, 2);
     /* Use an uncached forward address; adjacent proofs compose and the read
      * ends at 0x1060 instead of crossing into an unapproved range. */

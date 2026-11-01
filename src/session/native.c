@@ -28,6 +28,7 @@ bool tb_native_memory_region(const char *row, TbMemoryRegion *region)
     if (strlen(cursor) < 5 || cursor[0] != 'r' ||
         (cursor[1] != 'w' && cursor[1] != '-') || (cursor[2] != 'x' && cursor[2] != '-') ||
         (cursor[3] != 'p' && cursor[3] != 's') || cursor[4] != ' ') { return false; }
+    bool writable = cursor[1] == 'w';
     cursor += 5;
     if (!map_number(&cursor, ' ', &unused) || !map_number(&cursor, ':', &unused) ||
         !map_number(&cursor, ' ', &unused)) { return false; }
@@ -48,5 +49,5 @@ bool tb_native_memory_region(const char *row, TbMemoryRegion *region)
     if (*name == '/' && strncmp(name, "/dev/", 5) != 0 && strncmp(name, "/sys/", 5) != 0 &&
         strncmp(name, "/proc/", 6) != 0 && stat(name, &info) == 0 && S_ISREG(info.st_mode)) { ordinary = true; }
     if (!ordinary) { return false; }
-    *region = (TbMemoryRegion){begin, end}; return true;
+    *region = (TbMemoryRegion){begin, end, writable}; return true;
 }

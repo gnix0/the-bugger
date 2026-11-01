@@ -80,6 +80,18 @@ static void message(TbSession *native, const char *text)
     ++native->revision;
 }
 
+static void variable_regions(TbSession *session)
+{
+    TbVariableRegion regions[TB_MEMORY_REGIONS];
+    for (size_t i = 0; i < session->ordinary_region_count; ++i) {
+        regions[i] = (TbVariableRegion){
+            session->ordinary_regions[i].begin, session->ordinary_regions[i].end,
+            TB_VARIABLE_ORDINARY, session->ordinary_regions[i].writable
+        };
+    }
+    tb_variables_regions(session->variables, regions, session->ordinary_region_count);
+}
+
 static void line(TbSession *native, const char *prefix, const char *text)
 {
     size_t slot = (native->first + native->count) % TB_SESSION_LOG_LINES;
@@ -858,6 +870,9 @@ static void memory_metadata(TbSession *native)
     }
     if (maps) { (void)fclose(maps); }
     tb_memory_regions(native->memory, regions, count);
+    native->ordinary_region_count = count;
+    memcpy(native->ordinary_regions, regions, count * sizeof regions[0]);
+    variable_regions(native);
 }
 
 void tb_session_pump(TbSession *native, int wait_ms)
@@ -1141,6 +1156,7 @@ static void remote_setup(TbSession *session)
         tb_memory_target(session->memory, session->capabilities.octet_addressing, session->capabilities.address_bits);
         tb_memory_order(session->memory, session->capabilities.byte_order);
         tb_memory_regions(session->memory, session->ordinary_regions, session->ordinary_region_count);
+        variable_regions(session);
         session->configured = true;
         TbGdbState state = tb_gdb_state(session->gdb);
         state_set(session, !session->alive ? TB_SESSION_READY : state == TB_GDB_STOPPED ? TB_SESSION_STOPPED : state == TB_GDB_RUNNING ? TB_SESSION_RUNNING : TB_SESSION_READY);
