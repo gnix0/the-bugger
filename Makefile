@@ -824,3 +824,16 @@ $(BUILD_DIR)/test-stack-board: $(BUILD_DIR)/tests/integration/test_stack_board.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 -include $(BUILD_DIR)/tests/integration/test_stack_board.d
+
+.PHONY: test-edit-tmux
+test-edit-tmux: all $(BUILD_DIR)/test-variables-tui $(BUILD_DIR)/variables-fixture $(BUILD_DIR)/test-memory-tui $(BUILD_DIR)/memory-fixture
+	TB_VARIABLES_TEST_TMUX=1 $(BUILD_DIR)/test-variables-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/variables-fixture)
+	TB_MEMORY_TEST_TMUX=1 $(BUILD_DIR)/test-memory-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/memory-fixture)
+
+test-tmux: test-edit-tmux
+
+.PHONY: test-script-tmux
+test-script-tmux: all $(BUILD_DIR)/test-openocd-tui $(BUILD_DIR)/fake-openocd $(BUILD_DIR)/fake-mi
+	TB_OPENOCD_TEST_TMUX=1 $(BUILD_DIR)/test-openocd-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/fake-openocd) $(abspath $(BUILD_DIR)/fake-mi)
+
+test-tmux: test-script-tmux

@@ -43,7 +43,9 @@ struct TbVariables {
     TbVariableEditState edit_state;
     int edit_view, edit_node;
     unsigned edit_phase, edit_bytes, edit_bits;
-    bool edit_signed, edit_bool, edit_waiting;
+    bool edit_signed, edit_bool, edit_complete, edit_unresolved, edit_dispatched, octets;
+    char edit_object[256], edit_key[512], edit_thread[32];
+    int edit_frame;
     uint64_t edit_address;
     char edit_path[512], edit_value[128], edit_old[512], edit_type[192], edit_error[192];
     TbGdbGeneration edit_generation;
@@ -119,24 +121,48 @@ static bool stopped(const TbVariables *v)
     const TbContextSnapshot *s = tb_context_snapshot(v->context);
     return tb_gdb_state(v->gdb) == TB_GDB_STOPPED && s->ready && !s->stale && same(v->generation, s->generation);
 }
-static bool edit_type(const char *type, bool *is_bool, bool *is_signed, unsigned *bits)
+static bool edit_type(TbVariables *v, const char *type)
 {
-    if (!type || !*type || strchr(type, '*') || strchr(type, '[') ||
-        strstr(type, "struct") || strstr(type, "union") || strstr(type, "enum") ||
-        strstr(type, "float") || strstr(type, "double")) { return false; }
-    *is_bool = strstr(type, "bool") != NULL || strstr(type, "_Bool") != NULL;
-    *is_signed = !*is_bool && strstr(type, "unsigned") == NULL;
-    if (strstr(type, "char")) { *bits = 8; }
-    else if (strstr(type, "short")) { *bits = 16; }
-    else if (strstr(type, "long long")) { *bits = 64; }
-    else if (strstr(type, "long")) { *bits = sizeof(long) * CHAR_BIT; }
-    else if (strstr(type, "int")) { *bits = 32; }
-    else { return false; }
-    return *bits == 8 || *bits == 16 || *bits == 32 || *bits == 64;
+    /* Only builtin integer types with unambiguous signedness. Width comes from
+     * the target sizeof reply, never the frontend ABI or a substring match. */
+    if (!type) { return false; }
+    while (!strncmp(type, "volatile ", 9)) { type += 9; }
+    static const char *const signed_types[] = {"signed char", "short", "short int", "signed short", "signed short int",
+        "int", "signed", "signed int", "long", "long int", "signed long", "signed long int",
+        "long long", "long long int", "signed long long", "signed long long int"};
+    static const char *const unsigned_types[] = {"unsigned char", "unsigned short", "unsigned short int", "unsigned", "unsigned int",
+        "unsigned long", "unsigned long int", "unsigned long long", "unsigned long long int"};
+    v->edit_bool = !strcmp(type, "bool") || !strcmp(type, "_Bool"); v->edit_bits = 0;
+    if (v->edit_bool) { v->edit_signed = false; return true; }
+    for (size_t i = 0; i < sizeof signed_types / sizeof *signed_types; ++i) {
+        if (!strcmp(type, signed_types[i])) { v->edit_signed = true; return true; }
+    }
+    for (size_t i = 0; i < sizeof unsigned_types / sizeof *unsigned_types; ++i) {
+        if (!strcmp(type, unsigned_types[i])) { v->edit_signed = false; return true; }
+    }
+    return false;
+}
+static bool edit_path_safe(const char *path)
+{
+    /* GDB may parenthesize a fixed array/member path. Pointer dereferences,
+     * operators, casts and calls do not establish a fixed destination. */
+    char plain[512]; size_t used = 0; int depth = 0;
+    for (const char *p = path; *p; ++p) {
+        if (*p == '(') {
+            if (used && (isalnum((unsigned char)plain[used - 1]) || plain[used - 1] == '_' || plain[used - 1] == ']')) { return false; }
+            ++depth; continue;
+        }
+        if (*p == ')') { if (--depth < 0) { return false; } continue; }
+        if (!(isalnum((unsigned char)*p) || *p == '_' || *p == '.' || *p == '[' || *p == ']')) { return false; }
+        if (used + 1 == sizeof plain) { return false; }
+        plain[used++] = *p;
+    }
+    plain[used] = 0;
+    return depth == 0 && used && plain[0] != '[' && tb_memory_expression(plain);
 }
 static bool decimal_value(const char *input, bool is_bool, bool is_signed, unsigned bits, char *out, size_t capacity)
 {
-    if (!input || !*input) { return false; }
+    if (!input || !*input || !bits || bits > 64) { return false; }
     while (isspace((unsigned char)*input)) { ++input; }
     size_t length = strlen(input);
     while (length && isspace((unsigned char)input[length - 1])) { --length; }
@@ -151,9 +177,10 @@ static bool decimal_value(const char *input, bool is_bool, bool is_signed, unsig
     if (is_signed) {
         long long value = strtoll(copy, &end, 0);
         if (errno || end == copy || *end || (bits < 64 &&
-            (value < -(1LL << (bits - 1)) || value > (1LL << (bits - 1)) - 1))) { return false; }
+            (value < -(long long)(UINT64_C(1) << (bits - 1)) || value >= (long long)(UINT64_C(1) << (bits - 1))))) { return false; }
         (void)snprintf(out, capacity, "%lld", value);
     } else {
+        if (*copy == '-') { return false; }
         unsigned long long value = strtoull(copy, &end, 0);
         if (errno || end == copy || *end || (bits < 64 && value > (1ULL << bits) - 1ULL)) { return false; }
         (void)snprintf(out, capacity, "%llu", value);
@@ -188,6 +215,7 @@ void tb_variables_reset(TbVariables *v)
 }
 void tb_variables_authorizer(TbVariables *v, TbVariableAuthorize authorize, void *user)
 { v->authorize = authorize; v->authorize_user = user; }
+void tb_variables_target(TbVariables *v, bool octets) { v->octets = octets; }
 void tb_variables_regions(TbVariables *v, const TbVariableRegion *regions, size_t count)
 {
     v->region_count = 0;
@@ -374,17 +402,35 @@ bool tb_variables_names(TbVariables *v)
     v->trees[0].names_ready = v->trees[0].names_failed = false;
     v->trees[0].error[0] = 0; ++v->revision; return true;
 }
+/* Direct lvalues only: resolving a pointer path can itself read unsafe storage. */
+static bool direct_lvalue(const Tree *tree, const Node *node)
+{
+    for (;;) {
+        if (strchr(node->row.type, '*') || strchr(node->row.type, '&')) { return false; }
+        if (node->parent < 0) { break; }
+        node = &tree->nodes[node->parent];
+    }
+    const unsigned char *p = (const unsigned char *)node->expression;
+    if (!(*p == '_' || isalpha(*p))) { return false; }
+    for (++p; *p; ++p) { if (*p != '_' && !isalnum(*p)) { return false; } }
+    return true;
+}
 bool tb_variables_edit_begin(TbVariables *v, TbVariableView view, size_t row)
 {
     Node *n = at(v, view, row);
-    if (!n || !stopped(v) || v->waiting || v->edit_state == TB_VARIABLE_EDIT_UNCERTAIN ||
-        !n->row.fresh || !*n->object || n->row.children ||
-        !edit_type(n->row.type, &v->edit_bool, &v->edit_signed, &v->edit_bits)) {
+    if (!n || !v->octets || !stopped(v) || v->waiting || tb_context_write_blocked(v->context) ||
+        v->edit_state == TB_VARIABLE_EDIT_PROBING || v->edit_state == TB_VARIABLE_EDIT_READY ||
+        v->edit_state == TB_VARIABLE_EDIT_PENDING || v->edit_state == TB_VARIABLE_EDIT_UNCERTAIN ||
+        !n->row.fresh || !*n->object || n->row.children || !direct_lvalue(&v->trees[view], n) ||
+        !edit_type(v, n->row.type)) {
         (void)snprintf(v->edit_error, sizeof v->edit_error,
             v->edit_state == TB_VARIABLE_EDIT_UNCERTAIN ? "Previous write is uncertain; explicitly verify and reconcile first." :
             "Selected variable has no supported complete edit proof.");
         return false;
     }
+    (void)snprintf(v->edit_object, sizeof v->edit_object, "%s", n->object);
+    (void)snprintf(v->edit_key, sizeof v->edit_key, "%s", n->key);
+    (void)snprintf(v->edit_thread, sizeof v->edit_thread, "%s", v->thread); v->edit_frame = v->frame;
     v->edit_view = view; v->edit_node = (int)(n - v->trees[view].nodes);
     v->edit_generation = v->generation; v->edit_state = TB_VARIABLE_EDIT_PROBING;
     v->edit_phase = VAR_EDIT_ATTRIBUTES; v->edit_address = 0; v->edit_bytes = 0;
@@ -406,11 +452,13 @@ bool tb_variables_edit_apply(TbVariables *v, const char *value)
         return false;
     }
     (void)snprintf(v->edit_value, sizeof v->edit_value, "%s", canonical);
-    v->edit_phase = VAR_EDIT_ASSIGN; ++v->revision; return true;
+    v->edit_phase = VAR_EDIT_ASSIGN; v->edit_state = TB_VARIABLE_EDIT_PENDING; v->edit_dispatched = false;
+    ++v->revision; return true;
 }
 void tb_variables_edit_cancel(TbVariables *v)
 {
-    if (v->edit_state == TB_VARIABLE_EDIT_UNCERTAIN) { return; }
+    if (v->edit_state == TB_VARIABLE_EDIT_UNCERTAIN ||
+        (v->edit_state == TB_VARIABLE_EDIT_PENDING && v->edit_dispatched)) { return; }
     v->edit_state = TB_VARIABLE_EDIT_NONE; v->edit_phase = 0; v->edit_error[0] = 0;
     ++v->revision;
 }
@@ -420,7 +468,11 @@ bool tb_variables_edit_reconcile(TbVariables *v)
         v->edit_node >= 0 && v->edit_node < TB_VARIABLE_NODES ?
         &v->trees[v->edit_view].nodes[v->edit_node] : NULL;
     if (v->edit_state != TB_VARIABLE_EDIT_UNCERTAIN || !n || !n->row.fresh ||
-        tb_gdb_pending(v->gdb) || !stopped(v) || !same(v->edit_generation, tb_gdb_generation(v->gdb))) { return false; }
+        tb_gdb_pending(v->gdb) || !stopped(v) ||
+        strcmp(n->key, v->edit_key) != 0 || strcmp(n->row.type, v->edit_type) != 0 ||
+        v->edit_generation.session != v->generation.session || v->edit_generation.stop != v->generation.stop ||
+        v->edit_frame != v->frame || strcmp(v->edit_thread, v->thread) != 0 ||
+        !tb_context_write_reconcile(v->context, VAR_EDIT_ASSIGN)) { return false; }
     v->edit_state = TB_VARIABLE_EDIT_NONE; v->edit_phase = 0;
     (void)snprintf(v->edit_error, sizeof v->edit_error, "Reconciled after explicit verification; review a new edit.");
     ++v->revision; return true;
@@ -434,6 +486,7 @@ static bool allowed(TbVariables *v, Node *n, TbVariableRead operation, bool expl
 {
     /* Never discover a value in order to authorize discovering that value. */
     if (explicit_action) { return true; }
+    if (tb_context_written(v->context)) { return false; }
     TbVariableAccess access = {0};
     if (!v->authorize || !v->authorize(v->authorize_user, v->generation, n->expression,
         operation, n->row.first, operation == TB_VARIABLE_EXPAND ? TB_VARIABLE_CHILDREN : 1, &access) ||
@@ -535,12 +588,18 @@ bool tb_variables_event(TbVariables *v, const TbGdbEvent *event)
     bool okay = event->record && strcmp(event->record->klass, "done") == 0 && event->kind == TB_GDB_REPLY;
     if (event->cookie >= VAR_EDIT_ATTRIBUTES && event->cookie <= VAR_EDIT_ASSIGN) {
         bool assignment = event->cookie == VAR_EDIT_ASSIGN;
+        if (assignment) {
+            v->edit_complete = true;
+            v->edit_unresolved = !event->record ||
+                (strcmp(event->record->klass, "done") != 0 && strcmp(event->record->klass, "error") != 0);
+        }
         if (!event->record || !same(event->generation, v->edit_generation) ||
             !same(event->generation, tb_gdb_generation(v->gdb))) {
             if (assignment) {
                 v->edit_phase = 0;
                 v->edit_state = TB_VARIABLE_EDIT_UNCERTAIN;
                 (void)snprintf(v->edit_error, sizeof v->edit_error,
+                    v->edit_unresolved ? "Write completion unresolved; reconnect before editing again." :
                     "Write completion is uncertain; verify explicitly before reconciliation.");
             } else {
                 v->edit_state = TB_VARIABLE_EDIT_NONE;
@@ -574,7 +633,7 @@ bool tb_variables_event(TbVariables *v, const TbGdbEvent *event)
                 (void)snprintf(v->edit_error, sizeof v->edit_error, "GDB does not report this variable as editable.");
             } else { v->edit_phase = VAR_EDIT_PATH; }
         } else if (event->cookie == VAR_EDIT_PATH) {
-            if (!text(v->edit_path, sizeof v->edit_path, tb_mi_find(event->record->results, "path_expr")) || !*v->edit_path) {
+            if (!text(v->edit_path, sizeof v->edit_path, tb_mi_find(event->record->results, "path_expr")) || !edit_path_safe(v->edit_path)) {
                 v->edit_state = TB_VARIABLE_EDIT_NONE;
                 (void)snprintf(v->edit_error, sizeof v->edit_error, "Complete write path is unavailable for this variable.");
             } else { v->edit_phase = VAR_EDIT_ADDRESS; }
@@ -585,13 +644,14 @@ bool tb_variables_event(TbVariables *v, const TbGdbEvent *event)
             } else { v->edit_phase = VAR_EDIT_SIZE; }
         } else if (event->cookie == VAR_EDIT_SIZE) {
             uint64_t bytes;
-            if (!mi_number(value, &bytes) || bytes > UINT_MAX || !writable_destination(v, v->edit_address, (unsigned)bytes) ||
-                bytes != (v->edit_bits + 7U) / 8U) {
+            if (!mi_number(value, &bytes) || !v->octets || !bytes || bytes > 8 ||
+                !writable_destination(v, v->edit_address, (unsigned)bytes)) {
                 v->edit_state = TB_VARIABLE_EDIT_NONE;
                 (void)snprintf(v->edit_error, sizeof v->edit_error,
                     "Destination lacks complete proof of ordinary writable storage.");
             } else {
-                v->edit_bytes = (unsigned)bytes; v->edit_state = TB_VARIABLE_EDIT_READY;
+                v->edit_bytes = (unsigned)bytes; v->edit_bits = (unsigned)bytes * 8;
+                v->edit_state = TB_VARIABLE_EDIT_READY;
             }
         } else {
             Node *n = &v->trees[v->edit_view].nodes[v->edit_node];
@@ -710,7 +770,8 @@ bool tb_variables_event(TbVariables *v, const TbGdbEvent *event)
 }
 static void invalidate(TbVariables *v, const TbContextSnapshot *s)
 {
-    if (v->edit_state != TB_VARIABLE_EDIT_UNCERTAIN && v->edit_state != TB_VARIABLE_EDIT_NONE) {
+    if (v->edit_state != TB_VARIABLE_EDIT_UNCERTAIN && v->edit_state != TB_VARIABLE_EDIT_ACKNOWLEDGED &&
+        v->edit_state != TB_VARIABLE_EDIT_NONE) {
         v->edit_state = TB_VARIABLE_EDIT_NONE; v->edit_phase = 0;
         (void)snprintf(v->edit_error, sizeof v->edit_error, "Context changed; edit draft discarded.");
     }
@@ -753,6 +814,11 @@ static void invalidate(TbVariables *v, const TbContextSnapshot *s)
 }
 void tb_variables_pump(TbVariables *v)
 {
+    if (v->edit_complete) {
+        v->edit_complete = false;
+        tb_context_write_finish(v->context, VAR_EDIT_ASSIGN, v->edit_state != TB_VARIABLE_EDIT_UNCERTAIN ? TB_WRITE_ACKNOWLEDGED :
+            v->edit_unresolved ? TB_WRITE_UNRESOLVED : TB_WRITE_UNCERTAIN);
+    }
     TbGdbState state = tb_gdb_state(v->gdb);
     /* Pending replies must not keep an old sample marked fresh after resume
      * or a context change. Keep object identities until completion so stale
@@ -806,7 +872,7 @@ void tb_variables_pump(TbVariables *v)
             args[0] = n->object; count = 1;
             (void)request(v, VAR_EDIT_PATH, "-var-info-path-expression", args, count, TB_GDB_CONTEXT);
         } else if (v->edit_phase == VAR_EDIT_ADDRESS) {
-            (void)snprintf(expression, sizeof expression, "&(%s)", v->edit_path);
+            (void)snprintf(expression, sizeof expression, "(unsigned long long)&(%s)", v->edit_path);
             args[0] = "--language"; args[1] = "c"; args[2] = expression; count = 3;
             (void)request(v, VAR_EDIT_ADDRESS, "-data-evaluate-expression", args, count, TB_GDB_CONTEXT);
         } else if (v->edit_phase == VAR_EDIT_SIZE) {
@@ -814,8 +880,26 @@ void tb_variables_pump(TbVariables *v)
             args[0] = "--language"; args[1] = "c"; args[2] = expression; count = 3;
             (void)request(v, VAR_EDIT_SIZE, "-data-evaluate-expression", args, count, TB_GDB_CONTEXT);
         } else if (v->edit_phase == VAR_EDIT_ASSIGN) {
-            args[0] = n->object; args[1] = v->edit_value; count = 2;
-            (void)request(v, VAR_EDIT_ASSIGN, "-var-assign", args, count, TB_GDB_CONTEXT);
+            if (!n->used || !n->row.fresh || strcmp(n->object, v->edit_object) != 0 || strcmp(n->key, v->edit_key) != 0 ||
+                !v->octets || !same(v->edit_generation, v->generation) ||
+                !writable_destination(v, v->edit_address, v->edit_bytes)) {
+                v->edit_phase = 0; v->edit_state = TB_VARIABLE_EDIT_NONE;
+                (void)snprintf(v->edit_error, sizeof v->edit_error, "Write destination or context changed; review a new edit.");
+                ++v->revision; return;
+            }
+            if (tb_context_write_blocked(v->context)) {
+                v->edit_phase = 0; v->edit_state = TB_VARIABLE_EDIT_NONE;
+                (void)snprintf(v->edit_error, sizeof v->edit_error, "Another write requires explicit reconciliation first.");
+                ++v->revision; return;
+            }
+            if (!tb_context_write_begin(v->context, VAR_EDIT_ASSIGN)) { return; }
+            args[0] = v->edit_object; args[1] = v->edit_value; count = 2;
+            if (!request(v, VAR_EDIT_ASSIGN, "-var-assign", args, count, TB_GDB_CONTEXT)) {
+                tb_context_write_finish(v->context, VAR_EDIT_ASSIGN, TB_WRITE_ACKNOWLEDGED);
+                v->edit_phase = 0; v->edit_state = TB_VARIABLE_EDIT_NONE;
+                (void)snprintf(v->edit_error, sizeof v->edit_error, "Write request rejected; no automatic retry.");
+                ++v->revision;
+            } else { v->edit_dispatched = true; }
         }
         return;
     }

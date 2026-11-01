@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { MEMORY_RESOLVE = 9401, MEMORY_READ };
+enum { MEMORY_RESOLVE = 9401, MEMORY_READ, MEMORY_WRITE };
 typedef struct {
     TbMemoryView data;
     bool visible, browse_request;
@@ -20,23 +20,27 @@ typedef struct {
 } View;
 struct TbMemory {
     TbGdb *gdb; TbContext *context;
-    TbBrowseCache *cache;
-    TbMmio *mmio;
-    View views[TB_MEMORY_CLIENTS];
-    bool waiting, unsupported; unsigned address_bits; int active, cursor;
+    TbBrowseCache *cache; TbMmio *mmio;
     uint64_t revision, request_version;
-    TbGdbGeneration request_generation;
-    TbMemoryOrder order;
-    TbMemoryRegion regions[TB_MEMORY_REGIONS];
     size_t region_count;
+    uint64_t backend_session, backend_epoch, register_epoch, register_address, register_lifetime;
+    uint64_t edit_lifetime, edit_backend_epoch, edit_version, edit_address;
+    TbGdbGeneration request_generation, register_generation, edit_generation;
     TbMemoryBackend backend;
-    uint64_t backend_session;
-    bool backend_present, backend_confirmed;
-    uint64_t backend_epoch, register_epoch, register_address, register_lifetime;
-    TbGdbGeneration register_generation;
+    TbMemoryRegion regions[TB_MEMORY_REGIONS];
+    View views[TB_MEMORY_CLIENTS];
+    unsigned address_bits;
+    int active, cursor;
+    TbMemoryOrder order;
     int register_view;
     unsigned register_width;
-    bool register_queued;
+    TbMemoryEditState edit_state;
+    int edit_view;
+    unsigned edit_bytes;
+    bool waiting, unsupported, backend_present, backend_confirmed, register_queued;
+    bool edit_complete, edit_unresolved;
+    unsigned char edit_old[TB_MEMORY_ROW], edit_new[TB_MEMORY_ROW];
+    char edit_old_text[TB_MEMORY_ROW * 2 + 1], edit_error[192];
 };
 static TbBrowseKind byte_kind(int id) { return id < TB_MEMORY_VIEWS ? TB_BROWSE_MEMORY : TB_BROWSE_STACK_BYTES; }
 static bool valid_view(int id) { return id >= 0 && id < TB_MEMORY_CLIENTS; }
@@ -142,6 +146,23 @@ uint64_t tb_memory_revision(const TbMemory *m) { return m->revision; }
 static bool same(TbGdbGeneration a, TbGdbGeneration b)
 {
     return a.session == b.session && a.stop == b.stop && a.context == b.context;
+}
+static bool writable_destination(const TbMemory *m, int id, uint64_t address, unsigned bytes)
+{
+    if (id < 0 || id >= TB_MEMORY_VIEWS || !bytes || bytes > TB_MEMORY_ROW || address > UINT64_MAX - bytes) { return false; }
+    uint64_t end = address + bytes; bool region = false, consent = false;
+    for (size_t i = 0; i < m->region_count; ++i) {
+        const TbMemoryRegion *r = &m->regions[i];
+        if (address >= r->end || end <= r->begin) { continue; }
+        if (!r->writable) { return false; }
+        if (address >= r->begin && end <= r->end) { region = true; }
+    }
+    for (unsigned i = 0; i < TB_MEMORY_RANGES; ++i) {
+        const TbMemoryRange *r = &m->views[id].ranges[i];
+        if (r->used && r->policy == TB_MEMORY_ORDINARY && tb_memory_range_authorized(m, id, i) &&
+            address >= r->begin && end <= r->end) { consent = true; }
+    }
+    return !m->unsupported && !m->views[id].data.mmio && region && consent;
 }
 static bool backend_equal(const TbMemoryBackend *a, const TbMemoryBackend *b)
 {
@@ -512,6 +533,37 @@ bool tb_memory_event(TbMemory *m, const TbGdbEvent *event)
         }
         return true;
     }
+    if (event->cookie == MEMORY_WRITE) {
+        if (!(event->kind == TB_GDB_REPLY || event->kind == TB_GDB_STALE ||
+              event->kind == TB_GDB_TIMEOUT || event->kind == TB_GDB_CANCELLED)) { return false; }
+        m->edit_unresolved = !event->record ||
+            (strcmp(event->record->klass, "done") != 0 && strcmp(event->record->klass, "error") != 0);
+        bool current = event->kind == TB_GDB_REPLY && event->record &&
+            strcmp(event->record->klass, "done") == 0 &&
+            same(event->generation, m->edit_generation) &&
+            m->edit_lifetime == m->views[m->edit_view].lifetime && m->edit_backend_epoch == m->backend_epoch &&
+            same(event->generation, tb_gdb_generation(m->gdb));
+        if (current) {
+            View *v = &m->views[m->edit_view];
+            ++v->version; v->data.ready = false; v->data.pending = false;
+            (void)snprintf(v->data.error, sizeof v->data.error,
+                "Memory write acknowledged; Refresh explicitly to verify the exact bytes.");
+            m->edit_state = TB_MEMORY_EDIT_ACKNOWLEDGED;
+            (void)snprintf(m->edit_error, sizeof m->edit_error,
+                "Backend acknowledged; Refresh explicitly to establish the current bytes.");
+        } else {
+            if (valid_view(m->edit_view)) {
+                m->views[m->edit_view].data.ready = false;
+                m->views[m->edit_view].data.pending = false;
+            }
+            m->edit_state = TB_MEMORY_EDIT_UNCERTAIN;
+            (void)snprintf(m->edit_error, sizeof m->edit_error,
+                m->edit_unresolved ? "UNCERTAIN: backend completion is unresolved; reconnect before editing again." :
+                "UNCERTAIN: memory write failed; Refresh explicitly and reconcile before retrying.");
+        }
+        m->edit_complete = true;
+        ++m->revision; return true;
+    }
     if ((event->cookie != MEMORY_RESOLVE && event->cookie != MEMORY_READ) ||
         !(event->kind == TB_GDB_REPLY || event->kind == TB_GDB_STALE || event->kind == TB_GDB_TIMEOUT || event->kind == TB_GDB_CANCELLED)) { return false; }
     m->waiting = false; View *v = &m->views[m->active];
@@ -565,8 +617,20 @@ bool tb_memory_event(TbMemory *m, const TbGdbEvent *event)
 }
 void tb_memory_pump(TbMemory *m)
 {
+    if (m->edit_complete) {
+        m->edit_complete = false;
+        tb_context_write_finish(m->context, MEMORY_WRITE, m->edit_state != TB_MEMORY_EDIT_UNCERTAIN ? TB_WRITE_ACKNOWLEDGED :
+            m->edit_unresolved ? TB_WRITE_UNRESOLVED : TB_WRITE_UNCERTAIN);
+    }
     tb_mmio_pump(m->mmio);
     TbGdbGeneration current = tb_gdb_generation(m->gdb);
+    if (m->edit_state == TB_MEMORY_EDIT_PENDING &&
+        (tb_gdb_state(m->gdb) != TB_GDB_STOPPED || !same(m->edit_generation, current))) {
+        m->edit_state = TB_MEMORY_EDIT_UNCERTAIN;
+        (void)snprintf(m->edit_error, sizeof m->edit_error,
+            "UNCERTAIN: target context changed while the memory write was pending; Refresh before retrying.");
+        ++m->revision;
+    }
     if (m->backend_present && (m->backend_session != current.session ||
         tb_gdb_state(m->gdb) == TB_GDB_DISCONNECTED || tb_gdb_state(m->gdb) == TB_GDB_CLOSING ||
         tb_gdb_state(m->gdb) == TB_GDB_EXITED)) {
@@ -718,4 +782,117 @@ void tb_memory_client_cancel(TbMemory *m, int id)
 bool tb_memory_client_busy(const TbMemory *m, int id)
 {
     return valid_view(id) && (m->views[id].data.pending || (m->waiting && m->active == id));
+}
+
+bool tb_memory_edit_begin(TbMemory *m, int id, uint64_t address, unsigned bytes)
+{
+    if (!valid_view(id) || tb_context_write_blocked(m->context) || m->edit_state == TB_MEMORY_EDIT_PENDING ||
+        m->edit_state == TB_MEMORY_EDIT_UNCERTAIN || !bytes || bytes > TB_MEMORY_ROW ||
+        tb_memory_stale(m, id) || !writable_destination(m, id, address, bytes)) {
+        (void)snprintf(m->edit_error, sizeof m->edit_error,
+            m->edit_state == TB_MEMORY_EDIT_UNCERTAIN ?
+                "Previous write is uncertain; Refresh and reconcile before retrying." :
+                "Edit requires a fresh stopped sample, writable ordinary RAM and this view's authorized range.");
+        return false;
+    }
+    const TbMemoryView *v = &m->views[id].data;
+    if (address < v->address || address > UINT64_MAX - bytes ||
+        address - v->address > v->data_size || bytes > v->data_size - (address - v->address)) {
+        (void)snprintf(m->edit_error, sizeof m->edit_error,
+            "Selected bytes are outside the current Memory sample.");
+        return false;
+    }
+    size_t offset = (size_t)(address - v->address);
+    for (unsigned i = 0; i < bytes; ++i) {
+        if (!v->valid[offset + i]) {
+            (void)snprintf(m->edit_error, sizeof m->edit_error,
+                "Selected bytes include unavailable data; Refresh a complete sample first.");
+            return false;
+        }
+        m->edit_old[i] = v->bytes[offset + i];
+    }
+    m->edit_view = id; m->edit_address = address; m->edit_bytes = bytes;
+    m->edit_generation = v->generation; m->edit_state = TB_MEMORY_EDIT_READY;
+    m->edit_version = m->views[id].version; m->edit_lifetime = m->views[id].lifetime; m->edit_backend_epoch = m->backend_epoch;
+    for (unsigned i = 0; i < bytes; ++i) {
+        (void)snprintf(m->edit_old_text + (size_t)i * 2, 3, "%02x", m->edit_old[i]);
+    }
+    m->edit_old_text[(size_t)bytes * 2] = 0; m->edit_error[0] = 0; ++m->revision;
+    return true;
+}
+
+bool tb_memory_edit_apply(TbMemory *m, const char *encoded)
+{
+    if (m->edit_state != TB_MEMORY_EDIT_READY || !encoded ||
+        !same(m->edit_generation, tb_gdb_generation(m->gdb)) ||
+        tb_gdb_state(m->gdb) != TB_GDB_STOPPED ||
+        m->edit_lifetime != m->views[m->edit_view].lifetime || m->edit_backend_epoch != m->backend_epoch ||
+        m->edit_version != m->views[m->edit_view].version || tb_memory_stale(m, m->edit_view) ||
+        !writable_destination(m, m->edit_view, m->edit_address, m->edit_bytes) ||
+        strlen(encoded) != (size_t)m->edit_bytes * 2) {
+        (void)snprintf(m->edit_error, sizeof m->edit_error,
+            "Memory edit proof expired or the exact writable extent is no longer authorized.");
+        return false;
+    }
+    for (unsigned i = 0; i < m->edit_bytes; ++i) {
+        int high = hex((unsigned char)encoded[(size_t)i * 2]);
+        int low = hex((unsigned char)encoded[(size_t)i * 2 + 1]);
+        if (high < 0 || low < 0) {
+            (void)snprintf(m->edit_error, sizeof m->edit_error,
+                "Enter exactly %u hexadecimal bytes with no separators.", m->edit_bytes);
+            return false;
+        }
+        m->edit_new[i] = (unsigned char)(high * 16 + low);
+    }
+    char address[32], contents[TB_MEMORY_ROW * 2 + 1];
+    (void)snprintf(address, sizeof address, "0x%" PRIx64, m->edit_address);
+    memcpy(contents, encoded, (size_t)m->edit_bytes * 2 + 1);
+    const char *args[] = {address, contents};
+    if (m->waiting || tb_mmio_busy(m->mmio) || m->register_queued ||
+        !tb_context_write_begin(m->context, MEMORY_WRITE)) {
+        (void)snprintf(m->edit_error, sizeof m->edit_error, "Wait for pending operations or reconcile an uncertain write, then review again.");
+        return false;
+    }
+    m->edit_generation = tb_gdb_generation(m->gdb);
+    if (!tb_gdb_request(m->gdb, "-data-write-memory-bytes", args, 2, TB_GDB_CONTEXT,
+                        MEMORY_WRITE, 3000, NULL)) {
+        tb_context_write_finish(m->context, MEMORY_WRITE, TB_WRITE_ACKNOWLEDGED);
+        (void)snprintf(m->edit_error, sizeof m->edit_error,
+            "Memory write could not be queued; no retry was sent.");
+        return false;
+    }
+    m->edit_state = TB_MEMORY_EDIT_PENDING; ++m->revision; return true;
+}
+
+void tb_memory_edit_cancel(TbMemory *m)
+{
+    if (m->edit_state == TB_MEMORY_EDIT_PENDING || m->edit_state == TB_MEMORY_EDIT_UNCERTAIN) { return; }
+    m->edit_state = TB_MEMORY_EDIT_NONE; m->edit_error[0] = 0; ++m->revision;
+}
+
+bool tb_memory_edit_reconcile(TbMemory *m)
+{
+    if (m->edit_state != TB_MEMORY_EDIT_UNCERTAIN || !valid_view(m->edit_view) ||
+        tb_memory_stale(m, m->edit_view) || tb_gdb_pending(m->gdb)) { return false; }
+    const TbMemoryView *sample = &m->views[m->edit_view].data;
+    if (sample->address > m->edit_address || sample->data_size < m->edit_bytes ||
+        m->edit_address - sample->address > sample->data_size - m->edit_bytes) { return false; }
+    for (unsigned i = 0; i < m->edit_bytes; ++i) {
+        if (!sample->valid[m->edit_address - sample->address + i]) { return false; }
+    }
+    if (!tb_context_write_reconcile(m->context, MEMORY_WRITE)) { return false; }
+    m->edit_state = TB_MEMORY_EDIT_NONE;
+    (void)snprintf(m->edit_error, sizeof m->edit_error,
+        "Reconciled after explicit Refresh; review a new Memory edit.");
+    ++m->revision; return true;
+}
+
+TbMemoryEditState tb_memory_edit_state(const TbMemory *m) { return m->edit_state; }
+const char *tb_memory_edit_error(const TbMemory *m) { return m->edit_error; }
+const char *tb_memory_edit_old(const TbMemory *m) { return m->edit_old_text; }
+
+bool tb_memory_edit_destination(const TbMemory *m, uint64_t *address, unsigned *bytes)
+{
+    if (m->edit_state == TB_MEMORY_EDIT_NONE || !address || !bytes) { return false; }
+    *address = m->edit_address; *bytes = m->edit_bytes; return true;
 }

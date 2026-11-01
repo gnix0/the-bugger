@@ -37,6 +37,16 @@ void tb_context_reset(TbContext *context);
 bool tb_context_event(TbContext *context, const TbGdbEvent *event);
 /* No controller mutation from callbacks. Pump only when session setup/manual
  * operations are idle. No polling reads while running or with no visible view. */
+/* One stopped mutation at a time across inspectors. Acquire only immediately
+ * before dispatch on an idle controller; finish outside event callbacks.
+ * Uncertain mutations quarantine all inspector writes until explicit recovery. */
+typedef enum { TB_WRITE_ACKNOWLEDGED, TB_WRITE_UNCERTAIN, TB_WRITE_UNRESOLVED } TbWriteOutcome;
+bool tb_context_write_begin(TbContext *context, uint64_t cookie);
+void tb_context_write_finish(TbContext *context, uint64_t cookie, TbWriteOutcome outcome);
+bool tb_context_write_blocked(const TbContext *context);
+/* Mutation in this stop requires deliberate value reads, including aliases. */
+bool tb_context_written(const TbContext *context);
+bool tb_context_write_reconcile(TbContext *context, uint64_t cookie);
 void tb_context_pump(TbContext *context);
 void tb_context_visible(TbContext *context, bool threads, bool frames);
 void tb_context_require(TbContext *context, bool required);

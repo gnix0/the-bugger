@@ -150,6 +150,54 @@ int main(int argc, char **argv)
     tb_memory_regions(memory, ram, 2);
     CHECK(tb_memory_address(memory, 0, "0x1000")); ready(gdb, 0, true);
     char line[160]; tb_memory_line(memory, 0, 2, line, sizeof line); CHECK(strstr(line, "20 21 22 23")); CHECK(strstr(line, "| !\"#$%&"));
+    CHECK(tb_memory_range_set(memory, 0, 0, 0x1000, 0x1100, TB_MEMORY_ORDINARY, 0, "Reviewed writable RAM"));
+    CHECK(tb_memory_range_authorize(memory, 0, 0));
+    CHECK(tb_memory_edit_begin(memory, 0, 0x1000, 4));
+    CHECK(strcmp(tb_memory_edit_old(memory), "00010203") == 0);
+    CHECK(tb_memory_edit_state(memory) == TB_MEMORY_EDIT_READY);
+    CHECK(!tb_memory_edit_apply(memory, "aabbcc"));
+    CHECK(tb_memory_edit_state(memory) == TB_MEMORY_EDIT_READY);
+    CHECK(tb_memory_edit_apply(memory, "aabbccdd"));
+    CHECK(!tb_memory_edit_apply(memory, "aabbccdd"));
+    ready(gdb, 0, false);
+    CHECK(tb_memory_edit_state(memory) == TB_MEMORY_EDIT_ACKNOWLEDGED);
+    CHECK(strstr(tb_memory_edit_error(memory), "Refresh") != NULL);
+    CHECK(tb_memory_refresh(memory, 0)); ready(gdb, 0, true);
+    tb_memory_edit_cancel(memory);
+    CHECK(tb_memory_edit_state(memory) == TB_MEMORY_EDIT_NONE);
+    CHECK(tb_memory_range_authorize(memory, 0, 0));
+    const TbMemoryRegion read_only_overlay[] = {{0x1000, 0x2000, true}, {0x1001, 0x1002, false}};
+    tb_memory_regions(memory, read_only_overlay, 2);
+    CHECK(!tb_memory_edit_begin(memory, 0, 0x1000, 4));
+    tb_memory_regions(memory, ram, 2);
+    CHECK(tb_memory_edit_begin(memory, 0, 0x1000, 4));
+    CHECK(tb_memory_refresh(memory, 0)); ready(gdb, 0, true);
+    CHECK(!tb_memory_edit_apply(memory, "aabbccdd")); /* reviewed sample replaced */
+    tb_memory_edit_cancel(memory);
+    command(gdb, "-memory-mode", "9");
+    CHECK(tb_memory_range_authorize(memory, 0, 0));
+    CHECK(tb_memory_edit_begin(memory, 0, 0x1000, 2));
+    CHECK(tb_memory_edit_apply(memory, "beef")); ready(gdb, 0, false);
+    CHECK(tb_memory_edit_state(memory) == TB_MEMORY_EDIT_UNCERTAIN);
+    CHECK(!tb_memory_edit_reconcile(memory));
+    CHECK(tb_context_write_blocked(context)); CHECK(!tb_context_write_begin(context, 12345));
+    CHECK(tb_memory_address(memory, 0, "0x1010")); ready(gdb, 0, true);
+    CHECK(!tb_memory_edit_reconcile(memory)); /* a different sample cannot clear quarantine */
+    CHECK(tb_memory_address(memory, 0, "0x1000")); ready(gdb, 0, true);
+    CHECK(tb_memory_edit_reconcile(memory));
+    CHECK(tb_memory_edit_state(memory) == TB_MEMORY_EDIT_NONE);
+    command(gdb, "-memory-mode", "0");
+    CHECK(tb_memory_range_authorize(memory, 0, 0));
+    CHECK(tb_memory_edit_begin(memory, 0, 0x1000, 2));
+    command(gdb, "-memory-mode", "10");
+    CHECK(tb_memory_edit_apply(memory, "abcd"));
+    uint64_t write_end = tb_gdb_now_ms() + 4000;
+    while (tb_memory_edit_state(memory) == TB_MEMORY_EDIT_PENDING && tb_gdb_now_ms() < write_end) { pump(gdb); }
+    CHECK(tb_memory_edit_state(memory) == TB_MEMORY_EDIT_UNCERTAIN);
+    context_ready(gdb); command(gdb, "-memory-mode", "0");
+    CHECK(tb_memory_refresh(memory, 0)); ready(gdb, 0, true);
+    CHECK(!tb_memory_edit_reconcile(memory)); /* timed-out transport can still complete later */
+    CHECK(tb_context_write_blocked(context));
     CHECK(tb_memory_group(memory, 0, 4)); tb_memory_line(memory, 0, 0, line, sizeof line); CHECK(strstr(line, "03020100")); idle(gdb);
     tb_memory_order(memory, TB_MEMORY_BIG); tb_memory_line(memory, 0, 0, line, sizeof line); CHECK(strstr(line, "00010203"));
     CHECK(tb_memory_group(memory, 0, 8)); tb_memory_line(memory, 0, 0, line, sizeof line); CHECK(strstr(line, "0001020304050607"));

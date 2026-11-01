@@ -12,7 +12,7 @@ int main(int argc, char **argv)
     TestTerminal t; char *const args[] = {argv[1], NULL};
     test_terminal_start_argv(&t, args, "xterm-256color", false); test_terminal_resize(&t, 50, 180);
     test_terminal_click(&t, "Connect to GDB server"); test_terminal_expect(&t, "GDB endpoint");
-    test_terminal_send(&t, "\t\025\t\025"); test_terminal_send(&t, argv[2]);
+    test_terminal_send(&t, "\t\025localhost:3333\t\t\025"); test_terminal_send(&t, argv[2]);
     test_terminal_click(&t, "Review session"); test_terminal_click(&t, "[ Connect ]");
     test_terminal_expect(&t, "LIVE REMOTE"); test_terminal_expect(&t, "LIVE | Stopped");
     test_terminal_lower(&t, 0, true);

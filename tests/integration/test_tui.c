@@ -11,7 +11,7 @@ static void preview(TestTerminal *term, int session)
     for (int i = 0; i < session; ++i) { test_terminal_send(term, "\033OB"); }
     test_terminal_send(term, "\r");
     test_terminal_expect(term, "Configure session");
-    int field_count = session == 0 ? 5 : session == 1 ? 7 : 3;
+    int field_count = session == 0 ? 5 : session == 1 ? 7 : 4;
     for (int i = 0; i < field_count; ++i) { test_terminal_send(term, "\t"); }
     test_terminal_send(term, "\r");
     test_terminal_expect(term, "Review session preview");
@@ -55,6 +55,19 @@ int main(int argc, char *argv[])
     CHECK(argc == 2);
     const char *binary = argv[1];
     launcher_reference(binary);
+    /* Vertical form navigation follows rows; left/right actions remain independent. */
+    for (int session = 0; session < 3; session += 2) {
+        TestTerminal form; test_terminal_start(&form, binary, "xterm-256color", false);
+        test_terminal_click(&form, session == 0 ? "Linux application" : "Connect to GDB server");
+        test_terminal_send(&form, session == 0 ? "\t\t\t\t" : "\t\t\t");
+        test_terminal_send(&form, "q"); test_terminal_expect(&form, "Configure session");
+        test_terminal_send(&form, "\177\033OB\r"); test_terminal_expect(&form, "Review session preview");
+        test_terminal_send(&form, "\033"); test_terminal_expect(&form, "Configure session");
+        test_terminal_click(&form, "Review preview"); test_terminal_send(&form, "\033OAq");
+        test_terminal_expect(&form, "Configure session");
+        test_terminal_send(&form, "\021"); test_terminal_stop(&form, 0);
+    }
+
     TestTerminal term;
     for (int session = 0; session < 3; ++session) {
         test_terminal_start(&term, binary, "xterm-256color", false);
@@ -77,10 +90,28 @@ int main(int argc, char *argv[])
     test_terminal_expect(&term, "Start a debugging session");
     test_terminal_click(&term, "Embedded target");
     test_terminal_expect(&term, "Board script");
+    CHECK(!test_terminal_find(&term, "board/st_nucleo_f4.cfg", NULL, NULL));
+    CHECK(!test_terminal_find(&term, "build/blinky.elf", NULL, NULL));
+    CHECK(!test_terminal_find(&term, "arm-none-eabi-gdb", NULL, NULL));
+    CHECK(!test_terminal_find(&term, "localhost:3333", NULL, NULL));
+    CHECK(!test_terminal_find(&term, "openocd", NULL, NULL));
     test_terminal_send(&term, "\r");
     test_terminal_expect(&term, "Adapter script");
     test_terminal_expect(&term, "Target script");
     CHECK(!test_terminal_find(&term, "Board script (sample)", NULL, NULL));
+    test_terminal_send(&term, "\033");
+    test_terminal_expect(&term, "Start a debugging session");
+    test_terminal_click(&term, "Linux application");
+    test_terminal_expect(&term, "Configure session");
+    CHECK(!test_terminal_find(&term, "./build/debug-fixture", NULL, NULL));
+    CHECK(!test_terminal_find(&term, "gdb", NULL, NULL));
+    test_terminal_send(&term, "\033");
+    test_terminal_expect(&term, "Start a debugging session");
+    test_terminal_click(&term, "Connect to GDB server");
+    test_terminal_expect(&term, "Configure session");
+    CHECK(!test_terminal_find(&term, "localhost:3333", NULL, NULL));
+    CHECK(!test_terminal_find(&term, "build/application.elf", NULL, NULL));
+    CHECK(!test_terminal_find(&term, "gdb", NULL, NULL));
     test_terminal_send(&term, "\033");
     test_terminal_expect(&term, "Start a debugging session");
     test_terminal_click(&term, "Linux application");
@@ -95,6 +126,15 @@ int main(int argc, char *argv[])
     test_terminal_expect(&term, "path with spaces/firmware.elf");
     test_terminal_stop(&term, 0);
     puts("PASS M01 mouse startup, advanced preview and retained text editing");
+
+    test_terminal_start(&term, binary, "xterm-256color", false);
+    test_terminal_expect(&term, "Start a debugging session");
+    test_terminal_click(&term, "Connect to GDB server");
+    test_terminal_expect(&term, "Configure session");
+    test_terminal_send(&term, "q");
+    test_terminal_expect(&term, "Start a debugging session");
+    test_terminal_stop(&term, 0);
+    puts("PASS remote configuration q returns to launcher");
 
     test_terminal_start(&term, binary, "xterm-256color", false);
     preview(&term, 0);

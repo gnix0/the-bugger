@@ -530,3 +530,38 @@ tab/layout restoration without new setup fields.
 - Expanded lower groups retain top minimize/menu controls and omit duplicate
   bottom docks. Use available chrome spacing while retaining primary pane
   positions/sizes and compact navigation. No workspace-schema change is needed.
+
+## Deliberate variable and RAM editing (F03–F04)
+
+Inspection remains explicit. Editing is a separate stopped-target action with
+Review, Apply and Cancel; opening a dialog or changing a draft never writes.
+
+- F03 supports built-in integer and boolean scalar lvalues, including members
+  and fixed-array elements selected through a value tree. GDB must report an
+  editable object, a direct path, its target storage size and its exact address.
+  The complete footprint must fit ordinary writable storage. Pointer/reference
+  paths, register-only values, bitfields without an address, aggregates, floating
+  point, ambiguous plain `char`, unsupported typedef spellings and dynamic
+  objects are excluded. Conversion uses target size, not the frontend ABI.
+- F04 writes one selected Memory row, at most 16 bytes, as exact hexadecimal
+  pairs without separators. The old bytes must all be available in a fresh
+  sample. Both affirmative writable ordinary-region metadata and this view's
+  current ordinary-range authorization are required. Readability, ELF section
+  flags and a user-created read range alone do not prove writability.
+- Both require a current stopped session/context and serialize one mutation on
+  an idle controller. Apply is single-shot; cancellation cannot retract a
+  dispatched request. Policy and identity changes invalidate draft permission.
+- Acknowledgment does not establish a fresh sample. Related inspector snapshots
+  become stale; verification requires deliberate Read or Refresh. Errors,
+  cancellation after dispatch, stale completion and timeouts are conservatively
+  uncertain. Uncertainty blocks both editors until explicit reconciliation of
+  the original destination or a new session. No automatic retry or rollback.
+
+These editors do not program Flash or write MMIO, peripheral registers or CPU
+registers. F05 remains planned. Physical embedded write behavior requires its own
+recorded validation; existing read-only validation does not establish it.
+
+A timed-out, cancelled or otherwise lost write completion requires a new session
+before further edits. A controller with no pending tokens is not proof that the
+backend can no longer complete that mutation. Explicit verification can reconcile
+a completed backend error reply, but cannot clear an unresolved transport.

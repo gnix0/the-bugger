@@ -19,6 +19,9 @@ struct TbContext {
     Query query;
     uint64_t revision, next_lifetime;
     bool stack_required;
+    uint64_t write_owner, write_uncertain;
+    TbGdbGeneration last_write;
+    bool write_unresolved;
     ThreadLife lives[TB_CONTEXT_THREADS];
 };
 
@@ -389,8 +392,49 @@ static void publish(TbContext *context)
     context->query = QUERY_NONE; ++context->revision;
 }
 
+bool tb_context_write_blocked(const TbContext *context)
+{
+    return context->write_owner || context->write_uncertain;
+}
+bool tb_context_written(const TbContext *context)
+{
+    TbGdbGeneration current = tb_gdb_generation(context->gdb);
+    return context->last_write.session == current.session && context->last_write.stop == current.stop &&
+           context->last_write.session != 0;
+}
+bool tb_context_write_begin(TbContext *context, uint64_t cookie)
+{
+    TbGdbGeneration a = context->snapshot.generation, b = tb_gdb_generation(context->gdb);
+    if (!cookie || context->interlock || tb_context_write_blocked(context) ||
+        context->waiting || context->dirty || context->invalidate ||
+        !context->snapshot.ready || context->snapshot.stale ||
+        tb_gdb_state(context->gdb) != TB_GDB_STOPPED ||
+        a.session != b.session || a.stop != b.stop || a.context != b.context ||
+        !tb_gdb_reserve(context->gdb, cookie)) { return false; }
+    context->write_owner = cookie;
+    context->last_write = b;
+    context->snapshot.stale = true; context->snapshot.refreshing = false;
+    ++context->revision; return true;
+}
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): opaque request cookie and named outcome are distinct domains.
+void tb_context_write_finish(TbContext *context, uint64_t cookie, TbWriteOutcome outcome)
+{
+    if (context->write_owner != cookie) { return; }
+    tb_gdb_release(context->gdb, cookie); context->write_owner = 0;
+    if (outcome != TB_WRITE_ACKNOWLEDGED) { context->write_uncertain = cookie; }
+    context->write_unresolved = outcome == TB_WRITE_UNRESOLVED;
+    tb_context_refresh(context);
+}
+bool tb_context_write_reconcile(TbContext *context, uint64_t cookie)
+{
+    if (context->write_owner || context->write_unresolved || context->write_uncertain != cookie ||
+        tb_gdb_pending(context->gdb) || tb_gdb_state(context->gdb) != TB_GDB_STOPPED ||
+        !context->snapshot.ready || context->snapshot.stale) { return false; }
+    context->write_uncertain = 0; return true;
+}
 void tb_context_pump(TbContext *context)
 {
+    if (context->write_owner) { return; }
     if (context->invalidate) {
         context->invalidate = false; tb_gdb_context_changed(context->gdb);
     }
