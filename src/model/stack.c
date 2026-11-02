@@ -10,14 +10,14 @@
 enum { STACK_NONE, STACK_NAMES = 9701, STACK_ANCHOR, STACK_FRAME, STACK_LOCALS,
        STACK_GUARD, STACK_DISABLE, STACK_VERIFY, STACK_ADDRESS };
 struct TbStack {
-    TbGdb *gdb;
+    TbGdb_t *gdb;
     TbContext *context;
     TbMemory *memory;
     TbBrowseCache *cache;
     TbStackView views[TB_STACK_VIEWS];
     TbStackDeclaration declarations[TB_STACK_VIEWS][TB_CONTEXT_THREADS];
     uint64_t lives[TB_STACK_VIEWS], versions[TB_STACK_VIEWS], revision, sequence;
-    TbGdbGeneration seen, attempted, origin;
+    TbGdbGeneration_t seen, attempted, origin;
     uint64_t thread_lifetime, request_life, request_version, anchor_sp, anchor_lifetime;
     bool anchor_valid;
     char thread[32], architecture[64], variable[96];
@@ -27,9 +27,9 @@ struct TbStack {
     bool octets, waiting, canceled, catalogue, attempted_valid;
 };
 static bool valid(int view) { return view >= 0 && view < TB_STACK_VIEWS; }
-static bool same(TbGdbGeneration a, TbGdbGeneration b)
+static bool same(TbGdbGeneration_t a, TbGdbGeneration_t b)
 { return a.session == b.session && a.stop == b.stop && a.context == b.context; }
-static bool raw(char *out, size_t capacity, const TbMiValue *value)
+static bool raw(char *out, size_t capacity, const TbMiValue_t *value)
 {
     if (!value || value->type != TB_MI_STRING || value->string.length >= capacity ||
         memchr(value->string.data, 0, value->string.length)) { return false; }
@@ -80,7 +80,7 @@ static bool position(TbStack *s, TbStackView *v)
     }
     v->start = v->sp - half; v->positioned = true; v->historical = false; return true;
 }
-TbStack *tb_stack_create(TbGdb *gdb, TbContext *context, TbMemory *memory, TbBrowseCache *cache)
+TbStack *tb_stack_create(TbGdb_t *gdb, TbContext *context, TbMemory *memory, TbBrowseCache *cache)
 {
     TbStack *s = calloc(1, sizeof *s);
     if (s) { s->gdb = gdb; s->context = context; s->memory = memory; s->cache = tb_browse_retain(cache); tb_stack_reset(s); }
@@ -102,7 +102,7 @@ void tb_stack_clear(TbStack *s, int id)
 void tb_stack_reset(TbStack *s)
 {
     for (int i = 0; i < TB_STACK_VIEWS; ++i) { tb_stack_clear(s, i); }
-    s->seen = (TbGdbGeneration){0}; s->attempted_valid = false;
+    s->seen = (TbGdbGeneration_t){0}; s->attempted_valid = false;
     s->catalogue = s->waiting = s->canceled = false; s->sp_id = -1; s->job = STACK_NONE; s->owner = -1;
     s->bits = 0; s->octets = false; s->order = TB_MEMORY_UNKNOWN; s->architecture[0] = 0; ++s->revision;
 }
@@ -450,7 +450,7 @@ static void anchor_publish(TbStack *s)
 }
 static void synchronize(TbStack *s)
 {
-    TbGdbGeneration generation = tb_gdb_generation(s->gdb);
+    TbGdbGeneration_t generation = tb_gdb_generation(s->gdb);
     bool transitioned = !same(s->seen, generation);
     if (transitioned) {
         s->seen = generation; s->anchor_valid = false;
@@ -511,11 +511,11 @@ static bool identifier(const char *name)
     }
     return true;
 }
-static bool register_value(const TbStack *s, const TbMiRecord *record, uint64_t *address)
+static bool register_value(const TbStack *s, const TbMiRecord_t *record, uint64_t *address)
 {
-    const TbMiValue *list = tb_mi_find(record->results, "register-values"); bool found = false;
+    const TbMiValue_t *list = tb_mi_find(record->results, "register-values"); bool found = false;
     if (!list || list->type != TB_MI_LIST) { return false; }
-    for (const TbMiValue *entry = list->children; entry; entry = entry->next) {
+    for (const TbMiValue_t *entry = list->children; entry; entry = entry->next) {
         char number[32], value[128]; uint64_t id;
         if (entry->type != TB_MI_TUPLE || !raw(number, sizeof number, tb_mi_find(entry->children, "number")) ||
             !literal(number, &id) || id != (unsigned)s->sp_id || found || !raw(value, sizeof value, tb_mi_find(entry->children, "value")) ||
@@ -524,28 +524,28 @@ static bool register_value(const TbStack *s, const TbMiRecord *record, uint64_t 
     }
     return found;
 }
-static void parse_catalogue(TbStack *s, const TbMiRecord *record)
+static void parse_catalogue(TbStack *s, const TbMiRecord_t *record)
 {
     s->catalogue = true; s->sp_id = -1;
-    const TbMiValue *list = tb_mi_find(record->results, "register-names");
+    const TbMiValue_t *list = tb_mi_find(record->results, "register-names");
     if (!list || list->type != TB_MI_LIST) { return; }
     const char *canonical = strstr(s->architecture, "xtensa") ? "a1" :
                             strstr(s->architecture, "x86-64") ? "rsp" :
                             strstr(s->architecture, "i386") ? "esp" : "sp";
     int generic = -1, specific = -1; unsigned index = 0;
-    for (const TbMiValue *entry = list->children; entry && index < TB_REGISTERS_MAX; entry = entry->next, ++index) {
+    for (const TbMiValue_t *entry = list->children; entry && index < TB_REGISTERS_MAX; entry = entry->next, ++index) {
         char name[96]; if (!raw(name, sizeof name, entry)) { s->sp_id = -1; return; }
         if (strcmp(name, "sp") == 0) { if (generic >= 0) { return; } generic = (int)index; }
         if (strcmp(name, canonical) == 0) { if (specific >= 0) { return; } specific = (int)index; }
     }
     s->sp_id = specific >= 0 ? specific : generic;
 }
-static void parse_locals(TbStack *s, const TbMiRecord *record)
+static void parse_locals(TbStack *s, const TbMiRecord_t *record)
 {
     TbStackView *v = &s->views[s->owner]; v->name_count = 0; v->names_ready = false; v->names_limited = false;
-    const TbMiValue *list = tb_mi_find(record->results, "variables");
+    const TbMiValue_t *list = tb_mi_find(record->results, "variables");
     if (!list || list->type != TB_MI_LIST) { finish_error(s, "No structured names-only locals/arguments list; no address query sent."); return; }
-    for (const TbMiValue *entry = list->children; entry; entry = entry->next) {
+    for (const TbMiValue_t *entry = list->children; entry; entry = entry->next) {
         if (v->name_count == TB_STACK_NAMES) { v->names_limited = true; break; }
         TbStackName *name = &v->names[v->name_count++]; memset(name, 0, sizeof *name);
         bool exact = entry->type == TB_MI_TUPLE && raw(name->name, sizeof name->name, tb_mi_find(entry->children, "name"));
@@ -573,7 +573,7 @@ static void add_point(TbStack *s, uint64_t address, bool variable)
     else { (void)snprintf(p->label, sizeof p->label, "frame %d SP%s", s->frame, s->frame > 0 ? " (may be reconstructed)" : " (point)"); }
     s->job = STACK_NONE; note(s, v, variable ? "Variable address point retained; no extent, stack membership or ownership established. References may identify referents." : "Selected-frame SP point retained separately from frame-0 anchor; caller SP may be reconstructed.");
 }
-bool tb_stack_event(TbStack *s, const TbGdbEvent *event)
+bool tb_stack_event(TbStack *s, const TbGdbEvent_t *event)
 {
     if (event->kind == TB_GDB_STATE && tb_gdb_state(s->gdb) != TB_GDB_STOPPED) {
         s->anchor_valid = false;
@@ -592,10 +592,10 @@ bool tb_stack_event(TbStack *s, const TbGdbEvent *event)
     if (!chain_valid(s) || event->kind == TB_GDB_STALE || event->kind == TB_GDB_CANCELLED) {
         finish_error(s, s->canceled ? "Canceled result rejected; no further dispatch. Backend cancellation was not established." : "Context/view/thread lifetime changed; annotation/anchor result rejected."); return true;
     }
-    const TbMiRecord *record = event->record;
+    const TbMiRecord_t *record = event->record;
     if (event->kind != TB_GDB_REPLY || !record || strcmp(record->klass, "done") != 0) {
         char message[192] = "Stack metadata query failed/timed out; backend outcome unknown. Re-query explicitly; no retry.";
-        const TbMiValue *msg = record ? tb_mi_find(record->results, "msg") : NULL;
+        const TbMiValue_t *msg = record ? tb_mi_find(record->results, "msg") : NULL;
         if (msg && msg->type == TB_MI_STRING) { tb_code_safe(message, sizeof message, msg->string.data, msg->string.length); }
         if (s->request_job == STACK_NAMES) { s->catalogue = true; s->sp_id = -1; }
         finish_error(s, message); return true;

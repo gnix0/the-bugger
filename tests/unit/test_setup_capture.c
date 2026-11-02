@@ -3,16 +3,16 @@
 #include "../support/check.h"
 #include <string.h>
 #include <unistd.h>
-static void event(void *user, const TbGdbEvent *record) { (void)user; (void)record; }
+static void event(void *user, const TbGdbEvent_t *record) { (void)user; (void)record; }
 
 int main(void)
 {
-    TbGdb *gdb = tb_gdb_create(event, NULL); CHECK(gdb);
+    TbGdb_t *gdb = tb_gdb_create(event, NULL); CHECK(gdb);
     TbContext *context = tb_context_create(gdb); CHECK(context);
     TbCode *code = tb_code_create(gdb, context); TbMemory *memory = tb_memory_create(gdb, context);
     TbVariables *variables = tb_variables_create(gdb, context); TbBreakpoints *breaks = tb_break_create(gdb);
     CHECK(code && memory && variables && breaks);
-    TbLayout layout; tb_layout_init(&layout); TbDemo workspace; tb_demo_init(&workspace);
+    TbLayout_t layout; tb_layout_init(&layout); TbDemo workspace; tb_demo_init(&workspace);
     const char *expressions[TB_MAX_PANES]; for (size_t i = 0; i < TB_MAX_PANES; ++i) { expressions[i] = ""; }
     TbSetupCapture *c = tb_setup_capture_create(NULL); CHECK(c);
 #define CAPTURE() tb_setup_capture_update(c, &layout, &workspace, code, memory, variables, breaks, expressions)
@@ -36,7 +36,7 @@ int main(void)
     CHECK(tb_setup_capture_current(c)->watches[0].id == retained);
     CHECK(tb_variables_watch(variables, "watched.value")); CHECK(CAPTURE());
     CHECK(tb_setup_capture_current(c)->watches[1].id != watch_id);
-    CHECK(tb_layout_arrange(&layout, (TbRect){0, 0, 250, 100}, 0));
+    CHECK(tb_layout_arrange(&layout, (TbRect_t){0, 0, 250, 100}, 0));
     int added = tb_layout_split(&layout, 0, TB_SPLIT_RIGHT); CHECK(added >= 0);
     workspace.panes[added] = (TbDemoPane){.tabs = {TB_MEMORY}, .count = 1};
     CHECK(CAPTURE()); uint64_t pane_id = tb_setup_capture_current(c)->panes[added].id;

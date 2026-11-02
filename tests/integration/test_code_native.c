@@ -95,7 +95,7 @@ static void ordinary(const char *fixture)
     char stopped[48]; (void)snprintf(stopped, sizeof stopped, "%s", s->stopped.address);
     revision = v->assembly_revision; CHECK(tb_context_select_frame(tb_native_context(native), 1)); code_ready(native, revision);
     CHECK(s->selected.level == 1 && strcmp(stopped, s->stopped.address) == 0);
-    TbGdbGeneration selected_generation = s->generation;
+    TbGdbGeneration_t selected_generation = s->generation;
     char selected_address[48]; (void)snprintf(selected_address, sizeof selected_address, "%s", s->selected.address);
     const TbCodeView *other = tb_code_view(code, 1);
     uint64_t other_revision = other->assembly_revision;

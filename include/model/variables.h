@@ -28,7 +28,7 @@ typedef struct {
  * A readable target range or absence of 'volatile' is NOT enough. The default
  * adapter supplies no such proof: values require deliberate Read/expansion.
  * No callback may read target memory in order to establish this proof. */
-typedef bool (*TbVariableAuthorize)(void *user, TbGdbGeneration generation,
+typedef bool (*TbVariableAuthorize)(void *user, TbGdbGeneration_t generation,
                                    const char *expression, TbVariableRead operation,
                                    unsigned first, unsigned count, TbVariableAccess *access);
 typedef struct TbVariables TbVariables;
@@ -40,7 +40,7 @@ typedef enum {
 /* Root definitions only; no values, permissions or backend objects. */
 size_t tb_variables_definitions(const TbVariables *variables);
 bool tb_variables_definition(const TbVariables *variables, size_t index, TbWatchDefinition *definition);
-TbVariables *tb_variables_create(TbGdb *gdb, TbContext *context);
+TbVariables *tb_variables_create(TbGdb_t *gdb, TbContext *context);
 /* Destroy/reset after session shutdown; live root cleanup runs in pump. */
 void tb_variables_destroy(TbVariables *variables);
 void tb_variables_reset(TbVariables *variables);
@@ -78,7 +78,7 @@ bool tb_variables_stale(const TbVariables *variables, TbVariableView view);
 bool tb_variables_limited(const TbVariables *variables, TbVariableView view);
 const char *tb_variables_error(const TbVariables *variables, TbVariableView view);
 const char *tb_variables_format_name(TbVariableFormat format);
-bool tb_variables_event(TbVariables *variables, const TbGdbEvent *event);
+bool tb_variables_event(TbVariables *variables, const TbGdbEvent_t *event);
 void tb_variables_pump(TbVariables *variables);
 uint64_t tb_variables_revision(const TbVariables *variables);
 #endif

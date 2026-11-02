@@ -15,10 +15,10 @@
 typedef enum { CODE_NONE, CODE_FILES, CODE_ASSEMBLY, CODE_SYMBOL, CODE_FLAVOR,
                CODE_DIRECTORY, CODE_RULE, CODE_CLEAR_RULES, CODE_CLEAR_DIRS } CodeJob;
 enum { CODE_COOKIE = 7000, CODE_ANCHORS = 512 };
-typedef struct { uint64_t address, epoch; TbGdbGeneration generation; } CodeAnchor;
+typedef struct { uint64_t address, epoch; TbGdbGeneration_t generation; } CodeAnchor;
 typedef struct { size_t count, next; CodeAnchor entries[CODE_ANCHORS]; } AnchorHistory;
 typedef struct {
-    TbGdbGeneration generation;
+    TbGdbGeneration_t generation;
     uint64_t epoch, next_address, gap_begin, gap_end, function_start, range_end, follow_pc;
     bool more, mixed_available, truncated, function_known, indexed;
 } ListingOrigin;
@@ -27,7 +27,7 @@ typedef struct {
     bool visible_source, visible_assembly, source_dirty, assembly_dirty, assembly_refresh;
     char *source;
     size_t source_length, *offsets;
-    TbGdbGeneration generation;
+    TbGdbGeneration_t generation;
     uint64_t version;
     bool have_anchor, fallback, origin_tried, precontext, function_known;
     uint64_t follow_pc, function_start;
@@ -49,7 +49,7 @@ typedef struct {
     char resolved[TB_CODE_TABS - 1][TB_CODE_PATH];
 } View;
 struct TbCode {
-    TbGdb *gdb; TbContext *context;
+    TbGdb_t *gdb; TbContext *context;
     TbBrowseCache *cache;
     TbImages *images;
     pid_t pid;
@@ -61,7 +61,7 @@ struct TbCode {
     int active;
     uint64_t revision;
     uint64_t request_version, epoch, request_epoch, image_revision;
-    TbGdbGeneration flavor_generation;
+    TbGdbGeneration_t flavor_generation;
     char selected_thread[32], selected_address[48];
     int selected_level;
     uint64_t stop;
@@ -97,19 +97,19 @@ void tb_code_safe(char *out, size_t capacity, const char *bytes, size_t length)
     }
     out[used] = '\0';
 }
-static bool raw(char *out, size_t capacity, const TbMiValue *value)
+static bool raw(char *out, size_t capacity, const TbMiValue_t *value)
 {
     out[0] = '\0';
     if (!value || value->type != TB_MI_STRING || value->string.length >= capacity ||
         memchr(value->string.data, '\0', value->string.length)) { return false; }
     memcpy(out, value->string.data, value->string.length); out[value->string.length] = '\0'; return true;
 }
-static void safe(char *out, size_t capacity, const TbMiValue *value)
+static void safe(char *out, size_t capacity, const TbMiValue_t *value)
 {
     if (!value || value->type != TB_MI_STRING) { out[0] = '\0'; return; }
     tb_code_safe(out, capacity, value->string.data, value->string.length);
 }
-static int integer(const TbMiValue *value)
+static int integer(const TbMiValue_t *value)
 {
     char text[24]; if (!raw(text, sizeof text, value)) { return 0; }
     uint64_t n = 0;
@@ -146,7 +146,7 @@ bool tb_code_location(const char *text, uint64_t *address, bool *symbol)
     }
     *symbol = true; return true;
 }
-static bool address_value(const TbMiValue *value, uint64_t *address)
+static bool address_value(const TbMiValue_t *value, uint64_t *address)
 {
     char text[192]; bool symbol;
     if (!raw(text, sizeof text, value)) { return false; }
@@ -154,7 +154,7 @@ static bool address_value(const TbMiValue *value, uint64_t *address)
     return tb_code_location(text, address, &symbol) && !symbol;
 }
 static bool valid_view(int view) { return view >= 0 && view < TB_CODE_VIEWS; }
-TbCode *tb_code_create(TbGdb *gdb, TbContext *context)
+TbCode *tb_code_create(TbGdb_t *gdb, TbContext *context)
 {
     TbCode *code = calloc(1, sizeof *code);
     if (code) {
@@ -166,7 +166,7 @@ TbCode *tb_code_create(TbGdb *gdb, TbContext *context)
 }
 void tb_code_reset(TbCode *code)
 {
-    TbGdb *gdb = code->gdb; TbContext *context = code->context; uint64_t revision = code->revision;
+    TbGdb_t *gdb = code->gdb; TbContext *context = code->context; uint64_t revision = code->revision;
     TbImages *images = code->images; tb_images_reset(images);
     TbBrowseCache *cache = code->cache; tb_browse_clear(cache, TB_BROWSE_CODE, -1);
     tb_browse_clear(cache, TB_BROWSE_ANCHORS, -1);
@@ -582,17 +582,17 @@ void tb_code_clear(TbCode *code, int id)
 
 /* Validate the complete reply before replacing a useful retained listing.
  * Mixed mode adds one source wrapper; its instruction list is otherwise flat. */
-static bool assembly_valid(const TbMiValue *list, bool nested, size_t *instruction_count)
+static bool assembly_valid(const TbMiValue_t *list, bool nested, size_t *instruction_count)
 {
     if (!list || list->type != TB_MI_LIST) { return false; }
-    for (const TbMiValue *item = list->children; item; item = item->next) {
+    for (const TbMiValue_t *item = list->children; item; item = item->next) {
         if (item->type != TB_MI_TUPLE) { return false; }
-        const TbMiValue *children = tb_mi_find(item->children, "line_asm_insn");
+        const TbMiValue_t *children = tb_mi_find(item->children, "line_asm_insn");
         if (children) {
             if (nested || !assembly_valid(children, true, instruction_count)) { return false; }
         } else {
             uint64_t address;
-            const TbMiValue *text = tb_mi_find(item->children, "inst");
+            const TbMiValue_t *text = tb_mi_find(item->children, "inst");
             if (!address_value(tb_mi_find(item->children, "address"), &address) ||
                 !text || text->type != TB_MI_STRING || !text->string.length) { return false; }
             ++*instruction_count;
@@ -600,15 +600,15 @@ static bool assembly_valid(const TbMiValue *list, bool nested, size_t *instructi
     }
     return true;
 }
-static void assembly_parse(View *view, const TbMiValue *list, const char *path, int line)
+static void assembly_parse(View *view, const TbMiValue_t *list, const char *path, int line)
 {
     if (!list || list->type != TB_MI_LIST) { return; }
-    for (const TbMiValue *item = list->children; item; item = item->next) {
+    for (const TbMiValue_t *item = list->children; item; item = item->next) {
         if (view->data.instruction_count == TB_CODE_INSNS && !view->precontext) { view->data.more = true; return; }
-        const TbMiValue *nested = tb_mi_find(item->children, "line_asm_insn");
+        const TbMiValue_t *nested = tb_mi_find(item->children, "line_asm_insn");
         if (nested) {
             char source[512];
-            const TbMiValue *file = tb_mi_find(item->children, "fullname");
+            const TbMiValue_t *file = tb_mi_find(item->children, "fullname");
             if (!file) { file = tb_mi_find(item->children, "file"); }
             (void)raw(source, sizeof source, file);
             assembly_parse(view, nested, source, integer(tb_mi_find(item->children, "line"))); continue;
@@ -641,7 +641,7 @@ static void assembly_parse(View *view, const TbMiValue *list, const char *path, 
         if (line > 0 && *instruction->source) { view->data.mixed_available = true; }
     }
 }
-static bool request(TbCode *code, CodeJob job, const char *operation, const char *const args[], size_t count, TbGdbScope scope)
+static bool request(TbCode *code, CodeJob job, const char *operation, const char *const args[], size_t count, TbGdbScope_e scope)
 {
     code->job = job;
     code->request_version = code->views[code->active].version;
@@ -650,12 +650,12 @@ static bool request(TbCode *code, CodeJob job, const char *operation, const char
     if (!code->waiting) { code->job = CODE_NONE; message(code, "Code request unavailable; retry while stopped."); }
     return code->waiting;
 }
-static void files_parse(TbCode *code, const TbMiRecord *record)
+static void files_parse(TbCode *code, const TbMiRecord_t *record)
 {
     code->file_count = 0; code->files_limited = false;
-    const TbMiValue *list = tb_mi_find(record->results, "files");
+    const TbMiValue_t *list = tb_mi_find(record->results, "files");
     if (!list || list->type != TB_MI_LIST) { code->files_limited = true; message(code, "GDB returned no source-file catalog."); return; }
-    for (const TbMiValue *item = list->children; item; item = item->next) {
+    for (const TbMiValue_t *item = list->children; item; item = item->next) {
         if (code->file_count == TB_CODE_FILES) { code->files_limited = true; break; }
         TbCodeFile *file = &code->files[code->file_count];
         if (!raw(file->file, sizeof file->file, tb_mi_find(item->children, "file"))) { code->files_limited = true; continue; }
@@ -758,7 +758,7 @@ static void append_forward(View *view)
     }
     free(view->forward); view->forward = NULL; view->forward_count = 0;
 }
-bool tb_code_event(TbCode *code, const TbGdbEvent *event)
+bool tb_code_event(TbCode *code, const TbGdbEvent_t *event)
 {
     if (event->kind == TB_GDB_RECORD && event->record && event->record->kind == TB_MI_NOTIFY &&
         strcmp(event->record->klass, "memory-changed") == 0) { tb_code_image_invalidate(code); }
@@ -812,7 +812,7 @@ bool tb_code_event(TbCode *code, const TbGdbEvent *event)
     }
     if (job == CODE_FILES) { files_parse(code, event->record); }
     else if (job == CODE_ASSEMBLY) {
-        const TbMiValue *list = tb_mi_find(event->record->results, "asm_insns");
+        const TbMiValue_t *list = tb_mi_find(event->record->results, "asm_insns");
         size_t decoded = 0;
         if (!assembly_valid(list, false, &decoded) || !decoded) {
             cancel_precontext(view);
@@ -904,7 +904,7 @@ bool tb_code_event(TbCode *code, const TbGdbEvent *event)
     }
     ++code->revision; return true;
 }
-static bool generation_equal(TbGdbGeneration a, TbGdbGeneration b)
+static bool generation_equal(TbGdbGeneration_t a, TbGdbGeneration_t b)
 {
     return a.session == b.session && a.stop == b.stop && a.context == b.context;
 }
@@ -963,7 +963,7 @@ void tb_code_pump(TbCode *code)
     }
     const TbContextSnapshot *context = tb_context_snapshot(code->context);
     if (code->restoring && !code->waiting) {
-        TbGdbState state = tb_gdb_state(code->gdb);
+        TbGdbState_e state = tb_gdb_state(code->gdb);
         if (state != TB_GDB_READY && state != TB_GDB_STOPPED) { return; }
         if (code->restore_dir < code->restore_dirs) {
             size_t index = code->restore_dirs - 1 - code->restore_dir++;
@@ -1244,7 +1244,7 @@ static bool anchor_before(TbCode *code, int id, uint64_t *address)
     if (!tb_browse_find(code->cache, anchor_key(view, id), &sample) || sample.size != sizeof(AnchorHistory)) { return false; }
     AnchorHistory history; memcpy(&history, sample.data, sizeof history);
     if (history.count > CODE_ANCHORS) { return false; }
-    TbGdbGeneration current = tb_gdb_generation(code->gdb); bool found = false;
+    TbGdbGeneration_t current = tb_gdb_generation(code->gdb); bool found = false;
     for (size_t i = 0; i < history.count; ++i) {
         const CodeAnchor *anchor = &history.entries[i]; TbImageRange range;
         if (anchor->epoch != code->epoch || anchor->generation.session != current.session || anchor->generation.stop != current.stop ||
@@ -1306,7 +1306,7 @@ bool tb_code_assembly_page(TbCode *code, int id, int direction)
     listing_store(code, id);
     if (listing_cached(code, id, direction)) { return true; }
     if (!view->data.instruction_count) { return false; }
-    TbGdbGeneration current = tb_gdb_generation(code->gdb);
+    TbGdbGeneration_t current = tb_gdb_generation(code->gdb);
     if (tb_gdb_state(code->gdb) != TB_GDB_STOPPED || view->data.stale || view->data.assembly_historical ||
         view->data.assembly_generation.session != current.session || view->data.assembly_generation.stop != current.stop ||
         view->data.assembly_epoch != code->epoch) {

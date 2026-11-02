@@ -5,7 +5,7 @@
 enum { TB_STACK_VIEWS = 32, TB_STACK_POINTS = 32, TB_STACK_NAMES = 64 };
 typedef struct {
     uint64_t address, lifetime;
-    TbGdbGeneration generation;
+    TbGdbGeneration_t generation;
     int frame;
     char label[96];
     bool variable;
@@ -13,7 +13,7 @@ typedef struct {
 typedef struct { uint64_t low, high, lifetime; bool used, upward; } TbStackDeclaration;
 typedef struct {
     uint64_t address, lifetime, sequence, sampled_ms;
-    TbGdbGeneration generation;
+    TbGdbGeneration_t generation;
     char thread[32];
     unsigned size;
     TbMemoryOrder order;
@@ -33,14 +33,14 @@ typedef struct {
     TbStackSample sample;
 } TbStackView;
 typedef struct TbStack TbStack;
-TbStack *tb_stack_create(TbGdb *gdb, TbContext *context, TbMemory *memory, TbBrowseCache *cache);
+TbStack *tb_stack_create(TbGdb_t *gdb, TbContext *context, TbMemory *memory, TbBrowseCache *cache);
 void tb_stack_destroy(TbStack *stack);
 void tb_stack_reset(TbStack *stack);
 void tb_stack_clear(TbStack *stack, int view);
 void tb_stack_visible(TbStack *stack, int view, bool visible);
 void tb_stack_target(TbStack *stack, bool octets, unsigned address_bits, TbMemoryOrder order, const char *architecture);
 void tb_stack_invalidate(TbStack *stack);
-bool tb_stack_event(TbStack *stack, const TbGdbEvent *event);
+bool tb_stack_event(TbStack *stack, const TbGdbEvent_t *event);
 void tb_stack_pump(TbStack *stack);
 uint64_t tb_stack_revision(const TbStack *stack);
 const TbStackView *tb_stack_view(const TbStack *stack, int view);

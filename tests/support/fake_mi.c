@@ -612,9 +612,9 @@ int main(int argc, char *argv[])
             if (record_text == NULL) { free(line); return 4; }
             memcpy(record_text, "^done,v=", 8);
             memcpy(record_text + 8, command + 6, length);
-            TbMiRecord *record = NULL;
-            TbMiError error;
-            TbMiStatus status = tb_mi_parse(record_text, length + 7, &record, &error);
+            TbMiRecord_t *record = NULL;
+            TbMiError_t error;
+            TbMiStatus_e status = tb_mi_parse(record_text, length + 7, &record, &error);
             free(record_text);
             if (status != TB_MI_OK) { free(line); return 5; }
             size_t bytes = record->results->string.length;

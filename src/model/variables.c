@@ -16,7 +16,7 @@ typedef struct {
     char object[256], expression[256], canonical[512], baseline[512], key[512];
     int parent;
     bool used, wanted, read, expand, evaluate, evaluate_explicit, failed, canonical_ok, baseline_ok;
-    TbGdbGeneration sampled;
+    TbGdbGeneration_t sampled;
     uint64_t identity;
 } Node;
 typedef struct {
@@ -29,10 +29,10 @@ typedef struct {
 } Tree;
 typedef struct { char name[64]; bool retired, possible; } Owned;
 struct TbVariables {
-    TbGdb *gdb; TbContext *context;
+    TbGdb_t *gdb; TbContext *context;
     Tree trees[TB_VARIABLE_VIEWS];
     Owned owned[OWNED_MAX]; size_t owned_count;
-    TbGdbGeneration generation, request_generation;
+    TbGdbGeneration_t generation, request_generation;
     char thread[32], function[160]; int frame;
     unsigned job; int view, node; size_t deletion;
     bool waiting, cleanup_failed;
@@ -48,18 +48,18 @@ struct TbVariables {
     int edit_frame;
     uint64_t edit_address, regions_epoch, edit_regions_epoch;
     char edit_path[512], edit_value[128], edit_old[512], edit_type[192], edit_error[192];
-    TbGdbGeneration edit_generation;
+    TbGdbGeneration_t edit_generation;
 };
-static bool same(TbGdbGeneration a, TbGdbGeneration b)
+static bool same(TbGdbGeneration_t a, TbGdbGeneration_t b)
 { return a.session == b.session && a.stop == b.stop && a.context == b.context; }
-static bool text(char *out, size_t size, const TbMiValue *value)
+static bool text(char *out, size_t size, const TbMiValue_t *value)
 {
     out[0] = 0;
     if (!value || value->type != TB_MI_STRING) { return false; }
     tb_code_safe(out, size, value->string.data, value->string.length);
     return value->string.length < size && strlen(out) == value->string.length;
 }
-static unsigned number(const TbMiValue *v)
+static unsigned number(const TbMiValue_t *v)
 {
     unsigned n = 0;
     if (!v || v->type != TB_MI_STRING || !v->string.length) { return 0; }
@@ -187,7 +187,7 @@ static bool decimal_value(const char *input, bool is_bool, bool is_signed, unsig
     }
     return true;
 }
-static bool mi_number(const TbMiValue *value, uint64_t *out)
+static bool mi_number(const TbMiValue_t *value, uint64_t *out)
 {
     if (!value || value->type != TB_MI_STRING || !value->string.length) { return false; }
     char text[96];
@@ -197,7 +197,7 @@ static bool mi_number(const TbMiValue *value, uint64_t *out)
     if (errno || end == text || *end || number > UINT64_MAX) { return false; }
     *out = (uint64_t)number; return true;
 }
-TbVariables *tb_variables_create(TbGdb *gdb, TbContext *context)
+TbVariables *tb_variables_create(TbGdb_t *gdb, TbContext *context)
 {
     TbVariables *v = calloc(1, sizeof *v);
     if (v) { v->gdb = gdb; v->context = context; v->frame = -1; v->edit_view = v->edit_node = -1; }
@@ -207,7 +207,7 @@ void tb_variables_destroy(TbVariables *v) { free(v); }
 void tb_variables_reset(TbVariables *v)
 {
     /* Session owner calls reset only after the previous GDB has exited. */
-    TbGdb *gdb = v->gdb; TbContext *context = v->context;
+    TbGdb_t *gdb = v->gdb; TbContext *context = v->context;
     uint64_t revision = v->revision, serial = v->serial;
     TbVariableAuthorize authorize = v->authorize; void *user = v->authorize_user;
     memset(v, 0, sizeof *v); v->gdb = gdb; v->context = context; v->frame = -1; v->edit_view = v->edit_node = -1;
@@ -533,7 +533,7 @@ static bool writable_destination(const TbVariables *v, uint64_t address, unsigne
     }
     return contained;
 }
-static bool request(TbVariables *v, unsigned job, const char *op, const char *const *args, size_t count, TbGdbScope scope)
+static bool request(TbVariables *v, unsigned job, const char *op, const char *const *args, size_t count, TbGdbScope_e scope)
 {
     v->job = job; v->request_generation = v->generation;
     v->waiting = tb_gdb_request(v->gdb, op, args, count, scope, job, 3000, NULL);
@@ -544,9 +544,9 @@ static bool unavailable(const char *value)
     return *value == '<' && (strstr(value, "optimized out") || strstr(value, "unavailable") ||
                             strstr(value, "not available") || strstr(value, "error"));
 }
-static void publish(Node *n, const TbMiValue *values, TbGdbGeneration generation, bool canonical)
+static void publish(Node *n, const TbMiValue_t *values, TbGdbGeneration_t generation, bool canonical)
 {
-    const TbMiValue *value = tb_mi_find(values, "value");
+    const TbMiValue_t *value = tb_mi_find(values, "value");
     char buffer[512]; bool complete = text(buffer, sizeof buffer, value);
     if (canonical) {
         n->canonical_ok = complete && *buffer && !unavailable(buffer);
@@ -557,7 +557,7 @@ static void publish(Node *n, const TbMiValue *values, TbGdbGeneration generation
     (void)snprintf(n->row.value, sizeof n->row.value, "%s", value ? buffer : n->row.children ? "{...}" : "Unavailable");
     n->row.fresh = true; n->sampled = generation; n->row.limited = value && !complete;
 }
-static void catalog(TbVariables *v, const TbMiValue *list)
+static void catalog(TbVariables *v, const TbMiValue_t *list)
 {
     Tree *t = &v->trees[0]; bool seen[TB_VARIABLE_NODES] = {false};
     t->limited = false;
@@ -565,14 +565,14 @@ static void catalog(TbVariables *v, const TbMiValue *list)
     for (int i = 0; i < TB_VARIABLE_NODES; ++i) {
         Node *n = &t->nodes[i]; if (!n->used || n->parent >= 0) { continue; }
         bool found = false;
-        for (const TbMiValue *item = list->children; item; item = item->next) {
+        for (const TbMiValue_t *item = list->children; item; item = item->next) {
             char name[256];
             if (item->type == TB_MI_TUPLE && text(name, sizeof name, tb_mi_find(item->children, "name")) &&
                 strcmp(name, n->row.name) == 0) { found = true; break; }
         }
         if (!found) { retire(v, n->object); children_remove(t, i); memset(n, 0, sizeof *n); }
     }
-    for (const TbMiValue *item = list->children; item; item = item->next) {
+    for (const TbMiValue_t *item = list->children; item; item = item->next) {
         if (item->type != TB_MI_TUPLE) { continue; }
         char name[256];
         if (!text(name, sizeof name, tb_mi_find(item->children, "name")) || !*name) { continue; }
@@ -594,7 +594,7 @@ static void catalog(TbVariables *v, const TbMiValue *list)
     }
     order(t); t->names_ready = true;
 }
-bool tb_variables_event(TbVariables *v, const TbGdbEvent *event)
+bool tb_variables_event(TbVariables *v, const TbGdbEvent_t *event)
 {
     if (event->cookie < VAR_NAMES || event->cookie > VAR_EDIT_ASSIGN ||
         !(event->kind == TB_GDB_REPLY || event->kind == TB_GDB_STALE || event->kind == TB_GDB_TIMEOUT || event->kind == TB_GDB_CANCELLED)) { return false; }
@@ -624,7 +624,7 @@ bool tb_variables_event(TbVariables *v, const TbGdbEvent *event)
         if (!okay) {
             char message[192] = "Edit request failed; destination or backend state is unknown.";
             if (event->record) {
-                const TbMiValue *msg = tb_mi_find(event->record->results, "msg");
+                const TbMiValue_t *msg = tb_mi_find(event->record->results, "msg");
                 if (msg && msg->type == TB_MI_STRING) { tb_code_safe(message, sizeof message, msg->string.data, msg->string.length); }
             }
             if (assignment) {
@@ -639,7 +639,7 @@ bool tb_variables_event(TbVariables *v, const TbGdbEvent *event)
             }
             ++v->revision; return true;
         }
-        const TbMiValue *value = tb_mi_find(event->record->results, "value");
+        const TbMiValue_t *value = tb_mi_find(event->record->results, "value");
         if (event->cookie == VAR_EDIT_ATTRIBUTES) {
             char attr[32];
             if (!text(attr, sizeof attr, tb_mi_find(event->record->results, "attr")) || strcmp(attr, "editable") != 0) {
@@ -724,9 +724,9 @@ bool tb_variables_event(TbVariables *v, const TbGdbEvent *event)
         }
         ++v->revision; return true;
     }
-    const TbMiValue *results = event->record->results;
+    const TbMiValue_t *results = event->record->results;
     if (event->cookie == VAR_NAMES) {
-        const TbMiValue *list = tb_mi_find(results, "variables");
+        const TbMiValue_t *list = tb_mi_find(results, "variables");
         if (!list || list->type != TB_MI_LIST) { t->names_failed = true; (void)snprintf(t->error, sizeof t->error, "Malformed local-name list."); }
         else { catalog(v, list); }
     } else if (event->cookie == VAR_CREATE) {
@@ -747,13 +747,13 @@ bool tb_variables_event(TbVariables *v, const TbGdbEvent *event)
         n->read = false;
     } else if (event->cookie == VAR_FORMAT) { publish(n, results, v->generation, false); n->evaluate = false; n->row.format_pending = false; }
     else {
-        const TbMiValue *list = tb_mi_find(results, "children");
+        const TbMiValue_t *list = tb_mi_find(results, "children");
         n->expand = false;
         if (!list || list->type != TB_MI_LIST) {
             n->failed = true; (void)snprintf(t->error, sizeof t->error, "Malformed child list; collapse/read retries.");
         } else {
             unsigned count = 0;
-            for (const TbMiValue *item = list->children; item; item = item->next) {
+            for (const TbMiValue_t *item = list->children; item; item = item->next) {
                 if (count++ == TB_VARIABLE_CHILDREN) { t->limited = true; break; }
                 if (item->type != TB_MI_TUPLE) { continue; }
                 char id[256]; size_t prefix = strlen(n->object);
@@ -833,7 +833,7 @@ void tb_variables_pump(TbVariables *v)
         tb_context_write_finish(v->context, VAR_EDIT_ASSIGN, v->edit_state != TB_VARIABLE_EDIT_UNCERTAIN ? TB_WRITE_ACKNOWLEDGED :
             v->edit_unresolved ? TB_WRITE_UNRESOLVED : TB_WRITE_UNCERTAIN);
     }
-    TbGdbState state = tb_gdb_state(v->gdb);
+    TbGdbState_e state = tb_gdb_state(v->gdb);
     /* Pending replies must not keep an old sample marked fresh after resume
      * or a context change. Keep object identities until completion so stale
      * create replies can still be retired correctly. */

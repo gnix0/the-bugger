@@ -7,11 +7,11 @@ typedef struct {
     TbMmioStatus status;
     uint64_t address, value;
     unsigned width;
-    TbGdbGeneration generation;
+    TbGdbGeneration_t generation;
     char error[192];
 } TbMmioResult;
 typedef struct TbMmio TbMmio;
-TbMmio *tb_mmio_create(TbGdb *gdb);
+TbMmio *tb_mmio_create(TbGdb_t *gdb);
 /* Refuses to abandon an outstanding request on a live debugger. */
 bool tb_mmio_destroy(TbMmio *mmio);
 /* Transport only. Caller must establish target/width capability and explicit
@@ -19,7 +19,7 @@ bool tb_mmio_destroy(TbMmio *mmio);
 bool tb_mmio_read(TbMmio *mmio, const char *target, uint64_t address, unsigned width);
 /* Feed from the controller callback; never mutates the controller. Stream
  * records remain available to the normal console logger. */
-bool tb_mmio_event(TbMmio *mmio, const TbGdbEvent *event);
+bool tb_mmio_event(TbMmio *mmio, const TbGdbEvent_t *event);
 void tb_mmio_pump(TbMmio *mmio);
 const TbMmioResult *tb_mmio_result(const TbMmio *mmio);
 bool tb_mmio_busy(const TbMmio *mmio);

@@ -21,12 +21,16 @@ static void print_help(void)
          "Embedded/remote configuration remains an explicit preview.");
 }
 
+
 int main(int argc, char *argv[])
 {
     if (argc == 1) {
         return tb_tui_run(false);
     }
-    if (argc == 2 && strcmp(argv[1], "--demo") == 0) { return tb_tui_run(true); }
+
+    if (argc == 2 && strcmp(argv[1], "--demo") == 0) {
+        return tb_tui_run(true);
+    }
 
     if (argc == 2 && strcmp(argv[1], "--version") == 0) {
         puts("the-bugger " THE_BUGGER_VERSION);
@@ -39,6 +43,7 @@ int main(int argc, char *argv[])
     }
 
     fputs("the-bugger: expected no arguments, --demo, --help, or --version.\n"
-          "Run the-bugger --help for usage.\n", stderr);
+          "Run the-bugger --help for usage.\n",
+          stderr);
     return EXIT_FAILURE;
 }

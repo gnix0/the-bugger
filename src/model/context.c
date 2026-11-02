@@ -10,7 +10,7 @@ typedef enum { QUERY_NONE, QUERY_THREADS, QUERY_CURRENT, QUERY_FRAMES, QUERY_ARG
 enum { COOKIE_BASE = 6000 };
 typedef struct { char id[32], target[128]; uint64_t identity; } ThreadLife;
 struct TbContext {
-    TbGdb *gdb;
+    TbGdb_t *gdb;
     TbContextSnapshot snapshot, next;
     bool visible_threads, visible_frames, required, dirty, invalidate, waiting, failed, interlock;
     bool select_thread, select_frame, frame_only, registers_required, memory_required, variables_required;
@@ -20,13 +20,13 @@ struct TbContext {
     uint64_t revision, next_lifetime;
     bool stack_required;
     uint64_t write_owner, write_uncertain;
-    TbGdbGeneration last_write;
+    TbGdbGeneration_t last_write;
     bool write_unresolved;
     ThreadLife lives[TB_CONTEXT_THREADS];
 };
 
 /* Render-safe owned bytes; MI strings may include NUL/control characters. */
-static void text(char *out, size_t capacity, const TbMiValue *value)
+static void text(char *out, size_t capacity, const TbMiValue_t *value)
 {
     size_t used = 0;
     if (value && value->type == TB_MI_STRING) {
@@ -43,7 +43,7 @@ static void text(char *out, size_t capacity, const TbMiValue *value)
     out[used] = '\0';
 }
 
-static int number(const TbMiValue *value)
+static int number(const TbMiValue_t *value)
 {
     if (!value || value->type != TB_MI_STRING || value->string.length == 0) { return -1; }
     unsigned result = 0;
@@ -55,7 +55,7 @@ static int number(const TbMiValue *value)
     return (int)result;
 }
 
-static void frame(TbFrame *out, const TbMiValue *value)
+static void frame(TbFrame *out, const TbMiValue_t *value)
 {
     memset(out, 0, sizeof *out); out->level = out->line = -1;
     if (!value || value->type != TB_MI_TUPLE) { return; }
@@ -63,7 +63,7 @@ static void frame(TbFrame *out, const TbMiValue *value)
     out->line = number(tb_mi_find(value->children, "line"));
     text(out->address, sizeof out->address, tb_mi_find(value->children, "addr"));
     text(out->function, sizeof out->function, tb_mi_find(value->children, "func"));
-    const TbMiValue *file = tb_mi_find(value->children, "fullname");
+    const TbMiValue_t *file = tb_mi_find(value->children, "fullname");
     if (!file) { file = tb_mi_find(value->children, "file"); }
     text(out->file, sizeof out->file, file);
     if (file && file->type == TB_MI_STRING && file->string.length < sizeof out->path &&
@@ -75,7 +75,7 @@ static void frame(TbFrame *out, const TbMiValue *value)
     text(out->architecture, sizeof out->architecture, tb_mi_find(value->children, "arch"));
 }
 
-TbContext *tb_context_create(TbGdb *gdb)
+TbContext *tb_context_create(TbGdb_t *gdb)
 {
     TbContext *context = calloc(1, sizeof *context);
     if (context) { context->gdb = gdb; tb_context_reset(context); }
@@ -84,7 +84,7 @@ TbContext *tb_context_create(TbGdb *gdb)
 void tb_context_destroy(TbContext *context) { free(context); }
 void tb_context_reset(TbContext *context)
 {
-    TbGdb *gdb = context->gdb;
+    TbGdb_t *gdb = context->gdb;
     uint64_t revision = context->revision;
     memset(context, 0, sizeof *context); context->gdb = gdb;
     context->snapshot.stale = true;
@@ -187,16 +187,16 @@ static void inventory(TbContext *context, bool valid)
     }
 }
 
-static void parse_threads(TbContext *context, const TbMiRecord *record)
+static void parse_threads(TbContext *context, const TbMiRecord_t *record)
 {
     TbContextSnapshot *next = &context->next;
-    const TbMiValue *list = tb_mi_find(record->results, "threads");
+    const TbMiValue_t *list = tb_mi_find(record->results, "threads");
     if (!list || list->type != TB_MI_LIST) {
         (void)snprintf(next->error, sizeof next->error, "GDB returned no structured thread list."); inventory(context, false); return;
     }
     text(next->selected_thread, sizeof next->selected_thread, tb_mi_find(record->results, "current-thread-id"));
     bool valid = true;
-    for (const TbMiValue *item = list->children; item; item = item->next) {
+    for (const TbMiValue_t *item = list->children; item; item = item->next) {
         if (next->thread_count == TB_CONTEXT_THREADS) { next->threads_limited = true; break; }
         if (item->type != TB_MI_TUPLE || number(tb_mi_find(item->children, "id")) <= 0) { valid = false; continue; }
         TbThread *thread = &next->threads[next->thread_count++];
@@ -215,13 +215,13 @@ static void parse_threads(TbContext *context, const TbMiRecord *record)
     }
 }
 
-static void parse_frames(TbContext *context, const TbMiRecord *record)
+static void parse_frames(TbContext *context, const TbMiRecord_t *record)
 {
-    const TbMiValue *list = tb_mi_find(record->results, "stack");
+    const TbMiValue_t *list = tb_mi_find(record->results, "stack");
     if (!list || list->type != TB_MI_LIST) {
         (void)snprintf(context->next.stack_error, sizeof context->next.stack_error, "GDB returned no structured stack."); return;
     }
-    for (const TbMiValue *item = list->children; item; item = item->next) {
+    for (const TbMiValue_t *item = list->children; item; item = item->next) {
         if (context->next.frame_count == TB_CONTEXT_FRAMES) { context->next.more_frames = true; break; }
         if (item->type != TB_MI_TUPLE) { continue; }
         frame(&context->next.frames[context->next.frame_count], item);
@@ -229,30 +229,30 @@ static void parse_frames(TbContext *context, const TbMiRecord *record)
     }
 }
 
-static void parse_arguments(TbContextSnapshot *snapshot, const TbMiRecord *record, bool values)
+static void parse_arguments(TbContextSnapshot *snapshot, const TbMiRecord_t *record, bool values)
 {
-    const TbMiValue *list = tb_mi_find(record->results, "stack-args");
+    const TbMiValue_t *list = tb_mi_find(record->results, "stack-args");
     if (!list || list->type != TB_MI_LIST) {
         (void)snprintf(snapshot->arguments_error, sizeof snapshot->arguments_error, "Frame arguments unavailable."); return;
     }
     bool matched = false;
-    for (const TbMiValue *item = list->children; item; item = item->next) {
+    for (const TbMiValue_t *item = list->children; item; item = item->next) {
         if (item->type != TB_MI_TUPLE) { continue; }
         int level = number(tb_mi_find(item->children, "level"));
         if (values && level != snapshot->selected.level) { continue; }
         for (size_t i = 0; i < snapshot->frame_count; ++i) {
             TbFrame *out = &snapshot->frames[i];
             if (out->level != level) { continue; }
-            const TbMiValue *args = tb_mi_find(item->children, "args");
+            const TbMiValue_t *args = tb_mi_find(item->children, "args");
             if (!args || args->type != TB_MI_LIST) { continue; }
             matched = true;
             size_t used = 0; out->arguments[0] = 0; out->arguments_read = values;
-            for (const TbMiValue *arg = args->children; arg && used + 1 < sizeof out->arguments; arg = arg->next) {
+            for (const TbMiValue_t *arg = args->children; arg && used + 1 < sizeof out->arguments; arg = arg->next) {
                 char name[64], value[128];
                 if (arg->type == TB_MI_STRING && (!arg->name || strcmp(arg->name, "name") != 0)) { continue; }
                 text(name, sizeof name, arg->type == TB_MI_STRING ? arg : tb_mi_find(arg->children, "name"));
                 if (!*name) { continue; }
-                const TbMiValue *v = values ? tb_mi_find(arg->children, "value") : NULL;
+                const TbMiValue_t *v = values ? tb_mi_find(arg->children, "value") : NULL;
                 text(value, sizeof value, v);
                 int written = snprintf(out->arguments + used, sizeof out->arguments - used,
                                        "%s%s=%s", used ? ", " : "", name, v ? value : values ? "<aggregate/unavailable>" : "<read required>");
@@ -267,7 +267,7 @@ static void parse_arguments(TbContextSnapshot *snapshot, const TbMiRecord *recor
     }
 }
 
-bool tb_context_event(TbContext *context, const TbGdbEvent *event)
+bool tb_context_event(TbContext *context, const TbGdbEvent_t *event)
 {
     if (event->cookie > COOKIE_BASE && event->cookie <= COOKIE_BASE + READ_ARGUMENTS &&
         (event->kind == TB_GDB_REPLY || event->kind == TB_GDB_STALE ||
@@ -300,7 +300,7 @@ bool tb_context_event(TbContext *context, const TbGdbEvent *event)
             char *error = query >= SELECT_THREAD ? context->selection_error :
                           query == QUERY_THREADS ? context->next.error :
                           query == QUERY_ARGUMENTS ? context->next.arguments_error : context->next.stack_error;
-            const TbMiValue *msg = event->record ? tb_mi_find(event->record->results, "msg") : NULL;
+            const TbMiValue_t *msg = event->record ? tb_mi_find(event->record->results, "msg") : NULL;
             text(error, 192, msg);
             if (!*error) { (void)snprintf(error, 192, "Context request timed out or failed; refresh to retry."); }
         } else if (query == QUERY_THREADS) { parse_threads(context, event->record); }
@@ -315,7 +315,7 @@ bool tb_context_event(TbContext *context, const TbGdbEvent *event)
         context->query = query; ++context->revision;
         return true;
     }
-    const TbMiRecord *record = event->record;
+    const TbMiRecord_t *record = event->record;
     if (event->kind == TB_GDB_RECORD && record && record->kind == TB_MI_NOTIFY) {
         if (strcmp(record->klass, "thread-created") == 0 || strcmp(record->klass, "thread-exited") == 0) {
             char id[32]; text(id, sizeof id, tb_mi_find(record->results, "id"));
@@ -331,10 +331,10 @@ bool tb_context_event(TbContext *context, const TbGdbEvent *event)
     }
     if (event->kind == TB_GDB_RECONCILED && record) {
         char current[32]; text(current, sizeof current, tb_mi_find(record->results, "current-thread-id"));
-        const TbMiValue *threads = tb_mi_find(record->results, "threads");
+        const TbMiValue_t *threads = tb_mi_find(record->results, "threads");
         context->snapshot.stopped_thread[0] = 0; frame(&context->snapshot.stopped, NULL);
         context->first_frame = 0; context->select_thread = context->select_frame = false; stale(context);
-        for (const TbMiValue *item = threads ? threads->children : NULL; item; item = item->next) {
+        for (const TbMiValue_t *item = threads ? threads->children : NULL; item; item = item->next) {
             char id[32]; text(id, sizeof id, tb_mi_find(item->children, "id"));
             if (strcmp(id, current) != 0) { continue; }
             (void)snprintf(context->snapshot.stopped_thread, sizeof context->snapshot.stopped_thread, "%s", id);
@@ -343,7 +343,7 @@ bool tb_context_event(TbContext *context, const TbGdbEvent *event)
         }
     }
     if (event->kind == TB_GDB_STATE) {
-        TbGdbState state = tb_gdb_state(context->gdb);
+        TbGdbState_e state = tb_gdb_state(context->gdb);
         if (state == TB_GDB_RUNNING || state == TB_GDB_EXITED || state == TB_GDB_DISCONNECTED) {
             stale(context); context->snapshot.refreshing = false;
             context->select_thread = context->select_frame = false;
@@ -398,13 +398,13 @@ bool tb_context_write_blocked(const TbContext *context)
 }
 bool tb_context_written(const TbContext *context)
 {
-    TbGdbGeneration current = tb_gdb_generation(context->gdb);
+    TbGdbGeneration_t current = tb_gdb_generation(context->gdb);
     return context->last_write.session == current.session && context->last_write.stop == current.stop &&
            context->last_write.session != 0;
 }
 bool tb_context_write_begin(TbContext *context, uint64_t cookie)
 {
-    TbGdbGeneration a = context->snapshot.generation, b = tb_gdb_generation(context->gdb);
+    TbGdbGeneration_t a = context->snapshot.generation, b = tb_gdb_generation(context->gdb);
     if (!cookie || context->interlock || tb_context_write_blocked(context) ||
         context->waiting || context->dirty || context->invalidate ||
         !context->snapshot.ready || context->snapshot.stale ||
@@ -501,7 +501,7 @@ void tb_context_interlock(TbContext *context, bool active) { context->interlock 
 bool tb_context_interlocked(const TbContext *context) { return context->interlock; }
 static bool selection_current(const TbContext *context)
 {
-    TbGdbGeneration a = context->snapshot.generation, b = tb_gdb_generation(context->gdb);
+    TbGdbGeneration_t a = context->snapshot.generation, b = tb_gdb_generation(context->gdb);
     return context->snapshot.ready && !context->snapshot.stale &&
         !context->select_thread && !context->select_frame &&
         a.session == b.session && a.stop == b.stop && a.context == b.context;

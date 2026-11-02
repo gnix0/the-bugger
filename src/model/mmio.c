@@ -10,14 +10,14 @@
 
 enum { MMIO_COOKIE = 9403 };
 struct TbMmio {
-    TbGdb *gdb;
+    TbGdb_t *gdb;
     TbMonitorFrame frame;
     TbMmioResult result;
     uint64_t session, sequence, token, late_token;
     char nonce[33];
     bool active, release;
 };
-TbMmio *tb_mmio_create(TbGdb *gdb)
+TbMmio *tb_mmio_create(TbGdb_t *gdb)
 {
     if (!gdb) { return NULL; }
     TbMmio *m = calloc(1, sizeof *m); if (m) { m->gdb = gdb; } return m;
@@ -87,13 +87,13 @@ bool tb_mmio_read(TbMmio *m, const char *target, uint64_t address, unsigned widt
         .generation = tb_gdb_generation(m->gdb)};
     m->active = true; return true;
 }
-static bool late_result(const TbMmio *m, const TbMiRecord *record)
+static bool late_result(const TbMmio *m, const TbMiRecord_t *record)
 {
     if (!m->late_token || !record || record->kind != TB_MI_RESULT || !record->token) { return false; }
     char token[32]; (void)snprintf(token, sizeof token, "%" PRIu64, m->late_token);
     return strcmp(token, record->token) == 0;
 }
-bool tb_mmio_event(TbMmio *m, const TbGdbEvent *event)
+bool tb_mmio_event(TbMmio *m, const TbGdbEvent_t *event)
 {
     if (m->active && event->kind == TB_GDB_RECORD && event->record && event->record->kind == TB_MI_TARGET) {
         tb_monitor_feed(&m->frame, event->record->stream.data, event->record->stream.length);

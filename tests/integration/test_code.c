@@ -8,18 +8,18 @@
 static TbContext *context;
 static TbCode *code;
 static unsigned completions;
-static void emit(void *unused, const TbGdbEvent *event)
+static void emit(void *unused, const TbGdbEvent_t *event)
 {
     (void)unused;
     if (!tb_code_event(code, event)) { (void)tb_context_event(context, event); }
     if (event->kind == TB_GDB_REPLY) { ++completions; }
 }
-static void pump(TbGdb *gdb) { tb_gdb_pump(gdb, 5); tb_context_pump(context); tb_code_pump(code); }
-static void command(TbGdb *gdb, const char *operation)
+static void pump(TbGdb_t *gdb) { tb_gdb_pump(gdb, 5); tb_context_pump(context); tb_code_pump(code); }
+static void command(TbGdb_t *gdb, const char *operation)
 {
     CHECK(tb_gdb_request(gdb, operation, NULL, 0, TB_GDB_SESSION, 999, 1000, NULL));
 }
-static void ready(TbGdb *gdb, uint64_t revision)
+static void ready(TbGdb_t *gdb, uint64_t revision)
 {
     const TbCodeView *view = tb_code_view(code, 0);
     uint64_t until = tb_gdb_now_ms() + 5000;
@@ -52,7 +52,7 @@ static void grammar(void)
     char text[64]; tb_code_safe(text, sizeof text, "a\033\a\t\377", 5);
     CHECK(strstr(text, "\\x1b") && strstr(text, "\\x07") && strstr(text, "\\xff") && !strchr(text, '\033'));
 }
-static void source_bounds(const char *path, TbGdb *gdb)
+static void source_bounds(const char *path, TbGdb_t *gdb)
 {
     int fd = open(path, O_WRONLY | O_TRUNC); CHECK(fd >= 0);
     char *bytes = malloc(TB_CODE_SOURCE_BYTES + 32); CHECK(bytes);
@@ -67,7 +67,7 @@ static void source_bounds(const char *path, TbGdb *gdb)
     CHECK(tb_code_view(code, 0)->line_count == TB_CODE_LINES && tb_code_view(code, 0)->truncated);
     CHECK(tb_code_find(code, 0, "OUTSIDE_LIMIT", 0) == -1);
 }
-static void image_review(TbGdb *gdb, const char *elf)
+static void image_review(TbGdb_t *gdb, const char *elf)
 {
     while (tb_gdb_pending(gdb)) { pump(gdb); }
     unsigned before = completions;
@@ -101,7 +101,7 @@ static void retained_origin(const TbCodeView *view, const TbCodeView *saved)
     CHECK(view->gap_begin == saved->gap_begin && view->gap_end == saved->gap_end);
     CHECK(view->mixed_available == saved->mixed_available && view->truncated == saved->truncated && view->more == saved->more);
 }
-static void reconstruction(TbGdb *gdb)
+static void reconstruction(TbGdb_t *gdb)
 {
     const TbCodeView *view = tb_code_view(code, 0);
     TbBrowseCache *cache = tb_code_cache(code);
@@ -179,7 +179,7 @@ static void run(const char *peer, const char *mode)
     CHECK(write(fd, other_source, sizeof other_source - 1) == (ssize_t)sizeof other_source - 1 && close(fd) == 0);
     CHECK(setenv("TB_FAKE_SOURCE2", other_path, 1) == 0);
     CHECK(setenv("TB_FAKE_SOURCE", path, 1) == 0 && setenv("TB_FAKE_MODE", mode, 1) == 0);
-    TbGdb *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
+    TbGdb_t *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
     context = tb_context_create(gdb); code = tb_code_create(gdb, context); CHECK(context && code);
     CHECK(tb_gdb_start(gdb, peer, 1000));
     uint64_t until = tb_gdb_now_ms() + 2000;

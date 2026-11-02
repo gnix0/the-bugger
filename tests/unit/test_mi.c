@@ -4,33 +4,33 @@
 #include <stdint.h>
 #include <string.h>
 
-static TbMiRecord *parse_ok(const char *text)
+static TbMiRecord_t *parse_ok(const char *text)
 {
-    TbMiRecord *record = NULL;
-    TbMiError error;
+    TbMiRecord_t *record = NULL;
+    TbMiError_t error;
     CHECK(tb_mi_parse(text, strlen(text), &record, &error) == TB_MI_OK);
     CHECK(record != NULL && error.code == TB_MI_OK);
     return record;
 }
 
-static const TbMiValue *field(const TbMiValue *values, const char *name)
+static const TbMiValue_t *field(const TbMiValue_t *values, const char *name)
 {
-    const TbMiValue *value = tb_mi_find(values, name);
+    const TbMiValue_t *value = tb_mi_find(values, name);
     CHECK(value != NULL);
     return value;
 }
 
-static void string_is(const TbMiString *string, const char *expected)
+static void string_is(const TbMiString_t *string, const char *expected)
 {
     CHECK(string->length == strlen(expected));
     CHECK(memcmp(string->data, expected, string->length) == 0);
     CHECK(string->data[string->length] == '\0');
 }
 
-static void invalid(const char *text, TbMiStatus status)
+static void invalid(const char *text, TbMiStatus_e status)
 {
-    TbMiRecord *record = NULL;
-    TbMiError error;
+    TbMiRecord_t *record = NULL;
+    TbMiError_t error;
     CHECK(tb_mi_parse(text, strlen(text), &record, &error) == status);
     CHECK(record == NULL && error.code == status);
     CHECK(error.offset <= strlen(text) && error.message != NULL);
@@ -42,29 +42,29 @@ static void semantics(void)
     for (size_t i = 0; i < sizeof classes / sizeof classes[0]; ++i) {
         char input[100];
         (void)snprintf(input, sizeof input, "000123456789012345678901234567890^%s", classes[i]);
-        TbMiRecord *record = parse_ok(input);
+        TbMiRecord_t *record = parse_ok(input);
         CHECK(record->kind == TB_MI_RESULT);
         CHECK(strcmp(record->token, "000123456789012345678901234567890") == 0);
         CHECK(strcmp(record->klass, classes[i]) == 0 && record->results == NULL);
         tb_mi_record_free(record);
     }
-    TbMiRecord *record = parse_ok(
+    TbMiRecord_t *record = parse_ok(
         "*stopped,reason=\"breakpoint-hit\",frame={level=\"0\",args=[{name=\"a\",value=\"3\"}]},"
         "stack=[frame={func=\"f\"},frame={func=\"main\"}],a=\"first\",a=\"second\","
         "empty={},list=[],values=[\"x\",[],{}]");
     CHECK(record->kind == TB_MI_EXEC && record->token == NULL);
     string_is(&field(record->results, "reason")->string, "breakpoint-hit");
-    const TbMiValue *frame = field(record->results, "frame");
+    const TbMiValue_t *frame = field(record->results, "frame");
     CHECK(frame->type == TB_MI_TUPLE);
-    const TbMiValue *args = field(frame->children, "args");
+    const TbMiValue_t *args = field(frame->children, "args");
     CHECK(args->type == TB_MI_LIST && args->children->type == TB_MI_TUPLE);
     string_is(&field(args->children->children, "value")->string, "3");
-    const TbMiValue *stack = field(record->results, "stack");
+    const TbMiValue_t *stack = field(record->results, "stack");
     CHECK(stack->children->type == TB_MI_TUPLE);
     CHECK(strcmp(stack->children->name, "frame") == 0);
     CHECK(strcmp(stack->children->next->name, "frame") == 0);
     string_is(&field(stack->children->next->children, "func")->string, "main");
-    const TbMiValue *first = field(record->results, "a");
+    const TbMiValue_t *first = field(record->results, "a");
     string_is(&first->string, "first");
     CHECK(strcmp(first->next->name, "a") == 0);
     string_is(&first->next->string, "second");
@@ -72,7 +72,7 @@ static void semantics(void)
     CHECK(field(record->results, "empty")->children == NULL);
     CHECK(field(record->results, "list")->type == TB_MI_LIST);
     CHECK(field(record->results, "list")->children == NULL);
-    const TbMiValue *values = field(record->results, "values");
+    const TbMiValue_t *values = field(record->results, "values");
     CHECK(values->children->name == NULL && values->children->type == TB_MI_STRING);
     CHECK(values->children->next->type == TB_MI_LIST);
     CHECK(values->children->next->next->type == TB_MI_TUPLE);
@@ -91,7 +91,7 @@ static void semantics(void)
     tb_mi_record_free(record);
 
     char owned[] = "^done,x=\"kept\"";
-    TbMiRecord *copy = parse_ok(owned);
+    TbMiRecord_t *copy = parse_ok(owned);
     memset(owned, 'X', sizeof owned - 1);
     string_is(&field(copy->results, "x")->string, "kept");
     tb_mi_record_free(copy);
@@ -100,7 +100,7 @@ static void semantics(void)
 
 static void escapes(void)
 {
-    TbMiRecord *record = parse_ok("~\"\\a\\b\\f\\n\\r\\t\\v\\e\\\\\\\"\\'\\?\\000\\101\\x42\"");
+    TbMiRecord_t *record = parse_ok("~\"\\a\\b\\f\\n\\r\\t\\v\\e\\\\\\\"\\'\\?\\000\\101\\x42\"");
     const unsigned char expected[] = {7, 8, 12, 10, 13, 9, 11, 27, '\\', '"', '\'', '?', 0, 'A', 'B'};
     CHECK(record->kind == TB_MI_CONSOLE);
     CHECK(record->stream.length == sizeof expected);
@@ -123,15 +123,15 @@ static void escapes(void)
     string_is(&record->stream, "\n");
     tb_mi_record_free(record);
     record = parse_ok("^done,value=\"before\\000after\"");
-    const TbMiString *string = &field(record->results, "value")->string;
+    const TbMiString_t *string = &field(record->results, "value")->string;
     CHECK(string->length == 12 && memcmp(string->data, "before\0after", 12) == 0);
     tb_mi_record_free(record);
 }
 
 static void malformed(void)
 {
-    TbMiRecord *script = parse_ok("^done,bkpt={number=\"1\",script={\"silent\",\"printf 1\"},original-location=\"main\"}");
-    const TbMiValue *commands = field(field(script->results, "bkpt")->children, "script");
+    TbMiRecord_t *script = parse_ok("^done,bkpt={number=\"1\",script={\"silent\",\"printf 1\"},original-location=\"main\"}");
+    const TbMiValue_t *commands = field(field(script->results, "bkpt")->children, "script");
     CHECK(commands->type == TB_MI_TUPLE && commands->children && !commands->children->name);
     string_is(&commands->children->string, "silent"); string_is(&commands->children->next->string, "printf 1");
     tb_mi_record_free(script);
@@ -150,8 +150,8 @@ static void malformed(void)
         "(gdb)junk", " (gdb)", "^done\n^done", "^done\r", "~raw\n"
     };
     for (size_t i = 0; i < sizeof cases / sizeof cases[0]; ++i) { invalid(cases[i], TB_MI_INVALID); }
-    TbMiRecord *record = NULL;
-    TbMiError error;
+    TbMiRecord_t *record = NULL;
+    TbMiError_t error;
     const char nul[] = {'~', '"', 'a', '\0', '"'};
     CHECK(tb_mi_parse(nul, sizeof nul, &record, &error) == TB_MI_INVALID);
     CHECK(record == NULL && error.offset == 3);
@@ -163,7 +163,7 @@ static void malformed(void)
 typedef struct {
     uint64_t hash;
     size_t records, errors;
-    TbMiStatus last_error;
+    TbMiStatus_e last_error;
     size_t offset;
 } Events;
 
@@ -181,7 +181,7 @@ static void hash_string(Events *events, const char *text)
     if (text != NULL) { hash_bytes(events, text, strlen(text)); }
 }
 
-static void hash_values(Events *events, const TbMiValue *value)
+static void hash_values(Events *events, const TbMiValue_t *value)
 {
     for (; value != NULL; value = value->next) {
         hash_bytes(events, &value->type, sizeof value->type);
@@ -192,7 +192,7 @@ static void hash_values(Events *events, const TbMiValue *value)
     }
 }
 
-static void collect(void *context, TbMiRecord *record, const TbMiError *error)
+static void collect(void *context, TbMiRecord_t *record, const TbMiError_t *error)
 {
     Events *events = context;
     CHECK((record == NULL) != (error == NULL));
@@ -214,7 +214,7 @@ static void collect(void *context, TbMiRecord *record, const TbMiError *error)
 
 static Events feed(const char *text, size_t length, size_t split)
 {
-    TbMiParser parser = {0};
+    TbMiParser_t parser = {0};
     Events events = {0};
     CHECK(tb_mi_feed(&parser, text, split, collect, &events) == TB_MI_OK);
     CHECK(tb_mi_feed(&parser, text + split, length - split, collect, &events) == TB_MI_OK);
@@ -232,7 +232,7 @@ static void framing(void)
         Events actual = feed(text, sizeof text - 1, split);
         CHECK(actual.records == expected.records && actual.errors == 0 && actual.hash == expected.hash);
     }
-    TbMiParser parser = {0};
+    TbMiParser_t parser = {0};
     Events events = {0};
     const char tail[] = "^done,x=\"unfinished";
     CHECK(tb_mi_feed(&parser, tail, sizeof tail - 1, collect, &events) == TB_MI_OK);
@@ -294,15 +294,15 @@ static void limits(void)
     memset(large, 'x', maximum + 1);
     memcpy(large, "^done,v=\"", 9);
     large[maximum - 1] = '"';
-    TbMiRecord *record = NULL;
-    TbMiError error;
+    TbMiRecord_t *record = NULL;
+    TbMiError_t error;
     CHECK(tb_mi_parse(large, maximum, &record, &error) == TB_MI_OK);
     CHECK(record->results->string.length == maximum - 10);
     tb_mi_record_free(record);
     CHECK(tb_mi_parse(large, maximum + 1, &record, &error) == TB_MI_LIMIT);
     CHECK(record == NULL && error.offset == maximum);
 
-    TbMiParser parser = {0};
+    TbMiParser_t parser = {0};
     Events events = {0};
     CHECK(tb_mi_feed(&parser, large, maximum + 1, collect, &events) == TB_MI_OK);
     CHECK(events.errors == 0 && parser.capacity <= maximum);
@@ -311,7 +311,7 @@ static void limits(void)
     CHECK(tb_mi_finish(&parser, collect, &events) == TB_MI_OK);
     CHECK(events.errors == 1);
     tb_mi_parser_destroy(&parser);
-    parser = (TbMiParser){0};
+    parser = (TbMiParser_t){0};
     events = (Events){0};
     CHECK(tb_mi_feed(&parser, large, maximum + 1, collect, &events) == TB_MI_OK);
     CHECK(tb_mi_finish(&parser, collect, &events) == TB_MI_OK);
@@ -344,7 +344,7 @@ static void corpus(const char *valid, const char *bad)
         CHECK(actual.records == expected.records && actual.errors == 0 && actual.hash == expected.hash);
     }
     for (size_t chunk = 1; chunk <= 71; ++chunk) {
-        TbMiParser parser = {0};
+        TbMiParser_t parser = {0};
         Events events = {0};
         for (size_t at = 0; at < length; at += chunk) {
             size_t size = length - at < chunk ? length - at : chunk;
@@ -371,9 +371,9 @@ static void mutations(void)
         for (unsigned byte = 0; byte < 256; ++byte) {
             memcpy(input, seed, sizeof seed);
             input[at] = (char)byte;
-            TbMiRecord *record = NULL;
-            TbMiError error;
-            TbMiStatus status = tb_mi_parse(input, sizeof seed - 1, &record, &error);
+            TbMiRecord_t *record = NULL;
+            TbMiError_t error;
+            TbMiStatus_e status = tb_mi_parse(input, sizeof seed - 1, &record, &error);
             CHECK(status == TB_MI_OK || status == TB_MI_INVALID);
             CHECK((status == TB_MI_OK) == (record != NULL));
             tb_mi_record_free(record);

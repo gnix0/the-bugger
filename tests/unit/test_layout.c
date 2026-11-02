@@ -4,12 +4,12 @@
 #include <stdint.h>
 #include <string.h>
 
-static void tree(const TbLayout *layout, int node, bool visited[TB_LAYOUT_NODES],
+static void tree(const TbLayout_t *layout, int node, bool visited[TB_LAYOUT_NODES],
                  bool panes[TB_MAX_PANES])
 {
     CHECK(node >= 0 && node < TB_LAYOUT_NODES && !visited[node]);
     visited[node] = true;
-    const TbLayoutNode *n = &layout->nodes[node];
+    const TbLayoutNode_t *n = &layout->nodes[node];
     CHECK(n->used);
     if (n->pane >= 0) {
         CHECK(n->pane < TB_MAX_PANES && !panes[n->pane]);
@@ -21,19 +21,19 @@ static void tree(const TbLayout *layout, int node, bool visited[TB_LAYOUT_NODES]
     }
 }
 
-static void invariants(const TbLayout *layout, int focus)
+static void invariants(const TbLayout_t *layout, int focus)
 {
     bool visited[TB_LAYOUT_NODES] = {false}, panes[TB_MAX_PANES] = {false};
     for (int i = 0; i < TB_DEFAULT_PANES; ++i) { tree(layout, layout->roots[i], visited, panes); }
     for (int i = 0; i < TB_LAYOUT_NODES; ++i) { CHECK(visited[i] == layout->nodes[i].used); }
     int live = 0, visible = 0, surface = 0;
-    TbRect area = layout->area;
+    TbRect_t area = layout->area;
     for (int i = 0; i < TB_MAX_PANES; ++i) {
         CHECK(panes[i] == tb_layout_has_pane(layout, i));
         CHECK(panes[i] == (layout->identities[i] != 0));
         for (int j = 0; panes[i] && j < i; ++j) { CHECK(layout->identities[j] != layout->identities[i]); }
         if (panes[i]) { ++live; }
-        TbRect r = layout->panes[i];
+        TbRect_t r = layout->panes[i];
         if (r.w == 0 || r.h == 0) { continue; }
         CHECK(panes[i]);
         CHECK(r.x >= area.x && r.y >= area.y);
@@ -43,7 +43,7 @@ static void invariants(const TbLayout *layout, int focus)
         ++visible;
         surface += r.w * r.h;
         for (int j = 0; j < i; ++j) {
-            TbRect b = layout->panes[j];
+            TbRect_t b = layout->panes[j];
             if (b.w == 0 || b.h == 0) { continue; }
             CHECK(r.x >= b.x + b.w || b.x >= r.x + r.w ||
                   r.y >= b.y + b.h || b.y >= r.y + r.h);
@@ -62,7 +62,7 @@ static void invariants(const TbLayout *layout, int focus)
     /* Only the two global column gutters intersect the global row gutter. */
     int gutters = -2;
     for (int i = 0; i < layout->divider_count; ++i) {
-        TbRect r = layout->dividers[i].rect;
+        TbRect_t r = layout->dividers[i].rect;
         CHECK(r.x >= area.x && r.y >= area.y && r.x + r.w <= area.x + area.w && r.y + r.h <= area.y + area.h);
         gutters += r.w * r.h;
         CHECK(tb_layout_divider_at(layout, r.x, r.y) >= 0);
@@ -78,11 +78,11 @@ static uint32_t random_value(uint32_t *state)
 
 static void overlays(void)
 {
-    TbLayout layout;
+    TbLayout_t layout;
     tb_layout_init(&layout); layout.overlays = true;
-    TbRect area = {1, 4, 138, 38};
+    TbRect_t area = {1, 4, 138, 38};
     CHECK(tb_layout_arrange(&layout, area, 0));
-    TbRect upper[3]; memcpy(upper, layout.panes, sizeof upper);
+    TbRect_t upper[3]; memcpy(upper, layout.panes, sizeof upper);
     for (int i = 0; i < 3; ++i) {
         CHECK(layout.panes[i + 3].h == 0 && !layout.lower_open[i]);
         CHECK(layout.lower_bars[i].y == area.y + area.h - 1);
@@ -104,11 +104,11 @@ static void overlays(void)
     CHECK(child >= 6 && tb_layout_root(&layout, child) == 3);
     CHECK(layout.panes[3].h >= 7 && layout.panes[child].h >= 7);
     int preferred = layout.lower_height[0];
-    CHECK(!tb_layout_arrange(&layout, (TbRect){1, 4, 70, 12}, child));
+    CHECK(!tb_layout_arrange(&layout, (TbRect_t){1, 4, 70, 12}, child));
     CHECK(layout.lower_height[0] == preferred && layout.panes[child].h >= 7);
     CHECK(layout.lower_order[2] == 0);
     CHECK(tb_layout_pane_at(&layout, layout.panes[child].x, layout.panes[child].y) == child);
-    CHECK(!tb_layout_arrange(&layout, (TbRect){1, 4, 70, 12}, 4));
+    CHECK(!tb_layout_arrange(&layout, (TbRect_t){1, 4, 70, 12}, 4));
     CHECK(layout.lower_order[2] == 1);
     CHECK(tb_layout_pane_at(&layout, layout.panes[4].x, layout.panes[4].y) == 4);
     CHECK(tb_layout_arrange(&layout, area, child));
@@ -122,13 +122,13 @@ static void overlays(void)
 int main(void)
 {
     overlays();
-    TbLayout layout;
+    TbLayout_t layout;
     tb_layout_init(&layout);
-    CHECK(tb_layout_arrange(&layout, (TbRect){1, 4, 138, 38}, 0));
+    CHECK(tb_layout_arrange(&layout, (TbRect_t){1, 4, 138, 38}, 0));
     invariants(&layout, 0);
     CHECK(layout.panes[0].w == 48 && layout.panes[1].w == 46);
     CHECK(layout.panes[0].h > layout.panes[3].h);
-    TbRect original = layout.panes[0];
+    TbRect_t original = layout.panes[0];
     int added = tb_layout_split(&layout, 0, TB_SPLIT_RIGHT);
     CHECK(added == 6 && layout.count == 7);
     invariants(&layout, added);
@@ -141,12 +141,12 @@ int main(void)
     invariants(&layout, 6);
 
     /* Shrink/restore preserves tree structure, ratios, order and all pane IDs. */
-    TbLayout before = layout;
+    TbLayout_t before = layout;
     for (int height = 0; height < 64; ++height) {
         for (int width = 0; width < 200; ++width) {
             for (int i = 0; i < layout.count; ++i) {
                 int focus = layout.order[i];
-                (void)tb_layout_arrange(&layout, (TbRect){2, 3, width, height}, focus);
+                (void)tb_layout_arrange(&layout, (TbRect_t){2, 3, width, height}, focus);
                 invariants(&layout, focus);
                 CHECK(memcmp(before.nodes, layout.nodes, sizeof before.nodes) == 0);
             }
@@ -154,17 +154,17 @@ int main(void)
     }
     tb_layout_init(&layout);
     CHECK(!tb_layout_has_pane(&layout, -1) && !tb_layout_has_pane(&layout, TB_MAX_PANES));
-    CHECK(!tb_rect_contains((TbRect){0}, 0, 0));
-    CHECK(tb_rect_contains((TbRect){2, 3, 4, 5}, 2, 3));
-    CHECK(!tb_rect_contains((TbRect){2, 3, 4, 5}, 6, 3));
-    CHECK(!tb_rect_contains((TbRect){2, 3, 4, 5}, 2, 8));
+    CHECK(!tb_rect_contains((TbRect_t){0}, 0, 0));
+    CHECK(tb_rect_contains((TbRect_t){2, 3, 4, 5}, 2, 3));
+    CHECK(!tb_rect_contains((TbRect_t){2, 3, 4, 5}, 6, 3));
+    CHECK(!tb_rect_contains((TbRect_t){2, 3, 4, 5}, 2, 8));
     uint32_t state = UINT32_C(0xB066E2);
     int focus = 0;
     for (int iteration = 0; iteration < 12000; ++iteration) {
         unsigned action = random_value(&state) % 5;
         int width = 100 + (int)(random_value(&state) % 1900);
         int height = 20 + (int)(random_value(&state) % 180);
-        (void)tb_layout_arrange(&layout, (TbRect){1, 2, width, height}, focus);
+        (void)tb_layout_arrange(&layout, (TbRect_t){1, 2, width, height}, focus);
         int pane = layout.order[random_value(&state) % (unsigned)layout.count];
         if (action < 2) {
             before = layout;
@@ -186,7 +186,7 @@ int main(void)
     tb_layout_init(&layout);
     for (int cycle = 0; cycle < 3; ++cycle) {
         while (layout.count < TB_MAX_PANES) {
-            CHECK(tb_layout_arrange(&layout, (TbRect){0, 0, 6000, 1000}, 0));
+            CHECK(tb_layout_arrange(&layout, (TbRect_t){0, 0, 6000, 1000}, 0));
             int pane = layout.order[0];
             for (int i = 1; i < layout.count; ++i) {
                 int candidate = layout.order[i];

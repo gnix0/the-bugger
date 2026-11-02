@@ -5,12 +5,12 @@
 
 static TbBreakpoints *b;
 static unsigned replies, command_replies, inserts, enables, queries;
-static void event(void *unused, const TbGdbEvent *e)
+static void event(void *unused, const TbGdbEvent_t *e)
 {
     (void)unused; (void)tb_break_event(b, e);
     if (e->kind == TB_GDB_REPLY) {
         ++replies; if (e->cookie == 777) { ++command_replies; }
-        const TbMiValue *v = e->record ? tb_mi_find(e->record->results, "inserts") : NULL;
+        const TbMiValue_t *v = e->record ? tb_mi_find(e->record->results, "inserts") : NULL;
         if (v) {
             inserts = (unsigned)strtoul(v->string.data, NULL, 10);
             enables = (unsigned)strtoul(tb_mi_find(e->record->results, "enables")->string.data, NULL, 10);
@@ -18,8 +18,8 @@ static void event(void *unused, const TbGdbEvent *e)
         }
     }
 }
-static void pump(TbGdb *g) { tb_gdb_pump(g, 5); tb_break_pump(b); }
-static void command(TbGdb *g, const char *op, const char *argument)
+static void pump(TbGdb_t *g) { tb_gdb_pump(g, 5); tb_break_pump(b); }
+static void command(TbGdb_t *g, const char *op, const char *argument)
 {
     unsigned before = command_replies; const char *args[] = {argument};
     CHECK(tb_gdb_request(g, op, args, argument ? 1 : 0, TB_GDB_SESSION, 777, 1000, NULL));
@@ -27,7 +27,7 @@ static void command(TbGdb *g, const char *op, const char *argument)
     while (command_replies == before && tb_gdb_now_ms() < end) { pump(g); }
     CHECK(command_replies > before);
 }
-static void settled(TbGdb *g)
+static void settled(TbGdb_t *g)
 {
     uint64_t end = tb_gdb_now_ms() + 6000;
     while ((tb_break_restoration_active(b) || !tb_break_ready(b)) && tb_gdb_now_ms() < end) { pump(g); }
@@ -36,7 +36,7 @@ static void settled(TbGdb *g)
 static void run(const char *peer, unsigned scenario)
 {
     CHECK(setenv("TB_FAKE_MODE", "f01", 1) == 0);
-    TbGdb *g = tb_gdb_create(event, NULL); CHECK(g); b = tb_break_create(g); CHECK(b);
+    TbGdb_t *g = tb_gdb_create(event, NULL); CHECK(g); b = tb_break_create(g); CHECK(b);
     CHECK(tb_gdb_start(g, peer, 1000)); uint64_t end = tb_gdb_now_ms() + 3000;
     while (!tb_break_ready(b) && tb_gdb_now_ms() < end) { pump(g); }
     CHECK(tb_break_ready(b)); char mode[16]; (void)snprintf(mode, sizeof mode, "%u", scenario == 12 ? 1 : scenario);
