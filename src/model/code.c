@@ -1,6 +1,6 @@
 #define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- Standard POSIX feature selection. */
-#include "code.h"
-#include "images.h"
+#include "model/code.h"
+#include "model/images.h"
 
 #include <ctype.h>
 #include <errno.h>

@@ -2,7 +2,7 @@
 #define THE_BUGGER_DEMO_H
 
 #include <stdbool.h>
-#include "layout.h"
+#include "layout/layout.h"
 
 /* Explicitly simulated presentation state. Never use this as target data. */
 enum { TB_LOGS = 16, TB_SOURCE_LINES = 24 };

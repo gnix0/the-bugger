@@ -1,6 +1,6 @@
 #define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- POSIX interfaces. */
-#include "mmio.h"
-#include "monitor.h"
+#include "model/mmio.h"
+#include "model/monitor.h"
 #include <errno.h>
 #include <inttypes.h>
 #include <stdio.h>

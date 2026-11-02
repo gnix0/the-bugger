@@ -1,7 +1,7 @@
 #ifndef THE_BUGGER_MEMORY_H
 #define THE_BUGGER_MEMORY_H
-#include "context.h"
-#include "browse.h"
+#include "model/context.h"
+#include "model/browse.h"
 
 enum { TB_MEMORY_VIEWS = 32, TB_MEMORY_BYTES = 1024, TB_MEMORY_ROW = 16, TB_MEMORY_REGIONS = 128,
        TB_MEMORY_CLIENTS = 64, TB_MEMORY_RANGES = 16 };

@@ -1,5 +1,5 @@
 #define _GNU_SOURCE /* NOLINT(bugprone-reserved-identifier) -- Linux spawn/pipe interfaces. */
-#include "openocd.h"
+#include "session/openocd.h"
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <errno.h>

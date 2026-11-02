@@ -1,7 +1,7 @@
 #define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- POSIX interfaces. */
-#include "memory.h"
-#include "code.h"
-#include "mmio.h"
+#include "model/memory.h"
+#include "model/code.h"
+#include "model/mmio.h"
 #include <inttypes.h>
 #include <limits.h>
 #include <stdio.h>

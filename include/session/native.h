@@ -1,6 +1,6 @@
 #ifndef THE_BUGGER_NATIVE_H
 #define THE_BUGGER_NATIVE_H
-#include "session.h"
+#include "session/session.h"
 /* Source compatibility for accepted native integrations. The implementation
  * and target-neutral operations are owned by the shared session module. */
 typedef TbSessionWords TbNativeWords;

@@ -1,7 +1,7 @@
 #ifndef THE_BUGGER_BREAKPOINTS_H
 #define THE_BUGGER_BREAKPOINTS_H
-#include "controller.h"
-#include "setup.h"
+#include "gdb/controller.h"
+#include "session/setup.h"
 #include <sys/types.h>
 
 enum { TB_BREAK_ROWS = 256 };

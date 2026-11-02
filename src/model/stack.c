@@ -1,6 +1,6 @@
-#include "stack.h"
-#include "code.h"
-#include "registers.h"
+#include "model/stack.h"
+#include "model/code.h"
+#include "model/registers.h"
 #include <errno.h>
 #include <inttypes.h>
 #include <stdio.h>

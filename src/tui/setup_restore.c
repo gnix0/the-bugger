@@ -1,6 +1,6 @@
-#include "setup_restore.h"
+#include "tui/setup_restore.h"
 #include <stdlib.h>
-#include "images.h"
+#include "model/images.h"
 
 typedef enum { RESTORE_NONE, RESTORE_CONNECTION, RESTORE_SETTINGS, RESTORE_CATALOG,
                RESTORE_SOURCES, RESTORE_BREAKS, RESTORE_COMPLETE, RESTORE_CANCEL_REQUESTED, RESTORE_CANCELED } Phase;

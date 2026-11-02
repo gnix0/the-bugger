@@ -1,6 +1,6 @@
 #define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- Standard POSIX feature selection. */
-#include "preferences.h"
-#include "theme.h"
+#include "tui/preferences.h"
+#include "tui/theme.h"
 #include <json-c/json.h>
 #include <errno.h>
 #include <fcntl.h>

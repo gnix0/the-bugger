@@ -1,4 +1,4 @@
-#include "demo.h"
+#include "tui/demo.h"
 
 #include <stdio.h>
 #include <string.h>

@@ -1,9 +1,9 @@
 #ifndef THE_BUGGER_CODE_H
 #define THE_BUGGER_CODE_H
 
-#include "context.h"
-#include "browse.h"
-#include "images.h"
+#include "model/context.h"
+#include "model/browse.h"
+#include "model/images.h"
 
 enum { TB_CODE_VIEWS = 32, TB_CODE_FILES = 256, TB_CODE_INSNS = 128,
        TB_CODE_SOURCE_BYTES = 1024 * 1024, TB_CODE_LINES = 32768,

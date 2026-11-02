@@ -1,5 +1,5 @@
-#include "variables.h"
-#include "code.h"
+#include "model/variables.h"
+#include "model/code.h"
 
 #include <ctype.h>
 #include <errno.h>

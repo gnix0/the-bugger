@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "setup.h"
+#include "session/setup.h"
 
 enum { TB_PROFILES = 16, TB_PROFILE_NAME = 64, TB_PROFILE_PATH = 1024,
        TB_PROFILE_WORDS = 32, TB_PROFILE_WORD = 512, TB_PROFILE_SOURCES = 8,

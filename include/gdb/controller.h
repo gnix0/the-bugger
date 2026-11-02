@@ -1,7 +1,7 @@
 #ifndef THE_BUGGER_GDB_CONTROLLER_H
 #define THE_BUGGER_GDB_CONTROLLER_H
 
-#include "mi.h"
+#include "gdb/mi.h"
 #include <poll.h>
 #include <stdint.h>
 #include <sys/types.h>

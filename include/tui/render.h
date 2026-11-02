@@ -1,8 +1,8 @@
 #ifndef THE_BUGGER_RENDER_H
 #define THE_BUGGER_RENDER_H
 
-#include "demo.h"
-#include "theme.h"
+#include "tui/demo.h"
+#include "tui/theme.h"
 
 /* Draw within one row and width display cells. Controls/invalid bytes are inert
  * escaped text; a wide character is omitted if it cannot fit completely. */

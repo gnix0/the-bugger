@@ -1,6 +1,6 @@
 #ifndef THE_BUGGER_STACK_H
 #define THE_BUGGER_STACK_H
-#include "memory.h"
+#include "model/memory.h"
 
 enum { TB_STACK_VIEWS = 32, TB_STACK_POINTS = 32, TB_STACK_NAMES = 64 };
 typedef struct {

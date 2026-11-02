@@ -1,6 +1,6 @@
 #ifndef THE_BUGGER_OPENOCD_H
 #define THE_BUGGER_OPENOCD_H
-#include "profiles.h"
+#include "session/profiles.h"
 #include <poll.h>
 #include <stdint.h>
 #include <sys/types.h>

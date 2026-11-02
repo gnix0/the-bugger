@@ -1,5 +1,5 @@
 #define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- Standard POSIX feature selection. */
-#include "profiles.h"
+#include "session/profiles.h"
 #include <json-c/json.h>
 #include <ctype.h>
 #include <errno.h>

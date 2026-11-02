@@ -1,6 +1,6 @@
 #define _GNU_SOURCE /* NOLINT(bugprone-reserved-identifier) -- Linux pidfds/PTY. */
-#include "session.h"
-#include "native.h"
+#include "session/session.h"
+#include "session/native.h"
 
 #include <ctype.h>
 #include <elf.h>
