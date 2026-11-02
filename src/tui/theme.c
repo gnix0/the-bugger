@@ -1,4 +1,4 @@
-#include "theme.h"
+#include "tui/theme.h"
 
 #include <curses.h>
 #include <stdlib.h>

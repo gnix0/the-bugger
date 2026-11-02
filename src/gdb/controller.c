@@ -1,6 +1,6 @@
 /* Linux pipe2 and atomic close-on-exec descriptors. */
 #define _GNU_SOURCE /* NOLINT(bugprone-reserved-identifier) */
-#include "controller.h"
+#include "gdb/controller.h"
 
 #include <errno.h>
 #include <fcntl.h>

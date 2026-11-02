@@ -1,7 +1,7 @@
 #ifndef THE_BUGGER_BROWSE_H
 #define THE_BUGGER_BROWSE_H
 
-#include "controller.h"
+#include "gdb/controller.h"
 
 enum { TB_BROWSE_LIMIT = 4 * 1024 * 1024 };
 typedef enum { TB_BROWSE_CODE, TB_BROWSE_MEMORY, TB_BROWSE_SOURCE, TB_BROWSE_MMIO, TB_BROWSE_ANCHORS, TB_BROWSE_STACK, TB_BROWSE_STACK_BYTES } TbBrowseKind;

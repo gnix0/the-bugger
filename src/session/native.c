@@ -1,5 +1,5 @@
 #define _GNU_SOURCE /* NOLINT(bugprone-reserved-identifier) -- Linux metadata. */
-#include "native.h"
+#include "session/native.h"
 #include <errno.h>
 #include <limits.h>
 #include <stdlib.h>

@@ -1,7 +1,7 @@
 #ifndef THE_BUGGER_CONTEXT_H
 #define THE_BUGGER_CONTEXT_H
 
-#include "controller.h"
+#include "gdb/controller.h"
 
 enum { TB_CONTEXT_THREADS = 128, TB_CONTEXT_FRAMES = 32, TB_CONTEXT_MAX_LEVEL = 4095 };
 typedef struct {

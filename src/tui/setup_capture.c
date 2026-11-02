@@ -1,4 +1,4 @@
-#include "setup_capture.h"
+#include "tui/setup_capture.h"
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>

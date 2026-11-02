@@ -1,4 +1,4 @@
-#include "terminal.h"
+#include "tui/terminal.h"
 #include <curses.h>
 #include <term.h>
 #include <stdbool.h>

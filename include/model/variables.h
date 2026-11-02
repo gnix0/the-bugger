@@ -1,7 +1,7 @@
 #ifndef THE_BUGGER_VARIABLES_H
 #define THE_BUGGER_VARIABLES_H
-#include "context.h"
-#include "memory.h"
+#include "model/context.h"
+#include "model/memory.h"
 
 enum { TB_VARIABLE_NODES = 256, TB_VARIABLE_ROOTS = 64,
        TB_VARIABLE_CHILDREN = 32, TB_VARIABLE_DEPTH = 12 };

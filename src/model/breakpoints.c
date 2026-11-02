@@ -1,6 +1,6 @@
-#include "breakpoints.h"
-#include "memory.h"
-#include "images.h"
+#include "model/breakpoints.h"
+#include "model/memory.h"
+#include "model/images.h"
 
 #include <errno.h>
 #include <stdio.h>

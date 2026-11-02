@@ -1,15 +1,15 @@
 #ifndef THE_BUGGER_SESSION_H
 #define THE_BUGGER_SESSION_H
 
-#include "controller.h"
-#include "context.h"
-#include "code.h"
-#include "breakpoints.h"
-#include "registers.h"
-#include "memory.h"
-#include "stack.h"
-#include "variables.h"
-#include "openocd.h"
+#include "gdb/controller.h"
+#include "model/context.h"
+#include "model/code.h"
+#include "model/breakpoints.h"
+#include "model/registers.h"
+#include "model/memory.h"
+#include "model/stack.h"
+#include "model/variables.h"
+#include "session/openocd.h"
 
 enum { TB_SESSION_WORDS = 32, TB_SESSION_WORD_BYTES = 512,
        TB_SESSION_LOG_LINES = 512, TB_SESSION_LOG_WIDTH = 256 };

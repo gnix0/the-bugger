@@ -1,5 +1,5 @@
-#include "registers.h"
-#include "code.h"
+#include "model/registers.h"
+#include "model/code.h"
 
 #include <stdio.h>
 #include <stdlib.h>

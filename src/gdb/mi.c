@@ -1,4 +1,4 @@
-#include "mi.h"
+#include "gdb/mi.h"
 
 #include <stdlib.h>
 #include <string.h>

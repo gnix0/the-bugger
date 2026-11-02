@@ -1,4 +1,4 @@
-#include "editor.h"
+#include "tui/editor.h"
 #include <wctype.h>
 
 static int word_kind(wchar_t c)

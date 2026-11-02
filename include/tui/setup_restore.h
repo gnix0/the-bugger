@@ -1,7 +1,7 @@
 #ifndef THE_BUGGER_SETUP_RESTORE_H
 #define THE_BUGGER_SETUP_RESTORE_H
-#include "setup_capture.h"
-#include "session.h"
+#include "tui/setup_capture.h"
+#include "session/session.h"
 typedef struct TbSetupRestore TbSetupRestore;
 /* Owns progress only. Capture retains the definitions and unresolved entries. */
 TbSetupRestore *tb_setup_restore_create(void);

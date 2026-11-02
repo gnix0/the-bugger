@@ -1,5 +1,5 @@
 #define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- Standard POSIX feature selection. */
-#include "setup.h"
+#include "session/setup.h"
 
 #include <limits.h>
 #include <stdio.h>

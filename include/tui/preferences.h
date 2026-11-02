@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <sys/stat.h>
-#include "keybinds.h"
+#include "tui/keybinds.h"
 
 typedef struct {
     char directory[4000], path[4096], error[192];

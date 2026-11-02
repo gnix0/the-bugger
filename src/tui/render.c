@@ -1,4 +1,4 @@
-#include "render.h"
+#include "tui/render.h"
 
 #include <curses.h>
 #include <ctype.h>

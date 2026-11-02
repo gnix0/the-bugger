@@ -1,4 +1,4 @@
-#include "browse.h"
+#include "model/browse.h"
 
 #include <stdlib.h>
 #include <string.h>

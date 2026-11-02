@@ -1,11 +1,11 @@
 #ifndef THE_BUGGER_SETUP_CAPTURE_H
 #define THE_BUGGER_SETUP_CAPTURE_H
-#include "setup.h"
-#include "demo.h"
-#include "code.h"
-#include "memory.h"
-#include "variables.h"
-#include "breakpoints.h"
+#include "session/setup.h"
+#include "tui/demo.h"
+#include "model/code.h"
+#include "model/memory.h"
+#include "model/variables.h"
+#include "model/breakpoints.h"
 
 typedef struct TbSetupCapture TbSetupCapture;
 TbSetupCapture *tb_setup_capture_create(const TbSetup *saved);

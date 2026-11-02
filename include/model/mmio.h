@@ -1,6 +1,6 @@
 #ifndef THE_BUGGER_MMIO_H
 #define THE_BUGGER_MMIO_H
-#include "controller.h"
+#include "gdb/controller.h"
 
 typedef enum { TB_MMIO_IDLE, TB_MMIO_PENDING, TB_MMIO_COMPLETE, TB_MMIO_FAILED, TB_MMIO_UNCERTAIN } TbMmioStatus;
 typedef struct {

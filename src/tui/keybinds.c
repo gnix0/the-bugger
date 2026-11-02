@@ -1,4 +1,4 @@
-#include "keybinds.h"
+#include "tui/keybinds.h"
 #include <curses.h>
 #include <stdio.h>
 #include <string.h>

@@ -1,7 +1,7 @@
 #ifndef THE_BUGGER_REGISTERS_H
 #define THE_BUGGER_REGISTERS_H
 
-#include "context.h"
+#include "model/context.h"
 
 enum { TB_REGISTERS_MAX = 512, TB_REGISTERS_PAGE = 32, TB_REGISTER_VALUE = 1024 };
 typedef enum { TB_REG_HEX, TB_REG_DECIMAL, TB_REG_OCTAL, TB_REG_BINARY,

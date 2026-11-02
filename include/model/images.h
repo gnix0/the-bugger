@@ -1,7 +1,7 @@
 #ifndef THE_BUGGER_IMAGES_H
 #define THE_BUGGER_IMAGES_H
 
-#include "setup.h"
+#include "session/setup.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
