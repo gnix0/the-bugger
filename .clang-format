@@ -1,0 +1,56 @@
+# Optional formatting aid; never run automatically on save, in hooks or in CI.
+# Selective Emacs alignment and logical whitespace still require human judgment.
+BasedOnStyle: LLVM
+IndentWidth: 4
+ContinuationIndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 110
+
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+  AfterControlStatement: Never
+  BeforeElse: false
+  BeforeWhile: false
+  IndentBraces: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortBlocksOnASingleLine: Never
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+SpaceBeforeParens: ControlStatements
+InsertBraces: false
+RemoveBracesLLVM: false
+
+PointerAlignment: Right
+DerivePointerAlignment: false
+AlignConsecutiveDeclarations:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+  AlignFunctionDeclarations: false
+  AlignFunctionPointers: false
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+  AlignCompound: true
+  PadOperators: true
+AlignConsecutiveMacros:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignArrayOfStructures: None
+AlignTrailingComments:
+  Kind: Leave
+
+# Preserve existing separation; the formatter cannot insert exactly two blank
+# lines between functions or infer logical groups within a function.
+MaxEmptyLinesToKeep: 2
+SeparateDefinitionBlocks: Leave
+
+IncludeBlocks: Preserve
+SortIncludes:
+  Enabled: false
+ReflowComments: Never
+BreakStringLiterals: false
