@@ -12,10 +12,10 @@ typedef struct {
     bool available, changed, truncated, fresh;
 } TbRegister;
 typedef struct TbRegisters TbRegisters;
-TbRegisters *tb_registers_create(TbGdb *gdb, TbContext *context);
+TbRegisters *tb_registers_create(TbGdb_t *gdb, TbContext *context);
 void tb_registers_destroy(TbRegisters *registers);
 void tb_registers_reset(TbRegisters *registers);
-bool tb_registers_event(TbRegisters *registers, const TbGdbEvent *event);
+bool tb_registers_event(TbRegisters *registers, const TbGdbEvent_t *event);
 void tb_registers_pump(TbRegisters *registers);
 /* Begin a render pass, then request each visible pane's row range. */
 void tb_registers_visible(TbRegisters *registers, bool visible);

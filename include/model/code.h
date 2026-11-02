@@ -21,7 +21,7 @@ typedef struct {
     char path[TB_CODE_PATH], source_error[192], assembly_error[192];
     bool stale, source_follow, assembly_follow, mixed, mixed_available, more, truncated;
     bool assembly_stopped, assembly_historical;
-    TbGdbGeneration assembly_generation;
+    TbGdbGeneration_t assembly_generation;
     uint64_t assembly_epoch;
     uint64_t gap_begin, gap_end;
     int selected_line, stopped_line;
@@ -39,7 +39,7 @@ typedef struct {
  * Pass NULL for a count only; otherwise provide TB_CODE_ROWS slots. */
 size_t tb_code_rows(const TbCodeView *view, TbCodeRow *rows);
 typedef struct TbCode TbCode;
-typedef struct { TbImageReview image; TbGdbGeneration generation; uint64_t epoch; } TbCodeImageReview;
+typedef struct { TbImageReview image; TbGdbGeneration_t generation; uint64_t epoch; } TbCodeImageReview;
 /* Remote configured ELF review: metadata-only, no target access or permission.
  * Bias is added to linked virtual addresses; nonuniform relocation is not
  * inferred. User confirmation is distinct from native mapping verification. */
@@ -50,13 +50,13 @@ void tb_code_image_invalidate(TbCode *code);
 TbImageTrust tb_code_assembly_mapping(const TbCode *code, int view, size_t first, size_t count);
 const char *tb_code_gap_label(const TbCode *code, int view, uint64_t begin, uint64_t end);
 
-TbCode *tb_code_create(TbGdb *gdb, TbContext *context);
+TbCode *tb_code_create(TbGdb_t *gdb, TbContext *context);
 TbBrowseCache *tb_code_cache(TbCode *code); /* Borrowed session cache. */
 void tb_code_native(TbCode *code, pid_t pid, const char *executable);
 void tb_code_raw(TbCode *code, int view);
 void tb_code_destroy(TbCode *code);
 void tb_code_reset(TbCode *code);
-bool tb_code_event(TbCode *code, const TbGdbEvent *event);
+bool tb_code_event(TbCode *code, const TbGdbEvent_t *event);
 void tb_code_pump(TbCode *code);
 void tb_code_visible(TbCode *code, int view, bool source, bool assembly);
 bool tb_code_settled(const TbCode *code, int view);

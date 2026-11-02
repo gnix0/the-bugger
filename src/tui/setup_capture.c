@@ -37,7 +37,7 @@ static uint64_t allocate_id(TbSetup *s)
 { return s->next_id < INT64_MAX ? s->next_id++ : 0; }
 static size_t key_index(const uint64_t *keys, size_t count, uint64_t key)
 { size_t i = 0; while (i < count && keys[i] != key) { ++i; } return i; }
-bool tb_setup_capture_update(TbSetupCapture *c, const TbLayout *layout, const TbDemo *workspace,
+bool tb_setup_capture_update(TbSetupCapture *c, const TbLayout_t *layout, const TbDemo *workspace,
                             const TbCode *code, const TbMemory *memory, const TbVariables *variables,
                             const TbBreakpoints *breakpoints, const char *const expressions[TB_MAX_PANES])
 {
@@ -49,7 +49,7 @@ bool tb_setup_capture_update(TbSetupCapture *c, const TbLayout *layout, const Tb
     memcpy(s->roots, layout->roots, sizeof s->roots);
     uint64_t pane_keys[TB_MAX_PANES] = {0}, watch_keys[TB_SETUP_WATCHES] = {0}, break_keys[TB_SETUP_BREAKS] = {0};
     for (size_t i = 0; i < TB_SETUP_NODES; ++i) {
-        const TbLayoutNode *n = &layout->nodes[i]; if (!n->used) { continue; }
+        const TbLayoutNode_t *n = &layout->nodes[i]; if (!n->used) { continue; }
         s->nodes[i] = (TbSetupNode){true, n->pane, n->pane < 0 ? n->first : -1, n->pane < 0 ? n->second : -1,
                                   n->pane < 0 ? n->ratio : 0, n->pane < 0 ? (int)n->direction : 0};
     }
@@ -130,7 +130,7 @@ bool tb_setup_capture_remove_break(TbSetupCapture *c, uint64_t identity)
 }
 static int root_first(const TbSetup *s, int node)
 { while (s->nodes[node].pane < 0) { node = s->nodes[node].first; } return s->nodes[node].pane; }
-bool tb_setup_capture_restore(TbSetupCapture *c, const TbSetup *s, TbLayout *layout,
+bool tb_setup_capture_restore(TbSetupCapture *c, const TbSetup *s, TbLayout_t *layout,
                               TbDemo *workspace, TbCode *code, TbMemory *memory, TbVariables *variables)
 {
     if (!c || !tb_setup_valid(s) || tb_variables_definitions(variables)) { return false; }
@@ -145,7 +145,7 @@ bool tb_setup_capture_restore(TbSetupCapture *c, const TbSetup *s, TbLayout *lay
     layout->row_ratio = s->row_ratio; layout->count = 0;
     for (size_t i = 0; i < TB_SETUP_NODES; ++i) {
         const TbSetupNode *n = &s->nodes[i]; if (!n->used) { continue; }
-        layout->nodes[i] = (TbLayoutNode){true, n->pane, n->first, n->second, n->ratio, (TbSplit)n->direction};
+        layout->nodes[i] = (TbLayoutNode_t){true, n->pane, n->first, n->second, n->ratio, (TbSplit_e)n->direction};
     }
     for (int i = 0; i < TB_MAX_PANES; ++i) {
         const TbSetupPane *p = &s->panes[i]; if (!p->used) { c->panes[i] = 0; continue; }

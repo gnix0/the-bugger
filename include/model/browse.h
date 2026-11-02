@@ -11,7 +11,7 @@ typedef struct {
     int view;
     unsigned format;
     uint64_t begin, end, epoch;
-    TbGdbGeneration generation;
+    TbGdbGeneration_t generation;
 } TbBrowseKey;
 typedef struct {
     TbBrowseKey key;

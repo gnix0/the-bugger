@@ -17,7 +17,7 @@ typedef struct {
     uint64_t lifetime; /* Session-local identity; numeric ID reuse never inherits it. */
 } TbThread;
 typedef struct {
-    TbGdbGeneration generation;
+    TbGdbGeneration_t generation;
     bool ready, stale, refreshing, threads_limited, more_frames;
     char selected_thread[32], stopped_thread[32];
     TbFrame selected, stopped;
@@ -29,12 +29,12 @@ typedef struct {
 } TbContextSnapshot;
 typedef struct TbContext TbContext;
 
-TbContext *tb_context_create(TbGdb *gdb);
+TbContext *tb_context_create(TbGdb_t *gdb);
 void tb_context_destroy(TbContext *context);
 void tb_context_reset(TbContext *context);
 /* Called from the controller callback: copies borrowed data only. Returns true
  * for completions owned by this module, so other request owners ignore them. */
-bool tb_context_event(TbContext *context, const TbGdbEvent *event);
+bool tb_context_event(TbContext *context, const TbGdbEvent_t *event);
 /* No controller mutation from callbacks. Pump only when session setup/manual
  * operations are idle. No polling reads while running or with no visible view. */
 /* One stopped mutation at a time across inspectors. Acquire only immediately

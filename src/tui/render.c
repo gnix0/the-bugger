@@ -65,7 +65,7 @@ void tb_text(int y, int x, int width, TbStyle style, attr_t attributes, const ch
     }
 }
 
-void tb_fill(TbRect rect, TbStyle style)
+void tb_fill(TbRect_t rect, TbStyle style)
 {
     tb_style(style, 0);
     if (rect.x < 0 || rect.y < 0 || rect.w <= 0 || rect.h <= 0) {
@@ -262,7 +262,7 @@ static void styled_line(TbView view, int y, int x, int width, const char *text,
     }
 }
 
-void tb_render_demo(const TbDemo *demo, int pane_index, TbRect rect)
+void tb_render_demo(const TbDemo *demo, int pane_index, TbRect_t rect)
 {
     if (rect.w < 10 || rect.h < 7) {
         return;
@@ -271,7 +271,7 @@ void tb_render_demo(const TbDemo *demo, int pane_index, TbRect rect)
     TbView view = pane->tabs[pane->active];
     TbScroll scroll = tb_demo_scrollbar(demo, pane, rect.h - 3);
     int x = rect.x + 1, width = rect.w - 2;
-    tb_fill((TbRect){rect.x, rect.y + 1, rect.w, 1}, TB_FOOTER);
+    tb_fill((TbRect_t){rect.x, rect.y + 1, rect.w, 1}, TB_FOOTER);
     tb_text(rect.y + 1, x, width, TB_FOOTER, 0, heading(view));
     for (int row = 0; row < rect.h - 3; ++row) {
         char text[256];
@@ -282,7 +282,7 @@ void tb_render_demo(const TbDemo *demo, int pane_index, TbRect rect)
         }
         bool selected = (view == TB_SOURCE && index == 17 + demo->step) ||
                         (view == TB_DISASSEMBLY && index == demo->step);
-        if (selected) { tb_fill((TbRect){rect.x, rect.y + 2 + row, rect.w, 1}, TB_SELECTED); }
+        if (selected) { tb_fill((TbRect_t){rect.x, rect.y + 2 + row, rect.w, 1}, TB_SELECTED); }
         styled_line(view, rect.y + 2 + row, x, width, text, style, selected);
     }
     if (scroll.maximum > 0) {
@@ -297,7 +297,7 @@ void tb_render_demo(const TbDemo *demo, int pane_index, TbRect rect)
         "20000000 | HEX/ASCII", "Frame 0 | main", "GDB/MI | sample log"
     };
     int footer = rect.y + rect.h - 1;
-    tb_fill((TbRect){rect.x, footer, rect.w, 1}, TB_FOOTER);
+    tb_fill((TbRect_t){rect.x, footer, rect.w, 1}, TB_FOOTER);
     tb_text(footer, x, width - 6, TB_FOOTER, 0,
             demo->running ? "Running | stale sample" : view <= TB_CONSOLE ? footers[view] : "Simulated preview");
     tb_text(footer, rect.x + rect.w - 5, 4, TB_FOOTER, A_BOLD, "DEMO");

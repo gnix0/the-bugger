@@ -37,7 +37,7 @@ void *__wrap_realloc(void *pointer, size_t size)
 
 typedef struct { size_t records, errors; } Events;
 
-static void emit(void *context, TbMiRecord *record, const TbMiError *error)
+static void emit(void *context, TbMiRecord_t *record, const TbMiError_t *error)
 {
     Events *events = context;
     if (error != NULL) {
@@ -55,11 +55,11 @@ static void check(const char *line)
     size_t length = strlen(line);
     bool completed = false;
     for (size_t failure = 1; failure < 200; ++failure) {
-        TbMiRecord *record = NULL;
-        TbMiError error;
+        TbMiRecord_t *record = NULL;
+        TbMiError_t error;
         allocation = 0;
         fail_at = failure;
-        TbMiStatus status = tb_mi_parse(line, length, &record, &error);
+        TbMiStatus_e status = tb_mi_parse(line, length, &record, &error);
         fail_at = 0;
         if (status == TB_MI_OK) {
             CHECK(record != NULL);
@@ -73,11 +73,11 @@ static void check(const char *line)
 
     completed = false;
     for (size_t failure = 1; failure < 200; ++failure) {
-        TbMiParser parser = {0};
+        TbMiParser_t parser = {0};
         Events events = {0};
         allocation = 0;
         fail_at = failure;
-        TbMiStatus status = tb_mi_feed(&parser, line, length, emit, &events);
+        TbMiStatus_e status = tb_mi_feed(&parser, line, length, emit, &events);
         if (status == TB_MI_OK) { status = tb_mi_feed(&parser, "\n", 1, emit, &events); }
         fail_at = 0;
         if (status == TB_MI_OK) {

@@ -8,14 +8,14 @@
 static TbCode *code;
 static TbContext *context;
 static unsigned replies;
-static void emit(void *unused, const TbGdbEvent *event)
+static void emit(void *unused, const TbGdbEvent_t *event)
 {
     (void)unused;
     if (!tb_code_event(code, event)) { (void)tb_context_event(context, event); }
     if (event->kind == TB_GDB_REPLY) { ++replies; }
 }
-static void pump(TbGdb *gdb) { tb_gdb_pump(gdb, 2); tb_code_pump(code); }
-static void restored(TbGdb *gdb)
+static void pump(TbGdb_t *gdb) { tb_gdb_pump(gdb, 2); tb_code_pump(code); }
+static void restored(TbGdb_t *gdb)
 {
     uint64_t deadline = tb_gdb_now_ms() + 2000;
     while (tb_code_restoring(code) && tb_gdb_now_ms() < deadline) { pump(gdb); }
@@ -29,7 +29,7 @@ int main(int argc, char **argv)
     (void)snprintf(first, sizeof first, "%s/first path", root); (void)snprintf(second, sizeof second, "%s/second \"path\"", root);
     (void)snprintf(rejected, sizeof rejected, "%s/rejected", root);
     CHECK(mkdir(first, 0700) == 0 && mkdir(second, 0700) == 0 && mkdir(rejected, 0700) == 0);
-    TbGdb *gdb = tb_gdb_create(emit, NULL); CHECK(gdb); context = tb_context_create(gdb); CHECK(context); code = tb_code_create(gdb, context); CHECK(code);
+    TbGdb_t *gdb = tb_gdb_create(emit, NULL); CHECK(gdb); context = tb_context_create(gdb); CHECK(context); code = tb_code_create(gdb, context); CHECK(code);
     CHECK(tb_gdb_start(gdb, argv[1], 1000)); uint64_t end = tb_gdb_now_ms() + 2000;
     while (tb_gdb_state(gdb) != TB_GDB_READY && tb_gdb_now_ms() < end) { pump(gdb); } CHECK(tb_gdb_state(gdb) == TB_GDB_READY);
     const char *dirs[] = {first, second}; TbSourceRule rules[2] = {0};

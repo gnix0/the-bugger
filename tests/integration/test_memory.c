@@ -7,17 +7,17 @@
 static TbContext *context;
 static TbMemory *memory;
 static unsigned replies;
-static void emit(void *unused, const TbGdbEvent *event)
+static void emit(void *unused, const TbGdbEvent_t *event)
 {
     (void)unused;
     if (!tb_memory_event(memory, event)) { (void)tb_context_event(context, event); }
     if (event->kind == TB_GDB_REPLY) { ++replies; }
 }
-static void pump(TbGdb *gdb)
+static void pump(TbGdb_t *gdb)
 {
     tb_gdb_pump(gdb, 1); tb_context_pump(context); tb_memory_pump(memory);
 }
-static void command(TbGdb *gdb, const char *op, const char *arg)
+static void command(TbGdb_t *gdb, const char *op, const char *arg)
 {
     unsigned before = replies; const char *args[] = {arg};
     CHECK(tb_gdb_request(gdb, op, args, arg ? 1 : 0, TB_GDB_SESSION, 999, 1000, NULL));
@@ -25,24 +25,24 @@ static void command(TbGdb *gdb, const char *op, const char *arg)
     while (replies == before && tb_gdb_now_ms() < end) { pump(gdb); }
     CHECK(replies > before);
 }
-static void context_ready(TbGdb *gdb)
+static void context_ready(TbGdb_t *gdb)
 {
     uint64_t end = tb_gdb_now_ms() + 1500;
     while ((!tb_context_snapshot(context)->ready || tb_context_snapshot(context)->stale || tb_gdb_pending(gdb)) && tb_gdb_now_ms() < end) { pump(gdb); }
     CHECK(tb_context_snapshot(context)->ready && !tb_context_snapshot(context)->stale);
 }
-static void ready(TbGdb *gdb, int id, bool success)
+static void ready(TbGdb_t *gdb, int id, bool success)
 {
     uint64_t end = tb_gdb_now_ms() + 1500;
     while ((tb_memory_view(memory, id)->pending || tb_gdb_pending(gdb)) && tb_gdb_now_ms() < end) { pump(gdb); }
     const TbMemoryView *v = tb_memory_view(memory, id);
     if (v->pending || v->ready != success) { fprintf(stderr, "memory view %d expr %s: pending %d ready %d wanted %d state %d context %d/%d: %s\n", id, v->expression, v->pending, v->ready, success, tb_gdb_state(gdb), tb_context_snapshot(context)->ready, tb_context_snapshot(context)->stale, v->error); CHECK(false); }
 }
-static void idle(TbGdb *gdb)
+static void idle(TbGdb_t *gdb)
 {
     unsigned before = replies; for (int i = 0; i < 8; ++i) { pump(gdb); } CHECK(before == replies);
 }
-static void consent(TbGdb *gdb)
+static void consent(TbGdb_t *gdb)
 {
     CHECK(!tb_memory_range_set(memory, 0, 16, 1, 2, TB_MEMORY_ORDINARY, 0, ""));
     CHECK(!tb_memory_range_set(memory, 0, 0, 2, 1, TB_MEMORY_ORDINARY, 0, ""));
@@ -69,7 +69,7 @@ static void consent(TbGdb *gdb)
     CHECK(strstr(tb_memory_view(memory, 1)->error, "generic byte reads are blocked")); idle(gdb);
     tb_memory_clear(memory, 1); tb_memory_visible(memory, 1, true);
 }
-static void backend_consent(TbGdb *gdb)
+static void backend_consent(TbGdb_t *gdb)
 {
     TbMemoryBackend reviewed = {.target = "stm32f4x.cpu", .device = "STM32F446 / owner board",
         .server = "OpenOCD 0.12.0-01004-g9ea7f3d64; board/st_nucleo_f4.cfg; localhost:3333",
@@ -114,7 +114,7 @@ static void queued_revoke(const char *peer)
 {
     CHECK(setenv("TB_FAKE_FORBID_WRITES", "1", 1) == 0);
     CHECK(setenv("TB_FAKE_MODE", "context-memory", 1) == 0);
-    TbGdb *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
+    TbGdb_t *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
     context = tb_context_create(gdb); memory = tb_memory_create(gdb, context); CHECK(context && memory);
     CHECK(tb_gdb_start(gdb, peer, 1000));
     uint64_t until = tb_gdb_now_ms() + 2000;
@@ -145,7 +145,7 @@ int main(int argc, char **argv)
     for (size_t i = 0; i < sizeof good / sizeof *good; ++i) { CHECK(tb_memory_expression(good[i])); }
     for (size_t i = 0; i < sizeof bad / sizeof *bad; ++i) { CHECK(!tb_memory_expression(bad[i])); }
     CHECK(setenv("TB_FAKE_MODE", "context-memory", 1) == 0);
-    TbGdb *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
+    TbGdb_t *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
     context = tb_context_create(gdb); memory = tb_memory_create(gdb, context); CHECK(context && memory);
     CHECK(tb_gdb_start(gdb, argv[1], 1000)); uint64_t end = tb_gdb_now_ms() + 1500;
     while (tb_gdb_state(gdb) != TB_GDB_READY && tb_gdb_now_ms() < end) { pump(gdb); }

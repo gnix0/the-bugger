@@ -9,7 +9,7 @@ static TbMemory *memory;
 static unsigned replies, reads, children, deletes, writes;
 static uint64_t proof_address = 0x1000;
 static bool proof_complete;
-static bool proof(void *unused, TbGdbGeneration generation, const char *expression,
+static bool proof(void *unused, TbGdbGeneration_t generation, const char *expression,
                   TbVariableRead operation, unsigned first, unsigned count, TbVariableAccess *access)
 {
     (void)unused; (void)generation; (void)first; (void)count;
@@ -17,12 +17,12 @@ static bool proof(void *unused, TbGdbGeneration generation, const char *expressi
     access->count = 1; access->spans[0].address = proof_address; access->spans[0].bytes = 4;
     return true;
 }
-static unsigned field(const TbMiRecord *record, const char *name)
+static unsigned field(const TbMiRecord_t *record, const char *name)
 {
-    const TbMiValue *value = tb_mi_find(record->results, name);
+    const TbMiValue_t *value = tb_mi_find(record->results, name);
     CHECK(value && value->type == TB_MI_STRING); return (unsigned)strtoul(value->string.data, NULL, 10);
 }
-static void emit(void *unused, const TbGdbEvent *event)
+static void emit(void *unused, const TbGdbEvent_t *event)
 {
     (void)unused;
     /* Use the native owner's routing order, including the M10 module. */
@@ -34,14 +34,14 @@ static void emit(void *unused, const TbGdbEvent *event)
         }
     }
 }
-static void pump(TbGdb *gdb)
+static void pump(TbGdb_t *gdb)
 {
     tb_variables_begin(variables);
     tb_variables_want(variables, TB_VARIABLE_LOCALS, 0, TB_VARIABLE_NODES);
     tb_variables_want(variables, TB_VARIABLE_WATCHES, 0, TB_VARIABLE_NODES);
     tb_gdb_pump(gdb, 1); tb_context_pump(context); tb_variables_pump(variables);
 }
-static void drain(TbGdb *gdb)
+static void drain(TbGdb_t *gdb)
 {
     unsigned stable = 0; uint64_t end = tb_gdb_now_ms() + 1500;
     while (stable < 4 && tb_gdb_now_ms() < end) {
@@ -52,7 +52,7 @@ static void drain(TbGdb *gdb)
     }
     CHECK(stable == 4);
 }
-static void command_arg(TbGdb *gdb, const char *op, const char *arg, uint64_t cookie)
+static void command_arg(TbGdb_t *gdb, const char *op, const char *arg, uint64_t cookie)
 {
     const char *args[] = {arg};
     unsigned before = replies; CHECK(tb_gdb_request(gdb, op, args, arg ? 1 : 0, TB_GDB_SESSION, cookie, 1000, NULL));
@@ -60,7 +60,7 @@ static void command_arg(TbGdb *gdb, const char *op, const char *arg, uint64_t co
     while (replies == before && tb_gdb_now_ms() < end) { pump(gdb); }
     CHECK(replies > before); drain(gdb);
 }
-static void command(TbGdb *gdb, const char *op, uint64_t cookie) { command_arg(gdb, op, NULL, cookie); }
+static void command(TbGdb_t *gdb, const char *op, uint64_t cookie) { command_arg(gdb, op, NULL, cookie); }
 static size_t find(TbVariableView view, const char *name)
 {
     for (size_t row = 0; row < tb_variables_count(variables, view); ++row) {
@@ -71,7 +71,7 @@ static size_t find(TbVariableView view, const char *name)
 static void queued_revoke(const char *peer)
 {
     CHECK(setenv("TB_FAKE_FORBID_WRITES", "1", 1) == 0 && setenv("TB_FAKE_MODE", "context-variables", 1) == 0);
-    TbGdb *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
+    TbGdb_t *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
     context = tb_context_create(gdb); variables = tb_variables_create(gdb, context); memory = tb_memory_create(gdb, context);
     CHECK(context && variables && memory && tb_gdb_start(gdb, peer, 1000));
     uint64_t until = tb_gdb_now_ms() + 2000;
@@ -96,7 +96,7 @@ static void queued_revoke(const char *peer)
 int main(int argc, char **argv)
 {
     CHECK(argc == 2); CHECK(setenv("TB_FAKE_MODE", "context-variables", 1) == 0);
-    TbGdb *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
+    TbGdb_t *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
     context = tb_context_create(gdb); variables = tb_variables_create(gdb, context); memory = tb_memory_create(gdb, context); CHECK(context && variables && memory);
     CHECK(tb_gdb_start(gdb, argv[1], 1000));
     uint64_t end = tb_gdb_now_ms() + 1500;

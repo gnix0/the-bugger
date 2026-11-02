@@ -25,12 +25,12 @@ typedef struct {
     unsigned width; /* MMIO bits; zero for ordinary byte ranges. */
     bool used, authorized;
     char risks[160]; /* Empty means side effects are unknown, never safe. */
-    TbGdbGeneration generation;
+    TbGdbGeneration_t generation;
 } TbMemoryRange;
 typedef struct {
     uint64_t address, value, sampled_ms;
     unsigned width;
-    TbGdbGeneration generation;
+    TbGdbGeneration_t generation;
 } TbMemoryRegister;
 typedef struct {
     char expression[256], error[192];
@@ -41,7 +41,7 @@ typedef struct {
     bool valid[TB_MEMORY_BYTES];
     size_t data_size, readable;
     bool configured, ready, pending;
-    TbGdbGeneration generation;
+    TbGdbGeneration_t generation;
     bool register_pending;
     char register_error[192];
     bool mmio;
@@ -53,7 +53,7 @@ typedef enum {
     TB_MEMORY_EDIT_ACKNOWLEDGED, TB_MEMORY_EDIT_UNCERTAIN
 } TbMemoryEditState;
 typedef struct TbMemory TbMemory;
-TbMemory *tb_memory_create(TbGdb *gdb, TbContext *context);
+TbMemory *tb_memory_create(TbGdb_t *gdb, TbContext *context);
 void tb_memory_cache(TbMemory *memory, TbBrowseCache *cache);
 /* Metadata-only: no debugger requests, reads or polling. NULL invalidates.
  * Confirm exactly the identity displayed in the review; stale reviews fail. */
@@ -109,7 +109,7 @@ TbMemoryOrder tb_memory_get_order(const TbMemory *memory);
 const TbMemoryView *tb_memory_view(const TbMemory *memory, int view);
 bool tb_memory_stale(const TbMemory *memory, int view);
 void tb_memory_line(const TbMemory *memory, int view, size_t row, char *out, size_t capacity);
-bool tb_memory_event(TbMemory *memory, const TbGdbEvent *event);
+bool tb_memory_event(TbMemory *memory, const TbGdbEvent_t *event);
 void tb_memory_pump(TbMemory *memory);
 uint64_t tb_memory_revision(const TbMemory *memory);
 /* Reserved independent clients for Stack; the same scheduler serializes all

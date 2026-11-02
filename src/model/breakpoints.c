@@ -17,19 +17,19 @@ typedef struct {
     TbSetupBreak definition;
 } RestoredBreak;
 struct TbBreakpoints {
-    TbGdb *gdb; pid_t native_pid;
+    TbGdb_t *gdb; pid_t native_pid;
     TbBreakpoint rows[TB_BREAK_ROWS]; size_t count;
     bool dirty, waiting, ready, cleanup, continue_run, cleanup_failed, recover_insert, limited;
     BreakJob job;
     uint64_t revision, request_token;
     char temporary[32], thread[32], message[192];
-    TbGdbGeneration run_generation;
+    TbGdbGeneration_t run_generation;
     char run_location[8193];
     char baseline[TB_BREAK_ROWS][32]; size_t baseline_count;
     bool watch_pending, watch_recover, watch_reject, watch_failed;
     char watch_id[32], watch_expression[512];
     TbWatchMode watch_mode;
-    TbGdbGeneration watch_generation;
+    TbGdbGeneration_t watch_generation;
     char managed[TB_BREAK_ROWS][32]; size_t managed_count;
     ConfiguredBreak definitions[TB_BREAK_ROWS]; size_t definition_count, definition_reserved;
     TbBreakDefinition pending_definition;
@@ -39,16 +39,16 @@ struct TbBreakpoints {
     RestoredBreak *restored; size_t restored_count, restoring;
     RestoreStep restore_step, uncertain_step;
     bool restore_cancel, restore_query, restore_uncertain, baseline_complete, creation_notified, baseline_queried;
-    TbGdbGeneration restore_generation;
+    TbGdbGeneration_t restore_generation;
     DefinitionEdit uncertain_edit;
     TbBreakDefinition uncertain_definition;
     char uncertain_id[32];
 };
 static bool restore_pump(TbBreakpoints *b);
-static bool restore_event(TbBreakpoints *b, BreakJob job, const TbGdbEvent *event, bool okay);
+static bool restore_event(TbBreakpoints *b, BreakJob job, const TbGdbEvent_t *event, bool okay);
 static void remember_baseline(TbBreakpoints *b);
 static void forget_configured(TbBreakpoints *b, uint64_t identity);
-static void parse_listing(TbBreakpoints *b, const TbMiRecord *record);
+static void parse_listing(TbBreakpoints *b, const TbMiRecord_t *record);
 static bool definition_location(const TbBreakDefinition *d, const TbBreakpoint *row);
 size_t tb_break_definition_count(const TbBreakpoints *b) { return b->definition_count; }
 const TbBreakDefinition *tb_break_definition(const TbBreakpoints *b, size_t i)
@@ -56,7 +56,7 @@ const TbBreakDefinition *tb_break_definition(const TbBreakpoints *b, size_t i)
 bool tb_break_definitions_ready(const TbBreakpoints *b)
 {
     if (b->definition_uncertain || b->edit != EDIT_NONE || tb_break_busy(b)) { return false; }
-    TbGdbState state = tb_gdb_state(b->gdb);
+    TbGdbState_e state = tb_gdb_state(b->gdb);
     if ((state == TB_GDB_READY || state == TB_GDB_STOPPED) && (b->dirty || b->waiting)) { return false; }
     for (size_t i = 0; i < b->definition_count; ++i) { if (b->definitions[i].conflict) { return false; } }
     return true;
@@ -85,13 +85,13 @@ static void message(TbBreakpoints *b, const char *text)
     }
     b->message[out] = 0; ++b->revision;
 }
-static void copy(char *out, size_t capacity, const TbMiValue *v)
+static void copy(char *out, size_t capacity, const TbMiValue_t *v)
 {
     out[0] = 0;
     if (!v || v->type != TB_MI_STRING || v->string.length >= capacity || memchr(v->string.data, 0, v->string.length)) { return; }
     memcpy(out, v->string.data, v->string.length); out[v->string.length] = 0;
 }
-static uint64_t number(const TbMiValue *v)
+static uint64_t number(const TbMiValue_t *v)
 {
     char text[32]; copy(text, sizeof text, v); uint64_t n = 0;
     for (size_t i = 0; text[i]; ++i) {
@@ -118,14 +118,14 @@ static bool same_address(const char *left, const char *right)
     errno = 0; unsigned long long b = strtoull(right + 2, &end, 16);
     return !errno && !*end && a == b;
 }
-TbBreakpoints *tb_break_create(TbGdb *gdb)
+TbBreakpoints *tb_break_create(TbGdb_t *gdb)
 {
     TbBreakpoints *b = calloc(1, sizeof *b); if (b) { b->gdb = gdb; b->dirty = true; } return b;
 }
 void tb_break_destroy(TbBreakpoints *b) { if (b) { free(b->restored); free(b); } }
 void tb_break_reset(TbBreakpoints *b)
 {
-    TbGdb *gdb = b->gdb; uint64_t revision = b->revision;
+    TbGdb_t *gdb = b->gdb; uint64_t revision = b->revision;
     free(b->restored); memset(b, 0, sizeof *b); b->gdb = gdb; b->revision = revision + 1; b->dirty = true;
 }
 void tb_break_refresh(TbBreakpoints *b)
@@ -154,7 +154,7 @@ void tb_break_definition_reserve(TbBreakpoints *b, size_t retained)
 static bool allowed(TbBreakpoints *b)
 {
     if (b->interlock) { message(b, "Wait for setup restoration to settle."); return false; }
-    TbGdbState state = tb_gdb_state(b->gdb);
+    TbGdbState_e state = tb_gdb_state(b->gdb);
     if (b->waiting || tb_break_busy(b) || (state != TB_GDB_READY && state != TB_GDB_STOPPED)) {
         message(b, "Breakpoint operation needs an idle, loaded/stopped debugger."); return false;
     }
@@ -302,14 +302,14 @@ bool tb_break_run_to(TbBreakpoints *b, const char *location, const char *thread)
 {
     return tb_break_run_at(b, (TbBreakLocation){.text = location}, thread);
 }
-static bool field_text(char *out, size_t size, const TbMiValue *value)
+static bool field_text(char *out, size_t size, const TbMiValue_t *value)
 {
     copy(out, size, value);
     if (!value || value->type != TB_MI_STRING || value->string.length >= size || strlen(out) != value->string.length) { return false; }
     for (size_t i = 0; out[i]; ++i) { if ((unsigned char)out[i] < 32 || out[i] == 127) { return false; } }
     return true;
 }
-static bool field_unsigned(const TbMiValue *value, uint64_t maximum, uint64_t *out)
+static bool field_unsigned(const TbMiValue_t *value, uint64_t maximum, uint64_t *out)
 {
     if (!value || value->type != TB_MI_STRING || !value->string.length) { return false; }
     uint64_t n = 0;
@@ -320,11 +320,11 @@ static bool field_unsigned(const TbMiValue *value, uint64_t maximum, uint64_t *o
     }
     *out = n; return true;
 }
-static bool supported_fields(const TbMiValue *fields, char reason[192])
+static bool supported_fields(const TbMiValue_t *fields, char reason[192])
 {
     static const char *const supported[] = {"number", "type", "disp", "enabled", "addr", "func", "file", "fullname", "line", "thread-groups", "times", "original-location", "cond", "ignore", "pending", "locations"};
-    for (const TbMiValue *v = fields; v; v = v->next) {
-        for (const TbMiValue *previous = fields; previous != v; previous = previous->next) {
+    for (const TbMiValue_t *v = fields; v; v = v->next) {
+        for (const TbMiValue_t *previous = fields; previous != v; previous = previous->next) {
             if (v->name && previous->name && !strcmp(v->name, previous->name)) { (void)snprintf(reason, 192, "Duplicate breakpoint attribute: %.120s", v->name); return false; }
         }
         bool known = false;
@@ -333,10 +333,10 @@ static bool supported_fields(const TbMiValue *fields, char reason[192])
     }
     return true;
 }
-static void parse_row(TbBreakpoints *b, const TbMiValue *tuple, const TbBreakpoint *parent)
+static void parse_row(TbBreakpoints *b, const TbMiValue_t *tuple, const TbBreakpoint *parent)
 {
     if (!tuple || tuple->type != TB_MI_TUPLE) { return; }
-    TbBreakpoint row = {0}; const TbMiValue *fields = tuple->children;
+    TbBreakpoint row = {0}; const TbMiValue_t *fields = tuple->children;
     copy(row.id, sizeof row.id, tb_mi_find(fields, "number")); if (!id_valid(row.id)) { return; }
     for (size_t i = 0; i < b->count; ++i) { if (strcmp(b->rows[i].id, row.id) == 0) { return; } }
     const char *dot = strchr(row.id, '.');
@@ -390,10 +390,10 @@ static void parse_row(TbBreakpoints *b, const TbMiValue *tuple, const TbBreakpoi
         }
     }
     b->rows[b->count++] = row;
-    const TbMiValue *locations = tb_mi_find(fields, "locations");
+    const TbMiValue_t *locations = tb_mi_find(fields, "locations");
     if (!parent && locations) {
         bool complete = locations->type == TB_MI_LIST;
-        for (const TbMiValue *v = locations->children; complete && v; v = v->next) {
+        for (const TbMiValue_t *v = locations->children; complete && v; v = v->next) {
             size_t before = b->count; parse_row(b, v, &row); complete = b->count > before;
         }
         if (!complete) { b->listing_complete = false; }
@@ -427,7 +427,7 @@ static void watch_verify(TbBreakpoints *b)
         return;
     }
     (void)snprintf(b->watch_id, sizeof b->watch_id, "%s", found->id);
-    TbGdbGeneration now = tb_gdb_generation(b->gdb);
+    TbGdbGeneration_t now = tb_gdb_generation(b->gdb);
     bool context_changed = now.session != b->watch_generation.session || now.stop != b->watch_generation.stop || now.context != b->watch_generation.context;
     if (b->watch_recover || context_changed || !found->watchpoint || !found->hardware || found->watch_mode != b->watch_mode) {
         b->watch_reject = true;
@@ -442,12 +442,12 @@ static void watch_verify(TbBreakpoints *b)
         message(b, "Hardware data watchpoint verified. Width/slot insertion can still fail on resume; inspect GDB errors.");
     }
 }
-static void definition_complete(TbBreakpoints *b, const TbMiRecord *record)
+static void definition_complete(TbBreakpoints *b, const TbMiRecord_t *record)
 {
     if (b->edit == EDIT_NONE) { return; }
     size_t i = configured_index(b, b->edit_id);
     if (b->edit == EDIT_CREATE) {
-        const TbMiValue *bp = tb_mi_find(record->results, "bkpt"); char id[32];
+        const TbMiValue_t *bp = tb_mi_find(record->results, "bkpt"); char id[32];
         copy(id, sizeof id, bp ? tb_mi_find(bp->children, "number") : NULL);
         if (!id_valid(id) || strchr(id, '.') || configured_index(b, id) != b->definition_count) { b->definition_uncertain = true; }
         else {
@@ -480,16 +480,16 @@ static void definition_observations(TbBreakpoints *b)
          * replacements for the explicitly configured count. */
     }
 }
-bool tb_break_event(TbBreakpoints *b, const TbGdbEvent *event)
+bool tb_break_event(TbBreakpoints *b, const TbGdbEvent_t *event)
 {
-    const TbMiRecord *record = event->record;
+    const TbMiRecord_t *record = event->record;
     if (event->kind == TB_GDB_RECONCILED) { b->dirty = true; b->cleanup = *b->temporary != 0; b->continue_run = false; }
     if (event->kind == TB_GDB_RECORD && record) {
         if (record->kind == TB_MI_NOTIFY && strncmp(record->klass, "breakpoint-", 11) == 0) {
             b->dirty = true;
             if (b->waiting && b->job == BREAK_RESTORE_INSERT && strcmp(record->klass, "breakpoint-created") == 0) { b->creation_notified = true; }
             if (b->watch_pending && b->job == BREAK_WATCH_INSERT && strcmp(record->klass, "breakpoint-created") == 0) {
-                const TbMiValue *bp = tb_mi_find(record->results, "bkpt");
+                const TbMiValue_t *bp = tb_mi_find(record->results, "bkpt");
                 char expression[512], id[32];
                 copy(expression, sizeof expression, bp ? tb_mi_find(bp->children, "exp") : NULL);
                 if (!*expression) { copy(expression, sizeof expression, bp ? tb_mi_find(bp->children, "original-location") : NULL); }
@@ -497,7 +497,7 @@ bool tb_break_event(TbBreakpoints *b, const TbGdbEvent *event)
                 if (strcmp(expression, b->watch_expression) == 0 && new_id(b, id)) { (void)snprintf(b->watch_id, sizeof b->watch_id, "%s", id); }
             }
             if (b->waiting && b->job == BREAK_RUN_INSERT && strcmp(record->klass, "breakpoint-created") == 0) {
-                const TbMiValue *bp = tb_mi_find(record->results, "bkpt");
+                const TbMiValue_t *bp = tb_mi_find(record->results, "bkpt");
                 char location[8193], disp[16];
                 copy(location, sizeof location, bp ? tb_mi_find(bp->children, "original-location") : NULL);
                 copy(disp, sizeof disp, bp ? tb_mi_find(bp->children, "disp") : NULL);
@@ -517,11 +517,11 @@ bool tb_break_event(TbBreakpoints *b, const TbGdbEvent *event)
             char reason[64]; copy(reason, sizeof reason, tb_mi_find(record->results, "reason"));
             if (strstr(reason, "watchpoint")) {
                 char id[32], old[64], value[64], summary[192];
-                const TbMiValue *wp = tb_mi_find(record->results, "wpt");
+                const TbMiValue_t *wp = tb_mi_find(record->results, "wpt");
                 if (!wp) { wp = tb_mi_find(record->results, "hw-rwpt"); }
                 if (!wp) { wp = tb_mi_find(record->results, "hw-awpt"); }
                 copy(id, sizeof id, wp ? tb_mi_find(wp->children, "number") : tb_mi_find(record->results, "wpnum"));
-                const TbMiValue *values = tb_mi_find(record->results, "value");
+                const TbMiValue_t *values = tb_mi_find(record->results, "value");
                 copy(old, sizeof old, values ? tb_mi_find(values->children, "old") : NULL);
                 copy(value, sizeof value, values ? tb_mi_find(values->children, "new") : NULL);
                 if (!*value) { copy(value, sizeof value, values ? tb_mi_find(values->children, "value") : NULL); }
@@ -563,12 +563,12 @@ bool tb_break_event(TbBreakpoints *b, const TbGdbEvent *event)
         return true;
     }
     if (job == BREAK_LIST) {
-        const TbMiValue *table = tb_mi_find(record->results, "BreakpointTable");
-        const TbMiValue *body = table ? tb_mi_find(table->children, "body") : NULL;
+        const TbMiValue_t *table = tb_mi_find(record->results, "BreakpointTable");
+        const TbMiValue_t *body = table ? tb_mi_find(table->children, "body") : NULL;
         if (!body || body->type != TB_MI_LIST) { b->ready = false; message(b, "Malformed breakpoint table; retained listing is unavailable."); return true; }
         if (b->recover_insert) {
             unsigned found = 0; bool uncertain = false; char recovered[32] = {0};
-            for (const TbMiValue *v = body->children; v; v = v->next) {
+            for (const TbMiValue_t *v = body->children; v; v = v->next) {
                 if (v->type != TB_MI_TUPLE) { continue; }
                 char id[32], disp[16], location[8193];
                 copy(id, sizeof id, tb_mi_find(v->children, "number")); copy(disp, sizeof disp, tb_mi_find(v->children, "disp"));
@@ -608,7 +608,7 @@ bool tb_break_event(TbBreakpoints *b, const TbGdbEvent *event)
         }
         if (b->watch_pending && !b->watch_reject && !b->watch_failed) { watch_verify(b); }
     } else if (job == BREAK_WATCH_INSERT) {
-        const TbMiValue *wp = tb_mi_find(record->results, "wpt");
+        const TbMiValue_t *wp = tb_mi_find(record->results, "wpt");
         if (!wp) { wp = tb_mi_find(record->results, "hw-rwpt"); }
         if (!wp) { wp = tb_mi_find(record->results, "hw-awpt"); }
         char id[32]; copy(id, sizeof id, wp ? tb_mi_find(wp->children, "number") : NULL);
@@ -620,7 +620,7 @@ bool tb_break_event(TbBreakpoints *b, const TbGdbEvent *event)
         b->watch_id[0] = 0; b->dirty = true;
         message(b, "Data watchpoint rejected and removed; no software fallback retained.");
     } else if (job == BREAK_RUN_INSERT) {
-        const TbMiValue *bp = tb_mi_find(record->results, "bkpt");
+        const TbMiValue_t *bp = tb_mi_find(record->results, "bkpt");
         copy(b->temporary, sizeof b->temporary, bp ? tb_mi_find(bp->children, "number") : NULL);
         if (!id_valid(b->temporary)) { b->temporary[0] = 0; b->recover_insert = true; message(b, "Run-to breakpoint ID unavailable; reconciling before any resume."); }
         else if (b->run_generation.stop != tb_gdb_generation(b->gdb).stop || tb_gdb_state(b->gdb) != TB_GDB_STOPPED) { b->cleanup = true; }
@@ -635,7 +635,7 @@ void tb_break_pump(TbBreakpoints *b)
 {
     if (b->waiting) { return; }
     if (restore_pump(b)) { return; }
-    TbGdbState state = tb_gdb_state(b->gdb);
+    TbGdbState_e state = tb_gdb_state(b->gdb);
     if (state != TB_GDB_READY && state != TB_GDB_STOPPED) { return; }
     if (state == TB_GDB_STOPPED && b->native_pid > 1) {
         for (size_t i = 0; i < b->definition_count; ++i) {
@@ -673,15 +673,15 @@ const TbBreakpoint *tb_break_at(const TbBreakpoints *b, const char *path, unsign
     return NULL;
 }
 
-static void parse_listing(TbBreakpoints *b, const TbMiRecord *record)
+static void parse_listing(TbBreakpoints *b, const TbMiRecord_t *record)
 {
-    const TbMiValue *table = tb_mi_find(record->results, "BreakpointTable");
-    const TbMiValue *body = table ? tb_mi_find(table->children, "body") : NULL;
+    const TbMiValue_t *table = tb_mi_find(record->results, "BreakpointTable");
+    const TbMiValue_t *body = table ? tb_mi_find(table->children, "body") : NULL;
     uint64_t expected = 0; size_t roots = 0;
     b->count = 0; b->limited = false; b->listing_complete = body && body->type == TB_MI_LIST &&
         field_unsigned(table ? tb_mi_find(table->children, "nr_rows") : NULL, UINT32_MAX, &expected);
     if (!body || body->type != TB_MI_LIST) { b->listing_complete = false; b->ready = false; return; }
-    for (const TbMiValue *v = body->children; v; v = v->next) {
+    for (const TbMiValue_t *v = body->children; v; v = v->next) {
         char id[32]; copy(id, sizeof id, v->type == TB_MI_TUPLE ? tb_mi_find(v->children, "number") : NULL);
         if (!id_valid(id)) { b->listing_complete = false; }
         if (!strchr(id, '.')) { ++roots; }
@@ -833,7 +833,7 @@ static bool restore_issue(TbBreakpoints *b, BreakJob job, const char *operation,
 }
 static bool restore_pump(TbBreakpoints *b)
 {
-    TbGdbState state = tb_gdb_state(b->gdb);
+    TbGdbState_e state = tb_gdb_state(b->gdb);
     if (b->restore_query && (b->restore_uncertain || b->definition_uncertain)) {
         if (state != TB_GDB_READY && state != TB_GDB_STOPPED && state != TB_GDB_RUNNING) { return true; }
         b->restore_query = false;
@@ -942,11 +942,11 @@ static void restore_reconciled(TbBreakpoints *b)
     b->restore_step = b->uncertain_step == RESTORE_INSERT ? RESTORE_CONDITION : b->uncertain_step == RESTORE_CONDITION ? RESTORE_IGNORE : RESTORE_VERIFY_DISABLED;
     r->progress.state = TB_RESTORE_PENDING;
 }
-static bool restore_event(TbBreakpoints *b, BreakJob job, const TbGdbEvent *event, bool okay)
+static bool restore_event(TbBreakpoints *b, BreakJob job, const TbGdbEvent_t *event, bool okay)
 {
     bool query = job == BREAK_RESTORE_VERIFY || job == BREAK_RESTORE_RECONCILE || job == BREAK_INTENT_RECONCILE;
     if (job == BREAK_INTENT_RECONCILE || job == BREAK_RESTORE_RECONCILE) {
-        TbGdbGeneration current = tb_gdb_generation(b->gdb);
+        TbGdbGeneration_t current = tb_gdb_generation(b->gdb);
         okay = okay && event->generation.session == current.session && event->generation.stop == current.stop && event->generation.context == current.context;
         if (!okay) { message(b, "Reconciliation query failed; uncertainty and execution interlock retained. Retry reconciliation or close."); return true; }
         parse_listing(b, event->record);
@@ -954,7 +954,7 @@ static bool restore_event(TbBreakpoints *b, BreakJob job, const TbGdbEvent *even
         ++b->revision; return true;
     }
     RestoredBreak *r = &b->restored[b->restoring];
-    TbGdbGeneration now = tb_gdb_generation(b->gdb);
+    TbGdbGeneration_t now = tb_gdb_generation(b->gdb);
     bool changed = event->generation.session != now.session || event->generation.stop != now.stop || event->generation.context != now.context;
     if (!okay || changed) {
         if (event->kind != TB_GDB_REPLY || changed || job == BREAK_RESTORE_ENABLE || (job == BREAK_RESTORE_INSERT && b->creation_notified)) { restore_uncertain(b, b->restore_step); }
@@ -966,7 +966,7 @@ static bool restore_event(TbBreakpoints *b, BreakJob job, const TbGdbEvent *even
         return true;
     }
     if (job == BREAK_RESTORE_INSERT) {
-        const TbMiValue *record = tb_mi_find(event->record->results, "bkpt");
+        const TbMiValue_t *record = tb_mi_find(event->record->results, "bkpt");
         copy(r->progress.backend, sizeof r->progress.backend, record ? tb_mi_find(record->children, "number") : NULL);
         if (!id_valid(r->progress.backend) || strchr(r->progress.backend, '.') || !new_id(b, r->progress.backend)) { r->progress.backend[0] = 0; restore_uncertain(b, RESTORE_INSERT); return true; }
         b->restore_step = RESTORE_CONDITION;

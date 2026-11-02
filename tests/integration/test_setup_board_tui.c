@@ -66,7 +66,7 @@ int main(int argc, char **argv)
     CHECK(argc == 8 && atexit(cleanup) == 0);
     char settings[] = "/tmp/tb-setup-board-ui-XXXXXX"; CHECK(mkdtemp(settings));
     CHECK(setenv("XDG_CONFIG_HOME", settings, 1) == 0 && setenv("TB_TEST_CONFIG_HOME", settings, 1) == 0);
-    TbSession *s = tb_session_create(); CHECK(s); TbLayout layout; tb_layout_init(&layout); TbDemo workspace; tb_demo_init(&workspace);
+    TbSession *s = tb_session_create(); CHECK(s); TbLayout_t layout; tb_layout_init(&layout); TbDemo workspace; tb_demo_init(&workspace);
     const char *expressions[TB_MAX_PANES]; for (int i = 0; i < TB_MAX_PANES; ++i) { expressions[i] = ""; }
     expressions[3] = argv[7]; TbSetupCapture *capture = tb_setup_capture_create(NULL); CHECK(capture);
     CHECK(tb_setup_capture_update(capture, &layout, &workspace, tb_session_code(s), tb_session_memory(s), tb_session_variables(s), tb_session_breakpoints(s), expressions));

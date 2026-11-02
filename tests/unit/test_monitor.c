@@ -19,7 +19,7 @@ static void next(Replay *r, unsigned token)
     char id[64]; (void)snprintf(id, sizeof id, "d2304c391cb1698bb6c4cc6293930c53-%u", token);
     CHECK(tb_monitor_start(&r->frame, id, "stm32f4x.cpu", 0x20000000, 32)); r->active = token;
 }
-static void record(void *context, TbMiRecord *mi, const TbMiError *error)
+static void record(void *context, TbMiRecord_t *mi, const TbMiError_t *error)
 {
     Replay *r = context; CHECK(!error && mi);
     if (mi->kind == TB_MI_TARGET && r->active) { tb_monitor_feed(&r->frame, mi->stream.data, mi->stream.length); }
@@ -38,13 +38,13 @@ static void record(void *context, TbMiRecord *mi, const TbMiError *error)
 }
 static void replay(const char *path, size_t chunk)
 {
-    FILE *file = fopen(path, "rb"); CHECK(file); char bytes[4096]; TbMiParser parser = {0}; Replay r = {0};
+    FILE *file = fopen(path, "rb"); CHECK(file); char bytes[4096]; TbMiParser_t parser = {0}; Replay r = {0};
     size_t n;
     while ((n = fread(bytes, 1, chunk, file)) != 0) { CHECK(tb_mi_feed(&parser, bytes, n, record, &r) == TB_MI_OK); }
     CHECK(!ferror(file) && fclose(file) == 0); CHECK(tb_mi_finish(&parser, record, &r) == TB_MI_OK);
     CHECK(r.completed == 5 && !r.active); tb_mi_parser_destroy(&parser);
 }
-static void width_record(void *context, TbMiRecord *mi, const TbMiError *error)
+static void width_record(void *context, TbMiRecord_t *mi, const TbMiError_t *error)
 {
     Replay *r = context; CHECK(!error && mi);
     if (mi->kind == TB_MI_TARGET && r->active) { tb_monitor_feed(&r->frame, mi->stream.data, mi->stream.length); }
@@ -64,7 +64,7 @@ static void width_record(void *context, TbMiRecord *mi, const TbMiError *error)
 }
 static void width_replay(const char *path)
 {
-    FILE *file = fopen(path, "rb"); CHECK(file); TbMiParser parser = {0}; Replay r = {0}; int c;
+    FILE *file = fopen(path, "rb"); CHECK(file); TbMiParser_t parser = {0}; Replay r = {0}; int c;
     while ((c = fgetc(file)) != EOF) { char byte = (char)c; CHECK(tb_mi_feed(&parser, &byte, 1, width_record, &r) == TB_MI_OK); }
     CHECK(!ferror(file) && fclose(file) == 0 && tb_mi_finish(&parser, width_record, &r) == TB_MI_OK);
     CHECK(r.completed == 3 && !r.active); tb_mi_parser_destroy(&parser);

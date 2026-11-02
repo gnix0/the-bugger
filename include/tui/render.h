@@ -7,8 +7,8 @@
 /* Draw within one row and width display cells. Controls/invalid bytes are inert
  * escaped text; a wide character is omitted if it cannot fit completely. */
 void tb_text(int y, int x, int width, TbStyle style, attr_t attributes, const char *text);
-void tb_fill(TbRect rect, TbStyle style);
-void tb_render_demo(const TbDemo *demo, int pane, TbRect rect);
+void tb_fill(TbRect_t rect, TbStyle style);
+void tb_render_demo(const TbDemo *demo, int pane, TbRect_t rect);
 void tb_render_source_text(int y, int x, int width, const char *code, bool selected);
 typedef struct { int address, bytes, mnemonic; } TbAssemblyColumns;
 void tb_format_assembly(char *out, size_t capacity, TbAssemblyColumns columns,

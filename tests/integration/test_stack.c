@@ -61,18 +61,18 @@ static int peer(void)
     }
     return 0;
 }
-static TbGdb *g;
+static TbGdb_t *g;
 static TbContext *c;
 static TbMemory *m;
 static TbStack *s;
 static unsigned completed, reads, values, anchors, guards;
-static void event(void *unused, const TbGdbEvent *e)
+static void event(void *unused, const TbGdbEvent_t *e)
 {
     (void)unused;
     if (!tb_stack_event(s, e) && !tb_memory_event(m, e)) { (void)tb_context_event(c, e); }
     if (e->kind == TB_GDB_REPLY && e->cookie == 999) {
         ++completed;
-        const TbMiValue *v = tb_mi_find(e->record->results, "reads");
+        const TbMiValue_t *v = tb_mi_find(e->record->results, "reads");
         if (v) {
             reads = (unsigned)strtoul(v->string.data, NULL, 10);
             values = (unsigned)strtoul(tb_mi_find(e->record->results, "values")->string.data, NULL, 10);

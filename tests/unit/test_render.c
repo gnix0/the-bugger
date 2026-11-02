@@ -144,7 +144,7 @@ int main(void)
     TbDemo demo;
     tb_demo_init(&demo);
     demo.panes[0].scroll[TB_SOURCE] = 16;
-    TbRect rect = {1, 4, 49, 10};
+    TbRect_t rect = {1, 4, 49, 10};
     tb_fill(rect, TB_PANEL);
     tb_render_demo(&demo, 0, rect);
     /* Initial source row is main: line number, type and function are distinct. */

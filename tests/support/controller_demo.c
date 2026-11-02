@@ -15,7 +15,7 @@ static size_t streams;
 
 static void stop_signal(int number) { interrupted = number; }
 
-static const char *state_name(TbGdbState state)
+static const char *state_name(TbGdbState_e state)
 {
     static const char *const names[] = {"disconnected", "starting", "ready (no target)",
         "FAKE running", "FAKE stopped", "FAKE target exited", "closing"};
@@ -31,9 +31,9 @@ static void printable(const char *text, size_t length)
     }
 }
 
-static void emit(void *context, const TbGdbEvent *event)
+static void emit(void *context, const TbGdbEvent_t *event)
 {
-    TbGdb **gdb = context;
+    TbGdb_t **gdb = context;
     if (event->kind == TB_GDB_STATE) {
         printf("state: %s\n", state_name(tb_gdb_state(*gdb)));
     } else if (event->kind == TB_GDB_STDERR) {
@@ -61,7 +61,7 @@ static void emit(void *context, const TbGdbEvent *event)
     (void)fflush(stdout);
 }
 
-static void command(TbGdb *gdb, const char *line, uint64_t *cookie)
+static void command(TbGdb_t *gdb, const char *line, uint64_t *cookie)
 {
     static const char *const verbs[] = {"stop", "run", "hold", "release", "flood", "error", "die",
                                       "hold-context", "hold-stop"};
@@ -71,7 +71,7 @@ static void command(TbGdb *gdb, const char *line, uint64_t *cookie)
     }
     for (size_t i = 0; i < sizeof verbs / sizeof verbs[0]; ++i) {
         if (strcmp(line, verbs[i]) == 0) {
-            TbGdbScope scope = i == 7 ? TB_GDB_CONTEXT : i == 8 ? TB_GDB_STOP : TB_GDB_SESSION;
+            TbGdbScope_e scope = i == 7 ? TB_GDB_CONTEXT : i == 8 ? TB_GDB_STOP : TB_GDB_SESSION;
             char operation[32]; (void)snprintf(operation, sizeof operation, "-%s", i >= 7 ? "hold" : verbs[i]);
             if (!tb_gdb_request(gdb, operation, NULL, 0, scope, ++*cookie, i >= 7 ? 10000 : 2000, NULL)) {
                 puts("request rejected: wait for ready or inspect diagnostics");
@@ -95,7 +95,7 @@ int main(int argc, char *argv[])
     puts("M04 FAKE MI controller demonstration: no debugger target or hardware.\n"
          "Wait for ready, then type commands and Enter. Ctrl+C closes and reaps.\n"
          "Commands: stop run hold hold-context hold-stop release flood error die context close quit");
-    TbGdb *gdb = tb_gdb_create(emit, &gdb);
+    TbGdb_t *gdb = tb_gdb_create(emit, &gdb);
     if (gdb == NULL) { return 2; }
     if (!tb_gdb_start(gdb, argv[1], 1500)) { (void)tb_gdb_destroy(gdb); return 1; }
     char line[128]; size_t used = 0; uint64_t cookie = 0;

@@ -7,7 +7,7 @@
 
 enum { REG_NAMES = 9201, REG_CANONICAL, REG_VALUES };
 struct TbRegisters {
-    TbGdb *gdb; TbContext *context;
+    TbGdb_t *gdb; TbContext *context;
     TbRegister rows[TB_REGISTERS_MAX]; size_t count;
     char canonical[TB_REGISTERS_MAX][TB_REGISTER_VALUE];
     char baseline[TB_REGISTERS_MAX][TB_REGISTER_VALUE];
@@ -15,14 +15,14 @@ struct TbRegisters {
     bool wanted[TB_REGISTERS_MAX], failed[TB_REGISTERS_MAX];
     uint64_t sampled_stop[TB_REGISTERS_MAX];
     char thread[32], architecture[64], error[192]; int frame;
-    TbGdbGeneration generation;
+    TbGdbGeneration_t generation;
     TbRegisterFormat format;
     bool visible, waiting, names_ready, names_failed, limited;
     uint64_t revision, version, request_version;
     size_t batch[TB_REGISTERS_PAGE], batch_count;
 };
 
-static int number(const TbMiValue *v)
+static int number(const TbMiValue_t *v)
 {
     if (!v || v->type != TB_MI_STRING || !v->string.length) { return -1; }
     unsigned n = 0;
@@ -33,7 +33,7 @@ static int number(const TbMiValue *v)
     }
     return n < TB_REGISTERS_MAX ? (int)n : -1;
 }
-static bool copy(char *out, size_t capacity, const TbMiValue *v)
+static bool copy(char *out, size_t capacity, const TbMiValue_t *v)
 {
     out[0] = 0;
     if (!v || v->type != TB_MI_STRING) { return false; }
@@ -42,11 +42,11 @@ static bool copy(char *out, size_t capacity, const TbMiValue *v)
      * values from canonical comparisons rather than claim unseen changes. */
     return v->string.length < capacity && strlen(out) == v->string.length;
 }
-static bool same(TbGdbGeneration a, TbGdbGeneration b)
+static bool same(TbGdbGeneration_t a, TbGdbGeneration_t b)
 {
     return a.session == b.session && a.stop == b.stop && a.context == b.context;
 }
-TbRegisters *tb_registers_create(TbGdb *gdb, TbContext *context)
+TbRegisters *tb_registers_create(TbGdb_t *gdb, TbContext *context)
 {
     TbRegisters *r = calloc(1, sizeof *r);
     if (r) { r->gdb = gdb; r->context = context; tb_registers_reset(r); }
@@ -55,7 +55,7 @@ TbRegisters *tb_registers_create(TbGdb *gdb, TbContext *context)
 void tb_registers_destroy(TbRegisters *r) { free(r); }
 void tb_registers_reset(TbRegisters *r)
 {
-    TbGdb *gdb = r->gdb; TbContext *context = r->context; uint64_t revision = r->revision;
+    TbGdb_t *gdb = r->gdb; TbContext *context = r->context; uint64_t revision = r->revision;
     memset(r, 0, sizeof *r); r->gdb = gdb; r->context = context;
     r->frame = -1; r->revision = revision + 1;
 }
@@ -124,7 +124,7 @@ static bool issue(TbRegisters *r, unsigned job)
                                args, count, TB_GDB_CONTEXT, job, 3000, NULL);
     return r->waiting;
 }
-bool tb_registers_event(TbRegisters *r, const TbGdbEvent *event)
+bool tb_registers_event(TbRegisters *r, const TbGdbEvent_t *event)
 {
     if (!r->visible && event->kind == TB_GDB_RECORD && event->record &&
         event->record->kind == TB_MI_EXEC && strcmp(event->record->klass, "stopped") == 0) {
@@ -135,7 +135,7 @@ bool tb_registers_event(TbRegisters *r, const TbGdbEvent *event)
     r->waiting = false;
     if (event->kind == TB_GDB_STALE || event->kind == TB_GDB_CANCELLED || r->request_version != r->version ||
         !same(event->generation, r->generation)) { ++r->revision; return true; }
-    const TbMiRecord *record = event->record;
+    const TbMiRecord_t *record = event->record;
     bool okay = event->kind == TB_GDB_REPLY && record && strcmp(record->klass, "done") == 0;
     if (!okay) {
         (void)copy(r->error, sizeof r->error, record ? tb_mi_find(record->results, "msg") : NULL);
@@ -144,7 +144,7 @@ bool tb_registers_event(TbRegisters *r, const TbGdbEvent *event)
         else { for (size_t i = 0; i < r->batch_count; ++i) { r->failed[r->batch[i]] = true; } }
         ++r->revision; return true;
     }
-    const TbMiValue *list = tb_mi_find(record->results, event->cookie == REG_NAMES ? "register-names" : "register-values");
+    const TbMiValue_t *list = tb_mi_find(record->results, event->cookie == REG_NAMES ? "register-names" : "register-values");
     if (!list || list->type != TB_MI_LIST) {
         (void)snprintf(r->error, sizeof r->error, "Malformed register reply; Refresh retries.");
         if (event->cookie == REG_NAMES) { r->names_failed = true; }
@@ -153,7 +153,7 @@ bool tb_registers_event(TbRegisters *r, const TbGdbEvent *event)
     }
     if (event->cookie == REG_NAMES) {
         r->count = 0; r->limited = false; unsigned id = 0;
-        for (const TbMiValue *v = list->children; v; v = v->next, ++id) {
+        for (const TbMiValue_t *v = list->children; v; v = v->next, ++id) {
             if (id == TB_REGISTERS_MAX) { r->limited = true; break; }
             if (v->type != TB_MI_STRING || !v->string.length) { continue; }
             TbRegister *row = &r->rows[r->count]; memset(row, 0, sizeof *row); row->number = id;
@@ -163,8 +163,8 @@ bool tb_registers_event(TbRegisters *r, const TbGdbEvent *event)
         if (!r->count) { (void)snprintf(r->error, sizeof r->error, "GDB reports no named registers."); }
     } else {
         for (size_t i = 0; i < r->batch_count; ++i) {
-            size_t index = r->batch[i]; TbRegister *row = &r->rows[index]; const TbMiValue *value = NULL;
-            for (const TbMiValue *v = list->children; v; v = v->next) {
+            size_t index = r->batch[i]; TbRegister *row = &r->rows[index]; const TbMiValue_t *value = NULL;
+            for (const TbMiValue_t *v = list->children; v; v = v->next) {
                 if (v->type == TB_MI_TUPLE && number(tb_mi_find(v->children, "number")) == (int)row->number) {
                     value = tb_mi_find(v->children, "value"); break;
                 }

@@ -142,11 +142,11 @@ int main(int argc, char **argv)
     config = (TbSessionConfig){.kind = TB_SESSION_REMOTE, .endpoint = argv[2], .gdb = argv[1], .executable = argv[3], .openocd = plan};
     start(); stopped(0); idle(); CHECK(strstr(tb_session_capabilities(session)->architecture, argv[4]));
     CHECK(!tb_session_capabilities(session)->server_owned && tb_session_target_pid(session) == 0);
-    TbLayout layout; tb_layout_init(&layout); TbDemo workspace; tb_demo_init(&workspace);
+    TbLayout_t layout; tb_layout_init(&layout); TbDemo workspace; tb_demo_init(&workspace);
     const char *expressions[TB_MAX_PANES]; for (int i = 0; i < TB_MAX_PANES; ++i) { expressions[i] = ""; }
     TbSetupCapture *c = tb_setup_capture_create(NULL); CHECK(c);
 #define CAPTURE() tb_setup_capture_update(c, &layout, &workspace, tb_session_code(session), tb_session_memory(session), tb_session_variables(session), tb_session_breakpoints(session), expressions)
-    CHECK(tb_layout_arrange(&layout, (TbRect){0, 0, 240, 100}, 0)); int pane = tb_layout_split(&layout, 0, TB_SPLIT_RIGHT); CHECK(pane >= 0);
+    CHECK(tb_layout_arrange(&layout, (TbRect_t){0, 0, 240, 100}, 0)); int pane = tb_layout_split(&layout, 0, TB_SPLIT_RIGHT); CHECK(pane >= 0);
     workspace.panes[pane] = (TbDemoPane){.tabs = {TB_MEMORY, TB_WATCHES}, .count = 2, .active = 1};
     expressions[pane] = memory_expression;
     CHECK(tb_memory_definition(tb_session_memory(session), pane, 4, 4));

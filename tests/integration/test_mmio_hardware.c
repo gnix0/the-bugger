@@ -9,8 +9,8 @@
  * GPIOA_ODR 0x40020014, count 1 each, widths 8/16/32. No flash/reset/write,
  * resume, polling or retry command. Backend physical attempts may differ.
  * This tests transport; it does not test or grant interactive range consent. */
-typedef struct { TbGdb *gdb; TbMmio *mmio; bool reply, success; } Probe;
-static void emit(void *context, const TbGdbEvent *event)
+typedef struct { TbGdb_t *gdb; TbMmio *mmio; bool reply, success; } Probe;
+static void emit(void *context, const TbGdbEvent_t *event)
 {
     Probe *p = context;
     (void)tb_mmio_event(p->mmio, event);

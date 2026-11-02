@@ -14,18 +14,18 @@ typedef struct {
     bool visible, browse_request;
     unsigned phase, read_length;
     uint64_t version, next_address, lifetime;
-    TbGdbGeneration origin;
+    TbGdbGeneration_t origin;
     char thread[32];
     TbMemoryRange ranges[TB_MEMORY_RANGES];
 } View;
 struct TbMemory {
-    TbGdb *gdb; TbContext *context;
+    TbGdb_t *gdb; TbContext *context;
     TbBrowseCache *cache; TbMmio *mmio;
     uint64_t revision, request_version;
     size_t region_count;
     uint64_t backend_session, backend_epoch, register_epoch, register_address, register_lifetime;
     uint64_t edit_lifetime, edit_backend_epoch, edit_version, edit_address;
-    TbGdbGeneration request_generation, register_generation, edit_generation;
+    TbGdbGeneration_t request_generation, register_generation, edit_generation;
     uint64_t regions_epoch, edit_regions_epoch;
     TbMemoryBackend backend;
     TbMemoryRegion regions[TB_MEMORY_REGIONS];
@@ -101,7 +101,7 @@ static void error(TbMemory *m, View *v, const char *message)
     (void)snprintf(v->data.error, sizeof v->data.error, "%s", message);
     ++v->version; v->data.pending = false; v->data.ready = false; ++m->revision;
 }
-TbMemory *tb_memory_create(TbGdb *gdb, TbContext *context)
+TbMemory *tb_memory_create(TbGdb_t *gdb, TbContext *context)
 {
     TbMemory *m = calloc(1, sizeof *m);
     if (m) {
@@ -130,7 +130,7 @@ void tb_memory_clear(TbMemory *m, int id)
 }
 void tb_memory_reset(TbMemory *m)
 {
-    TbGdb *gdb = m->gdb; TbContext *context = m->context; uint64_t revision = m->revision;
+    TbGdb_t *gdb = m->gdb; TbContext *context = m->context; uint64_t revision = m->revision;
     TbBrowseCache *cache = m->cache; TbMmio *mmio = m->mmio; uint64_t epoch = m->backend_epoch + 1;
     memset(m, 0, sizeof *m); m->gdb = gdb; m->context = context; m->cache = cache; m->revision = revision + 1;
     m->mmio = mmio; m->backend_epoch = epoch; m->register_view = -1;
@@ -144,7 +144,7 @@ void tb_memory_visible(TbMemory *m, int id, bool visible)
 }
 const TbMemoryView *tb_memory_view(const TbMemory *m, int id) { return valid_view(id) ? &m->views[id].data : NULL; }
 uint64_t tb_memory_revision(const TbMemory *m) { return m->revision; }
-static bool same(TbGdbGeneration a, TbGdbGeneration b)
+static bool same(TbGdbGeneration_t a, TbGdbGeneration_t b)
 {
     return a.session == b.session && a.stop == b.stop && a.context == b.context;
 }
@@ -215,7 +215,7 @@ const TbMemoryBackend *tb_memory_backend(const TbMemory *m)
 }
 bool tb_memory_backend_confirmed(const TbMemory *m)
 {
-    TbGdbState state = tb_gdb_state(m->gdb);
+    TbGdbState_e state = tb_gdb_state(m->gdb);
     return m->backend_confirmed && tb_memory_backend(m) &&
            (state == TB_GDB_STOPPED || state == TB_GDB_RUNNING || state == TB_GDB_READY);
 }
@@ -516,12 +516,12 @@ bool tb_memory_browse(TbMemory *m, int id, int direction)
     ++v->version; v->origin = tb_gdb_generation(m->gdb); v->next_address = start; v->phase = MEMORY_READ;
     v->data.pending = true; v->data.ready = false; v->data.error[0] = 0; ++m->revision; return true;
 }
-static bool raw(char *out, size_t capacity, const TbMiValue *v)
+static bool raw(char *out, size_t capacity, const TbMiValue_t *v)
 {
     if (!v || v->type != TB_MI_STRING || v->string.length >= capacity || memchr(v->string.data, 0, v->string.length)) { return false; }
     memcpy(out, v->string.data, v->string.length); out[v->string.length] = 0; return true;
 }
-static bool address_value(const TbMiValue *v, uint64_t *address)
+static bool address_value(const TbMiValue_t *v, uint64_t *address)
 {
     char text[256]; if (!raw(text, sizeof text, v)) { return false; }
     const char *p = text; return numeric(&p, address) && (*p == 0 || *p == ' ');
@@ -540,7 +540,7 @@ static bool locate(const TbMemory *m, View *v, uint64_t base)
          (address >= (UINT64_C(1) << m->address_bits) || v->data.length > (UINT64_C(1) << m->address_bits) - address))) { return false; }
     v->next_address = address; v->read_length = v->data.length; v->phase = MEMORY_READ; return true;
 }
-bool tb_memory_event(TbMemory *m, const TbGdbEvent *event)
+bool tb_memory_event(TbMemory *m, const TbGdbEvent_t *event)
 {
     if (tb_mmio_event(m->mmio, event)) {
         if (valid_view(m->register_view) && m->register_lifetime == m->views[m->register_view].lifetime) {
@@ -603,9 +603,9 @@ bool tb_memory_event(TbMemory *m, const TbGdbEvent *event)
     if (event->kind == TB_GDB_STALE || event->kind == TB_GDB_CANCELLED || s->stale || !same(s->generation, m->request_generation)) {
         error(m, v, "Context changed; Refresh explicitly to read this range."); return true;
     }
-    const TbMiRecord *record = event->record;
+    const TbMiRecord_t *record = event->record;
     if (event->kind != TB_GDB_REPLY || !record || strcmp(record->klass, "done") != 0) {
-        const TbMiValue *msg = record ? tb_mi_find(record->results, "msg") : NULL;
+        const TbMiValue_t *msg = record ? tb_mi_find(record->results, "msg") : NULL;
         char safe[192] = "Memory request failed/timed out; Refresh retries.";
         if (msg && msg->type == TB_MI_STRING) { tb_code_safe(safe, sizeof safe, msg->string.data, msg->string.length); }
         error(m, v, safe); return true;
@@ -617,11 +617,11 @@ bool tb_memory_event(TbMemory *m, const TbGdbEvent *event)
         }
         return true;
     }
-    const TbMiValue *list = tb_mi_find(record->results, "memory");
+    const TbMiValue_t *list = tb_mi_find(record->results, "memory");
     unsigned char bytes[TB_MEMORY_BYTES] = {0}; bool valid[TB_MEMORY_BYTES] = {0}; size_t readable = 0;
     if (!list || list->type != TB_MI_LIST) { error(m, v, "Malformed memory reply; retained data is stale."); return true; }
-    for (const TbMiValue *block = list->children; block; block = block->next) {
-        uint64_t begin, end; const TbMiValue *contents = tb_mi_find(block->children, "contents");
+    for (const TbMiValue_t *block = list->children; block; block = block->next) {
+        uint64_t begin, end; const TbMiValue_t *contents = tb_mi_find(block->children, "contents");
         if (block->type != TB_MI_TUPLE || !address_value(tb_mi_find(block->children, "begin"), &begin) ||
             !address_value(tb_mi_find(block->children, "end"), &end) || end < begin || begin < v->next_address ||
             end - v->next_address > v->read_length || !contents || contents->type != TB_MI_STRING ||
@@ -654,7 +654,7 @@ void tb_memory_pump(TbMemory *m)
             m->edit_unresolved ? TB_WRITE_UNRESOLVED : TB_WRITE_UNCERTAIN);
     }
     tb_mmio_pump(m->mmio);
-    TbGdbGeneration current = tb_gdb_generation(m->gdb);
+    TbGdbGeneration_t current = tb_gdb_generation(m->gdb);
     if (m->edit_state == TB_MEMORY_EDIT_PENDING &&
         (tb_gdb_state(m->gdb) != TB_GDB_STOPPED || !same(m->edit_generation, current))) {
         m->edit_state = TB_MEMORY_EDIT_UNCERTAIN;

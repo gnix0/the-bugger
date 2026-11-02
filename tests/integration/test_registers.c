@@ -6,17 +6,17 @@
 static TbContext *context;
 static TbRegisters *registers;
 static unsigned replies;
-static void emit(void *unused, const TbGdbEvent *event)
+static void emit(void *unused, const TbGdbEvent_t *event)
 {
     (void)unused;
     if (!tb_registers_event(registers, event)) { (void)tb_context_event(context, event); }
     if (event->kind == TB_GDB_REPLY) { ++replies; }
 }
-static void pump(TbGdb *gdb)
+static void pump(TbGdb_t *gdb)
 {
     tb_gdb_pump(gdb, 2); tb_context_pump(context); tb_registers_pump(registers);
 }
-static void command(TbGdb *gdb, const char *op)
+static void command(TbGdb_t *gdb, const char *op)
 {
     unsigned before = replies;
     CHECK(tb_gdb_request(gdb, op, NULL, 0, TB_GDB_SESSION, 999, 1000, NULL));
@@ -24,7 +24,7 @@ static void command(TbGdb *gdb, const char *op)
     while (replies == before && tb_gdb_now_ms() < end) { pump(gdb); }
     CHECK(replies > before);
 }
-static void stopped(TbGdb *gdb, uint64_t previous_stop)
+static void stopped(TbGdb_t *gdb, uint64_t previous_stop)
 {
     uint64_t end = tb_gdb_now_ms() + 2000;
     while ((tb_gdb_state(gdb) != TB_GDB_STOPPED || tb_gdb_generation(gdb).stop == previous_stop) &&
@@ -32,7 +32,7 @@ static void stopped(TbGdb *gdb, uint64_t previous_stop)
     CHECK(tb_gdb_state(gdb) == TB_GDB_STOPPED);
     CHECK(tb_gdb_generation(gdb).stop != previous_stop);
 }
-static void ready(TbGdb *gdb)
+static void ready(TbGdb_t *gdb)
 {
     uint64_t end = tb_gdb_now_ms() + 3000;
     while (tb_gdb_now_ms() < end) {
@@ -45,7 +45,7 @@ static void ready(TbGdb *gdb)
 static void run(const char *peer, const char *mode)
 {
     CHECK(setenv("TB_FAKE_MODE", mode, 1) == 0);
-    TbGdb *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
+    TbGdb_t *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
     context = tb_context_create(gdb); registers = tb_registers_create(gdb, context); CHECK(context && registers);
     CHECK(tb_gdb_start(gdb, peer, 1000)); uint64_t end = tb_gdb_now_ms() + 2000;
     while (tb_gdb_state(gdb) != TB_GDB_READY && tb_gdb_now_ms() < end) { pump(gdb); }

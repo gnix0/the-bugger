@@ -14,7 +14,7 @@
 #include <unistd.h>
 
 typedef struct {
-    TbGdb *gdb;
+    TbGdb_t *gdb;
     size_t replies, stale, timeouts, cancelled, diagnostics, exits, records, stderr_bytes;
     uint64_t cookies[256];
     size_t cookies_count;
@@ -22,7 +22,7 @@ typedef struct {
     size_t echo_bytes;
 } Observer;
 
-static void emit(void *context, const TbGdbEvent *event)
+static void emit(void *context, const TbGdbEvent_t *event)
 {
     Observer *observer = context;
     switch (event->kind) {
@@ -31,7 +31,7 @@ static void emit(void *context, const TbGdbEvent *event)
         ++observer->replies;
         if (observer->cookies_count < 256) { observer->cookies[observer->cookies_count++] = event->cookie; }
         observer->command_error |= strcmp(event->record->klass, "error") == 0;
-        const TbMiValue *bytes = tb_mi_find(event->record->results, "bytes");
+        const TbMiValue_t *bytes = tb_mi_find(event->record->results, "bytes");
         if (bytes != NULL) { observer->echo_bytes = (size_t)strtoul(bytes->string.data, NULL, 10); }
         break;
     case TB_GDB_STALE: ++observer->stale; break;
@@ -55,7 +55,7 @@ static void emit(void *context, const TbGdbEvent *event)
     }
 }
 
-static void pump_until(Observer *observer, TbGdbState state, unsigned maximum_ms)
+static void pump_until(Observer *observer, TbGdbState_e state, unsigned maximum_ms)
 {
     uint64_t deadline = tb_gdb_now_ms() + maximum_ms;
     while (tb_gdb_state(observer->gdb) != state && tb_gdb_now_ms() < deadline) {
@@ -110,7 +110,7 @@ static void destroy(Observer *observer)
     observer->gdb = NULL;
 }
 
-static void request(Observer *observer, const char *operation, TbGdbScope scope, uint64_t cookie)
+static void request(Observer *observer, const char *operation, TbGdbScope_e scope, uint64_t cookie)
 {
     CHECK(tb_gdb_request(observer->gdb, operation, NULL, 0, scope, cookie, 1500, NULL));
 }
@@ -173,7 +173,7 @@ static void normal(const char *peer)
 
     request(&observer, "-stop", TB_GDB_SESSION, 60);
     pump_until(&observer, TB_GDB_STOPPED, 3000);
-    TbGdbGeneration before = tb_gdb_generation(observer.gdb);
+    TbGdbGeneration_t before = tb_gdb_generation(observer.gdb);
     request(&observer, "-hold", TB_GDB_CONTEXT, 70);
     tb_gdb_pump(observer.gdb, 0); /* Send before invalidating selected context. */
     tb_gdb_context_changed(observer.gdb);

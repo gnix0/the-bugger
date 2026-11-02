@@ -6,20 +6,20 @@
 static TbBreakpoints *breakpoints;
 static unsigned replies;
 static bool unconfirmed;
-static void emit(void *unused, const TbGdbEvent *event)
+static void emit(void *unused, const TbGdbEvent_t *event)
 {
     (void)unused; (void)tb_break_event(breakpoints, event);
     if (event->kind == TB_GDB_REPLY) { ++replies; }
     if (event->kind == TB_GDB_DIAGNOSTIC && event->text && strstr(event->text, "Could not confirm stopped")) { unconfirmed = true; }
 }
-static void pump(TbGdb *gdb) { tb_gdb_pump(gdb, 5); tb_break_pump(breakpoints); }
-static void idle(TbGdb *gdb)
+static void pump(TbGdb_t *gdb) { tb_gdb_pump(gdb, 5); tb_break_pump(breakpoints); }
+static void idle(TbGdb_t *gdb)
 {
     uint64_t end = tb_gdb_now_ms() + 6000;
     while ((!tb_break_ready(breakpoints) || tb_break_busy(breakpoints)) && tb_gdb_now_ms() < end) { pump(gdb); }
     CHECK(tb_break_ready(breakpoints) && !tb_break_busy(breakpoints));
 }
-static void command(TbGdb *gdb, const char *op, const char *argument)
+static void command(TbGdb_t *gdb, const char *op, const char *argument)
 {
     unsigned before = replies; const char *args[] = {argument};
     CHECK(tb_gdb_request(gdb, op, args, argument ? 1 : 0, TB_GDB_SESSION, 999, 1000, NULL));
@@ -31,7 +31,7 @@ static void run(const char *peer, const char *mode)
 {
     CHECK(setenv("TB_FAKE_MODE", mode, 1) == 0);
     unconfirmed = false;
-    TbGdb *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
+    TbGdb_t *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
     breakpoints = tb_break_create(gdb); CHECK(breakpoints); CHECK(tb_gdb_start(gdb, peer, 1000));
     idle(gdb); CHECK(tb_break_count(breakpoints) == 5);
     CHECK(tb_break_row(breakpoints, 1)->multiple && tb_break_row(breakpoints, 1)->hardware);

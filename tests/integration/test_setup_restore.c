@@ -34,13 +34,13 @@ int main(int argc, char **argv)
 {
     CHECK(argc == 3 && atexit(cleanup) == 0); owned = tb_session_create(); CHECK(owned);
     TbSessionConfig config = {.gdb = "gdb", .executable = argv[1]}; CHECK(tb_session_start(owned, &config));
-    TbLayout layout; tb_layout_init(&layout); layout.overlays = true; TbDemo workspace; tb_demo_init(&workspace);
+    TbLayout_t layout; tb_layout_init(&layout); layout.overlays = true; TbDemo workspace; tb_demo_init(&workspace);
     const char *expressions[TB_MAX_PANES]; for (int i = 0; i < TB_MAX_PANES; ++i) { expressions[i] = ""; }
     TbCode *code = tb_session_code(owned); TbMemory *memory = tb_session_memory(owned); TbVariables *variables = tb_session_variables(owned);
     TbSetupCapture *c = tb_setup_capture_create(NULL); CHECK(c);
 #define CAPTURE() tb_setup_capture_update(c, &layout, &workspace, code, memory, variables, tb_session_breakpoints(owned), expressions)
     CHECK(CAPTURE()); TbSetup *saved = malloc(sizeof *saved); CHECK(saved); *saved = *tb_setup_capture_current(c);
-    CHECK(tb_layout_arrange(&layout, (TbRect){0, 0, 240, 100}, 0)); int added = tb_layout_split(&layout, 0, TB_SPLIT_RIGHT); CHECK(added >= 0);
+    CHECK(tb_layout_arrange(&layout, (TbRect_t){0, 0, 240, 100}, 0)); int added = tb_layout_split(&layout, 0, TB_SPLIT_RIGHT); CHECK(added >= 0);
     workspace.panes[added] = (TbDemoPane){.tabs = {TB_MEMORY, TB_WATCHES}, .count = 2, .active = 1};
     CHECK(CAPTURE()); *saved = *tb_setup_capture_current(c);
     saved->panes[0].source_count = 2;

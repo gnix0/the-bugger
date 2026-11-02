@@ -60,7 +60,7 @@ typedef enum { ST_READ, ST_FOLLOW, ST_NAVIGATE, ST_GROUP, ST_SIZE, ST_DETAILS,
                ST_NAME_PICK, ST_POINT_REMOVE, ST_GUARD, ST_GUARD_CONFIRM,
                ST_PREVIOUS_PAGE, ST_NEXT_PAGE, ST_OPEN } StackAction;
 typedef struct {
-    TbRect rect;
+    TbRect_t rect;
     ControlKind kind;
     int value, pane;
 } Control;
@@ -80,7 +80,7 @@ typedef struct {
 typedef struct {
     Page page;
     TbDemo demo;
-    TbLayout layout;
+    TbLayout_t layout;
     Form forms[3];
     int session, focus, count, menu, form_scroll;
     size_t cursor;
@@ -89,10 +89,10 @@ typedef struct {
         bool active;
         int from, to;
         char thread[32];
-        TbGdbGeneration origin;
+        TbGdbGeneration_t origin;
         uint64_t started;
         WINDOW *panes[TB_MAX_PANES];
-        TbRect rectangles[TB_MAX_PANES];
+        TbRect_t rectangles[TB_MAX_PANES];
         TbView views[TB_MAX_PANES];
         uint64_t identities[TB_MAX_PANES];
     } frame_display;
@@ -104,7 +104,7 @@ typedef struct {
     bool scroll_drag_horizontal;
     Control last_control;
     Control controls[MAX_CONTROLS];
-    TbRect panes[TB_MAX_PANES];
+    TbRect_t panes[TB_MAX_PANES];
     int content_pane; /* -1 navigates controls; a pane ID navigates its content. */
     int fullscreen_source; /* -1 keeps the ordinary tiled rendering. */
     const char *colors;
@@ -135,7 +135,7 @@ typedef struct {
     struct {
         bool open;
         TbFrame frame;
-        TbGdbGeneration generation;
+        TbGdbGeneration_t generation;
         char thread[32];
         int offset, list_horizontal;
         bool stale;
@@ -164,7 +164,7 @@ typedef struct {
     bool watch_address;
     unsigned watch_width;
     int image_review_row;
-    TbGdbGeneration watch_context;
+    TbGdbGeneration_t watch_context;
     TbProfiles *profiles;
     TbProfile *profile;
     TbOpenOcdPlan *server_plan; TbOpenOcdCatalog *catalog;
@@ -320,7 +320,7 @@ static void draw_footer_spaced(const char *message, const char *hints, TbStyle m
     bool single = message_width + hint_width + 3 <= width;
     int message_y = padding || !single ? LINES - 2 : LINES - 1;
     int hint_x = hint_width < width ? COLS - 1 - hint_width : 1;
-    tb_fill((TbRect){0, LINES - 2, COLS, 2}, TB_WORKSPACE);
+    tb_fill((TbRect_t){0, LINES - 2, COLS, 2}, TB_WORKSPACE);
     tb_text(message_y, 1, width, message_style, 0, message);
     tb_text(single && padding ? LINES - 2 : LINES - 1, hint_x, width, hint_style, 0, hints);
 }
@@ -349,11 +349,11 @@ static void workspace_message(const App *app, char text[256])
     }
 }
 
-static TbRect menu_card(int width, int height)
+static TbRect_t menu_card(int width, int height)
 {
     if (width > COLS - 4) { width = COLS - 4; }
     if (height > LINES - 7) { height = LINES - 7; }
-    TbRect card = {(COLS - width) / 2, 4 + (LINES - 7 - height) / 2, width, height};
+    TbRect_t card = {(COLS - width) / 2, 4 + (LINES - 7 - height) / 2, width, height};
     tb_fill(card, TB_PANEL);
     return card;
 }
@@ -381,7 +381,7 @@ static int paragraph_rows(const char *text, int width)
 }
 
 /* Cached frame metadata only. Hard wrapping preserves long paths completely. */
-static int frame_detail_lines(const App *app, int pane, TbRect area, int first)
+static int frame_detail_lines(const App *app, int pane, TbRect_t area, int first)
 {
     int width = area.w;
     const TbFrame *f = &app->frame_details[pane].frame;
@@ -391,7 +391,7 @@ static int frame_detail_lines(const App *app, int pane, TbRect area, int first)
     if (f->line > 0) { (void)snprintf(line_number, sizeof line_number, "%d", f->line); }
     else { (void)snprintf(line_number, sizeof line_number, "unavailable"); }
     const TbContextSnapshot *c = tb_context_snapshot(tb_session_context(app->debugger));
-    TbGdbGeneration saved = app->frame_details[pane].generation;
+    TbGdbGeneration_t saved = app->frame_details[pane].generation;
     bool stale = app->frame_details[pane].stale || c->stale || !c->ready || c->generation.session != saved.session ||
                  c->generation.stop != saved.stop || c->generation.context != saved.context;
     (void)snprintf(raw, sizeof raw,
@@ -433,7 +433,7 @@ static int frame_detail_lines(const App *app, int pane, TbRect area, int first)
     return row;
 }
 
-static void menu_paragraph(TbRect card, int row, int lines, const char *text, TbStyle style)
+static void menu_paragraph(TbRect_t card, int row, int lines, const char *text, TbStyle style)
 {
     int width = card.w - 4;
     for (int line = 0; *text && line < lines && row + line < card.h; ++line) {
@@ -446,7 +446,7 @@ static void menu_paragraph(TbRect card, int row, int lines, const char *text, Tb
     }
 }
 
-static int add_control(App *app, TbRect rect, ControlKind kind, int value, int pane)
+static int add_control(App *app, TbRect_t rect, ControlKind kind, int value, int pane)
 {
     if (app->count >= MAX_CONTROLS) {
         return -1;
@@ -459,11 +459,11 @@ static int add_control(App *app, TbRect rect, ControlKind kind, int value, int p
 static void button(App *app, int y, int x, int width, const char *label,
                    ControlKind kind, int value, int pane)
 {
-    int index = add_control(app, (TbRect){x, y, width, 1}, kind, value, pane);
+    int index = add_control(app, (TbRect_t){x, y, width, 1}, kind, value, pane);
     if (index < 0) {
         return;
     }
-    tb_fill((TbRect){x, y, width, 1}, index == app->focus ? TB_SELECTED : TB_SURFACE);
+    tb_fill((TbRect_t){x, y, width, 1}, index == app->focus ? TB_SELECTED : TB_SURFACE);
     /* Action labels have centered padding; full-row choices stay left aligned. */
     if (label[0] == '[' || label[0] == ' ') {
         while (*label == ' ') { ++label; }
@@ -561,11 +561,11 @@ static void wide_text(int y, int x, int width, const wchar_t *text, size_t start
 static void draw_header(const App *app, const char *subtitle)
 {
     char text[160];
-    tb_fill((TbRect){0, 0, COLS, 1}, TB_CHROME);
+    tb_fill((TbRect_t){0, 0, COLS, 1}, TB_CHROME);
     tb_text(0, 1, 12, TB_BRAND, A_BOLD, "THE BUGGER");
     (void)snprintf(text, sizeof text, "v%s  |  %s", THE_BUGGER_VERSION, subtitle);
     tb_text(0, 14, COLS - 14, TB_CHROME, 0, text);
-    tb_fill((TbRect){0, 2, COLS, 1}, TB_NOTICE);
+    tb_fill((TbRect_t){0, 2, COLS, 1}, TB_NOTICE);
     tb_text(2, 2, COLS - 4, TB_NOTICE, A_BOLD,
             app->live ? (app->session == 1 ? "LIVE OPENOCD | Console / Call Stack / Threads" : app->session == 2 ? "LIVE REMOTE | Console / Call Stack / Threads" : "LIVE NATIVE | Console / Call Stack / Threads") :
             !app->demo_mode && app->session == 1 ? "OpenOCD | reviewed configuration; no automatic programming or reset" :
@@ -582,7 +582,7 @@ static void draw_launcher(App *app)
     int width = COLS > 108 ? 100 : COLS - 8;
     int left = (COLS - width) / 2;
     int height = compact ? 15 : 23, top = (LINES - 2 - height) / 2;
-    tb_fill((TbRect){left, top, width, height}, TB_PANEL);
+    tb_fill((TbRect_t){left, top, width, height}, TB_PANEL);
     int title = top + (compact ? 0 : 1);
     tb_text(title, left + 2, width - 16, TB_PINK, A_BOLD, "THE BUGGER");
     char version[32]; (void)snprintf(version, sizeof version, "v%s", THE_BUGGER_VERSION);
@@ -597,10 +597,10 @@ static void draw_launcher(App *app)
     const TbStyle accents[] = {TB_GREEN, TB_CYAN, TB_ORANGE};
     for (int i = 0; i < 3; ++i) {
         int stride = compact ? 2 : 3, y = top + (compact ? 5 : 7) + i * stride;
-        int control = add_control(app, (TbRect){left + 1, y, width - 2, stride}, CHOOSE_SESSION, i, 0);
+        int control = add_control(app, (TbRect_t){left + 1, y, width - 2, stride}, CHOOSE_SESSION, i, 0);
         bool selected = control == app->focus;
         TbStyle surface = selected ? TB_SELECTED : TB_PANEL;
-        tb_fill((TbRect){left + 1, y, width - 2, stride}, surface);
+        tb_fill((TbRect_t){left + 1, y, width - 2, stride}, surface);
         tb_text(y, left + 1, 1, surface, A_BOLD, selected ? ">" : " ");
         tb_text(y, left + 3, 2, selected ? tb_selected_style(accents[i]) : accents[i], A_BOLD, icons[i]);
         tb_text(y, left + 7, width - 12, surface, selected ? A_BOLD : 0, session_names[i]);
@@ -669,7 +669,7 @@ static void draw_config(App *app)
     bool themes = app->page == THEMES;
     int width = COLS > 80 ? 72 : COLS - 8, height = 14;
     int left = (COLS - width) / 2, top = (LINES - 2 - height) / 2;
-    tb_fill((TbRect){left, top, width, height}, TB_PANEL);
+    tb_fill((TbRect_t){left, top, width, height}, TB_PANEL);
     tb_text(top + 1, left + 2, width - 4, TB_PINK, A_BOLD, themes ? "Themes" : "Configuration");
     tb_style(TB_BORDER, 0); (void)mvhline(top + 3, left + 2, ACS_HLINE, width - 4);
     if (themes) {
@@ -778,7 +778,7 @@ static void keybind_capture(App *app, wint_t input, bool special)
     app->key_capture = -1;
     status(app, "Binding captured. Save to apply your changes.");
 }
-static void keybind_button(App *app, TbRect rect, const char *label, int action, bool enabled)
+static void keybind_button(App *app, TbRect_t rect, const char *label, int action, bool enabled)
 {
     if (enabled) { button(app, rect.y, rect.x, rect.w, label, KEY_ACTION, action, 0); }
     else { tb_text(rect.y, rect.x, rect.w, TB_MUTED, A_DIM, label); }
@@ -787,7 +787,7 @@ static void draw_keybinds(App *app)
 {
     if (app->key_confirm) {
         int width = COLS > 76 ? 72 : COLS - 4, height = 10;
-        TbRect card = menu_card(width, height);
+        TbRect_t card = menu_card(width, height);
         int left = card.x, top = card.y;
         tb_text(top + 1, left + 2, width - 4, TB_ORANGE, A_BOLD,
                 app->key_confirm == 2 ? "Restore default keybinds?" : "Unsaved keybind changes");
@@ -810,7 +810,7 @@ static void draw_keybinds(App *app)
     if (local >= app->key_scroll + rows) { app->key_scroll = local - rows + 1; }
     int width = dual ? 80 : (COLS > 60 ? 56 : COLS - 4);
     int height = selection_menu_height();
-    TbRect card = menu_card(width, height);
+    TbRect_t card = menu_card(width, height);
     int left = card.x, top = card.y, first_row = dense ? 5 : 7;
     tb_text(top + (dense ? 0 : 1), left + 2, width - 4, TB_PINK, A_BOLD, "Keybinds");
     tb_text(top + (dense ? 1 : 2), left + 2, width - 4, app->key_capture >= 0 ? TB_ORANGE : TB_MUTED, 0,
@@ -824,7 +824,7 @@ static void draw_keybinds(App *app)
         for (int row = 0; row < rows; ++row) {
             int action = table * 15 + app->key_scroll + row, y = top + first_row + row * 3;
             if (action < 0 || action >= TB_BIND_COUNT) { continue; }
-            int index = add_control(app, (TbRect){key_x, y - 1, key_width, 3}, KEY_ACTION, 1, action);
+            int index = add_control(app, (TbRect_t){key_x, y - 1, key_width, 3}, KEY_ACTION, 1, action);
             bool capture = app->key_capture == action;
             bool changed = app->key_draft[action] != app->preferences.keys[action];
             TbStyle border = capture ? TB_ORANGE : changed ? TB_CYAN : index == app->focus ? TB_PINK : TB_BORDER;
@@ -845,14 +845,14 @@ static void draw_keybinds(App *app)
             bool thumb = row >= bar.thumb_start && row < bar.thumb_start + bar.thumb_size;
             tb_text(top + first_row - 1 + row, left + width - 2, 1, thumb ? TB_CYAN : TB_MUTED, 0, thumb ? "#" : "|");
         }
-        (void)add_control(app, (TbRect){left + width - 2, top + first_row - 1, 1, bar.visible}, KEY_SCROLLBAR, 0, 0);
+        (void)add_control(app, (TbRect_t){left + width - 2, top + first_row - 1, 1, bar.visible}, KEY_SCROLLBAR, 0, 0);
     }
     int buttons_y = top + height - (compact ? 4 : dense ? 2 : 3);
-    keybind_button(app, (TbRect){left + 2, buttons_y, 8, 1}, "[ Back ]", 7, true);
-    keybind_button(app, (TbRect){left + 12, buttons_y, 8, 1}, "[ Undo ]", 2, app->key_history_count > 0);
-    keybind_button(app, (TbRect){compact ? left + 2 : left + 22, buttons_y + (compact ? 2 : 0), 20, 1},
+    keybind_button(app, (TbRect_t){left + 2, buttons_y, 8, 1}, "[ Back ]", 7, true);
+    keybind_button(app, (TbRect_t){left + 12, buttons_y, 8, 1}, "[ Undo ]", 2, app->key_history_count > 0);
+    keybind_button(app, (TbRect_t){compact ? left + 2 : left + 22, buttons_y + (compact ? 2 : 0), 20, 1},
             "[ Restore Defaults ]", 3, !keybind_factory(app));
-    keybind_button(app, (TbRect){left + width - 10, buttons_y + (compact ? 2 : 0), 8, 1},
+    keybind_button(app, (TbRect_t){left + width - 10, buttons_y + (compact ? 2 : 0), 8, 1},
             "[ Save ]", 4, keybind_dirty(app));
     button(app, top + (dense ? 2 : 3), left + 2, width - 4,
             app->vim_draft ? "Vim-like input   [ On ]" : "Vim-like input   [ Off ]", KEY_ACTION, 8, 0);
@@ -864,18 +864,18 @@ static void draw_keybinds(App *app)
 
 static void draw_theme_preview(App *app)
 {
-    TbDemo sample; TbLayout layout;
+    TbDemo sample; TbLayout_t layout;
     tb_demo_init(&sample); tb_layout_init(&layout);
     char label[128];
     (void)snprintf(label, sizeof label, "THEME PREVIEW | %s / %s | simulated data", tb_theme_name(theme_family(app->theme_draft)), tb_theme_palette(app->theme_draft)->variant);
     tb_text(1, 1, COLS - 2, TB_BRAND, A_BOLD, label);
     tb_text(2, 1, COLS - 2, TB_MUTED, 0, "No debugger connected. Preview does not save your selection.");
-    (void)tb_layout_arrange(&layout, (TbRect){1, 4, COLS - 2, LINES - 7}, 0);
+    (void)tb_layout_arrange(&layout, (TbRect_t){1, 4, COLS - 2, LINES - 7}, 0);
     for (int i = 0; i < layout.count; ++i) {
-        int pane = layout.order[i]; TbRect rect = layout.panes[pane];
+        int pane = layout.order[i]; TbRect_t rect = layout.panes[pane];
         tb_fill(rect, TB_PANEL);
         tb_text(rect.y, rect.x, rect.w, TB_ACTIVE_TAB, A_BOLD | A_UNDERLINE, tb_view_names[sample.panes[pane].tabs[0]]);
-        if (rect.h > 1) { tb_render_demo(&sample, pane, (TbRect){rect.x, rect.y + 1, rect.w, rect.h - 1}); }
+        if (rect.h > 1) { tb_render_demo(&sample, pane, (TbRect_t){rect.x, rect.y + 1, rect.w, rect.h - 1}); }
     }
     button(app, LINES - 2, 1, 12, "[ Back ]", BACK, 0, 0);
 }
@@ -908,7 +908,7 @@ static void draw_form(App *app, bool review)
     int visible = LINES - 7 - overhead;
     if (visible < 1) { visible = 1; }
     if (visible > n) { visible = n; }
-    TbRect card = menu_card(form_width, visible + overhead);
+    TbRect_t card = menu_card(form_width, visible + overhead);
     int left = card.x + 2, width = card.w - 4, first = card.y + 3;
     int script_y = first + visible + mode_gap + last_gap + (scripts ? gap : 0);
     int note_y = script_y + (scripts ? 1 : 0) + gap;
@@ -927,7 +927,7 @@ static void draw_form(App *app, bool review)
         int y = first + i - app->form_scroll + (i > 0 ? mode_gap : 0) + (i == n - 1 ? last_gap : 0);
         bool shown = i >= app->form_scroll && i < app->form_scroll + visible;
         int input_x = left + (COLS >= 64 ? 24 : 21);
-        TbRect rect = shown ? (TbRect){input_x, y, left + width - input_x, 1} : (TbRect){0};
+        TbRect_t rect = shown ? (TbRect_t){input_x, y, left + width - input_x, 1} : (TbRect_t){0};
         int index = review ? -1 : add_control(app, rect, FIELD, list[i].index, 0);
         if (!shown) {
             continue;
@@ -983,7 +983,7 @@ static void draw_form(App *app, bool review)
     }
 }
 
-static void draw_menu(App *app, int pane, TbRect rect)
+static void draw_menu(App *app, int pane, TbRect_t rect)
 {
     tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_YELLOW, A_BOLD,
             app->menu_actions ? "PANE ACTIONS" : app->live ? "SHOW VIEW" : "SHOW VIEW (DEMO)");
@@ -1023,7 +1023,7 @@ static void draw_menu(App *app, int pane, TbRect rect)
                 } else { tb_text(y, rect.x + rect.w - 3, 1, style, A_BOLD, "*"); }
             }
         } else {
-            (void)add_control(app, (TbRect){0}, kind, i, pane);
+            (void)add_control(app, (TbRect_t){0}, kind, i, pane);
         }
     }
     tb_text(rect.y + rect.h - 2, rect.x + 1, rect.w - 2, TB_MUTED, 0, "Wheel/Up/Down | Esc close");
@@ -1070,7 +1070,7 @@ static TbScroll workspace_scroll(const App *app, const TbDemoPane *pane, int vis
     if (app->body_height[index] > 0) { visible = app->body_height[index]; }
     TbView view = pane->tabs[pane->active];
     if (view == TB_CALL_STACK && app->frame_details[index].open) {
-        return axis_scroll(frame_detail_lines(app, index, (TbRect){.w = app->panes[index].w - 2}, 0),
+        return axis_scroll(frame_detail_lines(app, index, (TbRect_t){.w = app->panes[index].w - 2}, 0),
                            visible, app->frame_details[index].offset);
     }
     const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
@@ -1214,7 +1214,7 @@ static void source_tab_restore(App *app, int pane)
                                 app->source_tabs[pane][0].context != context->generation.context);
     app->source_revision[pane] = changed ? 0 : tb_code_view(tb_session_code(app->debugger), pane)->source_revision;
 }
-static void source_tab_strip(App *app, TbCode *code, int pane, TbRect rect)
+static void source_tab_strip(App *app, TbCode *code, int pane, TbRect_t rect)
 {
     size_t count = tb_code_tab_count(code, pane), active = tb_code_tab_active(code, pane);
     if (count <= 1 || rect.w < 12) { return; }
@@ -1248,7 +1248,7 @@ static void source_tab_strip(App *app, TbCode *code, int pane, TbRect rect)
     }
 }
 
-static void prepare_scrollbars(App *app, int index, TbRect rect)
+static void prepare_scrollbars(App *app, int index, TbRect_t rect)
 {
     TbDemoPane *pane = &app->demo.panes[index]; TbView view = pane->tabs[pane->active];
     int width = native_content_width(app, index), gutter = code_gutter(view);
@@ -1260,7 +1260,7 @@ static void prepare_scrollbars(App *app, int index, TbRect rect)
     app->horizontal[index][view] = app->horizontal_scroll[index].offset;
 }
 
-static void draw_scrollbars(App *app, int index, TbRect rect)
+static void draw_scrollbars(App *app, int index, TbRect_t rect)
 {
     TbDemoPane *pane = &app->demo.panes[index]; TbView view = pane->tabs[pane->active];
     TbScroll vertical = workspace_scroll(app, pane, rect.h - 3);
@@ -1269,7 +1269,7 @@ static void draw_scrollbars(App *app, int index, TbRect rect)
             bool thumb = row >= vertical.thumb_start && row < vertical.thumb_start + vertical.thumb_size;
             tb_text(rect.y + body_top(app, index) + row, rect.x + rect.w - 1, 1, thumb ? TB_CYAN : TB_MUTED, 0, thumb ? "#" : "|");
         }
-        (void)add_control(app, (TbRect){rect.x + rect.w - 1, rect.y + body_top(app, index), 1, vertical.visible}, SCROLLBAR, 0, index);
+        (void)add_control(app, (TbRect_t){rect.x + rect.w - 1, rect.y + body_top(app, index), 1, vertical.visible}, SCROLLBAR, 0, index);
     }
     TbScroll horizontal = app->horizontal_scroll[index];
     if (horizontal.maximum > 0) {
@@ -1278,7 +1278,7 @@ static void draw_scrollbars(App *app, int index, TbRect rect)
             bool thumb = col >= horizontal.thumb_start && col < horizontal.thumb_start + horizontal.thumb_size;
             tb_text(y, x + col, 1, thumb ? TB_CYAN : TB_MUTED, 0, thumb ? "=" : "-");
         }
-        (void)add_control(app, (TbRect){x, y, horizontal.visible, 1}, HSCROLLBAR, 0, index);
+        (void)add_control(app, (TbRect_t){x, y, horizontal.visible, 1}, HSCROLLBAR, 0, index);
     }
 }
 
@@ -1352,7 +1352,7 @@ static int assembly_pc_row(const TbCodeView *view, const char *pc)
     return -1;
 }
 
-static void draw_code_pane(App *app, int index, TbRect rect)
+static void draw_code_pane(App *app, int index, TbRect_t rect)
 {
     TbCode *code = tb_session_code(app->debugger);
     const TbCodeView *view = tb_code_view(code, index);
@@ -1444,7 +1444,7 @@ static void draw_code_pane(App *app, int index, TbRect rect)
         bool inspected = selected && (!stopped || context->selected.level > 0 || strcmp(context->selected_thread, context->stopped_thread) != 0);
         bool highlighted = stopped || inspected;
         TbStyle style = highlighted ? tb_selected_style(stopped ? TB_YELLOW : TB_CYAN) : TB_PANEL;
-        if (highlighted) { tb_fill((TbRect){rect.x + 1, content_y + output_row, rect.w - 2, 1}, style); }
+        if (highlighted) { tb_fill((TbRect_t){rect.x + 1, content_y + output_row, rect.w - 2, 1}, style); }
         char gutter[24];
         (void)snprintf(gutter, sizeof gutter, "%c%c%5zu ", source ? ' ' : stopped ? '>' : inspected ? '~' : ' ',
                        source ? stopped ? '>' : inspected ? '~' : ' ' : ' ', source ? i + 1 : i);
@@ -1523,7 +1523,7 @@ static void context_row(const TbContextSnapshot *snapshot, TbView view, int item
     }
 }
 
-static void draw_context_pane(App *app, int index, TbRect rect)
+static void draw_context_pane(App *app, int index, TbRect_t rect)
 {
     TbDemoPane *pane = &app->demo.panes[index];
     TbView view = pane->tabs[pane->active];
@@ -1538,7 +1538,7 @@ static void draw_context_pane(App *app, int index, TbRect rect)
         TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
         app->frame_details[index].offset = scroll.offset;
         tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_CYAN, 0, "Frame details | cached snapshot");
-        (void)frame_detail_lines(app, index, (TbRect){rect.x + 1, rect.y + 2, rect.w - 2, scroll.visible}, scroll.offset);
+        (void)frame_detail_lines(app, index, (TbRect_t){rect.x + 1, rect.y + 2, rect.w - 2, scroll.visible}, scroll.offset);
         button(app, rect.y + rect.h - 1, rect.x + 1, 8, " Frames ", FRAME_DETAILS, -1, index);
         return;
     }
@@ -1579,7 +1579,7 @@ static void draw_context_pane(App *app, int index, TbRect rect)
         size_t offset = (size_t)app->horizontal[index][view];
         if (offset > strlen(text)) { offset = strlen(text); }
         TbStyle style = selected ? tb_selected_style(TB_CYAN) : TB_PANEL;
-        if (selected) { tb_fill((TbRect){rect.x + 1, rect.y + 2 + row, rect.w - 2, 1}, style); }
+        if (selected) { tb_fill((TbRect_t){rect.x + 1, rect.y + 2 + row, rect.w - 2, 1}, style); }
         tb_text(rect.y + 2 + row, rect.x + 1, app->body_width[index], style,
                 app->keyboard_focus && pane->row[view] == item ? A_UNDERLINE : 0, text + offset);
     }
@@ -1597,7 +1597,7 @@ static void draw_context_pane(App *app, int index, TbRect rect)
     }
 }
 
-static TbRect navigation_rect(const App *app, int pane);
+static TbRect_t navigation_rect(const App *app, int pane);
 static bool exposed_pane(const App *app, int pane);
 static void frame_display_clear(App *app)
 {
@@ -1618,7 +1618,7 @@ static void frame_display_begin(App *app, int target)
     for (int i = 0; i < TB_MAX_PANES; ++i) {
         const TbDemoPane *p = &app->demo.panes[i];
         if (!exposed_pane(app, i)) { continue; }
-        TbView v = p->tabs[p->active]; TbRect r = navigation_rect(app, i);
+        TbView v = p->tabs[p->active]; TbRect_t r = navigation_rect(app, i);
         if (r.w < 1 || r.h < 1 || (v != TB_SOURCE && v != TB_DISASSEMBLY && v != TB_REGISTERS &&
             v != TB_CALL_STACK && v != TB_LOCALS && v != TB_WATCHES && v != TB_STACK)) { continue; }
         WINDOW *saved = newwin(r.h, r.w, r.y, r.x);
@@ -1637,7 +1637,7 @@ static void frame_display_present(App *app)
 {
     if (!app->frame_display.active) { return; }
     const TbContextSnapshot *c = tb_context_snapshot(tb_session_context(app->debugger));
-    TbGdbGeneration old = app->frame_display.origin;
+    TbGdbGeneration_t old = app->frame_display.origin;
     if (app->page != WORKSPACE || tb_session_state(app->debugger) != TB_SESSION_STOPPED ||
         (c->stale && !tb_context_frame_pending(tb_session_context(app->debugger))) ||
         c->generation.session != old.session || c->generation.stop != old.stop ||
@@ -1647,7 +1647,7 @@ static void frame_display_present(App *app)
     bool ready = c->ready && !c->stale && !tb_context_frame_pending(tb_session_context(app->debugger));
     for (int i = 0; i < TB_MAX_PANES; ++i) {
         if (!app->frame_display.panes[i]) { continue; }
-        TbRect r = navigation_rect(app, i), previous = app->frame_display.rectangles[i];
+        TbRect_t r = navigation_rect(app, i), previous = app->frame_display.rectangles[i];
         TbView v = app->demo.panes[i].tabs[app->demo.panes[i].active];
         if (r.x != previous.x || r.y != previous.y || r.w != previous.w || r.h != previous.h ||
             v != app->frame_display.views[i] || app->layout.identities[i] != app->frame_display.identities[i]) {
@@ -1665,13 +1665,13 @@ static void frame_display_present(App *app)
     }
     for (int i = 0; i < TB_MAX_PANES; ++i) {
         if (!app->frame_display.panes[i]) { continue; }
-        TbRect r = app->frame_display.rectangles[i];
+        TbRect_t r = app->frame_display.rectangles[i];
         (void)copywin(app->frame_display.panes[i], stdscr, 0, 0, r.y, r.x, r.y + r.h - 1, r.x + r.w - 1, FALSE);
     }
     if (tb_gdb_now_ms() - app->frame_display.started >= 150) {
         char message[96];
         (void)snprintf(message, sizeof message, "Switching to frame #%d...", app->frame_display.to);
-        tb_fill((TbRect){1, LINES - 2, COLS - 2, 1}, TB_WORKSPACE);
+        tb_fill((TbRect_t){1, LINES - 2, COLS - 2, 1}, TB_WORKSPACE);
         tb_text(LINES - 2, 1, COLS - 2, TB_HINT_TEXT, 0, message);
     }
 }
@@ -1704,7 +1704,7 @@ static void select_context_row(App *app, int pane_index)
 }
 
 
-static void draw_stack_pane(App *app, int index, TbRect rect)
+static void draw_stack_pane(App *app, int index, TbRect_t rect)
 {
     TbStack *stack = tb_session_stack(app->debugger); const TbStackView *v = tb_stack_view(stack, index);
     TbDemoPane *pane = &app->demo.panes[index]; char header[512];
@@ -1732,7 +1732,7 @@ static void draw_stack_pane(App *app, int index, TbRect rect)
     button(app, rect.y + rect.h - 1, rect.x + 8, 9, " Options ", STACK_ACTION, ST_OPEN, index);
 }
 
-static void draw_native_pane(App *app, int index, TbRect rect)
+static void draw_native_pane(App *app, int index, TbRect_t rect)
 {
     TbDemoPane *pane = &app->demo.panes[index];
     TbView view = pane->tabs[pane->active];
@@ -1795,9 +1795,9 @@ static void draw_native_pane(App *app, int index, TbRect rect)
         int label = rect.w >= 25 ? 8 : 1, field_x = rect.x + label;
         int field_width = rect.w - label - 5;
         tb_text(rect.y + 1, rect.x + 1, label - 1, TB_CYAN, 0, "Address");
-        int field = add_control(app, (TbRect){field_x, rect.y + 1, field_width, 1}, MEMORY_FIELD, 0, index);
+        int field = add_control(app, (TbRect_t){field_x, rect.y + 1, field_width, 1}, MEMORY_FIELD, 0, index);
         bool focused = field == app->focus;
-        tb_fill((TbRect){field_x, rect.y + 1, field_width, 1}, focused ? TB_SELECTED : TB_SURFACE);
+        tb_fill((TbRect_t){field_x, rect.y + 1, field_width, 1}, focused ? TB_SELECTED : TB_SURFACE);
         size_t cursor = app->memory_cursor[index], field_start = 0; int cells = 0;
         for (size_t p = cursor; p > 0; --p) {
             int width = wcwidth(app->memory_input[index][p - 1]); cells += width > 0 ? width : 1;
@@ -1881,10 +1881,10 @@ static void draw_native_pane(App *app, int index, TbRect rect)
         }
         int y = rect.y + rect.h - 1 - console_footer_rows(view, rect.h), label = rect.w >= 25 ? 8 : 1;
         int field_x = rect.x + label, field_width = rect.w - label - 6;
-        int field = add_control(app, (TbRect){rect.x + 1, y, rect.w - 7, 1}, COMMAND_FIELD, 0, index);
+        int field = add_control(app, (TbRect_t){rect.x + 1, y, rect.w - 7, 1}, COMMAND_FIELD, 0, index);
         bool focused = field == app->focus;
         tb_text(y, rect.x + 1, label - 1, TB_CYAN, 0, "Command");
-        tb_fill((TbRect){field_x, y, field_width, 1}, focused ? TB_SELECTED : TB_SURFACE);
+        tb_fill((TbRect_t){field_x, y, field_width, 1}, focused ? TB_SELECTED : TB_SURFACE);
         size_t cursor = app->command_cursor[index], start = 0; int cells = 0;
         for (size_t p = cursor; p > 0; --p) {
             int width = wcwidth(app->command_input[index][p - 1]); cells += width > 0 ? width : 1;
@@ -1904,7 +1904,7 @@ static void draw_native_pane(App *app, int index, TbRect rect)
     }
 }
 
-static bool exposed_rect(const App *app, TbRect rect, int pane)
+static bool exposed_rect(const App *app, TbRect_t rect, int pane)
 {
     if (rect.w <= 0 || rect.h <= 0) { return false; }
     if (!app->layout.overlays || app->fullscreen_source >= 0) { return true; }
@@ -1918,7 +1918,7 @@ static bool exposed_rect(const App *app, TbRect rect, int pane)
 
 static bool exposed_pane(const App *app, int pane)
 {
-    TbRect rect = app->panes[pane];
+    TbRect_t rect = app->panes[pane];
     if (rect.w < 10 || rect.h < 7) { return false; }
     int top = body_top(app, pane);
     rect.y += top; rect.h -= top + 1;
@@ -1969,7 +1969,7 @@ static void draw_lower_bars(App *app)
 {
     for (int lower = 0; lower < 3; ++lower) {
         if (app->layout.lower_open[lower]) { continue; }
-        TbRect bar = app->layout.lower_bars[lower];
+        TbRect_t bar = app->layout.lower_bars[lower];
         bool visible = false;
         for (int x = bar.x; x < bar.x + bar.w; ++x) {
             visible = visible || tb_layout_pane_at(&app->layout, x, bar.y) < 0;
@@ -1978,7 +1978,7 @@ static void draw_lower_bars(App *app)
         int pane = app->layout.root_focus[lower + 3];
         const TbDemoPane *p = &app->demo.panes[pane];
         tb_fill(bar, TB_SURFACE);
-        int label = add_control(app, (TbRect){bar.x, bar.y, bar.w - 7, 1}, FOCUS_PANE, pane, pane);
+        int label = add_control(app, (TbRect_t){bar.x, bar.y, bar.w - 7, 1}, FOCUS_PANE, pane, pane);
         tb_text(bar.y, bar.x, bar.w - 7, app->focus == label ? TB_ACTIVE_TAB : TB_TAB,
                 app->focus == label ? A_UNDERLINE : 0, tb_view_names[p->tabs[p->active]]);
         button(app, bar.y, bar.x + bar.w - 7, 1, app->layout.lower_open[lower] ? "_" : "^", LOWER_TOGGLE, lower, pane);
@@ -1986,7 +1986,7 @@ static void draw_lower_bars(App *app)
     }
 }
 
-static void draw_pane(App *app, int pane_index, TbRect rect)
+static void draw_pane(App *app, int pane_index, TbRect_t rect)
 {
     if (rect.w < 10 || rect.h < 7) {
         return;
@@ -1994,7 +1994,7 @@ static void draw_pane(App *app, int pane_index, TbRect rect)
     TbDemoPane *pane = &app->demo.panes[pane_index];
     int lower = app->layout.overlays ? tb_layout_root(&app->layout, pane_index) - 3 : -1;
     tb_fill(rect, TB_PANEL);
-    tb_fill((TbRect){rect.x, rect.y, rect.w, 1}, TB_SURFACE);
+    tb_fill((TbRect_t){rect.x, rect.y, rect.w, 1}, TB_SURFACE);
     int x = rect.x + 1;
     /* Active tab is always visible; additional tabs use the remaining width. */
     for (int pass = 0; app->fullscreen_source < 0 && pass < pane->count; ++pass) {
@@ -2010,9 +2010,9 @@ static void draw_pane(App *app, int pane_index, TbRect rect)
         if (width > available) {
             width = available;
         }
-        int control = add_control(app, (TbRect){x, rect.y, width, 1}, TAB, tab, pane_index);
+        int control = add_control(app, (TbRect_t){x, rect.y, width, 1}, TAB, tab, pane_index);
         TbStyle style = tab == pane->active ? TB_ACTIVE_TAB : TB_TAB;
-        tb_fill((TbRect){x, rect.y, width, 1}, style);
+        tb_fill((TbRect_t){x, rect.y, width, 1}, style);
         tb_text(rect.y, x, width, style,
                 (tab == pane->active ? A_UNDERLINE | A_BOLD : 0) |
                 (app->keyboard_focus && control == app->focus ? A_REVERSE : 0), label);
@@ -2031,7 +2031,7 @@ static void draw_pane(App *app, int pane_index, TbRect rect)
         /* Keep menu paging/actions within the exposed part of a covered pane. */
         if (app->layout.overlays && app->fullscreen_source < 0) {
             for (int i = 0; i < 3; ++i) {
-                TbRect cover = app->layout.lower_areas[i];
+                TbRect_t cover = app->layout.lower_areas[i];
                 if (tb_layout_root(&app->layout, pane_index) == i + 3 || cover.h <= 0 ||
                     cover.x >= rect.x + rect.w || cover.x + cover.w <= rect.x || cover.y <= rect.y) { continue; }
                 if (cover.y < rect.y + rect.h) { rect.h = cover.y - rect.y; }
@@ -2041,7 +2041,7 @@ static void draw_pane(App *app, int pane_index, TbRect rect)
     } else {
         if (!exposed_pane(app, pane_index)) { return; }
         if (app->live) { prepare_scrollbars(app, pane_index, rect); }
-        (void)add_control(app, (TbRect){rect.x + 1, rect.y + body_top(app, pane_index),
+        (void)add_control(app, (TbRect_t){rect.x + 1, rect.y + body_top(app, pane_index),
                           app->live ? app->body_width[pane_index] : rect.w - 2,
                           app->live ? app->body_height[pane_index] : rect.h - 3},
                           BODY, 0, pane_index);
@@ -2050,7 +2050,7 @@ static void draw_pane(App *app, int pane_index, TbRect rect)
         if (app->live) { draw_scrollbars(app, pane_index, rect); return; }
         TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
         if (scroll.maximum > 0) {
-            (void)add_control(app, (TbRect){rect.x + rect.w - 1, rect.y + 2, 1, rect.h - 3},
+            (void)add_control(app, (TbRect_t){rect.x + rect.w - 1, rect.y + 2, 1, rect.h - 3},
                               SCROLLBAR, 0, pane_index);
         }
     }
@@ -2068,14 +2068,14 @@ static int toolbar_last_row(char actions[7][64], int reserve)
 }
 static void draw_workspace_status(const App *app, int notice_y, int target_y)
 {
-    tb_fill((TbRect){0, notice_y, COLS, 1}, TB_NOTICE);
+    tb_fill((TbRect_t){0, notice_y, COLS, 1}, TB_NOTICE);
     tb_text(notice_y, 1, COLS - 2, TB_NOTICE, 0,
             app->live ? (app->session == 1 ? (app->instruction_mode ? "LIVE OPENOCD | instruction stepping | live code, context and console" : "LIVE OPENOCD | source stepping | live code, context and console") : app->session == 2 ? (app->instruction_mode ? "LIVE REMOTE | instruction stepping | live code, context and console" :
                          "LIVE REMOTE | source stepping | live code, context and console") :
                          app->instruction_mode ? "LIVE NATIVE | instruction stepping | live code, context and console" :
                          "LIVE NATIVE | source stepping | live code, context and console") :
             "DEMO / VISUAL REFERENCE  |  All values simulated. No debugger connected.");
-    tb_fill((TbRect){0, target_y, COLS, 1}, TB_CHROME);
+    tb_fill((TbRect_t){0, target_y, COLS, 1}, TB_CHROME);
     tb_text(target_y, 1, COLS - 20, TB_TARGET, 0, session_names[app->session]);
     tb_text(target_y, COLS - 18, 17, TB_STATE, A_BOLD,
             app->live ? tb_session_state_name(app->debugger) : app->demo.running ? "Running / stale" : "Paused (demo)");
@@ -2084,7 +2084,7 @@ static void draw_workspace_status(const App *app, int notice_y, int target_y)
 static void draw_workspace(App *app)
 {
     const int toolbar_top = 1;
-    tb_fill((TbRect){0, toolbar_top, COLS, 1}, TB_CHROME);
+    tb_fill((TbRect_t){0, toolbar_top, COLS, 1}, TB_CHROME);
     tb_text(toolbar_top, 1, 11, TB_BRAND, A_BOLD, "THE BUGGER");
     const char *const short_names[] = {"Continue", app->live && app->session == 1 ? "Halt" : "Pause", "Over", "Into", "Out", "BP", "Reset"};
     char actions[7][64];
@@ -2116,7 +2116,7 @@ static void draw_workspace(App *app)
     button(app, toolbar_top, COLS - 7, 6, " Quit ", QUIT, 0, 0);
     int notice_y = ++y, target_y = ++y;
     ++y;
-    TbRect area = {1, y + 1, COLS - 2, LINES - y - 3};
+    TbRect_t area = {1, y + 1, COLS - 2, LINES - y - 3};
     if (app->fullscreen_source >= 0 &&
         (!tb_layout_has_pane(&app->layout, app->fullscreen_source) ||
          app->demo.panes[app->fullscreen_source].tabs[app->demo.panes[app->fullscreen_source].active] != TB_SOURCE)) {
@@ -2198,7 +2198,7 @@ static void draw_workspace(App *app)
         if (app->resizing && app->layout.dividers[i].node == app->resize_node) { app->resize_divider = i; }
     }
     for (int i = 0; !fullscreen && i < app->layout.divider_count; ++i) {
-        TbDivider divider = app->layout.dividers[i];
+        TbDivider_t divider = app->layout.dividers[i];
         bool visible = false;
         for (int dy = 0; dy < divider.rect.h && !visible; ++dy) {
             for (int dx = 0; dx < divider.rect.w; ++dx) {
@@ -2245,7 +2245,7 @@ static void draw_code_menu(App *app)
 {
     bool source = app->demo.panes[app->code_pane].tabs[app->demo.panes[app->code_pane].active] == TB_SOURCE;
     int count = source || tb_session_kind(app->debugger) == TB_SESSION_LOCAL ? 7 : 8;
-    TbRect card = menu_card(80, count + 5);
+    TbRect_t card = menu_card(80, count + 5);
     int left = card.x + 2, top = card.y, width = card.w - 4;
     draw_header(app, "Code view actions");
     const CodeAction source_actions[] = {CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_STOPPED, CODE_SOURCE_SETTINGS, CODE_RUN_TO, CODE_FULLSCREEN};
@@ -2258,7 +2258,7 @@ static void draw_code_menu(App *app)
     button(app, top + card.h - 2, left, 12, "[ Back ]", BACK, 0, 0);
 }
 
-static void image_review_text(const char *text, TbRect card, int offset, int *row)
+static void image_review_text(const char *text, TbRect_t card, int offset, int *row)
 {
     int width = card.w - 4, visible = card.h - 4;
     while (*text) {
@@ -2274,7 +2274,7 @@ static void image_review_text(const char *text, TbRect card, int offset, int *ro
 
 static void draw_ram_review(App *app)
 {
-    TbRect card = menu_card(100, 21), body = card;
+    TbRect_t card = menu_card(100, 21), body = card;
     body.y += 2; body.h -= 2;
     int row = 0, visible = body.h - 4;
     char binding[160], endpoint[384];
@@ -2306,7 +2306,7 @@ static void draw_ram_review(App *app)
 
 static void draw_image_review(App *app)
 {
-    TbRect card = menu_card(100, 20); TbCode *code = tb_session_code(app->debugger);
+    TbRect_t card = menu_card(100, 20); TbCode *code = tb_session_code(app->debugger);
     draw_header(app, "Confirm remote ELF mapping?");
     TbImageRange range;
     if (!tb_code_image_range(code, &app->image_review, 0, &range)) {
@@ -2344,7 +2344,7 @@ static void draw_image_review(App *app)
 
 static void draw_source_settings(App *app)
 {
-    TbRect card = menu_card(88, (int)(tb_code_directory_count(tb_session_code(app->debugger)) + tb_code_rule_count(tb_session_code(app->debugger))) + 10);
+    TbRect_t card = menu_card(88, (int)(tb_code_directory_count(tb_session_code(app->debugger)) + tb_code_rule_count(tb_session_code(app->debugger))) + 10);
     int left = card.x + 2, top = card.y, width = card.w - 4;
     draw_header(app, "Source lookup settings");
     TbCode *code = tb_session_code(app->debugger);
@@ -2378,12 +2378,12 @@ static void draw_source_settings(App *app)
 
 static void draw_code_files(App *app)
 {
-    TbRect card = menu_card(96, (int)tb_code_file_count(tb_session_code(app->debugger)) + 10);
+    TbRect_t card = menu_card(96, (int)tb_code_file_count(tb_session_code(app->debugger)) + 10);
     int left = card.x + 2, top = card.y, width = card.w - 4;
     draw_header(app, "GDB source files");
     TbCode *code = tb_session_code(app->debugger);
     tb_text(top, left, 8, TB_CYAN, 0, "Filter:");
-    int field = add_control(app, (TbRect){left + 8, top, width - 8, 1}, FIELD, 0, 0);
+    int field = add_control(app, (TbRect_t){left + 8, top, width - 8, 1}, FIELD, 0, 0);
     wide_text(top, left + 8, card.w - 12, app->input, 0, app->focus == field);
     char filter[FIELD_SIZE * 4] = {0}; (void)field_utf8(app->input, filter, sizeof filter);
     int height = card.h - 6; if (height < 1) { height = 1; }
@@ -2428,7 +2428,7 @@ static void data_watch_open(App *app, const char *expression, bool address, unsi
 
 static void draw_input(App *app)
 {
-    TbRect card = menu_card(88, app->page == DATA_WATCH_INPUT ? 14 : 11);
+    TbRect_t card = menu_card(88, app->page == DATA_WATCH_INPUT ? 14 : 11);
     int left = card.x + 2, top = card.y, width = card.w - 4;
     bool profile_text = app->page == PROFILE_TEXT;
     bool code = app->page == CODE_INPUT;
@@ -2478,7 +2478,7 @@ static void draw_input(App *app)
     }
     if (profile_text) {
         static const char *const labels[] = {"Profile name", "Source directory (highest priority first)", "Build prefix to replace", "Local replacement prefix", "Ordered OpenOCD config path", "OpenOCD search directory", "New name for saved profile and setup copy"};
-        tb_fill((TbRect){left - 1, top + 1, card.w - 2, 3}, TB_PANEL);
+        tb_fill((TbRect_t){left - 1, top + 1, card.w - 2, 3}, TB_PANEL);
         tb_text(top + 1, left, width, TB_CYAN, A_BOLD, labels[app->profile_text]);
         tb_text(top + 3, left, width, TB_MUTED, 0, "Paths and arguments are data; saving never launches tools.");
     }
@@ -2486,7 +2486,7 @@ static void draw_input(App *app)
         tb_text(top + 1, left, width, TB_CYAN, A_BOLD, "Match filename or exact installed path (empty shows all)");
         tb_text(top + 3, left, width, TB_MUTED, 0, "Catalog metadata only; no configuration script is executed.");
     }
-    TbRect field = {left, top + 5, width, 1};
+    TbRect_t field = {left, top + 5, width, 1};
     int index = add_control(app, field, FIELD, 0, 0);
     tb_fill(field, index == app->focus ? TB_SELECTED : TB_SURFACE);
     size_t start = 0;
@@ -2521,7 +2521,7 @@ static void draw_input(App *app)
 
 static void draw_memory_menu(App *app)
 {
-    TbRect card = menu_card(88, 17);
+    TbRect_t card = menu_card(88, 17);
     int left = card.x + 2, top = card.y, width = card.w - 4;
     draw_header(app, "Memory inspection options");
     const TbMemoryView *v = tb_memory_view(tb_session_memory(app->debugger), app->memory_pane);
@@ -2552,7 +2552,7 @@ static void draw_memory_menu(App *app)
 static void draw_memory_ranges(App *app)
 {
     TbMemory *m = tb_session_memory(app->debugger);
-    TbRect card = menu_card(100, app->page == MEMORY_RANGES ? 22 : 17);
+    TbRect_t card = menu_card(100, app->page == MEMORY_RANGES ? 22 : 17);
     int left = card.x + 2, width = card.w - 4, top = card.y;
     char text[2048], risks[640];
     if (app->page == MEMORY_RANGES) {
@@ -2648,7 +2648,7 @@ static void draw_memory_ranges(App *app)
 
 static void draw_variable_menu(App *app)
 {
-    TbRect card = menu_card(96, 16);
+    TbRect_t card = menu_card(96, 16);
     int left = card.x + 2, top = card.y, width = card.w - 4;
     draw_header(app, "Locals / Watches inspection");
     bool compact = card.h < 16;
@@ -2686,7 +2686,7 @@ static void draw_variable_menu(App *app)
 
 static void draw_variable_edit(App *app)
 {
-    TbRect card = menu_card(88, 14);
+    TbRect_t card = menu_card(88, 14);
     int left = card.x + 2, top = card.y, width = card.w - 4;
     TbVariables *v = tb_session_variables(app->debugger);
     TbDemoPane *pane = &app->demo.panes[app->variable_pane];
@@ -2704,7 +2704,7 @@ static void draw_variable_edit(App *app)
     tb_text(top + 2, left, width, TB_MUTED, 0, "Old value:");
     tb_text(top + 2, left + 12, width - 12, TB_GREEN, 0, tb_variables_edit_old_value(v));
     tb_text(top + 3, left, width, TB_MUTED, 0, "New value:");
-    TbRect field = {left + 12, top + 3, width - 12, 1};
+    TbRect_t field = {left + 12, top + 3, width - 12, 1};
     int index = add_control(app, field, FIELD, 0, 0);
     wide_text(field.y, field.x, field.w, app->input, 0, index == app->focus);
     tb_text(top + 5, left, width, TB_MUTED, 0, "Type: ");
@@ -2722,7 +2722,7 @@ static void draw_variable_edit(App *app)
 
 static void draw_break_menu(App *app)
 {
-    TbRect card = menu_card(88, 15);
+    TbRect_t card = menu_card(88, 15);
     int left = card.x + 2, top = card.y, width = card.w - 4;
     draw_header(app, "Breakpoint / data-watchpoint management");
     bool compact = card.h < 15;
@@ -2745,7 +2745,7 @@ static bool stack_page(Page current) { return current >= STACK_MENU && current <
 static void draw_stack_pages(App *app)
 {
     TbStack *stack = tb_session_stack(app->debugger); int id = app->stack_pane;
-    const TbStackView *v = tb_stack_view(stack, id); TbRect card = menu_card(100, 24);
+    const TbStackView *v = tb_stack_view(stack, id); TbRect_t card = menu_card(100, 24);
     int left = card.x + 2, width = card.w - 4, visible = card.h - 6;
     const char *title = app->page == STACK_MENU ? "Stack options" : app->page == STACK_INPUT ? "Stack literal setting" :
         app->page == STACK_DETAILS ? "Stack row details" : app->page == STACK_NAMES_PAGE ? "Stack local/argument names" :
@@ -2754,8 +2754,8 @@ static void draw_stack_pages(App *app)
     if (app->page == STACK_INPUT) {
         const char *label = app->stack_input == 1 ? "Window start: literal address or signed frame-0 SP offset" : app->stack_input == 2 ? "Requested bytes: 1 to 1024" : app->stack_input == 3 ? "Declared low endpoint (inclusive)" : "Declared high endpoint (exclusive)";
         menu_paragraph(card, 0, 2, label, TB_CYAN);
-        int field = add_control(app, (TbRect){left, card.y + 3, width, 1}, FIELD, 0, id);
-        tb_fill((TbRect){left, card.y + 3, width, 1}, field == app->focus ? TB_SELECTED : TB_SURFACE);
+        int field = add_control(app, (TbRect_t){left, card.y + 3, width, 1}, FIELD, 0, id);
+        tb_fill((TbRect_t){left, card.y + 3, width, 1}, field == app->focus ? TB_SELECTED : TB_SURFACE);
         wide_text(card.y + 3, left, width, app->input, 0, field == app->focus);
         menu_paragraph(card, 5, 2, "Applying this setting reads no bytes. Declarations grant no access permission.", TB_MUTED);
         button(app, card.y + card.h - 4, left, 12, "[ Apply ]", INPUT_SUBMIT, 0, id);
@@ -2767,7 +2767,7 @@ static void draw_stack_pages(App *app)
         } else {
             (void)snprintf(text, sizeof text, "The variable-address query is blocked because GDB's may-call-functions setting is enabled. Confirming changes may-call-functions to off for the ENTIRE DEBUGGER SESSION, including Console and other inspectors. The setting will NOT be silently restored. The query proceeds only after a second GDB query verifies it is off. The no-call guard does not prevent GDB's internal memory reads, including reference/location/unwind evaluation. Only the selected names-only picker entry is queried using a controlled C address-of operation. This establishes an address point, not storage extent, stack membership or ownership. Cancel leaves the setting unchanged unless a setting command was already dispatched.");
         }
-        TbRect content = card;
+        TbRect_t content = card;
         ++content.y; content.h -= 2;
         if (app->page == STACK_GUARD_PAGE && app->stack_offset == 0) {
             int lines = 0;
@@ -2848,7 +2848,7 @@ static void draw_page(App *app)
     app->count = 0;
     app->command_caret_y = -1;
     (void)leaveok(stdscr, TRUE);
-    tb_fill((TbRect){0, 0, COLS, LINES}, TB_WORKSPACE);
+    tb_fill((TbRect_t){0, 0, COLS, LINES}, TB_WORKSPACE);
     if (COLS < 48 || LINES < 18) {
         char dimensions[64];
         (void)snprintf(dimensions, sizeof dimensions, "Current: %dx%d", COLS, LINES);
@@ -2898,7 +2898,7 @@ static void draw_page(App *app)
         bool closing = app->page == CLOSE_CONFIRM;
         draw_header(app, closing ? (app->exit_after_close ? "Quit application?" : app->session ? "Disconnect target session?" : "Close native session?") :
                     app->live ? "Reset and halt target?" : "Reset DEMO state?");
-        TbRect card = menu_card(88, closing && app->session == 1 ? 12 : 10);
+        TbRect_t card = menu_card(88, closing && app->session == 1 ? 12 : 10);
         const char *question = closing ? (app->session ?
                 "Disconnect from the existing server? Running targets are interrupted first; server controls the final target state." :
                 tb_session_attached(app->debugger) ? "Detach and resume the attached process?" :
@@ -2984,7 +2984,7 @@ static void draw_vim_fields(App *app)
     for (int i = 0; i < app->count; ++i) {
         Control control = app->controls[i];
         if (!text_control(app, control) || control.rect.w <= 0 || control.rect.h <= 0) { continue; }
-        TbRect rect = control.rect;
+        TbRect_t rect = control.rect;
         if (control.kind == COMMAND_FIELD) {
             int label = app->panes[control.pane].w >= 25 ? 8 : 1;
             rect.x += label - 1; rect.w -= label - 1;
@@ -3070,16 +3070,16 @@ static void draw(App *app)
     }
 }
 
-static TbRect navigation_rect(const App *app, int pane)
+static TbRect_t navigation_rect(const App *app, int pane)
 {
-    TbRect rect = app->panes[pane];
+    TbRect_t rect = app->panes[pane];
     if (!app->layout.overlays || app->fullscreen_source >= 0) { return rect; }
     int root = tb_layout_root(&app->layout, pane);
     bool above = root < 3;
     for (int i = 0; i < 3; ++i) {
         int lower = app->layout.lower_order[i];
         if (root == lower + 3) { above = true; continue; }
-        TbRect cover = app->layout.lower_areas[lower];
+        TbRect_t cover = app->layout.lower_areas[lower];
         if (above && cover.h > 0 && cover.x < rect.x + rect.w && rect.x < cover.x + cover.w &&
             cover.y > rect.y && cover.y < rect.y + rect.h) { rect.h = cover.y - rect.y; }
     }
@@ -3089,7 +3089,7 @@ static TbRect navigation_rect(const App *app, int pane)
 /* At most MAX_CONTROLS candidates: use exposed geometry for controls and panes. */
 static int spatial_target(const App *app, int key, bool content)
 {
-    TbRect from = content ? navigation_rect(app, app->content_pane) : app->controls[app->focus].rect;
+    TbRect_t from = content ? navigation_rect(app, app->content_pane) : app->controls[app->focus].rect;
     bool horizontal = key == KEY_LEFT || key == KEY_RIGHT;
     bool forward = key == KEY_RIGHT || key == KEY_DOWN;
     if (!content && app->page == CONFIGURE && !horizontal) {
@@ -3109,7 +3109,7 @@ static int spatial_target(const App *app, int key, bool content)
     for (int i = 0; i < app->count; ++i) {
         Control c = app->controls[i];
         if (content ? c.kind != BODY || !exposed_control(app, c) || c.rect.w <= 0 || c.rect.h <= 0 : !navigable(app, c)) { continue; }
-        TbRect to = content ? navigation_rect(app, c.pane) : c.rect;
+        TbRect_t to = content ? navigation_rect(app, c.pane) : c.rect;
         int primary = horizontal ? to.x * 2 + to.w - (from.x * 2 + from.w) :
                                    to.y * 2 + to.h - (from.y * 2 + from.h);
         int distance = forward ? primary : -primary;
@@ -3369,7 +3369,7 @@ static bool setup_available(App *app)
     }
     return true;
 }
-typedef struct { App *app; TbRect card; int logical, visible; } SetupText;
+typedef struct { App *app; TbRect_t card; int logical, visible; } SetupText;
 static int setup_chunk(const char *text, int width)
 {
     size_t at = 0, space = 0, length = strlen(text); int cells = 0; mbstate_t state = {0};
@@ -3476,7 +3476,7 @@ static void setup_entry_actions(SetupText *text, int retry, int remove, int entr
 static void draw_setup(App *app)
 {
     draw_header(app, app->page == SETUP_RESTORE_REVIEW ? "Session setup restoration review" : app->page == SETUP_MENU ? "Setup" : app->page == SETUP_SAVE ? "Save setup review" : "Setup information");
-    TbRect card = menu_card(100, app->page == SETUP_MENU ? 12 : 25); int left = card.x + 2, width = card.w - 4;
+    TbRect_t card = menu_card(100, app->page == SETUP_MENU ? 12 : 25); int left = card.x + 2, width = card.w - 4;
     const TbSetup *s = app->page == SETUP_RESTORE_REVIEW ? app->restore_definition : tb_setup_capture_current(app->setup);
     const TbProfile *associated = tb_profiles_find(app->profiles, app->page == SETUP_RESTORE_REVIEW ? app->profile->name : app->setup_profile);
     char line[256]; (void)snprintf(line, sizeof line, "Profile: %s", associated ? associated->name : "none - save a connection profile first");
@@ -3778,7 +3778,7 @@ static void draw_profiles(App *app)
     bool wrap_actions = app->page == PROFILE_LIST && COLS < 78;
     size_t count = app->page == PROFILE_LIST ? tb_profiles_count(app->profiles) : profile_item_count(app);
     int options_height = app->profile->kind == 1 ? 16 : app->profile->kind ? 14 : 11;
-    TbRect card = menu_card(96, app->page == PROFILE_CONFIRM ? 9 : app->page == PROFILE_OPTIONS ? options_height :
+    TbRect_t card = menu_card(96, app->page == PROFILE_CONFIRM ? 9 : app->page == PROFILE_OPTIONS ? options_height :
                             10 + (wrap_actions ? 1 : 0) + (int)(count > 8 ? 8 : count));
     int left = card.x + 2, top = card.y, width = card.w - 4;
     bool compact_options = app->page == PROFILE_OPTIONS && card.h < options_height;
@@ -3957,7 +3957,7 @@ static bool prepare_server(App *app)
 }
 static void draw_server_review(App *app)
 {
-    TbRect card = menu_card(100, 24);
+    TbRect_t card = menu_card(100, 24);
     int left = card.x + 2, top = card.y, width = card.w - 4;
     draw_header(app, "Review OpenOCD session"); TbOpenOcdPlan *p = app->server_plan;
     if (!p) { tb_text(top + 1, left, width, TB_ORANGE, 0, "Return to configuration and review the setup."); button(app, top + 5, left, 12, "[ Back ]", BACK, 0, 0); return; }
@@ -4039,7 +4039,7 @@ static void draw_scripts(App *app)
     script_move(app, 0);
     app->script_refocus = false;
     if (!toolbar) { app->focus = app->script_selected - app->script_offset; }
-    TbRect card = menu_card(96, selection_menu_height());
+    TbRect_t card = menu_card(96, selection_menu_height());
     int left = card.x + 2, top = card.y, width = card.w - 5;
     draw_header(app, "Installed OpenOCD scripts");
     char summary[384]; (void)snprintf(summary, sizeof summary, "Filter: %s%s", *app->script_filter ? app->script_filter : "(all)", app->catalog && app->catalog->truncated ? " | bounded catalog; manual paths remain available" : "");
@@ -4065,7 +4065,7 @@ static void draw_scripts(App *app)
             bool thumb = row >= bar.thumb_start && row < bar.thumb_start + bar.thumb_size;
             tb_text(top + 2 + row, card.x + card.w - 2, 1, thumb ? TB_CYAN : TB_MUTED, 0, thumb ? "#" : "|");
         }
-        (void)add_control(app, (TbRect){card.x + card.w - 2, top + 2, 1, bar.visible}, SCRIPT_SCROLLBAR, 0, 0);
+        (void)add_control(app, (TbRect_t){card.x + card.w - 2, top + 2, 1, bar.visible}, SCRIPT_SCROLLBAR, 0, 0);
     }
     if (toolbar) { app->focus = app->count + (previous.kind == BACK ? 1 : 0); }
     button(app, top + card.h - 2, left, 12, "[ Filter ]", SCRIPT_ACTION, 0, 0);
@@ -5313,7 +5313,7 @@ static void mouse_event(App *app, MEVENT event)
     if (app->page == WORKSPACE && app->drag >= 0) {
         if (event.bstate & (BUTTON1_PRESSED | BUTTON1_RELEASED | REPORT_MOUSE_POSITION)) {
             if (app->drag < app->layout.divider_count) {
-                TbDivider divider = app->layout.dividers[app->drag];
+                TbDivider_t divider = app->layout.dividers[app->drag];
                 (void)tb_layout_move_divider(&app->layout, app->drag,
                         divider.direction == TB_SPLIT_RIGHT ? event.x : event.y);
             }
@@ -5650,7 +5650,7 @@ static void key_event(App *app, wint_t key, bool special)
             }
         } else if (special && control.kind == DIVIDER &&
                    (key == KEY_LEFT || key == KEY_RIGHT || key == KEY_UP || key == KEY_DOWN)) {
-            TbDivider divider = app->layout.dividers[control.value];
+            TbDivider_t divider = app->layout.dividers[control.value];
             bool right = divider.direction == TB_SPLIT_RIGHT;
             if ((right && (key == KEY_LEFT || key == KEY_RIGHT)) ||
                 (!right && (key == KEY_UP || key == KEY_DOWN))) {

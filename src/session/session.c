@@ -21,7 +21,7 @@ typedef enum { JOB_NONE, JOB_SETUP, JOB_RUN, JOB_PAUSE, JOB_CONSOLE,
 static uint64_t connection_serial;
 struct TbSession {
     bool setup_active, setup_unacknowledged;
-    TbGdb *gdb;
+    TbGdb_t *gdb;
     TbOpenOcd *server;
     bool close_resume, close_prepared, target_uncertain;
     int target_action; uint64_t target_deadline;
@@ -210,13 +210,13 @@ bool tb_session_words(const char *input, TbSessionWords *words, char *error, siz
     return true;
 }
 
-static bool mi_string(const TbMiValue *value, const char *text)
+static bool mi_string(const TbMiValue_t *value, const char *text)
 {
     return value != NULL && value->type == TB_MI_STRING &&
            value->string.length == strlen(text) && memcmp(value->string.data, text, value->string.length) == 0;
 }
 
-static pid_t record_pid(const TbMiValue *value)
+static pid_t record_pid(const TbMiValue_t *value)
 {
     if (value == NULL || value->type != TB_MI_STRING || value->string.length == 0) { return 0; }
     uint64_t number = 0;
@@ -228,7 +228,7 @@ static pid_t record_pid(const TbMiValue *value)
     return (pid_t)number;
 }
 
-static void emit(void *context, const TbGdbEvent *event)
+static void emit(void *context, const TbGdbEvent_t *event)
 {
     TbSession *native = context;
     ++native->revision;
@@ -256,7 +256,7 @@ static void emit(void *context, const TbGdbEvent *event)
                           (strcmp(event->record->klass, "done") == 0 || strcmp(event->record->klass, "running") == 0 ||
                            (native->job == JOB_REMOTE_CONNECT && strcmp(event->record->klass, "connected") == 0));
         if (native->success && native->job >= JOB_REMOTE_UNITS && native->job <= JOB_REMOTE_FRAME) {
-            const TbMiValue *value = tb_mi_find(event->record->results, "value");
+            const TbMiValue_t *value = tb_mi_find(event->record->results, "value");
             if (native->job == JOB_REMOTE_UNITS) { native->capabilities.octet_addressing = mi_string(value, "0"); }
             else if (native->job == JOB_REMOTE_WIDTH) {
                 native->capabilities.address_bits = mi_string(value, "4") ? 32 : mi_string(value, "8") ? 64 : 0;
@@ -264,8 +264,8 @@ static void emit(void *context, const TbGdbEvent *event)
                 native->capabilities.byte_order = mi_string(value, "little") ? TB_MEMORY_LITTLE :
                                                   mi_string(value, "big") ? TB_MEMORY_BIG : TB_MEMORY_UNKNOWN;
             } else if (native->job == JOB_REMOTE_FRAME) {
-                const TbMiValue *frame = tb_mi_find(event->record->results, "frame");
-                const TbMiValue *arch = frame ? tb_mi_find(frame->children, "arch") : NULL;
+                const TbMiValue_t *frame = tb_mi_find(event->record->results, "frame");
+                const TbMiValue_t *arch = frame ? tb_mi_find(frame->children, "arch") : NULL;
                 if (arch && arch->type == TB_MI_STRING) {
                     safe_text(native->capabilities.architecture, sizeof native->capabilities.architecture, arch->string.data, arch->string.length);
                 }
@@ -273,19 +273,19 @@ static void emit(void *context, const TbGdbEvent *event)
         }
         native->reply_error[0] = '\0';
         if (!native->success) {
-            const TbMiValue *value = event->record ? tb_mi_find(event->record->results, "msg") : NULL;
+            const TbMiValue_t *value = event->record ? tb_mi_find(event->record->results, "msg") : NULL;
             if (value != NULL && value->type == TB_MI_STRING) {
                 safe_text(native->reply_error, sizeof native->reply_error, value->string.data, value->string.length);
             } else { (void)snprintf(native->reply_error, sizeof native->reply_error, "%s", event->kind == TB_GDB_TIMEOUT ? "GDB operation timed out; it was not retried." : "GDB operation was cancelled."); }
         }
     } else if (event->kind == TB_GDB_STATE && native->configured && !native->want_close) {
-        TbGdbState state = tb_gdb_state(native->gdb);
+        TbGdbState_e state = tb_gdb_state(native->gdb);
         if (state == TB_GDB_RUNNING) { state_set(native, TB_SESSION_RUNNING); }
         else if (state == TB_GDB_STOPPED) { state_set(native, TB_SESSION_STOPPED); }
         else if (state == TB_GDB_EXITED) { state_set(native, TB_SESSION_EXITED); }
     }
     if (event->record == NULL) { return; }
-    const TbMiRecord *record = event->record;
+    const TbMiRecord_t *record = event->record;
     if (record->kind == TB_MI_CONSOLE || record->kind == TB_MI_TARGET || record->kind == TB_MI_LOG) {
         stream(native, record->kind == TB_MI_CONSOLE ? 0 : record->kind == TB_MI_TARGET ? 1 : 2,
                record->stream.data, record->stream.length);
@@ -295,7 +295,7 @@ static void emit(void *context, const TbGdbEvent *event)
             native->target_pid = record_pid(tb_mi_find(record->results, "pid"));
             native->alive = native->target_pid > 0;
         } else {
-            const TbMiValue *id = tb_mi_find(record->results, "pid");
+            const TbMiValue_t *id = tb_mi_find(record->results, "pid");
             if (id && id->type == TB_MI_STRING) {
                 safe_text(native->capabilities.target_id, sizeof native->capabilities.target_id, id->string.data, id->string.length);
             }
@@ -330,7 +330,7 @@ static void emit(void *context, const TbGdbEvent *event)
             if (native->pidfd >= 0) { (void)close(native->pidfd); native->pidfd = -1; }
         }
     } else if (record->kind == TB_MI_EXEC && strcmp(record->klass, "stopped") == 0) {
-        const TbMiValue *reason = tb_mi_find(record->results, "reason");
+        const TbMiValue_t *reason = tb_mi_find(record->results, "reason");
         char text[192] = "Target stopped";
         if (reason != NULL && reason->type == TB_MI_STRING) { safe_text(text, sizeof text, reason->string.data, reason->string.length); }
         diagnostic(native, text);
@@ -889,7 +889,7 @@ static void release_target(TbSession *native)
         return;
     }
     if (!native->alive) { tb_gdb_close(native->gdb); return; }
-    TbGdbState state = tb_gdb_state(native->gdb);
+    TbGdbState_e state = tb_gdb_state(native->gdb);
     if (state == TB_GDB_RUNNING) { (void)issue(native, JOB_INTERRUPT_CLOSE, "-exec-interrupt", NULL, 0); }
     else if (state == TB_GDB_STOPPED) {
         if (native->owned && native->target_pid == native->owned_pid) {
@@ -974,7 +974,7 @@ void tb_session_pump(TbSession *native, int wait_ms)
         memory_metadata(native);
     }
     tb_break_native(native->breakpoints, native->kind == TB_SESSION_LOCAL ? native->target_pid : 0);
-    TbGdbState gdb = tb_gdb_state(native->gdb);
+    TbGdbState_e gdb = tb_gdb_state(native->gdb);
     if (gdb == TB_GDB_DISCONNECTED) {
         if (native->kind != TB_SESSION_LOCAL && native->capabilities.connected) {
             native->target_connected = native->capabilities.connected = native->alive = false;
@@ -1227,7 +1227,7 @@ static void remote_setup(TbSession *session)
             tb_session_close(session); return;
         }
         session->configured = true;
-        TbGdbState state = tb_gdb_state(session->gdb);
+        TbGdbState_e state = tb_gdb_state(session->gdb);
         state_set(session, !session->alive ? TB_SESSION_READY : state == TB_GDB_STOPPED ? TB_SESSION_STOPPED : state == TB_GDB_RUNNING ? TB_SESSION_RUNNING : TB_SESSION_READY);
         diagnostic(session, "Connected to existing GDB server. No server ownership; unknown memory regions require explicit reads.");
     }

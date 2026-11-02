@@ -5,18 +5,18 @@
 
 typedef struct { bool ready, features, async, all_stop, exit_reply; size_t diagnostics, exits; } Evidence;
 
-static void emit(void *context, const TbGdbEvent *event)
+static void emit(void *context, const TbGdbEvent_t *event)
 {
     Evidence *evidence = context;
     if (event->kind == TB_GDB_REPLY && event->cookie == 1) {
-        const TbMiValue *features = tb_mi_find(event->record->results, "features");
+        const TbMiValue_t *features = tb_mi_find(event->record->results, "features");
         CHECK(strcmp(event->record->klass, "done") == 0 && features != NULL && features->type == TB_MI_LIST);
         evidence->features = true;
     } else if (event->kind == TB_GDB_REPLY && event->cookie == 2) {
         CHECK(strcmp(event->record->klass, "exit") == 0);
         evidence->exit_reply = true;
     } else if (event->kind == TB_GDB_REPLY && (event->cookie == 3 || event->cookie == 4)) {
-        const TbMiValue *value = tb_mi_find(event->record->results, "value");
+        const TbMiValue_t *value = tb_mi_find(event->record->results, "value");
         CHECK(value && value->type == TB_MI_STRING);
         CHECK(strcmp(value->string.data, event->cookie == 3 ? "on" : "off") == 0);
         if (event->cookie == 3) { evidence->async = true; }
@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
 {
     CHECK(argc == 2);
     Evidence evidence = {0};
-    TbGdb *gdb = tb_gdb_create(emit, &evidence);
+    TbGdb_t *gdb = tb_gdb_create(emit, &evidence);
     CHECK(gdb != NULL && tb_gdb_start(gdb, argv[1], 2000));
     uint64_t deadline = tb_gdb_now_ms() + 5000;
     bool submitted_exit = false, submitted_queries = false;

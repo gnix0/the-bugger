@@ -3,13 +3,13 @@
 #include "../support/check.h"
 #include <string.h>
 
-typedef struct { TbGdb *gdb; TbContext *context; TbMemory *memory; unsigned replies, reads; } Fixture;
-static void emit(void *context, const TbGdbEvent *event)
+typedef struct { TbGdb_t *gdb; TbContext *context; TbMemory *memory; unsigned replies, reads; } Fixture;
+static void emit(void *context, const TbGdbEvent_t *event)
 {
     Fixture *f = context;
     if (!tb_memory_event(f->memory, event)) { (void)tb_context_event(f->context, event); }
     if (event->kind == TB_GDB_REPLY) {
-        ++f->replies; const TbMiValue *reads = tb_mi_find(event->record->results, "reads");
+        ++f->replies; const TbMiValue_t *reads = tb_mi_find(event->record->results, "reads");
         if (reads) { CHECK(reads->type == TB_MI_STRING); f->reads = (unsigned)strtoul(reads->string.data, NULL, 10); }
     }
 }
