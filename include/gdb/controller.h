@@ -6,7 +6,11 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-enum { TB_GDB_MAX_PENDING = 64, TB_GDB_MAX_COMMAND = 16384, TB_GDB_IO_BUDGET = 16384 };
+enum {
+    TB_GDB_MAX_PENDING = 64,
+    TB_GDB_MAX_COMMAND = 16384,
+    TB_GDB_IO_BUDGET   = 16384
+};
 
 typedef struct tb_gdb TbGdb_t;
 
@@ -20,10 +24,16 @@ typedef enum {
     TB_GDB_CLOSING
 } TbGdbState_e;
 
-typedef enum { TB_GDB_SESSION, TB_GDB_STOP, TB_GDB_CONTEXT } TbGdbScope_e;
+typedef enum {
+    TB_GDB_SESSION,
+    TB_GDB_STOP,
+    TB_GDB_CONTEXT
+} TbGdbScope_e;
 
 typedef struct {
-    uint64_t session, stop, context;
+    uint64_t session;
+    uint64_t stop;
+    uint64_t context;
 } TbGdbGeneration_t;
 
 typedef enum {
@@ -41,7 +51,8 @@ typedef enum {
 
 typedef struct {
     TbGdbEventKind_e    kind;
-    uint64_t            token, cookie;
+    uint64_t            token;
+    uint64_t            cookie;
     TbGdbGeneration_t   generation; /* Request origin for completion events. */
     const TbMiRecord_t *record;
     const char         *text;

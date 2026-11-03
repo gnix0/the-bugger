@@ -9,39 +9,44 @@
 #include <sys/random.h>
 
 enum { MMIO_COOKIE = 9403 };
+
 struct tb_mmio {
     TbGdb_t          *gdb;
     TbMonitorFrame_t  frame;
     TbMmioResult_t    result;
-    uint64_t          session, sequence, token, late_token;
+    uint64_t          session;
+    uint64_t          sequence;
+    uint64_t          token;
+    uint64_t          late_token;
     char              nonce[33];
-    bool              active, release;
+    bool              active;
+    bool              release;
 };
+
 TbMmio_t *tb_mmio_create(TbGdb_t *gdb)
 {
-    if (!gdb) {
+    if (!gdb)
         return NULL;
-    }
 
-    TbMmio_t *m = calloc(1, sizeof *m);
-    if (m) {
+    TbMmio_t *m = calloc(1, sizeof(*m));
+    if (m)
         m->gdb = gdb;
-    }
+
     return m;
 }
 
 
 bool tb_mmio_destroy(TbMmio_t *m)
 {
-    if (!m) {
+    if (!m)
         return true;
-    }
-    if ((m->active || m->late_token) && tb_gdb_state(m->gdb) != TB_GDB_DISCONNECTED) {
+
+    if ((m->active || m->late_token) && tb_gdb_state(m->gdb) != TB_GDB_DISCONNECTED)
         return false;
-    }
 
     tb_gdb_release(m->gdb, MMIO_COOKIE);
     free(m);
+
     return true;
 }
 
@@ -61,7 +66,7 @@ bool tb_mmio_busy(const TbMmio_t *m)
 static void outcome(TbMmio_t *m, TbMmioStatus_e status, const char *error)
 {
     m->result.status = status;
-    (void)snprintf(m->result.error, sizeof m->result.error, "%s", error);
+    (void)snprintf(m->result.error, sizeof(m->result.error), "%s", error);
     m->active  = false;
     m->release = true;
 }
@@ -80,40 +85,39 @@ void tb_mmio_pump(TbMmio_t *m)
         m->session    = session;
         m->active     = m->release = false;
         m->late_token = m->token = m->sequence = 0;
-        memset(m->nonce, 0, sizeof m->nonce);
-        memset(&m->result, 0, sizeof m->result);
+        memset(m->nonce, 0, sizeof(m->nonce));
+        memset(&m->result, 0, sizeof(m->result));
     }
 }
 
 
 static bool nonce(TbMmio_t *m)
 {
-    if (*m->nonce) {
+    if (*m->nonce)
         return true;
-    }
 
     unsigned char bytes[16];
     size_t        used = 0;
-    for (unsigned attempt = 0; used < sizeof bytes && attempt < 32; ++attempt) {
-        ssize_t n = getrandom(bytes + used, sizeof bytes - used, GRND_NONBLOCK);
-        if (n < 0 && errno == EINTR) {
+    for (unsigned attempt = 0; used < sizeof(bytes) && attempt < 32; ++attempt) {
+        ssize_t n = getrandom(bytes + used, sizeof(bytes) - used, GRND_NONBLOCK);
+        if (n < 0 && errno == EINTR)
             continue;
-        }
-        if (n <= 0) {
+
+        if (n <= 0)
             return false;
-        }
+
         used += (size_t)n;
     }
-    if (used != sizeof bytes) {
+    if (used != sizeof(bytes))
         return false;
-    }
 
     static const char hex[] = "0123456789abcdef";
-    for (size_t i = 0; i < sizeof bytes; ++i) {
+    for (size_t i = 0; i < sizeof(bytes); ++i) {
         m->nonce[2 * i]     = hex[bytes[i] / 16];
         m->nonce[2 * i + 1] = hex[bytes[i] % 16];
     }
     m->nonce[32] = 0;
+
     return true;
 }
 
@@ -128,16 +132,15 @@ bool tb_mmio_read(TbMmio_t *m, const char *target, uint64_t address, unsigned wi
     }
 
     char id[64];
-    (void)snprintf(id, sizeof id, "%s-%" PRIu64, m->nonce, ++m->sequence);
-    if (!tb_monitor_start(&m->frame, id, target, address, width) || !tb_gdb_reserve(m->gdb, MMIO_COOKIE)) {
+    (void)snprintf(id, sizeof(id), "%s-%" PRIu64, m->nonce, ++m->sequence);
+    if (!tb_monitor_start(&m->frame, id, target, address, width) || !tb_gdb_reserve(m->gdb, MMIO_COOKIE))
         return false;
-    }
 
     char command[1024];
     /* Validated identifiers and integer literals only. Target instance binding
      * is checked both before and after the single explicit-width operation.
      * No persistent Tcl helper, human memory table or byte-read fallback. */
-    int n = snprintf(command, sizeof command,
+    int n = snprintf(command, sizeof(command),
                      "monitor apply {{id t a w} {if {[target current] ne $t} {error TB_TARGET_CHANGED}; "
                      "set v [$t read_memory $a $w 1]; if {[llength $v] != 1} {error TB_BAD_COUNT}; "
                      "if {[target current] ne $t} {error TB_TARGET_CHANGED}; "
@@ -145,31 +148,33 @@ bool tb_mmio_read(TbMmio_t *m, const char *target, uint64_t address, unsigned wi
                      " %u",
                      id, target, address, width);
     const char *args[] = {"console", command};
-    if (n < 0 || (size_t)n >= sizeof command ||
+    if (n < 0 || (size_t)n >= sizeof(command) ||
         !tb_gdb_request(m->gdb, "-interpreter-exec", args, 2, TB_GDB_CONTEXT, MMIO_COOKIE, 3000, &m->token)) {
         tb_gdb_release(m->gdb, MMIO_COOKIE);
         return false;
     }
 
-    m->result = (TbMmioResult_t){
+    m->result = (TbMmioResult_t) {
         .status     = TB_MMIO_PENDING,
         .address    = address,
         .width      = width,
         .generation = tb_gdb_generation(m->gdb)
     };
+
     m->active = true;
+
     return true;
 }
 
 
 static bool late_result(const TbMmio_t *m, const TbMiRecord_t *record)
 {
-    if (!m->late_token || !record || record->kind != TB_MI_RESULT || !record->token) {
+    if (!m->late_token || !record || record->kind != TB_MI_RESULT || !record->token)
         return false;
-    }
 
     char token[32];
-    (void)snprintf(token, sizeof token, "%" PRIu64, m->late_token);
+    (void)snprintf(token, sizeof(token), "%" PRIu64, m->late_token);
+
     return strcmp(token, record->token) == 0;
 }
 
@@ -222,5 +227,6 @@ bool tb_mmio_event(TbMmio_t *m, const TbGdbEvent_t *event)
     } else {
         outcome(m, TB_MMIO_FAILED, "OpenOCD read failed; hardware may have been accessed. No retry sent.");
     }
+
     return true;
 }

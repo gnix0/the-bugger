@@ -26,16 +26,36 @@ struct tb_stack {
     TbBrowseCache_t      *cache;
     TbStackView_t         views[TB_STACK_VIEWS];
     TbStackDeclaration_t  declarations[TB_STACK_VIEWS][TB_CONTEXT_THREADS];
-    uint64_t              lives[TB_STACK_VIEWS], versions[TB_STACK_VIEWS], revision, sequence;
-    TbGdbGeneration_t     seen, attempted, origin;
-    uint64_t              thread_lifetime, request_life, request_version, anchor_sp, anchor_lifetime;
+    uint64_t              lives[TB_STACK_VIEWS];
+    uint64_t              versions[TB_STACK_VIEWS];
+    uint64_t              revision;
+    uint64_t              sequence;
+    TbGdbGeneration_t     seen;
+    TbGdbGeneration_t     attempted;
+    TbGdbGeneration_t     origin;
+    uint64_t              thread_lifetime;
+    uint64_t              request_life;
+    uint64_t              request_version;
+    uint64_t              anchor_sp;
+    uint64_t              anchor_lifetime;
     bool                  anchor_valid;
-    char                  thread[32], architecture[64], variable[96];
-    unsigned              bits, job, request_job;
+    char                  thread[32];
+    char                  architecture[64];
+    char                  variable[96];
+    unsigned              bits;
+    unsigned              job;
+    unsigned              request_job;
     TbMemoryOrder         order;
-    int                   owner, frame, sp_id;
-    bool                  octets, waiting, canceled, catalogue, attempted_valid;
+    int                   owner;
+    int                   frame;
+    int                   sp_id;
+    bool                  octets;
+    bool                  waiting;
+    bool                  canceled;
+    bool                  catalogue;
+    bool                  attempted_valid;
 };
+
 static bool valid(int view)
 {
     return view >= 0 && view < TB_STACK_VIEWS;
@@ -57,23 +77,21 @@ static bool raw(char *out, size_t capacity, const TbMiValue_t *value)
 
     memcpy(out, value->string.data, value->string.length);
     out[value->string.length] = 0;
+
     return true;
 }
 
 
 static bool literal(const char *text, uint64_t *value)
 {
-    if (!text || !*text || *text == '+' || *text == '-' || *text == ' ' || *text == '\t') {
+    if (!text || !*text || *text == '+' || *text == '-' || *text == ' ' || *text == '\t')
         return false;
-    }
 
     unsigned base = text[0] == '0' && (text[1] == 'x' || text[1] == 'X') ? 16 : 10;
-    if (base == 16) {
+    if (base == 16)
         text += 2;
-    }
-    if (!*text) {
+    if (!*text)
         return false;
-    }
 
     uint64_t result = 0;
     for (; *text; ++text) {
@@ -81,9 +99,9 @@ static bool literal(const char *text, uint64_t *value)
                          : *text >= 'a' && *text <= 'f' ? (unsigned)(*text - 'a' + 10)
                          : *text >= 'A' && *text <= 'F' ? (unsigned)(*text - 'A' + 10)
                                                         : 99;
-        if (digit >= base || result > (UINT64_MAX - digit) / base) {
+        if (digit >= base || result > (UINT64_MAX - digit) / base)
             return false;
-        }
+
         result = result * base + digit;
     }
 
@@ -104,15 +122,15 @@ static bool footprint(const TbStack_t *s, uint64_t address, unsigned size)
 static void changed(TbStack_t *s, TbStackView_t *v)
 {
     ++s->revision;
-    if (v) {
+    if (v)
         ++v->revision;
-    }
 }
 
 
 static bool fresh(const TbStack_t *s)
 {
     const TbContextSnapshot_t *c = tb_context_snapshot(s->context);
+
     return tb_gdb_state(s->gdb) == TB_GDB_STOPPED && c->ready && !c->stale &&
            same(c->generation, tb_gdb_generation(s->gdb));
 }
@@ -121,6 +139,7 @@ static bool fresh(const TbStack_t *s)
 static bool context_valid(const TbStack_t *s, const TbStackView_t *v)
 {
     const TbContextSnapshot_t *c = tb_context_snapshot(s->context);
+
     return fresh(s) && v->lifetime &&
            tb_context_thread_lifetime(s->context, c->selected_thread) == v->lifetime &&
            strcmp(v->thread, c->selected_thread) == 0;
@@ -129,7 +148,7 @@ static bool context_valid(const TbStack_t *s, const TbStackView_t *v)
 
 static void note(TbStack_t *s, TbStackView_t *v, const char *message)
 {
-    (void)snprintf(v->message, sizeof v->message, "%s", message);
+    (void)snprintf(v->message, sizeof(v->message), "%s", message);
     changed(s, v);
 }
 
@@ -139,7 +158,7 @@ static bool position(TbStack_t *s, TbStackView_t *v)
     unsigned half = v->size / 2;
     if (!v->anchor_valid || v->sp < half || !footprint(s, v->sp - half, v->size)) {
         v->positioned = false;
-        (void)snprintf(v->anchor_error, sizeof v->anchor_error,
+        (void)snprintf(v->anchor_error, sizeof(v->anchor_error),
                        "Frame-0 SP unavailable or centered window overflows; no substitute anchor.");
         return false;
     }
@@ -147,13 +166,14 @@ static bool position(TbStack_t *s, TbStackView_t *v)
     v->start      = v->sp - half;
     v->positioned = true;
     v->historical = false;
+
     return true;
 }
 
 
 TbStack_t *tb_stack_create(TbGdb_t *gdb, TbContext_t *context, TbMemory *memory, TbBrowseCache_t *cache)
 {
-    TbStack_t *s = calloc(1, sizeof *s);
+    TbStack_t *s = calloc(1, sizeof(*s));
     if (s) {
         s->gdb     = gdb;
         s->context = context;
@@ -161,6 +181,7 @@ TbStack_t *tb_stack_create(TbGdb_t *gdb, TbContext_t *context, TbMemory *memory,
         s->cache   = tb_browse_retain(cache);
         tb_stack_reset(s);
     }
+
     return s;
 }
 
@@ -176,39 +197,40 @@ void tb_stack_destroy(TbStack_t *s)
 
 void tb_stack_clear(TbStack_t *s, int id)
 {
-    if (!valid(id)) {
+    if (!valid(id))
         return;
-    }
 
     tb_memory_client_cancel(s->memory, tb_memory_stack_client(id));
     tb_memory_clear(s->memory, tb_memory_stack_client(id));
     tb_browse_clear(s->cache, TB_BROWSE_STACK, id);
 
-    memset(&s->views[id], 0, sizeof s->views[id]);
-    memset(s->declarations[id], 0, sizeof s->declarations[id]);
+    memset(&s->views[id], 0, sizeof(s->views[id]));
+    memset(s->declarations[id], 0, sizeof(s->declarations[id]));
+
     s->views[id].size = 128;
     s->views[id].grouping =
         s->order != TB_MEMORY_UNKNOWN && (s->bits == 16 || s->bits == 32 || s->bits == 64) ? s->bits / 8 : 1;
     s->views[id].follow = true;
+
     ++s->lives[id];
     ++s->versions[id];
+
     changed(s, &s->views[id]);
+
     if (s->owner == id && (s->job || s->waiting)) {
         s->canceled = true;
-        if (!s->waiting) {
+        if (!s->waiting)
             s->job = STACK_NONE;
-        }
     }
 }
 
 
 void tb_stack_reset(TbStack_t *s)
 {
-    for (int i = 0; i < TB_STACK_VIEWS; ++i) {
+    for (int i = 0; i < TB_STACK_VIEWS; ++i)
         tb_stack_clear(s, i);
-    }
 
-    s->seen            = (TbGdbGeneration_t){0};
+    s->seen            = (TbGdbGeneration_t) {0};
     s->attempted_valid = false;
     s->catalogue       = s->waiting = s->canceled = false;
     s->sp_id           = -1;
@@ -225,20 +247,20 @@ void tb_stack_reset(TbStack_t *s)
 
 void tb_stack_visible(TbStack_t *s, int id, bool visible)
 {
-    if (!valid(id)) {
+    if (!valid(id))
         return;
-    }
 
     TbStackView_t *v = &s->views[id];
-    if (v->visible && !visible && v->reading) {
+    if (v->visible && !visible && v->reading)
         tb_stack_cancel(s, id);
-    }
+
     v->visible = visible;
     tb_memory_visible(s->memory, tb_memory_stack_client(id), visible);
+
     bool any = false;
-    for (int i = 0; i < TB_STACK_VIEWS; ++i) {
+    for (int i = 0; i < TB_STACK_VIEWS; ++i)
         any = any || s->views[i].visible;
-    }
+
     tb_context_stack(s->context, any);
 }
 
@@ -249,36 +271,34 @@ void tb_stack_invalidate(TbStack_t *s)
     s->anchor_valid    = false;
     s->catalogue       = false;
     s->sp_id           = -1;
+
     for (int i = 0; i < TB_STACK_VIEWS; ++i) {
         TbStackView_t *v = &s->views[i];
         v->anchor_valid = false;
-        if (v->follow) {
+        if (v->follow)
             v->positioned = false;
-        }
-        v->point_count = 0;
-        v->names_ready = false;
+        v->point_count    = 0;
+        v->names_ready    = false;
 
         v->guard_confirmation = false;
         ++s->versions[i];
-        if (v->reading) {
+        if (v->reading)
             tb_stack_cancel(s, i);
-        }
         changed(s, v);
     }
+
     if (s->waiting || s->job) {
         s->canceled = true;
-        if (!s->waiting) {
+        if (!s->waiting)
             s->job = STACK_NONE;
-        }
     }
 }
 
 
 void tb_stack_target(TbStack_t *s, bool octets, unsigned bits, TbMemoryOrder order, const char *architecture)
 {
-    if (!architecture) {
+    if (!architecture)
         architecture = "";
-    }
     if (s->octets == octets && s->bits == bits && s->order == order &&
         strcmp(s->architecture, architecture) == 0) {
         return;
@@ -288,11 +308,10 @@ void tb_stack_target(TbStack_t *s, bool octets, unsigned bits, TbMemoryOrder ord
     s->octets = octets;
     s->bits   = bits;
     s->order  = order;
-    (void)snprintf(s->architecture, sizeof s->architecture, "%s", architecture);
+    (void)snprintf(s->architecture, sizeof(s->architecture), "%s", architecture);
     unsigned group = order != TB_MEMORY_UNKNOWN && (bits == 16 || bits == 32 || bits == 64) ? bits / 8 : 1;
-    for (int i = 0; i < TB_STACK_VIEWS; ++i) {
+    for (int i = 0; i < TB_STACK_VIEWS; ++i)
         s->views[i].grouping = group;
-    }
 }
 
 
@@ -319,9 +338,8 @@ void tb_stack_manual(TbStack_t *s, int id)
 
 bool tb_stack_follow(TbStack_t *s, int id)
 {
-    if (!valid(id)) {
+    if (!valid(id))
         return false;
-    }
 
     TbStackView_t *v = &s->views[id];
 
@@ -334,19 +352,18 @@ bool tb_stack_follow(TbStack_t *s, int id)
     } else {
         (void)position(s, v);
     }
-    if (s->sp_id < 0) {
+    if (s->sp_id < 0)
         s->catalogue = false;
-    }
     note(s, v, "Follow frame-0 SP restored; no bytes read.");
+
     return true;
 }
 
 
 bool tb_stack_navigate(TbStack_t *s, int id, const char *text)
 {
-    if (!valid(id) || !text) {
+    if (!valid(id) || !text)
         return false;
-    }
 
     TbStackView_t *v = &s->views[id];
     uint64_t       address, distance;
@@ -375,33 +392,32 @@ bool tb_stack_navigate(TbStack_t *s, int id, const char *text)
     v->follow     = v->historical = false;
     ++s->versions[id];
     note(s, v, "Window moved; uncached bytes remain unread. Use Read explicitly.");
+
     return true;
 }
 
 
 bool tb_stack_page(TbStack_t *s, int id, int direction)
 {
-    if (!valid(id) || !direction) {
+    if (!valid(id) || !direction)
         return false;
-    }
 
     TbStackView_t *v = &s->views[id];
-    if (!v->positioned || (direction < 0 ? v->start < v->size : v->start > UINT64_MAX - v->size)) {
+    if (!v->positioned || (direction < 0 ? v->start < v->size : v->start > UINT64_MAX - v->size))
         return false;
-    }
 
     uint64_t next = direction < 0 ? v->start - v->size : v->start + v->size;
     char     text[32];
-    (void)snprintf(text, sizeof text, "0x%" PRIx64, next);
+    (void)snprintf(text, sizeof(text), "0x%" PRIx64, next);
+
     return tb_stack_navigate(s, id, text);
 }
 
 
 bool tb_stack_size(TbStack_t *s, int id, unsigned bytes)
 {
-    if (!valid(id) || !bytes || bytes > TB_MEMORY_BYTES) {
+    if (!valid(id) || !bytes || bytes > TB_MEMORY_BYTES)
         return false;
-    }
 
     TbStackView_t *v = &s->views[id];
     if (v->follow && v->anchor_valid) {
@@ -416,11 +432,11 @@ bool tb_stack_size(TbStack_t *s, int id, unsigned bytes)
 
     tb_stack_cancel(s, id);
     v->size = bytes;
-    if (v->follow) {
+    if (v->follow)
         (void)position(s, v);
-    }
     ++s->versions[id];
     note(s, v, "Window size changed; no bytes read.");
+
     return true;
 }
 
@@ -435,15 +451,15 @@ bool tb_stack_group(TbStack_t *s, int id, unsigned bytes)
 
     s->views[id].grouping = bytes;
     note(s, &s->views[id], "Grouping changed; no bytes read.");
+
     return true;
 }
 
 
 bool tb_stack_read(TbStack_t *s, int id)
 {
-    if (!valid(id)) {
+    if (!valid(id))
         return false;
-    }
 
     TbStackView_t *v = &s->views[id];
     if (!v->visible || v->historical || !v->positioned || !context_valid(s, v) ||
@@ -459,15 +475,15 @@ bool tb_stack_read(TbStack_t *s, int id)
     v->reading          = true;
     v->cancel_requested = false;
     note(s, v, "Explicit byte read requested; no automatic refresh.");
+
     return true;
 }
 
 
 void tb_stack_cancel(TbStack_t *s, int id)
 {
-    if (!valid(id)) {
+    if (!valid(id))
         return;
-    }
 
     TbStackView_t *v      = &s->views[id];
     bool           active = v->reading || (s->owner == id && (s->job || s->waiting || v->guard_confirmation));
@@ -476,9 +492,8 @@ void tb_stack_cancel(TbStack_t *s, int id)
     v->reading = false;
     if (s->owner == id && (s->job || s->waiting || v->guard_confirmation)) {
         s->canceled = true;
-        if (!s->waiting) {
+        if (!s->waiting)
             s->job = STACK_NONE;
-        }
     }
 
     v->guard_confirmation = false;
@@ -502,11 +517,11 @@ static bool showing(const TbStackView_t *v)
 
 bool tb_stack_stale(const TbStack_t *s, int id)
 {
-    if (!valid(id)) {
+    if (!valid(id))
         return true;
-    }
 
     const TbStackView_t *v = &s->views[id];
+
     return !showing(v) || v->historical || !context_valid(s, v) ||
            !same(v->sample.generation, tb_gdb_generation(s->gdb));
 }
@@ -514,42 +529,46 @@ bool tb_stack_stale(const TbStack_t *s, int id)
 
 size_t tb_stack_rows(const TbStack_t *s, int id)
 {
-    if (!valid(id) || !s->views[id].positioned) {
+    if (!valid(id) || !s->views[id].positioned)
         return 0;
-    }
 
     const TbStackView_t *v = &s->views[id];
+
     return (v->size + v->grouping - 1) / v->grouping;
 }
 
 
 bool tb_stack_cached(TbStack_t *s, int id, int direction)
 {
-    if (!valid(id) || !direction) {
+    if (!valid(id) || !direction)
         return false;
-    }
 
-    TbStackView_t   *v = &s->views[id];
-    TbBrowseSample_t sample;
+    TbStackView_t    *v = &s->views[id];
+    TbBrowseSample_t  sample;
 
-    uint64_t         sequence = v->historical ? v->sample.sequence : direction < 0 ? UINT64_MAX : 0;
-    TbBrowseKey_t    key      = {.kind = TB_BROWSE_STACK, .view = id, .begin = sequence};
+    uint64_t sequence = v->historical ? v->sample.sequence : direction < 0 ? UINT64_MAX : 0;
+    TbBrowseKey_t key      = {
+        .kind  = TB_BROWSE_STACK,
+        .view  = id,
+        .begin = sequence
+    };
+
     if (!tb_browse_history(s->cache, key, direction, &sample) || sample.size != sizeof(TbStackSample_t)) {
         note(s, v, "No retained sample in that direction; no read queued.");
         return false;
     }
 
     tb_stack_cancel(s, id);
-    memcpy(&v->sample, sample.data, sizeof v->sample);
-    if (v->sample.order == TB_MEMORY_UNKNOWN) {
+    memcpy(&v->sample, sample.data, sizeof(v->sample));
+    if (v->sample.order == TB_MEMORY_UNKNOWN)
         v->grouping = 1;
-    }
-    v->start      = v->sample.address;
-    v->size       = v->sample.size;
-    v->positioned = true;
-    v->historical = true;
-    v->follow     = false;
+    v->start        = v->sample.address;
+    v->size         = v->sample.size;
+    v->positioned   = true;
+    v->historical   = true;
+    v->follow       = false;
     note(s, v, "Deliberate cached inspection; original thread lifetime and stop provenance retained.");
+
     return true;
 }
 
@@ -575,57 +594,53 @@ static void offset_text(const TbStack_t *s, const TbStackView_t *v, uint64_t add
 
 void tb_stack_line(const TbStack_t *s, int id, size_t row, char *text, size_t capacity)
 {
-    if (!capacity) {
+    if (!capacity)
         return;
-    }
-    *text = 0;
-    if (!valid(id) || row >= tb_stack_rows(s, id)) {
-        return;
-    }
 
-    const TbStackView_t *v     = &s->views[id];
-    unsigned             first = (unsigned)row * v->grouping;
-    unsigned             count = v->size - first < v->grouping ? v->size - first : v->grouping;
+    *text = 0;
+    if (!valid(id) || row >= tb_stack_rows(s, id))
+        return;
+
+    const TbStackView_t *v       = &s->views[id];
+    unsigned             first   = (unsigned)row * v->grouping;
+    unsigned             count   = v->size - first < v->grouping ? v->size - first : v->grouping;
     char                 offset[64], value[96];
     uint64_t             address = v->start + first;
 
-    offset_text(s, v, address, offset, sizeof offset);
+    offset_text(s, v, address, offset, sizeof(offset));
     bool available = showing(v) && first + count <= v->sample.size;
     bool complete  = available && count == v->grouping;
-    for (unsigned i = 0; i < count && available; ++i) {
+    for (unsigned i = 0; i < count && available; ++i)
         complete = complete && v->sample.valid[first + i];
-    }
     if (!available) {
-        (void)snprintf(value, sizeof value, "UNREAD");
+        (void)snprintf(value, sizeof(value), "UNREAD");
     } else if (complete) {
         uint64_t number = 0;
         for (unsigned i = 0; i < count; ++i) {
             unsigned at = v->sample.order == TB_MEMORY_LITTLE ? count - 1 - i : i;
             number = number * UINT64_C(256) + v->sample.bytes[first + at];
         }
-        (void)snprintf(value, sizeof value, "0x%0*" PRIx64, (int)(count * 2), number);
+        (void)snprintf(value, sizeof(value), "0x%0*" PRIx64, (int)(count * 2), number);
     } else {
         size_t used = 0;
-        for (unsigned i = 0; i < count && used + 4 < sizeof value; ++i) {
+        for (unsigned i = 0; i < count && used + 4 < sizeof(value); ++i) {
             int n = v->sample.valid[first + i]
-                        ? snprintf(value + used, sizeof value - used, "%02x ", v->sample.bytes[first + i])
-                        : snprintf(value + used, sizeof value - used, "?? ");
-            if (n > 0) {
+                        ? snprintf(value + used, sizeof(value) - used, "%02x ", v->sample.bytes[first + i])
+                        : snprintf(value + used, sizeof(value) - used, "?? ");
+            if (n > 0)
                 used += (size_t)n;
-            }
         }
-        (void)snprintf(value + used, sizeof value - used, "[%s]",
+        (void)snprintf(value + used, sizeof(value) - used, "[%s]",
                        count < v->grouping ? "incomplete group" : "missing bytes");
     }
 
     /* Keep columns stable for every row in the complete requested window. */
     char first_offset[64], last_offset[64];
-    offset_text(s, v, v->start, first_offset, sizeof first_offset);
-    offset_text(s, v, v->start + v->size - 1, last_offset, sizeof last_offset);
+    offset_text(s, v, v->start, first_offset, sizeof(first_offset));
+    offset_text(s, v, v->start + v->size - 1, last_offset, sizeof(last_offset));
     int offset_width = (int)strlen(first_offset);
-    if ((int)strlen(last_offset) > offset_width) {
+    if ((int)strlen(last_offset) > offset_width)
         offset_width = (int)strlen(last_offset);
-    }
     (void)snprintf(text, capacity, "0x%016" PRIx64 " %*s %-18s", address, offset_width, offset, value);
     for (size_t i = 0; i < v->point_count; ++i) {
         const TbStackPoint_t *p = &v->points[i];
@@ -634,29 +649,27 @@ void tb_stack_line(const TbStack_t *s, int id, size_t row, char *text, size_t ca
             continue;
         }
         size_t used = strlen(text);
-        if (used < capacity) {
+        if (used < capacity)
             (void)snprintf(text + used, capacity - used, " | @%zu %s", i + 1, p->label);
-        }
     }
 }
 
 
 const TbStackDeclaration_t *tb_stack_declaration(const TbStack_t *s, int id)
 {
-    if (!valid(id)) {
+    if (!valid(id))
         return NULL;
-    }
 
     const TbStackView_t *v = &s->views[id];
-    if (!tb_context_lifetime_live(s->context, v->lifetime)) {
+    if (!tb_context_lifetime_live(s->context, v->lifetime))
         return NULL;
-    }
+
     for (size_t i = 0; i < TB_CONTEXT_THREADS; ++i) {
         const TbStackDeclaration_t *d = &s->declarations[id][i];
-        if (d->used && d->lifetime == v->lifetime) {
+        if (d->used && d->lifetime == v->lifetime)
             return d;
-        }
     }
+
     return NULL;
 }
 
@@ -672,8 +685,14 @@ bool tb_stack_declare(TbStack_t *s, int id, uint64_t low, uint64_t high, bool up
     for (size_t i = 0; i < TB_CONTEXT_THREADS; ++i) {
         TbStackDeclaration_t *d = &s->declarations[id][i];
         if (d == current || (!current && !d->used)) {
-            *d = (TbStackDeclaration_t){
-                .used = true, .low = low, .high = high, .upward = upward, .lifetime = s->views[id].lifetime};
+            *d = (TbStackDeclaration_t) {
+                .used     = true,
+                .low      = low,
+                .high     = high,
+                .upward   = upward,
+                .lifetime = s->views[id].lifetime
+            };
+
             note(
                 s, &s->views[id],
                 "Bounds declared for this view/thread lifetime; no read permission or ownership "
@@ -681,19 +700,19 @@ bool tb_stack_declare(TbStack_t *s, int id, uint64_t low, uint64_t high, bool up
             return true;
         }
     }
+
     return false;
 }
 
 
 void tb_stack_undeclare(TbStack_t *s, int id)
 {
-    if (!valid(id)) {
+    if (!valid(id))
         return;
-    }
+
     for (size_t i = 0; i < TB_CONTEXT_THREADS; ++i) {
-        if (s->declarations[id][i].lifetime == s->views[id].lifetime) {
-            memset(&s->declarations[id][i], 0, sizeof s->declarations[id][i]);
-        }
+        if (s->declarations[id][i].lifetime == s->views[id].lifetime)
+            memset(&s->declarations[id][i], 0, sizeof(s->declarations[id][i]));
     }
     note(s, &s->views[id], "Declaration removed; verified bounds remain unknown.");
 }
@@ -702,9 +721,8 @@ void tb_stack_undeclare(TbStack_t *s, int id)
 void tb_stack_bounds(const TbStack_t *s, int id, char *text, size_t capacity)
 {
     if (!valid(id)) {
-        if (capacity) {
+        if (capacity)
             *text = 0;
-        }
         return;
     }
 
@@ -725,13 +743,13 @@ void tb_stack_bounds(const TbStack_t *s, int id, char *text, size_t capacity)
 
     char relationship[160];
     if (!v->anchor_valid || !context_valid(s, v)) {
-        (void)snprintf(relationship, sizeof relationship,
+        (void)snprintf(relationship, sizeof(relationship),
                        "Fresh frame-0 SP unavailable; displacement unknown.");
     } else if (v->sp < d->low || v->sp > d->high) {
-        (void)snprintf(relationship, sizeof relationship, "SP is %s the declared endpoint span.",
+        (void)snprintf(relationship, sizeof(relationship), "SP is %s the declared endpoint span.",
                        v->sp < d->low ? "below" : "above");
     } else {
-        (void)snprintf(relationship, sizeof relationship,
+        (void)snprintf(relationship, sizeof(relationship),
                        "SP displacement from declared start: %" PRIu64 " bytes.",
                        d->upward ? v->sp - d->low : d->high - v->sp);
     }
@@ -746,9 +764,9 @@ void tb_stack_bounds(const TbStack_t *s, int id, char *text, size_t capacity)
 
 void tb_stack_details(const TbStack_t *s, int id, size_t row, char *text, size_t capacity)
 {
-    if (!capacity) {
+    if (!capacity)
         return;
-    }
+
     *text = 0;
     if (!valid(id)) {
         (void)snprintf(text, capacity, "No selected Stack row.");
@@ -766,13 +784,13 @@ void tb_stack_details(const TbStack_t *s, int id, size_t row, char *text, size_t
     const TbStackView_t *v = &s->views[id];
     char                 line[4096], bounds[768], anchor[80];
     if (v->anchor_valid && context_valid(s, v)) {
-        (void)snprintf(anchor, sizeof anchor, "GDB-reported SP 0x%" PRIx64, v->sp);
+        (void)snprintf(anchor, sizeof(anchor), "GDB-reported SP 0x%" PRIx64, v->sp);
     } else {
-        (void)snprintf(anchor, sizeof anchor, "unavailable (no substitute)");
+        (void)snprintf(anchor, sizeof(anchor), "unavailable (no substitute)");
     }
 
-    tb_stack_line(s, id, row, line, sizeof line);
-    tb_stack_bounds(s, id, bounds, sizeof bounds);
+    tb_stack_line(s, id, row, line, sizeof(line));
+    tb_stack_bounds(s, id, bounds, sizeof(bounds));
     (void)snprintf(
         text, capacity,
         "%s. Window [0x%" PRIx64 ", 0x%" PRIx64
@@ -802,9 +820,9 @@ void tb_stack_details(const TbStack_t *s, int id, size_t row, char *text, size_t
             continue;
         }
         used = strlen(text);
-        if (used >= capacity) {
+        if (used >= capacity)
             break;
-        }
+
         (void)snprintf(
             text + used, capacity - used,
             "Point @%zu %s at 0x%" PRIx64 ": thread lifetime %" PRIu64 ", frame %d, session %" PRIu64
@@ -855,12 +873,13 @@ static bool begin(TbStack_t *s, int id, unsigned job)
     s->request_life    = s->lives[id];
     s->request_version = s->versions[id];
     s->frame           = c->selected.level;
-    (void)snprintf(s->thread, sizeof s->thread, "%s", v->thread);
+    (void)snprintf(s->thread, sizeof(s->thread), "%s", v->thread);
     s->canceled = false;
 
     v->guard_confirmation  = false;
     v->annotation_error[0] = 0;
     changed(s, v);
+
     return true;
 }
 
@@ -881,21 +900,21 @@ bool tb_stack_names(TbStack_t *s, int id)
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 bool tb_stack_variable_point(TbStack_t *s, int id, size_t name)
 {
-    if (!valid(id)) {
+    if (!valid(id))
         return false;
-    }
 
     TbStackView_t *v = &s->views[id];
     if (!v->names_ready || name >= v->name_count || !v->names[name].eligible) {
-        (void)snprintf(v->annotation_error, sizeof v->annotation_error,
+        (void)snprintf(v->annotation_error, sizeof(v->annotation_error),
                        "Name is unsupported, ambiguous or truncated; no address query sent.");
         changed(s, v);
         return false;
     }
-    if (!begin(s, id, STACK_GUARD)) {
+    if (!begin(s, id, STACK_GUARD))
         return false;
-    }
-    (void)snprintf(s->variable, sizeof s->variable, "%s", v->names[name].name);
+
+    (void)snprintf(s->variable, sizeof(s->variable), "%s", v->names[name].name);
+
     return true;
 }
 
@@ -913,21 +932,22 @@ bool tb_stack_disable_calls(TbStack_t *s, int id)
     s->job                           = STACK_DISABLE;
     s->canceled                      = false;
     changed(s, &s->views[id]);
+
     return true;
 }
 
 
 bool tb_stack_remove_point(TbStack_t *s, int id, size_t point)
 {
-    if (!valid(id) || point >= s->views[id].point_count) {
+    if (!valid(id) || point >= s->views[id].point_count)
         return false;
-    }
 
     TbStackView_t *v = &s->views[id];
 
-    memmove(v->points + point, v->points + point + 1, (v->point_count - point - 1) * sizeof *v->points);
+    memmove(v->points + point, v->points + point + 1, (v->point_count - point - 1) * sizeof(*v->points));
     --v->point_count;
     changed(s, v);
+
     return true;
 }
 
@@ -941,12 +961,12 @@ static bool chain_valid(const TbStack_t *s)
 
     if (s->owner < 0) {
         for (int i = 0; i < TB_STACK_VIEWS; ++i) {
-            if (s->views[i].visible) {
+            if (s->views[i].visible)
                 return true;
-            }
         }
         return false;
     }
+
     return valid(s->owner) && s->lives[s->owner] == s->request_life &&
            s->versions[s->owner] == s->request_version && s->views[s->owner].visible &&
            context_valid(s, &s->views[s->owner]);
@@ -959,19 +979,18 @@ static void finish_error(TbStack_t *s, const char *message)
         s->anchor_valid = false;
         for (int i = 0; i < TB_STACK_VIEWS; ++i) {
             TbStackView_t *v = &s->views[i];
-            if (!v->visible || v->lifetime != s->thread_lifetime) {
+            if (!v->visible || v->lifetime != s->thread_lifetime)
                 continue;
-            }
+
             v->anchor_valid = false;
-            if (v->follow) {
+            if (v->follow)
                 v->positioned = false;
-            }
-            (void)snprintf(v->anchor_error, sizeof v->anchor_error, "%s", message);
+            (void)snprintf(v->anchor_error, sizeof(v->anchor_error), "%s", message);
             changed(s, v);
         }
     } else if (valid(s->owner) && s->lives[s->owner] == s->request_life) {
         TbStackView_t *v = &s->views[s->owner];
-        (void)snprintf(v->annotation_error, sizeof v->annotation_error, "%s", message);
+        (void)snprintf(v->annotation_error, sizeof(v->annotation_error), "%s", message);
 
         v->guard_confirmation = false;
         changed(s, v);
@@ -985,19 +1004,17 @@ static void anchor_publish(TbStack_t *s)
 {
     for (int i = 0; i < TB_STACK_VIEWS; ++i) {
         TbStackView_t *v = &s->views[i];
-        if (!v->visible || v->lifetime != s->anchor_lifetime) {
+        if (!v->visible || v->lifetime != s->anchor_lifetime)
             continue;
-        }
+
         bool moved         = !v->anchor_valid || v->sp != s->anchor_sp;
         v->sp              = s->anchor_sp;
         v->anchor_valid    = true;
         v->anchor_error[0] = 0;
-        if (v->follow && (moved || !v->positioned)) {
+        if (v->follow && (moved || !v->positioned))
             (void)position(s, v);
-        }
-        if (moved) {
+        if (moved)
             changed(s, v);
-        }
     }
 }
 
@@ -1016,12 +1033,10 @@ static void synchronize(TbStack_t *s)
             v->names_ready  = false;
 
             v->guard_confirmation = false;
-            if (v->follow) {
+            if (v->follow)
                 v->positioned = false;
-            }
-            if (v->reading) {
+            if (v->reading)
                 tb_stack_cancel(s, i);
-            }
             ++s->versions[i];
             changed(s, v);
         }
@@ -1032,7 +1047,7 @@ static void synchronize(TbStack_t *s)
         for (size_t j = 0; j < TB_CONTEXT_THREADS; ++j) {
             TbStackDeclaration_t *d = &s->declarations[i][j];
             if (d->used && !tb_context_lifetime_live(s->context, d->lifetime)) {
-                memset(d, 0, sizeof *d);
+                memset(d, 0, sizeof(*d));
                 changed(s, &s->views[i]);
             }
         }
@@ -1054,13 +1069,13 @@ static void synchronize(TbStack_t *s)
             tb_memory_clear(s->memory, tb_memory_stack_client(i));
             tb_memory_visible(s->memory, tb_memory_stack_client(i), v->visible);
             v->lifetime = lifetime;
-            (void)snprintf(v->thread, sizeof v->thread, "%s", c->selected_thread);
+            (void)snprintf(v->thread, sizeof(v->thread), "%s", c->selected_thread);
             v->follow      = true;
             v->historical  = false;
             v->positioned  = v->anchor_valid = false;
             v->point_count = 0;
             v->names_ready = false;
-            memset(&v->sample, 0, sizeof v->sample);
+            memset(&v->sample, 0, sizeof(v->sample));
             ++s->versions[i];
             note(
                 s, v,
@@ -1073,7 +1088,7 @@ static void synchronize(TbStack_t *s)
                 if (bytes->ready && same(bytes->generation, generation) && bytes->address == v->start &&
                     bytes->data_size == v->size) {
                     TbStackSample_t *sample = &v->sample;
-                    memset(sample, 0, sizeof *sample);
+                    memset(sample, 0, sizeof(*sample));
                     sample->address    = bytes->address;
                     sample->size       = (unsigned)bytes->data_size;
                     sample->generation = bytes->generation;
@@ -1081,9 +1096,9 @@ static void synchronize(TbStack_t *s)
                     sample->sequence   = ++s->sequence;
                     sample->sampled_ms = tb_gdb_now_ms();
                     sample->order      = s->order;
-                    (void)snprintf(sample->thread, sizeof sample->thread, "%s", v->thread);
-                    memcpy(sample->bytes, bytes->bytes, sizeof sample->bytes);
-                    memcpy(sample->valid, bytes->valid, sizeof sample->valid);
+                    (void)snprintf(sample->thread, sizeof(sample->thread), "%s", v->thread);
+                    memcpy(sample->bytes, bytes->bytes, sizeof(sample->bytes));
+                    memcpy(sample->valid, bytes->valid, sizeof(sample->valid));
                     TbBrowseKey_t key = {
                         .kind       = TB_BROWSE_STACK,
                         .view       = i,
@@ -1092,7 +1107,8 @@ static void synchronize(TbStack_t *s)
                         .epoch      = sample->lifetime,
                         .generation = sample->generation
                     };
-                    bool retained = tb_browse_store(s->cache, key, sample, sizeof *sample);
+
+                    bool retained = tb_browse_store(s->cache, key, sample, sizeof(*sample));
                     note(
                         s, v,
                         *bytes->error ? bytes->error
@@ -1111,23 +1127,23 @@ static void synchronize(TbStack_t *s)
             }
         }
     }
-    if (fresh(s) && s->anchor_valid && s->attempted_valid && same(s->attempted, generation)) {
+    if (fresh(s) && s->anchor_valid && s->attempted_valid && same(s->attempted, generation))
         anchor_publish(s);
-    }
 }
 
 
 static bool identifier(const char *name)
 {
-    if (!name || !((*name >= 'A' && *name <= 'Z') || (*name >= 'a' && *name <= 'z') || *name == '_')) {
+    if (!name || !((*name >= 'A' && *name <= 'Z') || (*name >= 'a' && *name <= 'z') || *name == '_'))
         return false;
-    }
+
     for (++name; *name; ++name) {
         if (!((*name >= 'A' && *name <= 'Z') || (*name >= 'a' && *name <= 'z') ||
               (*name >= '0' && *name <= '9') || *name == '_')) {
             return false;
         }
     }
+
     return true;
 }
 
@@ -1136,21 +1152,22 @@ static bool register_value(const TbStack_t *s, const TbMiRecord_t *record, uint6
 {
     const TbMiValue_t *list  = tb_mi_find(record->results, "register-values");
     bool               found = false;
-    if (!list || list->type != TB_MI_LIST) {
+    if (!list || list->type != TB_MI_LIST)
         return false;
-    }
+
     for (const TbMiValue_t *entry = list->children; entry; entry = entry->next) {
         char     number[32], value[128];
         uint64_t id;
         if (entry->type != TB_MI_TUPLE ||
-            !raw(number, sizeof number, tb_mi_find(entry->children, "number")) || !literal(number, &id) ||
+            !raw(number, sizeof(number), tb_mi_find(entry->children, "number")) || !literal(number, &id) ||
             id != (unsigned)s->sp_id || found ||
-            !raw(value, sizeof value, tb_mi_find(entry->children, "value")) || !literal(value, address) ||
+            !raw(value, sizeof(value), tb_mi_find(entry->children, "value")) || !literal(value, address) ||
             (s->bits < 64 && *address >= (UINT64_C(1) << s->bits))) {
             return false;
         }
         found = true;
     }
+
     return found;
 }
 
@@ -1161,32 +1178,32 @@ static void parse_catalogue(TbStack_t *s, const TbMiRecord_t *record)
     s->sp_id     = -1;
 
     const TbMiValue_t *list = tb_mi_find(record->results, "register-names");
-    if (!list || list->type != TB_MI_LIST) {
+    if (!list || list->type != TB_MI_LIST)
         return;
-    }
+
     const char *canonical = strstr(s->architecture, "xtensa")   ? "a1"
                             : strstr(s->architecture, "x86-64") ? "rsp"
                             : strstr(s->architecture, "i386")   ? "esp"
                                                                 : "sp";
-    int         generic = -1, specific = -1;
-    unsigned    index = 0;
+    int      generic = -1, specific = -1;
+    unsigned index   = 0;
     for (const TbMiValue_t *entry = list->children; entry && index < TB_REGISTERS_MAX;
-         entry                    = entry->next, ++index) {
+         entry = entry->next, ++index) {
         char name[96];
-        if (!raw(name, sizeof name, entry)) {
+        if (!raw(name, sizeof(name), entry)) {
             s->sp_id = -1;
             return;
         }
         if (strcmp(name, "sp") == 0) {
-            if (generic >= 0) {
+            if (generic >= 0)
                 return;
-            }
+
             generic = (int)index;
         }
         if (strcmp(name, canonical) == 0) {
-            if (specific >= 0) {
+            if (specific >= 0)
                 return;
-            }
+
             specific = (int)index;
         }
     }
@@ -1211,26 +1228,23 @@ static void parse_locals(TbStack_t *s, const TbMiRecord_t *record)
             break;
         }
         TbStackName_t *name = &v->names[v->name_count++];
-        memset(name, 0, sizeof *name);
+        memset(name, 0, sizeof(*name));
         bool exact = entry->type == TB_MI_TUPLE &&
-                     raw(name->name, sizeof name->name, tb_mi_find(entry->children, "name"));
-        if (!exact) {
-            (void)snprintf(name->name, sizeof name->name, "<unsupported/truncated name>");
-        }
+                     raw(name->name, sizeof(name->name), tb_mi_find(entry->children, "name"));
+        if (!exact)
+            (void)snprintf(name->name, sizeof(name->name), "<unsupported/truncated name>");
         name->eligible = exact && identifier(name->name);
     }
 
     for (size_t i = 0; i < v->name_count; ++i) {
         for (size_t j = i + 1; j < v->name_count; ++j) {
-            if (strcmp(v->names[i].name, v->names[j].name) == 0) {
+            if (strcmp(v->names[i].name, v->names[j].name) == 0)
                 v->names[i].eligible = v->names[j].eligible = false;
-            }
         }
         /* A truncated inventory cannot prove that an omitted local does not
          * shadow a retained name. No guessed lookup in an incomplete scope. */
-        if (v->names_limited) {
+        if (v->names_limited)
             v->names[i].eligible = false;
-        }
     }
 
     v->names_ready = true;
@@ -1249,17 +1263,18 @@ static void add_point(TbStack_t *s, uint64_t address, bool variable)
     }
     v->annotation_error[0] = 0;
     TbStackPoint_t *p      = &v->points[v->point_count++];
-    *p                     = (TbStackPoint_t){
+    *p                     = (TbStackPoint_t) {
         .address    = address,
         .lifetime   = v->lifetime,
         .generation = s->origin,
         .frame      = s->frame,
         .variable   = variable
     };
+
     if (variable) {
-        (void)snprintf(p->label, sizeof p->label, "%s", s->variable);
+        (void)snprintf(p->label, sizeof(p->label), "%s", s->variable);
     } else {
-        (void)snprintf(p->label, sizeof p->label, "frame %d SP%s", s->frame,
+        (void)snprintf(p->label, sizeof(p->label), "frame %d SP%s", s->frame,
                        s->frame > 0 ? " (may be reconstructed)" : " (point)");
     }
 
@@ -1285,9 +1300,8 @@ bool tb_stack_event(TbStack_t *s, const TbGdbEvent_t *event)
             v->names_ready  = false;
 
             v->guard_confirmation = false;
-            if (v->follow) {
+            if (v->follow)
                 v->positioned = false;
-            }
             changed(s, v);
         }
     }
@@ -1319,9 +1333,8 @@ bool tb_stack_event(TbStack_t *s, const TbGdbEvent_t *event)
         char message[192] =
             "Stack metadata query failed/timed out; backend outcome unknown. Re-query explicitly; no retry.";
         const TbMiValue_t *msg = record ? tb_mi_find(record->results, "msg") : NULL;
-        if (msg && msg->type == TB_MI_STRING) {
-            tb_code_safe(message, sizeof message, msg->string.data, msg->string.length);
-        }
+        if (msg && msg->type == TB_MI_STRING)
+            tb_code_safe(message, sizeof(message), msg->string.data, msg->string.length);
 
         if (s->request_job == STACK_NAMES) {
             s->catalogue = true;
@@ -1357,7 +1370,7 @@ bool tb_stack_event(TbStack_t *s, const TbGdbEvent_t *event)
         s->job = STACK_VERIFY;
     } else if (s->request_job == STACK_GUARD || s->request_job == STACK_VERIFY) {
         char setting[32] = {0};
-        if (raw(setting, sizeof setting, tb_mi_find(record->results, "value")) &&
+        if (raw(setting, sizeof(setting), tb_mi_find(record->results, "value")) &&
             strcmp(setting, "off") == 0) {
             s->job = STACK_ADDRESS;
         } else if (s->request_job == STACK_GUARD && strcmp(setting, "on") == 0) {
@@ -1366,7 +1379,7 @@ bool tb_stack_event(TbStack_t *s, const TbGdbEvent_t *event)
 
             s->job = STACK_NONE;
             (void)snprintf(
-                v->annotation_error, sizeof v->annotation_error,
+                v->annotation_error, sizeof(v->annotation_error),
                 "may-call-functions is ON. Explicitly disable it session-wide to query; it will "
                 "not be restored. GDB may still read internally.");
             changed(s, v);
@@ -1376,7 +1389,7 @@ bool tb_stack_event(TbStack_t *s, const TbGdbEvent_t *event)
     } else if (s->request_job == STACK_ADDRESS) {
         char     text[128];
         uint64_t address;
-        if (!raw(text, sizeof text, tb_mi_find(record->results, "value")) || !literal(text, &address) ||
+        if (!raw(text, sizeof(text), tb_mi_find(record->results, "value")) || !literal(text, &address) ||
             (s->bits < 64 && address >= (UINT64_C(1) << s->bits))) {
             finish_error(
                 s,
@@ -1386,6 +1399,7 @@ bool tb_stack_event(TbStack_t *s, const TbGdbEvent_t *event)
             add_point(s, address, true);
         }
     }
+
     return true;
 }
 
@@ -1393,23 +1407,20 @@ bool tb_stack_event(TbStack_t *s, const TbGdbEvent_t *event)
 void tb_stack_pump(TbStack_t *s)
 {
     synchronize(s);
-    if (s->waiting) {
+    if (s->waiting)
         return;
-    }
-    if (s->job && !chain_valid(s)) {
+
+    if (s->job && !chain_valid(s))
         finish_error(s, "Context changed/canceled before dispatch; no further query.");
-    }
 
     bool confirmation = false;
-    for (int i = 0; i < TB_STACK_VIEWS; ++i) {
+    for (int i = 0; i < TB_STACK_VIEWS; ++i)
         confirmation = confirmation || s->views[i].guard_confirmation;
-    }
     if (!s->job && !confirmation && fresh(s)) {
         const TbContextSnapshot_t *c   = tb_context_snapshot(s->context);
         bool                       any = false;
-        for (int i = 0; i < TB_STACK_VIEWS; ++i) {
+        for (int i = 0; i < TB_STACK_VIEWS; ++i)
             any = any || s->views[i].visible;
-        }
         uint64_t lifetime = tb_context_thread_lifetime(s->context, c->selected_thread);
         if (any && lifetime && s->octets && s->bits && s->bits <= 64 &&
             (!s->attempted_valid || !same(s->attempted, c->generation))) {
@@ -1418,16 +1429,16 @@ void tb_stack_pump(TbStack_t *s)
             s->job             = STACK_ANCHOR;
             s->origin          = c->generation;
             s->thread_lifetime = lifetime;
-            (void)snprintf(s->thread, sizeof s->thread, "%s", c->selected_thread);
+            (void)snprintf(s->thread, sizeof(s->thread), "%s", c->selected_thread);
             s->attempted       = c->generation;
             s->attempted_valid = true;
             s->canceled        = false;
         }
     }
 
-    if (!s->job || !chain_valid(s)) {
+    if (!s->job || !chain_valid(s))
         return;
-    }
+
     unsigned job = s->job;
     if ((job == STACK_FRAME || job == STACK_ANCHOR) && s->sp_id < 0) {
         if (s->catalogue) {
@@ -1444,16 +1455,15 @@ void tb_stack_pump(TbStack_t *s)
     if (job == STACK_GUARD || job == STACK_VERIFY || job == STACK_DISABLE) {
         operation     = job == STACK_DISABLE ? "-gdb-set" : "-gdb-show";
         args[count++] = "may-call-functions";
-        if (job == STACK_DISABLE) {
+        if (job == STACK_DISABLE)
             args[count++] = "off";
-        }
     } else if (job == STACK_NAMES) {
         operation = "-data-list-register-names";
     } else {
         args[count++] = "--thread";
         args[count++] = s->thread;
         args[count++] = "--frame";
-        (void)snprintf(frame, sizeof frame, "%d", job == STACK_ANCHOR ? 0 : s->frame);
+        (void)snprintf(frame, sizeof(frame), "%d", job == STACK_ANCHOR ? 0 : s->frame);
         args[count++] = frame;
         if (job == STACK_LOCALS) {
             operation     = "-stack-list-variables";
@@ -1465,19 +1475,18 @@ void tb_stack_pump(TbStack_t *s)
             operation     = "-data-evaluate-expression";
             args[count++] = "--language";
             args[count++] = "c";
-            (void)snprintf(expression, sizeof expression, "(unsigned long long)&'%s'", s->variable);
+            (void)snprintf(expression, sizeof(expression), "(unsigned long long)&'%s'", s->variable);
             args[count++] = expression;
         } else {
             operation     = "-data-list-register-values";
             args[count++] = "x";
-            (void)snprintf(reg, sizeof reg, "%d", s->sp_id);
+            (void)snprintf(reg, sizeof(reg), "%d", s->sp_id);
             args[count++] = reg;
         }
     }
 
     s->request_job = job;
     s->waiting     = tb_gdb_request(s->gdb, operation, args, count, TB_GDB_CONTEXT, job, 3000, NULL);
-    if (!s->waiting) {
+    if (!s->waiting)
         finish_error(s, "Stack request rejected; no automatic retry.");
-    }
 }

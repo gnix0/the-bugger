@@ -5,7 +5,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { REG_NAMES = 9201, REG_CANONICAL, REG_VALUES };
+enum {
+    REG_NAMES = 9201,
+    REG_CANONICAL,
+    REG_VALUES
+};
+
 struct tb_registers {
     TbGdb_t            *gdb;
     TbContext_t        *context;
@@ -13,33 +18,44 @@ struct tb_registers {
     size_t              count;
     char                canonical[TB_REGISTERS_MAX][TB_REGISTER_VALUE];
     char                baseline[TB_REGISTERS_MAX][TB_REGISTER_VALUE];
-    bool                canonical_ok[TB_REGISTERS_MAX], baseline_ok[TB_REGISTERS_MAX],
-                        canonical_fresh[TB_REGISTERS_MAX];
-    bool                wanted[TB_REGISTERS_MAX], failed[TB_REGISTERS_MAX];
+    bool                canonical_ok[TB_REGISTERS_MAX];
+    bool                baseline_ok[TB_REGISTERS_MAX];
+    bool                canonical_fresh[TB_REGISTERS_MAX];
+    bool                wanted[TB_REGISTERS_MAX];
+    bool                failed[TB_REGISTERS_MAX];
     uint64_t            sampled_stop[TB_REGISTERS_MAX];
-    char                thread[32], architecture[64], error[192];
+    char                thread[32];
+    char                architecture[64];
+    char                error[192];
     int                 frame;
     TbGdbGeneration_t   generation;
     TbRegisterFormat_e  format;
-    bool                visible, waiting, names_ready, names_failed, limited;
-    uint64_t            revision, version, request_version;
-    size_t              batch[TB_REGISTERS_PAGE], batch_count;
+    bool                visible;
+    bool                waiting;
+    bool                names_ready;
+    bool                names_failed;
+    bool                limited;
+    uint64_t            revision;
+    uint64_t            version;
+    uint64_t            request_version;
+    size_t              batch[TB_REGISTERS_PAGE];
+    size_t              batch_count;
 };
 
 static int number(const TbMiValue_t *v)
 {
-    if (!v || v->type != TB_MI_STRING || !v->string.length) {
+    if (!v || v->type != TB_MI_STRING || !v->string.length)
         return -1;
-    }
 
     unsigned n = 0;
     for (size_t i = 0; i < v->string.length; ++i) {
         unsigned char c = (unsigned char)v->string.data[i];
-        if (c < '0' || c > '9' || n > (TB_REGISTERS_MAX - 1U - (unsigned)(c - '0')) / 10U) {
+        if (c < '0' || c > '9' || n > (TB_REGISTERS_MAX - 1U - (unsigned)(c - '0')) / 10U)
             return -1;
-        }
+
         n = n * 10U + c - '0';
     }
+
     return n < TB_REGISTERS_MAX ? (int)n : -1;
 }
 
@@ -47,9 +63,8 @@ static int number(const TbMiValue_t *v)
 static bool copy(char *out, size_t capacity, const TbMiValue_t *v)
 {
     out[0] = 0;
-    if (!v || v->type != TB_MI_STRING) {
+    if (!v || v->type != TB_MI_STRING)
         return false;
-    }
 
     tb_code_safe(out, capacity, v->string.data, v->string.length);
     /* Escaping can expand bytes: conservatively exclude escaped/truncated
@@ -66,12 +81,13 @@ static bool same(TbGdbGeneration_t a, TbGdbGeneration_t b)
 
 TbRegisters_t *tb_registers_create(TbGdb_t *gdb, TbContext_t *context)
 {
-    TbRegisters_t *r = calloc(1, sizeof *r);
+    TbRegisters_t *r = calloc(1, sizeof(*r));
     if (r) {
         r->gdb     = gdb;
         r->context = context;
         tb_registers_reset(r);
     }
+
     return r;
 }
 
@@ -88,7 +104,7 @@ void tb_registers_reset(TbRegisters_t *r)
     TbContext_t *context  = r->context;
     uint64_t     revision = r->revision;
 
-    memset(r, 0, sizeof *r);
+    memset(r, 0, sizeof(*r));
     r->gdb      = gdb;
     r->context  = context;
     r->frame    = -1;
@@ -105,15 +121,14 @@ void tb_registers_visible(TbRegisters_t *r, bool visible)
 
 void tb_registers_begin(TbRegisters_t *r)
 {
-    memset(r->wanted, 0, sizeof r->wanted);
+    memset(r->wanted, 0, sizeof(r->wanted));
 }
 
 
 void tb_registers_want(TbRegisters_t *r, size_t first, size_t count)
 {
-    for (size_t i = first; count && i < r->count; ++i, --count) {
+    for (size_t i = first; count && i < r->count; ++i, --count)
         r->wanted[i] = true;
-    }
 }
 
 
@@ -133,9 +148,8 @@ void tb_registers_refresh(TbRegisters_t *r)
 
 void tb_registers_format(TbRegisters_t *r, TbRegisterFormat_e format)
 {
-    if (format < 0 || format >= TB_REG_FORMATS || format == r->format) {
+    if (format < 0 || format >= TB_REG_FORMATS || format == r->format)
         return;
-    }
 
     r->format = format;
     tb_registers_refresh(r);
@@ -151,6 +165,7 @@ TbRegisterFormat_e tb_registers_get_format(const TbRegisters_t *r)
 const char *tb_registers_format_name(TbRegisterFormat_e format)
 {
     static const char *const names[] = {"Hex", "Decimal", "Octal", "Binary", "Raw", "Natural"};
+
     return format >= 0 && format < TB_REG_FORMATS ? names[format] : "Unknown";
 }
 
@@ -170,6 +185,7 @@ const TbRegister_t *tb_registers_row(const TbRegisters_t *r, size_t row)
 bool tb_registers_stale(const TbRegisters_t *r)
 {
     const TbContextSnapshot_t *s = tb_context_snapshot(r->context);
+
     return tb_gdb_state(r->gdb) != TB_GDB_STOPPED || s->stale || !s->ready ||
            !same(r->generation, s->generation);
 }
@@ -177,21 +193,20 @@ bool tb_registers_stale(const TbRegisters_t *r)
 
 bool tb_registers_settled(const TbRegisters_t *r)
 {
-    if (tb_registers_stale(r) || r->waiting) {
+    if (tb_registers_stale(r) || r->waiting)
         return false;
-    }
-    if (r->names_failed) {
+
+    if (r->names_failed)
         return true;
-    }
-    if (!r->names_ready) {
+
+    if (!r->names_ready)
         return false;
-    }
 
     for (size_t i = 0; i < r->count; ++i) {
-        if (r->wanted[i] && !r->rows[i].fresh && !r->failed[i]) {
+        if (r->wanted[i] && !r->rows[i].fresh && !r->failed[i])
             return false;
-        }
     }
+
     return true;
 }
 
@@ -223,12 +238,12 @@ static bool issue(TbRegisters_t *r, unsigned job)
         args[count++] = "--thread";
         args[count++] = r->thread;
         args[count++] = "--frame";
-        (void)snprintf(frame, sizeof frame, "%d", r->frame);
+        (void)snprintf(frame, sizeof(frame), "%d", r->frame);
         args[count++] = frame;
         static const char *const formats[] = {"x", "d", "o", "t", "r", "N"};
         args[count++] = job == REG_CANONICAL ? "x" : formats[r->format];
         for (size_t i = 0; i < r->batch_count; ++i) {
-            (void)snprintf(ids[i], sizeof ids[i], "%u", r->rows[r->batch[i]].number);
+            (void)snprintf(ids[i], sizeof(ids[i]), "%u", r->rows[r->batch[i]].number);
             args[count++] = ids[i];
         }
     }
@@ -237,6 +252,7 @@ static bool issue(TbRegisters_t *r, unsigned job)
     r->waiting =
         tb_gdb_request(r->gdb, job == REG_NAMES ? "-data-list-register-names" : "-data-list-register-values",
                        args, count, TB_GDB_CONTEXT, job, 3000, NULL);
+
     return r->waiting;
 }
 
@@ -245,7 +261,7 @@ bool tb_registers_event(TbRegisters_t *r, const TbGdbEvent_t *event)
 {
     if (!r->visible && event->kind == TB_GDB_RECORD && event->record && event->record->kind == TB_MI_EXEC &&
         strcmp(event->record->klass, "stopped") == 0) {
-        memset(r->canonical_ok, 0, sizeof r->canonical_ok);
+        memset(r->canonical_ok, 0, sizeof(r->canonical_ok));
     }
 
     if (event->cookie < REG_NAMES || event->cookie > REG_VALUES ||
@@ -263,17 +279,15 @@ bool tb_registers_event(TbRegisters_t *r, const TbGdbEvent_t *event)
     const TbMiRecord_t *record = event->record;
     bool                okay   = event->kind == TB_GDB_REPLY && record && strcmp(record->klass, "done") == 0;
     if (!okay) {
-        (void)copy(r->error, sizeof r->error, record ? tb_mi_find(record->results, "msg") : NULL);
-        if (!*r->error) {
-            (void)snprintf(r->error, sizeof r->error, "Register read failed/timed out; Refresh retries.");
-        }
+        (void)copy(r->error, sizeof(r->error), record ? tb_mi_find(record->results, "msg") : NULL);
+        if (!*r->error)
+            (void)snprintf(r->error, sizeof(r->error), "Register read failed/timed out; Refresh retries.");
 
         if (event->cookie == REG_NAMES) {
             r->names_failed = true;
         } else {
-            for (size_t i = 0; i < r->batch_count; ++i) {
+            for (size_t i = 0; i < r->batch_count; ++i)
                 r->failed[r->batch[i]] = true;
-            }
         }
         ++r->revision;
         return true;
@@ -282,14 +296,13 @@ bool tb_registers_event(TbRegisters_t *r, const TbGdbEvent_t *event)
     const TbMiValue_t *list =
         tb_mi_find(record->results, event->cookie == REG_NAMES ? "register-names" : "register-values");
     if (!list || list->type != TB_MI_LIST) {
-        (void)snprintf(r->error, sizeof r->error, "Malformed register reply; Refresh retries.");
+        (void)snprintf(r->error, sizeof(r->error), "Malformed register reply; Refresh retries.");
 
         if (event->cookie == REG_NAMES) {
             r->names_failed = true;
         } else {
-            for (size_t i = 0; i < r->batch_count; ++i) {
+            for (size_t i = 0; i < r->batch_count; ++i)
                 r->failed[r->batch[i]] = true;
-            }
         }
         ++r->revision;
         return true;
@@ -304,19 +317,18 @@ bool tb_registers_event(TbRegisters_t *r, const TbGdbEvent_t *event)
                 r->limited = true;
                 break;
             }
-            if (v->type != TB_MI_STRING || !v->string.length) {
+            if (v->type != TB_MI_STRING || !v->string.length)
                 continue;
-            }
+
             TbRegister_t *row = &r->rows[r->count];
-            memset(row, 0, sizeof *row);
+            memset(row, 0, sizeof(*row));
             row->number = id;
-            (void)copy(row->name, sizeof row->name, v);
+            (void)copy(row->name, sizeof(row->name), v);
             ++r->count;
         }
         r->names_ready = true;
-        if (!r->count) {
-            (void)snprintf(r->error, sizeof r->error, "GDB reports no named registers.");
-        }
+        if (!r->count)
+            (void)snprintf(r->error, sizeof(r->error), "GDB reports no named registers.");
     } else {
         for (size_t i = 0; i < r->batch_count; ++i) {
             size_t             index = r->batch[i];
@@ -330,7 +342,7 @@ bool tb_registers_event(TbRegisters_t *r, const TbGdbEvent_t *event)
             }
 
             char text[TB_REGISTER_VALUE];
-            bool complete  = copy(text, sizeof text, value);
+            bool complete  = copy(text, sizeof(text), value);
             bool available = value && *text && strcmp(text, "<unavailable>") != 0;
             if (event->cookie == REG_CANONICAL) {
                 row->changed =
@@ -342,7 +354,7 @@ bool tb_registers_event(TbRegisters_t *r, const TbGdbEvent_t *event)
             }
 
             if (event->cookie == REG_VALUES || r->format == TB_REG_HEX) {
-                (void)snprintf(row->value, sizeof row->value, "%s", available ? text : "Unavailable");
+                (void)snprintf(row->value, sizeof(row->value), "%s", available ? text : "Unavailable");
                 row->available = available;
                 row->truncated = value && !complete;
                 row->fresh     = true;
@@ -350,20 +362,19 @@ bool tb_registers_event(TbRegisters_t *r, const TbGdbEvent_t *event)
         }
     }
     ++r->revision;
+
     return true;
 }
 
 
 void tb_registers_pump(TbRegisters_t *r)
 {
-    if (!r->visible || tb_gdb_state(r->gdb) != TB_GDB_STOPPED) {
+    if (!r->visible || tb_gdb_state(r->gdb) != TB_GDB_STOPPED)
         return;
-    }
 
     const TbContextSnapshot_t *s = tb_context_snapshot(r->context);
-    if (s->stale || !s->ready) {
+    if (s->stale || !s->ready)
         return;
-    }
 
     if (!same(r->generation, s->generation)) {
         bool identity     = r->generation.session == s->generation.session && r->frame == s->selected.level &&
@@ -375,9 +386,8 @@ void tb_registers_pump(TbRegisters_t *r)
             if (!identity || stop_changed) {
                 r->baseline_ok[i] =
                     identity && r->canonical_ok[i] && r->sampled_stop[i] == r->generation.stop;
-                if (r->baseline_ok[i]) {
-                    memcpy(r->baseline[i], r->canonical[i], sizeof r->baseline[i]);
-                }
+                if (r->baseline_ok[i])
+                    memcpy(r->baseline[i], r->canonical[i], sizeof(r->baseline[i]));
             }
             r->rows[i].fresh      = r->rows[i].changed = false;
             r->failed[i]          = false;
@@ -391,44 +401,40 @@ void tb_registers_pump(TbRegisters_t *r)
             strcmp(r->architecture, s->selected.architecture) != 0) {
             r->names_ready = false;
             r->count       = 0;
-            memset(r->canonical_ok, 0, sizeof r->canonical_ok);
-            memset(r->baseline_ok, 0, sizeof r->baseline_ok);
+            memset(r->canonical_ok, 0, sizeof(r->canonical_ok));
+            memset(r->baseline_ok, 0, sizeof(r->baseline_ok));
         }
         r->generation = s->generation;
         r->frame      = s->selected.level;
-        (void)snprintf(r->thread, sizeof r->thread, "%s", s->selected_thread);
-        (void)snprintf(r->architecture, sizeof r->architecture, "%s", s->selected.architecture);
+        (void)snprintf(r->thread, sizeof(r->thread), "%s", s->selected_thread);
+        (void)snprintf(r->architecture, sizeof(r->architecture), "%s", s->selected.architecture);
         ++r->version;
         r->error[0]     = 0;
         r->names_failed = false;
         ++r->revision;
     }
 
-    if (r->waiting) {
+    if (r->waiting)
         return;
-    }
+
     if (!r->names_ready) {
-        if (!r->names_failed) {
+        if (!r->names_failed)
             (void)issue(r, REG_NAMES);
-        }
         return;
     }
 
     r->batch_count = 0;
     for (size_t i = 0; i < r->count && r->batch_count < TB_REGISTERS_PAGE; ++i) {
-        if (r->wanted[i] && !r->rows[i].fresh && !r->failed[i]) {
+        if (r->wanted[i] && !r->rows[i].fresh && !r->failed[i])
             r->batch[r->batch_count++] = i;
-        }
     }
-    if (!r->batch_count) {
+    if (!r->batch_count)
         return;
-    }
 
     bool canonical = false;
     for (size_t i = 0; i < r->batch_count; ++i) {
-        if (!r->canonical_fresh[r->batch[i]]) {
+        if (!r->canonical_fresh[r->batch[i]])
             canonical = true;
-        }
     }
     if (r->format == TB_REG_HEX || canonical) {
         (void)issue(r, REG_CANONICAL);

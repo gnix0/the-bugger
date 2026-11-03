@@ -9,11 +9,18 @@
  * Feed decoded MI @ stream bytes for one serialized request. The caller must
  * correlate the terminal MI result token before accepting finish(done=true). */
 typedef struct {
-    char     id[64], target[64], line[256];
-    size_t   used, received;
-    uint64_t address, value;
+    char     id[64];
+    char     target[64];
+    char     line[256];
+    size_t   used;
+    size_t   received;
+    uint64_t address;
+    uint64_t value;
     unsigned width;
-    bool     invalid, found, discard, cr;
+    bool     invalid;
+    bool     found;
+    bool     discard;
+    bool     cr;
 } TbMonitorFrame_t;
 
 bool tb_monitor_start(TbMonitorFrame_t *frame, const char *id, const char *target, uint64_t address,

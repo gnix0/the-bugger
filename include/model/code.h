@@ -18,39 +18,64 @@ enum {
 };
 
 typedef struct {
-    char file[TB_CODE_PATH], full[TB_CODE_PATH];
+    char file[TB_CODE_PATH];
+    char full[TB_CODE_PATH];
 } TbCodeFile_t;
 
 typedef struct {
-    char from[TB_CODE_PATH], to[TB_CODE_PATH];
+    char from[TB_CODE_PATH];
+    char to[TB_CODE_PATH];
 } TbSourceRule_t;
 
 typedef struct {
-    char     address[48], opcodes[96], text[384], source[512];
+    char     address[48];
+    char     opcodes[96];
+    char     text[384];
+    char     source[512];
     int      line;
     uint64_t numeric;
     unsigned bytes;
 } TbInstruction_t;
 
 typedef struct {
-    char              path[TB_CODE_PATH], source_error[192], assembly_error[192];
-    bool              stale, source_follow, assembly_follow, mixed, mixed_available, more, truncated;
-    bool              assembly_stopped, assembly_historical;
+    char              path[TB_CODE_PATH];
+    char              source_error[192];
+    char              assembly_error[192];
+    bool              stale;
+    bool              source_follow;
+    bool              assembly_follow;
+    bool              mixed;
+    bool              mixed_available;
+    bool              more;
+    bool              truncated;
+    bool              assembly_stopped;
+    bool              assembly_historical;
     TbGdbGeneration_t assembly_generation;
     uint64_t          assembly_epoch;
-    uint64_t          gap_begin, gap_end;
-    int               selected_line, stopped_line;
-    size_t            line_count, instruction_count;
+    uint64_t          gap_begin;
+    uint64_t          gap_end;
+    int               selected_line;
+    int               stopped_line;
+    size_t            line_count;
+    size_t            instruction_count;
     TbInstruction_t   instructions[TB_CODE_INSNS];
-    uint64_t          anchor, next_address, source_revision, assembly_revision;
+    uint64_t          anchor;
+    uint64_t          next_address;
+    uint64_t          source_revision;
+    uint64_t          assembly_revision;
 } TbCodeView_t;
 
-typedef enum { TB_CODE_INSTRUCTION, TB_CODE_SOURCE, TB_CODE_GAP } TbCodeRowKind_e;
+typedef enum {
+    TB_CODE_INSTRUCTION,
+    TB_CODE_SOURCE,
+    TB_CODE_GAP
+} TbCodeRowKind_e;
 
 typedef struct {
     TbCodeRowKind_e kind;
     size_t          instruction;
-    uint64_t        begin, end;
+    uint64_t        begin;
+    uint64_t        end;
 } TbCodeRow_t;
 
 /* The same flattened rows drive rendering, scrolling, selection and markers.

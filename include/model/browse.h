@@ -4,6 +4,7 @@
 #include "gdb/controller.h"
 
 enum { TB_BROWSE_LIMIT = 4 * 1024 * 1024 };
+
 typedef enum {
     TB_BROWSE_CODE,
     TB_BROWSE_MEMORY,
@@ -20,7 +21,9 @@ typedef struct {
     TbBrowseKind_e    kind;
     int               view;
     unsigned          format;
-    uint64_t          begin, end, epoch;
+    uint64_t          begin;
+    uint64_t          end;
+    uint64_t          epoch;
     TbGdbGeneration_t generation;
 } TbBrowseKey_t;
 

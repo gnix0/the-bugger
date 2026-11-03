@@ -13,37 +13,62 @@ enum {
 };
 
 typedef struct {
-    int x, y, w, h;
+    int x;
+    int y;
+    int w;
+    int h;
 } TbRect_t;
 
-typedef enum { TB_SPLIT_RIGHT, TB_SPLIT_BELOW } TbSplit_e;
+typedef enum {
+    TB_SPLIT_RIGHT,
+    TB_SPLIT_BELOW
+} TbSplit_e;
 
 typedef struct {
     bool      used;
-    int       pane, first, second, ratio;
+    int       pane;
+    int       first;
+    int       second;
+    int       ratio;
     TbSplit_e direction;
 } TbLayoutNode_t;
 
 typedef struct {
-    TbRect_t  rect, area;
-    int       node, minimum_first, minimum_second;
+    TbRect_t  rect;
+    TbRect_t  area;
+    int       node;
+    int       minimum_first;
+    int       minimum_second;
     TbSplit_e direction;
 } TbDivider_t;
 
 typedef struct {
     TbLayoutNode_t nodes[TB_LAYOUT_NODES];
-    int            roots[TB_DEFAULT_PANES], columns[3], row_ratio;
-    TbRect_t       panes[TB_MAX_PANES], area;
+    int            roots[TB_DEFAULT_PANES];
+    int            columns[3];
+    int            row_ratio;
+    TbRect_t       panes[TB_MAX_PANES];
+    TbRect_t       area;
     TbDivider_t    dividers[TB_MAX_PANES];
-    int            divider_count, order[TB_MAX_PANES], count;
-    uint64_t       serial, identities[TB_MAX_PANES];
-    int            widths[3], minimum_columns[3], minimum_rows[2];
+    int            divider_count;
+    int            order[TB_MAX_PANES];
+    int            count;
+    uint64_t       serial;
+    uint64_t       identities[TB_MAX_PANES];
+    int            widths[3];
+    int            minimum_columns[3];
+    int            minimum_rows[2];
     bool           tiled;
     /* Lower roots retain their split trees while hidden or over the primary
      * roots. Preferred heights survive temporary terminal-size clamping. */
-    bool     overlays, lower_open[3];
-    int      lower_height[3], lower_order[3], root_focus[TB_DEFAULT_PANES], primary_focus;
-    TbRect_t lower_bars[3], lower_areas[3];
+    bool     overlays;
+    bool     lower_open[3];
+    int      lower_height[3];
+    int      lower_order[3];
+    int      root_focus[TB_DEFAULT_PANES];
+    int      primary_focus;
+    TbRect_t lower_bars[3];
+    TbRect_t lower_areas[3];
 } TbLayout_t;
 
 void tb_layout_init(TbLayout_t *layout);

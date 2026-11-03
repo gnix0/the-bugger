@@ -13,7 +13,8 @@ typedef enum {
 
 typedef struct {
     TbMmioStatus_e    status;
-    uint64_t          address, value;
+    uint64_t          address;
+    uint64_t          value;
     unsigned          width;
     TbGdbGeneration_t generation;
     char              error[192];

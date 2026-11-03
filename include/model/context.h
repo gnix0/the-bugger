@@ -3,31 +3,54 @@
 
 #include "gdb/controller.h"
 
-enum { TB_CONTEXT_THREADS = 128, TB_CONTEXT_FRAMES = 32, TB_CONTEXT_MAX_LEVEL = 4095 };
+enum {
+    TB_CONTEXT_THREADS   = 128,
+    TB_CONTEXT_FRAMES    = 32,
+    TB_CONTEXT_MAX_LEVEL = 4095
+};
+
 typedef struct {
-    int  level, line;
+    int  level;
+    int  line;
     char path[4096];            /* Exact filesystem bytes; file below is a render-safe label. */
-    char address[48], function[160], file[384], from[160], architecture[64];
-    char arguments[256], argument_names[256];
+    char address[48];
+    char function[160];
+    char file[384];
+    char from[160];
+    char architecture[64];
+    char arguments[256];
+    char argument_names[256];
     bool arguments_read;
 } TbFrame_t;
 
 typedef struct {
-    char      id[32], name[96], target[128], state[24];
+    char      id[32];
+    char      name[96];
+    char      target[128];
+    char      state[24];
     TbFrame_t frame;
     uint64_t  lifetime;         /* Session-local identity; numeric ID reuse never inherits it. */
 } TbThread_t;
 
 typedef struct {
     TbGdbGeneration_t generation;
-    bool              ready, stale, refreshing, threads_limited, more_frames;
-    char              selected_thread[32], stopped_thread[32];
-    TbFrame_t         selected, stopped;
+    bool              ready;
+    bool              stale;
+    bool              refreshing;
+    bool              threads_limited;
+    bool              more_frames;
+    char              selected_thread[32];
+    char              stopped_thread[32];
+    TbFrame_t         selected;
+    TbFrame_t         stopped;
     TbThread_t        threads[TB_CONTEXT_THREADS];
     TbFrame_t         frames[TB_CONTEXT_FRAMES];
-    size_t            thread_count, frame_count;
+    size_t            thread_count;
+    size_t            frame_count;
     int               first_frame;
-    char              error[192], stack_error[192], arguments_error[192];
+    char              error[192];
+    char              stack_error[192];
+    char              arguments_error[192];
 } TbContextSnapshot_t;
 
 typedef struct tb_context TbContext_t;
@@ -43,7 +66,12 @@ bool tb_context_event(TbContext_t *context, const TbGdbEvent_t *event);
 /* One stopped mutation at a time across inspectors. Acquire only immediately
  * before dispatch on an idle controller; finish outside event callbacks.
  * Uncertain mutations quarantine all inspector writes until explicit recovery. */
-typedef enum { TB_WRITE_ACKNOWLEDGED, TB_WRITE_UNCERTAIN, TB_WRITE_UNRESOLVED } TbWriteOutcome_e;
+typedef enum {
+    TB_WRITE_ACKNOWLEDGED,
+    TB_WRITE_UNCERTAIN,
+    TB_WRITE_UNRESOLVED
+} TbWriteOutcome_e;
+
 bool tb_context_write_begin(TbContext_t *context, uint64_t cookie);
 void tb_context_write_finish(TbContext_t *context, uint64_t cookie, TbWriteOutcome_e outcome);
 bool tb_context_write_blocked(const TbContext_t *context);
