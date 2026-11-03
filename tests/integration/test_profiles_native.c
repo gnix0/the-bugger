@@ -15,7 +15,7 @@ static void cleanup(void)
 }
 static void breaks_ready(TbNative *n)
 {
-    TbBreakpoints *b = tb_native_breakpoints(n); uint64_t end = tb_gdb_now_ms() + 5000;
+    TbBreakpoints_t *b = tb_native_breakpoints(n); uint64_t end = tb_gdb_now_ms() + 5000;
     while ((!tb_break_ready(b) || tb_break_busy(b)) && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
     CHECK(tb_break_ready(b) && !tb_break_busy(b));
 }
@@ -66,8 +66,8 @@ int main(int argc, char **argv)
         if (strstr(file->full, "/left/duplicate.c")) { left = file; break; }
     }
     CHECK(left && strstr(left->full, argv[2]));
-    TbBreakpoints *b = tb_native_breakpoints(n);
-    CHECK(tb_break_add_at(b, (TbBreakLocation){.source = left->full, .line = 3}, false)); breaks_ready(n);
+    TbBreakpoints_t *b = tb_native_breakpoints(n);
+    CHECK(tb_break_add_at(b, (TbBreakLocation_t){.source = left->full, .line = 3}, false)); breaks_ready(n);
     CHECK(tb_break_count(b) == 1 && !tb_break_row(b, 0)->pending && strcmp(tb_break_row(b, 0)->file, left->full) == 0);
     uint64_t before = tb_context_snapshot(tb_native_context(n))->generation.stop;
     CHECK(tb_native_continue(n)); stopped(n, before);

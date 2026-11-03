@@ -81,7 +81,7 @@ int main(int argc, char **argv)
     CHECK(tb_code_tab_count(code, 0) == 3 && !strcmp(tb_code_tab_file(code, 0, 1)->full, "/former/source/session.c"));
     CHECK(tb_code_tab_select(code, 0, 2));
     CHECK(tb_break_definition_count(tb_session_breakpoints(owned)) == 1 && tb_setup_capture_retained(c) == 1);
-    const TbBreakDefinition *installed = tb_break_definition(tb_session_breakpoints(owned), 0);
+    const TbBreakDefinition_t *installed = tb_break_definition(tb_session_breakpoints(owned), 0);
     CHECK(installed && !strcmp(installed->location, "missing_saved_f01_symbol") && installed->ignore == 3 && installed->ignore_set && installed->enabled);
     CHECK(CAPTURE() && !tb_setup_capture_dirty(c));
     tb_break_definition_reserve(tb_session_breakpoints(owned), TB_SETUP_BREAKS);
@@ -109,7 +109,7 @@ int main(int argc, char **argv)
     CHECK(tb_setup_capture_saved(c)); CHECK(CAPTURE() && !tb_setup_capture_dirty(c));
     /* Current native provenance permits address reuse without saved permissions.
      * A changed bias requires explicit approval even in this same process. */
-    TbBreakDefinition literal = {.mapping = mapping, .enabled = false};
+    TbBreakDefinition_t literal = {.mapping = mapping, .enabled = false};
     (void)snprintf(literal.location, sizeof literal.location, "*0x%llx", (unsigned long long)address);
     uint64_t literal_id = tb_setup_capture_import_break(c, &literal); CHECK(literal_id && CAPTURE());
     CHECK(tb_setup_capture_saved(c)); tb_setup_restore_begin(r); settle(r, c);

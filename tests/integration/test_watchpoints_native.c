@@ -4,7 +4,7 @@
 
 static void idle(TbNative *n)
 {
-    TbBreakpoints *b = tb_native_breakpoints(n); uint64_t end = tb_gdb_now_ms() + 5000;
+    TbBreakpoints_t *b = tb_native_breakpoints(n); uint64_t end = tb_gdb_now_ms() + 5000;
     while ((!tb_break_ready(b) || tb_break_busy(b)) && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
     if (!tb_break_ready(b) || tb_break_busy(b)) { fprintf(stderr, "%s\n", tb_break_message(b)); }
     CHECK(tb_break_ready(b) && !tb_break_busy(b));
@@ -27,7 +27,7 @@ static TbNative *start(const char *fixture, bool scope)
     while (tb_native_state(n) != TB_NATIVE_READY && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
     CHECK(tb_native_state(n) == TB_NATIVE_READY);
     tb_context_visible(tb_native_context(n), false, true);
-    TbBreakpoints *b = tb_native_breakpoints(n); idle(n);
+    TbBreakpoints_t *b = tb_native_breakpoints(n); idle(n);
     CHECK(tb_break_add(b, scope ? "watch_scope" : "watch_checkpoint", false)); idle(n);
     CHECK(tb_native_continue(n)); stop(n, 0);
     return n;
@@ -47,12 +47,12 @@ int main(int argc, char **argv)
 {
     CHECK(argc == 2);
     for (int mode = 0; mode < TB_WATCH_MODES; ++mode) {
-        TbNative *n = start(argv[1], false); TbBreakpoints *b = tb_native_breakpoints(n);
-        CHECK(tb_break_watch(b, "watched_value", (TbWatchMode)mode));
+        TbNative *n = start(argv[1], false); TbBreakpoints_t *b = tb_native_breakpoints(n);
+        CHECK(tb_break_watch(b, "watched_value", (TbWatchMode_e)mode));
         CHECK(!tb_native_continue(n)); idle(n);
         CHECK(tb_break_count(b) == 2);
-        const TbBreakpoint *row = tb_break_row(b, 1);
-        CHECK(row->watchpoint && row->hardware && row->watch_mode == (TbWatchMode)mode);
+        const TbBreakpoint_t *row = tb_break_row(b, 1);
+        CHECK(row->watchpoint && row->hardware && row->watch_mode == (TbWatchMode_e)mode);
         char id[32]; (void)snprintf(id, sizeof id, "%s", row->id);
         CHECK(tb_break_enable(b, id, false)); idle(n); CHECK(!tb_break_row(b, 1)->enabled);
         CHECK(tb_break_enable(b, id, true)); idle(n); CHECK(tb_break_row(b, 1)->enabled);
@@ -71,7 +71,7 @@ int main(int argc, char **argv)
         CHECK(tb_break_count(b) == 1 && *tb_break_message(b)); /* Hardware disabled: no read-watchpoint fallback. */
         close_session(n);
     }
-    TbNative *n = start(argv[1], true); TbBreakpoints *b = tb_native_breakpoints(n);
+    TbNative *n = start(argv[1], true); TbBreakpoints_t *b = tb_native_breakpoints(n);
     uint64_t previous = tb_context_snapshot(tb_native_context(n))->generation.stop;
     CHECK(tb_native_step(n, TB_STEP_OVER, false)); stop(n, previous); /* Initialize local. */
     CHECK(tb_break_watch(b, "local", TB_WATCH_CHANGE)); idle(n);

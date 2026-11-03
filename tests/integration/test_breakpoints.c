@@ -3,7 +3,7 @@
 #include "../support/check.h"
 #include <string.h>
 
-static TbBreakpoints *breakpoints;
+static TbBreakpoints_t *breakpoints;
 static unsigned replies;
 static bool unconfirmed;
 static void emit(void *unused, const TbGdbEvent_t *event)

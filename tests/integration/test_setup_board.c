@@ -44,7 +44,7 @@ static void stopped(uint64_t previous)
 }
 static void idle(void)
 {
-    TbBreakpoints *b = tb_session_breakpoints(session); uint64_t end = tb_gdb_now_ms() + 6000;
+    TbBreakpoints_t *b = tb_session_breakpoints(session); uint64_t end = tb_gdb_now_ms() + 6000;
     while ((!tb_break_ready(b) || tb_break_busy(b)) && tb_gdb_now_ms() < end) { pump(); }
     if (!tb_break_ready(b) || tb_break_busy(b)) { dump(); CHECK(false); }
 }
@@ -85,7 +85,7 @@ static void no_values(int pane)
 static void arm_core(void)
 {
     const char *step_location = getenv("TB_SETUP_BOARD_STEP_LOCATION"); CHECK(step_location && *step_location);
-    TbBreakpoints *b = tb_session_breakpoints(session); CHECK(tb_break_add(b, step_location, true)); idle();
+    TbBreakpoints_t *b = tb_session_breakpoints(session); CHECK(tb_break_add(b, step_location, true)); idle();
     uint64_t entry_stop = tb_context_snapshot(tb_session_context(session))->generation.stop;
     CHECK(tb_session_continue(session)); stopped(entry_stop); idle(); char entry_id[32];
     (void)snprintf(entry_id, sizeof entry_id, "%s", tb_break_row(b, 0)->id); CHECK(tb_break_remove(b, entry_id)); idle();
@@ -119,7 +119,7 @@ static void arm_core(void)
     CHECK(tb_session_continue(session)); stopped(before); idle(); char scope_break[32];
     (void)snprintf(scope_break, sizeof scope_break, "%s", tb_break_row(b, 0)->id); CHECK(tb_break_remove(b, scope_break)); idle();
     CHECK(tb_break_watch(b, watch_expression, TB_WATCH_CHANGE)); idle(); char id[32] = {0};
-    for (size_t i = 0; i < tb_break_count(b); ++i) { const TbBreakpoint *bp = tb_break_row(b, i); if (bp->watchpoint) { CHECK(bp->hardware); (void)snprintf(id, sizeof id, "%s", bp->id); } }
+    for (size_t i = 0; i < tb_break_count(b); ++i) { const TbBreakpoint_t *bp = tb_break_row(b, i); if (bp->watchpoint) { CHECK(bp->hardware); (void)snprintf(id, sizeof id, "%s", bp->id); } }
     CHECK(*id); before = tb_context_snapshot(tb_session_context(session))->generation.stop;
     CHECK(tb_session_continue(session)); stopped(before); idle(); bool triggered = false;
     for (size_t i = 0; i < tb_session_log_count(session); ++i) { triggered = triggered || strstr(tb_session_log_line(session, i), "watchpoint-trigger"); }
@@ -174,11 +174,11 @@ int main(int argc, char **argv)
     CHECK(!layout.lower_open[0] && layout.count == 7); no_values(pane);
     TbSetupRestore *restore = tb_setup_restore_create(); CHECK(restore); tb_setup_restore_begin(restore); tb_session_setup_interlock(session, true, false);
     CHECK(!tb_session_continue(session) && !tb_session_console(session, "show version")); settle(restore, c);
-    TbBreakpoints *b = tb_session_breakpoints(session);
-    const TbBreakRestoration *good = tb_break_restoration(b, saved->breaks[0].id), *bad = tb_break_restoration(b, saved->breaks[1].id), *address = tb_break_restoration(b, saved->breaks[2].id);
+    TbBreakpoints_t *b = tb_session_breakpoints(session);
+    const TbBreakRestoration_t *good = tb_break_restoration(b, saved->breaks[0].id), *bad = tb_break_restoration(b, saved->breaks[1].id), *address = tb_break_restoration(b, saved->breaks[2].id);
     CHECK(good && good->state == TB_RESTORE_INSTALLED && bad && bad->state == TB_RESTORE_UNRESOLVED && address && address->state == TB_RESTORE_ADDRESS);
     char installed[32], partial[32]; (void)snprintf(installed, sizeof installed, "%s", good->backend); (void)snprintf(partial, sizeof partial, "%s", bad->backend);
-    bool disabled_failure = false; for (size_t i = 0; i < tb_break_count(b); ++i) { const TbBreakpoint *bp = tb_break_row(b, i); if (!strcmp(bp->id, partial)) { disabled_failure = !bp->enabled; } }
+    bool disabled_failure = false; for (size_t i = 0; i < tb_break_count(b); ++i) { const TbBreakpoint_t *bp = tb_break_row(b, i); if (!strcmp(bp->id, partial)) { disabled_failure = !bp->enabled; } }
     CHECK(disabled_failure && tb_setup_capture_retained(c) == 2 && tb_setup_restore_acknowledgment(restore));
     CHECK(!tb_session_continue(session)); CHECK(CAPTURE() && !tb_setup_capture_dirty(c)); no_values(pane);
     CHECK(tb_code_tab_active(tb_session_code(session), 0) == 2 && tb_code_tab_unavailable(tb_session_code(session), 0, 2));
@@ -199,14 +199,14 @@ int main(int argc, char **argv)
     for (int i = 0; i < 20; ++i) { pump(); tb_setup_restore_pump(restore, c, session); }
     CHECK(tb_session_state(session) == TB_SESSION_RUNNING && tb_session_pause(session));
     stopped(0); tb_setup_restore_pump(restore, c, session); CHECK(tb_setup_restore_active(restore) && !tb_session_continue(session)); settle(restore, c); no_values(pane);
-    TbBreakDefinition cancel = {.enabled = true, .hardware = true}; (void)snprintf(cancel.location, sizeof cancel.location, "%s", argv[5]);
+    TbBreakDefinition_t cancel = {.enabled = true, .hardware = true}; (void)snprintf(cancel.location, sizeof cancel.location, "%s", argv[5]);
     uint64_t cancel_id = tb_setup_capture_import_break(c, &cancel); CHECK(cancel_id && CAPTURE());
     const TbSetupBreak *entry = NULL; for (size_t i = 0; i < tb_setup_capture_retained(c); ++i) { const TbSetupBreak *d = tb_setup_capture_retained_break(c, i); if (d->id == cancel_id) { entry = d; } }
     CHECK(entry && tb_break_restore(b, entry, false)); tb_break_pump(b); tb_setup_restore_cancel(restore, session);
     CHECK(tb_setup_restore_active(restore) && strstr(tb_setup_restore_status(restore), "Cancel requested")); settle(restore, c);
     CHECK(strstr(tb_setup_restore_status(restore), "canceled") && tb_break_restoration(b, cancel_id)->state == TB_RESTORE_UNRESOLVED);
     tb_setup_restore_acknowledge(restore); tb_setup_restore_pump(restore, c, session);
-    for (size_t i = 0; i < tb_break_count(b);) { const TbBreakpoint *bp = tb_break_row(b, i); char id[32]; (void)snprintf(id, sizeof id, "%s", bp->id); CHECK(tb_break_remove(b, id)); idle(); }
+    for (size_t i = 0; i < tb_break_count(b);) { const TbBreakpoint_t *bp = tb_break_row(b, i); char id[32]; (void)snprintf(id, sizeof id, "%s", bp->id); CHECK(tb_break_remove(b, id)); idle(); }
     tb_setup_restore_destroy(restore); tb_setup_capture_destroy(c); free(saved);
     if (!strcmp(argv[4], "arm")) {
         /* Stop on the reviewed local's scope before explicit ARM core checks. */

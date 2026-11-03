@@ -160,7 +160,7 @@ typedef struct {
     size_t command_cursor[TB_MAX_PANES];
     int command_caret_x, command_caret_y;
     char break_id[32];
-    TbWatchMode watch_mode;
+    TbWatchMode_e watch_mode;
     bool watch_address;
     unsigned watch_width;
     int image_review_row;
@@ -185,7 +185,7 @@ typedef struct {
     char setup_profile[TB_PROFILE_NAME], launch_directory[TB_SETUP_PATH];
     bool setup_skipped;
     int setup_information, setup_offset;
-    TbBreakDefinition import_definition;
+    TbBreakDefinition_t import_definition;
     char import_backend[32];
     uint64_t import_revision;
     int import_hardware, import_ignore;
@@ -1088,7 +1088,7 @@ static TbScroll workspace_scroll(const App *app, const TbDemoPane *pane, int vis
     return axis_scroll(total, visible, pane->scroll[view]);
 }
 
-static void break_text(const TbBreakpoint *bp, char *text, size_t capacity)
+static void break_text(const TbBreakpoint_t *bp, char *text, size_t capacity)
 {
     char raw[1800];
     (void)snprintf(raw, sizeof raw, "%s%s %c %s%s %.500s | %s | %.500s:%u | ignore %u hit %llu | %.500s",
@@ -1311,15 +1311,15 @@ static void reset_lower(App *app)
     app->demo.pane = app->layout.primary_focus; app->content_pane = -1;
 }
 
-static bool selected_location(App *app, char *location, size_t capacity, const TbBreakpoint **existing, TbBreakLocation *where)
+static bool selected_location(App *app, char *location, size_t capacity, const TbBreakpoint_t **existing, TbBreakLocation_t *where)
 {
     int id = app->execution_pane; TbDemoPane *pane = &app->demo.panes[id];
     const TbCodeView *code = tb_code_view(tb_session_code(app->debugger), id);
-    TbBreakpoints *b = tb_session_breakpoints(app->debugger);
+    TbBreakpoints_t *b = tb_session_breakpoints(app->debugger);
     if (!app->instruction_mode) {
         unsigned line = pane->row[TB_SOURCE] >= 0 ? (unsigned)pane->row[TB_SOURCE] + 1 : 0;
         *existing = tb_break_at(b, code->path, line, NULL);
-        *where = (TbBreakLocation){.source = code->path, .line = line};
+        *where = (TbBreakLocation_t){.source = code->path, .line = line};
         return *code->path && line && line <= code->line_count;
     }
     TbCodeRow rows[TB_CODE_ROWS]; size_t count = tb_code_rows(code, rows);
@@ -1328,13 +1328,13 @@ static bool selected_location(App *app, char *location, size_t capacity, const T
     if (row->kind != TB_CODE_INSTRUCTION) { return false; }
     const TbInstruction *instruction = &code->instructions[row->instruction];
     *existing = tb_break_at(b, NULL, 0, instruction->address);
-    (void)snprintf(location, capacity, "*%s", instruction->address); *where = (TbBreakLocation){.text = location}; return !code->stale;
+    (void)snprintf(location, capacity, "*%s", instruction->address); *where = (TbBreakLocation_t){.text = location}; return !code->stale;
 }
 static bool toggle_breakpoint(App *app)
 {
-    char location[8192]; const TbBreakpoint *existing = NULL;
-    TbBreakLocation where;
-    TbBreakpoints *b = tb_session_breakpoints(app->debugger);
+    char location[8192]; const TbBreakpoint_t *existing = NULL;
+    TbBreakLocation_t where;
+    TbBreakpoints_t *b = tb_session_breakpoints(app->debugger);
     bool okay = selected_location(app, location, sizeof location, &existing, &where) &&
                 (existing ? tb_break_remove(b, existing->child ? existing->parent : existing->id) : tb_break_add_at(b, where, false));
     status(app, okay ? "Breakpoint change queued." : *tb_break_message(b) ? tb_break_message(b) : "Select a source line or instruction first.");
@@ -1449,7 +1449,7 @@ static void draw_code_pane(App *app, int index, TbRect_t rect)
         (void)snprintf(gutter, sizeof gutter, "%c%c%5zu ", source ? ' ' : stopped ? '>' : inspected ? '~' : ' ',
                        source ? stopped ? '>' : inspected ? '~' : ' ' : ' ', source ? i + 1 : i);
         if (!source) { (void)snprintf(gutter, sizeof gutter, " %c ", stopped ? '>' : inspected ? '~' : ' '); }
-        const TbBreakpoint *bp = tb_break_at(tb_session_breakpoints(app->debugger), source ? view->path : NULL,
+        const TbBreakpoint_t *bp = tb_break_at(tb_session_breakpoints(app->debugger), source ? view->path : NULL,
                                             source ? (unsigned)i + 1 : 0, source ? NULL : instruction->address);
         if (bp) { gutter[0] = bp->enabled ? 'o' : '-'; }
         int gutter_width = source ? 8 : 3;
@@ -1851,12 +1851,12 @@ static void draw_native_pane(App *app, int index, TbRect_t rect)
         return;
     }
     if (view == TB_BREAKPOINTS) {
-        TbBreakpoints *b = tb_session_breakpoints(app->debugger);
+        TbBreakpoints_t *b = tb_session_breakpoints(app->debugger);
         tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_CYAN, 0, tb_break_ready(b) ? "LIVE | breakpoints / data watches | o enabled / - disabled" : "Refreshing breakpoint table...");
         if (tb_break_busy(b) && *tb_break_message(b)) { tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_ORANGE, 0, tb_break_message(b)); }
         TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
         for (int row = 0; row < scroll.visible && row + scroll.offset < scroll.total; ++row) {
-            int item = row + scroll.offset; const TbBreakpoint *bp = tb_break_row(b, (size_t)item);
+            int item = row + scroll.offset; const TbBreakpoint_t *bp = tb_break_row(b, (size_t)item);
             char safe[4096]; break_text(bp, safe, sizeof safe);
             size_t offset = (size_t)app->horizontal[index][view]; if (offset > strlen(safe)) { offset = strlen(safe); }
             tb_text(rect.y + 2 + row, rect.x + 1, rect.w - 2, TB_PANEL, pane->row[view] == item ? A_UNDERLINE : 0, safe + offset);
@@ -2728,7 +2728,7 @@ static void draw_break_menu(App *app)
     bool compact = card.h < 15;
     int actions_y = top + (compact ? 1 : 2);
     TbDemoPane *pane = &app->demo.panes[app->break_pane];
-    const TbBreakpoint *bp = tb_break_row(tb_session_breakpoints(app->debugger), (size_t)pane->row[TB_BREAKPOINTS]);
+    const TbBreakpoint_t *bp = tb_break_row(tb_session_breakpoints(app->debugger), (size_t)pane->row[TB_BREAKPOINTS]);
     char text[1024], safe[1200];
     if (bp) { (void)snprintf(text, sizeof text, "Selected %s | %.400s | %.400s", bp->id, bp->location, bp->condition); }
     else { (void)snprintf(text, sizeof text, "Select an existing row in the Breakpoints pane to edit it."); }
@@ -3529,12 +3529,12 @@ static void draw_setup(App *app)
         else { button(app, card.y + card.h - 2, left, 18, "[ Save profile ]", PROFILE_OPEN, 2, 0); }
     } else if (app->setup_information == 5) {
         setup_text(&text, "Review the complete supported definition. Import changes only the unsaved setup draft; no GDB breakpoint is created or changed.");
-        TbBreakpoints *b = tb_session_breakpoints(app->debugger);
+        TbBreakpoints_t *b = tb_session_breakpoints(app->debugger);
         setup_text(&text, *app->import_definition.source ? app->import_definition.source : app->import_definition.location);
         if (*app->import_definition.source) { (void)snprintf(line, sizeof line, "Original source line: %u", app->import_definition.line); setup_text(&text, line); }
         setup_text(&text, app->import_definition.enabled ? "Enabled intent: yes" : "Enabled intent: no");
         setup_text(&text, "Condition:"); setup_text(&text, *app->import_definition.condition ? app->import_definition.condition : "none");
-        const TbBreakpoint *observed = NULL;
+        const TbBreakpoint_t *observed = NULL;
         for (size_t i = 0; i < tb_break_count(b); ++i) { if (!strcmp(tb_break_row(b, i)->id, app->import_backend)) { observed = tb_break_row(b, i); break; } }
         if (observed) {
             (void)snprintf(line, sizeof line, "Observed implementation: %s; remaining ignore count: %u; hits: %llu", observed->hardware ? "hardware" : "software", observed->ignore, (unsigned long long)observed->hits); setup_text(&text, line);
@@ -3548,12 +3548,12 @@ static void draw_setup(App *app)
         if (row >= 0 && row < text.visible) { button(app, card.y + 3 + row, left, width, "[ Include reviewed definition ]", SETUP_ACTION, 19, 0); }
     } else if (app->setup_information == 4) {
         setup_text(&text, "Import requires a complete current listing and explicit decisions. Unsupported entries are excluded whole. Managed external changes require review.");
-        TbBreakpoints *b = tb_session_breakpoints(app->debugger);
+        TbBreakpoints_t *b = tb_session_breakpoints(app->debugger);
         for (size_t i = 0; i < tb_break_count(b); ++i) {
-            const TbBreakpoint *row = tb_break_row(b, i); if (row->child) { continue; }
+            const TbBreakpoint_t *row = tb_break_row(b, i); if (row->child) { continue; }
             (void)snprintf(line, sizeof line, "#%s | %s | observed %s | %.120s", row->id, row->enabled ? "enabled" : "disabled", row->hardware ? "hardware" : "software", row->location);
             setup_text(&text, line);
-            TbBreakDefinition definition;
+            TbBreakDefinition_t definition;
             if (tb_break_importable(b, row->id, &definition) && (!tb_break_owned(b, row->id) || tb_break_managed(b, row->id))) {
                 int logical = text.logical++ - app->setup_offset;
                 if (logical >= 0 && logical < text.visible) { button(app, card.y + 3 + logical, left, width, tb_break_managed(b, row->id) ? "[ Review managed definition ]" : "[ Review for import ]", SETUP_ACTION, 16, (int)i); }
@@ -3590,7 +3590,7 @@ static void draw_setup(App *app)
                 (void)snprintf(line, sizeof line, "Breakpoint %llu | %s | %s | %.140s", (unsigned long long)b->id,
                     b->enabled ? "enabled intent" : "disabled intent", tb_break_restoration(tb_session_breakpoints(app->debugger), b->id) ? tb_break_restore_state(tb_break_restoration(tb_session_breakpoints(app->debugger), b->id)->state) : tb_session_state(app->debugger) == TB_SESSION_RUNNING ? "awaiting stop" : "pending", *b->source ? b->source : b->location);
                 setup_text(&text, line);
-                const TbBreakRestoration *progress = tb_break_restoration(tb_session_breakpoints(app->debugger), b->id);
+                const TbBreakRestoration_t *progress = tb_break_restoration(tb_session_breakpoints(app->debugger), b->id);
                 if (progress && *progress->reason) { setup_text(&text, progress->reason); }
                 if (progress && progress->state == TB_RESTORE_ADDRESS) { setup_text(&text, "Retry explicitly approves this address in the current session only."); }
                 setup_entry_actions(&text, progress && progress->state != TB_RESTORE_DRAFT && progress->state != TB_RESTORE_UNCERTAIN ? 14 : 0, 11, (int)i); ++entries;
@@ -3681,13 +3681,13 @@ static void setup_activate(App *app, int action, int entry)
     if (action == 15) { (void)tb_break_reconcile(tb_session_breakpoints(app->debugger)); return; }
     if (action == 20) { tb_break_refresh(tb_session_breakpoints(app->debugger)); return; }
     if (action == 21) {
-        TbBreakpoints *b = tb_session_breakpoints(app->debugger); const TbBreakDefinition *d = entry >= 0 ? tb_break_definition(b, (size_t)entry) : NULL;
+        TbBreakpoints_t *b = tb_session_breakpoints(app->debugger); const TbBreakDefinition_t *d = entry >= 0 ? tb_break_definition(b, (size_t)entry) : NULL;
         if (d && tb_break_discard_intent(b, d->identity)) { (void)setup_capture(app); status(app, "Entire managed definition excluded from the unsaved draft; GDB unchanged."); }
         else { status(app, "Wait for a complete current breakpoint listing before exclusion."); }
         return;
     }
     if (action == 16) {
-        TbBreakpoints *b = tb_session_breakpoints(app->debugger); const TbBreakpoint *row = entry >= 0 ? tb_break_row(b, (size_t)entry) : NULL;
+        TbBreakpoints_t *b = tb_session_breakpoints(app->debugger); const TbBreakpoint_t *row = entry >= 0 ? tb_break_row(b, (size_t)entry) : NULL;
         if (!row || !tb_break_importable(b, row->id, &app->import_definition) || (tb_break_owned(b, row->id) && !tb_break_managed(b, row->id))) { status(app, "Refresh the complete breakpoint listing before review."); return; }
         (void)snprintf(app->import_backend, sizeof app->import_backend, "%s", row->id); app->import_revision = tb_break_revision(b);
         app->import_hardware = app->import_ignore = -1; app->import_definition.ignore = row->ignore;
@@ -3696,7 +3696,7 @@ static void setup_activate(App *app, int action, int entry)
     if (action == 17) { app->import_hardware = app->import_hardware < 0 ? 0 : !app->import_hardware; return; }
     if (action == 18) { app->import_ignore = app->import_ignore < 0 ? 0 : !app->import_ignore; return; }
     if (action == 19) {
-        TbBreakpoints *b = tb_session_breakpoints(app->debugger); TbBreakDefinition current;
+        TbBreakpoints_t *b = tb_session_breakpoints(app->debugger); TbBreakDefinition_t current;
         if (app->import_hardware < 0 || app->import_ignore < 0) { status(app, "Choose hardware and ignore-count intent before inclusion."); return; }
         if (tb_setup_restore_active(app->restoration) || app->import_revision != tb_break_revision(b) || !tb_break_importable(b, app->import_backend, &current)) { status(app, "Breakpoint metadata changed; refresh and review again."); return; }
         app->import_definition.hardware = app->import_hardware != 0; app->import_definition.ignore_set = app->import_ignore != 0;
@@ -4526,7 +4526,7 @@ static void activate(App *app, Control control)
     case VARIABLE_OPEN:
         app->variable_pane = control.pane; page(app, VARIABLE_MENU); break;
     case DATA_WATCH_OPTION:
-        if (control.value == 0) { app->watch_mode = (TbWatchMode)((app->watch_mode + 1) % TB_WATCH_MODES); }
+        if (control.value == 0) { app->watch_mode = (TbWatchMode_e)((app->watch_mode + 1) % TB_WATCH_MODES); }
         else if (app->watch_address) { app->watch_width = app->watch_width == 8 ? 1 : app->watch_width * 2; }
         break;
     case VARIABLE_ACTION: {
@@ -4819,9 +4819,9 @@ static void activate(App *app, Control control)
     case BREAK_OPEN:
         app->break_pane = control.pane; page(app, BREAK_MENU); break;
     case BREAK_ACTION: {
-        TbBreakpoints *b = tb_session_breakpoints(app->debugger);
+        TbBreakpoints_t *b = tb_session_breakpoints(app->debugger);
         TbDemoPane *pane = &app->demo.panes[app->break_pane];
-        const TbBreakpoint *bp = tb_break_row(b, (size_t)pane->row[TB_BREAKPOINTS]);
+        const TbBreakpoint_t *bp = tb_break_row(b, (size_t)pane->row[TB_BREAKPOINTS]);
         app->break_action = control.value;
         if (control.value == 7) { data_watch_open(app, "", false, 1); break; }
         if (control.value == 5) { app->break_hardware = !app->break_hardware; break; }
@@ -4866,8 +4866,8 @@ static void activate(App *app, Control control)
             status(app, okay ? tb_code_message(code) : "Stop the target and wait for its instruction address.");
             page_result(app, WORKSPACE);
         } else if (app->code_action == CODE_RUN_TO) {
-            char location[8192]; const TbBreakpoint *existing = NULL;
-            TbBreakLocation where;
+            char location[8192]; const TbBreakpoint_t *existing = NULL;
+            TbBreakLocation_t where;
             bool okay = selected_location(app, location, sizeof location, &existing, &where) && tb_session_run_at(app->debugger, where);
             status(app, okay ? "Run to Selected queued; an intervening stop cancels it." : "Run to Selected needs a selected code row and fresh stopped context."); page_result(app, WORKSPACE);
         } else if (app->code_action == CODE_RAW) {
@@ -4973,7 +4973,7 @@ static void activate(App *app, Control control)
                 context->generation.stop != app->watch_context.stop || context->generation.context != app->watch_context.context) {
                 status(app, "Context changed; cancel and reopen data-watchpoint creation."); break;
             }
-            TbBreakpoints *b = tb_session_breakpoints(app->debugger); bool okay;
+            TbBreakpoints_t *b = tb_session_breakpoints(app->debugger); bool okay;
             if (app->watch_address) {
                 char *end; errno = 0;
                 unsigned long long address = strtoull(input, &end, 0);
@@ -5056,7 +5056,7 @@ static void activate(App *app, Control control)
             break;
         }
         if (app->page == BREAK_INPUT) {
-            TbBreakpoints *b = tb_session_breakpoints(app->debugger);
+            TbBreakpoints_t *b = tb_session_breakpoints(app->debugger);
             bool okay = app->break_action == 0 ? tb_break_add(b, input, app->break_hardware) :
                         app->break_action == 3 ? tb_break_condition(b, app->break_id, input) : tb_break_ignore(b, app->break_id, input);
             status(app, okay ? "Breakpoint change queued; GDB validates the request." : tb_break_message(b));

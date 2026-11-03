@@ -42,7 +42,7 @@ int main(int argc, char **argv)
     tb_registers_refresh(r); ready(n, stop - 1); CHECK(instruction->changed);
     /* GDB normally ends its backtrace at main. Establish an actual caller
      * instead of assuming libc startup frames are exposed. */
-    TbBreakpoints *breakpoints = tb_native_breakpoints(n);
+    TbBreakpoints_t *breakpoints = tb_native_breakpoints(n);
     end = tb_gdb_now_ms() + 5000;
     while ((!tb_break_ready(breakpoints) || tb_break_busy(breakpoints)) && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
     CHECK(tb_break_ready(breakpoints) && !tb_break_busy(breakpoints));

@@ -3,7 +3,7 @@
 #include "../support/check.h"
 #include <string.h>
 
-static TbBreakpoints *model;
+static TbBreakpoints_t *model;
 static unsigned replies;
 static void emit(void *unused, const TbGdbEvent_t *event)
 {
@@ -47,10 +47,10 @@ int main(int argc, char **argv)
     CHECK(!tb_break_watch_address(model, UINT64_MAX, 8, TB_WATCH_CHANGE));
     CHECK(!tb_break_watch_address(model, 0x20000000, 3, TB_WATCH_CHANGE));
     for (int i = 0; i < TB_WATCH_MODES; ++i) {
-        CHECK(tb_break_watch(model, "watched", (TbWatchMode)i)); CHECK(tb_break_busy(model)); idle(gdb);
+        CHECK(tb_break_watch(model, "watched", (TbWatchMode_e)i)); CHECK(tb_break_busy(model)); idle(gdb);
         CHECK(tb_break_count(model) == 2);
-        const TbBreakpoint *row = tb_break_row(model, 1);
-        CHECK(row->watchpoint && row->hardware && row->watch_mode == (TbWatchMode)i && strcmp(row->location, "watched") == 0);
+        const TbBreakpoint_t *row = tb_break_row(model, 1);
+        CHECK(row->watchpoint && row->hardware && row->watch_mode == (TbWatchMode_e)i && strcmp(row->location, "watched") == 0);
         command(gdb, "-data-hit", NULL); idle(gdb); CHECK(strstr(tb_break_message(model), "17 -> 20"));
         CHECK(tb_break_remove(model, row->id)); idle(gdb); CHECK(tb_break_count(model) == 1);
     }

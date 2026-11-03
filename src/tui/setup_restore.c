@@ -40,12 +40,12 @@ void tb_setup_restore_cancel(TbSetupRestore *r, TbSession *s)
     r->phase = RESTORE_CANCEL_REQUESTED; r->active = true;
     tb_code_cancel_settings(tb_session_code(s)); tb_break_restore_cancel(tb_session_breakpoints(s)); tb_session_setup_interlock(s, true, false);
 }
-static uint64_t failed_enabled(const TbSetupCapture *c, const TbBreakpoints *breakpoints)
+static uint64_t failed_enabled(const TbSetupCapture *c, const TbBreakpoints_t *breakpoints)
 {
     uint64_t hash = 1469598103934665603ULL; bool any = false;
     for (size_t i = 0; i < tb_setup_capture_retained(c); ++i) {
         const TbSetupBreak *b = tb_setup_capture_retained_break(c, i);
-        const TbBreakRestoration *progress = tb_break_restoration(breakpoints, b->id);
+        const TbBreakRestoration_t *progress = tb_break_restoration(breakpoints, b->id);
         if (!b->enabled || (progress && progress->state == TB_RESTORE_DRAFT)) { continue; }
         if (progress) {
             hash ^= progress->state; hash *= 1099511628211ULL;
@@ -59,7 +59,7 @@ static uint64_t failed_enabled(const TbSetupCapture *c, const TbBreakpoints *bre
 void tb_setup_restore_pump(TbSetupRestore *r, TbSetupCapture *c, TbSession *s)
 {
     if (!r) { return; }
-    TbBreakpoints *breakpoints = tb_session_breakpoints(s);
+    TbBreakpoints_t *breakpoints = tb_session_breakpoints(s);
     if (r->phase == RESTORE_NONE) {
         r->active = tb_break_restoration_active(breakpoints); tb_session_setup_interlock(s, r->active, false); return;
     }
@@ -103,7 +103,7 @@ void tb_setup_restore_pump(TbSetupRestore *r, TbSetupCapture *c, TbSession *s)
     }
     for (size_t i = 0; i < tb_setup_capture_retained(c);) {
         const TbSetupBreak *d = tb_setup_capture_retained_break(c, i);
-        const TbBreakRestoration *progress = tb_break_restoration(breakpoints, d->id);
+        const TbBreakRestoration_t *progress = tb_break_restoration(breakpoints, d->id);
         if (progress && progress->state == TB_RESTORE_INSTALLED && tb_setup_capture_adopt_break(c, d->id, progress->identity)) { continue; }
         ++i;
     }

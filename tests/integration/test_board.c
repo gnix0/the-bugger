@@ -24,7 +24,7 @@ static bool logged(const char *text)
 static void cleanup(void)
 {
     if (!session) { return; }
-    TbBreakpoints *b = tb_session_breakpoints(session);
+    TbBreakpoints_t *b = tb_session_breakpoints(session);
     if (tb_session_state(session) == TB_SESSION_RUNNING) {
         (void)tb_session_halt(session);
         uint64_t until = tb_gdb_now_ms() + 2000;
@@ -63,15 +63,15 @@ static void stop(uint64_t previous)
 }
 static void breaks(void)
 {
-    TbBreakpoints *b = tb_session_breakpoints(session); uint64_t end = tb_gdb_now_ms() + 5000;
+    TbBreakpoints_t *b = tb_session_breakpoints(session); uint64_t end = tb_gdb_now_ms() + 5000;
     while ((!tb_break_ready(b) || tb_break_busy(b)) && tb_gdb_now_ms() < end) { pump(); }
     CHECK(tb_break_ready(b) && !tb_break_busy(b));
 }
 static void identifier(char out[32], bool watch)
 {
-    TbBreakpoints *b = tb_session_breakpoints(session);
+    TbBreakpoints_t *b = tb_session_breakpoints(session);
     for (size_t i = 0; i < tb_break_count(b); ++i) {
-        const TbBreakpoint *row = tb_break_row(b, i);
+        const TbBreakpoint_t *row = tb_break_row(b, i);
         if (row->watchpoint == watch && strstr(row->location, watch ? "fixture_counter" : "fixture_checkpoint")) {
             CHECK(row->hardware && row->enabled && !row->pending);
             (void)snprintf(out, 32, "%s", row->id); return;
@@ -184,9 +184,9 @@ int main(int argc, char **argv)
            tb_session_capabilities(session)->address_bits, tb_session_capabilities(session)->byte_order);
     CHECK(strstr(tb_session_capabilities(session)->architecture, argv[4]));
     CHECK(!tb_session_capabilities(session)->server_owned && tb_session_target_pid(session) == 0);
-    breaks(); TbBreakpoints *b = tb_session_breakpoints(session);
+    breaks(); TbBreakpoints_t *b = tb_session_breakpoints(session);
     for (size_t i = 0; i < tb_break_count(b); ++i) {
-        const TbBreakpoint *row = tb_break_row(b, i);
+        const TbBreakpoint_t *row = tb_break_row(b, i);
         CHECK(!strstr(row->location, "fixture_checkpoint") && !strstr(row->location, "fixture_counter"));
     }
     CHECK(tb_break_add(b, "fixture_checkpoint", true)); breaks(); identifier(owned_break, false);
@@ -234,7 +234,7 @@ int main(int argc, char **argv)
     CHECK(logged("watchpoint-trigger"));
     bool hit = false;
     for (size_t i = 0; i < tb_break_count(b); ++i) {
-        const TbBreakpoint *row = tb_break_row(b, i);
+        const TbBreakpoint_t *row = tb_break_row(b, i);
         if (!strcmp(row->id, owned_watch)) { hit = row->hits > 0; }
     }
     CHECK(hit);

@@ -98,12 +98,12 @@ bool tb_session_attached(const TbSession *native);
 bool tb_session_active(const TbSession *native);
 TbContext_t *tb_session_context(TbSession *native);
 TbCode *tb_session_code(TbSession *native);
-TbBreakpoints *tb_session_breakpoints(TbSession *native);
+TbBreakpoints_t *tb_session_breakpoints(TbSession *native);
 TbRegisters_t *tb_session_registers(TbSession *native);
 TbMemory *tb_session_memory(TbSession *native);
 TbStack_t *tb_session_stack(TbSession *session);
 TbVariables *tb_session_variables(TbSession *native);
 bool tb_session_run_to(TbSession *native, const char *location);
-bool tb_session_run_at(TbSession *native, TbBreakLocation location);
+bool tb_session_run_at(TbSession *native, TbBreakLocation_t location);
 
 #endif
