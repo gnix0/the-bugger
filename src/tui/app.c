@@ -150,7 +150,7 @@ typedef struct {
     RangeAction memory_range_input;
     TbSessionRamReview ram_review;
     int ram_offset;
-    TbMemoryBackend mmio_review;
+    TbMemoryBackend_t mmio_review;
     TbCodeImageReview_t image_review;
     char memory_input_error[192];
     wchar_t memory_input[TB_MAX_PANES][FIELD_SIZE];
@@ -1119,7 +1119,7 @@ static TbAssemblyColumns assembly_columns(const TbCodeView_t *view)
     return columns;
 }
 
-static void variable_text(const TbVariable *row, char *text, size_t capacity)
+static void variable_text(const TbVariable_t *row, char *text, size_t capacity)
 {
     char state = (char)(row->changed && row->fresh ? '*' : !row->available ? '!' : !row->fresh ? '?' : ' ');
     char tree = (char)(row->expanded ? '-' : row->children ? '+' : ' ');
@@ -1738,8 +1738,8 @@ static void draw_native_pane(App *app, int index, TbRect_t rect)
     TbView view = pane->tabs[pane->active];
     if (view == TB_STACK) { draw_stack_pane(app, index, rect); return; }
     if (view == TB_LOCALS || view == TB_WATCHES) {
-        TbVariables *v = tb_session_variables(app->debugger);
-        TbVariableView kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
+        TbVariables_t *v = tb_session_variables(app->debugger);
+        TbVariableView_e kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
         const char *error = tb_variables_error(v, kind);
         bool stale = tb_variables_stale(v, kind);
         char header[160]; const TbContextSnapshot_t *s = tb_context_snapshot(tb_session_context(app->debugger));
@@ -1753,7 +1753,7 @@ static void draw_native_pane(App *app, int index, TbRect_t rect)
         tb_variables_want(v, kind, (size_t)scroll.offset, (size_t)scroll.visible);
         for (int row = 0; row < scroll.visible && row + scroll.offset < scroll.total; ++row) {
             int item = row + scroll.offset;
-            const TbVariable *value = tb_variables_row(v, kind, (size_t)item); char text[1500];
+            const TbVariable_t *value = tb_variables_row(v, kind, (size_t)item); char text[1500];
             variable_text(value, text, sizeof text);
             size_t offset = (size_t)app->horizontal[index][view]; if (offset > strlen(text)) { offset = strlen(text); }
             TbStyle style = !value->fresh || s->stale || tb_session_state(app->debugger) != TB_SESSION_STOPPED ? TB_MUTED : !value->available ? TB_ORANGE : value->changed ? TB_YELLOW : TB_PANEL;
@@ -1791,7 +1791,7 @@ static void draw_native_pane(App *app, int index, TbRect_t rect)
         tb_text(rect.y + rect.h - 1, rect.x + 22, rect.w - 23, TB_MUTED, 0, "All (ungrouped)"); return;
     }
     if (view == TB_MEMORY) {
-        TbMemory *memory = tb_session_memory(app->debugger); const TbMemoryView *data = tb_memory_view(memory, index);
+        TbMemory_t *memory = tb_session_memory(app->debugger); const TbMemoryView_t *data = tb_memory_view(memory, index);
         int label = rect.w >= 25 ? 8 : 1, field_x = rect.x + label;
         int field_width = rect.w - label - 5;
         tb_text(rect.y + 1, rect.x + 1, label - 1, TB_CYAN, 0, "Address");
@@ -1811,7 +1811,7 @@ static void draw_native_pane(App *app, int index, TbRect_t rect)
             app->command_caret_y = rect.y + 1; app->command_caret_x = x;
         }
         bool stale = tb_memory_stale(memory, index); char header[384];
-        TbMemoryOrder order = tb_memory_get_order(memory);
+        TbMemoryOrder_e order = tb_memory_get_order(memory);
         (void)snprintf(header, sizeof header, "%s | %uB groups | %s | %s%+lld | Read %uB",
                        data->pending ? "READING" : !data->configured ? "MEMORY" : stale ? "STALE" : "LIVE",
                        data->grouping, order == TB_MEMORY_LITTLE ? "LE" : order == TB_MEMORY_BIG ? "BE" : "byte order unknown",
@@ -2439,7 +2439,7 @@ static void draw_input(App *app)
     bool data_watch = app->page == DATA_WATCH_INPUT;
     bool memory_length = memory && app->memory_length_input;
     const char *bp_label = app->break_action == 0 ? "Add code breakpoint" : app->break_action == 3 ? "Breakpoint condition (empty clears)" : "Breakpoint ignore count";
-    TbMemory *memory_model = memory ? tb_session_memory(app->debugger) : NULL;
+    TbMemory_t *memory_model = memory ? tb_session_memory(app->debugger) : NULL;
     bool editing_memory = memory && memory_model && app->memory_edit_input && !memory_length;
     draw_header(app, data_watch ? "Add hardware data watchpoint" : watch ? "Add watch expression" :
                 editing_memory ? "Review ordinary RAM edit" : memory_length ? "Memory byte count" :
@@ -2524,7 +2524,7 @@ static void draw_memory_menu(App *app)
     TbRect_t card = menu_card(88, 17);
     int left = card.x + 2, top = card.y, width = card.w - 4;
     draw_header(app, "Memory inspection options");
-    const TbMemoryView *v = tb_memory_view(tb_session_memory(app->debugger), app->memory_pane);
+    const TbMemoryView_t *v = tb_memory_view(tb_session_memory(app->debugger), app->memory_pane);
     bool compact = card.h < 15;
     int actions_y = top + (compact ? 2 : 5);
     char text[512];
@@ -2551,7 +2551,7 @@ static void draw_memory_menu(App *app)
 
 static void draw_memory_ranges(App *app)
 {
-    TbMemory *m = tb_session_memory(app->debugger);
+    TbMemory_t *m = tb_session_memory(app->debugger);
     TbRect_t card = menu_card(100, app->page == MEMORY_RANGES ? 22 : 17);
     int left = card.x + 2, width = card.w - 4, top = card.y;
     char text[2048], risks[640];
@@ -2564,7 +2564,7 @@ static void draw_memory_ranges(App *app)
         if (app->memory_range_page > (TB_MEMORY_RANGES - 1) / rows) { app->memory_range_page = (TB_MEMORY_RANGES - 1) / rows; }
         for (int row = 0; row < rows; ++row) {
             unsigned slot = (unsigned)(app->memory_range_page * rows + row);
-            const TbMemoryRange *r = tb_memory_range(m, app->memory_pane, slot);
+            const TbMemoryRange_t *r = tb_memory_range(m, app->memory_pane, slot);
             if (!r) { break; }
             if (!r->used) { continue; }
             char policy[40]; (void)snprintf(policy, sizeof policy, r->policy == TB_MEMORY_MMIO ? "MMIO %u-bit" : "ordinary bytes", r->width);
@@ -2580,14 +2580,14 @@ static void draw_memory_ranges(App *app)
         if ((app->memory_range_page + 1) * rows < TB_MEMORY_RANGES) { button(app, top + card.h - 1, left + 26, 12, "Next", MEMORY_RANGE_ACTION, RANGE_NEXT, app->memory_pane); }
         return;
     }
-    const TbMemoryRange *r = tb_memory_range(m, app->memory_pane, app->memory_range);
+    const TbMemoryRange_t *r = tb_memory_range(m, app->memory_pane, app->memory_range);
     if (!r || !r->used) { return; }
     tb_code_safe(risks, sizeof risks, r->risks, strlen(r->risks));
     draw_header(app, app->page == MMIO_SETUP ? "Confirm documented MMIO setup?" : app->page == MEMORY_CONSENT ? "Authorize temporary Memory range?" : "Inspect temporary Memory range");
     if (app->page == MEMORY_CONSENT || app->page == MMIO_SETUP) {
         char access[40]; (void)snprintf(access, sizeof access, r->policy == TB_MEMORY_MMIO ? "%u-bit address unit" : "ordinary bytes", r->width);
         if (app->page == MMIO_SETUP) {
-            const TbMemoryBackend *b = &app->mmio_review;
+            const TbMemoryBackend_t *b = &app->mmio_review;
             (void)snprintf(text, sizeof text,
                 "USER CONFIRMATION, not automatic verification. Confirm only if this exact physically validated setup matches yours: "
                 "target %s; device %s; firmware %s; server configuration %s; configuration revision %llu. "
@@ -2655,9 +2655,9 @@ static void draw_variable_menu(App *app)
     int actions_y = top + (compact ? 2 : 4);
     TbDemoPane *pane = &app->demo.panes[app->variable_pane];
     TbView view = pane->tabs[pane->active];
-    TbVariableView kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
-    TbVariables *v = tb_session_variables(app->debugger);
-    const TbVariable *row = tb_variables_row(v, kind, (size_t)pane->row[view]);
+    TbVariableView_e kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
+    TbVariables_t *v = tb_session_variables(app->debugger);
+    const TbVariable_t *row = tb_variables_row(v, kind, (size_t)pane->row[view]);
     char summary[1000];
     if (row) {
         (void)snprintf(summary, sizeof summary, "%.255s | %.191s | %s | children %u, page %u | %s",
@@ -2688,11 +2688,11 @@ static void draw_variable_edit(App *app)
 {
     TbRect_t card = menu_card(88, 14);
     int left = card.x + 2, top = card.y, width = card.w - 4;
-    TbVariables *v = tb_session_variables(app->debugger);
+    TbVariables_t *v = tb_session_variables(app->debugger);
     TbDemoPane *pane = &app->demo.panes[app->variable_pane];
     TbView view = pane->tabs[pane->active];
-    TbVariableView kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
-    const TbVariable *row = tb_variables_row(v, kind, (size_t)pane->row[view]);
+    TbVariableView_e kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
+    const TbVariable_t *row = tb_variables_row(v, kind, (size_t)pane->row[view]);
     char target[512];
     if (row) {
         (void)snprintf(target, sizeof target, "%s | %s", row->name, row->type);
@@ -3579,9 +3579,9 @@ static void draw_setup(App *app)
                     setup_entry_actions(&text, 9, 10, pane * TB_CODE_TABS + (int)tab); ++entries;
                 }
             }
-            TbVariables *variables = tb_session_variables(app->debugger);
+            TbVariables_t *variables = tb_session_variables(app->debugger);
             for (size_t i = 0; i < tb_variables_definitions(variables); ++i) {
-                TbWatchDefinition w; if (!tb_variables_definition(variables, i, &w) || tb_memory_expression(w.expression)) { continue; }
+                TbWatchDefinition_t w; if (!tb_variables_definition(variables, i, &w) || tb_memory_expression(w.expression)) { continue; }
                 (void)snprintf(line, sizeof line, "Watch: %.200s | unsupported saved expression", w.expression); setup_text(&text, line);
                 setup_entry_actions(&text, 0, 13, (int)i); ++entries;
             }
@@ -3667,7 +3667,7 @@ static void setup_activate(App *app, int action, int entry)
         return;
     }
     if (action == 13 && !tb_setup_restore_active(app->restoration)) {
-        TbVariables *variables = tb_session_variables(app->debugger); TbWatchDefinition w;
+        TbVariables_t *variables = tb_session_variables(app->debugger); TbWatchDefinition_t w;
         if (entry >= 0 && tb_variables_definition(variables, (size_t)entry, &w)) {
             (void)tb_variables_remove_definition(variables, w.identity); (void)setup_capture(app);
         }
@@ -4532,7 +4532,7 @@ static void activate(App *app, Control control)
     case VARIABLE_ACTION: {
         app->variable_pane = control.pane;
         if (app->page == VARIABLE_EDIT) {
-            TbVariables *v = tb_session_variables(app->debugger);
+            TbVariables_t *v = tb_session_variables(app->debugger);
             if (control.value == 9) {
                 tb_variables_edit_cancel(v); page(app, WORKSPACE);
             } else if (control.value == 8) {
@@ -4554,15 +4554,15 @@ static void activate(App *app, Control control)
             break;
         }
         TbDemoPane *pane = &app->demo.panes[control.pane]; TbView view = pane->tabs[pane->active];
-        TbVariableView kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
-        TbVariables *v = tb_session_variables(app->debugger); size_t row = (size_t)pane->row[view];
+        TbVariableView_e kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
+        TbVariables_t *v = tb_session_variables(app->debugger); size_t row = (size_t)pane->row[view];
         if (control.value == 11) {
             bool reconciled = tb_variables_edit_reconcile(v);
             status(app, reconciled ? "Write reconciled; review a new edit." : "Read the original value in its original stopped thread/frame first; otherwise reconnect.");
             break;
         }
         if (control.value == 10) {
-            const TbVariable *selected = tb_variables_row(v, kind, row);
+            const TbVariable_t *selected = tb_variables_row(v, kind, row);
             if (!selected || !tb_variables_edit_begin(v, kind, row)) {
                 status(app, tb_variables_edit_error(v));
             } else {
@@ -4574,7 +4574,7 @@ static void activate(App *app, Control control)
             break;
         }
         if (control.value == 7) {
-            const TbVariable *selected = tb_variables_row(v, kind, row);
+            const TbVariable_t *selected = tb_variables_row(v, kind, row);
             /* Backend child display names are not trustworthy C paths. */
             data_watch_open(app, selected && !selected->depth ? selected->name : "", false, 1); break;
         }
@@ -4589,8 +4589,8 @@ static void activate(App *app, Control control)
         if (okay) { page_result(app, WORKSPACE); } break;
     }
     case MEMORY_ACTION: {
-        TbMemory *m = tb_session_memory(app->debugger); int id = control.pane;
-        const TbMemoryView *v = tb_memory_view(m, id); bool okay = true;
+        TbMemory_t *m = tb_session_memory(app->debugger); int id = control.pane;
+        const TbMemoryView_t *v = tb_memory_view(m, id); bool okay = true;
         app->memory_pane = id;
         if (control.value == 11) {
             bool reconciled = tb_memory_edit_reconcile(m);
@@ -4643,7 +4643,7 @@ static void activate(App *app, Control control)
         }
         if (control.value == 6) { page(app, MEMORY_MENU); break; }
         if (v->mmio && (control.value == 1 || control.value == 10)) {
-            uint64_t address; TbMemoryRegister sample;
+            uint64_t address; TbMemoryRegister_t sample;
             size_t row = (size_t)app->demo.panes[id].row[TB_MEMORY];
             if (!tb_memory_unit_address(m, id, row, &address)) { status(app, "Select a declared MMIO unit first."); break; }
             if (control.value == 1 && !tb_memory_register_sample(m, id, address, v->unit_width, &sample)) {
@@ -4679,7 +4679,7 @@ static void activate(App *app, Control control)
     case MEMORY_RANGE_PICK:
         app->memory_range = (unsigned)control.value; page(app, MEMORY_RANGE); break;
     case MEMORY_RANGE_ACTION: {
-        TbMemory *m = tb_session_memory(app->debugger); int id = app->memory_pane;
+        TbMemory_t *m = tb_session_memory(app->debugger); int id = app->memory_pane;
         RangeAction action = (RangeAction)control.value;
         if (action == RANGE_PREVIOUS || action == RANGE_NEXT) {
             app->memory_range_page += action == RANGE_NEXT ? 1 : -1; break;
@@ -4688,13 +4688,13 @@ static void activate(App *app, Control control)
             unsigned slot = 0;
             while (slot < TB_MEMORY_RANGES && tb_memory_range(m, id, slot)->used) { ++slot; }
             if (slot == TB_MEMORY_RANGES) { status(app, "All 16 range slots are used; inspect and edit an existing range."); break; }
-            const TbMemoryView *v = tb_memory_view(m, id);
+            const TbMemoryView_t *v = tb_memory_view(m, id);
             uint64_t begin = v->data_size && v->address < UINT64_MAX ? v->address : 0;
             uint64_t end = begin < UINT64_MAX - v->length ? begin + v->length : UINT64_MAX;
             if (!tb_memory_range_set(m, id, slot, begin, end, TB_MEMORY_ORDINARY, 0, "")) { status(app, "Range bounds are unavailable for this target."); break; }
             app->memory_range = slot; page(app, MEMORY_RANGE); status(app, "Draft added without permission or target reads. Review its bounds and policy."); break;
         }
-        const TbMemoryRange *r = tb_memory_range(m, id, app->memory_range);
+        const TbMemoryRange_t *r = tb_memory_range(m, id, app->memory_range);
         if (!r || !r->used) { break; }
         if (action == RANGE_SETUP) {
             if (!tb_session_mmio_review(app->debugger, &app->mmio_review)) {
@@ -4734,7 +4734,7 @@ static void activate(App *app, Control control)
             break;
         }
         if (action == RANGE_POLICY || action == RANGE_WIDTH) {
-            TbMemoryPolicy policy = action == RANGE_POLICY ? r->policy == TB_MEMORY_MMIO ? TB_MEMORY_ORDINARY : TB_MEMORY_MMIO : r->policy;
+            TbMemoryPolicy_e policy = action == RANGE_POLICY ? r->policy == TB_MEMORY_MMIO ? TB_MEMORY_ORDINARY : TB_MEMORY_MMIO : r->policy;
             unsigned width = policy == TB_MEMORY_ORDINARY ? 0 : action == RANGE_POLICY ? 32 : r->width == 8 ? 16 : r->width == 16 ? 32 : 8;
             if (action == RANGE_WIDTH && policy == TB_MEMORY_ORDINARY) { break; }
             if (tb_memory_range_set(m, id, app->memory_range, r->begin, r->end, policy, width, r->risks)) {
@@ -4936,7 +4936,7 @@ static void activate(App *app, Control control)
         char input[FIELD_SIZE * 4];
         if (!field_utf8(app->input, input, sizeof input)) { status(app, "Invalid text encoding."); break; }
         if (app->page == VARIABLE_EDIT) {
-            TbVariables *v = tb_session_variables(app->debugger);
+            TbVariables_t *v = tb_session_variables(app->debugger);
             if (app->variable_edit_confirm) {
                 activate(app, (Control){.kind = VARIABLE_ACTION, .value = 8, .pane = app->variable_pane});
             } else if (tb_variables_edit_state(v) != TB_VARIABLE_EDIT_READY) {
@@ -4987,14 +4987,14 @@ static void activate(App *app, Control control)
             break;
         }
         if (app->page == WATCH_INPUT) {
-            TbVariables *v = tb_session_variables(app->debugger);
+            TbVariables_t *v = tb_session_variables(app->debugger);
             bool okay = tb_variables_watch(v, input);
             status(app, okay ? "Watch added without a memory read. Select Read to inspect it." : tb_variables_error(v, TB_VARIABLE_WATCHES));
             if (okay) {
                 app->demo.pane = app->variable_pane; tb_demo_view(&app->demo, TB_WATCHES);
                 TbDemoPane *pane = &app->demo.panes[app->variable_pane];
                 for (size_t row = 0; row < tb_variables_count(v, TB_VARIABLE_WATCHES); ++row) {
-                    const TbVariable *value = tb_variables_row(v, TB_VARIABLE_WATCHES, row);
+                    const TbVariable_t *value = tb_variables_row(v, TB_VARIABLE_WATCHES, row);
                     if (!value->depth && strcmp(value->name, input) == 0) { pane->row[TB_WATCHES] = (int)row; }
                 }
                 int height = app->body_height[app->variable_pane]; if (height < 1) { height = 1; }
@@ -5004,8 +5004,8 @@ static void activate(App *app, Control control)
             break;
         }
         if (app->page == MEMORY_RANGE_INPUT) {
-            TbMemory *m = tb_session_memory(app->debugger);
-            const TbMemoryRange *r = tb_memory_range(m, app->memory_pane, app->memory_range);
+            TbMemory_t *m = tb_session_memory(app->debugger);
+            const TbMemoryRange_t *r = tb_memory_range(m, app->memory_pane, app->memory_range);
             if (!r) { break; }
             uint64_t address = 0; bool symbol = false;
             bool risks = app->memory_range_input == RANGE_RISKS;
@@ -5018,7 +5018,7 @@ static void activate(App *app, Control control)
             page(app, MEMORY_RANGE); status(app, "Range edited; permission revoked. No target read."); break;
         }
         if (app->page == MEMORY_INPUT) {
-            TbMemory *m = tb_session_memory(app->debugger); int id = app->memory_pane;
+            TbMemory_t *m = tb_session_memory(app->debugger); int id = app->memory_pane;
             if (app->memory_edit_input) {
                 if (!app->memory_edit_confirm) {
                     if (tb_memory_edit_state(m) != TB_MEMORY_EDIT_READY) {
@@ -5452,7 +5452,7 @@ static void mouse_event(App *app, MEVENT event)
                 if (target < scroll.total) { pane->row[view] = target; }
                 if (app->live && target < scroll.total) { select_context_row(app, control.pane); }
                 if (app->live && target < scroll.total && view == TB_SOURCE && event.x < control.rect.x + 2) { (void)toggle_breakpoint(app); }
-                const TbVariable *value = view == TB_LOCALS || view == TB_WATCHES ?
+                const TbVariable_t *value = view == TB_LOCALS || view == TB_WATCHES ?
                     tb_variables_row(tb_session_variables(app->debugger),
                                      view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES,
                                      (size_t)target) : NULL;

@@ -29,15 +29,15 @@ struct TbSession {
     TbSessionCapabilities capabilities;
     bool target_connected, remote_metadata_dirty, close_interrupt_sent;
     char endpoint[256];
-    TbMemoryRegion ordinary_regions[TB_MEMORY_REGIONS];
+    TbMemoryRegion_t ordinary_regions[TB_MEMORY_REGIONS];
     size_t ordinary_region_count;
     TbContext_t *context;
     TbCode_t *code;
     TbBreakpoints_t *breakpoints;
     TbRegisters_t *registers;
-    TbMemory *memory;
+    TbMemory_t *memory;
     TbStack_t *stack;
-    TbVariables *variables;
+    TbVariables_t *variables;
     TbSessionState state;
     bool attach, configured, waiting, completed, success, want_close, failed, reply_cancelled;
     bool alive, launch_requested, owned, recovery_sent;
@@ -85,9 +85,9 @@ static void message(TbSession *native, const char *text)
 static void variable_regions(TbSession *session)
 {
     tb_variables_target(session->variables, session->capabilities.octet_addressing);
-    TbVariableRegion regions[TB_MEMORY_REGIONS];
+    TbVariableRegion_t regions[TB_MEMORY_REGIONS];
     for (size_t i = 0; i < session->ordinary_region_count; ++i) {
-        regions[i] = (TbVariableRegion){
+        regions[i] = (TbVariableRegion_t){
             session->ordinary_regions[i].begin, session->ordinary_regions[i].end,
             TB_VARIABLE_ORDINARY, session->ordinary_regions[i].writable
         };
@@ -143,7 +143,7 @@ static void state_set(TbSession *native, TbSessionState state)
     if (native->state != state) { native->state = state; ++native->revision; }
 }
 
-static bool publish_regions(TbSession *s, const TbMemoryRegion *regions, size_t count)
+static bool publish_regions(TbSession *s, const TbMemoryRegion_t *regions, size_t count)
 {
     bool valid = (!count || s->capabilities.address_bits) &&
         tb_memory_regions_valid(regions, count, s->capabilities.address_bits);
@@ -687,10 +687,10 @@ bool tb_session_ram_confirm(TbSession *s, const TbSessionRamReview *review)
     return true;
 }
 
-bool tb_session_mmio_review(TbSession *s, TbMemoryBackend *review)
+bool tb_session_mmio_review(TbSession *s, TbMemoryBackend_t *review)
 {
     if (!review || !mmio_review_ready(s)) { return false; }
-    TbMemoryBackend candidate = {.target = "stm32f4x.cpu", .device = "STM32F446 / Cortex-M4 / ST-LINK",
+    TbMemoryBackend_t candidate = {.target = "stm32f4x.cpu", .device = "STM32F446 / Cortex-M4 / ST-LINK",
         .firmware = "ST-LINK V2J48M35 (API v2)", .configuration = s->mmio_configuration,
         .widths = (unsigned)TB_MEMORY_WIDTH8 | (unsigned)TB_MEMORY_WIDTH16 | (unsigned)TB_MEMORY_WIDTH32};
     int n = snprintf(candidate.server, sizeof candidate.server,
@@ -699,7 +699,7 @@ bool tb_session_mmio_review(TbSession *s, TbMemoryBackend *review)
     *review = candidate; return true;
 }
 
-bool tb_session_mmio_confirm(TbSession *s, const TbMemoryBackend *review)
+bool tb_session_mmio_confirm(TbSession *s, const TbMemoryBackend_t *review)
 {
     return review && mmio_review_ready(s) && review->configuration == s->mmio_configuration &&
            tb_memory_backend_confirm(s->memory, review);
@@ -909,7 +909,7 @@ static void memory_metadata(TbSession *native)
     int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK); unsigned char ident[EI_NIDENT];
     ssize_t bytes = fd >= 0 ? read(fd, ident, sizeof ident) : -1;
     if (fd >= 0) { (void)close(fd); }
-    TbMemoryOrder order = TB_MEMORY_UNKNOWN;
+    TbMemoryOrder_e order = TB_MEMORY_UNKNOWN;
     if (bytes == EI_NIDENT && memcmp(ident, ELFMAG, SELFMAG) == 0 &&
         (ident[EI_CLASS] == ELFCLASS32 || ident[EI_CLASS] == ELFCLASS64)) {
         order = ident[EI_DATA] == ELFDATA2LSB ? TB_MEMORY_LITTLE : ident[EI_DATA] == ELFDATA2MSB ? TB_MEMORY_BIG : TB_MEMORY_UNKNOWN;
@@ -918,7 +918,7 @@ static void memory_metadata(TbSession *native)
     native->capabilities.octet_addressing = bytes == EI_NIDENT && order != TB_MEMORY_UNKNOWN;
     native->capabilities.address_bits = bytes == EI_NIDENT ? (ident[EI_CLASS] == ELFCLASS32 ? 32U : ident[EI_CLASS] == ELFCLASS64 ? 64U : 0U) : 0U;
     tb_memory_order(native->memory, order);
-    TbMemoryRegion regions[TB_MEMORY_REGIONS]; size_t count = 0;
+    TbMemoryRegion_t regions[TB_MEMORY_REGIONS]; size_t count = 0;
     (void)snprintf(path, sizeof path, "/proc/%ld/maps", (long)pid); FILE *maps = fopen(path, "re");
     char row[PATH_MAX + 256]; unsigned budget = 4096;
     bool discard = false, invalid = false;
@@ -927,7 +927,7 @@ static void memory_metadata(TbSession *native)
         bool complete = strchr(row, '\n') != NULL;
         if (discard) { discard = !complete; continue; }
         if (!complete) { discard = true; continue; }
-        TbMemoryRegion region;
+        TbMemoryRegion_t region;
         if (tb_native_memory_region(row, &region)) {
             if (count == TB_MEMORY_REGIONS) { invalid = true; break; }
             regions[count++] = region;
@@ -1090,8 +1090,8 @@ const char *tb_session_state_name(const TbSession *native)
 const char *tb_session_message(const TbSession *native) { return native->message; }
 uint64_t tb_session_revision(const TbSession *native) { return native->revision + tb_context_revision(native->context) + tb_code_revision(native->code) + tb_break_revision(native->breakpoints) + tb_registers_revision(native->registers) + tb_memory_revision(native->memory) + tb_stack_revision(native->stack) + tb_variables_revision(native->variables); }
 TbRegisters_t *tb_session_registers(TbSession *native) { return native->registers; }
-TbMemory *tb_session_memory(TbSession *native) { return native->memory; }
-TbVariables *tb_session_variables(TbSession *native) { return native->variables; }
+TbMemory_t *tb_session_memory(TbSession *native) { return native->memory; }
+TbVariables_t *tb_session_variables(TbSession *native) { return native->variables; }
 size_t tb_session_log_count(const TbSession *native) { return native->count; }
 const char *tb_session_log_line(const TbSession *native, size_t row) { return row < native->count ? native->logs[(native->first + row) % TB_SESSION_LOG_LINES] : ""; }
 pid_t tb_session_target_pid(const TbSession *native) { return native->target_pid; }
@@ -1172,7 +1172,7 @@ static bool remote_image(TbSession *session)
     ssize_t n = fd >= 0 ? read(fd, header, sizeof header) : -1;
     if (fd >= 0) { (void)close(fd); }
     if (n != sizeof header || memcmp(header, ELFMAG, SELFMAG) != 0) { return false; }
-    TbMemoryOrder order = header[EI_DATA] == ELFDATA2LSB ? TB_MEMORY_LITTLE :
+    TbMemoryOrder_e order = header[EI_DATA] == ELFDATA2LSB ? TB_MEMORY_LITTLE :
                           header[EI_DATA] == ELFDATA2MSB ? TB_MEMORY_BIG : TB_MEMORY_UNKNOWN;
     unsigned bits = header[EI_CLASS] == ELFCLASS32 ? 32 : header[EI_CLASS] == ELFCLASS64 ? 64 : 0;
     unsigned machine = order == TB_MEMORY_LITTLE ? (unsigned)header[18] + 256U * header[19] : 256U * header[18] + header[19];

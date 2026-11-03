@@ -4,11 +4,11 @@
 
 static void pump(TbNative *n)
 {
-    TbVariables *v = tb_native_variables(n);
+    TbVariables_t *v = tb_native_variables(n);
     tb_variables_begin(v); tb_variables_want(v, TB_VARIABLE_LOCALS, 0, TB_VARIABLE_NODES);
     tb_variables_want(v, TB_VARIABLE_WATCHES, 0, TB_VARIABLE_NODES); tb_native_pump(n, 2);
 }
-static size_t find(TbVariables *v, TbVariableView view, const char *name)
+static size_t find(TbVariables_t *v, TbVariableView_e view, const char *name)
 {
     for (size_t i = 0; i < tb_variables_count(v, view); ++i) {
         if (strcmp(tb_variables_row(v, view, i)->name, name) == 0) { return i; }
@@ -26,14 +26,14 @@ static void stop(TbNative *n, uint64_t after)
     }
     fprintf(stderr, "variables stop: %s / %s\n", tb_native_message(n), tb_variables_error(tb_native_variables(n), TB_VARIABLE_LOCALS)); CHECK(false);
 }
-static void read_row(TbNative *n, TbVariableView view, size_t row)
+static void read_row(TbNative *n, TbVariableView_e view, size_t row)
 {
-    TbVariables *v = tb_native_variables(n); uint64_t end = tb_gdb_now_ms() + 5000;
+    TbVariables_t *v = tb_native_variables(n); uint64_t end = tb_gdb_now_ms() + 5000;
     bool requested = false;
     while (tb_gdb_now_ms() < end) {
         if (!requested) { requested = tb_variables_read(v, view, row); }
         pump(n);
-        const TbVariable *value = tb_variables_row(v, view, row);
+        const TbVariable_t *value = tb_variables_row(v, view, row);
         if (requested && value && value->fresh) { return; }
         if (requested && *tb_variables_error(v, view)) { break; }
     }
@@ -41,7 +41,7 @@ static void read_row(TbNative *n, TbVariableView view, size_t row)
 }
 static void expand(TbNative *n, size_t row)
 {
-    TbVariables *v = tb_native_variables(n); uint64_t end = tb_gdb_now_ms() + 5000;
+    TbVariables_t *v = tb_native_variables(n); uint64_t end = tb_gdb_now_ms() + 5000;
     CHECK(tb_variables_toggle(v, TB_VARIABLE_WATCHES, row));
     while (tb_gdb_now_ms() < end) {
         pump(n); if (tb_variables_row(v, TB_VARIABLE_WATCHES, row)->expanded) { return; }
@@ -51,13 +51,13 @@ static void expand(TbNative *n, size_t row)
 }
 static void expand_members(TbNative *n, size_t root)
 {
-    TbVariables *v = tb_native_variables(n);
+    TbVariables_t *v = tb_native_variables(n);
     unsigned depth = tb_variables_row(v, TB_VARIABLE_WATCHES, root)->depth;
     expand(n, root);
     /* GDB may place C++ fields below typeless access-group pseudochildren.
      * Expanding those is a separate explicit inspection, just as in the UI. */
     for (size_t row = root + 1; row < tb_variables_count(v, TB_VARIABLE_WATCHES); ++row) {
-        const TbVariable *child = tb_variables_row(v, TB_VARIABLE_WATCHES, row);
+        const TbVariable_t *child = tb_variables_row(v, TB_VARIABLE_WATCHES, row);
         if (child->depth <= depth) { break; }
         if (child->depth != depth + 1 || *child->type || !child->children || child->expanded) { continue; }
         if (!strcmp(child->name, "public") || !strcmp(child->name, "protected") || !strcmp(child->name, "private")) {
@@ -67,11 +67,11 @@ static void expand_members(TbNative *n, size_t root)
 }
 static void require_member(TbNative *n, const char *name)
 {
-    TbVariables *v = tb_native_variables(n);
+    TbVariables_t *v = tb_native_variables(n);
     if (find(v, TB_VARIABLE_WATCHES, name) == SIZE_MAX) {
         fprintf(stderr, "Missing member %s; backend error: %s\n", name, tb_variables_error(v, TB_VARIABLE_WATCHES));
         for (size_t i = 0; i < tb_variables_count(v, TB_VARIABLE_WATCHES) && i < 16; ++i) {
-            const TbVariable *row = tb_variables_row(v, TB_VARIABLE_WATCHES, i);
+            const TbVariable_t *row = tb_variables_row(v, TB_VARIABLE_WATCHES, i);
             fprintf(stderr, "  row %zu depth %u: %s | %s | children %u | %s\n", i, row->depth, row->name, row->type, row->children, row->value);
         }
         CHECK(false);
@@ -84,7 +84,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "M11 native fixture: %s\n", argv[fixture]);
         bool optimized = strstr(argv[fixture], "optimized") != NULL;
         TbNative *n = tb_native_create(); CHECK(n);
-        TbVariables *v = tb_native_variables(n); tb_variables_visible(v, true, true);
+        TbVariables_t *v = tb_native_variables(n); tb_variables_visible(v, true, true);
         TbNativeConfig config = {.gdb = "gdb", .executable = argv[fixture]}; CHECK(tb_native_start(n, &config));
         uint64_t end = tb_gdb_now_ms() + 5000;
         while (tb_native_state(n) != TB_NATIVE_READY && tb_gdb_now_ms() < end) { pump(n); }

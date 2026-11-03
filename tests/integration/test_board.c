@@ -81,9 +81,9 @@ static void identifier(char out[32], bool watch)
 }
 static void memory(int view, const char *expression, size_t size, const char *expected)
 {
-    TbMemory *m = tb_session_memory(session); tb_memory_visible(m, view, true);
+    TbMemory_t *m = tb_session_memory(session); tb_memory_visible(m, view, true);
     CHECK(tb_memory_length(m, view, 16) && tb_memory_address(m, view, expression));
-    const TbMemoryView *v = tb_memory_view(m, view); uint64_t end = tb_gdb_now_ms() + 5000;
+    const TbMemoryView_t *v = tb_memory_view(m, view); uint64_t end = tb_gdb_now_ms() + 5000;
     while ((!v->ready || v->pending) && tb_gdb_now_ms() < end) { pump(); }
     if (!v->ready || v->readable != 16) { fprintf(stderr, "Memory %s: %s\n", expression, v->error); CHECK(false); }
     for (size_t i = 0; i < 16; ++i) { CHECK(v->valid[i]); }
@@ -127,7 +127,7 @@ static void frame(int level)
 }
 static void locals(void)
 {
-    TbVariables *v = tb_session_variables(session); uint64_t end = tb_gdb_now_ms() + 5000;
+    TbVariables_t *v = tb_session_variables(session); uint64_t end = tb_gdb_now_ms() + 5000;
     size_t selected = SIZE_MAX;
     while (selected == SIZE_MAX && tb_gdb_now_ms() < end) {
         pump();
@@ -142,22 +142,22 @@ static void locals(void)
 }
 static void watch_value(void)
 {
-    TbVariables *v = tb_session_variables(session); tb_variables_visible(v, true, true);
+    TbVariables_t *v = tb_session_variables(session); tb_variables_visible(v, true, true);
     CHECK(tb_variables_watch(v, "fixture_sample")); uint64_t end = tb_gdb_now_ms() + 5000;
     bool sent = false;
     while (tb_gdb_now_ms() < end) {
         pump();
         if (!sent) { sent = tb_variables_read(v, TB_VARIABLE_WATCHES, 0); }
-        const TbVariable *row = tb_variables_row(v, TB_VARIABLE_WATCHES, 0);
+        const TbVariable_t *row = tb_variables_row(v, TB_VARIABLE_WATCHES, 0);
         if (sent && row && row->fresh) { CHECK(row->available && row->children >= 3); return; }
     }
     fprintf(stderr, "Variables: %s\n", tb_variables_error(v, TB_VARIABLE_WATCHES)); CHECK(false);
 }
 static uint32_t counter(void)
 {
-    TbMemory *m = tb_session_memory(session); tb_memory_visible(m, 0, true);
+    TbMemory_t *m = tb_session_memory(session); tb_memory_visible(m, 0, true);
     CHECK(tb_memory_length(m, 0, 4) && tb_memory_address(m, 0, "&fixture_counter"));
-    const TbMemoryView *v = tb_memory_view(m, 0); uint64_t end = tb_gdb_now_ms() + 5000;
+    const TbMemoryView_t *v = tb_memory_view(m, 0); uint64_t end = tb_gdb_now_ms() + 5000;
     while ((!v->ready || v->pending) && tb_gdb_now_ms() < end) { pump(); }
     CHECK(v->ready && v->readable == 4 && !tb_memory_stale(m, 0));
     return (uint32_t)v->bytes[0] | (uint32_t)v->bytes[1] << 8U | (uint32_t)v->bytes[2] << 16U | (uint32_t)v->bytes[3] << 24U;

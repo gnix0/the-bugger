@@ -18,7 +18,7 @@ int main(void)
     for (int i = 0; i < TB_NATIVE_WORDS + 1; ++i) { strcat(many, "x "); }
     CHECK(!tb_native_words(many, &words, error, sizeof error));
     CHECK(tb_native_words(" \t ", &words, error, sizeof error) && words.count == 0);
-    TbMemoryRegion region = {0};
+    TbMemoryRegion_t region = {0};
     CHECK(tb_native_memory_region("1000-2000 rw-p 00000000 00:00 0\n", &region));
     CHECK(region.begin == 0x1000 && region.end == 0x2000);
     CHECK(tb_native_memory_region("1000-2000 rw-p 00000000 00:00 0    [heap]\n", &region));

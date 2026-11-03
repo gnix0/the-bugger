@@ -21,7 +21,7 @@ typedef enum { TB_SESSION_LOCAL, TB_SESSION_REMOTE, TB_SESSION_EXTENDED_REMOTE }
 typedef struct {
     bool connected, octet_addressing, local_process, server_owned, openocd;
     unsigned address_bits;
-    TbMemoryOrder byte_order;
+    TbMemoryOrder_e byte_order;
     char architecture[64], target_id[32], symbol_image[4096];
     bool image_relocation_known;
 } TbSessionCapabilities;
@@ -34,7 +34,7 @@ typedef struct {
     const TbOpenOcdPlan *openocd;
     /* Affirmative adapter/user evidence, not inferred from target readability.
      * Empty for unknown servers. Never automatically derived from an ELF. */
-    const TbMemoryRegion *ordinary_regions;
+    const TbMemoryRegion_t *ordinary_regions;
     size_t ordinary_region_count;
     bool attach;
     pid_t pid;
@@ -46,7 +46,7 @@ typedef struct TbSession TbSession;
  * never silicon detection. Tokens bind the exact live connection and policy. */
 typedef struct {
     uint64_t connection, configuration, evidence;
-    TbMemoryRegion region;
+    TbMemoryRegion_t region;
     char endpoint[256], inferior[32], device[32], source[128];
 } TbSessionRamReview;
 bool tb_session_ram_review(TbSession *session, TbSessionRamReview *review);
@@ -72,8 +72,8 @@ bool tb_session_console(TbSession *native, const char *command);
 /* Metadata-only review of the documented physically validated MMIO setup.
  * These functions perform no hardware requests. Confirmation is the user's
  * assertion that every displayed binding matches, never automatic detection. */
-bool tb_session_mmio_review(TbSession *session, TbMemoryBackend *review);
-bool tb_session_mmio_confirm(TbSession *session, const TbMemoryBackend *review);
+bool tb_session_mmio_review(TbSession *session, TbMemoryBackend_t *review);
+bool tb_session_mmio_confirm(TbSession *session, const TbMemoryBackend_t *review);
 bool tb_session_save_log(TbSession *native, const char *path);
 /* Local launch: terminate the still-owned inferior; local attach: detach/resume.
  * Remote: disconnect only, with target disposition controlled by the server.
@@ -100,9 +100,9 @@ TbContext_t *tb_session_context(TbSession *native);
 TbCode_t *tb_session_code(TbSession *native);
 TbBreakpoints_t *tb_session_breakpoints(TbSession *native);
 TbRegisters_t *tb_session_registers(TbSession *native);
-TbMemory *tb_session_memory(TbSession *native);
+TbMemory_t *tb_session_memory(TbSession *native);
 TbStack_t *tb_session_stack(TbSession *session);
-TbVariables *tb_session_variables(TbSession *native);
+TbVariables_t *tb_session_variables(TbSession *native);
 bool tb_session_run_to(TbSession *native, const char *location);
 bool tb_session_run_at(TbSession *native, TbBreakLocation_t location);
 

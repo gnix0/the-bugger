@@ -90,7 +90,7 @@ int main(int argc, char **argv)
     tb_context_visible(tb_session_context(session), true, false);
     CHECK(tb_session_console(session, attach)); stopped();
     CHECK(tb_session_target_pid(session) == 0 && !tb_session_capabilities(session)->server_owned);
-    TbMemory *memory = tb_session_memory(session); tb_memory_visible(memory, 0, true);
+    TbMemory_t *memory = tb_session_memory(session); tb_memory_visible(memory, 0, true);
     CHECK(tb_memory_length(memory, 0, 32)); CHECK(tb_memory_address(memory, 0, "&remote_buffer"));
     uint64_t until = tb_gdb_now_ms() + 5000;
     while (tb_memory_view(memory, 0)->pending && tb_gdb_now_ms() < until) { tb_session_pump(session, 1); }

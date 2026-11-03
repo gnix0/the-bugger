@@ -3,7 +3,7 @@
 #include "../support/check.h"
 #include <string.h>
 
-typedef struct { TbGdb_t *gdb; TbContext_t *context; TbMemory *memory; unsigned replies, reads; } Fixture;
+typedef struct { TbGdb_t *gdb; TbContext_t *context; TbMemory_t *memory; unsigned replies, reads; } Fixture;
 static void emit(void *context, const TbGdbEvent_t *event)
 {
     Fixture *f = context;
@@ -50,12 +50,12 @@ int main(int argc, char **argv)
     while (tb_gdb_state(f.gdb) != TB_GDB_READY && tb_gdb_now_ms() < until) { pump(&f); }
     CHECK(tb_gdb_state(f.gdb) == TB_GDB_READY); tb_memory_visible(f.memory, 0, true);
     command(&f, "-stop"); ready(&f); tb_memory_target(f.memory, true, 32);
-    TbMemoryBackend setup = {.target = "stm32f4x.cpu", .device = "Authored device identity",
+    TbMemoryBackend_t setup = {.target = "stm32f4x.cpu", .device = "Authored device identity",
         .server = "Authored OpenOCD fixture configuration", .firmware = "Authored ST-LINK firmware assertion",
         .configuration = 1, .widths = TB_MEMORY_WIDTH32};
     CHECK(tb_memory_backend_set(f.memory, &setup) && tb_memory_backend_confirm(f.memory, &setup));
     CHECK(tb_memory_range_set(f.memory, 0, 0, 0x40020010, 0x40020020, TB_MEMORY_MMIO, 32, "Unknown side effects"));
-    TbMemoryRegister sample;
+    TbMemoryRegister_t sample;
     CHECK(!tb_memory_register_sample(f.memory, 0, 0x40020014, 32, &sample));
     CHECK(!tb_memory_read_register(f.memory, 0, 0x40020014, 32));
     CHECK(tb_memory_range_authorize(f.memory, 0, 0)); idle(&f); command(&f, "-mmio-stats"); CHECK(f.reads == 0);

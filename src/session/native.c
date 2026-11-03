@@ -19,7 +19,7 @@ static bool map_number(const char **cursor, char delimiter, uint64_t *value)
     *value = (uint64_t)parsed; *cursor = end + 1; return true;
 }
 
-bool tb_native_memory_region(const char *row, TbMemoryRegion *region)
+bool tb_native_memory_region(const char *row, TbMemoryRegion_t *region)
 {
     if (!row || !region || !strchr(row, '\n')) { return false; }
     uint64_t begin, end, unused, inode;
@@ -49,5 +49,5 @@ bool tb_native_memory_region(const char *row, TbMemoryRegion *region)
     if (*name == '/' && strncmp(name, "/dev/", 5) != 0 && strncmp(name, "/sys/", 5) != 0 &&
         strncmp(name, "/proc/", 6) != 0 && stat(name, &info) == 0 && S_ISREG(info.st_mode)) { ordinary = true; }
     if (!ordinary) { return false; }
-    *region = (TbMemoryRegion){begin, end, writable}; return true;
+    *region = (TbMemoryRegion_t){begin, end, writable}; return true;
 }

@@ -38,7 +38,7 @@ static uint64_t allocate_id(TbSetup *s)
 static size_t key_index(const uint64_t *keys, size_t count, uint64_t key)
 { size_t i = 0; while (i < count && keys[i] != key) { ++i; } return i; }
 bool tb_setup_capture_update(TbSetupCapture *c, const TbLayout_t *layout, const TbDemo *workspace,
-                            const TbCode_t *code, const TbMemory *memory, const TbVariables *variables,
+                            const TbCode_t *code, const TbMemory_t *memory, const TbVariables_t *variables,
                             const TbBreakpoints_t *breakpoints, const char *const expressions[TB_MAX_PANES])
 {
     if (!c) { return false; }
@@ -73,13 +73,13 @@ bool tb_setup_capture_update(TbSetupCapture *c, const TbLayout_t *layout, const 
             if (!f->id) { f->id = allocate_id(s); }
             if (tb_code_tab_active(code, i) == j + 1) { p->source_selected = f->id; }
         }
-        const TbMemoryView *m = tb_memory_view(memory, i); if (!m || !expressions[i] || strlen(expressions[i]) >= sizeof p->memory_expression) { return false; }
+        const TbMemoryView_t *m = tb_memory_view(memory, i); if (!m || !expressions[i] || strlen(expressions[i]) >= sizeof p->memory_expression) { return false; }
         memcpy(p->memory_expression, expressions[i], strlen(expressions[i]) + 1); p->memory_bytes = m->length; p->memory_group = m->grouping;
     }
     s->watch_count = tb_variables_definitions(variables);
     if (s->watch_count > TB_SETUP_WATCHES) { return false; }
     for (size_t i = 0; i < s->watch_count; ++i) {
-        TbWatchDefinition w; if (!tb_variables_definition(variables, i, &w)) { return false; }
+        TbWatchDefinition_t w; if (!tb_variables_definition(variables, i, &w)) { return false; }
         size_t prior = c->current ? key_index(c->watches, c->current->watch_count, w.identity) : 0;
         s->watches[i].id = c->current && prior < c->current->watch_count ? c->current->watches[prior].id : allocate_id(s);
         memcpy(s->watches[i].expression, w.expression, sizeof w.expression); s->watches[i].format = (int)w.format; watch_keys[i] = w.identity;
@@ -131,7 +131,7 @@ bool tb_setup_capture_remove_break(TbSetupCapture *c, uint64_t identity)
 static int root_first(const TbSetup *s, int node)
 { while (s->nodes[node].pane < 0) { node = s->nodes[node].first; } return s->nodes[node].pane; }
 bool tb_setup_capture_restore(TbSetupCapture *c, const TbSetup *s, TbLayout_t *layout,
-                              TbDemo *workspace, TbCode_t *code, TbMemory *memory, TbVariables *variables)
+                              TbDemo *workspace, TbCode_t *code, TbMemory_t *memory, TbVariables_t *variables)
 {
     if (!c || !tb_setup_valid(s) || tb_variables_definitions(variables)) { return false; }
     TbSetupBreak *retained = s->break_count ? malloc(s->break_count * sizeof *retained) : NULL;
@@ -164,8 +164,8 @@ bool tb_setup_capture_restore(TbSetupCapture *c, const TbSetup *s, TbLayout_t *l
     for (int i = 0; i < TB_DEFAULT_PANES; ++i) { layout->root_focus[i] = root_first(s, s->roots[i]); }
     workspace->pane = layout->primary_focus = layout->root_focus[0];
     for (size_t i = 0; i < s->watch_count; ++i) {
-        if (!tb_variables_restore_watch(variables, s->watches[i].expression, (TbVariableFormat)s->watches[i].format)) { return false; }
-        TbWatchDefinition definition; if (!tb_variables_definition(variables, i, &definition)) { return false; }
+        if (!tb_variables_restore_watch(variables, s->watches[i].expression, (TbVariableFormat_e)s->watches[i].format)) { return false; }
+        TbWatchDefinition_t definition; if (!tb_variables_definition(variables, i, &definition)) { return false; }
         c->watches[i] = definition.identity;
     }
     return true;

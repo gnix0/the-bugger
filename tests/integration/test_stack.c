@@ -63,7 +63,7 @@ static int peer(void)
 }
 static TbGdb_t *g;
 static TbContext_t *c;
-static TbMemory *m;
+static TbMemory_t *m;
 static TbStack_t *s;
 static unsigned completed, reads, values, anchors, guards;
 static void event(void *unused, const TbGdbEvent_t *e)

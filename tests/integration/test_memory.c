@@ -5,7 +5,7 @@
 #include <unistd.h>
 
 static TbContext_t *context;
-static TbMemory *memory;
+static TbMemory_t *memory;
 static unsigned replies;
 static void emit(void *unused, const TbGdbEvent_t *event)
 {
@@ -35,7 +35,7 @@ static void ready(TbGdb_t *gdb, int id, bool success)
 {
     uint64_t end = tb_gdb_now_ms() + 1500;
     while ((tb_memory_view(memory, id)->pending || tb_gdb_pending(gdb)) && tb_gdb_now_ms() < end) { pump(gdb); }
-    const TbMemoryView *v = tb_memory_view(memory, id);
+    const TbMemoryView_t *v = tb_memory_view(memory, id);
     if (v->pending || v->ready != success) { fprintf(stderr, "memory view %d expr %s: pending %d ready %d wanted %d state %d context %d/%d: %s\n", id, v->expression, v->pending, v->ready, success, tb_gdb_state(gdb), tb_context_snapshot(context)->ready, tb_context_snapshot(context)->stale, v->error); CHECK(false); }
 }
 static void idle(TbGdb_t *gdb)
@@ -71,7 +71,7 @@ static void consent(TbGdb_t *gdb)
 }
 static void backend_consent(TbGdb_t *gdb)
 {
-    TbMemoryBackend reviewed = {.target = "stm32f4x.cpu", .device = "STM32F446 / owner board",
+    TbMemoryBackend_t reviewed = {.target = "stm32f4x.cpu", .device = "STM32F446 / owner board",
         .server = "OpenOCD 0.12.0-01004-g9ea7f3d64; board/st_nucleo_f4.cfg; localhost:3333",
         .firmware = "ST-LINK V2J48M35", .configuration = 1,
         .widths = TB_MEMORY_WIDTH8 | TB_MEMORY_WIDTH16 | TB_MEMORY_WIDTH32};
@@ -85,7 +85,7 @@ static void backend_consent(TbGdb_t *gdb)
     for (unsigned field = 0; field < 6; ++field) {
         CHECK(tb_memory_range_set(memory, 1, 0, 0x40020014, 0x40020018, TB_MEMORY_MMIO, 32, "Reviewed risks"));
         CHECK(tb_memory_range_authorize(memory, 1, 0));
-        TbMemoryBackend changed = reviewed;
+        TbMemoryBackend_t changed = reviewed;
         switch (field) {
         case 0: (void)snprintf(changed.target, sizeof changed.target, "other.cpu"); break;
         case 1: (void)snprintf(changed.device, sizeof changed.device, "other board"); break;
@@ -101,7 +101,7 @@ static void backend_consent(TbGdb_t *gdb)
         CHECK(tb_memory_backend_set(memory, &reviewed) && !tb_memory_backend_confirmed(memory));
         CHECK(tb_memory_backend_confirm(memory, &reviewed));
     }
-    TbMemoryBackend invalid = reviewed; memset(invalid.firmware, 'x', sizeof invalid.firmware);
+    TbMemoryBackend_t invalid = reviewed; memset(invalid.firmware, 'x', sizeof invalid.firmware);
     CHECK(!tb_memory_backend_set(memory, &invalid));
     CHECK(!tb_memory_backend(memory) && !tb_memory_backend_confirmed(memory));
     CHECK(tb_memory_backend_set(memory, &reviewed) && tb_memory_backend_confirm(memory, &reviewed));
@@ -121,7 +121,7 @@ static void queued_revoke(const char *peer)
     while (tb_gdb_state(gdb) != TB_GDB_READY && tb_gdb_now_ms() < until) { pump(gdb); }
     CHECK(tb_gdb_state(gdb) == TB_GDB_READY);
     tb_memory_visible(memory, 0, true); command(gdb, "-stop", NULL); context_ready(gdb);
-    const TbMemoryRegion region = {0x1000, 0x1100, true};
+    const TbMemoryRegion_t region = {0x1000, 0x1100, true};
     CHECK(tb_memory_regions(memory, &region, 1));
     CHECK(tb_memory_address(memory, 0, "0x1000")); ready(gdb, 0, true);
     CHECK(tb_memory_range_set(memory, 0, 0, 0x1000, 0x1100, TB_MEMORY_ORDINARY, 0, "Authored RAM"));
@@ -158,15 +158,15 @@ int main(int argc, char **argv)
     CHECK(!tb_memory_group(memory, 0, 2));
     tb_memory_order(memory, TB_MEMORY_LITTLE);
     CHECK(tb_memory_length(memory, 0, 64)); CHECK(tb_memory_address(memory, 0, "&buffer")); ready(gdb, 0, true);
-    const TbMemoryView *a = tb_memory_view(memory, 0), *b = tb_memory_view(memory, 1);
+    const TbMemoryView_t *a = tb_memory_view(memory, 0), *b = tb_memory_view(memory, 1);
     CHECK(a->address == 0x1000 && a->data_size == 64 && a->readable == 64 && !tb_memory_stale(memory, 0));
     CHECK(!tb_memory_browse(memory, 0, 1)); idle(gdb); CHECK(a->address == 0x1000);
-    const TbMemoryRegion ram[] = {{0x1000, 0x1100, true}, {0x20000000, 0x20001000, true}};
+    const TbMemoryRegion_t ram[] = {{0x1000, 0x1100, true}, {0x20000000, 0x20001000, true}};
     tb_memory_regions(memory, ram, 2);
     CHECK(tb_memory_browse(memory, 0, 1)); ready(gdb, 0, true); CHECK(a->address == 0x1040);
     CHECK(tb_memory_browse(memory, 0, -1)); ready(gdb, 0, true); CHECK(a->address == 0x1000);
     CHECK(!tb_memory_browse(memory, 0, -1)); idle(gdb); CHECK(a->address == 0x1000);
-    const TbMemoryRegion adjacent[] = {{0x1000, 0x1050, true}, {0x1050, 0x1060, true}};
+    const TbMemoryRegion_t adjacent[] = {{0x1000, 0x1050, true}, {0x1050, 0x1060, true}};
     tb_memory_regions(memory, adjacent, 2);
     /* Use an uncached forward address; adjacent proofs compose and the read
      * ends at 0x1060 instead of crossing into an unapproved range. */
@@ -193,7 +193,7 @@ int main(int argc, char **argv)
     tb_memory_edit_cancel(memory);
     CHECK(tb_memory_edit_state(memory) == TB_MEMORY_EDIT_NONE);
     CHECK(tb_memory_range_authorize(memory, 0, 0));
-    const TbMemoryRegion read_only_overlay[] = {{0x1000, 0x2000, true}, {0x1001, 0x1002, false}};
+    const TbMemoryRegion_t read_only_overlay[] = {{0x1000, 0x2000, true}, {0x1001, 0x1002, false}};
     CHECK(!tb_memory_regions(memory, read_only_overlay, 2));
     CHECK(!tb_memory_edit_begin(memory, 0, 0x1000, 4));
     CHECK(tb_memory_regions(memory, ram, 2));
@@ -204,7 +204,7 @@ int main(int argc, char **argv)
     CHECK(!tb_memory_edit_apply(memory, "aabbccdd"));
     CHECK(!tb_memory_range_authorized(memory, 0, 0));
     CHECK(!tb_memory_regions(memory, ram, TB_MEMORY_REGIONS + 1));
-    const TbMemoryRegion malformed[] = {{0x1000, 0x1100, true}, {8, 7, false}};
+    const TbMemoryRegion_t malformed[] = {{0x1000, 0x1100, true}, {8, 7, false}};
     CHECK(!tb_memory_regions(memory, malformed, 2));
     CHECK(tb_memory_range_authorize(memory, 0, 0));
     CHECK(!tb_memory_edit_begin(memory, 0, 0x1000, 4)); /* no accepted prefix */

@@ -61,9 +61,9 @@ static void disconnect(bool resume)
 }
 static uint32_t read_word(const char *expression)
 {
-    TbMemory *m = tb_session_memory(session); tb_memory_visible(m, 3, true);
+    TbMemory_t *m = tb_session_memory(session); tb_memory_visible(m, 3, true);
     CHECK(tb_memory_length(m, 3, 4) && tb_memory_address(m, 3, expression));
-    const TbMemoryView *v = tb_memory_view(m, 3); uint64_t end = tb_gdb_now_ms() + 5000;
+    const TbMemoryView_t *v = tb_memory_view(m, 3); uint64_t end = tb_gdb_now_ms() + 5000;
     while ((!v->ready || v->pending) && tb_gdb_now_ms() < end) { pump(); }
     if (!v->ready || v->readable != 4) { fprintf(stderr, "Explicit RAM read: %s\n", v->error); CHECK(false); }
     return (uint32_t)v->bytes[0] | (uint32_t)v->bytes[1] << 8U | (uint32_t)v->bytes[2] << 16U | (uint32_t)v->bytes[3] << 24U;
@@ -77,9 +77,9 @@ static void settle(TbSetupRestore *r, TbSetupCapture *c)
 }
 static void no_values(int pane)
 {
-    const TbMemoryView *m = tb_memory_view(tb_session_memory(session), pane);
+    const TbMemoryView_t *m = tb_memory_view(tb_session_memory(session), pane);
     CHECK(!m->configured && !m->ready && !m->pending);
-    const TbVariable *v = tb_variables_row(tb_session_variables(session), TB_VARIABLE_WATCHES, 0);
+    const TbVariable_t *v = tb_variables_row(tb_session_variables(session), TB_VARIABLE_WATCHES, 0);
     CHECK(v && strstr(v->value, "Read required"));
 }
 static void arm_core(void)
