@@ -10,7 +10,7 @@ static void dump(TbNative *native)
 {
     for (size_t i = 0; i < tb_native_log_count(native); ++i) { fprintf(stderr, "%s\n", tb_native_log_line(native, i)); }
     const TbCodeView *v = tb_code_view(tb_native_code(native), 0);
-    const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(native));
+    const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(native));
     fprintf(stderr, "state=%s ctx=%d/%d T%s #%d %s:%d PC=%s; code stale=%d lines=%zu insns=%zu src=%s asm=%s\n", tb_native_state_name(native), s->ready, s->stale, s->selected_thread, s->selected.level, s->selected.path, s->selected.line, s->selected.address, v->stale, v->line_count, v->instruction_count, v->source_error, v->assembly_error);
 }
 static void wait_state(TbNative *native, TbNativeState expected)
@@ -22,7 +22,7 @@ static void wait_state(TbNative *native, TbNativeState expected)
 static void code_ready(TbNative *native, uint64_t after)
 {
     const TbCodeView *v = tb_code_view(tb_native_code(native), 0);
-    const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(native));
+    const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(native));
     uint64_t until = tb_gdb_now_ms() + 10000;
     while ((s->stale || !s->ready || v->stale || v->assembly_revision <= after) && tb_gdb_now_ms() < until) { tb_native_pump(native, 5); }
     if (s->stale || !s->ready || v->stale || v->assembly_revision <= after) { dump(native); CHECK(false); }
@@ -53,7 +53,7 @@ static void step(TbNative *native, TbStep action, bool instruction)
 static void ordinary(const char *fixture)
 {
     TbNative *native = start(fixture, "start"); TbCode *code = tb_native_code(native);
-    const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(native));
+    const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(native));
     const TbCodeView *v = tb_code_view(code, 0);
     CHECK(strstr(s->selected.function, "main") && v->line_count > 10 && v->instruction_count > 0);
     CHECK(v->selected_line == s->selected.line && v->stopped_line == s->stopped.line);

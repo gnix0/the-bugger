@@ -8,7 +8,7 @@ static void event(void *user, const TbGdbEvent_t *record) { (void)user; (void)re
 int main(void)
 {
     TbGdb_t *gdb = tb_gdb_create(event, NULL); CHECK(gdb);
-    TbContext *context = tb_context_create(gdb); CHECK(context);
+    TbContext_t *context = tb_context_create(gdb); CHECK(context);
     TbCode *code = tb_code_create(gdb, context); TbMemory *memory = tb_memory_create(gdb, context);
     TbVariables *variables = tb_variables_create(gdb, context); TbBreakpoints *breaks = tb_break_create(gdb);
     CHECK(code && memory && variables && breaks);

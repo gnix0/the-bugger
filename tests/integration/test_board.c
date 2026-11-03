@@ -48,7 +48,7 @@ static void cleanup(void)
     free(server_plan); server_plan = NULL;
 }
 static void pump(void) { tb_session_pump(session, 5); }
-static const TbContextSnapshot *context(void) { return tb_context_snapshot(tb_session_context(session)); }
+static const TbContextSnapshot_t *context(void) { return tb_context_snapshot(tb_session_context(session)); }
 static void stop(uint64_t previous)
 {
     uint64_t end = tb_gdb_now_ms() + 10000;
@@ -93,13 +93,13 @@ static void memory(int view, const char *expression, size_t size, const char *ex
 }
 static void registers(void)
 {
-    TbRegisters *r = tb_session_registers(session); tb_registers_visible(r, true);
+    TbRegisters_t *r = tb_session_registers(session); tb_registers_visible(r, true);
     uint64_t end = tb_gdb_now_ms() + 5000;
-    const TbRegister *pc = NULL, *sp = NULL;
+    const TbRegister_t *pc = NULL, *sp = NULL;
     do {
         tb_registers_begin(r); tb_registers_want(r, 0, 32);
         for (size_t i = 0; i < tb_registers_count(r); ++i) {
-            const TbRegister *row = tb_registers_row(r, i);
+            const TbRegister_t *row = tb_registers_row(r, i);
             if (!strcmp(row->name, "pc") || !strcmp(row->name, "r15")) {
                 pc = row; tb_registers_want(r, i, 1);
             }

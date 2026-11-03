@@ -3,7 +3,7 @@
 #include "../support/check.h"
 #include <string.h>
 
-static TbContext *context;
+static TbContext_t *context;
 static TbVariables *variables;
 static TbMemory *memory;
 static unsigned replies, reads, children, deletes, writes;

@@ -18,7 +18,7 @@ static size_t find(TbVariables *v, TbVariableView view, const char *name)
 static void stop(TbNative *n, uint64_t after)
 {
     uint64_t end = tb_gdb_now_ms() + 5000;
-    const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(n));
+    const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(n));
     while (tb_gdb_now_ms() < end) {
         pump(n);
         if (tb_native_state(n) == TB_NATIVE_STOPPED && s->ready && !s->stale && s->generation.stop > after &&
@@ -95,7 +95,7 @@ int main(int argc, char **argv)
         bool sent = false;
         while (!sent && tb_gdb_now_ms() < end) { pump(n); sent = tb_native_console(n, "run"); }
         CHECK(sent); stop(n, 0);
-        const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(n));
+        const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(n));
         size_t stage = find(v, TB_VARIABLE_LOCALS, "stage");
         CHECK(stage != SIZE_MAX && !tb_variables_row(v, TB_VARIABLE_LOCALS, stage)->fresh);
         read_row(n, TB_VARIABLE_LOCALS, stage);

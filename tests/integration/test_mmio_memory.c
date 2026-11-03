@@ -3,7 +3,7 @@
 #include "../support/check.h"
 #include <string.h>
 
-typedef struct { TbGdb_t *gdb; TbContext *context; TbMemory *memory; unsigned replies, reads; } Fixture;
+typedef struct { TbGdb_t *gdb; TbContext_t *context; TbMemory *memory; unsigned replies, reads; } Fixture;
 static void emit(void *context, const TbGdbEvent_t *event)
 {
     Fixture *f = context;
@@ -31,7 +31,7 @@ static void command(Fixture *f, const char *operation)
 static void ready(Fixture *f)
 {
     uint64_t until = tb_gdb_now_ms() + 3000;
-    const TbContextSnapshot *s = tb_context_snapshot(f->context);
+    const TbContextSnapshot_t *s = tb_context_snapshot(f->context);
     while ((!s->ready || s->stale || tb_gdb_pending(f->gdb)) && tb_gdb_now_ms() < until) { pump(f); }
     CHECK(s->ready && !s->stale && !tb_gdb_pending(f->gdb));
 }

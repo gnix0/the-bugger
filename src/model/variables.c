@@ -29,7 +29,7 @@ typedef struct {
 } Tree;
 typedef struct { char name[64]; bool retired, possible; } Owned;
 struct TbVariables {
-    TbGdb_t *gdb; TbContext *context;
+    TbGdb_t *gdb; TbContext_t *context;
     Tree trees[TB_VARIABLE_VIEWS];
     Owned owned[OWNED_MAX]; size_t owned_count;
     TbGdbGeneration_t generation, request_generation;
@@ -118,7 +118,7 @@ static void retire(TbVariables *v, const char *object)
 }
 static bool stopped(const TbVariables *v)
 {
-    const TbContextSnapshot *s = tb_context_snapshot(v->context);
+    const TbContextSnapshot_t *s = tb_context_snapshot(v->context);
     return tb_gdb_state(v->gdb) == TB_GDB_STOPPED && s->ready && !s->stale && same(v->generation, s->generation);
 }
 static bool edit_type(TbVariables *v, const char *type)
@@ -197,7 +197,7 @@ static bool mi_number(const TbMiValue_t *value, uint64_t *out)
     if (errno || end == text || *end || number > UINT64_MAX) { return false; }
     *out = (uint64_t)number; return true;
 }
-TbVariables *tb_variables_create(TbGdb_t *gdb, TbContext *context)
+TbVariables *tb_variables_create(TbGdb_t *gdb, TbContext_t *context)
 {
     TbVariables *v = calloc(1, sizeof *v);
     if (v) { v->gdb = gdb; v->context = context; v->frame = -1; v->edit_view = v->edit_node = -1; }
@@ -207,7 +207,7 @@ void tb_variables_destroy(TbVariables *v) { free(v); }
 void tb_variables_reset(TbVariables *v)
 {
     /* Session owner calls reset only after the previous GDB has exited. */
-    TbGdb_t *gdb = v->gdb; TbContext *context = v->context;
+    TbGdb_t *gdb = v->gdb; TbContext_t *context = v->context;
     uint64_t revision = v->revision, serial = v->serial;
     TbVariableAuthorize authorize = v->authorize; void *user = v->authorize_user;
     memset(v, 0, sizeof *v); v->gdb = gdb; v->context = context; v->frame = -1; v->edit_view = v->edit_node = -1;
@@ -782,7 +782,7 @@ bool tb_variables_event(TbVariables *v, const TbGdbEvent_t *event)
     }
     ++v->revision; return true;
 }
-static void invalidate(TbVariables *v, const TbContextSnapshot *s)
+static void invalidate(TbVariables *v, const TbContextSnapshot_t *s)
 {
     if (v->edit_state != TB_VARIABLE_EDIT_UNCERTAIN && v->edit_state != TB_VARIABLE_EDIT_ACKNOWLEDGED &&
         v->edit_state != TB_VARIABLE_EDIT_NONE) {
@@ -856,7 +856,7 @@ void tb_variables_pump(TbVariables *v)
             }
         }
     }
-    const TbContextSnapshot *s = tb_context_snapshot(v->context);
+    const TbContextSnapshot_t *s = tb_context_snapshot(v->context);
     if (state == TB_GDB_STOPPED && s->ready && !s->stale && !same(v->generation, s->generation)) { invalidate(v, s); }
     if (state != TB_GDB_READY && state != TB_GDB_RUNNING && state != TB_GDB_STOPPED) { return; }
     if (v->cleanup_failed) {

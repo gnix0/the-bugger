@@ -4,16 +4,16 @@
 #include <string.h>
 
 static const char good[] = "TBM1|probe-1|stm32f4x.cpu|20000000|32|1|12345678|END\n";
-static void begin(TbMonitorFrame *f)
+static void begin(TbMonitorFrame_t *f)
 {
     CHECK(tb_monitor_start(f, "probe-1", "stm32f4x.cpu", 0x20000000, 32));
 }
 static void malformed(const char *text)
 {
-    TbMonitorFrame frame; begin(&frame); uint64_t value = 77;
+    TbMonitorFrame_t frame; begin(&frame); uint64_t value = 77;
     tb_monitor_feed(&frame, text, strlen(text)); CHECK(!tb_monitor_finish(&frame, true, &value)); CHECK(value == 77);
 }
-typedef struct { TbMonitorFrame frame; unsigned active, completed; } Replay;
+typedef struct { TbMonitorFrame_t frame; unsigned active, completed; } Replay;
 static void next(Replay *r, unsigned token)
 {
     char id[64]; (void)snprintf(id, sizeof id, "d2304c391cb1698bb6c4cc6293930c53-%u", token);
@@ -71,7 +71,7 @@ static void width_replay(const char *path)
 }
 int main(int argc, char **argv)
 {
-    CHECK(argc == 2 || argc == 3); TbMonitorFrame f; uint64_t value = 0;
+    CHECK(argc == 2 || argc == 3); TbMonitorFrame_t f; uint64_t value = 0;
     for (size_t chunk = 1; chunk < sizeof good; ++chunk) {
         begin(&f);
         for (size_t at = 0; at < sizeof good - 1; at += chunk) {

@@ -4,7 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 
-static TbContext *context;
+static TbContext_t *context;
 static TbMemory *memory;
 static unsigned replies;
 static void emit(void *unused, const TbGdbEvent_t *event)

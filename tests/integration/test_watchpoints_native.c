@@ -11,7 +11,7 @@ static void idle(TbNative *n)
 }
 static void stop(TbNative *n, uint64_t previous)
 {
-    const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(n));
+    const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(n));
     uint64_t end = tb_gdb_now_ms() + 6000;
     do {
         tb_native_pump(n, 5);

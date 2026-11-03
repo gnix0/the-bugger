@@ -6,7 +6,7 @@
 #include <unistd.h>
 
 static TbCode *code;
-static TbContext *context;
+static TbContext_t *context;
 static unsigned replies;
 static void emit(void *unused, const TbGdbEvent_t *event)
 {

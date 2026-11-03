@@ -14,7 +14,7 @@ static void mmio_close(const char *peer, bool dispatched)
     CHECK(tb_session_start(s, &config));
     tb_memory_visible(tb_session_memory(s), 0, true);
     uint64_t until = tb_gdb_now_ms() + 3000;
-    const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(s));
+    const TbContextSnapshot_t *context = tb_context_snapshot(tb_session_context(s));
     while ((!context->ready || context->stale || tb_session_state(s) != TB_SESSION_STOPPED) && tb_gdb_now_ms() < until) { tb_session_pump(s, 1); }
     if (!context->ready || context->stale) {
         fprintf(stderr, "MMIO close fixture: %s | %s\n", tb_session_state_name(s), tb_session_message(s));
@@ -82,7 +82,7 @@ static void run(const char *peer, const char *mode)
         tb_memory_visible(tb_session_memory(s), 0, true);
         for (int i = 0; i < 10; ++i) { tb_session_pump(s, 1); }
         CHECK(!tb_memory_view(tb_session_memory(s), 0)->configured);
-        const TbContextSnapshot *snapshot = tb_context_snapshot(tb_session_context(s));
+        const TbContextSnapshot_t *snapshot = tb_context_snapshot(tb_session_context(s));
         uint64_t ready_until = tb_gdb_now_ms() + 1000;
         while ((!snapshot->ready || snapshot->stale) && tb_gdb_now_ms() < ready_until) { tb_session_pump(s, 1); }
         CHECK(snapshot->ready && !snapshot->stale);
@@ -198,7 +198,7 @@ static void ram_evidence(const char *peer)
     CHECK(tb_session_reset_halt(s)); CHECK(!tb_session_ram_confirmed(s));
     ram_ready(s); CHECK(tb_session_ram_review(s, &current));
     CHECK(tb_session_ram_confirm(s, &current)); ram_ready(s);
-    TbContext *context = tb_session_context(s);
+    TbContext_t *context = tb_session_context(s);
     uint64_t until = tb_gdb_now_ms() + 3000;
     while (!tb_context_write_begin(context, 99991) && tb_gdb_now_ms() < until) { tb_session_pump(s, 1); }
     CHECK(tb_context_write_blocked(context));

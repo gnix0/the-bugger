@@ -6,7 +6,7 @@
 #include <string.h>
 
 static TbSession *session;
-static TbStack *stack;
+static TbStack_t *stack;
 static void dump(void)
 {
     for (size_t i = 0; i < tb_session_log_count(session); ++i) { fprintf(stderr, "%s\n", tb_session_log_line(session, i)); }
@@ -15,8 +15,8 @@ static void settled(void)
 {
     uint64_t end = tb_gdb_now_ms() + 8000;
     while (tb_gdb_now_ms() < end) {
-        tb_session_pump(session, 5); const TbStackView *v = tb_stack_view(stack, 0);
-        const TbContextSnapshot *c = tb_context_snapshot(tb_session_context(session));
+        tb_session_pump(session, 5); const TbStackView_t *v = tb_stack_view(stack, 0);
+        const TbContextSnapshot_t *c = tb_context_snapshot(tb_session_context(session));
         if (tb_session_state(session) == TB_SESSION_STOPPED && c->ready && !c->stale && v->anchor_valid && !v->reading) {
             uint64_t before = tb_session_revision(session);
             for (int i = 0; i < 12; ++i) { tb_session_pump(session, 5); }
@@ -44,7 +44,7 @@ int main(int argc, char **argv)
     CHECK(tb_session_continue(session)); end = tb_gdb_now_ms() + 8000;
     while (tb_context_snapshot(tb_session_context(session))->generation.stop == stop && tb_gdb_now_ms() < end) { tb_session_pump(session, 5); }
     settled();
-    const TbStackView *v = tb_stack_view(stack, 0); const TbContextSnapshot *c = tb_context_snapshot(tb_session_context(session));
+    const TbStackView_t *v = tb_stack_view(stack, 0); const TbContextSnapshot_t *c = tb_context_snapshot(tb_session_context(session));
     CHECK(strstr(c->selected.function, "fixture_checkpoint"));
     CHECK(v->size == 128 && v->grouping == 4 && !v->sample.sequence);
     printf("Physical ARM: T%s lifetime %" PRIu64 " frame-0 SP 0x%" PRIx64 ", requested unread 128-byte window 0x%" PRIx64 "\n", v->thread, v->lifetime, v->sp, v->start);

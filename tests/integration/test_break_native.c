@@ -27,7 +27,7 @@ static void idle(TbNative *n)
 }
 static void stop(TbNative *n, uint64_t previous)
 {
-    uint64_t end = tb_gdb_now_ms() + 5000; const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(n));
+    uint64_t end = tb_gdb_now_ms() + 5000; const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(n));
     while ((tb_native_state(n) != TB_NATIVE_STOPPED || s->generation.stop <= previous || s->stale || !s->ready) && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
     if (!(tb_native_state(n) == TB_NATIVE_STOPPED && s->generation.stop > previous && !s->stale && s->ready)) {
         fprintf(stderr, "stop timeout state=%s previous=%llu stop=%llu stale=%d ready=%d\n", tb_native_state_name(n), (unsigned long long)previous, (unsigned long long)s->generation.stop, s->stale, s->ready);
