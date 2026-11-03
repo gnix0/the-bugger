@@ -194,13 +194,13 @@ int main(int argc, char **argv)
     CHECK(tb_session_continue(session)); stop(before);
     CHECK(strstr(context()->selected.function, "fixture_checkpoint"));
     CHECK(context()->selected.line > 0 && context()->frame_count >= 2);
-    TbCode *code = tb_session_code(session); tb_code_visible(code, 0, true, true);
+    TbCode_t *code = tb_session_code(session); tb_code_visible(code, 0, true, true);
     uint64_t code_end = tb_gdb_now_ms() + 5000;
-    const TbCodeView *listing = tb_code_view(code, 0);
+    const TbCodeView_t *listing = tb_code_view(code, 0);
     while ((listing->stale || !listing->line_count || !listing->instruction_count) && tb_gdb_now_ms() < code_end) { pump(); }
     CHECK(!listing->stale && listing->line_count && listing->instruction_count);
     CHECK(strstr(listing->path, "workload.c"));
-    const TbInstruction *stopped_instruction = NULL;
+    const TbInstruction_t *stopped_instruction = NULL;
     uint64_t stopped_pc = strtoull(context()->stopped.address, NULL, 0);
     for (size_t i = 0; i < listing->instruction_count; ++i) {
         if (listing->instructions[i].numeric == stopped_pc) { stopped_instruction = &listing->instructions[i]; break; }

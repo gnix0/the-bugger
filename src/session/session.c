@@ -32,7 +32,7 @@ struct TbSession {
     TbMemoryRegion ordinary_regions[TB_MEMORY_REGIONS];
     size_t ordinary_region_count;
     TbContext_t *context;
-    TbCode *code;
+    TbCode_t *code;
     TbBreakpoints_t *breakpoints;
     TbRegisters_t *registers;
     TbMemory *memory;
@@ -1098,7 +1098,7 @@ pid_t tb_session_target_pid(const TbSession *native) { return native->target_pid
 pid_t tb_session_debugger_pid(const TbSession *native) { return tb_gdb_pid(native->gdb); }
 bool tb_session_attached(const TbSession *native) { return native->attach; }
 TbContext_t *tb_session_context(TbSession *native) { return native->context; }
-TbCode *tb_session_code(TbSession *native) { return native->code; }
+TbCode_t *tb_session_code(TbSession *native) { return native->code; }
 TbBreakpoints_t *tb_session_breakpoints(TbSession *native) { return native->breakpoints; }
 bool tb_session_run_at(TbSession *native, TbBreakLocation_t location)
 {

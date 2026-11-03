@@ -151,7 +151,7 @@ typedef struct {
     TbSessionRamReview ram_review;
     int ram_offset;
     TbMemoryBackend mmio_review;
-    TbCodeImageReview image_review;
+    TbCodeImageReview_t image_review;
     char memory_input_error[192];
     wchar_t memory_input[TB_MAX_PANES][FIELD_SIZE];
     size_t memory_cursor[TB_MAX_PANES];
@@ -1031,11 +1031,11 @@ static void draw_menu(App *app, int pane, TbRect_t rect)
             app->menu_actions ? "< Show views" : "Pane actions >", MENU_SECTION, 0, pane);
 }
 
-static int assembly_rows(const TbCodeView *view);
+static int assembly_rows(const TbCodeView_t *view);
 static void context_row(const TbContextSnapshot_t *snapshot, TbView view, int item,
                         char *text, size_t capacity, bool *selected);
 
-static void mixed_summary(const App *app, int index, const TbInstruction *instruction,
+static void mixed_summary(const App *app, int index, const TbInstruction_t *instruction,
                           char *summary, size_t capacity)
 {
     char text[1024] = {0};
@@ -1074,7 +1074,7 @@ static TbScroll workspace_scroll(const App *app, const TbDemoPane *pane, int vis
                            visible, app->frame_details[index].offset);
     }
     const TbContextSnapshot_t *context = tb_context_snapshot(tb_session_context(app->debugger));
-    const TbCodeView *code = tb_code_view(tb_session_code(app->debugger), (int)(pane - app->demo.panes));
+    const TbCodeView_t *code = tb_code_view(tb_session_code(app->debugger), (int)(pane - app->demo.panes));
     int total = view == TB_CONSOLE ? (int)tb_session_log_count(app->debugger) :
                        view == TB_BREAKPOINTS ? (int)tb_break_count(tb_session_breakpoints(app->debugger)) :
                        view == TB_REGISTERS ? (int)tb_registers_count(tb_session_registers(app->debugger)) :
@@ -1105,11 +1105,11 @@ static void register_text(const TbRegister_t *row, char *text, size_t capacity)
                    *row->value ? row->value : "Awaiting read", row->fresh ? "" : " [stale]", row->truncated ? " [bounded]" : "");
 }
 
-static TbAssemblyColumns assembly_columns(const TbCodeView *view)
+static TbAssemblyColumns assembly_columns(const TbCodeView_t *view)
 {
     TbAssemblyColumns columns = {10, 11, 7};
     for (size_t i = 0; i < view->instruction_count; ++i) {
-        const TbInstruction *instruction = &view->instructions[i];
+        const TbInstruction_t *instruction = &view->instructions[i];
         int address = (int)strlen(instruction->address), bytes = (int)strlen(instruction->opcodes);
         int mnemonic = (int)strcspn(instruction->text, " \t");
         if (address > columns.address) { columns.address = address; }
@@ -1129,7 +1129,7 @@ static void variable_text(const TbVariable *row, char *text, size_t capacity)
                    row->format_pending ? " [natural; format read required]" : "");
 }
 
-static void assembly_gap_text(const App *app, int index, const TbCodeRow *row, char *out, size_t capacity)
+static void assembly_gap_text(const App *app, int index, const TbCodeRow_t *row, char *out, size_t capacity)
 {
     (void)snprintf(out, capacity, "%llu bytes %s | 0x%llx..0x%llx",
         (unsigned long long)(row->end - row->begin),
@@ -1141,10 +1141,10 @@ static int native_content_width(const App *app, int index)
     const TbDemoPane *pane = &app->demo.panes[index];
     TbView view = pane->tabs[pane->active];
     if (view == TB_CALL_STACK && app->frame_details[index].open) { return 0; }
-    const TbCodeView *code = tb_code_view(tb_session_code(app->debugger), index);
+    const TbCodeView_t *code = tb_code_view(tb_session_code(app->debugger), index);
     TbAssemblyColumns columns = assembly_columns(code);
     const TbContextSnapshot_t *context = tb_context_snapshot(tb_session_context(app->debugger));
-    TbCodeRow assembly[TB_CODE_ROWS];
+    TbCodeRow_t assembly[TB_CODE_ROWS];
     size_t rows = view == TB_LOCALS || view == TB_WATCHES ? tb_variables_count(tb_session_variables(app->debugger), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES) : view == TB_STACK ? tb_stack_rows(tb_session_stack(app->debugger), index) : view == TB_MEMORY ? tb_memory_rows(tb_session_memory(app->debugger), index) : view == TB_REGISTERS ? tb_registers_count(tb_session_registers(app->debugger)) : view == TB_SOURCE ? code->line_count : view == TB_DISASSEMBLY ? tb_code_rows(code, assembly) :
                   view == TB_CONSOLE ? tb_session_log_count(app->debugger) : view == TB_BREAKPOINTS ? tb_break_count(tb_session_breakpoints(app->debugger)) : view == TB_CALL_STACK && context->ready && !context->stale ? context->frame_count :
                   view == TB_THREADS && context->ready && !context->stale ? context->thread_count : 0;
@@ -1157,13 +1157,13 @@ static int native_content_width(const App *app, int index)
         else if (view == TB_LOCALS || view == TB_WATCHES) { variable_text(tb_variables_row(tb_session_variables(app->debugger), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES, row), text, sizeof text); }
         else if (view == TB_SOURCE) { (void)tb_code_source_line(tb_session_code(app->debugger), index, row, text, sizeof text); }
         else if (view == TB_DISASSEMBLY) {
-            const TbCodeRow *mapped = &assembly[row];
+            const TbCodeRow_t *mapped = &assembly[row];
             if (mapped->kind == TB_CODE_GAP) { assembly_gap_text(app, index, mapped, text, sizeof text); }
             else if (mapped->kind == TB_CODE_SOURCE) {
                 char summary[1600]; mixed_summary(app, index, &code->instructions[mapped->instruction], summary, sizeof summary);
                 (void)snprintf(text, sizeof text, "%s", summary + 2);
             } else {
-                const TbInstruction *instruction = &code->instructions[mapped->instruction];
+                const TbInstruction_t *instruction = &code->instructions[mapped->instruction];
                 tb_format_assembly(text, sizeof text, columns, instruction->address, instruction->opcodes, instruction->text);
             }
         } else if (view == TB_CONSOLE) { (void)snprintf(text, sizeof text, "%s", tb_session_log_line(app->debugger, row)); }
@@ -1214,7 +1214,7 @@ static void source_tab_restore(App *app, int pane)
                                 app->source_tabs[pane][0].context != context->generation.context);
     app->source_revision[pane] = changed ? 0 : tb_code_view(tb_session_code(app->debugger), pane)->source_revision;
 }
-static void source_tab_strip(App *app, TbCode *code, int pane, TbRect_t rect)
+static void source_tab_strip(App *app, TbCode_t *code, int pane, TbRect_t rect)
 {
     size_t count = tb_code_tab_count(code, pane), active = tb_code_tab_active(code, pane);
     if (count <= 1 || rect.w < 12) { return; }
@@ -1224,7 +1224,7 @@ static void source_tab_strip(App *app, TbCode *code, int pane, TbRect_t rect)
         size_t tab = step == 0 && active > 0 ? active : step;
         if (tab == 0 || (step > 0 && tab == active)) { continue; }
         if (x + 18 + (tab == active ? 3 : 0) > end - 7) { break; }
-        const TbCodeFile *file = tb_code_tab_file(code, pane, tab);
+        const TbCodeFile_t *file = tb_code_tab_file(code, pane, tab);
         const char *path = file && *file->full ? file->full : file ? file->file : "";
         const char *name = strrchr(path, '/'); name = name ? name + 1 : path;
         char raw_label[24], label[64];
@@ -1282,7 +1282,7 @@ static void draw_scrollbars(App *app, int index, TbRect_t rect)
     }
 }
 
-static int assembly_rows(const TbCodeView *view)
+static int assembly_rows(const TbCodeView_t *view)
 {
     return (int)tb_code_rows(view, NULL);
 }
@@ -1314,7 +1314,7 @@ static void reset_lower(App *app)
 static bool selected_location(App *app, char *location, size_t capacity, const TbBreakpoint_t **existing, TbBreakLocation_t *where)
 {
     int id = app->execution_pane; TbDemoPane *pane = &app->demo.panes[id];
-    const TbCodeView *code = tb_code_view(tb_session_code(app->debugger), id);
+    const TbCodeView_t *code = tb_code_view(tb_session_code(app->debugger), id);
     TbBreakpoints_t *b = tb_session_breakpoints(app->debugger);
     if (!app->instruction_mode) {
         unsigned line = pane->row[TB_SOURCE] >= 0 ? (unsigned)pane->row[TB_SOURCE] + 1 : 0;
@@ -1322,11 +1322,11 @@ static bool selected_location(App *app, char *location, size_t capacity, const T
         *where = (TbBreakLocation_t){.source = code->path, .line = line};
         return *code->path && line && line <= code->line_count;
     }
-    TbCodeRow rows[TB_CODE_ROWS]; size_t count = tb_code_rows(code, rows);
+    TbCodeRow_t rows[TB_CODE_ROWS]; size_t count = tb_code_rows(code, rows);
     if (pane->row[TB_DISASSEMBLY] < 0 || (size_t)pane->row[TB_DISASSEMBLY] >= count) { return false; }
-    const TbCodeRow *row = &rows[pane->row[TB_DISASSEMBLY]];
+    const TbCodeRow_t *row = &rows[pane->row[TB_DISASSEMBLY]];
     if (row->kind != TB_CODE_INSTRUCTION) { return false; }
-    const TbInstruction *instruction = &code->instructions[row->instruction];
+    const TbInstruction_t *instruction = &code->instructions[row->instruction];
     *existing = tb_break_at(b, NULL, 0, instruction->address);
     (void)snprintf(location, capacity, "*%s", instruction->address); *where = (TbBreakLocation_t){.text = location}; return !code->stale;
 }
@@ -1341,11 +1341,11 @@ static bool toggle_breakpoint(App *app)
     return okay;
 }
 
-static int assembly_pc_row(const TbCodeView *view, const char *pc)
+static int assembly_pc_row(const TbCodeView_t *view, const char *pc)
 {
     uint64_t address; bool symbol;
     if (!tb_code_location(pc, &address, &symbol) || symbol) { return -1; }
-    TbCodeRow rows[TB_CODE_ROWS]; size_t count = tb_code_rows(view, rows);
+    TbCodeRow_t rows[TB_CODE_ROWS]; size_t count = tb_code_rows(view, rows);
     for (size_t i = 0; i < count; ++i) {
         if (rows[i].kind == TB_CODE_INSTRUCTION && view->instructions[rows[i].instruction].numeric == address) { return (int)i; }
     }
@@ -1354,8 +1354,8 @@ static int assembly_pc_row(const TbCodeView *view, const char *pc)
 
 static void draw_code_pane(App *app, int index, TbRect_t rect)
 {
-    TbCode *code = tb_session_code(app->debugger);
-    const TbCodeView *view = tb_code_view(code, index);
+    TbCode_t *code = tb_session_code(app->debugger);
+    const TbCodeView_t *view = tb_code_view(code, index);
     const TbContextSnapshot_t *context = tb_context_snapshot(tb_session_context(app->debugger));
     TbDemoPane *pane = &app->demo.panes[index];
     bool source = pane->tabs[pane->active] == TB_SOURCE;
@@ -1407,13 +1407,13 @@ static void draw_code_pane(App *app, int index, TbRect_t rect)
     uint64_t selected_pc = 0, stopped_pc = 0; bool symbol;
     bool selected_valid = tb_code_location(context->selected.address, &selected_pc, &symbol) && !symbol;
     bool stopped_valid = tb_code_location(context->stopped.address, &stopped_pc, &symbol) && !symbol;
-    TbCodeRow rows[TB_CODE_ROWS];
+    TbCodeRow_t rows[TB_CODE_ROWS];
     size_t total = source ? view->line_count : tb_code_rows(view, rows);
     size_t visible_first = view->instruction_count, visible_end = 0;
     TbAssemblyColumns columns = assembly_columns(view);
     for (size_t flat = (size_t)scroll.offset; flat < total && output_row < scroll.visible; ++flat) {
         size_t i = source ? flat : rows[flat].instruction;
-        const TbInstruction *instruction = source || !view->instruction_count ? NULL : &view->instructions[i];
+        const TbInstruction_t *instruction = source || !view->instruction_count ? NULL : &view->instructions[i];
         if (!source && rows[flat].kind == TB_CODE_GAP) {
             char gap[160];
             assembly_gap_text(app, index, &rows[flat], gap, sizeof gap);
@@ -2306,7 +2306,7 @@ static void draw_ram_review(App *app)
 
 static void draw_image_review(App *app)
 {
-    TbRect_t card = menu_card(100, 20); TbCode *code = tb_session_code(app->debugger);
+    TbRect_t card = menu_card(100, 20); TbCode_t *code = tb_session_code(app->debugger);
     draw_header(app, "Confirm remote ELF mapping?");
     TbImageRange_t range;
     if (!tb_code_image_range(code, &app->image_review, 0, &range)) {
@@ -2347,7 +2347,7 @@ static void draw_source_settings(App *app)
     TbRect_t card = menu_card(88, (int)(tb_code_directory_count(tb_session_code(app->debugger)) + tb_code_rule_count(tb_session_code(app->debugger))) + 10);
     int left = card.x + 2, top = card.y, width = card.w - 4;
     draw_header(app, "Source lookup settings");
-    TbCode *code = tb_session_code(app->debugger);
+    TbCode_t *code = tb_session_code(app->debugger);
     tb_text(top, left, width, TB_MUTED, 0, "Directories: newest first. Prefix rules: first match wins, in listed order.");
     int height = card.h - 6; if (height < 1) { height = 1; }
     app->file_rows = height;
@@ -2360,7 +2360,7 @@ static void draw_source_settings(App *app)
             tb_code_safe(safe_from, sizeof safe_from, path, strlen(path));
             (void)snprintf(text, sizeof text, "Directory %zu: %s", item + 1, safe_from);
         } else if (item < dirs + rules) {
-            const TbSourceRule *rule = tb_code_rule(code, item - dirs);
+            const TbSourceRule_t *rule = tb_code_rule(code, item - dirs);
             tb_code_safe(safe_from, sizeof safe_from, rule->from, strlen(rule->from));
             tb_code_safe(safe_to, sizeof safe_to, rule->to, strlen(rule->to));
             (void)snprintf(text, sizeof text, "Rule %zu: %s -> %s", item - dirs + 1, safe_from, safe_to);
@@ -2381,7 +2381,7 @@ static void draw_code_files(App *app)
     TbRect_t card = menu_card(96, (int)tb_code_file_count(tb_session_code(app->debugger)) + 10);
     int left = card.x + 2, top = card.y, width = card.w - 4;
     draw_header(app, "GDB source files");
-    TbCode *code = tb_session_code(app->debugger);
+    TbCode_t *code = tb_session_code(app->debugger);
     tb_text(top, left, 8, TB_CYAN, 0, "Filter:");
     int field = add_control(app, (TbRect_t){left + 8, top, width - 8, 1}, FIELD, 0, 0);
     wide_text(top, left + 8, card.w - 12, app->input, 0, app->focus == field);
@@ -2390,7 +2390,7 @@ static void draw_code_files(App *app)
     app->file_rows = height;
     int match = 0, shown = 0;
     for (size_t i = 0; i < tb_code_file_count(code); ++i) {
-        const TbCodeFile *file = tb_code_file(code, i);
+        const TbCodeFile_t *file = tb_code_file(code, i);
         if (*filter && !strstr(file->file, filter) && !strstr(file->full, filter)) { continue; }
         if (match++ < app->file_page * height || shown == height) { continue; }
         char label[1024], path[960];
@@ -3295,7 +3295,7 @@ static bool profile_load(App *app, const TbProfile *p)
 }
 static bool profile_sources(App *app, TbProfile *next)
 {
-        TbCode *code = tb_session_code(app->debugger);
+        TbCode_t *code = tb_session_code(app->debugger);
         next->directory_count = tb_code_directory_count(code); next->rule_count = tb_code_rule_count(code);
         for (size_t i = 0; i < next->directory_count; ++i) {
             const char *path = tb_code_directory(code, i);
@@ -3303,7 +3303,7 @@ static bool profile_sources(App *app, TbProfile *next)
             memcpy(next->directories[i], path, strlen(path) + 1);
         }
         for (size_t i = 0; i < next->rule_count; ++i) {
-            const TbSourceRule *rule = tb_code_rule(code, i);
+            const TbSourceRule_t *rule = tb_code_rule(code, i);
             if (strlen(rule->from) >= TB_PROFILE_PATH || strlen(rule->to) >= TB_PROFILE_PATH) { status(app, "Applied source mapping exceeds profile field limit."); return false; }
             memcpy(next->rules[i].from, rule->from, strlen(rule->from) + 1); memcpy(next->rules[i].to, rule->to, strlen(rule->to) + 1);
         }
@@ -3570,11 +3570,11 @@ static void draw_setup(App *app)
     } else {
         setup_text(&text, app->setup_skipped ? "Saved setup was deliberately skipped. Save requires explicit replacement; hidden definitions are not merged." : tb_setup_restore_status(app->restoration));
         if (app->setup_information == 2) {
-            TbCode *code = tb_session_code(app->debugger); unsigned entries = 0;
+            TbCode_t *code = tb_session_code(app->debugger); unsigned entries = 0;
             for (int pane = 0; pane < TB_MAX_PANES; ++pane) {
                 for (size_t tab = 1; tab < tb_code_tab_count(code, pane); ++tab) {
                     if (!tb_code_tab_unavailable(code, pane, tab)) { continue; }
-                    const TbCodeFile *file = tb_code_tab_file(code, pane, tab);
+                    const TbCodeFile_t *file = tb_code_tab_file(code, pane, tab);
                     (void)snprintf(line, sizeof line, "Source pane %d: %.200s | unavailable", pane + 1, file->file); setup_text(&text, line);
                     setup_entry_actions(&text, 9, 10, pane * TB_CODE_TABS + (int)tab); ++entries;
                 }
@@ -3653,7 +3653,7 @@ static void setup_activate(App *app, int action, int entry)
     if (action >= 2 && action <= 4) { if (action == 4) { tb_break_refresh(tb_session_breakpoints(app->debugger)); } app->setup_information = action; app->setup_offset = 0; page(app, SETUP_INFO); return; }
     if (action == 8) { tb_setup_restore_cancel(app->restoration, app->debugger); return; }
     if (action == 9 || action == 10) {
-        int pane = entry / TB_CODE_TABS; size_t tab = (size_t)(entry % TB_CODE_TABS); TbCode *code = tb_session_code(app->debugger);
+        int pane = entry / TB_CODE_TABS; size_t tab = (size_t)(entry % TB_CODE_TABS); TbCode_t *code = tb_session_code(app->debugger);
         if (tb_setup_restore_active(app->restoration)) { status(app, "Wait for restoration to settle before retry/removal."); return; }
         bool okay = action == 9 ? tb_code_tab_retry(code, pane, tab) : tb_code_tab_close(code, pane, tab);
         if (action == 9 && !okay && !tb_code_files_ready(code)) { status(app, "Wait for the current source catalog; use Choose source file to refresh it."); }
@@ -4118,7 +4118,7 @@ static bool start_session(App *app)
     (void)snprintf(app->setup_profile, sizeof app->setup_profile, "%s", tb_profiles_find(app->profiles, app->profile->name) ? app->profile->name : "");
     TbSetup *saved = tb_profiles_setup(app->profiles, app->setup_profile);
     tb_setup_capture_destroy(app->setup); app->setup = tb_setup_capture_create(saved); app->setup_skipped = saved != NULL; free(saved);
-    const char *directories[TB_PROFILE_SOURCES]; TbSourceRule rules[TB_PROFILE_SOURCES];
+    const char *directories[TB_PROFILE_SOURCES]; TbSourceRule_t rules[TB_PROFILE_SOURCES];
     for (size_t i = 0; i < app->profile->directory_count; ++i) { directories[i] = app->profile->directories[i]; }
     for (size_t i = 0; i < app->profile->rule_count; ++i) {
         (void)snprintf(rules[i].from, sizeof rules[i].from, "%s", app->profile->rules[i].from);
@@ -4849,7 +4849,7 @@ static void activate(App *app, Control control)
         break;
     case CODE_ACTION: {
         if (control.value == CODE_FULLSCREEN) { toggle_source_fullscreen(app, control.pane); break; }
-        TbCode *code = tb_session_code(app->debugger);
+        TbCode_t *code = tb_session_code(app->debugger);
         app->code_pane = control.pane; app->code_action = (CodeAction)control.value;
         if (app->code_action == CODE_CHOOSE_FILE) {
             app->input[0] = L'\0'; app->file_page = 0; tb_code_request_files(code); page(app, CODE_FILES);
@@ -4892,7 +4892,7 @@ static void activate(App *app, Control control)
         if (app->page == CODE_FILES) {
             char filter[FIELD_SIZE * 4] = {0}; (void)field_utf8(app->input, filter, sizeof filter); total = 0;
             for (size_t i = 0; i < tb_code_file_count(tb_session_code(app->debugger)); ++i) {
-                const TbCodeFile *file = tb_code_file(tb_session_code(app->debugger), i);
+                const TbCodeFile_t *file = tb_code_file(tb_session_code(app->debugger), i);
                 if (!*filter || strstr(file->file, filter) || strstr(file->full, filter)) { ++total; }
             }
         }
@@ -4909,7 +4909,7 @@ static void activate(App *app, Control control)
         break;
     case CODE_SOURCE_TAB:
     case CODE_SOURCE_CYCLE: {
-        TbCode *code = tb_session_code(app->debugger);
+        TbCode_t *code = tb_session_code(app->debugger);
         size_t count = tb_code_tab_count(code, control.pane);
         size_t current = tb_code_tab_active(code, control.pane);
         size_t tab = control.kind == CODE_SOURCE_TAB ? (size_t)control.value :
@@ -4919,7 +4919,7 @@ static void activate(App *app, Control control)
         break;
     }
     case CODE_SOURCE_CLOSE: {
-        TbCode *code = tb_session_code(app->debugger);
+        TbCode_t *code = tb_session_code(app->debugger);
         size_t tab = (size_t)control.value;
         source_tab_save(app, control.pane);
         if (tb_code_tab_close(code, control.pane, tab)) {
@@ -5064,7 +5064,7 @@ static void activate(App *app, Control control)
         }
         if (app->page == CODE_FILES) { app->file_page = 0; break; }
         if (app->page == CODE_INPUT) {
-            TbCode *code = tb_session_code(app->debugger);
+            TbCode_t *code = tb_session_code(app->debugger);
             if (app->code_action == CODE_IMAGE_MAP) {
                 uint64_t bias; bool symbol;
                 if (!tb_code_location(input, &bias, &symbol) || symbol) {
@@ -5205,8 +5205,8 @@ static void scroll_body(App *app, Control control, int amount)
         ((amount < 0 && scroll.offset == 0) || (amount > 0 && scroll.offset == scroll.maximum))) {
         char previous[48];
             {
-                const TbCodeView *code = tb_code_view(tb_session_code(app->debugger), control.pane);
-                TbCodeRow rows[TB_CODE_ROWS]; size_t count = tb_code_rows(code, rows);
+                const TbCodeView_t *code = tb_code_view(tb_session_code(app->debugger), control.pane);
+                TbCodeRow_t rows[TB_CODE_ROWS]; size_t count = tb_code_rows(code, rows);
                 size_t visible = (size_t)scroll.offset < count ? rows[scroll.offset].instruction : 0;
                 (void)snprintf(previous, sizeof previous, "%s",
                                code->instruction_count ? code->instructions[visible].address : "");

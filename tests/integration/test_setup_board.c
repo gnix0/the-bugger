@@ -89,13 +89,13 @@ static void arm_core(void)
     uint64_t entry_stop = tb_context_snapshot(tb_session_context(session))->generation.stop;
     CHECK(tb_session_continue(session)); stopped(entry_stop); idle(); char entry_id[32];
     (void)snprintf(entry_id, sizeof entry_id, "%s", tb_break_row(b, 0)->id); CHECK(tb_break_remove(b, entry_id)); idle();
-    TbCode *code = tb_session_code(session); CHECK(tb_code_tab_select(code, 0, 0)); tb_code_visible(code, 0, true, true);
-    const TbCodeView *v = tb_code_view(code, 0); uint64_t end = tb_gdb_now_ms() + 6000;
+    TbCode_t *code = tb_session_code(session); CHECK(tb_code_tab_select(code, 0, 0)); tb_code_visible(code, 0, true, true);
+    const TbCodeView_t *v = tb_code_view(code, 0); uint64_t end = tb_gdb_now_ms() + 6000;
     while ((v->stale || !v->instruction_count || !v->line_count) && tb_gdb_now_ms() < end) { pump(); }
     CHECK(!v->stale && v->instruction_count && v->line_count);
     uint64_t pc = strtoull(tb_context_snapshot(tb_session_context(session))->stopped.address, NULL, 0); bool decoded = false;
     for (size_t i = 0; i < v->instruction_count; ++i) {
-        const TbInstruction *in = &v->instructions[i];
+        const TbInstruction_t *in = &v->instructions[i];
         if (in->numeric == pc) { decoded = in->bytes && *in->opcodes && *in->text && *in->text != '.' && !strstr(in->text, "(bad)"); }
     }
     CHECK(decoded);

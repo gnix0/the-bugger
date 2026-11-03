@@ -43,14 +43,14 @@ static void close_session(TbNative *n)
 }
 static void code_ready(TbNative *n, uint64_t revision)
 {
-    const TbCodeView *v = tb_code_view(tb_native_code(n), 0); uint64_t end = tb_gdb_now_ms() + 8000;
+    const TbCodeView_t *v = tb_code_view(tb_native_code(n), 0); uint64_t end = tb_gdb_now_ms() + 8000;
     while ((v->stale || v->assembly_revision <= revision) && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
     if (v->stale || v->assembly_revision <= revision) { fprintf(stderr, "code timeout %s / %s\n", v->assembly_error, tb_code_message(tb_native_code(n))); }
     CHECK(!v->stale && v->assembly_revision > revision);
 }
 static void browsing(TbNative *n)
 {
-    TbCode *code = tb_native_code(n); const TbCodeView *v = tb_code_view(code, 0);
+    TbCode_t *code = tb_native_code(n); const TbCodeView_t *v = tb_code_view(code, 0);
     uint64_t revision = v->assembly_revision; CHECK(tb_code_address(code, 0, "_init")); code_ready(n, revision);
     CHECK(v->instruction_count && strstr(tb_code_assembly_notice(code, 0, 0, v->instruction_count), "BACKEND-VERIFIED"));
     uint64_t init = v->instructions[0].numeric, gap = v->next_address;
@@ -65,7 +65,7 @@ static void browsing(TbNative *n)
     revision = v->assembly_revision; CHECK(tb_code_assembly_page(code, 0, -1)); code_ready(n, revision);
     CHECK(v->instructions[0].numeric == init && strstr(tb_code_assembly_notice(code, 0, 0, v->instruction_count), "BACKEND-VERIFIED"));
     for (size_t i = 0; i < v->instruction_count; ++i) { CHECK(v->instructions[i].numeric < gap || v->instructions[i].numeric >= next); }
-    TbCodeView *saved = malloc(sizeof *saved); CHECK(saved); *saved = *v;
+    TbCodeView_t *saved = malloc(sizeof *saved); CHECK(saved); *saved = *v;
     for (int repeat = 0; repeat < 5; ++repeat) {
         tb_code_visible(code, 0, true, false); for (int i = 0; i < 20; ++i) { tb_native_pump(n, 5); }
         tb_code_visible(code, 0, true, true); for (int i = 0; i < 20; ++i) { tb_native_pump(n, 5); }
@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
     CHECK(tb_break_definition_count(b) == 1 && definition->identity == definition_identity);
     CHECK(tb_break_remove(b, id)); idle(n); CHECK(tb_break_count(b) == 0);
     CHECK(tb_break_definition_count(b) == 0);
-    const TbCodeView *view = tb_code_view(tb_native_code(n), 0); uint64_t revision = view->assembly_revision;
+    const TbCodeView_t *view = tb_code_view(tb_native_code(n), 0); uint64_t revision = view->assembly_revision;
     tb_code_return(tb_native_code(n), 0); code_ready(n, revision); CHECK(view->instruction_count > 1);
     char location[64]; (void)snprintf(location, sizeof location, "*%s", view->instructions[1].address);
     previous = tb_context_snapshot(tb_native_context(n))->generation.stop;

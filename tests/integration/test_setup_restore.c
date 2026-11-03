@@ -36,7 +36,7 @@ int main(int argc, char **argv)
     TbSessionConfig config = {.gdb = "gdb", .executable = argv[1]}; CHECK(tb_session_start(owned, &config));
     TbLayout_t layout; tb_layout_init(&layout); layout.overlays = true; TbDemo workspace; tb_demo_init(&workspace);
     const char *expressions[TB_MAX_PANES]; for (int i = 0; i < TB_MAX_PANES; ++i) { expressions[i] = ""; }
-    TbCode *code = tb_session_code(owned); TbMemory *memory = tb_session_memory(owned); TbVariables *variables = tb_session_variables(owned);
+    TbCode_t *code = tb_session_code(owned); TbMemory *memory = tb_session_memory(owned); TbVariables *variables = tb_session_variables(owned);
     TbSetupCapture *c = tb_setup_capture_create(NULL); CHECK(c);
 #define CAPTURE() tb_setup_capture_update(c, &layout, &workspace, code, memory, variables, tb_session_breakpoints(owned), expressions)
     CHECK(CAPTURE()); TbSetup *saved = malloc(sizeof *saved); CHECK(saved); *saved = *tb_setup_capture_current(c);
