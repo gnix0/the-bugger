@@ -5,7 +5,7 @@
 #include <inttypes.h>
 #include <string.h>
 
-static TbSession *session;
+static TbSession_t *session;
 static TbStack_t *stack;
 static void dump(void)
 {
@@ -29,9 +29,9 @@ int main(int argc, char **argv)
 {
     CHECK(argc == 4); const char *log = getenv("TB_STACK_BOARD_LOG"); CHECK(log && *log);
     session = tb_session_create(); CHECK(session); stack = tb_session_stack(session);
-    TbOpenOcdPlan *external = calloc(1, sizeof *external); CHECK(external);
+    TbOpenOcdPlan_t *external = calloc(1, sizeof *external); CHECK(external);
     (void)snprintf(external->endpoint, sizeof external->endpoint, "%s", argv[2]);
-    TbSessionConfig config = {.kind = TB_SESSION_EXTENDED_REMOTE, .gdb = argv[1], .endpoint = argv[2], .executable = argv[3], .openocd = external};
+    TbSessionConfig_t config = {.kind = TB_SESSION_EXTENDED_REMOTE, .gdb = argv[1], .endpoint = argv[2], .executable = argv[3], .openocd = external};
     CHECK(tb_session_start(session, &config));
     tb_context_visible(tb_session_context(session), true, true); tb_stack_visible(stack, 0, true);
     uint64_t end = tb_gdb_now_ms() + 10000;

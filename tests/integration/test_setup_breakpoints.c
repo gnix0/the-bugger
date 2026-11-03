@@ -42,8 +42,8 @@ static void run(const char *peer, unsigned scenario)
     CHECK(tb_break_ready(b)); char mode[16]; (void)snprintf(mode, sizeof mode, "%u", scenario == 12 ? 1 : scenario);
     command(g, "-fcase", mode);
     if (scenario == 9 || scenario == 10) { tb_break_refresh(b); for (int i = 0; i < 30; ++i) { pump(g); } }
-    TbSetupBreak d = {.id = 7, .location = "main", .enabled = true, .condition = "1", .ignore_set = true, .ignore = 2, .hardware = scenario == 7};
-    TbSetupBreak address = {.id = 9, .location = "*0x1000", .enabled = true};
+    TbSetupBreak_t d = {.id = 7, .location = "main", .enabled = true, .condition = "1", .ignore_set = true, .ignore = 2, .hardware = scenario == 7};
+    TbSetupBreak_t address = {.id = 9, .location = "*0x1000", .enabled = true};
     CHECK(tb_break_restore(b, &address, false)); CHECK(tb_break_restoration(b, 9)->state == TB_RESTORE_ADDRESS);
     CHECK(!tb_break_restoration_active(b) && tb_break_definition_count(b) == 0);
     CHECK(tb_break_restore(b, &d, false)); CHECK(tb_break_definition_count(b) == 0);

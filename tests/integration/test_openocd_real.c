@@ -25,13 +25,13 @@ int main(int argc, char **argv)
     struct sockaddr_in addr = {.sin_family = AF_INET, .sin_addr.s_addr = htonl(INADDR_LOOPBACK)};
     CHECK(bind(fd, (struct sockaddr *)&addr, sizeof addr) == 0); socklen_t length = sizeof addr;
     CHECK(getsockname(fd, (struct sockaddr *)&addr, &length) == 0 && close(fd) == 0);
-    TbProfile *p = calloc(1, sizeof *p); TbOpenOcdPlan *plan = malloc(sizeof *plan); CHECK(p && plan);
+    TbProfile_t *p = calloc(1, sizeof *p); TbOpenOcdPlan_t *plan = malloc(sizeof *plan); CHECK(p && plan);
     p->start_server = true; (void)snprintf(p->openocd, sizeof p->openocd, "%s", argv[1]);
     (void)snprintf(p->endpoint, sizeof p->endpoint, "localhost:%u", ntohs(addr.sin_port));
     p->search.count = 1; (void)snprintf(p->search.values[0], TB_PROFILE_WORD, "%s", root);
     p->scripts.count = 2; (void)snprintf(p->scripts.values[0], TB_PROFILE_WORD, "first config.cfg"); (void)snprintf(p->scripts.values[1], TB_PROFILE_WORD, "second.cfg");
     char error[256]; CHECK(tb_openocd_plan(p, plan, error, sizeof error));
-    TbOpenOcd *server = tb_openocd_create(log_line, NULL); CHECK(server && tb_openocd_start(server, plan));
+    TbOpenOcd_t *server = tb_openocd_create(log_line, NULL); CHECK(server && tb_openocd_start(server, plan));
     uint64_t until = tb_gdb_now_ms() + 2000;
     while (tb_openocd_active(server) && tb_gdb_now_ms() < until) { tb_openocd_pump(server); (void)poll(NULL, 0, 1); }
     CHECK(!tb_openocd_active(server) && tb_openocd_failed(server) && !tb_openocd_ready(server) && ordered);

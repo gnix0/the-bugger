@@ -13,7 +13,7 @@
 #include <unistd.h>
 
 static pid_t server = -1, fixture = -1;
-static TbSession *session;
+static TbSession_t *session;
 static void cleanup(void)
 {
     if (session) {
@@ -52,7 +52,7 @@ static pid_t spawn(char *const args[], const char *ready)
     return child;
 }
 
-static void state(TbSessionState expected)
+static void state(TbSessionState_e expected)
 {
     uint64_t until = tb_gdb_now_ms() + 5000;
     while (tb_session_state(session) != expected && tb_gdb_now_ms() < until) { tb_session_pump(session, 1); }
@@ -84,7 +84,7 @@ int main(int argc, char **argv)
     char endpoint[64]; (void)snprintf(endpoint, sizeof endpoint, "127.0.0.1:%u", ntohs(address.sin_port));
     char *const command[] = {"gdbserver", "--multi", endpoint, NULL}; server = spawn(command, "Listening on port");
     session = tb_session_create(); CHECK(session);
-    TbSessionConfig config = {.kind = TB_SESSION_EXTENDED_REMOTE, .gdb = "gdb", .endpoint = endpoint, .executable = argv[1]};
+    TbSessionConfig_t config = {.kind = TB_SESSION_EXTENDED_REMOTE, .gdb = "gdb", .endpoint = endpoint, .executable = argv[1]};
     CHECK(tb_session_start(session, &config)); state(TB_SESSION_READY);
     char attach[64]; (void)snprintf(attach, sizeof attach, "attach %ld", (long)fixture);
     tb_context_visible(tb_session_context(session), true, false);

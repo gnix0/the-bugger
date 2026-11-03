@@ -63,8 +63,8 @@ bool tb_images_trusted_neighbor(const TbImages_t *images, uint64_t address, int 
  * Called after stops, never from a protocol callback or while running. */
 void tb_images_native(TbImages_t *images, pid_t pid, const char *executable, uint64_t pc);
 /* Current procfs/ELF metadata proof, no target bytes or access permission. */
-bool tb_images_native_mapping(pid_t pid, uint64_t address, TbSetupMapping *mapping);
-bool tb_images_mapping_equal(const TbSetupMapping *saved, const TbSetupMapping *current, uint64_t address);
+bool tb_images_native_mapping(pid_t pid, uint64_t address, TbSetupMapping_t *mapping);
+bool tb_images_mapping_equal(const TbSetupMapping_t *saved, const TbSetupMapping_t *current, uint64_t address);
 bool tb_images_limited(const TbImages_t *images);
 
 #endif // THE_BUGGER_IMAGES_H

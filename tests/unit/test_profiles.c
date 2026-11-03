@@ -37,23 +37,23 @@ static char *read_file(const char *path)
     char *text = malloc((size_t)length + 1); CHECK(text);
     CHECK(fread(text, 1, (size_t)length, file) == (size_t)length); text[length] = 0; CHECK(fclose(file) == 0); return text;
 }
-static TbSetup *setup_fixture(void)
+static TbSetup_t *setup_fixture(void)
 {
-    TbSetup *s = calloc(1, sizeof *s); CHECK(s);
+    TbSetup_t *s = calloc(1, sizeof *s); CHECK(s);
     s->next_id = 7; s->columns[0] = 3600; s->columns[1] = 3400; s->columns[2] = 3000; s->row_ratio = 6200;
     for (int i = 0; i < 6; ++i) {
-        s->roots[i] = i; s->nodes[i] = (TbSetupNode){.used = true, .pane = i, .first = -1, .second = -1};
-        TbSetupPane *p = &s->panes[i]; p->used = true; p->id = (uint64_t)i + 1;
+        s->roots[i] = i; s->nodes[i] = (TbSetupNode_t){.used = true, .pane = i, .first = -1, .second = -1};
+        TbSetupPane_t *p = &s->panes[i]; p->used = true; p->id = (uint64_t)i + 1;
         p->tab_count = 1; p->tabs[0] = p->selected = i; p->memory_bytes = 128; p->memory_group = 1;
     }
     return s;
 }
-static void setup_checks(TbProfiles *store)
+static void setup_checks(TbProfiles_t *store)
 {
-    TbSetup *s = setup_fixture(); CHECK(tb_setup_valid(s));
+    TbSetup_t *s = setup_fixture(); CHECK(tb_setup_valid(s));
     s->panes[0].source_count = 2;
     for (size_t i = 0; i < 2; ++i) {
-        TbSetupSource *f = &s->panes[0].sources[i]; f->id = s->next_id++;
+        TbSetupSource_t *f = &s->panes[0].sources[i]; f->id = s->next_id++;
         (void)snprintf(f->file, sizeof f->file, "tree %zu/duplicate.c", i);
         (void)snprintf(f->full, sizeof f->full, "/missing tree %zu/duplicate.c", i);
     }
@@ -61,32 +61,32 @@ static void setup_checks(TbProfiles *store)
     (void)snprintf(s->panes[3].memory_expression, 256, "&buffer[4]");
     s->watch_count = 1; s->watches[0].id = s->next_id++; s->watches[0].format = 1;
     (void)snprintf(s->watches[0].expression, 256, "sample.member");
-    s->break_count = 1; s->breaks[0] = (TbSetupBreak){.id = s->next_id++, .enabled = true, .ignore_set = true, .ignore = 13, .hardware = true};
+    s->break_count = 1; s->breaks[0] = (TbSetupBreak_t){.id = s->next_id++, .enabled = true, .ignore_set = true, .ignore = 13, .hardware = true};
     (void)snprintf(s->breaks[0].location, TB_SETUP_LOCATION, "a_symbol");
     (void)snprintf(s->breaks[0].condition, 512, "value == 3");
-    s->breaks[0].mapping = (TbSetupMapping){.path = "/native/image", .identity = "reliable-current-file-identity", .bias = UINT64_MAX - 4096, .begin = UINT64_MAX - 1024, .end = UINT64_MAX};
+    s->breaks[0].mapping = (TbSetupMapping_t){.path = "/native/image", .identity = "reliable-current-file-identity", .bias = UINT64_MAX - 4096, .begin = UINT64_MAX - 1024, .end = UINT64_MAX};
     json_object *encoded = tb_setup_encode(s); CHECK(encoded);
-    TbSetup *decoded = tb_setup_decode(encoded); CHECK(decoded && tb_setup_equal(s, decoded));
+    TbSetup_t *decoded = tb_setup_decode(encoded); CHECK(decoded && tb_setup_equal(s, decoded));
     ++decoded->next_id; decoded->nodes[63].ratio = 123; decoded->nodes[0].ratio = 456;
     CHECK(tb_setup_equal(s, decoded)); free(decoded);
     json_object *panes = NULL; CHECK(json_object_object_get_ex(encoded, "panes", &panes));
     json_object *pane = json_object_array_get_idx(panes, 0);
     CHECK(json_object_object_add(pane, "source_selected", json_object_new_int(999)) == 0);
     CHECK(!tb_setup_decode(encoded)); json_object_put(encoded);
-    s->nodes[6] = (TbSetupNode){.used = true, .pane = -1, .first = 6, .second = 0, .ratio = 5000};
+    s->nodes[6] = (TbSetupNode_t){.used = true, .pane = -1, .first = 6, .second = 0, .ratio = 5000};
     s->roots[0] = 6; CHECK(!tb_setup_valid(s)); s->roots[0] = 0; memset(&s->nodes[6], 0, sizeof s->nodes[6]);
     uint64_t id = s->breaks[0].id; s->breaks[0].id = s->watches[0].id; CHECK(!tb_setup_valid(s)); s->breaks[0].id = id;
 
-    const TbProfile *p = tb_profiles_find(store, "profile-0"); CHECK(p);
+    const TbProfile_t *p = tb_profiles_find(store, "profile-0"); CHECK(p);
     char *before = read_file(tb_profiles_path(store));
     CHECK(!tb_profiles_save_setup(store, "missing", s, p, "/launch directory"));
     CHECK(tb_profiles_save_setup(store, p->name, s, p, "/launch directory"));
     char *saved = read_file(tb_profiles_path(store)); CHECK(strstr(saved, "\"version\":3") || strstr(saved, "\"version\": 3"));
     CHECK(strstr(saved, "\"setups\"") && !strstr(before, "\"setups\"")); free(before);
-    TbProfiles *copy = tb_profiles_create(); CHECK(copy && tb_profiles_load(copy));
+    TbProfiles_t *copy = tb_profiles_create(); CHECK(copy && tb_profiles_load(copy));
     char *unchanged_load = read_file(tb_profiles_path(store)); CHECK(strcmp(saved, unchanged_load) == 0); free(unchanged_load);
     decoded = tb_profiles_setup(copy, "profile-0"); CHECK(decoded && tb_setup_equal(s, decoded)); free(decoded);
-    TbProfile *snapshot = calloc(1, sizeof *snapshot); char directory[TB_SETUP_PATH]; CHECK(snapshot);
+    TbProfile_t *snapshot = calloc(1, sizeof *snapshot); char directory[TB_SETUP_PATH]; CHECK(snapshot);
     CHECK(tb_profiles_setup_connection(copy, "profile-0", snapshot, directory));
     CHECK(strcmp(directory, "/launch directory") == 0 && memcmp(snapshot, p, sizeof *p) == 0);
     CHECK(tb_profiles_duplicate(store, "profile-0", "independent"));
@@ -143,7 +143,7 @@ static void setup_checks(TbProfiles *store)
      * escaping, must fail as a whole without replacing the 1 MiB store. */
     s->break_count = TB_SETUP_BREAKS;
     for (size_t i = 0; i < s->break_count; ++i) {
-        TbSetupBreak *b = &s->breaks[i]; memset(b, 0, sizeof *b); b->id = s->next_id++;
+        TbSetupBreak_t *b = &s->breaks[i]; memset(b, 0, sizeof *b); b->id = s->next_id++;
         memset(b->location, '\\', sizeof b->location - 1);
     }
     encoded = tb_setup_encode(s); CHECK(encoded);
@@ -159,7 +159,7 @@ static void setup_checks(TbProfiles *store)
 int main(void)
 {
     char root[] = "/tmp/the-bugger-m13-XXXXXX"; CHECK(mkdtemp(root)); CHECK(setenv("XDG_CONFIG_HOME", root, 1) == 0);
-    TbProfiles *store = tb_profiles_create(); TbProfile *p = malloc(sizeof *p); CHECK(store && p);
+    TbProfiles_t *store = tb_profiles_create(); TbProfile_t *p = malloc(sizeof *p); CHECK(store && p);
     CHECK(tb_profiles_load(store) && tb_profiles_count(store) == 0);
     CHECK(access(tb_profiles_path(store), F_OK) != 0); /* Loading creates nothing. */
     for (int kind = 0; kind < 3; ++kind) {
@@ -178,8 +178,8 @@ int main(void)
         CHECK(tb_profile_valid(p) && tb_profiles_put(store, p, false));
         CHECK(!tb_profiles_put(store, p, false));
         CHECK(tb_profiles_put(store, p, true));
-        TbProfiles *copy = tb_profiles_create(); CHECK(copy && tb_profiles_load(copy));
-        const TbProfile *got = tb_profiles_find(copy, p->name); CHECK(got && memcmp(got, p, sizeof *p) == 0);
+        TbProfiles_t *copy = tb_profiles_create(); CHECK(copy && tb_profiles_load(copy));
+        const TbProfile_t *got = tb_profiles_find(copy, p->name); CHECK(got && memcmp(got, p, sizeof *p) == 0);
         tb_profiles_destroy(copy);
     }
     char *legacy_store = read_file(tb_profiles_path(store));
@@ -217,7 +217,7 @@ int main(void)
     int large = open(tb_profiles_path(store), O_WRONLY); CHECK(large >= 0);
     CHECK(ftruncate(large, 1024 * 1024 + 1) == 0 && close(large) == 0); CHECK(!tb_profiles_load(store));
     write_file(tb_profiles_path(store), original); CHECK(tb_profiles_load(store));
-    TbProfiles *stale = tb_profiles_create(); CHECK(stale && tb_profiles_load(stale));
+    TbProfiles_t *stale = tb_profiles_create(); CHECK(stale && tb_profiles_load(stale));
     CHECK(tb_profiles_touch(store, "profile-0")); CHECK(!tb_profiles_touch(stale, "profile-1"));
     CHECK(strstr(tb_profiles_error(stale), "changed on disk")); CHECK(tb_profiles_load(stale));
     CHECK(tb_profiles_touch(stale, "profile-1")); CHECK(tb_profiles_load(store));
@@ -244,7 +244,7 @@ int main(void)
     pid_t child = fork(); CHECK(child >= 0);
     if (child == 0) {
         CHECK(setenv("HOME", root, 1) == 0 && setenv("XDG_CONFIG_HOME", "relative-is-ignored", 1) == 0);
-        TbProfiles *fallback = tb_profiles_create(); CHECK(fallback && tb_profiles_load(fallback));
+        TbProfiles_t *fallback = tb_profiles_create(); CHECK(fallback && tb_profiles_load(fallback));
         char expected[256]; (void)snprintf(expected, sizeof expected, "%s/.config/the-bugger/profiles.json", root);
         CHECK(strcmp(tb_profiles_path(fallback), expected) == 0);
         tb_profile_defaults(p, 0); (void)snprintf(p->name, sizeof p->name, "fallback"); CHECK(tb_profiles_put(fallback, p, false));

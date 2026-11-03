@@ -116,7 +116,7 @@ typedef struct {
     Control field_identity;
     Page field_page;
     char status[160];
-    TbSession *debugger;
+    TbSession_t *debugger;
     bool demo_mode, live, leave_session, exit_after_close;
     bool follow_log[TB_MAX_PANES];
     wchar_t input[FIELD_SIZE];
@@ -148,7 +148,7 @@ typedef struct {
     unsigned memory_range;
     int memory_range_page, memory_range_rows, memory_range_review;
     RangeAction memory_range_input;
-    TbSessionRamReview ram_review;
+    TbSessionRamReview_t ram_review;
     int ram_offset;
     TbMemoryBackend_t mmio_review;
     TbCodeImageReview_t image_review;
@@ -165,9 +165,9 @@ typedef struct {
     unsigned watch_width;
     int image_review_row;
     TbGdbGeneration_t watch_context;
-    TbProfiles *profiles;
-    TbProfile *profile;
-    TbOpenOcdPlan *server_plan; TbOpenOcdCatalog *catalog;
+    TbProfiles_t *profiles;
+    TbProfile_t *profile;
+    TbOpenOcdPlan_t *server_plan; TbOpenOcdCatalog_t *catalog;
     bool script_refocus;
     int script_drag_grab;
     char script_filter[FIELD_SIZE]; int script_kind, script_offset, script_selected, review_offset;
@@ -179,9 +179,9 @@ typedef struct {
     char profile_from[TB_PROFILE_PATH];
     char profile_original_name[TB_PROFILE_NAME];
     TbSetupCapture *setup;
-    TbProfile *session_profile;
-    TbProfile *setup_review_connection;
-    TbSetup *setup_review;
+    TbProfile_t *session_profile;
+    TbProfile_t *setup_review_connection;
+    TbSetup_t *setup_review;
     char setup_profile[TB_PROFILE_NAME], launch_directory[TB_SETUP_PATH];
     bool setup_skipped;
     int setup_information, setup_offset;
@@ -190,8 +190,8 @@ typedef struct {
     uint64_t import_revision;
     int import_hardware, import_ignore;
     TbSetupRestore *restoration;
-    TbSetup *restore_definition;
-    TbProfile *restore_connection;
+    TbSetup_t *restore_definition;
+    TbProfile_t *restore_connection;
     char restore_directory[TB_SETUP_PATH], restore_saved_directory[TB_SETUP_PATH];
     char restore_stamp[256], restore_saved_stamp[256];
     bool restore_selected, restore_confirmed;
@@ -199,7 +199,7 @@ typedef struct {
 
 static bool start_session(App *app);
 static bool profile_capture(App *app);
-static bool profile_load(App *app, const TbProfile *profile);
+static bool profile_load(App *app, const TbProfile_t *profile);
 static void draw_profiles(App *app);
 static void profile_edit(App *app, int operation, const char *initial);
 static void profile_activate(App *app, Control control);
@@ -3263,7 +3263,7 @@ static bool form_string(Form *form, int field, const char *text)
     if (length == (size_t)-1 || length >= FIELD_SIZE) { return false; }
     form->values[field][length] = 0; return true;
 }
-static bool profile_load(App *app, const TbProfile *p)
+static bool profile_load(App *app, const TbProfile_t *p)
 {
     if (!p) { status(app, "Profile no longer exists; Reload the list."); return false; }
     Form next = {0}; next.alternate = p->kind == 0 ? p->attach : p->adapter_target; next.start_server = p->start_server;
@@ -3293,7 +3293,7 @@ static bool profile_load(App *app, const TbProfile *p)
         p->kind == 2 ? "Remote profile loaded for review. Connect explicitly; server stays externally owned." :
         "Profile loaded for review. PID/environment/runtime state are not restored."); return true;
 }
-static bool profile_sources(App *app, TbProfile *next)
+static bool profile_sources(App *app, TbProfile_t *next)
 {
         TbCode_t *code = tb_session_code(app->debugger);
         next->directory_count = tb_code_directory_count(code); next->rule_count = tb_code_rule_count(code);
@@ -3311,7 +3311,7 @@ static bool profile_sources(App *app, TbProfile *next)
 }
 static bool profile_capture(App *app)
 {
-    TbProfile next = *app->profile; next.kind = app->session;
+    TbProfile_t next = *app->profile; next.kind = app->session;
     char values[FORM_FIELDS][FIELD_SIZE * 4];
     for (int i = 0; i < FORM_FIELDS; ++i) { if (!field_utf8(app->forms[app->session].values[i], values[i], sizeof values[i])) { status(app, "Invalid configuration text."); return false; } }
     Form *form = &app->forms[app->session];
@@ -3320,7 +3320,7 @@ static bool profile_capture(App *app)
         (void)snprintf(next.executable, sizeof next.executable, "%s", values[form->alternate ? 4 : 1]);
         (void)snprintf(next.directory, sizeof next.directory, "%s", values[3]);
         (void)snprintf(next.gdb, sizeof next.gdb, "%s", values[5]);
-        TbSessionWords words = {0}; char error[160];
+        TbSessionWords_t words = {0}; char error[160];
         if (!form->alternate && !tb_session_words(values[2], &words, error, sizeof error)) { status(app, error); return false; }
         if (form->alternate) { next.directory[0] = 0; }
         next.arguments.count = words.count; memcpy(next.arguments.values, words.values, sizeof words.values);
@@ -3359,7 +3359,7 @@ static bool setup_capture(App *app)
 }
 static bool setup_available(App *app)
 {
-    TbSessionState state = tb_session_state(app->debugger);
+    TbSessionState_e state = tb_session_state(app->debugger);
     if (tb_setup_restore_active(app->restoration) || !app->setup || state == TB_SESSION_STARTING || state == TB_SESSION_CLOSING || state == TB_SESSION_FAILED ||
         tb_code_settings_busy(tb_session_code(app->debugger))) {
         status(app, "Wait for session/source configuration to settle before saving setup."); return false;
@@ -3406,7 +3406,7 @@ static void setup_pair(SetupText *r, const char *label, const char *session, con
     (void)snprintf(line, sizeof line, "  Saved: %s", *saved ? saved : "(empty)"); setup_text(r, line);
     (void)snprintf(line, sizeof line, "  Session: %s", *session ? session : "(empty)"); setup_text(r, line);
 }
-static void setup_words(SetupText *r, const char *label, const TbProfileWords *a, const TbProfileWords *b)
+static void setup_words(SetupText *r, const char *label, const TbProfileWords_t *a, const TbProfileWords_t *b)
 {
     size_t count = a->count > b->count ? a->count : b->count;
     for (size_t i = 0; i < count; ++i) {
@@ -3414,7 +3414,7 @@ static void setup_words(SetupText *r, const char *label, const TbProfileWords *a
         setup_pair(r, name, i < a->count ? a->values[i] : "(absent)", i < b->count ? b->values[i] : "(absent)");
     }
 }
-static void setup_differences(SetupText *r, const TbProfile *a, const TbProfile *b)
+static void setup_differences(SetupText *r, const TbProfile_t *a, const TbProfile_t *b)
 {
     uint32_t changes = tb_profile_differences(a, b);
     if (!changes) { setup_text(r, "Connection snapshot matches the saved profile."); return; }
@@ -3477,8 +3477,8 @@ static void draw_setup(App *app)
 {
     draw_header(app, app->page == SETUP_RESTORE_REVIEW ? "Session setup restoration review" : app->page == SETUP_MENU ? "Setup" : app->page == SETUP_SAVE ? "Save setup review" : "Setup information");
     TbRect_t card = menu_card(100, app->page == SETUP_MENU ? 12 : 25); int left = card.x + 2, width = card.w - 4;
-    const TbSetup *s = app->page == SETUP_RESTORE_REVIEW ? app->restore_definition : tb_setup_capture_current(app->setup);
-    const TbProfile *associated = tb_profiles_find(app->profiles, app->page == SETUP_RESTORE_REVIEW ? app->profile->name : app->setup_profile);
+    const TbSetup_t *s = app->page == SETUP_RESTORE_REVIEW ? app->restore_definition : tb_setup_capture_current(app->setup);
+    const TbProfile_t *associated = tb_profiles_find(app->profiles, app->page == SETUP_RESTORE_REVIEW ? app->profile->name : app->setup_profile);
     char line[256]; (void)snprintf(line, sizeof line, "Profile: %s", associated ? associated->name : "none - save a connection profile first");
     tb_text(card.y, left, width, TB_CYAN, A_BOLD, line);
     if (app->page == SETUP_MENU) {
@@ -3586,7 +3586,7 @@ static void draw_setup(App *app)
                 setup_entry_actions(&text, 0, 13, (int)i); ++entries;
             }
             for (size_t i = 0; i < tb_setup_capture_retained(app->setup); ++i) {
-                const TbSetupBreak *b = tb_setup_capture_retained_break(app->setup, i);
+                const TbSetupBreak_t *b = tb_setup_capture_retained_break(app->setup, i);
                 (void)snprintf(line, sizeof line, "Breakpoint %llu | %s | %s | %.140s", (unsigned long long)b->id,
                     b->enabled ? "enabled intent" : "disabled intent", tb_break_restoration(tb_session_breakpoints(app->debugger), b->id) ? tb_break_restore_state(tb_break_restoration(tb_session_breakpoints(app->debugger), b->id)->state) : tb_session_state(app->debugger) == TB_SESSION_RUNNING ? "awaiting stop" : "pending", *b->source ? b->source : b->location);
                 setup_text(&text, line);
@@ -3662,7 +3662,7 @@ static void setup_activate(App *app, int action, int entry)
     }
     if (action == 11) {
         if (tb_setup_restore_active(app->restoration)) { return; }
-        const TbSetupBreak *b = entry >= 0 ? tb_setup_capture_retained_break(app->setup, (size_t)entry) : NULL;
+        const TbSetupBreak_t *b = entry >= 0 ? tb_setup_capture_retained_break(app->setup, (size_t)entry) : NULL;
         if (b) { uint64_t id = b->id; (void)tb_setup_capture_remove_break(app->setup, id); tb_break_restore_forget(tb_session_breakpoints(app->debugger), id); (void)setup_capture(app); }
         return;
     }
@@ -3674,7 +3674,7 @@ static void setup_activate(App *app, int action, int entry)
         return;
     }
     if (action == 14 && !tb_setup_restore_active(app->restoration)) {
-        const TbSetupBreak *definition = entry >= 0 ? tb_setup_capture_retained_break(app->setup, (size_t)entry) : NULL;
+        const TbSetupBreak_t *definition = entry >= 0 ? tb_setup_capture_retained_break(app->setup, (size_t)entry) : NULL;
         if (definition) { (void)tb_break_restore(tb_session_breakpoints(app->debugger), definition, true); tb_setup_restore_pump(app->restoration, app->setup, app->debugger); }
         return;
     }
@@ -3705,7 +3705,7 @@ static void setup_activate(App *app, int action, int entry)
             if (!tb_break_review_intent(b, app->import_backend, &app->import_definition)) { status(app, "Reviewed intent does not match current supported attributes; resolve the external change before saving."); return; }
         } else {
             if (tb_break_owned(b, app->import_backend)) { status(app, "Breakpoint is already included."); return; }
-            TbSetupBreak candidate = {0}; uint64_t address; memcpy(candidate.location, app->import_definition.location, sizeof candidate.location);
+            TbSetupBreak_t candidate = {0}; uint64_t address; memcpy(candidate.location, app->import_definition.location, sizeof candidate.location);
             if (tb_session_kind(app->debugger) == TB_SESSION_LOCAL && tb_session_state(app->debugger) == TB_SESSION_STOPPED && tb_break_literal(&candidate, &address) && address) {
                 (void)tb_images_native_mapping(tb_session_target_pid(app->debugger), address, &app->import_definition.mapping);
             }
@@ -3720,7 +3720,7 @@ static void setup_activate(App *app, int action, int entry)
     if (action == 12) { tb_setup_restore_acknowledge(app->restoration); tb_setup_restore_pump(app->restoration, app->setup, app->debugger); return; }
     if (action == 5) {
         if (!tb_profiles_find(app->profiles, app->setup_profile) || !setup_available(app) || !setup_capture(app)) { return; }
-        TbProfile snapshot = *app->session_profile; if (!profile_sources(app, &snapshot)) { return; }
+        TbProfile_t snapshot = *app->session_profile; if (!profile_sources(app, &snapshot)) { return; }
         if (!app->setup_review || !app->setup_review_connection || !tb_setup_equal(app->setup_review, tb_setup_capture_current(app->setup)) ||
             tb_profile_differences(&snapshot, app->setup_review_connection)) {
             if (app->setup_review && app->setup_review_connection) {
@@ -3747,7 +3747,7 @@ static const char *profile_item_text(const App *app, size_t index)
     return app->profile_group == 0 ? app->profile->directories[index] : app->profile_group == 1 ? app->profile->rules[index].from :
            app->profile_group == 2 ? app->profile->scripts.values[index] : app->profile_group == 3 ? app->profile->search.values[index] : "";
 }
-static const TbProfile *profile_list_at(const App *app, size_t index)
+static const TbProfile_t *profile_list_at(const App *app, size_t index)
 {
     size_t at = 0;
     for (size_t i = 0; i < TB_PROFILE_RECENT; ++i) {
@@ -3755,7 +3755,7 @@ static const TbProfile *profile_list_at(const App *app, size_t index)
         if (at++ == index) { return tb_profiles_find(app->profiles, name); }
     }
     for (size_t i = 0; i < tb_profiles_count(app->profiles); ++i) {
-        const TbProfile *p = tb_profiles_at(app->profiles, i); bool recent = false;
+        const TbProfile_t *p = tb_profiles_at(app->profiles, i); bool recent = false;
         for (size_t j = 0; j < TB_PROFILE_RECENT; ++j) {
             const char *name = tb_profiles_recent(app->profiles, j); if (!name) { break; }
             recent = recent || strcmp(p->name, name) == 0;
@@ -3827,7 +3827,7 @@ static void draw_profiles(App *app)
         if (app->page == SCRIPT_LIST) { page(app, CONFIGURE); break; }
         if (app->page == SCRIPT_FILTER) { page(app, SCRIPT_LIST); break; }
         if (app->page == PROFILE_LIST) {
-            const TbProfile *p = profile_list_at(app, (size_t)item);
+            const TbProfile_t *p = profile_list_at(app, (size_t)item);
             if (!p) { continue; }
             bool recent = false;
             for (size_t j = 0; j < TB_PROFILE_RECENT; ++j) { const char *name = tb_profiles_recent(app->profiles, j); recent = recent || (name && strcmp(name, p->name) == 0); }
@@ -3858,7 +3858,7 @@ static void profile_finish(App *app, bool ok)
         if (*app->profile->name && tb_profiles_find(app->profiles, app->profile->name)) {
             if (strcmp(app->setup_profile, app->profile->name) != 0) {
                 app->setup_skipped = tb_profiles_has_setup(app->profiles, app->profile->name);
-                TbSetup *saved = tb_profiles_setup(app->profiles, app->profile->name);
+                TbSetup_t *saved = tb_profiles_setup(app->profiles, app->profile->name);
                 if (saved) { (void)tb_setup_capture_baseline(app->setup, saved); } free(saved);
             }
             (void)snprintf(app->setup_profile, sizeof app->setup_profile, "%s", app->profile->name);
@@ -3878,7 +3878,7 @@ static void profile_activate(App *app, Control control)
             app->profile_replacing = false; page(app, PROFILE_CONFIRM);
         } else { profile_edit(app, 0, app->profile->name); }
     } else if (control.kind == PROFILE_PICK) {
-        const TbProfile *p = control.value < 0 ? tb_profiles_find(app->profiles, tb_profiles_recent(app->profiles, 0)) : profile_list_at(app, (size_t)control.value);
+        const TbProfile_t *p = control.value < 0 ? tb_profiles_find(app->profiles, tb_profiles_recent(app->profiles, 0)) : profile_list_at(app, (size_t)control.value);
         (void)profile_load(app, p);
     } else if (control.kind == PROFILE_ITEM) {
         app->profile_selected = control.value;
@@ -3905,7 +3905,7 @@ static void profile_activate(App *app, Control control)
                 if (group == 0) { memmove(app->profile->directories[selected], app->profile->directories[selected + 1], (count - selected - 1) * TB_PROFILE_PATH); --app->profile->directory_count; }
                 else if (group == 1) { memmove(&app->profile->rules[selected], &app->profile->rules[selected + 1], (count - selected - 1) * sizeof app->profile->rules[0]); --app->profile->rule_count; }
                 else {
-                    TbProfileWords *words = group == 2 ? &app->profile->scripts : &app->profile->search;
+                    TbProfileWords_t *words = group == 2 ? &app->profile->scripts : &app->profile->search;
                     memmove(words->values[selected], words->values[selected + 1], (count - selected - 1) * TB_PROFILE_WORD); --words->count;
                 }
             } else { profile_edit(app, group == 0 ? 1 : group == 1 ? 2 : group == 2 ? 4 : 5, action == 20 ? "" : profile_item_text(app, selected)); }
@@ -3914,7 +3914,7 @@ static void profile_activate(App *app, Control control)
 }
 static void profile_text_submit(App *app, const char *input)
 {
-    TbProfile *p = app->profile; size_t index = (size_t)app->profile_selected;
+    TbProfile_t *p = app->profile; size_t index = (size_t)app->profile_selected;
     if (app->profile_text == 6) {
         if (!tb_profiles_duplicate(app->profiles, p->name, input)) { status(app, tb_profiles_error(app->profiles)); return; }
         page(app, PROFILE_OPTIONS); status(app, "Saved profile and setup duplicated. Unsaved draft unchanged."); return;
@@ -3939,7 +3939,7 @@ static void profile_text_submit(App *app, const char *input)
             (void)snprintf(p->rules[index].from, TB_PROFILE_PATH, "%s", app->profile_from);
             (void)snprintf(p->rules[index].to, TB_PROFILE_PATH, "%s", input); if (index == p->rule_count) { ++p->rule_count; }
         } else {
-            TbProfileWords *words = app->profile_text == 4 ? &p->scripts : &p->search;
+            TbProfileWords_t *words = app->profile_text == 4 ? &p->scripts : &p->search;
             memcpy(words->values[index], input, strlen(input) + 1); if (index == words->count) { ++words->count; }
         }
     }
@@ -3959,7 +3959,7 @@ static void draw_server_review(App *app)
 {
     TbRect_t card = menu_card(100, 24);
     int left = card.x + 2, top = card.y, width = card.w - 4;
-    draw_header(app, "Review OpenOCD session"); TbOpenOcdPlan *p = app->server_plan;
+    draw_header(app, "Review OpenOCD session"); TbOpenOcdPlan_t *p = app->server_plan;
     if (!p) { tb_text(top + 1, left, width, TB_ORANGE, 0, "Return to configuration and review the setup."); button(app, top + 5, left, 12, "[ Back ]", BACK, 0, 0); return; }
     char summary[1600];
     (void)snprintf(summary, sizeof summary, "Endpoint: %s | %s", p->endpoint, p->start_server ? "Start owned OpenOCD" : "Connect to existing server (never owned)");
@@ -3983,7 +3983,7 @@ static void draw_server_review(App *app)
     if (app->review_offset + visible < logical) { button(app, top + card.h - 1, left + 17, 14, "Next argv", REVIEW_PAGE, visible, 0); }
 }
 
-static bool script_matches(const App *app, const TbOpenOcdScript *script)
+static bool script_matches(const App *app, const TbOpenOcdScript_t *script)
 {
     return script->kind == app->script_kind &&
            (!*app->script_filter || strstr(script->path, app->script_filter));
@@ -4046,7 +4046,7 @@ static void draw_scripts(App *app)
     tb_text(top, left, width, TB_CYAN, 0, summary);
     int visible = card.h - 5; if (visible < 1) { visible = 1; } int found = 0;
     for (size_t i = 0; app->catalog && i < app->catalog->count; ++i) {
-        const TbOpenOcdScript *script = &app->catalog->scripts[i];
+        const TbOpenOcdScript_t *script = &app->catalog->scripts[i];
         if (!script_matches(app, script)) { continue; }
         if (found >= app->script_offset && found < app->script_offset + visible) {
             char label[TB_PROFILE_PATH];
@@ -4083,7 +4083,7 @@ static bool start_session(App *app)
             status(app, "Field encoding/length is invalid."); return false;
         }
     }
-    TbSessionWords arguments = {0}, environment = {0}; char error[160];
+    TbSessionWords_t arguments = {0}, environment = {0}; char error[160];
     if (app->session == 0 && !app->forms[0].alternate &&
         (!tb_session_words(values[2], &arguments, error, sizeof error) ||
          !tb_session_words(values[7], &environment, error, sizeof error))) { status(app, error); return false; }
@@ -4099,24 +4099,24 @@ static bool start_session(App *app)
         }
         pid = (pid_t)number;
     }
-    TbSessionConfig config = {.attach = app->forms[0].alternate, .pid = pid, .gdb = values[5],
+    TbSessionConfig_t config = {.attach = app->forms[0].alternate, .pid = pid, .gdb = values[5],
         .executable = app->forms[0].alternate ? values[4] : values[1],
         .directory = app->forms[0].alternate ? "" : values[3],
         .arguments = &arguments, .environment = &environment};
     if (app->session == 2) {
-        config = (TbSessionConfig){.kind = strcmp(app->profile->protocol, "extended-remote") == 0 ? TB_SESSION_EXTENDED_REMOTE : TB_SESSION_REMOTE,
+        config = (TbSessionConfig_t){.kind = strcmp(app->profile->protocol, "extended-remote") == 0 ? TB_SESSION_EXTENDED_REMOTE : TB_SESSION_REMOTE,
                                   .endpoint = values[0], .executable = values[1], .gdb = values[2]};
     }
     if (app->session == 1) {
         if (!prepare_server(app)) { return false; }
-        config = (TbSessionConfig){.kind = strcmp(app->profile->protocol, "extended-remote") == 0 ? TB_SESSION_EXTENDED_REMOTE : TB_SESSION_REMOTE,
+        config = (TbSessionConfig_t){.kind = strcmp(app->profile->protocol, "extended-remote") == 0 ? TB_SESSION_EXTENDED_REMOTE : TB_SESSION_REMOTE,
             .endpoint = app->server_plan->endpoint, .executable = app->profile->executable, .gdb = app->profile->gdb, .openocd = app->server_plan};
     }
     if (!tb_session_start(app->debugger, &config)) { status(app, tb_session_message(app->debugger)); return false; }
     *app->session_profile = *app->profile;
     if (!*app->session_profile->gdb) { (void)snprintf(app->session_profile->gdb, sizeof app->session_profile->gdb, "gdb"); }
     (void)snprintf(app->setup_profile, sizeof app->setup_profile, "%s", tb_profiles_find(app->profiles, app->profile->name) ? app->profile->name : "");
-    TbSetup *saved = tb_profiles_setup(app->profiles, app->setup_profile);
+    TbSetup_t *saved = tb_profiles_setup(app->profiles, app->setup_profile);
     tb_setup_capture_destroy(app->setup); app->setup = tb_setup_capture_create(saved); app->setup_skipped = saved != NULL; free(saved);
     const char *directories[TB_PROFILE_SOURCES]; TbSourceRule_t rules[TB_PROFILE_SOURCES];
     for (size_t i = 0; i < app->profile->directory_count; ++i) { directories[i] = app->profile->directories[i]; }
@@ -5971,7 +5971,7 @@ int tb_tui_run(bool demo)
                 tb_setup_restore_pump(app.restoration, app.setup, app.debugger);
                 if (app.live && (before_restore != tb_setup_restore_status(app.restoration) || before_active != tb_setup_restore_active(app.restoration))) { draw(&app); }
                 if (app.recent_pending) {
-                    TbSessionState state = tb_session_state(app.debugger);
+                    TbSessionState_e state = tb_session_state(app.debugger);
                     if (state == TB_SESSION_READY || state == TB_SESSION_STOPPED) {
                         app.recent_pending = false;
                         if (!tb_profiles_touch(app.profiles, app.profile->name)) { status(&app, tb_profiles_error(app.profiles)); draw(&app); }

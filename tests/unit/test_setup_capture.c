@@ -25,7 +25,7 @@ int main(void)
     CHECK(strcmp(tb_setup_capture_current(c)->panes[3].memory_expression, "&mmio_word") == 0);
     CHECK(!tb_memory_view(memory, 3)->ready && !tb_memory_view(memory, 3)->pending);
     CHECK(tb_variables_watch(variables, "watched.value")); CHECK(CAPTURE());
-    const TbSetup *s = tb_setup_capture_current(c); CHECK(s->watch_count == 1);
+    const TbSetup_t *s = tb_setup_capture_current(c); CHECK(s->watch_count == 1);
     uint64_t watch_id = s->watches[0].id; CHECK(s->panes[0].id == original);
     CHECK(strcmp(tb_variables_row(variables, TB_VARIABLE_WATCHES, 0)->value, "Read required") == 0);
     CHECK(tb_setup_capture_saved(c) && !tb_setup_capture_dirty(c));
@@ -53,7 +53,7 @@ int main(void)
     expressions[3] = oversized; CHECK(!CAPTURE());
     CHECK(strcmp(tb_setup_capture_current(c)->panes[3].memory_expression, "&mmio_word") == 0);
     CHECK(tb_gdb_state(gdb) == TB_GDB_DISCONNECTED);
-    TbProfile *a = malloc(sizeof *a), *b = malloc(sizeof *b); CHECK(a && b);
+    TbProfile_t *a = malloc(sizeof *a), *b = malloc(sizeof *b); CHECK(a && b);
     tb_profile_defaults(a, 0); *b = *a;
     (void)snprintf(b->name, sizeof b->name, "cosmetic name"); (void)snprintf(b->endpoint, sizeof b->endpoint, "inactive");
     CHECK(!tb_profile_differences(a, b));

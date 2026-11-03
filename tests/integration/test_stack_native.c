@@ -2,7 +2,7 @@
 #include "../support/check.h"
 #include <string.h>
 
-static TbSession *session;
+static TbSession_t *session;
 static TbStack_t *stack;
 static void settle(void)
 {
@@ -20,7 +20,7 @@ static void settle(void)
     for (size_t i = 0; i < tb_session_log_count(session); ++i) { fprintf(stderr, "%s\n", tb_session_log_line(session, i)); }
     CHECK(false);
 }
-static void state(TbSessionState wanted)
+static void state(TbSessionState_e wanted)
 {
     uint64_t until = tb_gdb_now_ms() + 6000;
     while (tb_session_state(session) != wanted && tb_gdb_now_ms() < until) { tb_session_pump(session, 2); }
@@ -39,7 +39,7 @@ static size_t name(const char *wanted)
 static void run(const char *fixture, bool symbols, bool optimized)
 {
     session = tb_session_create(); CHECK(session); stack = tb_session_stack(session);
-    TbSessionConfig config = {.gdb = "gdb", .executable = fixture}; CHECK(tb_session_start(session, &config)); state(TB_SESSION_READY);
+    TbSessionConfig_t config = {.gdb = "gdb", .executable = fixture}; CHECK(tb_session_start(session, &config)); state(TB_SESSION_READY);
     tb_stack_visible(stack, 0, true); tb_stack_visible(stack, 1, true);
     tb_context_visible(tb_session_context(session), true, true);
     CHECK(tb_session_console(session, symbols ? "break stack_checkpoint" : "starti"));
@@ -78,7 +78,7 @@ static void run(const char *fixture, bool symbols, bool optimized)
 static void threads(const char *fixture)
 {
     session = tb_session_create(); CHECK(session); stack = tb_session_stack(session);
-    TbSessionConfig config = {.gdb = "gdb", .executable = fixture}; CHECK(tb_session_start(session, &config)); state(TB_SESSION_READY);
+    TbSessionConfig_t config = {.gdb = "gdb", .executable = fixture}; CHECK(tb_session_start(session, &config)); state(TB_SESSION_READY);
     tb_context_visible(tb_session_context(session), true, true); tb_stack_visible(stack, 0, true);
     CHECK(tb_session_continue(session)); state(TB_SESSION_STOPPED); settle();
     const TbContextSnapshot_t *c = tb_context_snapshot(tb_session_context(session)); const TbStackView_t *v = tb_stack_view(stack, 0);

@@ -7,8 +7,8 @@
 
 /* Explicit hardware exerciser. No programming, inferred memory ranges or
  * deletion of breakpoints not created by this process. The server is external. */
-static TbSession *session;
-static TbOpenOcdPlan *server_plan;
+static TbSession_t *session;
+static TbOpenOcdPlan_t *server_plan;
 static char owned_break[32], owned_watch[32];
 static const char *log_path(void)
 {
@@ -177,7 +177,7 @@ int main(int argc, char **argv)
     session = tb_session_create(); CHECK(session && atexit(cleanup) == 0);
     server_plan = calloc(1, sizeof *server_plan); CHECK(server_plan);
     CHECK(strlen(argv[2]) < sizeof server_plan->endpoint); (void)snprintf(server_plan->endpoint, sizeof server_plan->endpoint, "%s", argv[2]);
-    TbSessionConfig config = {.kind = TB_SESSION_REMOTE, .endpoint = argv[2], .gdb = argv[1], .executable = argv[3], .openocd = server_plan};
+    TbSessionConfig_t config = {.kind = TB_SESSION_REMOTE, .endpoint = argv[2], .gdb = argv[1], .executable = argv[3], .openocd = server_plan};
     CHECK(tb_session_start(session, &config));
     tb_context_visible(tb_session_context(session), true, true); stop(0);
     printf("TARGET architecture %s, address bits %u, byte order %d\n", tb_session_capabilities(session)->architecture,

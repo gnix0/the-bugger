@@ -9,8 +9,8 @@
 static void mmio_close(const char *peer, bool dispatched)
 {
     CHECK(setenv("TB_FAKE_MODE", dispatched ? "remote-mmio-slow" : "remote-mmio", 1) == 0);
-    TbSession *s = tb_session_create(); CHECK(s);
-    TbSessionConfig config = {.kind = TB_SESSION_REMOTE, .gdb = peer, .endpoint = "localhost:3333"};
+    TbSession_t *s = tb_session_create(); CHECK(s);
+    TbSessionConfig_t config = {.kind = TB_SESSION_REMOTE, .gdb = peer, .endpoint = "localhost:3333"};
     CHECK(tb_session_start(s, &config));
     tb_memory_visible(tb_session_memory(s), 0, true);
     uint64_t until = tb_gdb_now_ms() + 3000;
@@ -49,8 +49,8 @@ static void mmio_close(const char *peer, bool dispatched)
 static void run(const char *peer, const char *mode)
 {
     CHECK(setenv("TB_FAKE_MODE", mode, 1) == 0);
-    TbSession *s = tb_session_create(); CHECK(s);
-    TbSessionConfig config = {.kind = TB_SESSION_REMOTE, .gdb = peer, .endpoint = "localhost:3333"};
+    TbSession_t *s = tb_session_create(); CHECK(s);
+    TbSessionConfig_t config = {.kind = TB_SESSION_REMOTE, .gdb = peer, .endpoint = "localhost:3333"};
     const TbMemoryRegion_t regions[] = {{0x20000000, 0x20000100, true}, {0x08000000, 0x08000100, false}};
     if (strcmp(mode, "remote-regions") == 0) {
         config.ordinary_regions = regions; config.ordinary_region_count = 2;
@@ -72,7 +72,7 @@ static void run(const char *peer, const char *mode)
                    strcmp(mode, "remote-drop") == 0 || strcmp(mode, "remote-mismatch") == 0;
     if (!refused && !cancel) {
         CHECK(tb_session_state(s) == TB_SESSION_STOPPED);
-        const TbSessionCapabilities *caps = tb_session_capabilities(s);
+        const TbSessionCapabilities_t *caps = tb_session_capabilities(s);
         CHECK(caps->connected && !caps->local_process && !caps->server_owned);
         CHECK(strcmp(caps->target_id, "987654321") == 0 && tb_session_target_pid(s) == 0);
         CHECK(caps->address_bits == 32 && strcmp(caps->architecture, "arm") == 0);
@@ -151,15 +151,15 @@ static void run(const char *peer, const char *mode)
     CHECK(tb_session_destroy(s));
     if (strcmp(mode, "remote-mismatch") == 0) { CHECK(unlink(image) == 0); }
 }
-static void ram_ready(TbSession *s)
+static void ram_ready(TbSession_t *s)
 {
-    TbSessionRamReview review;
+    TbSessionRamReview_t review;
     uint64_t until = tb_gdb_now_ms() + 4000;
     tb_memory_visible(tb_session_memory(s), 0, true);
     while (!tb_session_ram_review(s, &review) && tb_gdb_now_ms() < until) { tb_session_pump(s, 1); }
     CHECK(tb_session_ram_review(s, &review));
 }
-static void ram_close(TbSession *s)
+static void ram_close(TbSession_t *s)
 {
     tb_session_close(s);
     uint64_t until = tb_gdb_now_ms() + 5000;
@@ -169,12 +169,12 @@ static void ram_close(TbSession *s)
 static void ram_evidence(const char *peer)
 {
     CHECK(setenv("TB_FAKE_MODE", "remote-openocd-ram", 1) == 0);
-    TbOpenOcdPlan plan = {0}; /* External authored peer; never launches hardware tools. */
-    TbSessionConfig config = {.kind = TB_SESSION_REMOTE, .gdb = peer, .endpoint = "localhost:3333", .openocd = &plan};
-    TbSession *s = tb_session_create(), *other = tb_session_create(); CHECK(s && other);
+    TbOpenOcdPlan_t plan = {0}; /* External authored peer; never launches hardware tools. */
+    TbSessionConfig_t config = {.kind = TB_SESSION_REMOTE, .gdb = peer, .endpoint = "localhost:3333", .openocd = &plan};
+    TbSession_t *s = tb_session_create(), *other = tb_session_create(); CHECK(s && other);
     CHECK(tb_session_start(s, &config)); ram_ready(s);
     CHECK(tb_session_start(other, &config)); ram_ready(other);
-    TbSessionRamReview first, current, tampered;
+    TbSessionRamReview_t first, current, tampered;
     CHECK(tb_session_ram_review(s, &first) && !tb_session_ram_confirmed(s));
     CHECK(first.region.begin == UINT64_C(0x20000000) && first.region.end == UINT64_C(0x20020000));
     CHECK(strstr(first.device, "user-confirmed"));
@@ -222,7 +222,7 @@ static void ram_evidence(const char *peer)
 int main(int argc, char **argv)
 {
     CHECK(argc == 2);
-    TbSession *idle = tb_session_create(); CHECK(idle);
+    TbSession_t *idle = tb_session_create(); CHECK(idle);
     CHECK(tb_session_destroy(idle)); /* MMIO releases its lease before its controller dies. */
     CHECK(tb_session_endpoint("localhost:3333") && tb_session_endpoint("[::1]:65535"));
     const char *bad[] = {"|touch /tmp/no", "/dev/ttyUSB0", "localhost", "-x:1", "h:0", "h:65536", "h:1\n-gdb-exit", "h:22;true", "h:2 3"};
