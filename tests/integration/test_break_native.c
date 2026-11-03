@@ -21,7 +21,7 @@ static TbNative *start(const char *fixture, const char *library)
 }
 static void idle(TbNative *n)
 {
-    TbBreakpoints *b = tb_native_breakpoints(n); uint64_t end = tb_gdb_now_ms() + 5000;
+    TbBreakpoints_t *b = tb_native_breakpoints(n); uint64_t end = tb_gdb_now_ms() + 5000;
     while ((!tb_break_ready(b) || tb_break_busy(b)) && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
     CHECK(tb_break_ready(b) && !tb_break_busy(b));
 }
@@ -115,11 +115,11 @@ static void browsing(TbNative *n)
 }
 int main(int argc, char *argv[])
 {
-    CHECK(argc == 4); TbNative *n = start(argv[1], NULL); TbBreakpoints *b = tb_native_breakpoints(n);
+    CHECK(argc == 4); TbNative *n = start(argv[1], NULL); TbBreakpoints_t *b = tb_native_breakpoints(n);
     browsing(n); idle(n);
     CHECK(tb_break_add(b, "m08_tick", false)); idle(n); CHECK(tb_break_count(b) == 1);
     CHECK(tb_break_definitions_ready(b) && tb_break_definition_count(b) == 1);
-    const TbBreakDefinition *definition = tb_break_definition(b, 0);
+    const TbBreakDefinition_t *definition = tb_break_definition(b, 0);
     CHECK(definition && strcmp(definition->location, "m08_tick") == 0 && definition->enabled && !definition->hardware && !definition->ignore_set);
     uint64_t definition_identity = definition->identity;
     char id[32]; (void)snprintf(id, sizeof id, "%s", tb_break_row(b, 0)->id);
@@ -201,7 +201,7 @@ int main(int argc, char *argv[])
     n = start(argv[2], NULL); b = tb_native_breakpoints(n);
     TbSetupBreak restored = {.id = 1, .location = "m08_overload", .condition = "1", .enabled = true, .ignore_set = true, .ignore = 2};
     CHECK(tb_break_restore(b, &restored, false)); idle(n);
-    const TbBreakRestoration *progress = tb_break_restoration(b, 1);
+    const TbBreakRestoration_t *progress = tb_break_restoration(b, 1);
     if (!progress || progress->state != TB_RESTORE_INSTALLED) { fprintf(stderr, "Multiple-location restore: %s / %s\n", progress ? progress->reason : "missing", tb_break_message(b)); }
     CHECK(progress && progress->state == TB_RESTORE_INSTALLED);
     CHECK(tb_break_definition_count(b) == 1 && !strcmp(tb_break_definition(b, 0)->location, "m08_overload") && tb_break_definition(b, 0)->ignore == 2);

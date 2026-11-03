@@ -3,7 +3,7 @@
 #include "../support/check.h"
 #include <string.h>
 
-static TbBreakpoints *b;
+static TbBreakpoints_t *b;
 static unsigned replies, command_replies, inserts, enables, queries;
 static void event(void *unused, const TbGdbEvent_t *e)
 {
@@ -72,7 +72,7 @@ static void run(const char *peer, unsigned scenario)
         if (scenario == 4) { command(g, "-fcase", "0"); CHECK(tb_break_reconcile(b)); settled(g); }
     } else {
         settled(g);
-        const TbBreakRestoration *r = tb_break_restoration(b, 7); CHECK(r);
+        const TbBreakRestoration_t *r = tb_break_restoration(b, 7); CHECK(r);
         if (scenario == 1 || scenario == 2 || scenario == 12) {
             CHECK(r->state == TB_RESTORE_UNRESOLVED && !tb_break_row(b, 0)->enabled);
             CHECK(tb_break_definition_count(b) == 0);
@@ -83,7 +83,7 @@ static void run(const char *peer, unsigned scenario)
         CHECK(tb_break_definition_count(b) == 1 && tb_break_definition(b, 0)->enabled);
         CHECK(tb_break_definition(b, 0)->ignore_set && tb_break_definition(b, 0)->ignore == 2);
         command(g, "-fstats", NULL); CHECK(inserts == (scenario == 12 ? 2 : 1) && enables == 1);
-        TbBreakDefinition imported; CHECK(tb_break_importable(b, "1", &imported));
+        TbBreakDefinition_t imported; CHECK(tb_break_importable(b, "1", &imported));
         CHECK(!imported.ignore_set && !imported.hardware); /* Never infer historical policy/count. */
         command(g, "-fcase", "5"); tb_break_refresh(b);
         end = tb_gdb_now_ms() + 2000; while (!tb_break_ready(b) && tb_gdb_now_ms() < end) { pump(g); }

@@ -41,7 +41,7 @@ int main(int argc, char **argv)
     TbMemory *m = tb_native_memory(n); tb_memory_visible(m, 0, true); tb_memory_visible(m, 1, true);
     CHECK(tb_native_console(n, "start")); stopped(n, 0);
     const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(n)); uint64_t stop = s->generation.stop;
-    TbBreakpoints *bp = tb_native_breakpoints(n); end = tb_gdb_now_ms() + 5000;
+    TbBreakpoints_t *bp = tb_native_breakpoints(n); end = tb_gdb_now_ms() + 5000;
     while ((!tb_break_ready(bp) || tb_break_busy(bp)) && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
     CHECK(tb_native_run_to(n, "memory_checkpoint")); stopped(n, stop);
     CHECK(tb_memory_get_order(m) == TB_MEMORY_LITTLE);

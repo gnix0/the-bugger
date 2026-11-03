@@ -10,7 +10,7 @@ int main(void)
     TbGdb_t *gdb = tb_gdb_create(event, NULL); CHECK(gdb);
     TbContext_t *context = tb_context_create(gdb); CHECK(context);
     TbCode *code = tb_code_create(gdb, context); TbMemory *memory = tb_memory_create(gdb, context);
-    TbVariables *variables = tb_variables_create(gdb, context); TbBreakpoints *breaks = tb_break_create(gdb);
+    TbVariables *variables = tb_variables_create(gdb, context); TbBreakpoints_t *breaks = tb_break_create(gdb);
     CHECK(code && memory && variables && breaks);
     TbLayout_t layout; tb_layout_init(&layout); TbDemo workspace; tb_demo_init(&workspace);
     const char *expressions[TB_MAX_PANES]; for (size_t i = 0; i < TB_MAX_PANES; ++i) { expressions[i] = ""; }

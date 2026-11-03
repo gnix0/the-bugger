@@ -33,7 +33,7 @@ struct TbSession {
     size_t ordinary_region_count;
     TbContext_t *context;
     TbCode *code;
-    TbBreakpoints *breakpoints;
+    TbBreakpoints_t *breakpoints;
     TbRegisters_t *registers;
     TbMemory *memory;
     TbStack_t *stack;
@@ -1099,8 +1099,8 @@ pid_t tb_session_debugger_pid(const TbSession *native) { return tb_gdb_pid(nativ
 bool tb_session_attached(const TbSession *native) { return native->attach; }
 TbContext_t *tb_session_context(TbSession *native) { return native->context; }
 TbCode *tb_session_code(TbSession *native) { return native->code; }
-TbBreakpoints *tb_session_breakpoints(TbSession *native) { return native->breakpoints; }
-bool tb_session_run_at(TbSession *native, TbBreakLocation location)
+TbBreakpoints_t *tb_session_breakpoints(TbSession *native) { return native->breakpoints; }
+bool tb_session_run_at(TbSession *native, TbBreakLocation_t location)
 {
     if (setup_blocked(native, true)) { return false; }
     if (register_read_pending(native)) { return false; }
@@ -1112,7 +1112,7 @@ bool tb_session_run_at(TbSession *native, TbBreakLocation location)
 }
 bool tb_session_run_to(TbSession *native, const char *location)
 {
-    return tb_session_run_at(native, (TbBreakLocation){.text = location});
+    return tb_session_run_at(native, (TbBreakLocation_t){.text = location});
 }
 bool tb_session_active(const TbSession *native)
 {

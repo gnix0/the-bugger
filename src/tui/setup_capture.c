@@ -39,7 +39,7 @@ static size_t key_index(const uint64_t *keys, size_t count, uint64_t key)
 { size_t i = 0; while (i < count && keys[i] != key) { ++i; } return i; }
 bool tb_setup_capture_update(TbSetupCapture *c, const TbLayout_t *layout, const TbDemo *workspace,
                             const TbCode *code, const TbMemory *memory, const TbVariables *variables,
-                            const TbBreakpoints *breakpoints, const char *const expressions[TB_MAX_PANES])
+                            const TbBreakpoints_t *breakpoints, const char *const expressions[TB_MAX_PANES])
 {
     if (!c) { return false; }
     TbSetup *s = c->next; const TbSetup *old = c->current ? c->current : c->saved;
@@ -87,7 +87,7 @@ bool tb_setup_capture_update(TbSetupCapture *c, const TbLayout_t *layout, const 
     s->break_count = tb_break_definition_count(breakpoints);
     if (s->break_count + c->retained_count > TB_SETUP_BREAKS) { return false; }
     for (size_t i = 0; i < s->break_count; ++i) {
-        const TbBreakDefinition *b = tb_break_definition(breakpoints, i); TbSetupBreak *d = &s->breaks[i]; if (!b) { return false; }
+        const TbBreakDefinition_t *b = tb_break_definition(breakpoints, i); TbSetupBreak *d = &s->breaks[i]; if (!b) { return false; }
         size_t prior = c->current ? key_index(c->breaks, c->current->break_count, b->identity) : 0;
         d->id = c->current && prior < c->current->break_count ? c->current->breaks[prior].id : allocate_id(s);
         memcpy(d->location, b->location, sizeof d->location); memcpy(d->source, b->source, sizeof d->source); memcpy(d->condition, b->condition, sizeof d->condition);
@@ -180,7 +180,7 @@ bool tb_setup_capture_adopt_break(TbSetupCapture *c, uint64_t id, uint64_t model
     }
     return false;
 }
-uint64_t tb_setup_capture_import_break(TbSetupCapture *c, const TbBreakDefinition *d)
+uint64_t tb_setup_capture_import_break(TbSetupCapture *c, const TbBreakDefinition_t *d)
 {
     if (!c || !c->current || c->current->break_count >= TB_SETUP_BREAKS || !d) { return 0; }
     TbSetupBreak *retained = realloc(c->retained, (c->retained_count + 1) * sizeof *retained);
