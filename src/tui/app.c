@@ -77,6 +77,7 @@ typedef enum {
     MMIO_SETUP,
     IMAGE_REVIEW,
     VARIABLE_EDIT,
+    REGISTER_EDIT,
     RAM_REVIEW,
     SETUP_MENU,
     SETUP_SAVE,
@@ -180,6 +181,7 @@ typedef enum {
     BREAK_ACTION,
     REGISTER_REFRESH,
     REGISTER_FORMAT,
+    REGISTER_EDIT_ACTION,
     MEMORY_ACTION,
     MEMORY_FIELD,
     MEMORY_RANGE_ACTION,
@@ -369,6 +371,10 @@ typedef struct {
     int                   stack_pane;
     int                   stack_page;
     int                   stack_offset;
+    int                   register_pane;
+    int                   register_offset;
+    int                   register_rows;
+    bool                  register_confirm;
     int                   stack_input;
     uint64_t              stack_low;
     uint64_t              stack_high;
@@ -465,7 +471,8 @@ static bool editing_page(const App_t *app)
     return app->page == SCRIPT_FILTER || app->page == SAVE_INPUT || app->page == CODE_INPUT ||
            app->page == CODE_FILES || app->page == BREAK_INPUT || app->page == MEMORY_INPUT ||
            app->page == WATCH_INPUT || app->page == DATA_WATCH_INPUT || app->page == PROFILE_TEXT ||
-           app->page == MEMORY_RANGE_INPUT || app->page == STACK_INPUT || app->page == VARIABLE_EDIT;
+           app->page == MEMORY_RANGE_INPUT || app->page == STACK_INPUT || app->page == VARIABLE_EDIT ||
+           app->page == REGISTER_EDIT;
 }
 
 
@@ -492,6 +499,15 @@ static void status(App_t *app, const char *message)
 
 static void page(App_t *app, Page_e next)
 {
+    if (app->page == REGISTER_EDIT && next != REGISTER_EDIT && app->debugger) {
+        TbRegisters_t *registers = tb_session_registers(app->debugger);
+        TbRegisterEditState_e state = tb_registers_edit(registers)->state;
+        if (state == TB_REGISTER_EDIT_PROBING || state == TB_REGISTER_EDIT_READY ||
+            state == TB_REGISTER_EDIT_CHECKING || state == TB_REGISTER_EDIT_FAILED) {
+            tb_registers_edit_cancel(registers);
+        }
+    }
+
     app->status[0]      = 0;
     app->key_drag_grab  = app->script_drag_grab = -1;
     app->field_tracking = app->field_insert = false;
@@ -608,6 +624,8 @@ static const char *footer_message(const App_t *app)
         return "Edit this temporary range; applying an edit revokes its permission. No read is performed.";
     case VARIABLE_MENU:
         return "Choose an explicit variable inspection action.";
+    case REGISTER_EDIT:
+        return "CPU register bits | Review / Apply | Verify explicitly | Escape closes without retry.";
     case VARIABLE_EDIT:
         return app->variable_edit_confirm
                    ? "Review the variable edit, then Apply or Cancel."
@@ -3144,8 +3162,13 @@ static void draw_native_pane(App_t *app, int index, TbRect_t rect)
         (void)snprintf(header, sizeof(header), "%s | registers | T%s frame %d | * changed%s",
                        stale ? "STALE" : "LIVE", s->selected_thread, s->selected.level,
                        tb_registers_limited(r) ? " | limited" : "");
-        tb_text(rect.y + 1, rect.x + 1, rect.w - 2, stale ? TB_ORANGE : TB_MUTED, 0,
-                *tb_registers_error(r) ? tb_registers_error(r) : header);
+        const TbRegisterEdit_t *edit = tb_registers_edit(r);
+        bool mismatch = edit->verified && !edit->matches;
+
+        tb_text(rect.y + 1, rect.x + 1, rect.w - 2, stale || mismatch ? TB_ORANGE : TB_MUTED, 0,
+                *tb_registers_error(r) ? tb_registers_error(r)
+                    : mismatch ? "VERIFY MISMATCH; Edit for observed bits"
+                    : header);
 
         TbScroll_t scroll = workspace_scroll(app, pane, rect.h - 3);
         tb_registers_want(r, (size_t)scroll.offset, (size_t)scroll.visible);
@@ -3163,7 +3186,8 @@ static void draw_native_pane(App_t *app, int index, TbRect_t rect)
                 : row->changed ? TB_YELLOW
                 : TB_GREEN;
 
-            tb_text(rect.y + 2 + i, rect.x + 1, app->body_width[index], style, 0, text + offset);
+            tb_text(rect.y + 2 + i, rect.x + 1, app->body_width[index], style,
+                    pane->row[view] == i + scroll.offset ? A_UNDERLINE : 0, text + offset);
         }
 
         if (!scroll.total) {
@@ -3176,7 +3200,8 @@ static void draw_native_pane(App_t *app, int index, TbRect_t rect)
         char format[32];
         (void)snprintf(format, sizeof(format), " %s ", tb_registers_format_name(tb_registers_get_format(r)));
         button(app, rect.y + rect.h - 1, rect.x + 11, (int)strlen(format), format, REGISTER_FORMAT, 0, index);
-        tb_text(rect.y + rect.h - 1, rect.x + 22, rect.w - 23, TB_MUTED, 0, "All (ungrouped)");
+        if (rect.w > 29)
+            button(app, rect.y + rect.h - 1, rect.x + 22, 6, " Edit ", REGISTER_EDIT_ACTION, 0, index);
         return;
     }
 
@@ -4880,6 +4905,109 @@ static void draw_variable_edit(App_t *app)
 }
 
 
+static void draw_register_edit(App_t *app)
+{
+    TbRegisters_t          *registers = tb_session_registers(app->debugger);
+    const TbRegisterEdit_t *edit      = tb_registers_edit(registers);
+    TbRect_t                card      = menu_card(100, 22);
+    int                     left      = card.x + 2;
+    int                     width     = card.w - 4;
+    bool                    ready     = edit->state == TB_REGISTER_EDIT_READY;
+    char                    text[1200];
+    char                    heading[256];
+
+    draw_header(app, app->register_confirm ? "Review CPU register edit" : "CPU register edit");
+    (void)snprintf(heading, sizeof(heading), "%s | ID %u | %u bits | T%s frame 0", edit->name, edit->number,
+                   edit->bits, edit->thread);
+    menu_paragraph(card, 0, 2, heading, TB_CYAN);
+    (void)snprintf(heading, sizeof(heading), "Old: %s", edit->old_value);
+    tb_text(card.y + 2, left, width, TB_GREEN, 0, heading);
+
+    if ((ready || edit->state == TB_REGISTER_EDIT_PROBING) && !app->register_confirm) {
+        tb_text(card.y + 3, left, 5, TB_MUTED, 0, "New:");
+
+        TbRect_t field = {
+            .x = left + 6,
+            .y = card.y + 3,
+            .w = width - 6,
+            .h = 1
+        };
+        int index = add_control(app, field, FIELD, 0, 0);
+
+        wide_text(field.y, field.x, field.w, app->input, 0, index == app->focus);
+        if (index == app->focus) {
+            app->command_caret_y = field.y;
+            app->command_caret_x = field.x + (int)app->cursor;
+        }
+    } else {
+        (void)snprintf(heading, sizeof(heading), "New: %s%s%s", edit->new_value,
+                       edit->verified ? " | observed: " : "", edit->verified ? edit->observed_value : "");
+        tb_text(card.y + 3, left, width, edit->verified && !edit->matches ? TB_ORANGE : TB_CYAN, 0, heading);
+    }
+
+    if (ready && app->register_confirm) {
+        (void)snprintf(
+            text, sizeof(text),
+            "Target architecture: %s. Register %s, ID %u, %u bits, thread %s, frame 0. "
+            "This writes the complete selected live CPU register. "
+            "Changing PC, SP, status or control bits can redirect execution, corrupt state or make debugging "
+            "unavailable. GDB reports an editable object; it does not prove every bit is physically writable. "
+            "Apply sends one request. Acknowledgment is not verification: use Verify / Refresh afterward. "
+            "No automatic retry or rollback follows errors or lost completion. Cancel sends no write.",
+            tb_session_capabilities(app->debugger)->architecture, edit->name, edit->number,
+            edit->bits, edit->thread);
+    } else {
+        (void)snprintf(text, sizeof(text),
+                       "%s Register %s, ID %u, %u bits, thread %s, frame 0. "
+                       "Requested bits: %s. Observed bits: %s.",
+                       edit->message, edit->name, edit->number, edit->bits, edit->thread,
+                       *edit->new_value ? edit->new_value : "not entered",
+                       edit->verified ? edit->observed_value : "not sampled");
+    }
+
+    app->register_rows = card.h - 8;
+    if (app->register_rows < 1)
+        app->register_rows = 1;
+
+    int rows = paragraph_rows(text, width);
+    if (app->register_offset >= rows)
+        app->register_offset = rows > app->register_rows ? rows - app->register_rows : 0;
+
+    const char *part = text;
+    for (int row = 0; *part; ++row) {
+        int count = paragraph_chunk(part, width);
+        if (row >= app->register_offset && row < app->register_offset + app->register_rows) {
+            char line[512];
+            (void)snprintf(line, sizeof(line), "%.*s", count, part);
+            tb_text(card.y + 5 + row - app->register_offset, left, width, TB_ORANGE, 0, line);
+        }
+        part += count;
+        while (*part == ' ')
+            ++part;
+    }
+
+    int  actions = card.y + card.h - 2;
+    bool more    = app->register_offset + app->register_rows < rows;
+
+    if (more) {
+        button(app, actions, left + 12, 10, "[ Next ]", REGISTER_EDIT_ACTION, 4, app->register_pane);
+    } else if (ready) {
+        button(app, actions, left + 12, 10, app->register_confirm ? "[ Apply ]" : "[ Review ]",
+               REGISTER_EDIT_ACTION, 1, app->register_pane);
+    } else if (edit->state == TB_REGISTER_EDIT_ACKNOWLEDGED || edit->state == TB_REGISTER_EDIT_UNCERTAIN) {
+        button(app, actions, left + 12, 10, "[ Verify ]", REGISTER_EDIT_ACTION, 2, app->register_pane);
+    }
+
+    if (edit->state == TB_REGISTER_EDIT_UNCERTAIN && edit->verified && !more) {
+        button(app, actions, left + 24, 13, "[ Reconcile ]", REGISTER_EDIT_ACTION, 3, app->register_pane);
+    } else if (app->register_offset > 0) {
+        button(app, actions, left + 24, 12, "[ Previous ]", REGISTER_EDIT_ACTION, 5, app->register_pane);
+    }
+
+    button(app, actions, left, 10, "[ Cancel ]", BACK, 0, 0);
+}
+
+
 static void draw_break_menu(App_t *app)
 {
     TbRect_t card  = menu_card(88, 15);
@@ -5197,6 +5325,8 @@ static void draw_page(App_t *app)
         draw_variable_menu(app);
     } else if (app->page == VARIABLE_EDIT) {
         draw_variable_edit(app);
+    } else if (app->page == REGISTER_EDIT) {
+        draw_register_edit(app);
     } else if (app->page == PROFILE_LIST || app->page == PROFILE_OPTIONS || app->page == PROFILE_ITEMS ||
                app->page == PROFILE_CONFIRM) {
         draw_profiles(app);
@@ -7966,6 +8096,7 @@ static void activate(App_t *app, Control_t control)
     case COMMAND_SEND:
     case VARIABLE_OPEN:
     case VARIABLE_ACTION:
+    case REGISTER_EDIT_ACTION:
     case MEMORY_ACTION:
     case STACK_ACTION:
     case FRAME_DETAILS:
@@ -8316,6 +8447,12 @@ static void activate(App_t *app, Control_t control)
                 memcpy(app->profile->name, app->profile_original_name, sizeof(app->profile->name));
 
             page(app, app->profile_text == 0 ? app->profile_return : PROFILE_ITEMS);
+            break;
+        }
+
+        if (app->page == REGISTER_EDIT) {
+            tb_registers_edit_cancel(tb_session_registers(app->debugger));
+            page(app, WORKSPACE);
             break;
         }
 
@@ -8943,6 +9080,71 @@ static void activate(App_t *app, Control_t control)
     case STACK_ACTION:
         stack_activate(app, control);
         break;
+    case REGISTER_EDIT_ACTION: {
+        TbRegisters_t          *r    = tb_session_registers(app->debugger);
+        const TbRegisterEdit_t *edit = tb_registers_edit(r);
+
+        if (control.value == 0) {
+            app->register_pane = control.pane;
+            int row = app->demo.panes[control.pane].row[TB_REGISTERS];
+            if (edit->state != TB_REGISTER_EDIT_UNCERTAIN && edit->state != TB_REGISTER_EDIT_PENDING &&
+                !(edit->state == TB_REGISTER_EDIT_ACKNOWLEDGED && (!edit->verified || !edit->matches)) &&
+                !tb_registers_edit_begin(r, (size_t)row)) {
+                status(app, edit->message);
+                break;
+            }
+            app->register_confirm = false;
+            app->register_offset  = 0;
+            app->input[0]         = L'\0';
+            page(app, REGISTER_EDIT);
+        } else if (control.value == 1) {
+            bool okay;
+            if (app->register_confirm) {
+                okay = tb_registers_edit_apply(r, edit->new_value);
+                if (okay) {
+                    app->register_confirm = false;
+                    app->register_offset  = 0;
+                }
+            } else {
+                char input[FIELD_SIZE * 4];
+                okay = field_utf8(app->input, input, sizeof(input)) && tb_registers_edit_value(r, input);
+                if (okay) {
+                    app->register_confirm = true;
+                    app->register_offset  = 0;
+                    app->focus            = 0;
+                }
+            }
+            if (!okay)
+                status(app, edit->message);
+        } else if (control.value == 2) {
+            if (!tb_registers_edit_verify(r)) {
+                status(app, "Wait for cleanup, then select the original stopped thread/frame 0 to Verify.");
+                break;
+            }
+            for (size_t i = 0; i < tb_registers_count(r); ++i) {
+                const TbRegister_t *row = tb_registers_row(r, i);
+                if (row->number == edit->number && strcmp(row->name, edit->name) == 0) {
+                    app->demo.panes[app->register_pane].row[TB_REGISTERS]    = (int)i;
+                    app->demo.panes[app->register_pane].scroll[TB_REGISTERS] = (int)i;
+                    break;
+                }
+            }
+            page(app, WORKSPACE);
+            status(app, "Explicit register Refresh requested; compare the observed bits.");
+        } else if (control.value == 3) {
+            bool okay = tb_registers_edit_reconcile(r);
+            status(app, okay ? edit->message
+                : "Refresh the original register first; lost completion requires reconnect.");
+            if (okay)
+                page(app, WORKSPACE);
+        } else {
+            app->register_offset += control.value == 4 ? app->register_rows : -app->register_rows;
+            if (app->register_offset < 0)
+                app->register_offset = 0;
+            app->focus = 0;
+        }
+        break;
+    }
     case REGISTER_REFRESH:
         tb_registers_refresh(tb_session_registers(app->debugger));
         status(app, "Register refresh requested; reads wait until stopped.");
@@ -9252,6 +9454,15 @@ static void activate(App_t *app, Control_t control)
         char input[FIELD_SIZE * 4];
         if (!field_utf8(app->input, input, sizeof(input))) {
             status(app, "Invalid text encoding.");
+            break;
+        }
+
+        if (app->page == REGISTER_EDIT) {
+            activate(app, (Control_t) {
+                .kind  = REGISTER_EDIT_ACTION,
+                .value = 1,
+                .pane  = app->register_pane
+            });
             break;
         }
 
@@ -10286,6 +10497,10 @@ static void key_event(App_t *app, wint_t key, bool special)
     }
 
     if (special && key == KEY_RESIZE) {
+        /* A new wrap width must not skip unread register-review text. */
+        if (app->page == REGISTER_EDIT)
+            app->register_offset = 0;
+
         app->key_drag_grab    = app->script_drag_grab = -1;
         app->drag             = -1;
         app->scroll_drag_pane = -1;
@@ -10533,7 +10748,8 @@ static void key_event(App_t *app, wint_t key, bool special)
             return;
         }
 
-        if (app->page == VARIABLE_EDIT || (app->page == MEMORY_INPUT && app->memory_edit_input)) {
+        if (app->page == VARIABLE_EDIT || app->page == REGISTER_EDIT ||
+            (app->page == MEMORY_INPUT && app->memory_edit_input)) {
             activate(app, (Control_t) {.kind = BACK});
             return;
         }
@@ -10698,6 +10914,14 @@ static void key_event(App_t *app, wint_t key, bool special)
             TbDemoPane_t *pane = &app->demo.panes[control.pane];
             TbView_e      view = pane->tabs[pane->active];
 
+            if (view == TB_REGISTERS) {
+                activate(app, (Control_t) {
+                    .kind = REGISTER_EDIT_ACTION,
+                    .pane = control.pane
+                });
+                return;
+            }
+
             if (view == TB_STACK) {
                 activate(app, (Control_t) {
                     .kind  = STACK_ACTION,
@@ -10766,7 +10990,7 @@ static void key_event(App_t *app, wint_t key, bool special)
             }
 
             if (app->live && (view == TB_CALL_STACK || view == TB_THREADS || view == TB_LOCALS ||
-                              view == TB_WATCHES || view == TB_STACK)) {
+                              view == TB_WATCHES || view == TB_STACK || view == TB_REGISTERS)) {
                 TbScroll_t scroll = workspace_scroll(app, pane, app->panes[control.pane].h - 3);
                 int row = pane->row[view] + (key == KEY_UP ? -1
                     : key == KEY_DOWN ? 1

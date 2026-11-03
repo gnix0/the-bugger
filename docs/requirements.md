@@ -566,10 +566,33 @@ Review, Apply and Cancel; opening a dialog or changing a draft never writes.
   the original destination or a new session. No automatic retry or rollback.
 
 These editors do not program Flash or write MMIO, peripheral registers or CPU
-registers. F05 remains planned. Physical embedded write behavior requires its own
+registers. F05 supplies the separate CPU-register path below. Physical embedded
+write behavior requires its own
 recorded validation; existing read-only validation does not establish it.
 
 A timed-out, cancelled or otherwise lost write completion requires a new session
 before further edits. A controller with no pending tokens is not proof that the
 backend can no longer complete that mutation. Explicit verification can reconcile
 a completed backend error reply, but cannot clear an unresolved transport.
+
+## Deliberate CPU-register editing (F05)
+
+- Use discovered CPU-register IDs/names only, a fresh stopped frame-zero context,
+  and the existing shared F03/F04 mutation reservation and quarantine. Caller
+  frames must not write unwound stack storage through a register operation.
+- Require a complete scalar hexadecimal sample, target-reported storage size
+  of 1–8 octets, unique safely representable name, structured write-command
+  availability, enabled GDB write permission and an editable register object.
+  Missing, malformed, contradictory or unsupported evidence refuses editing.
+  No architecture-specific writable-register list is inferred.
+- Review raw hexadecimal bits with register/thread/width/old/new identity;
+  explicit Apply sends one numeric-ID `-data-write-register-values` request.
+  Recheck name/ID, permission, editability and stopped/context identity before
+  dispatch. No typed floating-point/vector, peripheral or bitfield editor.
+- GDB object editability is backend metadata, not physical bit-writability proof.
+  Backend refusal, ignored or normalized bits and stale/uncertain completions
+  remain visible. Require explicit Refresh/Verify; acknowledgment is not verified
+  contents. Never retry or roll back automatically. Preserve the shared lost-
+  completion rule and require the original destination for reconciliation.
+- Record native and physical ARM/Xtensa/RISC-V write/verify/restore evidence
+  separately. Existing inspection results do not establish write behavior.

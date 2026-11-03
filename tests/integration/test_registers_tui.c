@@ -10,7 +10,7 @@ int main(int argc, char **argv)
     test_terminal_click(&t, "Review session"); test_terminal_click(&t, "Start native");
     test_terminal_expect(&t, "LIVE | Loaded"); test_terminal_lower(&t, 2, true); test_terminal_click(&t, "Command");
     test_terminal_send(&t, "start\r"); test_terminal_lower(&t, 2, false); test_terminal_expect(&t, "LIVE | registers");
-    test_terminal_expect(&t, "rax"); test_terminal_expect(&t, "rip"); test_terminal_expect(&t, "All (ungrouped)");
+    test_terminal_expect(&t, "rax"); test_terminal_expect(&t, "rip"); test_terminal_expect(&t, "Edit");
     test_terminal_click(&t, "Disassembly"); test_terminal_send(&t, "\033[23~");
     test_terminal_expect(&t, "* rip");
     test_terminal_click(&t, "Hex"); test_terminal_expect(&t, "Decimal"); test_terminal_expect(&t, "* rip");

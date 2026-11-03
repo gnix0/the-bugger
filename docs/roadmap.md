@@ -6,14 +6,12 @@ implemented features or hardware support claims. See [architecture](architecture
 
 ## Current development sequence
 
-F01 and F02 are accepted; their historical release and physical evidence remains
-in [validation records](validation.md). The owner reports F03 accepted before
-F04 began. The owner accepted the F03/F04 host safety corrections,
-connection-form/script-list navigation, centered menus and spacing after manual
-review. Fresh fortified host regression and static analysis pass. The narrow user-confirmed STM32F446RE SRAM evidence path is implemented and host
-verified; owner review and physical write verification remain pending.
-F05 remains planning-only. Existing read-only hardware results are preserved and
-do not count as write validation.
+F01–F04 are accepted. The owner reports F03/F04 validation across the supported
+architectures; detailed historical evidence remains in [validation records](validation.md).
+F05 CPU-register editing is implemented and host verified. Agent-run physical
+STM32 write/verify/restore checks pass; the owner also reports ESP32-S3/Xtensa
+and ESP32-C6/RISC-V validation complete. Final implementation acceptance remains
+pending. Read-only hardware results do not count as F05 write validation.
 
 | Task | Scope | Current state |
 |---|---|---|
@@ -25,7 +23,8 @@ do not count as write validation.
 | F01 | Setup restoration for v0.1.4 | Accepted and shipped; host/physical checks and published artifacts verified |
 | F02 | Dedicated Stack inspection and inspection UX for v0.1.5 | Accepted; owner host and three-target inspection validation pass |
 | F03 | Deliberate integer/bool variable editing | Accepted, including current safety corrections |
-| F04 | Exact ordinary-RAM byte editing and form/script navigation | User-confirmed STM32 SRAM path host verified; owner review pending, physical writes unverified |
+| F04 | Exact ordinary-RAM byte editing and form/script navigation | Accepted; owner reports architecture validation |
+| F05 | Deliberate CPU-register editing | Host and all three physical architectures validated; final acceptance pending |
 | 2.4 | Release v0.1.4 | Published; hosted checks passed, uploaded artifacts verified and branch synchronization complete |
 
 Current controls are in [usage](usage.md); the accepted browsing scope is in
@@ -53,7 +52,7 @@ Accepted post-release work includes themes, Source fullscreen, spatial navigatio
 (`53b1e5a`), multi-file Source tabs, inline Console, personal keybinds, Vim-like
 input, tmux RGB, rendering fixes, lower overlays and browsing history. Release
 contents are in [CHANGELOG](../CHANGELOG.md); results are in
-[validation records](validation.md). F01 shipped in v0.1.4. F02/F03 acceptance and the current F04 gate are
+[validation records](validation.md). F01 shipped in v0.1.4. F02–F04 acceptance and the current F05 gate are
 recorded above; later gates remain planned.
 
 | Milestone | Deliverable | State | Commit / release reference |

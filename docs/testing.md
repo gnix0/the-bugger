@@ -2056,13 +2056,14 @@ For manual host review, use a freshly built binary and its matching fixtures:
    both remain centered when resized or maximized. Repeat through tmux.
    No script executes.
 
-Physical F03/F04 writes are **UNVERIFIED**. Do not substitute host or synthetic
-results for STM32/ESP32 evidence. Use only disposable fixture RAM whose complete
+The owner reports F03/F04 accepted and validated across the supported
+architectures; see the [validation record](validation.md#f04-owner-acceptance).
+Do not substitute host or synthetic results for future physical regression evidence. Use only disposable fixture RAM whose complete
 writable region and target capabilities are supplied by the adapter/session.
 Read-range consent does not create that evidence. A remote TUI session lacking
 writable-region metadata must refuse edits; the current connection forms do not
 let a user invent such metadata. The fixed STM32F446RE review below supplies
-user-confirmed eligibility; physical write validation remains pending. Existing
+user-confirmed eligibility; each release still requires its physical regression. Existing
 embedded inspection, MMIO read and release regression procedures remain applicable.
 
 
@@ -2107,4 +2108,103 @@ For a separately authorized physical acceptance session:
    reused. No write permission follows merely from a successful read or a GDB
    RAM label. Retain logs and distinguish request extent from actual bus width.
 
-Physical F03/F04 write/verify evidence remains **UNVERIFIED** until recorded.
+Historical pending F03/F04 checks are superseded by the recorded owner acceptance;
+new release checks must retain their own actual results.
+
+## CPU-register editing (F05)
+
+Focused host commands (also included in `test-ci`):
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/f05-check CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-register-edit test-register-edit-native test-register-edit-tui test-register-edit-tmux
+```
+
+`test-register-edit` uses authored MI to check sparse IDs, exact one-ID/one-value
+commands, invalid/oversized hex, unsupported or malformed capability metadata,
+permission/editability revocation before dispatch, caller-frame/stale drafts,
+cancel, rejected creation/ownership, cleanup failure, ignored stores, backend
+errors, running/stale completion,
+explicit verification and shared quarantine. A late acknowledgment cannot clear
+a timed-out write. No physical hardware is involved.
+
+`test-register-edit-native` changes and restores `rax` in the stopped native
+fixture, verifies both values explicitly and checks that PC is unchanged. The PTY
+checks exercise mouse selection, literal input/Backspace/Enter, Review/Cancel,
+leaving a draft through close-session confirmation, 48×18 pagination/resize, Apply,
+explicit Verify, restoration, Vim and isolated tmux/terminal cleanup.
+
+### Physical write/verify/restore
+
+The same native runner accepts an explicit existing server, compatible GDB,
+discovered register name and architecture check. It performs real writes; use it
+only on an authorized disposable stopped target. No firmware replacement, ELF,
+Flash programming, reset, peripheral access or guessed numeric register ID is
+needed for this CPU-register check. Stop any competing debugger first. On a
+multi-core target it edits only the discovered selected thread's frame zero.
+
+1. Activate the matching tool environment and start the appropriate server in a
+   separate terminal. For the existing USB/JTAG ESP setups, from the repository
+   root, use **one** of:
+
+   ```sh
+   # Espressif OpenOCD and its matching scripts, ESP32-S3 native USB/JTAG:
+   openocd -f tests/fixtures/embedded/openocd/esp32s3.cfg
+   # Espressif OpenOCD and its matching scripts, ESP32-C6 native USB/JTAG:
+   openocd -f tests/fixtures/embedded/openocd/esp32c6.cfg
+   # System OpenOCD and its matching scripts, NUCLEO-F446RE/ST-LINK:
+   openocd -f board/st_nucleo_f4.cfg
+   ```
+
+   Do not mix system OpenOCD with an ESP-IDF `OPENOCD_SCRIPTS` root. Use the
+   matching distribution. Existing server ownership remains external to the
+   runner. No new firmware fixture is required; retain firmware identity in the
+   evidence when available. The [embedded fixture instructions](../tests/fixtures/embedded/README.md)
+   describe connector/tool setup and separately authorized flashing if needed.
+2. Build the runner without running its host checks:
+
+   ```sh
+   make build/test-register-edit-native
+   ```
+
+   Record board/probe, firmware identity, GDB/OpenOCD versions and endpoint. Run
+   the matching command from the repository root (one connected setup at a time):
+
+   ```sh
+   TB_REGISTER_EDIT_LOG="$PWD/build/f05-s3.log" \
+     ./build/test-register-edit-native --board \
+     xtensa-esp32s3-elf-gdb 127.0.0.1:3333 a4 xtensa
+
+   TB_REGISTER_EDIT_LOG="$PWD/build/f05-c6.log" \
+     ./build/test-register-edit-native --board \
+     riscv32-esp-elf-gdb 127.0.0.1:3333 t0 riscv
+
+   TB_REGISTER_EDIT_LOG="$PWD/build/f05-stm32.log" \
+     ./build/test-register-edit-native --board \
+     arm-none-eabi-gdb 127.0.0.1:3333 r4 arm
+   ```
+
+   Names are looked up in the actual catalog; missing names or unsupported
+   evidence must refuse the edit. The runner captures and prints original bits,
+   exercises Review/Cancel and invalid input, changes the lowest bit, explicitly
+   verifies the new bits, then deliberately restores and verifies the original.
+   Expect two `VERIFIED` lines, `RESTORED`, unchanged PC, final `PASS` and exit 0.
+   There is no automatic rollback after a failure. If interrupted or failed,
+   retain the printed original value and logs; inspect the target before any
+   further mutation. The runner does not issue Continue/reset, and server-specific
+   disconnect behavior determines the target's final execution disposition.
+3. Review the same flow in `./build/the-bugger`: connect to that server using its
+   compatible GDB, select a stopped hardware thread and frame 0, then select the
+   same general-purpose register. Record the old bits. **Edit → Review → Cancel**
+   followed by explicit Refresh must preserve them. Repeat **Review → Apply →
+   Verify**, compare the observed bits, then deliberately restore/Verify the
+   original. Resize during review and ensure all pages precede Apply. A fresh
+   value and width must be shown; no cached caller-frame write is allowed.
+4. Use authored host checks for forced timeouts, unsupported metadata and ignored
+   writes; do not induce transport faults or mutate PC/SP/status to manufacture
+   a failure on physical hardware. Retain actual results per architecture.
+
+The current F05 record includes agent-run native/STM32 results and owner-reported
+ESP32-S3/Xtensa and ESP32-C6/RISC-V validation. New native/STM32 results do not
+substitute for either ESP architecture in later regressions. Existing general
+embedded/release regression remains separate from this focused procedure.

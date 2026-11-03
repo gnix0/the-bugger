@@ -3926,3 +3926,102 @@ identify the tested inputs and delivered diff; fixture hashes are in
 `fixture.sha256`. Source/build inputs remained unchanged during this final run.
 These are agent-run local Linux results, not hosted Ubuntu or physical results.
 F04 remains awaiting owner review and actual STM32 F03/F04 write/verify evidence.
+
+## F04 owner acceptance
+
+After the 2026-11-01 implementation handoff, the owner reported approval and
+physical testing/validation across all supported architectures. This supersedes
+F04's historical pending-review and pending-physical-check status above. These
+are owner-reported results; no additional agent-run hardware logs, versions or
+per-device measurements were supplied with that report. It does not establish
+F05 CPU-register editing results.
+
+## F05 CPU-register editing — 2026-11-03
+
+Implemented discovered-ID, stopped frame-zero scalar register editing with raw
+hexadecimal Review/Apply, GDB command/permission/editability/size evidence,
+dispatch-time identity checks and the shared F03–F05 write reservation/quarantine.
+The frozen scalar varobj supplies backend editability evidence; it does not prove
+physical writability of every bit. Explicit Verify records matching or different
+observed bits. No implicit read-back, retry, rollback, caller-frame assignment,
+peripheral editor or architecture-specific writable-register list was added.
+
+Agent-run focused authored-MI, native GDB and direct/Vim/isolated-tmux PTY checks
+passed, exit 0 (`build/f05-evidence/ownership-pagination-final.log`). Model coverage includes
+sparse IDs, exact command extent, unsupported evidence, stale/caller frames,
+pre-dispatch permission/editability changes, cancellation/cleanup, ignored writes,
+backend errors, stale running completion and unresolved timeout/late reply. The
+PTY regression caught and corrected focus retention on Cancel while asynchronous
+proof completed; compact review pagination is checked before Apply.
+
+### Physical ARM/Cortex-M result
+
+Agent-run on the owner-identified connected STM32 NUCLEO-F446RE using ST-LINK
+V2J48M35 (0483:374B), system OpenOCD
+`0.12.0-01004-g9ea7f3d64-dirty (2026-08-27-22:55)` and
+`arm-none-eabi-gdb` 18.1. OpenOCD reported Cortex-M4 r0p1, device ID `0x10006421`,
+512-KiB Flash and 3.284-V target supply on the initial run. These server reports
+are recorded facts, not automatic device-identity authorization.
+
+The runner connected to an agent-owned OpenOCD process at `127.0.0.1:3337` in the final run, using
+`board/st_nucleo_f4.cfg`. Earlier focused runs used port 3333. Existing firmware was retained; no flashing, reset or
+ELF load was performed. This focused check concerns live CPU-register behavior,
+not firmware-level acceptance. It discovered thread 1, frame 0, `r4`, numeric
+ID 4 and 32-bit storage. Review/Cancel preserved `0x00000000`; an explicit Apply
+requested `0x00000001`, and explicit Verify observed `0x00000001`. A second
+reviewed Apply restored `0x00000000`; explicit Verify observed `0x00000000`.
+PC remained `0x08000220`. Final runner exit was 0. Only the agent-owned server
+was stopped afterward; no explicit Continue was issued.
+
+The physical terminal flow also passed on the final application: keyboard
+register selection/Enter, mouse Edit, Review/Cancel, close-confirmation
+cancellation, 48×18 complete review pagination, Apply/Verify and a second
+reviewed restoration. It observed `r4` restored to `0x00000000` before closing.
+`stm32-ui-final.log` / `.exit` record PASS and exit 0; the shared final OpenOCD
+log, commands and temporary physical PTY harness source are retained beside them.
+
+Final commands and results are retained in `build/f05-evidence/`:
+`stm32-final-commands.txt`, `stm32-register-edit-final.log` / `.exit`,
+`stm32-openocd-final.log`, `stm32-session-final.log` and tool-version files.
+The physical register/session inputs and final terminal application match the
+final host input manifest. Initial development failures remain in earlier focused
+logs. Static analysis also caught a missing pane-index guard for the new control;
+it was corrected before the final frozen-tree baseline. Superseded runs are not
+reported as final passing baselines.
+
+### Owner-reported Xtensa and RISC-V results
+
+During this handoff, the owner reported ESP32-S3/Xtensa and ESP32-C6/RISC-V
+validation already completed and authorized marking both validated. These are
+owner-run PASS results, distinct from the agent-run STM32 evidence. No additional
+ESP logs, exact values or tool/firmware versions were supplied with that report;
+none are inferred from host or STM32 checks. The F05 physical architecture matrix
+is therefore complete. Final implementation acceptance remains pending.
+
+No hosted Ubuntu result is claimed. See the
+[focused procedure](testing.md#cpu-register-editing-f05).
+
+### Final host verification
+
+Agent-run local Linux x86-64 verification on the frozen final inputs:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/f05-finalchecked-20261103 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make analyze
+```
+
+Both PASS, exit 0 (`build/f05-evidence/test-ci.log` / `.exit`, `analyze.log` /
+`.exit`). The complete baseline includes existing input/context/terminal and
+remote ownership assertions, plus F05 model/native, ordinary/Vim terminal and
+isolated tmux checks. Fortified compilation of all 85 unit/integration/support C
+sources also PASS, exit 0 (`test-compilation.log` / `.exit`). Suppressed non-user
+and existing NOLINT analysis diagnostics are not actionable project warnings.
+No hosted Ubuntu result is claimed.
+
+`tested-final-inputs.json`, `environment.json`, `input-integrity.log` and
+`delivery.patch` identify the tested inputs, commands and delivered changes.
+Implementation/build/test inputs remained unchanged throughout this final run.
+Earlier superseded results and the interrupted baseline retain separate logs;
+they do not replace final-tree verification. `default-build.log` / `.exit`
+record the normal launcher rebuild. F05 remains awaiting final owner acceptance;
+the reported physical checks are complete. Tests alone do not mark acceptance.
