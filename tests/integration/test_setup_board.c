@@ -68,7 +68,7 @@ static uint32_t read_word(const char *expression)
     if (!v->ready || v->readable != 4) { fprintf(stderr, "Explicit RAM read: %s\n", v->error); CHECK(false); }
     return (uint32_t)v->bytes[0] | (uint32_t)v->bytes[1] << 8U | (uint32_t)v->bytes[2] << 16U | (uint32_t)v->bytes[3] << 24U;
 }
-static void settle(TbSetupRestore *r, TbSetupCapture *c)
+static void settle(TbSetupRestore_t *r, TbSetupCapture_t *c)
 {
     uint64_t end = tb_gdb_now_ms() + 12000;
     while (tb_setup_restore_active(r) && tb_gdb_now_ms() < end) { pump(); tb_setup_restore_pump(r, c, session); }
@@ -142,12 +142,12 @@ int main(int argc, char **argv)
     config = (TbSessionConfig_t){.kind = TB_SESSION_REMOTE, .endpoint = argv[2], .gdb = argv[1], .executable = argv[3], .openocd = plan};
     start(); stopped(0); idle(); CHECK(strstr(tb_session_capabilities(session)->architecture, argv[4]));
     CHECK(!tb_session_capabilities(session)->server_owned && tb_session_target_pid(session) == 0);
-    TbLayout_t layout; tb_layout_init(&layout); TbDemo workspace; tb_demo_init(&workspace);
+    TbLayout_t layout; tb_layout_init(&layout); TbDemo_t workspace; tb_demo_init(&workspace);
     const char *expressions[TB_MAX_PANES]; for (int i = 0; i < TB_MAX_PANES; ++i) { expressions[i] = ""; }
-    TbSetupCapture *c = tb_setup_capture_create(NULL); CHECK(c);
+    TbSetupCapture_t *c = tb_setup_capture_create(NULL); CHECK(c);
 #define CAPTURE() tb_setup_capture_update(c, &layout, &workspace, tb_session_code(session), tb_session_memory(session), tb_session_variables(session), tb_session_breakpoints(session), expressions)
     CHECK(tb_layout_arrange(&layout, (TbRect_t){0, 0, 240, 100}, 0)); int pane = tb_layout_split(&layout, 0, TB_SPLIT_RIGHT); CHECK(pane >= 0);
-    workspace.panes[pane] = (TbDemoPane){.tabs = {TB_MEMORY, TB_WATCHES}, .count = 2, .active = 1};
+    workspace.panes[pane] = (TbDemoPane_t){.tabs = {TB_MEMORY, TB_WATCHES}, .count = 2, .active = 1};
     expressions[pane] = memory_expression;
     CHECK(tb_memory_definition(tb_session_memory(session), pane, 4, 4));
     CHECK(tb_variables_watch(tb_session_variables(session), watch_expression));
@@ -172,7 +172,7 @@ int main(int argc, char **argv)
     start(); c = tb_setup_capture_create(saved); CHECK(c);
     CHECK(tb_setup_capture_restore(c, saved, &layout, &workspace, tb_session_code(session), tb_session_memory(session), tb_session_variables(session)));
     CHECK(!layout.lower_open[0] && layout.count == 7); no_values(pane);
-    TbSetupRestore *restore = tb_setup_restore_create(); CHECK(restore); tb_setup_restore_begin(restore); tb_session_setup_interlock(session, true, false);
+    TbSetupRestore_t *restore = tb_setup_restore_create(); CHECK(restore); tb_setup_restore_begin(restore); tb_session_setup_interlock(session, true, false);
     CHECK(!tb_session_continue(session) && !tb_session_console(session, "show version")); settle(restore, c);
     TbBreakpoints_t *b = tb_session_breakpoints(session);
     const TbBreakRestoration_t *good = tb_break_restoration(b, saved->breaks[0].id), *bad = tb_break_restoration(b, saved->breaks[1].id), *address = tb_break_restoration(b, saved->breaks[2].id);

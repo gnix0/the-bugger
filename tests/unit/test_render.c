@@ -80,7 +80,7 @@ static double contrast(unsigned foreground, unsigned background)
 int main(void)
 {
     CHECK(setlocale(LC_ALL, "C.UTF-8") != NULL);
-    TbAssemblyColumns columns = {18, 44, 7};
+    TbAssemblyColumns_t columns = {18, 44, 7};
     char short_line[256], long_line[256], tiny[8];
     tb_format_assembly(short_line, sizeof short_line, columns, "0x0000000000001000", "55", "push   %rbp");
     tb_format_assembly(long_line, sizeof long_line, columns, "0x0000000000001001", "48 89 e5", "mov\t%rsp,%rbp");
@@ -102,7 +102,7 @@ int main(void)
     CHECK(default_fg == 0xcad3f5 && default_bg == 0x24273a);
     CHECK(tb_theme_count() == 49 && tb_theme_family_count() == 11);
     for (size_t i = 0; i < tb_theme_count(); ++i) {
-        const TbPalette *palette = tb_theme_palette(i);
+        const TbPalette_t *palette = tb_theme_palette(i);
         CHECK(tb_theme_find(palette->family, palette->variant) == i);
         for (int surface = 0; surface < 4; ++surface) {
             CHECK(contrast(palette->colors[5], palette->colors[surface]) >= 4.5);
@@ -124,8 +124,8 @@ int main(void)
     for (size_t light = 0; light < 2; ++light) {
         const char *deut = light ? "operandi-deuteranopia" : "vivendi-deuteranopia";
         const char *trit = light ? "operandi-tritanopia" : "vivendi-tritanopia";
-        const TbPalette *d = tb_theme_palette(tb_theme_find("modus", deut));
-        const TbPalette *t = tb_theme_palette(tb_theme_find("modus", trit));
+        const TbPalette_t *d = tb_theme_palette(tb_theme_find("modus", deut));
+        const TbPalette_t *t = tb_theme_palette(tb_theme_find("modus", trit));
         CHECK(d && t && d->colors[7] != t->colors[7] && d->colors[8] != t->colors[8]);
         CHECK(d->colors[8] == (light ? 0x0031a9U : 0x2fafffU));
         CHECK(t->colors[8] == (light ? 0x005e8bU : 0x00d3d0U));
@@ -141,7 +141,7 @@ int main(void)
     CHECK(extended_pair_content(TB_ACTIVE_TAB, &fg, &bg) == OK && fg == 0xff6188);
     CHECK(extended_pair_content(tb_selected_style(TB_CYAN), &fg, &bg) == OK);
     CHECK(fg == 0x78dce8 && bg == 0x4b3d4b);
-    TbDemo demo;
+    TbDemo_t demo;
     tb_demo_init(&demo);
     demo.panes[0].scroll[TB_SOURCE] = 16;
     TbRect_t rect = {1, 4, 49, 10};

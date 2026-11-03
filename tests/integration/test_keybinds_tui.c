@@ -312,7 +312,7 @@ int main(int argc, char **argv)
     scrollbar_layout();
     int x, y; CHECK(test_terminal_find(&term, "Keybinds", &x, &y) && x > 0 && y > 0);
     inactive("[ Undo ]"); inactive("[ Save ]"); inactive("[ Restore Defaults ]");
-    TbPreferences prefs; CHECK(tb_preferences_load(&prefs) && !prefs.existed);
+    TbPreferences_t prefs; CHECK(tb_preferences_load(&prefs) && !prefs.existed);
     edit("F11"); test_terminal_expect(&term, "Already assigned to Step into");
     test_terminal_send(&term, "\021"); test_terminal_expect(&term, "Key unavailable or reserved");
     test_terminal_send(&term, "\033"); test_terminal_expect(&term, "Capture cancelled.");

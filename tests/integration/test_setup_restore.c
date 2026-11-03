@@ -22,7 +22,7 @@ static void wait_state(TbSessionState_e state)
     }
     fprintf(stderr, "Session: %s\n", tb_session_message(owned)); CHECK(false);
 }
-static void settle(TbSetupRestore *r, TbSetupCapture *c)
+static void settle(TbSetupRestore_t *r, TbSetupCapture_t *c)
 {
     uint64_t end = tb_gdb_now_ms() + 6000;
     while (tb_setup_restore_active(r) && tb_gdb_now_ms() < end) {
@@ -34,14 +34,14 @@ int main(int argc, char **argv)
 {
     CHECK(argc == 3 && atexit(cleanup) == 0); owned = tb_session_create(); CHECK(owned);
     TbSessionConfig_t config = {.gdb = "gdb", .executable = argv[1]}; CHECK(tb_session_start(owned, &config));
-    TbLayout_t layout; tb_layout_init(&layout); layout.overlays = true; TbDemo workspace; tb_demo_init(&workspace);
+    TbLayout_t layout; tb_layout_init(&layout); layout.overlays = true; TbDemo_t workspace; tb_demo_init(&workspace);
     const char *expressions[TB_MAX_PANES]; for (int i = 0; i < TB_MAX_PANES; ++i) { expressions[i] = ""; }
     TbCode_t *code = tb_session_code(owned); TbMemory_t *memory = tb_session_memory(owned); TbVariables_t *variables = tb_session_variables(owned);
-    TbSetupCapture *c = tb_setup_capture_create(NULL); CHECK(c);
+    TbSetupCapture_t *c = tb_setup_capture_create(NULL); CHECK(c);
 #define CAPTURE() tb_setup_capture_update(c, &layout, &workspace, code, memory, variables, tb_session_breakpoints(owned), expressions)
     CHECK(CAPTURE()); TbSetup_t *saved = malloc(sizeof *saved); CHECK(saved); *saved = *tb_setup_capture_current(c);
     CHECK(tb_layout_arrange(&layout, (TbRect_t){0, 0, 240, 100}, 0)); int added = tb_layout_split(&layout, 0, TB_SPLIT_RIGHT); CHECK(added >= 0);
-    workspace.panes[added] = (TbDemoPane){.tabs = {TB_MEMORY, TB_WATCHES}, .count = 2, .active = 1};
+    workspace.panes[added] = (TbDemoPane_t){.tabs = {TB_MEMORY, TB_WATCHES}, .count = 2, .active = 1};
     CHECK(CAPTURE()); *saved = *tb_setup_capture_current(c);
     saved->panes[0].source_count = 2;
     saved->panes[0].sources[0].id = saved->next_id++;
@@ -67,7 +67,7 @@ int main(int argc, char **argv)
     CHECK(!tb_memory_view(memory, added)->configured && !tb_memory_view(memory, added)->ready && !tb_memory_view(memory, added)->pending);
     CHECK(tb_memory_view(memory, added)->length == 48 && tb_memory_view(memory, added)->grouping == 8);
     CHECK(tb_variables_definitions(variables) == 2 && tb_variables_row(variables, TB_VARIABLE_WATCHES, 0)->format == TB_VARIABLE_HEX);
-    TbSetupRestore *r = tb_setup_restore_create(); CHECK(r); tb_setup_restore_begin(r); tb_session_setup_interlock(owned, true, false);
+    TbSetupRestore_t *r = tb_setup_restore_create(); CHECK(r); tb_setup_restore_begin(r); tb_session_setup_interlock(owned, true, false);
     CHECK(!tb_session_continue(owned) && !tb_session_console(owned, "start"));
     CHECK(!tb_context_select_thread(tb_session_context(owned), "1"));
     CHECK(!tb_break_add(tb_session_breakpoints(owned), "main", false));

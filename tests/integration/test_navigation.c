@@ -182,7 +182,7 @@ int main(int argc, char **argv)
     char root[] = "/tmp/the-bugger-navigation-XXXXXX"; CHECK(mkdtemp(root));
     CHECK(setenv("XDG_CONFIG_HOME", root, 1) == 0);
     CHECK(setenv("TB_TEST_CONFIG_HOME", root, 1) == 0);
-    TbPreferences prefs; CHECK(tb_preferences_load(&prefs));
+    TbPreferences_t prefs; CHECK(tb_preferences_load(&prefs));
     CHECK(tb_keybind_vim(prefs.keys, true));
     CHECK(tb_preferences_save_input(&prefs, prefs.keys, true));
     test_terminal_start(&arrows, argv[1], "xterm-256color", true); active[0] = true;
