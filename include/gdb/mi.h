@@ -4,9 +4,19 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-enum { TB_MI_MAX_RECORD_BYTES = 1024 * 1024, TB_MI_MAX_VALUES = 16384, TB_MI_MAX_DEPTH = 64 };
+enum {
+    TB_MI_MAX_RECORD_BYTES = 1024 * 1024,
+    TB_MI_MAX_VALUES       = 16384,
+    TB_MI_MAX_DEPTH        = 64
+};
 
-typedef enum { TB_MI_OK, TB_MI_INVALID, TB_MI_LIMIT, TB_MI_NOMEM, TB_MI_TRUNCATED } TbMiStatus_e;
+typedef enum {
+    TB_MI_OK,
+    TB_MI_INVALID,
+    TB_MI_LIMIT,
+    TB_MI_NOMEM,
+    TB_MI_TRUNCATED
+} TbMiStatus_e;
 
 typedef struct {
     TbMiStatus_e  code;
@@ -19,7 +29,11 @@ typedef struct {
     size_t  length;             /* Authoritative decoded byte length. */
 } TbMiString_t;
 
-typedef enum { TB_MI_STRING, TB_MI_TUPLE, TB_MI_LIST } TbMiType_e;
+typedef enum {
+    TB_MI_STRING,
+    TB_MI_TUPLE,
+    TB_MI_LIST
+} TbMiType_e;
 
 typedef struct tb_mi_value {
     TbMiType_e          type;
@@ -60,8 +74,11 @@ const TbMiValue_t *tb_mi_find(const TbMiValue_t *values, const char *name);
 /* Zero-initialize before use. Fields are implementation state; do not modify. */
 typedef struct {
     char   *buffer;
-    size_t  length, capacity;
-    bool    discard, skip_lf, failed;
+    size_t  length;
+    size_t  capacity;
+    bool    discard;
+    bool    skip_lf;
+    bool    failed;
 } TbMiParser_t;
 
 /* Exactly one of record/error is non-NULL. Callback owns a successful record;

@@ -3,9 +3,15 @@
 
 #include "model/memory.h"
 
-enum { TB_STACK_VIEWS = 32, TB_STACK_POINTS = 32, TB_STACK_NAMES = 64 };
+enum {
+    TB_STACK_VIEWS  = 32,
+    TB_STACK_POINTS = 32,
+    TB_STACK_NAMES  = 64
+};
+
 typedef struct {
-    uint64_t          address, lifetime;
+    uint64_t          address;
+    uint64_t          lifetime;
     TbGdbGeneration_t generation;
     int               frame;
     char              label[96];
@@ -13,12 +19,18 @@ typedef struct {
 } TbStackPoint_t;
 
 typedef struct {
-    uint64_t low, high, lifetime;
-    bool     used, upward;
+    uint64_t low;
+    uint64_t high;
+    uint64_t lifetime;
+    bool     used;
+    bool     upward;
 } TbStackDeclaration_t;
 
 typedef struct {
-    uint64_t          address, lifetime, sequence, sampled_ms;
+    uint64_t          address;
+    uint64_t          lifetime;
+    uint64_t          sequence;
+    uint64_t          sampled_ms;
     TbGdbGeneration_t generation;
     char              thread[32];
     unsigned          size;
@@ -33,12 +45,28 @@ typedef struct {
 } TbStackName_t;
 
 typedef struct {
-    char            thread[32], message[192], anchor_error[192], annotation_error[192];
-    uint64_t        lifetime, sp, start, revision;
-    unsigned        size, grouping;
-    bool            visible, follow, anchor_valid, positioned, historical, reading, cancel_requested;
-    bool            names_ready, names_limited, guard_confirmation;
-    size_t          name_count, point_count;
+    char            thread[32];
+    char            message[192];
+    char            anchor_error[192];
+    char            annotation_error[192];
+    uint64_t        lifetime;
+    uint64_t        sp;
+    uint64_t        start;
+    uint64_t        revision;
+    unsigned        size;
+    unsigned        grouping;
+    bool            visible;
+    bool            follow;
+    bool            anchor_valid;
+    bool            positioned;
+    bool            historical;
+    bool            reading;
+    bool            cancel_requested;
+    bool            names_ready;
+    bool            names_limited;
+    bool            guard_confirmation;
+    size_t          name_count;
+    size_t          point_count;
     TbStackName_t   names[TB_STACK_NAMES];
     TbStackPoint_t  points[TB_STACK_POINTS];
     TbStackSample_t sample;

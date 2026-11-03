@@ -7,10 +7,22 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-typedef enum { TB_IMAGE_UNKNOWN, TB_IMAGE_CODE, TB_IMAGE_DATA } TbImageKind_e;
-typedef enum { TB_IMAGE_UNVERIFIED, TB_IMAGE_USER_CONFIRMED, TB_IMAGE_BACKEND_VERIFIED } TbImageTrust_e;
+typedef enum {
+    TB_IMAGE_UNKNOWN,
+    TB_IMAGE_CODE,
+    TB_IMAGE_DATA
+} TbImageKind_e;
+
+typedef enum {
+    TB_IMAGE_UNVERIFIED,
+    TB_IMAGE_USER_CONFIRMED,
+    TB_IMAGE_BACKEND_VERIFIED
+} TbImageTrust_e;
+
 typedef struct {
-    uint64_t       start, end, anchor;
+    uint64_t       start;
+    uint64_t       end;
+    uint64_t       anchor;
     TbImageKind_e  kind;
     TbImageTrust_e trust;
     char           name[96];
@@ -18,7 +30,8 @@ typedef struct {
 
 typedef struct {
     char     path[4096];
-    uint64_t bias, revision;
+    uint64_t bias;
+    uint64_t revision;
     size_t   ranges;
 } TbImageReview_t;
 

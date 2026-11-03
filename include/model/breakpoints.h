@@ -7,15 +7,33 @@
 
 enum { TB_BREAK_ROWS = 256 };
 
-typedef enum { TB_WATCH_CHANGE, TB_WATCH_READ, TB_WATCH_ACCESS, TB_WATCH_MODES } TbWatchMode_e;
+typedef enum {
+    TB_WATCH_CHANGE,
+    TB_WATCH_READ,
+    TB_WATCH_ACCESS,
+    TB_WATCH_MODES
+} TbWatchMode_e;
 
 typedef struct {
-    char          id[32], parent[32], type[64], address[48], file[4096], location[8193], condition[512],
-                  unsupported[192];
-    unsigned      line, ignore;
+    char          id[32];
+    char          parent[32];
+    char          type[64];
+    char          address[48];
+    char          file[4096];
+    char          location[8193];
+    char          condition[512];
+    char          unsupported[192];
+    unsigned      line;
+    unsigned      ignore;
     uint64_t      hits;
-    bool          enabled, pending, multiple, hardware, temporary, child;
-    bool          watchpoint, definition_complete;
+    bool          enabled;
+    bool          pending;
+    bool          multiple;
+    bool          hardware;
+    bool          temporary;
+    bool          child;
+    bool          watchpoint;
+    bool          definition_complete;
     TbWatchMode_e watch_mode;
 } TbBreakpoint_t;
 
@@ -24,9 +42,14 @@ typedef struct tb_breakpoints TbBreakpoints_t;
 typedef struct {
     uint64_t       identity;
     TbSetupMapping mapping;
-    char           location[8193], source[4096], condition[512];
-    unsigned       line, ignore;
-    bool           enabled, ignore_set, hardware;
+    char           location[8193];
+    char           source[4096];
+    char           condition[512];
+    unsigned       line;
+    unsigned       ignore;
+    bool           enabled;
+    bool           ignore_set;
+    bool           hardware;
 } TbBreakDefinition_t;
 
 /* Configured frontend intent, independent of hits/remaining backend counts.
@@ -51,9 +74,11 @@ typedef enum {
 } TbBreakRestoreState_e;
 
 typedef struct {
-    uint64_t              id, identity;
+    uint64_t              id;
+    uint64_t              identity;
     TbBreakRestoreState_e state;
-    char                  backend[32], reason[192];
+    char                  backend[32];
+    char                  reason[192];
 } TbBreakRestoration_t;
 
 /* Runtime progress and backend IDs are never serialized. One bounded operation
@@ -76,7 +101,8 @@ bool tb_break_owned(const TbBreakpoints_t *breakpoints, const char *backend);
 void tb_break_restore_forget(TbBreakpoints_t *breakpoints, uint64_t identity);
 const char *tb_break_restore_state(TbBreakRestoreState_e state);
 typedef struct {
-    const char *text, *source;
+    const char *text;
+    const char *source;
     unsigned    line;
 } TbBreakLocation_t;
 

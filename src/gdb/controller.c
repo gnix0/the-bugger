@@ -19,11 +19,16 @@ extern char **environ;
 
 typedef struct {
     char              *wire;
-    size_t             length, written;
-    uint64_t           token, cookie, deadline;
+    size_t             length;
+    size_t             written;
+    uint64_t           token;
+    uint64_t           cookie;
+    uint64_t           deadline;
     TbGdbGeneration_t  generation;
     TbGdbScope_e       scope;
-    bool               setup, state_query, require_frame;
+    bool               setup;
+    bool               state_query;
+    bool               require_frame;
 } Request_t;
 
 struct tb_gdb {
@@ -32,16 +37,28 @@ struct tb_gdb {
     TbGdbState_e       state;
     TbGdbGeneration_t  generation;
     pid_t              pid;
-    int                input, output, error, version, shutdown_stage;
-    uint64_t           next_token, startup_deadline, shutdown_deadline, drain_deadline;
+    int                input;
+    int                output;
+    int                error;
+    int                version;
+    int                shutdown_stage;
+    uint64_t           next_token;
+    uint64_t           startup_deadline;
+    uint64_t           shutdown_deadline;
+    uint64_t           drain_deadline;
     char              *executable;
     char               startup_error[1024];
     size_t             startup_error_length;
-    bool               prompted, closing, protocol_failed;
-    unsigned           startup_ms, setup_left;
-    uint64_t           resume_token, resume_stop;
+    bool               prompted;
+    bool               closing;
+    bool               protocol_failed;
+    unsigned           startup_ms;
+    unsigned           setup_left;
+    uint64_t           resume_token;
+    uint64_t           resume_stop;
     uint64_t           reserved_cookie;
-    bool               reconcile_pending, reconcile_stopped;
+    bool               reconcile_pending;
+    bool               reconcile_stopped;
     TbMiParser_t       parser;
     Request_t          requests[TB_GDB_MAX_PENDING];
 };
@@ -49,9 +66,9 @@ struct tb_gdb {
 uint64_t tb_gdb_now_ms(void)
 {
     struct timespec now;
-    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
         abort();
-    }
+
     return (uint64_t)now.tv_sec * 1000 + (uint64_t)now.tv_nsec / 1000000;
 }
 
@@ -85,9 +102,8 @@ static void diagnostic(TbGdb_t *gdb, const char *text, int error)
 
 static void state_set(TbGdb_t *gdb, TbGdbState_e state)
 {
-    if (gdb->state == state) {
+    if (gdb->state == state)
         return;
-    }
 
     gdb->state = state;
     event(gdb, TB_GDB_STATE, NULL, NULL, NULL, 0, 0);
@@ -105,24 +121,21 @@ static void fd_close(int *fd)
 
 static void complete(TbGdb_t *gdb, Request_t *request, TbGdbEventKind_e kind, const TbMiRecord_t *record)
 {
-    if (!request->setup && !request->state_query) {
+    if (!request->setup && !request->state_query)
         event(gdb, kind, request, record, NULL, 0, 0);
-    }
-    if (request->state_query && kind == TB_GDB_TIMEOUT) {
+    if (request->state_query && kind == TB_GDB_TIMEOUT)
         diagnostic(gdb, "Execution-state verification timed out; state remains unconfirmed.", ETIMEDOUT);
-    }
 
     free(request->wire);
-    memset(request, 0, sizeof *request);
+    memset(request, 0, sizeof(*request));
 }
 
 
 static void cancel_all(TbGdb_t *gdb)
 {
     for (size_t i = 0; i < TB_GDB_MAX_PENDING; ++i) {
-        if (gdb->requests[i].wire != NULL) {
+        if (gdb->requests[i].wire != NULL)
             complete(gdb, &gdb->requests[i], TB_GDB_CANCELLED, NULL);
-        }
     }
 }
 
@@ -139,9 +152,8 @@ static void shutting_down(TbGdb_t *gdb, bool immediate)
 
 static void broken(TbGdb_t *gdb, const char *text, int error)
 {
-    if (gdb->closing) {
+    if (gdb->closing)
         return;
-    }
 
     diagnostic(gdb, text, error);
     shutting_down(gdb, true);
@@ -150,28 +162,27 @@ static void broken(TbGdb_t *gdb, const char *text, int error)
 
 TbGdb_t *tb_gdb_create(tb_gdb_emit_fn emit, void *context)
 {
-    if (emit == NULL) {
+    if (emit == NULL)
         return NULL;
-    }
 
-    TbGdb_t *gdb = calloc(1, sizeof *gdb);
+    TbGdb_t *gdb = calloc(1, sizeof(*gdb));
     if (gdb != NULL) {
         gdb->emit    = emit;
         gdb->context = context;
-        gdb->input = gdb->output = gdb->error = -1;
+        gdb->input   = gdb->output = gdb->error = -1;
     }
+
     return gdb;
 }
 
 
 bool tb_gdb_destroy(TbGdb_t *gdb)
 {
-    if (gdb == NULL) {
+    if (gdb == NULL)
         return true;
-    }
-    if (gdb->pid != 0 || gdb->state != TB_GDB_DISCONNECTED) {
+
+    if (gdb->pid != 0 || gdb->state != TB_GDB_DISCONNECTED)
         return false;
-    }
 
     cancel_all(gdb);
     fd_close(&gdb->input);
@@ -191,20 +202,21 @@ static bool lift(int fds[2])
     for (size_t i = 0; i < 2; ++i) {
         if (fds[i] < 3) {
             int moved = fcntl(fds[i], F_DUPFD_CLOEXEC, 3);
-            if (moved < 0) {
+            if (moved < 0)
                 return false;
-            }
+
             (void)close(fds[i]);
             fds[i] = moved;
         }
     }
+
     return true;
 }
 
 
 static bool spawn_peer(TbGdb_t *gdb)
 {
-    int in[2] = {-1, -1}, out[2] = {-1, -1}, err[2] = {-1, -1};
+    int in[2]   = {-1, -1}, out[2] = {-1, -1}, err[2] = {-1, -1};
     int failure = 0;
     if (pipe2(in, O_CLOEXEC) != 0 || pipe2(out, O_CLOEXEC) != 0 || pipe2(err, O_CLOEXEC) != 0 || !lift(in) ||
         !lift(out) || !lift(err)) {
@@ -224,20 +236,16 @@ static bool spawn_peer(TbGdb_t *gdb)
         attr_ok = failure == 0;
     }
 
-    if (failure == 0) {
+    if (failure == 0)
         failure = posix_spawn_file_actions_adddup2(&actions, in[0], 0);
-    }
-    if (failure == 0) {
+    if (failure == 0)
         failure = posix_spawn_file_actions_adddup2(&actions, out[1], 1);
-    }
-    if (failure == 0) {
+    if (failure == 0)
         failure = posix_spawn_file_actions_adddup2(&actions, err[1], 2);
-    }
     /* After installing stdio, isolate the child from every inherited endpoint,
      * including descriptors opened by the process that launched this frontend. */
-    if (failure == 0) {
+    if (failure == 0)
         failure = posix_spawn_file_actions_addclosefrom_np(&actions, 3);
-    }
 
     sigset_t empty, defaults;
     (void)sigemptyset(&empty);
@@ -247,15 +255,12 @@ static bool spawn_peer(TbGdb_t *gdb)
     (void)sigaddset(&defaults, SIGTERM);
     (void)sigaddset(&defaults, SIGHUP);
 
-    if (failure == 0) {
+    if (failure == 0)
         failure = posix_spawnattr_setsigmask(&attr, &empty);
-    }
-    if (failure == 0) {
+    if (failure == 0)
         failure = posix_spawnattr_setsigdefault(&attr, &defaults);
-    }
-    if (failure == 0) {
+    if (failure == 0)
         failure = posix_spawnattr_setpgroup(&attr, 0);
-    }
     if (failure == 0) {
         failure = posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF |
                                                       POSIX_SPAWN_SETPGROUP);
@@ -263,27 +268,23 @@ static bool spawn_peer(TbGdb_t *gdb)
 
     char *const argv[]    = {gdb->executable, "--quiet", "--nx",
                              gdb->version == 3 ? "--interpreter=mi3" : "--interpreter=mi2", NULL};
-    int         parents[] = {in[1], out[0], err[0]};
+    int parents[] = {in[1], out[0], err[0]};
 
     for (size_t i = 0; failure == 0 && i < 3; ++i) {
         int flags = fcntl(parents[i], F_GETFL);
-        if (flags < 0 || fcntl(parents[i], F_SETFL, (int)((unsigned)flags | (unsigned)O_NONBLOCK)) < 0) {
+        if (flags < 0 || fcntl(parents[i], F_SETFL, (int)((unsigned)flags | (unsigned)O_NONBLOCK)) < 0)
             failure = errno;
-        }
     }
     if (failure == 0) {
         failure = posix_spawnp(&gdb->pid, gdb->executable, &actions, &attr, argv, environ);
-        if (failure != 0) {
+        if (failure != 0)
             gdb->pid = 0;
-        }
     }
 
-    if (actions_ok) {
+    if (actions_ok)
         (void)posix_spawn_file_actions_destroy(&actions);
-    }
-    if (attr_ok) {
+    if (attr_ok)
         (void)posix_spawnattr_destroy(&attr);
-    }
 
     if (failure == 0) {
         gdb->input  = in[1];
@@ -293,14 +294,14 @@ static bool spawn_peer(TbGdb_t *gdb)
         (void)close(out[1]);
         (void)close(err[1]);
     } else {
-        for (size_t i = 0; i < sizeof all / sizeof all[0]; ++i) {
-            if (all[i] >= 0) {
+        for (size_t i = 0; i < sizeof(all) / sizeof(all[0]); ++i) {
+            if (all[i] >= 0)
                 (void)close(all[i]);
-            }
         }
         diagnostic(gdb, "cannot spawn debugger executable", failure);
         state_set(gdb, TB_GDB_DISCONNECTED);
     }
+
     return failure == 0;
 }
 
@@ -330,33 +331,34 @@ bool tb_gdb_start(TbGdb_t *gdb, const char *executable, unsigned startup_ms)
     gdb->startup_ms       = startup_ms;
     gdb->startup_deadline = tb_gdb_now_ms() + startup_ms;
 
-    gdb->prompted = gdb->closing = gdb->protocol_failed = false;
-    gdb->resume_token = gdb->resume_stop = 0;
+    gdb->prompted          = gdb->closing = gdb->protocol_failed = false;
+    gdb->resume_token      = gdb->resume_stop = 0;
     gdb->reconcile_pending = gdb->reconcile_stopped = false;
-    gdb->setup_left     = 0;
-    gdb->shutdown_stage = 0;
+    gdb->setup_left        = 0;
+    gdb->shutdown_stage    = 0;
 
     gdb->startup_error_length = 0;
     gdb->startup_error[0]     = '\0';
 
     state_set(gdb, TB_GDB_STARTING);
+
     return spawn_peer(gdb);
 }
 
 
 static bool operation_valid(const char *operation)
 {
-    if (operation == NULL || operation[0] != '-' || operation[1] == '\0') {
+    if (operation == NULL || operation[0] != '-' || operation[1] == '\0')
         return false;
-    }
+
     for (size_t i = 1; operation[i] != '\0'; ++i) {
-        if ((operation[i] < 'a' || operation[i] > 'z') && operation[i] != '-') {
+        if ((operation[i] < 'a' || operation[i] > 'z') && operation[i] != '-')
             return false;
-        }
-        if (i > 128) {
+
+        if (i > 128)
             return false;
-        }
     }
+
     return true;
 }
 
@@ -397,9 +399,8 @@ static bool enqueue(TbGdb_t *gdb, const char *operation, const char *const args[
      * Setting names are restricted; tail bytes cannot introduce a new record.
      * Environment assignment values are literal, including spaces/quotes. */
     bool setting = strcmp(operation, "-gdb-set") == 0 || strcmp(operation, "-gdb-show") == 0;
-    if (setting && (count == 0 || args[0] == NULL || args[0][0] == '\0')) {
+    if (setting && (count == 0 || args[0] == NULL || args[0][0] == '\0'))
         valid = false;
-    }
     for (size_t i = 0; valid && i < count; ++i) {
         if (args[i] == NULL || length + 3 >= TB_GDB_MAX_COMMAND) {
             valid = false;
@@ -422,7 +423,7 @@ static bool enqueue(TbGdb_t *gdb, const char *operation, const char *const args[
         bool plain = args[i][0] != '\0';
         for (size_t j = 0; plain && args[i][j] != '\0'; ++j) {
             unsigned char c = (unsigned char)args[i][j];
-            plain           = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+            plain = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
                               strchr("_./:=+-", (int)c) != NULL;
         }
         if (plain) {
@@ -453,15 +454,13 @@ static bool enqueue(TbGdb_t *gdb, const char *operation, const char *const args[
                 wire[length++] = (char)('0' + (c / 8) % 8);
                 wire[length++] = (char)('0' + c % 8);
             } else {
-                if (needed == 2) {
+                if (needed == 2)
                     wire[length++] = '\\';
-                }
-                wire[length++] = (char)c;
+                wire[length++]     = (char)c;
             }
         }
-        if (valid) {
+        if (valid)
             wire[length++] = '"';
-        }
     }
     if (!valid) {
         free(wire);
@@ -472,7 +471,7 @@ static bool enqueue(TbGdb_t *gdb, const char *operation, const char *const args[
     wire[length++] = '\n';
     wire[length]   = '\0';
 
-    *request = (Request_t){
+    *request = (Request_t) {
         .wire       = wire,
         .length     = length,
         .token      = next,
@@ -482,10 +481,10 @@ static bool enqueue(TbGdb_t *gdb, const char *operation, const char *const args[
         .scope      = scope,
         .setup      = setup
     };
+
     gdb->next_token = next;
-    if (token != NULL) {
+    if (token != NULL)
         *token = next;
-    }
 
     return true;
 }
@@ -512,15 +511,15 @@ bool tb_gdb_reserve(TbGdb_t *gdb, uint64_t cookie)
     }
 
     gdb->reserved_cookie = cookie;
+
     return true;
 }
 
 
 void tb_gdb_release(TbGdb_t *gdb, uint64_t cookie)
 {
-    if (gdb && cookie && gdb->reserved_cookie == cookie) {
+    if (gdb && cookie && gdb->reserved_cookie == cookie)
         gdb->reserved_cookie = 0;
-    }
 }
 
 
@@ -534,19 +533,18 @@ static bool obsolete(const TbGdb_t *gdb, const Request_t *request)
 
 void tb_gdb_context_changed(TbGdb_t *gdb)
 {
-    if (gdb != NULL) {
+    if (gdb != NULL)
         ++gdb->generation.context;
-    }
 }
 
 
 bool tb_gdb_verify_stop(TbGdb_t *gdb)
 {
-    if (!gdb || gdb->closing || (gdb->state != TB_GDB_STOPPED && gdb->state != TB_GDB_RUNNING)) {
+    if (!gdb || gdb->closing || (gdb->state != TB_GDB_STOPPED && gdb->state != TB_GDB_RUNNING))
         return false;
-    }
 
     gdb->reconcile_pending = gdb->reconcile_stopped = true;
+
     return true;
 }
 
@@ -564,9 +562,9 @@ static void execution_state(TbGdb_t *gdb, TbGdbState_e state)
 static bool threads_stopped(const TbMiRecord_t *record)
 {
     const TbMiValue_t *threads = tb_mi_find(record->results, "threads");
-    if (!threads || threads->type != TB_MI_LIST || !threads->children) {
+    if (!threads || threads->type != TB_MI_LIST || !threads->children)
         return false;
-    }
+
     for (const TbMiValue_t *item = threads->children; item; item = item->next) {
         const TbMiValue_t *state = tb_mi_find(item->children, "state");
         if (!state || state->type != TB_MI_STRING || state->string.length != 7 ||
@@ -574,6 +572,7 @@ static bool threads_stopped(const TbMiRecord_t *record)
             return false;
         }
     }
+
     return true;
 }
 
@@ -582,9 +581,9 @@ static bool current_stop_frame(const TbMiRecord_t *record)
 {
     const TbMiValue_t *current = tb_mi_find(record->results, "current-thread-id");
     const TbMiValue_t *threads = tb_mi_find(record->results, "threads");
-    if (!current || current->type != TB_MI_STRING || !current->string.length || !threads) {
+    if (!current || current->type != TB_MI_STRING || !current->string.length || !threads)
         return false;
-    }
+
     for (const TbMiValue_t *item = threads->children; item; item = item->next) {
         const TbMiValue_t *id = tb_mi_find(item->children, "id");
         if (!id || id->type != TB_MI_STRING || id->string.length != current->string.length ||
@@ -600,12 +599,12 @@ static bool current_stop_frame(const TbMiRecord_t *record)
         }
         for (size_t i = 2; i < address->string.length; ++i) {
             char c = address->string.data[i];
-            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
+            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
                 return false;
-            }
         }
         return true;
     }
+
     return false;
 }
 
@@ -624,10 +623,10 @@ static void parsed(void *context, TbMiRecord_t *record, const TbMiError_t *error
     }
 
     if (record->kind == TB_MI_PROMPT && !gdb->prompted) {
-        gdb->prompted                = true;
+        gdb->prompted = true;
         const char *const async[]    = {"mi-async", "on"};
         const char *const all_stop[] = {"non-stop", "off"};
-        gdb->setup_left              = 2;
+        gdb->setup_left = 2;
         if (!enqueue(gdb, "-gdb-set", async, 2, TB_GDB_SESSION, 0, gdb->startup_ms, NULL, true) ||
             !enqueue(gdb, "-gdb-set", all_stop, 2, TB_GDB_SESSION, 0, gdb->startup_ms, NULL, true)) {
             gdb->protocol_failed = true;
@@ -638,7 +637,7 @@ static void parsed(void *context, TbMiRecord_t *record, const TbMiError_t *error
             Request_t *candidate = &gdb->requests[i];
             if (candidate->wire != NULL && candidate->written == candidate->length && record->token != NULL) {
                 char token[32];
-                (void)snprintf(token, sizeof token, "%" PRIu64, candidate->token);
+                (void)snprintf(token, sizeof(token), "%" PRIu64, candidate->token);
                 if (strcmp(token, record->token) == 0) {
                     request = candidate;
                     break;
@@ -648,7 +647,7 @@ static void parsed(void *context, TbMiRecord_t *record, const TbMiError_t *error
 
         if (request == NULL) {
             char resume[32];
-            (void)snprintf(resume, sizeof resume, "%" PRIu64, gdb->resume_token);
+            (void)snprintf(resume, sizeof(resume), "%" PRIu64, gdb->resume_token);
             if (gdb->resume_token && gdb->state == TB_GDB_RUNNING &&
                 gdb->generation.stop == gdb->resume_stop && record->token &&
                 strcmp(record->token, resume) == 0 && strcmp(record->klass, "error") == 0) {
@@ -662,9 +661,8 @@ static void parsed(void *context, TbMiRecord_t *record, const TbMiError_t *error
             bool setup = request->setup;
             complete(gdb, request, TB_GDB_TIMEOUT, NULL);
             event(gdb, TB_GDB_STALE, NULL, record, "MI reply arrived after deadline", 31, 0);
-            if (setup) {
+            if (setup)
                 gdb->protocol_failed = true;
-            }
         } else {
             bool stale   = obsolete(gdb, request);
             bool setup   = request->setup;
@@ -697,12 +695,10 @@ static void parsed(void *context, TbMiRecord_t *record, const TbMiError_t *error
             }
 
             complete(gdb, request, stale ? TB_GDB_STALE : TB_GDB_REPLY, record);
-            if (exiting) {
+            if (exiting)
                 shutting_down(gdb, false);
-            }
-            if (setup && !gdb->protocol_failed && --gdb->setup_left == 0) {
+            if (setup && !gdb->protocol_failed && --gdb->setup_left == 0)
                 state_set(gdb, TB_GDB_READY);
-            }
         }
     } else if (record->kind == TB_MI_EXEC && gdb->state != TB_GDB_STARTING) {
         if (strcmp(record->klass, "running") == 0) {
@@ -732,63 +728,74 @@ static int next_write(const TbGdb_t *gdb)
             next = (int)i;
         }
     }
+
     return next;
 }
 
 
 size_t tb_gdb_pollfds(const TbGdb_t *gdb, struct pollfd fds[3])
 {
-    if (gdb == NULL || fds == NULL) {
+    if (gdb == NULL || fds == NULL)
         return 0;
-    }
 
-    fds[0] = (struct pollfd){gdb->output, POLLIN, 0};
-    fds[1] = (struct pollfd){gdb->error, POLLIN, 0};
-    fds[2] = (struct pollfd){gdb->input, next_write(gdb) >= 0 ? POLLOUT : 0, 0};
+    fds[0] = (struct pollfd) {
+        gdb->output,
+        POLLIN,
+        0
+    };
+
+    fds[1] = (struct pollfd) {
+        gdb->error,
+        POLLIN,
+        0
+    };
+
+    fds[2] = (struct pollfd) {
+        gdb->input,
+        next_write(gdb) >= 0 ? POLLOUT : 0,
+        0
+    };
+
     return 3;
 }
 
 
 int tb_gdb_timeout(const TbGdb_t *gdb, int maximum_ms)
 {
-    if (gdb == NULL || gdb->state == TB_GDB_DISCONNECTED) {
+    if (gdb == NULL || gdb->state == TB_GDB_DISCONNECTED)
         return maximum_ms;
-    }
 
     int      limit    = maximum_ms < 0 || maximum_ms > 25 ? 25 : maximum_ms;
     uint64_t now      = tb_gdb_now_ms();
     uint64_t deadline = now + (unsigned)limit;
-    if (gdb->closing && gdb->pid > 0 && gdb->shutdown_deadline < deadline) {
+    if (gdb->closing && gdb->pid > 0 && gdb->shutdown_deadline < deadline)
         deadline = gdb->shutdown_deadline;
-    }
-    if (gdb->pid == 0 && gdb->drain_deadline < deadline) {
+    if (gdb->pid == 0 && gdb->drain_deadline < deadline)
         deadline = gdb->drain_deadline;
-    }
-    if (!gdb->closing && gdb->state == TB_GDB_STARTING && gdb->startup_deadline < deadline) {
+    if (!gdb->closing && gdb->state == TB_GDB_STARTING && gdb->startup_deadline < deadline)
         deadline = gdb->startup_deadline;
-    }
     for (size_t i = 0; i < TB_GDB_MAX_PENDING; ++i) {
-        if (gdb->requests[i].wire != NULL && gdb->requests[i].deadline < deadline) {
+        if (gdb->requests[i].wire != NULL && gdb->requests[i].deadline < deadline)
             deadline = gdb->requests[i].deadline;
-        }
     }
+
     return deadline <= now ? 0 : (int)(deadline - now);
 }
 
 
 static void read_pipe(TbGdb_t *gdb, bool stderr_pipe)
 {
-    int   *fd = stderr_pipe ? &gdb->error : &gdb->output;
-    char   buffer[4096];
-    size_t budget = TB_GDB_IO_BUDGET;
+    int    *fd     = stderr_pipe ? &gdb->error : &gdb->output;
+    char    buffer[4096];
+    size_t  budget = TB_GDB_IO_BUDGET;
 
     while (*fd >= 0 && budget != 0) {
-        size_t  maximum = budget < sizeof buffer ? budget : sizeof buffer;
+        size_t  maximum = budget < sizeof(buffer) ? budget : sizeof(buffer);
         ssize_t length  = read(*fd, buffer, maximum);
         if (length > 0) {
             budget -= (size_t)length;
             if (stderr_pipe) {
-                size_t room   = sizeof gdb->startup_error - 1 - gdb->startup_error_length;
+                size_t room   = sizeof(gdb->startup_error) - 1 - gdb->startup_error_length;
                 size_t copied = (size_t)length < room ? (size_t)length : room;
                 memcpy(gdb->startup_error + gdb->startup_error_length, buffer, copied);
                 gdb->startup_error_length                     += copied;
@@ -803,9 +810,8 @@ static void read_pipe(TbGdb_t *gdb, bool stderr_pipe)
             }
         } else if (length == 0) {
             fd_close(fd);
-            if (!stderr_pipe) {
+            if (!stderr_pipe)
                 (void)tb_mi_finish(&gdb->parser, parsed, gdb);
-            }
             break;
         } else {
             if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
@@ -825,9 +831,9 @@ static ssize_t pipe_write(int fd, const char *data, size_t length)
     sigset_t blocked, old, pending;
     (void)sigemptyset(&blocked);
     (void)sigaddset(&blocked, SIGPIPE);
-    if (sigprocmask(SIG_BLOCK, &blocked, &old) != 0) {
+    if (sigprocmask(SIG_BLOCK, &blocked, &old) != 0)
         return -1;
-    }
+
     if (sigpending(&pending) != 0) {
         int saved = errno;
         (void)sigprocmask(SIG_SETMASK, &old, NULL);
@@ -845,6 +851,7 @@ static ssize_t pipe_write(int fd, const char *data, size_t length)
 
     (void)sigprocmask(SIG_SETMASK, &old, NULL);
     errno = saved;
+
     return sent;
 }
 
@@ -861,17 +868,15 @@ static void write_commands(TbGdb_t *gdb)
             continue;
         }
         size_t amount = request->length - request->written;
-        if (amount > budget) {
+        if (amount > budget)
             amount = budget;
-        }
         ssize_t sent = pipe_write(gdb->input, request->wire + request->written, amount);
         if (sent > 0) {
             request->written += (size_t)sent;
             budget           -= (size_t)sent;
         } else {
-            if (sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+            if (sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
                 broken(gdb, "cannot write debugger command", errno);
-            }
             break;
         }
     }
@@ -880,9 +885,8 @@ static void write_commands(TbGdb_t *gdb)
 
 void tb_gdb_close(TbGdb_t *gdb)
 {
-    if (gdb == NULL || gdb->state == TB_GDB_DISCONNECTED || gdb->closing) {
+    if (gdb == NULL || gdb->state == TB_GDB_DISCONNECTED || gdb->closing)
         return;
-    }
 
     /* The native session releases its target before this process primitive.
      * Never turn debugger cleanup into process-group killing. */
@@ -893,15 +897,13 @@ void tb_gdb_close(TbGdb_t *gdb)
 static void reap(TbGdb_t *gdb);
 void tb_gdb_abort(TbGdb_t *gdb)
 {
-    if (!gdb || gdb->state == TB_GDB_DISCONNECTED) {
+    if (!gdb || gdb->state == TB_GDB_DISCONNECTED)
         return;
-    }
-    if (gdb->pid > 0) {
+
+    if (gdb->pid > 0)
         reap(gdb);
-    }
-    if (gdb->pid > 0) {
+    if (gdb->pid > 0)
         (void)kill(gdb->pid, SIGKILL);
-    }
     shutting_down(gdb, true);
     gdb->shutdown_stage = 1;
 }
@@ -910,26 +912,23 @@ void tb_gdb_abort(TbGdb_t *gdb)
 static void deadlines(TbGdb_t *gdb)
 {
     uint64_t now = tb_gdb_now_ms();
-    if (!gdb->closing && gdb->state == TB_GDB_STARTING && now >= gdb->startup_deadline) {
+    if (!gdb->closing && gdb->state == TB_GDB_STARTING && now >= gdb->startup_deadline)
         broken(gdb, "debugger startup timed out", ETIMEDOUT);
-    }
     for (size_t i = 0; i < TB_GDB_MAX_PENDING && !gdb->closing; ++i) {
         Request_t *request = &gdb->requests[i];
-        if (request->wire == NULL || now < request->deadline) {
+        if (request->wire == NULL || now < request->deadline)
             continue;
-        }
+
         bool partial = request->written != 0 && request->written != request->length;
         bool setup   = request->setup;
         complete(gdb, request, TB_GDB_TIMEOUT, NULL);
-        if (partial || setup) {
+        if (partial || setup)
             broken(gdb, "debugger command timed out during write/setup", ETIMEDOUT);
-        }
     }
     if (gdb->closing && gdb->pid > 0 && now >= gdb->shutdown_deadline) {
         int signal_number = gdb->shutdown_stage == 0 ? SIGTERM : SIGKILL;
-        if (kill(gdb->pid, signal_number) != 0 && errno != ESRCH) {
+        if (kill(gdb->pid, signal_number) != 0 && errno != ESRCH)
             diagnostic(gdb, "cannot signal owned debugger", errno);
-        }
         ++gdb->shutdown_stage;
         gdb->shutdown_deadline = now + 200;
     }
@@ -940,9 +939,9 @@ static void reap(TbGdb_t *gdb)
 {
     int   status = 0;
     pid_t child  = waitpid(gdb->pid, &status, WNOHANG);
-    if (child == 0 || (child < 0 && errno == EINTR)) {
+    if (child == 0 || (child < 0 && errno == EINTR))
         return;
-    }
+
     if (child < 0 && errno != ECHILD) {
         broken(gdb, "cannot reap debugger", errno);
         return;
@@ -962,34 +961,29 @@ static void reap(TbGdb_t *gdb)
 
 void tb_gdb_pump(TbGdb_t *gdb, int wait_ms)
 {
-    if (gdb == NULL || gdb->state == TB_GDB_DISCONNECTED) {
+    if (gdb == NULL || gdb->state == TB_GDB_DISCONNECTED)
         return;
-    }
-    if (gdb->pid > 0) {
+
+    if (gdb->pid > 0)
         reap(gdb);
-    }
     deadlines(gdb);
 
     struct pollfd fds[3];
     (void)tb_gdb_pollfds(gdb, fds);
     int ready = poll(fds, 3, tb_gdb_timeout(gdb, wait_ms));
-    if (ready < 0 && errno == EINTR) {
+    if (ready < 0 && errno == EINTR)
         return;
-    }
-    if (ready < 0) {
+
+    if (ready < 0)
         broken(gdb, "debugger poll failed", errno);
-    }
 
     deadlines(gdb); /* Never transmit queued commands after their deadline. */
-    if (fds[0].revents != 0) {
+    if (fds[0].revents != 0)
         read_pipe(gdb, false);
-    }
-    if (fds[1].revents != 0) {
+    if (fds[1].revents != 0)
         read_pipe(gdb, true);
-    }
-    if (fds[2].revents != 0) {
+    if (fds[2].revents != 0)
         write_commands(gdb);
-    }
 
     if (gdb->reconcile_pending && !gdb->closing && tb_gdb_pending(gdb) < TB_GDB_MAX_PENDING) {
         bool stopped           = gdb->reconcile_stopped;
@@ -1016,9 +1010,8 @@ void tb_gdb_pump(TbGdb_t *gdb, int wait_ms)
             broken(gdb, "debugger command input closed", EPIPE);
         }
     }
-    if (gdb->pid > 0) {
+    if (gdb->pid > 0)
         reap(gdb);
-    }
 
     if (gdb->pid == 0 && tb_gdb_now_ms() >= gdb->drain_deadline && (gdb->output >= 0 || gdb->error >= 0)) {
         diagnostic(gdb, "closing pipes retained after debugger exit", EPIPE);
@@ -1039,9 +1032,8 @@ void tb_gdb_pump(TbGdb_t *gdb, int wait_ms)
             gdb->startup_deadline = tb_gdb_now_ms() + gdb->startup_ms;
             (void)spawn_peer(gdb);
         } else {
-            if (!gdb->closing) {
+            if (!gdb->closing)
                 diagnostic(gdb, "debugger exited or closed its output", 0);
-            }
             cancel_all(gdb);
             tb_mi_parser_destroy(&gdb->parser);
             state_set(gdb, TB_GDB_DISCONNECTED);
@@ -1050,9 +1042,8 @@ void tb_gdb_pump(TbGdb_t *gdb, int wait_ms)
         broken(gdb, "debugger MI output reached EOF", EPIPE);
     }
 
-    if (gdb->state != TB_GDB_DISCONNECTED) {
+    if (gdb->state != TB_GDB_DISCONNECTED)
         deadlines(gdb);
-    }
 }
 
 
@@ -1083,8 +1074,8 @@ int tb_gdb_mi_version(const TbGdb_t *gdb)
 size_t tb_gdb_pending(const TbGdb_t *gdb)
 {
     size_t count = 0;
-    for (size_t i = 0; i < TB_GDB_MAX_PENDING; ++i) {
+    for (size_t i = 0; i < TB_GDB_MAX_PENDING; ++i)
         count += gdb->requests[i].wire != NULL;
-    }
+
     return count;
 }

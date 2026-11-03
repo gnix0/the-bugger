@@ -5,14 +5,20 @@
 
 typedef struct {
     const char  *data;
-    size_t       length, at, values;
+    size_t       length;
+    size_t       at;
+    size_t       values;
     TbMiError_t  error;
 } Parse_t;
 
 static void fail(Parse_t *parse, TbMiStatus_e code, size_t offset, const char *message)
 {
     if (parse->error.code == TB_MI_OK) {
-        parse->error = (TbMiError_t){code, offset, message};
+        parse->error = (TbMiError_t) {
+            code,
+            offset,
+            message
+        };
     }
 }
 
@@ -31,15 +37,15 @@ static bool word(unsigned char c)
 
 static int hex_digit(unsigned char c)
 {
-    if (digit(c)) {
+    if (digit(c))
         return c - '0';
-    }
-    if (c >= 'a' && c <= 'f') {
+
+    if (c >= 'a' && c <= 'f')
         return c - 'a' + 10;
-    }
-    if (c >= 'A' && c <= 'F') {
+
+    if (c >= 'A' && c <= 'F')
         return c - 'A' + 10;
-    }
+
     return -1;
 }
 
@@ -62,9 +68,8 @@ static char *copy(Parse_t *parse, size_t start, size_t length)
 static char *identifier(Parse_t *parse)
 {
     size_t start = parse->at;
-    while (parse->at < parse->length && word((unsigned char)parse->data[parse->at])) {
+    while (parse->at < parse->length && word((unsigned char)parse->data[parse->at]))
         ++parse->at;
-    }
 
     if (start == parse->at) {
         fail(parse, TB_MI_INVALID, start, "expected a field name or record class");
@@ -81,6 +86,7 @@ static bool take(Parse_t *parse, char character)
         ++parse->at;
         return true;
     }
+
     return false;
 }
 
@@ -101,9 +107,8 @@ static bool quoted(Parse_t *parse, TbMiString_t *string)
             fail(parse, TB_MI_INVALID, end - 1, "unescaped control byte in string");
             return false;
         }
-        if (c == '\\' && end < parse->length) {
+        if (c == '\\' && end < parse->length)
             ++end;
-        }
     }
 
     if (end == parse->length) {
@@ -122,7 +127,7 @@ static bool quoted(Parse_t *parse, TbMiString_t *string)
         unsigned char c = (unsigned char)parse->data[i];
         if (c == '\\') {
             size_t escape = i++;
-            c             = (unsigned char)parse->data[i];
+            c = (unsigned char)parse->data[i];
             switch (c) {
             case 'a':
                 c = '\a';
@@ -163,9 +168,8 @@ static bool quoted(Parse_t *parse, TbMiString_t *string)
                         value = value * 8 + (unsigned)(parse->data[++i] - '0');
                     }
                 } else if (c == 'x') {
-                    if (i + 1 == end || hex_digit((unsigned char)parse->data[i + 1]) < 0) {
+                    if (i + 1 == end || hex_digit((unsigned char)parse->data[i + 1]) < 0)
                         fail(parse, TB_MI_INVALID, escape, "hex escape requires digits");
-                    }
                     while (i + 1 < end && hex_digit((unsigned char)parse->data[i + 1]) >= 0) {
                         unsigned next = (unsigned)hex_digit((unsigned char)parse->data[++i]);
                         if (value > (255U - next) / 16U) {
@@ -177,9 +181,8 @@ static bool quoted(Parse_t *parse, TbMiString_t *string)
                 } else {
                     fail(parse, TB_MI_INVALID, escape, "unknown string escape");
                 }
-                if (value > 255U) {
+                if (value > 255U)
                     fail(parse, TB_MI_INVALID, escape, "escape exceeds one byte");
-                }
                 c = (unsigned char)value;
                 break;
             }
@@ -193,8 +196,13 @@ static bool quoted(Parse_t *parse, TbMiString_t *string)
     }
 
     decoded[used] = '\0';
-    *string       = (TbMiString_t){decoded, used};
-    parse->at     = end + 1;
+    *string       = (TbMiString_t) {
+        decoded,
+        used
+    };
+
+    parse->at = end + 1;
+
     return true;
 }
 
@@ -214,9 +222,8 @@ static void values_free(TbMiValue_t *value)
 
 void tb_mi_record_free(TbMiRecord_t *record)
 {
-    if (record == NULL) {
+    if (record == NULL)
         return;
-    }
 
     free(record->token);
     free(record->klass);
@@ -228,15 +235,14 @@ void tb_mi_record_free(TbMiRecord_t *record)
 
 const TbMiValue_t *tb_mi_find(const TbMiValue_t *values, const char *name)
 {
-    if (name == NULL) {
+    if (name == NULL)
         return NULL;
-    }
 
     for (; values != NULL; values = values->next) {
-        if (values->name != NULL && strcmp(values->name, name) == 0) {
+        if (values->name != NULL && strcmp(values->name, name) == 0)
             return values;
-        }
     }
+
     return NULL;
 }
 
@@ -248,9 +254,9 @@ static TbMiValue_t *entry_parse(Parse_t *parse, bool named, size_t depth)
     char *name = NULL;
     if (named) {
         name = identifier(parse);
-        if (name == NULL) {
+        if (name == NULL)
             return NULL;
-        }
+
         if (!take(parse, '=')) {
             fail(parse, TB_MI_INVALID, parse->at, "expected '=' after field name");
             free(name);
@@ -264,6 +270,7 @@ static TbMiValue_t *entry_parse(Parse_t *parse, bool named, size_t depth)
     } else {
         value->name = name;
     }
+
     return value;
 }
 
@@ -289,7 +296,7 @@ static TbMiValue_t *value_parse(Parse_t *parse, size_t depth, bool script)
         return NULL;
     }
 
-    TbMiValue_t *value = calloc(1, sizeof *value);
+    TbMiValue_t *value = calloc(1, sizeof(*value));
     if (value == NULL) {
         fail(parse, TB_MI_NOMEM, parse->at, "out of memory");
         return NULL;
@@ -298,15 +305,14 @@ static TbMiValue_t *value_parse(Parse_t *parse, size_t depth, bool script)
     ++parse->values;
     value->type = marker == '"' ? TB_MI_STRING : marker == '{' ? TB_MI_TUPLE : TB_MI_LIST;
     if (marker == '"') {
-        if (quoted(parse, &value->string)) {
+        if (quoted(parse, &value->string))
             return value;
-        }
     } else {
         ++parse->at;
         char close = marker == '{' ? '}' : ']';
-        if (take(parse, close)) {
+        if (take(parse, close))
             return value;
-        }
+
         /* MI lists contain either values or results, never a mixture. Tuples
          * contain results. GDB emits breakpoint script={"command",...} as
          * an extension; accept only strings there, retaining the whole field.
@@ -319,9 +325,9 @@ static TbMiValue_t *value_parse(Parse_t *parse, size_t depth, bool script)
         TbMiValue_t **tail  = &value->children;
         while (true) {
             TbMiValue_t *child = entry_parse(parse, named, depth + 1);
-            if (child == NULL) {
+            if (child == NULL)
                 break;
-            }
+
             if (script_values && child->type != TB_MI_STRING) {
                 values_free(child);
                 fail(parse, TB_MI_INVALID, parse->at, "expected breakpoint command string");
@@ -329,9 +335,9 @@ static TbMiValue_t *value_parse(Parse_t *parse, size_t depth, bool script)
             }
             *tail = child;
             tail  = &child->next;
-            if (take(parse, close)) {
+            if (take(parse, close))
                 return value;
-            }
+
             if (!take(parse, ',')) {
                 fail(parse, TB_MI_INVALID, parse->at, "expected comma or container end");
                 break;
@@ -347,9 +353,8 @@ static TbMiValue_t *value_parse(Parse_t *parse, size_t depth, bool script)
 
 static void trailing_space(Parse_t *parse)
 {
-    while (parse->at < parse->length && (parse->data[parse->at] == ' ' || parse->data[parse->at] == '\t')) {
+    while (parse->at < parse->length && (parse->data[parse->at] == ' ' || parse->data[parse->at] == '\t'))
         ++parse->at;
-    }
 }
 
 
@@ -361,14 +366,12 @@ static void record_parse(Parse_t *parse, TbMiRecord_t *record)
         trailing_space(parse);
         return;
     }
-    while (parse->at < parse->length && digit((unsigned char)parse->data[parse->at])) {
+    while (parse->at < parse->length && digit((unsigned char)parse->data[parse->at]))
         ++parse->at;
-    }
     if (parse->at != 0) {
         record->token = copy(parse, 0, parse->at);
-        if (record->token == NULL) {
+        if (record->token == NULL)
             return;
-        }
     }
     if (parse->at == parse->length) {
         fail(parse, TB_MI_INVALID, parse->at, "expected MI record prefix");
@@ -413,32 +416,35 @@ static void record_parse(Parse_t *parse, TbMiRecord_t *record)
         } else {
             /* The stream-record documentation also permits raw text, with an
              * implicit newline. Keep its trailing spaces and bytes verbatim. */
-            size_t length = parse->length - parse->at;
-            char  *text   = malloc(length + 2);
+            size_t  length = parse->length - parse->at;
+            char   *text   = malloc(length + 2);
             if (text == NULL) {
                 fail(parse, TB_MI_NOMEM, parse->at, "out of memory");
                 return;
             }
             memcpy(text, parse->data + parse->at, length);
-            text[length]     = '\n';
+            text[length] = '\n';
             text[length + 1] = '\0';
-            record->stream   = (TbMiString_t){text, length + 1};
-            parse->at        = parse->length;
+            record->stream   = (TbMiString_t) {
+                text,
+                length + 1
+            };
+
+            parse->at = parse->length;
         }
         return;
     }
 
     record->klass = identifier(parse);
-    if (record->klass == NULL) {
+    if (record->klass == NULL)
         return;
-    }
 
     TbMiValue_t **tail = &record->results;
     while (take(parse, ',')) {
         TbMiValue_t *value = entry_parse(parse, true, 0);
-        if (value == NULL) {
+        if (value == NULL)
             return;
-        }
+
         *tail = value;
         tail  = &value->next;
     }
@@ -449,33 +455,39 @@ static void record_parse(Parse_t *parse, TbMiRecord_t *record)
 
 TbMiStatus_e tb_mi_parse(const char *data, size_t length, TbMiRecord_t **record, TbMiError_t *error)
 {
-    Parse_t parse = {.data = data, .length = length, .error = {TB_MI_OK, 0, "no error"}};
-    if (record != NULL) {
+    Parse_t parse = {
+        .data   = data,
+        .length = length,
+        .error  = {
+            TB_MI_OK,
+            0,
+            "no error"
+        }
+    };
+
+    if (record != NULL)
         *record = NULL;
-    }
+
     if (record == NULL || data == NULL) {
         fail(&parse, TB_MI_INVALID, 0, "invalid parser arguments");
     } else if (length > TB_MI_MAX_RECORD_BYTES) {
         fail(&parse, TB_MI_LIMIT, TB_MI_MAX_RECORD_BYTES, "record exceeds byte limit");
     } else {
         const char *bad = memchr(data, '\0', length);
-        if (bad == NULL) {
+        if (bad == NULL)
             bad = memchr(data, '\r', length);
-        }
-        if (bad == NULL) {
+        if (bad == NULL)
             bad = memchr(data, '\n', length);
-        }
         if (bad != NULL) {
             fail(&parse, TB_MI_INVALID, (size_t)(bad - data), "raw NUL or record delimiter");
         } else {
-            TbMiRecord_t *parsed = calloc(1, sizeof *parsed);
+            TbMiRecord_t *parsed = calloc(1, sizeof(*parsed));
             if (parsed == NULL) {
                 fail(&parse, TB_MI_NOMEM, 0, "out of memory");
             } else {
                 record_parse(&parse, parsed);
-                if (parse.error.code == TB_MI_OK && parse.at != length) {
+                if (parse.error.code == TB_MI_OK && parse.at != length)
                     fail(&parse, TB_MI_INVALID, parse.at, "unexpected trailing bytes");
-                }
                 if (parse.error.code == TB_MI_OK) {
                     *record = parsed;
                 } else {
@@ -485,9 +497,8 @@ TbMiStatus_e tb_mi_parse(const char *data, size_t length, TbMiRecord_t **record,
         }
     }
 
-    if (error != NULL) {
+    if (error != NULL)
         *error = parse.error;
-    }
 
     return parse.error.code;
 }
@@ -495,14 +506,27 @@ TbMiStatus_e tb_mi_parse(const char *data, size_t length, TbMiRecord_t **record,
 
 static TbMiStatus_e emit_line(TbMiParser_t *parser, tb_mi_emit_fn emit, void *context, bool eof)
 {
-    TbMiError_t   error  = {TB_MI_OK, 0, "no error"};
+    TbMiError_t error  = {
+        TB_MI_OK,
+        0,
+        "no error"
+    };
+
     TbMiRecord_t *record = NULL;
     if (parser->discard) {
-        error = (TbMiError_t){TB_MI_LIMIT, TB_MI_MAX_RECORD_BYTES, "record exceeds byte limit"};
+        error = (TbMiError_t) {
+            TB_MI_LIMIT,
+            TB_MI_MAX_RECORD_BYTES,
+            "record exceeds byte limit"
+        };
     } else if (parser->length == 0) {
         return TB_MI_OK;
     } else if (eof) {
-        error = (TbMiError_t){TB_MI_TRUNCATED, parser->length, "unterminated record at EOF"};
+        error = (TbMiError_t) {
+            TB_MI_TRUNCATED,
+            parser->length,
+            "unterminated record at EOF"
+        };
     } else {
         (void)tb_mi_parse(parser->buffer, parser->length, &record, &error);
     }
@@ -520,31 +544,29 @@ static TbMiStatus_e emit_line(TbMiParser_t *parser, tb_mi_emit_fn emit, void *co
 TbMiStatus_e tb_mi_feed(TbMiParser_t *parser, const char *data, size_t length, tb_mi_emit_fn emit,
                         void *context)
 {
-    if (parser == NULL || emit == NULL || (data == NULL && length != 0)) {
+    if (parser == NULL || emit == NULL || (data == NULL && length != 0))
         return TB_MI_INVALID;
-    }
-    if (parser->failed) {
+
+    if (parser->failed)
         return TB_MI_NOMEM;
-    }
 
     for (size_t i = 0; i < length; ++i) {
         char c = data[i];
         if (parser->skip_lf) {
             parser->skip_lf = false;
-            if (c == '\n') {
+            if (c == '\n')
                 continue;
-            }
         }
         if (c == '\r' || c == '\n') {
-            if (emit_line(parser, emit, context, false) == TB_MI_NOMEM) {
+            if (emit_line(parser, emit, context, false) == TB_MI_NOMEM)
                 return TB_MI_NOMEM;
-            }
+
             parser->skip_lf = c == '\r';
             continue;
         }
-        if (parser->discard) {
+        if (parser->discard)
             continue;
-        }
+
         if (parser->length == TB_MI_MAX_RECORD_BYTES) {
             parser->discard = true;
             parser->length  = 0;
@@ -552,13 +574,17 @@ TbMiStatus_e tb_mi_feed(TbMiParser_t *parser, const char *data, size_t length, t
         }
         if (parser->length == parser->capacity) {
             size_t capacity = parser->capacity == 0 ? 256 : parser->capacity * 2;
-            if (capacity > TB_MI_MAX_RECORD_BYTES) {
+            if (capacity > TB_MI_MAX_RECORD_BYTES)
                 capacity = TB_MI_MAX_RECORD_BYTES;
-            }
             char *buffer = realloc(parser->buffer, capacity);
             if (buffer == NULL) {
-                TbMiError_t error = {TB_MI_NOMEM, parser->length, "out of memory buffering record"};
-                parser->failed    = true;
+                TbMiError_t error = {
+                    TB_MI_NOMEM,
+                    parser->length,
+                    "out of memory buffering record"
+                };
+
+                parser->failed = true;
                 emit(context, NULL, &error);
                 return TB_MI_NOMEM;
             }
@@ -574,15 +600,14 @@ TbMiStatus_e tb_mi_feed(TbMiParser_t *parser, const char *data, size_t length, t
 
 TbMiStatus_e tb_mi_finish(TbMiParser_t *parser, tb_mi_emit_fn emit, void *context)
 {
-    if (parser == NULL || emit == NULL) {
+    if (parser == NULL || emit == NULL)
         return TB_MI_INVALID;
-    }
-    if (parser->failed) {
+
+    if (parser->failed)
         return TB_MI_NOMEM;
-    }
 
     TbMiStatus_e status = emit_line(parser, emit, context, true);
-    parser->skip_lf     = false;
+    parser->skip_lf = false;
 
     return status;
 }
@@ -592,6 +617,6 @@ void tb_mi_parser_destroy(TbMiParser_t *parser)
 {
     if (parser != NULL) {
         free(parser->buffer);
-        memset(parser, 0, sizeof *parser);
+        memset(parser, 0, sizeof(*parser));
     }
 }
