@@ -843,3 +843,41 @@ test-ram-tmux: all $(BUILD_DIR)/test-mmio-tui $(BUILD_DIR)/fake-mi
 	TB_RAM_TEST_TMUX=1 $(BUILD_DIR)/test-mmio-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/fake-mi)
 
 test-tmux: test-ram-tmux
+
+$(BUILD_DIR)/test-register-edit-native: $(BUILD_DIR)/tests/integration/test_register_edit_native.o $(NATIVE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-register-edit-native
+test-register-edit-native: $(BUILD_DIR)/test-register-edit-native $(BUILD_DIR)/code-fixture
+	$(BUILD_DIR)/test-register-edit-native $(abspath $(BUILD_DIR)/code-fixture)
+
+test-native: test-register-edit-native
+
+-include $(BUILD_DIR)/tests/integration/test_register_edit_native.d
+
+$(BUILD_DIR)/test-register-edit: $(BUILD_DIR)/tests/integration/test_register_edit.o $(BUILD_DIR)/src/model/registers.o $(BUILD_DIR)/src/model/context.o $(BUILD_DIR)/src/model/code.o $(BUILD_DIR)/src/model/browse.o $(BUILD_DIR)/src/model/images.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-register-edit
+test-register-edit: $(BUILD_DIR)/test-register-edit $(BUILD_DIR)/fake-mi
+	$(BUILD_DIR)/test-register-edit $(abspath $(BUILD_DIR)/fake-mi)
+
+test: test-register-edit
+
+-include $(BUILD_DIR)/tests/integration/test_register_edit.d
+
+$(BUILD_DIR)/test-register-edit-tui: $(BUILD_DIR)/tests/integration/test_register_edit_tui.o $(BUILD_DIR)/tests/support/terminal.o $(BUILD_DIR)/src/tui/preferences.o $(BUILD_DIR)/src/tui/keybinds.o $(BUILD_DIR)/src/tui/theme.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(NCURSES_LIBS) $(JSON_LIBS) $(LDLIBS)
+
+.PHONY: test-register-edit-tui test-register-edit-tmux
+test-register-edit-tui: all $(BUILD_DIR)/test-register-edit-tui $(BUILD_DIR)/code-fixture
+	$(BUILD_DIR)/test-register-edit-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/code-fixture)
+	TB_REGISTER_TEST_VIM=1 $(BUILD_DIR)/test-register-edit-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/code-fixture)
+
+test-register-edit-tmux: all $(BUILD_DIR)/test-register-edit-tui $(BUILD_DIR)/code-fixture
+	TB_REGISTER_TEST_VIM=1 TB_REGISTER_TEST_TMUX=1 $(BUILD_DIR)/test-register-edit-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/code-fixture)
+
+test-native: test-register-edit-tui
+test-tmux: test-register-edit-tmux
+
+-include $(BUILD_DIR)/tests/integration/test_register_edit_tui.d

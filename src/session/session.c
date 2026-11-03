@@ -1823,6 +1823,7 @@ void tb_session_pump(TbSession_t *native, int wait_ms)
             tb_stack_target(native->stack, native->capabilities.octet_addressing,
                             native->capabilities.address_bits, native->capabilities.byte_order,
                             native->capabilities.architecture);
+            tb_registers_target(native->registers, native->capabilities.octet_addressing);
             tb_code_pump(native->code);
             tb_registers_pump(native->registers);
             tb_stack_pump(native->stack);

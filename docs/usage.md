@@ -374,9 +374,8 @@ create a change. Selecting another frame/thread resets the comparison baseline.
 
 Click the format control to cycle Hex, Decimal, Octal, Binary, Raw and Natural.
 **Refresh** rereads stopped values. Running values remain visibly stale; hidden
-or idle panes do not poll. Register editing is not implemented. GDB/MI does not
-provide standard structured register groups here, so the pane says **All
-(ungrouped)** rather than guessing groups from register names.
+or idle panes do not poll. Groups remain unclassified: GDB/MI provides no standard
+structured group discovery here, and register names are not used to guess groups.
 
 Visible rows are fetched in batches of 32, with a 512-ID catalog and bounded
 1024-byte value buffers. Unavailable values, bounded output and errors are
@@ -385,6 +384,39 @@ launch `build/code-fixture`, enter `start` in Console, focus Disassembly and ste
 F11. Compare `rip` with the stopped instruction address, then change formats.
 See the [register checklist](testing.md#cpu-registers)
 for frame selection and further checks.
+
+### Edit a CPU register
+
+1. Stop the target and select **frame 0** in Call Stack. Select a fresh register
+   row, then click **Edit** or press Enter with its content selected.
+2. Enter raw hexadecimal bits, optionally prefixed by `0x`. **Review** (or Enter)
+   shows the register name, discovered ID, width, thread, old bits and new bits.
+   Read every review page; **Apply** appears on the last page. **Cancel** sends
+   no write. In Vim Insert mode, Escape first returns to Normal.
+3. Apply once, then choose **Verify**, or return to the pane and **Refresh**.
+   Acknowledgment alone does not establish the contents. A mismatch stays visible
+   in the pane; **Edit** shows the requested and observed values. Cancel closes
+   that result before starting another edit.
+4. To restore the old bits, make a second reviewed edit and explicitly verify it.
+   Restoration is never automatic. An uncertain result blocks all three editors;
+   explicitly Verify the original register before **Reconcile**. Lost completion
+   requires a new session even if later contents match.
+
+Editing requires a complete scalar sample, a target-reported size of 8–64 bits
+on an octet-addressed target, an unambiguous discovered name/ID, GDB's structured
+write command, enabled `may-write-registers`, and an editable GDB register object.
+The frontend never enables GDB writes implicitly. Caller frames, unavailable,
+truncated, wide/compound and unsupported registers are refused. No integer
+expressions, typed floating-point conversion, bitfield editor or peripheral
+register writes are provided.
+
+**GDB editability does not prove every bit is physically writable.** Targets can
+reject, ignore or normalize bits; only an explicit fresh sample establishes what
+was observed. Changing PC, SP, status or control registers can redirect execution,
+corrupt state or make debugging unavailable. Use a disposable stopped fixture and
+an appropriate general-purpose register for initial validation. Changing context
+or refreshing invalidates a draft; evidence is checked again before dispatch.
+See the [CPU-register editing checks](testing.md#cpu-register-editing-f05).
 
 ## Memory inspection
 
@@ -999,10 +1031,11 @@ for the original Memory extent. A write invalidates the stopped context and its
 temporary grants; reauthorize the ordinary range before another Memory edit. The displayed acknowledgment is not verification.
 Memory and variable snapshots become stale; no automatic read-back verifies the
 edit. An uncertain write
-blocks further edits in both inspectors: explicitly inspect the original
+blocks further edits in all three inspectors: explicitly inspect the original
 value/bytes, then use **Reconcile uncertain write** in its Actions/Options menu.
 If the original variable scope is gone, start a new session. No automatic retry,
-rollback, MMIO write, Flash programming or CPU-register editing is performed.
+rollback, MMIO write or Flash programming is performed. CPU-register editing has
+its separate [frame-zero review](#edit-a-cpu-register).
 
 A timed-out, cancelled or otherwise lost write completion requires a new session
 before further edits. A controller with no pending tokens is not proof that the

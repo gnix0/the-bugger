@@ -876,7 +876,7 @@ not evidence of execution state. Remote-board validation remains separate.
 
 ## CPU registers
 
-`src/model/registers.{c,h}` owns discovered numeric IDs/names and cached values.
+`src/model/registers.c` and `include/model/registers.h` own discovered numeric IDs/names and cached values.
 `-data-list-register-names` preserves empty-name positions; no ARM/x86 list is
 canonical. `-data-list-register-values --thread ... --frame ...` reads only
 requested visible rows, in batches of at most 32. Catalog capacity is 512 IDs;
@@ -895,8 +895,37 @@ not claim changes that cannot be established from complete samples.
 The pane uses existing horizontal/vertical scrolling, Refresh and `*` plus color
 for changed values. It labels selected context and stale data. GDB/MI provides
 no standard structured group-discovery command here; All (ungrouped) is honest
-fallback, without CLI-table parsing or guessed metadata. Writes, peripheral polling, SVD interpretation and register editing are not
-implemented in this model.
+fallback, without CLI-table parsing or guessed metadata. The footer offers
+Refresh, format and Edit; peripheral polling and SVD interpretation remain outside
+this model.
+
+F05 keeps a single frozen register varobj for backend editability evidence.
+Opening Edit explicitly requests command capability, exact numeric-ID/name
+binding, `may-write-registers`, scalar varobj creation, attributes and a built-in
+C `sizeof($name)` probe. Names must be complete, unique ASCII identifiers; values
+must be complete scalar hex and sizes 1–8 octets. No user expression or overloaded
+operation enters that probe. Frame zero avoids writes to caller unwind storage.
+GDB's `editable` attribute establishes an assignable object, not a hardware
+writability guarantee; backend errors and explicit observed mismatches remain
+separate outcomes.
+
+Apply rechecks ID/name, permission and attributes, then checks current generation,
+thread lifetime, catalog/version and octet capability at shared reservation
+acquisition. It sends one `-data-write-register-values --thread ... --frame 0 x
+ID VALUE` request. The bounded frozen object is deleted after cancel/failure/
+completion; failed cleanup blocks further register edits until reconnect rather
+than leaking successive object names. A rejected or corrupt creation reply does
+not establish ownership: no object is deleted on that assumption, and another
+probe requires reconnect. No varobj assignment or new write transport
+is introduced. Opening/Review/Cancel never dispatches a target write.
+
+Register completion refreshes the shared context outside callbacks, invalidating
+all dependent inspector snapshots. Registers suppresses automatic samples for
+that stop after any inspector write; explicit Refresh/Verify grants the current
+generation's requested samples. Verification compares raw canonical bits with
+the request, including a visible mismatch for ignored/normalized writes. An
+explicit original-register sample can reconcile a completed backend error; a
+lost completion stays quarantined until a new session.
 
 Reference: GDB [MI data commands, register names and values](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Data-Manipulation.html).
 
@@ -1391,14 +1420,14 @@ limits are described in the [RISC-V procedure](testing.md#risc-v-hardware-valida
 The [Memory validation record](validation.md#m10) summarizes the corrections
 and their evidence limits; the roadmap assigns the remaining integration gaps.
 
-## Stopped inspector mutations (F03–F04)
+## Stopped inspector mutations (F03–F05)
 
-`model/context.c` coordinates one inspector mutation across Variables and Memory.
+`model/context.c` coordinates one inspector mutation across Variables, Memory and Registers.
 An idle-controller reservation belongs to the request cookie. Acquisition checks
 the published stopped generation and marks the shared snapshot stale; release
 runs outside controller callbacks and refreshes the context generation. Memory,
 Stack, Registers, Code and Variables then reject their previous-context samples.
-Automatic variable acquisition is suppressed for the remainder of that stop;
+Automatic variable and register acquisition is suppressed for the remainder of that stop;
 explicit reads remain available. A later stop starts normal read-policy checks.
 
 Variable drafts retain object/key, thread/frame, target size, address and
@@ -1417,7 +1446,7 @@ catalogs are rejected atomically, including writable/read-only overlaps. MMIO vi
 Stack byte clients cannot use this editor.
 
 Callbacks record acknowledgment or uncertainty without dispatching follow-up
-requests. Uncertainty quarantines both editors. Memory reconciliation requires
+requests. Uncertainty quarantines all three editors. Memory reconciliation requires
 an explicit complete valid sample covering the original bytes. Variable
 reconciliation requires an explicit fresh read of the original identity in the
 same stopped thread/frame. An unavailable original destination requires a new

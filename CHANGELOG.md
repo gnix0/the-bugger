@@ -4,6 +4,11 @@
 
 ### Added
 
+- Deliberate stopped frame-zero CPU-register editing through discovered GDB IDs,
+  bounded raw hexadecimal Review/Apply, backend capability checks and explicit
+  Verify. Register, variable and RAM edits share serialization and uncertainty
+  quarantine; no implicit read-back, retry or rollback.
+
 - Session-scoped, user-confirmed STM32F446RE main-SRAM eligibility for deliberate
   Memory and memory-backed variable edits. Connection-bound review, atomic region
   publication and evidence-generation checks revoke stale permissions without

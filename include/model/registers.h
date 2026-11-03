@@ -31,6 +31,31 @@ typedef struct {
 
 typedef struct tb_registers TbRegisters_t;
 
+typedef enum {
+    TB_REGISTER_EDIT_NONE,
+    TB_REGISTER_EDIT_PROBING,
+    TB_REGISTER_EDIT_READY,
+    TB_REGISTER_EDIT_CHECKING,
+    TB_REGISTER_EDIT_PENDING,
+    TB_REGISTER_EDIT_ACKNOWLEDGED,
+    TB_REGISTER_EDIT_UNCERTAIN,
+    TB_REGISTER_EDIT_FAILED
+} TbRegisterEditState_e;
+
+typedef struct {
+    TbRegisterEditState_e  state;
+    unsigned              number;
+    unsigned              bits;
+    char                  name[96];
+    char                  thread[32];
+    char                  old_value[19];
+    char                  new_value[19];
+    char                  observed_value[19];
+    bool                  verified;
+    bool                  matches;
+    char                  message[192];
+} TbRegisterEdit_t;
+
 TbRegisters_t *tb_registers_create(TbGdb_t *gdb, TbContext_t *context);
 void tb_registers_destroy(TbRegisters_t *registers);
 void tb_registers_reset(TbRegisters_t *registers);
@@ -51,5 +76,14 @@ bool tb_registers_stale(const TbRegisters_t *registers);
 bool tb_registers_limited(const TbRegisters_t *registers);
 const char *tb_registers_error(const TbRegisters_t *registers);
 uint64_t tb_registers_revision(const TbRegisters_t *registers);
+/* Only discovered live frame-zero CPU registers; never caller stack storage. */
+void tb_registers_target(TbRegisters_t *registers, bool octets);
+bool tb_registers_edit_begin(TbRegisters_t *registers, size_t row);
+bool tb_registers_edit_value(TbRegisters_t *registers, const char *hex);
+bool tb_registers_edit_apply(TbRegisters_t *registers, const char *hex);
+void tb_registers_edit_cancel(TbRegisters_t *registers);
+bool tb_registers_edit_reconcile(TbRegisters_t *registers);
+bool tb_registers_edit_verify(TbRegisters_t *registers);
+const TbRegisterEdit_t *tb_registers_edit(const TbRegisters_t *registers);
 
 #endif // THE_BUGGER_REGISTERS_H
