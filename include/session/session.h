@@ -97,7 +97,7 @@ pid_t tb_session_debugger_pid(const TbSession *native);
 bool tb_session_attached(const TbSession *native);
 bool tb_session_active(const TbSession *native);
 TbContext_t *tb_session_context(TbSession *native);
-TbCode *tb_session_code(TbSession *native);
+TbCode_t *tb_session_code(TbSession *native);
 TbBreakpoints_t *tb_session_breakpoints(TbSession *native);
 TbRegisters_t *tb_session_registers(TbSession *native);
 TbMemory *tb_session_memory(TbSession *native);

@@ -64,7 +64,7 @@ void tb_setup_restore_pump(TbSetupRestore *r, TbSetupCapture *c, TbSession *s)
         r->active = tb_break_restoration_active(breakpoints); tb_session_setup_interlock(s, r->active, false); return;
     }
     tb_break_definition_reserve(tb_session_breakpoints(s), tb_setup_capture_retained(c));
-    TbCode *code = tb_session_code(s); TbSessionState state = tb_session_state(s);
+    TbCode_t *code = tb_session_code(s); TbSessionState state = tb_session_state(s);
     bool running = state == TB_SESSION_RUNNING;
     if (r->phase == RESTORE_COMPLETE || r->phase == RESTORE_CANCELED) { r->active = false; r->awaiting_stop = false; }
     if (r->phase == RESTORE_CANCEL_REQUESTED) {

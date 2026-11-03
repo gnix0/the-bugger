@@ -9,7 +9,7 @@
 static void dump(TbNative *native)
 {
     for (size_t i = 0; i < tb_native_log_count(native); ++i) { fprintf(stderr, "%s\n", tb_native_log_line(native, i)); }
-    const TbCodeView *v = tb_code_view(tb_native_code(native), 0);
+    const TbCodeView_t *v = tb_code_view(tb_native_code(native), 0);
     const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(native));
     fprintf(stderr, "state=%s ctx=%d/%d T%s #%d %s:%d PC=%s; code stale=%d lines=%zu insns=%zu src=%s asm=%s\n", tb_native_state_name(native), s->ready, s->stale, s->selected_thread, s->selected.level, s->selected.path, s->selected.line, s->selected.address, v->stale, v->line_count, v->instruction_count, v->source_error, v->assembly_error);
 }
@@ -21,7 +21,7 @@ static void wait_state(TbNative *native, TbNativeState expected)
 }
 static void code_ready(TbNative *native, uint64_t after)
 {
-    const TbCodeView *v = tb_code_view(tb_native_code(native), 0);
+    const TbCodeView_t *v = tb_code_view(tb_native_code(native), 0);
     const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(native));
     uint64_t until = tb_gdb_now_ms() + 10000;
     while ((s->stale || !s->ready || v->stale || v->assembly_revision <= after) && tb_gdb_now_ms() < until) { tb_native_pump(native, 5); }
@@ -52,9 +52,9 @@ static void step(TbNative *native, TbStep action, bool instruction)
 }
 static void ordinary(const char *fixture)
 {
-    TbNative *native = start(fixture, "start"); TbCode *code = tb_native_code(native);
+    TbNative *native = start(fixture, "start"); TbCode_t *code = tb_native_code(native);
     const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(native));
-    const TbCodeView *v = tb_code_view(code, 0);
+    const TbCodeView_t *v = tb_code_view(code, 0);
     CHECK(strstr(s->selected.function, "main") && v->line_count > 10 && v->instruction_count > 0);
     CHECK(v->selected_line == s->selected.line && v->stopped_line == s->stopped.line);
     size_t retained_count = v->instruction_count;
@@ -97,7 +97,7 @@ static void ordinary(const char *fixture)
     CHECK(s->selected.level == 1 && strcmp(stopped, s->stopped.address) == 0);
     TbGdbGeneration_t selected_generation = s->generation;
     char selected_address[48]; (void)snprintf(selected_address, sizeof selected_address, "%s", s->selected.address);
-    const TbCodeView *other = tb_code_view(code, 1);
+    const TbCodeView_t *other = tb_code_view(code, 1);
     uint64_t other_revision = other->assembly_revision;
     revision = v->assembly_revision; CHECK(tb_code_return_stop(code, 0)); code_ready(native, revision);
     CHECK(s->selected.level == 1 && strcmp(s->selected.address, selected_address) == 0);
@@ -137,8 +137,8 @@ static void ordinary(const char *fixture)
 }
 static void degraded(const char *fixture, bool stripped)
 {
-    TbNative *native = start(fixture, stripped ? "starti" : "start"); TbCode *code = tb_native_code(native);
-    const TbCodeView *v = tb_code_view(code, 0);
+    TbNative *native = start(fixture, stripped ? "starti" : "start"); TbCode_t *code = tb_native_code(native);
+    const TbCodeView_t *v = tb_code_view(code, 0);
     CHECK(v->instruction_count > 0);
     if (stripped) { CHECK(v->line_count == 0 && *v->source_error); }
     uint64_t revision = v->assembly_revision; tb_code_mixed(code, 0, true); code_ready(native, revision);
@@ -149,7 +149,7 @@ static void degraded(const char *fixture, bool stripped)
 }
 static void cpp(const char *fixture)
 {
-    TbNative *native = start(fixture, "start"); TbCode *code = tb_native_code(native);
+    TbNative *native = start(fixture, "start"); TbCode_t *code = tb_native_code(native);
     uint64_t revision = tb_code_view(code, 0)->assembly_revision;
     CHECK(tb_code_address(code, 0, "code_object")); code_ready(native, revision);
     CHECK(tb_native_console(native, "print code_sideeffects"));
@@ -179,8 +179,8 @@ static void relocated(const char *fixture, const char *sources, bool right_first
         (void)snprintf(from, sizeof from, "%s/%s", sources, names[i]);
         (void)snprintf(target, sizeof target, "%s/%s", directory, names[i]); copy_file(from, target);
     }
-    TbNative *native = start(fixture, "start"); TbCode *code = tb_native_code(native);
-    const TbCodeView *v = tb_code_view(code, 0);
+    TbNative *native = start(fixture, "start"); TbCode_t *code = tb_native_code(native);
+    const TbCodeView_t *v = tb_code_view(code, 0);
     CHECK(v->line_count == 0 && *v->source_error);
     CHECK(tb_code_add_directory(code, directory));
     uint64_t until = tb_gdb_now_ms() + 4000;
@@ -198,14 +198,14 @@ static void relocated(const char *fixture, const char *sources, bool right_first
     size_t file_count = tb_code_file_count(code);
     size_t files[2] = {file_count, file_count};
     for (size_t i = 0; i < file_count; ++i) {
-        const TbCodeFile *file = tb_code_file(code, i);
+        const TbCodeFile_t *file = tb_code_file(code, i);
         if (strstr(file->full, "/left/duplicate.c")) { files[0] = i; }
         if (strstr(file->full, "/right/duplicate.c")) { files[1] = i; }
     }
     CHECK(files[0] < file_count && files[1] < file_count && files[0] != files[1]);
     for (size_t step_index = 0; step_index < 2; ++step_index) {
         size_t i = files[right_first ? 1 - step_index : step_index];
-        const TbCodeFile *file = tb_code_file(code, i);
+        const TbCodeFile_t *file = tb_code_file(code, i);
         CHECK(strstr(file->full, directory)); CHECK(tb_code_open(code, 0, i));
         bool is_left = strstr(file->full, "/left/") != NULL;
         CHECK(is_left || strstr(file->full, "/right/"));

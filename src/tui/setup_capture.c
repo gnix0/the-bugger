@@ -38,7 +38,7 @@ static uint64_t allocate_id(TbSetup *s)
 static size_t key_index(const uint64_t *keys, size_t count, uint64_t key)
 { size_t i = 0; while (i < count && keys[i] != key) { ++i; } return i; }
 bool tb_setup_capture_update(TbSetupCapture *c, const TbLayout_t *layout, const TbDemo *workspace,
-                            const TbCode *code, const TbMemory *memory, const TbVariables *variables,
+                            const TbCode_t *code, const TbMemory *memory, const TbVariables *variables,
                             const TbBreakpoints_t *breakpoints, const char *const expressions[TB_MAX_PANES])
 {
     if (!c) { return false; }
@@ -65,7 +65,7 @@ bool tb_setup_capture_update(TbSetupCapture *c, const TbLayout_t *layout, const 
         p->source_count = tb_code_tab_count(code, i) - 1;
         if (p->source_count >= TB_SETUP_SOURCES) { return false; }
         for (size_t j = 0; j < p->source_count; ++j) {
-            const TbCodeFile *file = tb_code_tab_file(code, i, j + 1); if (!file) { return false; }
+            const TbCodeFile_t *file = tb_code_tab_file(code, i, j + 1); if (!file) { return false; }
             TbSetupSource *f = &p->sources[j]; memcpy(f->file, file->file, sizeof f->file); memcpy(f->full, file->full, sizeof f->full);
             for (size_t k = 0; previous && k < previous->source_count; ++k) {
                 if (strcmp(f->file, previous->sources[k].file) == 0 && strcmp(f->full, previous->sources[k].full) == 0) { f->id = previous->sources[k].id; break; }
@@ -131,7 +131,7 @@ bool tb_setup_capture_remove_break(TbSetupCapture *c, uint64_t identity)
 static int root_first(const TbSetup *s, int node)
 { while (s->nodes[node].pane < 0) { node = s->nodes[node].first; } return s->nodes[node].pane; }
 bool tb_setup_capture_restore(TbSetupCapture *c, const TbSetup *s, TbLayout_t *layout,
-                              TbDemo *workspace, TbCode *code, TbMemory *memory, TbVariables *variables)
+                              TbDemo *workspace, TbCode_t *code, TbMemory *memory, TbVariables *variables)
 {
     if (!c || !tb_setup_valid(s) || tb_variables_definitions(variables)) { return false; }
     TbSetupBreak *retained = s->break_count ? malloc(s->break_count * sizeof *retained) : NULL;
@@ -154,7 +154,7 @@ bool tb_setup_capture_restore(TbSetupCapture *c, const TbSetup *s, TbLayout_t *l
         for (int j = 0; j < p->tab_count; ++j) { view->tabs[j] = (TbView)p->tabs[j]; if (p->tabs[j] == p->selected) { view->active = j; } }
         tb_code_clear(code, i); size_t selected = 0;
         for (size_t j = 0; j < p->source_count; ++j) {
-            TbCodeFile file; memcpy(file.file, p->sources[j].file, sizeof file.file); memcpy(file.full, p->sources[j].full, sizeof file.full);
+            TbCodeFile_t file; memcpy(file.file, p->sources[j].file, sizeof file.file); memcpy(file.full, p->sources[j].full, sizeof file.full);
             if (!tb_code_tab_restore(code, i, &file)) { return false; }
             if (p->source_selected == p->sources[j].id) { selected = j + 1; }
         }

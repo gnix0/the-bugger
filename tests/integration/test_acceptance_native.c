@@ -43,7 +43,7 @@ static void run(TbNative *n, const char *fixture)
     uint64_t deadline = tb_gdb_now_ms() + 8000;
     while (tb_native_state(n) != TB_NATIVE_READY && tb_gdb_now_ms() < deadline) { pump(n); }
     CHECK(tb_native_state(n) == TB_NATIVE_READY);
-    TbContext_t *context = tb_native_context(n); TbCode *code = tb_native_code(n);
+    TbContext_t *context = tb_native_context(n); TbCode_t *code = tb_native_code(n);
     TbRegisters_t *registers = tb_native_registers(n); TbVariables *variables = tb_native_variables(n);
     TbMemory *memory = tb_native_memory(n);
     tb_context_visible(context, true, true); tb_code_visible(code, 0, true, true);

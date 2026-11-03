@@ -22,7 +22,7 @@ static void breaks_ready(TbNative *n)
 static void stopped(TbNative *n, uint64_t after)
 {
     uint64_t end = tb_gdb_now_ms() + 6000;
-    const TbCodeView *v = tb_code_view(tb_native_code(n), 0);
+    const TbCodeView_t *v = tb_code_view(tb_native_code(n), 0);
     const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(n));
     while (tb_gdb_now_ms() < end) {
         tb_native_pump(n, 5);
@@ -47,8 +47,8 @@ int main(int argc, char **argv)
     const TbProfile *loaded = tb_profiles_find(store, "relocated"); CHECK(loaded);
     TbNative *n = tb_native_create(); CHECK(n); owned = n;
     TbNativeConfig config = {.gdb = loaded->gdb, .executable = loaded->executable}; CHECK(tb_native_start(n, &config));
-    TbCode *code = tb_native_code(n); const char *dirs[] = {loaded->directories[0]};
-    TbSourceRule rule = {0}; (void)snprintf(rule.from, sizeof rule.from, "%s", loaded->rules[0].from); (void)snprintf(rule.to, sizeof rule.to, "%s", loaded->rules[0].to);
+    TbCode_t *code = tb_native_code(n); const char *dirs[] = {loaded->directories[0]};
+    TbSourceRule_t rule = {0}; (void)snprintf(rule.from, sizeof rule.from, "%s", loaded->rules[0].from); (void)snprintf(rule.to, sizeof rule.to, "%s", loaded->rules[0].to);
     CHECK(tb_code_restore_settings(code, dirs, 1, &rule, 1)); CHECK(!tb_native_continue(n));
     tb_code_visible(code, 0, true, true); uint64_t end = tb_gdb_now_ms() + 6000; bool interlocked = false;
     while ((tb_native_state(n) != TB_NATIVE_READY || tb_code_restoring(code)) && tb_gdb_now_ms() < end) {
@@ -59,10 +59,10 @@ int main(int argc, char **argv)
     CHECK(tb_native_state(n) == TB_NATIVE_READY && !tb_code_restoring(code));
     CHECK(tb_code_directory_count(code) == 1 && tb_code_rule_count(code) == 1);
     CHECK(tb_native_console(n, "start")); stopped(n, 0); breaks_ready(n);
-    const TbCodeView *view = tb_code_view(code, 0); CHECK(strstr(view->path, argv[2]));
-    const TbCodeFile *left = NULL;
+    const TbCodeView_t *view = tb_code_view(code, 0); CHECK(strstr(view->path, argv[2]));
+    const TbCodeFile_t *left = NULL;
     for (size_t i = 0; i < tb_code_file_count(code); ++i) {
-        const TbCodeFile *file = tb_code_file(code, i);
+        const TbCodeFile_t *file = tb_code_file(code, i);
         if (strstr(file->full, "/left/duplicate.c")) { left = file; break; }
     }
     CHECK(left && strstr(left->full, argv[2]));

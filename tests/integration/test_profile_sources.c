@@ -5,7 +5,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-static TbCode *code;
+static TbCode_t *code;
 static TbContext_t *context;
 static unsigned replies;
 static void emit(void *unused, const TbGdbEvent_t *event)
@@ -32,7 +32,7 @@ int main(int argc, char **argv)
     TbGdb_t *gdb = tb_gdb_create(emit, NULL); CHECK(gdb); context = tb_context_create(gdb); CHECK(context); code = tb_code_create(gdb, context); CHECK(code);
     CHECK(tb_gdb_start(gdb, argv[1], 1000)); uint64_t end = tb_gdb_now_ms() + 2000;
     while (tb_gdb_state(gdb) != TB_GDB_READY && tb_gdb_now_ms() < end) { pump(gdb); } CHECK(tb_gdb_state(gdb) == TB_GDB_READY);
-    const char *dirs[] = {first, second}; TbSourceRule rules[2] = {0};
+    const char *dirs[] = {first, second}; TbSourceRule_t rules[2] = {0};
     (void)snprintf(rules[0].from, TB_CODE_PATH, "/build/project"); (void)snprintf(rules[0].to, TB_CODE_PATH, "%s", first);
     (void)snprintf(rules[1].from, TB_CODE_PATH, "/build"); (void)snprintf(rules[1].to, TB_CODE_PATH, "%s", second);
     CHECK(tb_code_restore_settings(code, dirs, 2, rules, 2)); restored(gdb);
