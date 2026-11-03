@@ -17,7 +17,7 @@ int main(void)
 {
     char root[] = "/tmp/the-bugger-preferences-XXXXXX"; CHECK(mkdtemp(root));
     CHECK(setenv("XDG_CONFIG_HOME", root, 1) == 0);
-    TbPreferences first, second;
+    TbPreferences_t first, second;
     CHECK(tb_preferences_load(&first) && !first.existed);
     CHECK(first.palette == tb_theme_find("catppuccin", "macchiato"));
     CHECK(access(first.path, F_OK) != 0); /* Opening/previewing never creates a file. */

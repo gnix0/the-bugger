@@ -12,9 +12,9 @@ int main(void)
     TbCode_t *code = tb_code_create(gdb, context); TbMemory_t *memory = tb_memory_create(gdb, context);
     TbVariables_t *variables = tb_variables_create(gdb, context); TbBreakpoints_t *breaks = tb_break_create(gdb);
     CHECK(code && memory && variables && breaks);
-    TbLayout_t layout; tb_layout_init(&layout); TbDemo workspace; tb_demo_init(&workspace);
+    TbLayout_t layout; tb_layout_init(&layout); TbDemo_t workspace; tb_demo_init(&workspace);
     const char *expressions[TB_MAX_PANES]; for (size_t i = 0; i < TB_MAX_PANES; ++i) { expressions[i] = ""; }
-    TbSetupCapture *c = tb_setup_capture_create(NULL); CHECK(c);
+    TbSetupCapture_t *c = tb_setup_capture_create(NULL); CHECK(c);
 #define CAPTURE() tb_setup_capture_update(c, &layout, &workspace, code, memory, variables, breaks, expressions)
     CHECK(CAPTURE() && !tb_setup_capture_dirty(c));
     uint64_t original = tb_setup_capture_current(c)->panes[0].id;
@@ -38,13 +38,13 @@ int main(void)
     CHECK(tb_setup_capture_current(c)->watches[1].id != watch_id);
     CHECK(tb_layout_arrange(&layout, (TbRect_t){0, 0, 250, 100}, 0));
     int added = tb_layout_split(&layout, 0, TB_SPLIT_RIGHT); CHECK(added >= 0);
-    workspace.panes[added] = (TbDemoPane){.tabs = {TB_MEMORY}, .count = 1};
+    workspace.panes[added] = (TbDemoPane_t){.tabs = {TB_MEMORY}, .count = 1};
     CHECK(CAPTURE()); uint64_t pane_id = tb_setup_capture_current(c)->panes[added].id;
     CHECK(tb_layout_close(&layout, added) >= 0);
     CHECK(tb_layout_split(&layout, 0, TB_SPLIT_RIGHT) == added);
     CHECK(CAPTURE() && tb_setup_capture_current(c)->panes[added].id != pane_id);
     CHECK(tb_setup_capture_current(c)->panes[0].id == original);
-    TbSetupCapture *skipped = tb_setup_capture_create(tb_setup_capture_current(c)); CHECK(skipped);
+    TbSetupCapture_t *skipped = tb_setup_capture_create(tb_setup_capture_current(c)); CHECK(skipped);
     while (tb_variables_definitions(variables)) { CHECK(tb_variables_remove(variables, 0)); }
     CHECK(tb_setup_capture_update(skipped, &layout, &workspace, code, memory, variables, breaks, expressions));
     CHECK(tb_setup_capture_current(skipped)->watch_count == 0 && tb_setup_capture_dirty(skipped));
