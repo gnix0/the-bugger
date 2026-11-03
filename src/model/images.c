@@ -636,8 +636,9 @@ static bool native_mapping(TbImages_t *images, pid_t pid, uint64_t pc, TbSetupMa
             continue;
         }
         cursor += strspn(cursor, " ");
-        errno   = 0;
-        char *after_inode  = NULL;
+        errno = 0;
+
+        char *after_inode = NULL;
         if (*cursor < '0' || *cursor > '9')
             continue;
 
