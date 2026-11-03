@@ -5,7 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 
-static TbSession *owned;
+static TbSession_t *owned;
 static void cleanup(void)
 {
     if (!owned) { return; }
@@ -13,7 +13,7 @@ static void cleanup(void)
     while (tb_session_active(owned) && tb_gdb_now_ms() < end) { tb_session_pump(owned, 5); }
     if (!tb_session_active(owned)) { CHECK(tb_session_destroy(owned)); owned = NULL; }
 }
-static void wait_state(TbSessionState state)
+static void wait_state(TbSessionState_e state)
 {
     uint64_t end = tb_gdb_now_ms() + 6000;
     while (tb_gdb_now_ms() < end) {
@@ -33,13 +33,13 @@ static void settle(TbSetupRestore *r, TbSetupCapture *c)
 int main(int argc, char **argv)
 {
     CHECK(argc == 3 && atexit(cleanup) == 0); owned = tb_session_create(); CHECK(owned);
-    TbSessionConfig config = {.gdb = "gdb", .executable = argv[1]}; CHECK(tb_session_start(owned, &config));
+    TbSessionConfig_t config = {.gdb = "gdb", .executable = argv[1]}; CHECK(tb_session_start(owned, &config));
     TbLayout_t layout; tb_layout_init(&layout); layout.overlays = true; TbDemo workspace; tb_demo_init(&workspace);
     const char *expressions[TB_MAX_PANES]; for (int i = 0; i < TB_MAX_PANES; ++i) { expressions[i] = ""; }
     TbCode_t *code = tb_session_code(owned); TbMemory_t *memory = tb_session_memory(owned); TbVariables_t *variables = tb_session_variables(owned);
     TbSetupCapture *c = tb_setup_capture_create(NULL); CHECK(c);
 #define CAPTURE() tb_setup_capture_update(c, &layout, &workspace, code, memory, variables, tb_session_breakpoints(owned), expressions)
-    CHECK(CAPTURE()); TbSetup *saved = malloc(sizeof *saved); CHECK(saved); *saved = *tb_setup_capture_current(c);
+    CHECK(CAPTURE()); TbSetup_t *saved = malloc(sizeof *saved); CHECK(saved); *saved = *tb_setup_capture_current(c);
     CHECK(tb_layout_arrange(&layout, (TbRect_t){0, 0, 240, 100}, 0)); int added = tb_layout_split(&layout, 0, TB_SPLIT_RIGHT); CHECK(added >= 0);
     workspace.panes[added] = (TbDemoPane){.tabs = {TB_MEMORY, TB_WATCHES}, .count = 2, .active = 1};
     CHECK(CAPTURE()); *saved = *tb_setup_capture_current(c);
@@ -53,10 +53,10 @@ int main(int argc, char **argv)
     saved->panes[0].source_selected = saved->panes[0].sources[1].id;
     saved->panes[added].memory_bytes = 48; saved->panes[added].memory_group = 8;
     (void)snprintf(saved->panes[added].memory_expression, 256, "&fixture_buffer"); expressions[added] = saved->panes[added].memory_expression;
-    saved->watch_count = 2; saved->watches[0] = (TbSetupWatch){.id = saved->next_id++, .expression = "fixture_counter", .format = TB_VARIABLE_HEX};
-    saved->watches[1] = (TbSetupWatch){.id = saved->next_id++, .expression = "unsafe_call()", .format = TB_VARIABLE_DECIMAL};
-    saved->break_count = 2; saved->breaks[1] = (TbSetupBreak){.id = saved->next_id++, .location = "missing_saved_f01_symbol", .condition = "1", .enabled = true, .ignore_set = true, .ignore = 3};
-    saved->breaks[0] = (TbSetupBreak){.id = saved->next_id++, .location = "main", .condition = "(", .enabled = true, .ignore_set = true, .ignore = 2};
+    saved->watch_count = 2; saved->watches[0] = (TbSetupWatch_t){.id = saved->next_id++, .expression = "fixture_counter", .format = TB_VARIABLE_HEX};
+    saved->watches[1] = (TbSetupWatch_t){.id = saved->next_id++, .expression = "unsafe_call()", .format = TB_VARIABLE_DECIMAL};
+    saved->break_count = 2; saved->breaks[1] = (TbSetupBreak_t){.id = saved->next_id++, .location = "missing_saved_f01_symbol", .condition = "1", .enabled = true, .ignore_set = true, .ignore = 3};
+    saved->breaks[0] = (TbSetupBreak_t){.id = saved->next_id++, .location = "main", .condition = "(", .enabled = true, .ignore_set = true, .ignore = 2};
     CHECK(tb_setup_valid(saved)); tb_setup_capture_destroy(c); c = tb_setup_capture_create(saved); CHECK(c);
     CHECK(tb_setup_capture_restore(c, saved, &layout, &workspace, code, memory, variables));
     CHECK(layout.overlays && layout.count == 7 && !layout.lower_open[0]);
@@ -94,7 +94,7 @@ int main(int argc, char **argv)
     uint64_t context_end = tb_gdb_now_ms() + 4000;
     while ((!tb_context_snapshot(tb_session_context(owned))->ready || tb_context_snapshot(tb_session_context(owned))->stale) && tb_gdb_now_ms() < context_end) { tb_session_pump(owned, 5); }
     uint64_t address = strtoull(tb_context_snapshot(tb_session_context(owned))->selected.address, NULL, 16);
-    TbSetupMapping mapping, changed; CHECK(address && tb_images_native_mapping(tb_session_target_pid(owned), address, &mapping));
+    TbSetupMapping_t mapping, changed; CHECK(address && tb_images_native_mapping(tb_session_target_pid(owned), address, &mapping));
     CHECK(tb_images_mapping_equal(&mapping, &mapping, address)); changed = mapping; ++changed.bias; CHECK(!tb_images_mapping_equal(&mapping, &changed, address));
     changed = mapping; changed.identity[0] = changed.identity[0] == 'x' ? 'y' : 'x'; CHECK(!tb_images_mapping_equal(&mapping, &changed, address));
     CHECK(!tb_images_mapping_equal(&mapping, &mapping, mapping.end));

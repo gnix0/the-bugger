@@ -8,9 +8,9 @@
 
 /* Opt-in, already-programmed physical target. No flash or implicit value reads.
  * Arguments name the reviewed firmware, code location and explicit RAM object. */
-static TbSession *session;
-static TbOpenOcdPlan *plan;
-static TbSessionConfig config;
+static TbSession_t *session;
+static TbOpenOcdPlan_t *plan;
+static TbSessionConfig_t config;
 static const char *source, *watch_expression, *memory_expression, *code_location;
 static unsigned log_serial;
 static char settings[] = "/tmp/the-bugger-setup-board-XXXXXX";
@@ -139,7 +139,7 @@ int main(int argc, char **argv)
     CHECK(setenv("XDG_CONFIG_HOME", settings, 1) == 0);
     source = argv[7]; code_location = argv[5]; watch_expression = argv[6]; memory_expression = argv[8];
     plan = calloc(1, sizeof *plan); CHECK(plan); (void)snprintf(plan->endpoint, sizeof plan->endpoint, "%s", argv[2]);
-    config = (TbSessionConfig){.kind = TB_SESSION_REMOTE, .endpoint = argv[2], .gdb = argv[1], .executable = argv[3], .openocd = plan};
+    config = (TbSessionConfig_t){.kind = TB_SESSION_REMOTE, .endpoint = argv[2], .gdb = argv[1], .executable = argv[3], .openocd = plan};
     start(); stopped(0); idle(); CHECK(strstr(tb_session_capabilities(session)->architecture, argv[4]));
     CHECK(!tb_session_capabilities(session)->server_owned && tb_session_target_pid(session) == 0);
     TbLayout_t layout; tb_layout_init(&layout); TbDemo workspace; tb_demo_init(&workspace);
@@ -151,19 +151,19 @@ int main(int argc, char **argv)
     expressions[pane] = memory_expression;
     CHECK(tb_memory_definition(tb_session_memory(session), pane, 4, 4));
     CHECK(tb_variables_watch(tb_session_variables(session), watch_expression));
-    CHECK(CAPTURE()); TbSetup *saved = malloc(sizeof *saved); CHECK(saved); *saved = *tb_setup_capture_current(c);
+    CHECK(CAPTURE()); TbSetup_t *saved = malloc(sizeof *saved); CHECK(saved); *saved = *tb_setup_capture_current(c);
     saved->panes[0].source_count = 2;
     saved->panes[0].sources[0].id = saved->next_id++; (void)snprintf(saved->panes[0].sources[0].file, TB_SETUP_PATH, "%s", source); (void)snprintf(saved->panes[0].sources[0].full, TB_SETUP_PATH, "%s", source);
-    saved->panes[0].sources[1] = (TbSetupSource){.id = saved->next_id++, .file = "missing-f01-board.c", .full = "/missing-f01-board.c"};
+    saved->panes[0].sources[1] = (TbSetupSource_t){.id = saved->next_id++, .file = "missing-f01-board.c", .full = "/missing-f01-board.c"};
     saved->panes[0].source_selected = saved->panes[0].sources[1].id;
     saved->break_count = 3;
-    saved->breaks[0] = (TbSetupBreak){.id = saved->next_id++, .enabled = true, .hardware = true, .condition = "1", .ignore_set = true, .ignore = 2};
+    saved->breaks[0] = (TbSetupBreak_t){.id = saved->next_id++, .enabled = true, .hardware = true, .condition = "1", .ignore_set = true, .ignore = 2};
     (void)snprintf(saved->breaks[0].location, TB_SETUP_LOCATION, "%s", argv[5]);
     saved->breaks[1] = saved->breaks[0]; saved->breaks[1].id = saved->next_id++; (void)snprintf(saved->breaks[1].condition, 512, "(");
-    saved->breaks[2] = (TbSetupBreak){.id = saved->next_id++, .enabled = false, .hardware = true};
+    saved->breaks[2] = (TbSetupBreak_t){.id = saved->next_id++, .enabled = false, .hardware = true};
     (void)snprintf(saved->breaks[2].location, TB_SETUP_LOCATION, "*%s", tb_context_snapshot(tb_session_context(session))->stopped.address);
     CHECK(tb_setup_valid(saved));
-    TbProfiles *store = tb_profiles_create(); CHECK(store && tb_profiles_load(store)); TbProfile profile; tb_profile_defaults(&profile, 1);
+    TbProfiles_t *store = tb_profiles_create(); CHECK(store && tb_profiles_load(store)); TbProfile_t profile; tb_profile_defaults(&profile, 1);
     profile.start_server = false; (void)snprintf(profile.name, TB_PROFILE_NAME, "physical-f01"); (void)snprintf(profile.executable, TB_PROFILE_PATH, "%s", argv[3]); (void)snprintf(profile.gdb, TB_PROFILE_PATH, "%s", argv[1]); (void)snprintf(profile.endpoint, sizeof profile.endpoint, "%s", argv[2]);
     char directory[TB_SETUP_PATH]; CHECK(getcwd(directory, sizeof directory));
     CHECK(tb_profiles_put(store, &profile, false) && tb_profiles_save_setup(store, profile.name, saved, &profile, directory));
@@ -201,7 +201,7 @@ int main(int argc, char **argv)
     stopped(0); tb_setup_restore_pump(restore, c, session); CHECK(tb_setup_restore_active(restore) && !tb_session_continue(session)); settle(restore, c); no_values(pane);
     TbBreakDefinition_t cancel = {.enabled = true, .hardware = true}; (void)snprintf(cancel.location, sizeof cancel.location, "%s", argv[5]);
     uint64_t cancel_id = tb_setup_capture_import_break(c, &cancel); CHECK(cancel_id && CAPTURE());
-    const TbSetupBreak *entry = NULL; for (size_t i = 0; i < tb_setup_capture_retained(c); ++i) { const TbSetupBreak *d = tb_setup_capture_retained_break(c, i); if (d->id == cancel_id) { entry = d; } }
+    const TbSetupBreak_t *entry = NULL; for (size_t i = 0; i < tb_setup_capture_retained(c); ++i) { const TbSetupBreak_t *d = tb_setup_capture_retained_break(c, i); if (d->id == cancel_id) { entry = d; } }
     CHECK(entry && tb_break_restore(b, entry, false)); tb_break_pump(b); tb_setup_restore_cancel(restore, session);
     CHECK(tb_setup_restore_active(restore) && strstr(tb_setup_restore_status(restore), "Cancel requested")); settle(restore, c);
     CHECK(strstr(tb_setup_restore_status(restore), "canceled") && tb_break_restoration(b, cancel_id)->state == TB_RESTORE_UNRESOLVED);

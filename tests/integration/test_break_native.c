@@ -199,7 +199,7 @@ int main(int argc, char *argv[])
     }
     close_session(n);
     n = start(argv[2], NULL); b = tb_native_breakpoints(n);
-    TbSetupBreak restored = {.id = 1, .location = "m08_overload", .condition = "1", .enabled = true, .ignore_set = true, .ignore = 2};
+    TbSetupBreak_t restored = {.id = 1, .location = "m08_overload", .condition = "1", .enabled = true, .ignore_set = true, .ignore = 2};
     CHECK(tb_break_restore(b, &restored, false)); idle(n);
     const TbBreakRestoration_t *progress = tb_break_restoration(b, 1);
     if (!progress || progress->state != TB_RESTORE_INSTALLED) { fprintf(stderr, "Multiple-location restore: %s / %s\n", progress ? progress->reason : "missing", tb_break_message(b)); }
@@ -209,7 +209,7 @@ int main(int argc, char *argv[])
     CHECK(tb_break_enable(b, tb_break_row(b, 1)->id, false)); idle(n); CHECK(!tb_break_row(b, 1)->enabled);
     (void)snprintf(id, sizeof id, "%s", tb_break_row(b, 0)->id); CHECK(tb_break_remove(b, id)); idle(n); CHECK(tb_break_count(b) == 0);
     CHECK(!tb_break_restoration(b, 1));
-    restored = (TbSetupBreak){.id = 2, .source = "tests/fixtures/native/breakpoints.cpp", .line = 7, .enabled = false, .ignore_set = true};
+    restored = (TbSetupBreak_t){.id = 2, .source = "tests/fixtures/native/breakpoints.cpp", .line = 7, .enabled = false, .ignore_set = true};
     CHECK(tb_break_restore(b, &restored, false)); idle(n);
     CHECK(tb_break_restoration(b, 2)->state == TB_RESTORE_INSTALLED && !tb_break_row(b, 0)->enabled);
     CHECK(tb_break_definition(b, 0)->line == 7 && !strcmp(tb_break_definition(b, 0)->source, restored.source) && tb_break_definition(b, 0)->ignore_set);

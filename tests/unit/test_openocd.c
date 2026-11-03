@@ -18,7 +18,7 @@ int main(void)
     (void)snprintf(path, sizeof path, "%s/target", root); CHECK(mkdir(path, 0700) == 0);
     (void)snprintf(target, sizeof target, "%s/target/test.cfg", root); file(target);
     (void)snprintf(custom, sizeof custom, "%s/extra.cfg", root); file(custom);
-    TbProfile *p = calloc(1, sizeof *p); TbOpenOcdPlan *plan = malloc(sizeof *plan); TbOpenOcdCatalog *catalog = malloc(sizeof *catalog); CHECK(p && plan && catalog);
+    TbProfile_t *p = calloc(1, sizeof *p); TbOpenOcdPlan_t *plan = malloc(sizeof *plan); TbOpenOcdCatalog_t *catalog = malloc(sizeof *catalog); CHECK(p && plan && catalog);
     p->kind = 1; p->start_server = true;
     (void)snprintf(p->endpoint, sizeof p->endpoint, "localhost:3333");
     (void)snprintf(p->openocd, sizeof p->openocd, "/literal path/openocd");
@@ -41,7 +41,7 @@ int main(void)
     p->start_server = false; CHECK(tb_openocd_plan(p, plan, error, sizeof error) && plan->count == 0);
     tb_openocd_catalog(catalog, &p->search); bool got_board = false, got_adapter = false, got_target = false;
     for (size_t i = 0; i < catalog->count; ++i) {
-        const TbOpenOcdScript *v = &catalog->scripts[i];
+        const TbOpenOcdScript_t *v = &catalog->scripts[i];
         got_board = got_board || (v->kind == 0 && !strcmp(v->path, board));
         got_adapter = got_adapter || (v->kind == 1 && !strcmp(v->path, adapter));
         got_target = got_target || (v->kind == 2 && !strcmp(v->path, target));

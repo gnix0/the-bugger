@@ -41,7 +41,7 @@ static void close_session(TbNative *native)
 {
     tb_native_close(native); wait_state(native, TB_NATIVE_CLOSED); CHECK(tb_native_destroy(native));
 }
-static void step(TbNative *native, TbStep action, bool instruction)
+static void step(TbNative *native, TbStep_e action, bool instruction)
 {
     uint64_t revision = tb_code_view(tb_native_code(native), 0)->assembly_revision;
     uint64_t stop = tb_context_snapshot(tb_native_context(native))->generation.stop;

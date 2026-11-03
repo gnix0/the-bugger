@@ -41,7 +41,7 @@ typedef struct tb_breakpoints TbBreakpoints_t;
 
 typedef struct {
     uint64_t       identity;
-    TbSetupMapping mapping;
+    TbSetupMapping_t mapping;
     char           location[8193];
     char           source[4096];
     char           condition[512];
@@ -83,13 +83,13 @@ typedef struct {
 
 /* Runtime progress and backend IDs are never serialized. One bounded operation
  * at a time, disabled insertion and attribute verification before enable. */
-bool tb_break_restore(TbBreakpoints_t *breakpoints, const TbSetupBreak *definition, bool address_approved);
+bool tb_break_restore(TbBreakpoints_t *breakpoints, const TbSetupBreak_t *definition, bool address_approved);
 const TbBreakRestoration_t *tb_break_restoration(const TbBreakpoints_t *breakpoints, uint64_t identity);
 bool tb_break_restoration_active(const TbBreakpoints_t *breakpoints);
 bool tb_break_restoration_uncertain(const TbBreakpoints_t *breakpoints);
 void tb_break_restore_cancel(TbBreakpoints_t *breakpoints);
 bool tb_break_reconcile(TbBreakpoints_t *breakpoints);
-bool tb_break_literal(const TbSetupBreak *definition, uint64_t *address);
+bool tb_break_literal(const TbSetupBreak_t *definition, uint64_t *address);
 bool tb_break_importable(const TbBreakpoints_t *breakpoints, const char *id, TbBreakDefinition_t *definition);
 const char *tb_break_conflict(const TbBreakpoints_t *breakpoints, size_t definition);
 bool tb_break_discard_intent(TbBreakpoints_t *breakpoints, uint64_t identity);

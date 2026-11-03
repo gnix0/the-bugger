@@ -34,7 +34,7 @@ int main(int argc, char **argv)
 {
     CHECK(argc == 3); CHECK(atexit(cleanup) == 0);
     char root[] = "/tmp/the-bugger-m13-native-XXXXXX"; CHECK(mkdtemp(root)); CHECK(setenv("XDG_CONFIG_HOME", root, 1) == 0);
-    TbProfiles *store = tb_profiles_create(); TbProfile *p = malloc(sizeof *p); CHECK(store && p && tb_profiles_load(store));
+    TbProfiles_t *store = tb_profiles_create(); TbProfile_t *p = malloc(sizeof *p); CHECK(store && p && tb_profiles_load(store));
     tb_profile_defaults(p, 0); (void)snprintf(p->name, sizeof p->name, "relocated");
     CHECK(strlen(argv[1]) < sizeof p->executable && strlen(argv[2]) < TB_PROFILE_PATH);
     (void)snprintf(p->executable, sizeof p->executable, "%s", argv[1]);
@@ -44,7 +44,7 @@ int main(int argc, char **argv)
     (void)snprintf(p->rules[0].to, TB_PROFILE_PATH, "%s", argv[2]);
     CHECK(tb_profiles_put(store, p, false)); free(p); tb_profiles_destroy(store);
     store = tb_profiles_create(); CHECK(store && tb_profiles_load(store));
-    const TbProfile *loaded = tb_profiles_find(store, "relocated"); CHECK(loaded);
+    const TbProfile_t *loaded = tb_profiles_find(store, "relocated"); CHECK(loaded);
     TbNative *n = tb_native_create(); CHECK(n); owned = n;
     TbNativeConfig config = {.gdb = loaded->gdb, .executable = loaded->executable}; CHECK(tb_native_start(n, &config));
     TbCode_t *code = tb_native_code(n); const char *dirs[] = {loaded->directories[0]};

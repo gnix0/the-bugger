@@ -56,7 +56,7 @@ typedef enum {
 
 typedef struct {
     TbBreakRestoration_t progress;
-    TbSetupBreak         definition;
+    TbSetupBreak_t         definition;
 } RestoredBreak_t;
 
 struct tb_breakpoints {
@@ -1302,7 +1302,7 @@ void tb_break_pump(TbBreakpoints_t *b)
             if (b->definitions[i].mapping_checked || *d->mapping.path || *d->source)
                 continue;
 
-            TbSetupBreak candidate = {0};
+            TbSetupBreak_t candidate = {0};
             memcpy(candidate.location, d->location, sizeof(candidate.location));
             uint64_t address;
             if (tb_break_literal(&candidate, &address) && address) {
@@ -1413,7 +1413,7 @@ static void remember_baseline(TbBreakpoints_t *b)
 }
 
 
-bool tb_break_literal(const TbSetupBreak *d, uint64_t *address)
+bool tb_break_literal(const TbSetupBreak_t *d, uint64_t *address)
 {
     if (*d->source)
         return false;
@@ -1504,7 +1504,7 @@ static void restore_finish(TbBreakpoints_t *b, TbBreakRestoreState_e state, cons
 }
 
 
-static void original_location(const TbSetupBreak *d, char out[TB_SETUP_LOCATION])
+static void original_location(const TbSetupBreak_t *d, char out[TB_SETUP_LOCATION])
 {
     if (*d->source) {
         (void)snprintf(out, TB_SETUP_LOCATION, "-source %s -line %u", d->source, d->line);
@@ -1514,7 +1514,7 @@ static void original_location(const TbSetupBreak *d, char out[TB_SETUP_LOCATION]
 }
 
 
-static bool location_matches(const TbSetupBreak *d, const TbBreakpoint_t *row)
+static bool location_matches(const TbSetupBreak_t *d, const TbBreakpoint_t *row)
 {
     char original[TB_SETUP_LOCATION];
     original_location(d, original);
@@ -1523,7 +1523,7 @@ static bool location_matches(const TbSetupBreak *d, const TbBreakpoint_t *row)
 }
 
 
-static TbBreakDefinition_t configured(const TbSetupBreak *d)
+static TbBreakDefinition_t configured(const TbSetupBreak_t *d)
 {
     TbBreakDefinition_t out = {
         .mapping    = d->mapping,
@@ -1553,7 +1553,7 @@ static const TbBreakpoint_t *row_id(const TbBreakpoints_t *b, const char *id)
 }
 
 
-static bool attributes(const TbSetupBreak *d, const TbBreakpoint_t *row, bool enabled)
+static bool attributes(const TbSetupBreak_t *d, const TbBreakpoint_t *row, bool enabled)
 {
     return row && row->definition_complete && location_matches(d, row) && row->enabled == enabled &&
            (!d->hardware || row->hardware) && strcmp(row->condition, d->condition) == 0 &&
@@ -1591,7 +1591,7 @@ static void restore_install(TbBreakpoints_t *b)
 }
 
 
-bool tb_break_restore(TbBreakpoints_t *b, const TbSetupBreak *d, bool approved)
+bool tb_break_restore(TbBreakpoints_t *b, const TbSetupBreak_t *d, bool approved)
 {
     if (!d || !d->id || b->restore_step != RESTORE_IDLE || tb_break_busy(b) || b->waiting)
         return false;
@@ -1813,7 +1813,7 @@ static bool restore_pump(TbBreakpoints_t *b)
 
 static bool definition_location(const TbBreakDefinition_t *d, const TbBreakpoint_t *row)
 {
-    TbSetupBreak definition = {.line = d->line};
+    TbSetupBreak_t definition = {.line = d->line};
     memcpy(definition.location, d->location, sizeof(definition.location));
     memcpy(definition.source, d->source, sizeof(definition.source));
 
@@ -1823,7 +1823,7 @@ static bool definition_location(const TbBreakDefinition_t *d, const TbBreakpoint
 
 static bool supported_match(const TbBreakDefinition_t *d, const TbBreakpoint_t *row)
 {
-    TbSetupBreak definition = {
+    TbSetupBreak_t definition = {
         .enabled    = d->enabled,
         .hardware   = d->hardware,
         .ignore_set = d->ignore_set,

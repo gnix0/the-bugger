@@ -34,7 +34,7 @@ const char *tb_setup_restore_status(const TbSetupRestore *r)
     default: return "Restoration state unavailable.";
     }
 }
-void tb_setup_restore_cancel(TbSetupRestore *r, TbSession *s)
+void tb_setup_restore_cancel(TbSetupRestore *r, TbSession_t *s)
 {
     if (!r || r->phase == RESTORE_NONE || (r->phase == RESTORE_COMPLETE && !tb_break_restoration_active(tb_session_breakpoints(s))) || r->phase == RESTORE_CANCELED) { return; }
     r->phase = RESTORE_CANCEL_REQUESTED; r->active = true;
@@ -44,7 +44,7 @@ static uint64_t failed_enabled(const TbSetupCapture *c, const TbBreakpoints_t *b
 {
     uint64_t hash = 1469598103934665603ULL; bool any = false;
     for (size_t i = 0; i < tb_setup_capture_retained(c); ++i) {
-        const TbSetupBreak *b = tb_setup_capture_retained_break(c, i);
+        const TbSetupBreak_t *b = tb_setup_capture_retained_break(c, i);
         const TbBreakRestoration_t *progress = tb_break_restoration(breakpoints, b->id);
         if (!b->enabled || (progress && progress->state == TB_RESTORE_DRAFT)) { continue; }
         if (progress) {
@@ -56,7 +56,7 @@ static uint64_t failed_enabled(const TbSetupCapture *c, const TbBreakpoints_t *b
     }
     return any ? hash ? hash : 1 : 0;
 }
-void tb_setup_restore_pump(TbSetupRestore *r, TbSetupCapture *c, TbSession *s)
+void tb_setup_restore_pump(TbSetupRestore *r, TbSetupCapture *c, TbSession_t *s)
 {
     if (!r) { return; }
     TbBreakpoints_t *breakpoints = tb_session_breakpoints(s);
@@ -64,7 +64,7 @@ void tb_setup_restore_pump(TbSetupRestore *r, TbSetupCapture *c, TbSession *s)
         r->active = tb_break_restoration_active(breakpoints); tb_session_setup_interlock(s, r->active, false); return;
     }
     tb_break_definition_reserve(tb_session_breakpoints(s), tb_setup_capture_retained(c));
-    TbCode_t *code = tb_session_code(s); TbSessionState state = tb_session_state(s);
+    TbCode_t *code = tb_session_code(s); TbSessionState_e state = tb_session_state(s);
     bool running = state == TB_SESSION_RUNNING;
     if (r->phase == RESTORE_COMPLETE || r->phase == RESTORE_CANCELED) { r->active = false; r->awaiting_stop = false; }
     if (r->phase == RESTORE_CANCEL_REQUESTED) {
@@ -88,9 +88,9 @@ void tb_setup_restore_pump(TbSetupRestore *r, TbSetupCapture *c, TbSession *s)
             } else if (r->phase == RESTORE_BREAKS && !tb_break_restoration_active(breakpoints)) {
                 bool remaining = false;
                 for (size_t i = 0; i < tb_setup_capture_retained(c); ++i) {
-                    const TbSetupBreak *d = tb_setup_capture_retained_break(c, i);
+                    const TbSetupBreak_t *d = tb_setup_capture_retained_break(c, i);
                     if (tb_break_restoration(breakpoints, d->id)) { continue; }
-                    remaining = true; bool approved = false; uint64_t address; TbSetupMapping current;
+                    remaining = true; bool approved = false; uint64_t address; TbSetupMapping_t current;
                     if (tb_session_kind(s) == TB_SESSION_LOCAL && tb_break_literal(d, &address) && address &&
                         tb_images_native_mapping(tb_session_target_pid(s), address, &current)) {
                         approved = tb_images_mapping_equal(&d->mapping, &current, address);
@@ -102,7 +102,7 @@ void tb_setup_restore_pump(TbSetupRestore *r, TbSetupCapture *c, TbSession *s)
         }
     }
     for (size_t i = 0; i < tb_setup_capture_retained(c);) {
-        const TbSetupBreak *d = tb_setup_capture_retained_break(c, i);
+        const TbSetupBreak_t *d = tb_setup_capture_retained_break(c, i);
         const TbBreakRestoration_t *progress = tb_break_restoration(breakpoints, d->id);
         if (progress && progress->state == TB_RESTORE_INSTALLED && tb_setup_capture_adopt_break(c, d->id, progress->identity)) { continue; }
         ++i;

@@ -186,7 +186,7 @@ static void stop(void) { test_terminal_stop(&term, 0); active = false; }
 
 static void native_bindings(const char *binary, const char *fixture)
 {
-    TbProfiles *store = tb_profiles_create(); TbProfile *profile = malloc(sizeof *profile); CHECK(store && profile);
+    TbProfiles_t *store = tb_profiles_create(); TbProfile_t *profile = malloc(sizeof *profile); CHECK(store && profile);
     CHECK(tb_profiles_load(store)); tb_profile_defaults(profile, 0);
     (void)snprintf(profile->name, sizeof profile->name, "Shared connection");
     (void)snprintf(profile->executable, sizeof profile->executable, "%s", fixture);

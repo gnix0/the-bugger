@@ -596,7 +596,7 @@ static bool map_number(char **cursor, const char *limit, uint64_t *out, char sep
 
 // Native PID and target PC are distinct mapping lookup inputs.
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-static bool native_mapping(TbImages_t *images, pid_t pid, uint64_t pc, TbSetupMapping *mapping)
+static bool native_mapping(TbImages_t *images, pid_t pid, uint64_t pc, TbSetupMapping_t *mapping)
 {
     if (pid <= 1)
         return false;
@@ -696,7 +696,7 @@ static bool native_mapping(TbImages_t *images, pid_t pid, uint64_t pc, TbSetupMa
             if (stat(path, &current) == 0 && same_file(&info, &current)) {
                 found = true;
                 if (mapping) {
-                    *mapping = (TbSetupMapping) {
+                    *mapping = (TbSetupMapping_t) {
                         .bias  = bias,
                         .begin = low,
                         .end   = high
@@ -732,13 +732,13 @@ void tb_images_native(TbImages_t *images, pid_t pid, const char *executable, uin
 }
 
 
-bool tb_images_native_mapping(pid_t pid, uint64_t address, TbSetupMapping *mapping)
+bool tb_images_native_mapping(pid_t pid, uint64_t address, TbSetupMapping_t *mapping)
 {
     return mapping && native_mapping(NULL, pid, address, mapping);
 }
 
 
-bool tb_images_mapping_equal(const TbSetupMapping *a, const TbSetupMapping *b, uint64_t address)
+bool tb_images_mapping_equal(const TbSetupMapping_t *a, const TbSetupMapping_t *b, uint64_t address)
 {
     return a && b && *a->path && *a->identity && !strcmp(a->path, b->path) &&
            !strcmp(a->identity, b->identity) && a->bias == b->bias && a->begin == b->begin &&
