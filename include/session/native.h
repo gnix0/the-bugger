@@ -52,5 +52,5 @@ typedef TbSession TbNative;
 #define tb_native_run_to tb_session_run_to
 #define tb_native_run_at tb_session_run_at
 /* Linux metadata parser; never used for remote target identifiers. */
-bool tb_native_memory_region(const char *row, TbMemoryRegion *region);
+bool tb_native_memory_region(const char *row, TbMemoryRegion_t *region);
 #endif

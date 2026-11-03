@@ -34,7 +34,7 @@ typedef struct {
     TbGdbGeneration_t generation;
     char              thread[32];
     unsigned          size;
-    TbMemoryOrder     order;
+    TbMemoryOrder_e     order;
     unsigned char     bytes[TB_MEMORY_BYTES];
     bool              valid[TB_MEMORY_BYTES];
 } TbStackSample_t;
@@ -74,12 +74,12 @@ typedef struct {
 
 typedef struct tb_stack TbStack_t;
 
-TbStack_t *tb_stack_create(TbGdb_t *gdb, TbContext_t *context, TbMemory *memory, TbBrowseCache_t *cache);
+TbStack_t *tb_stack_create(TbGdb_t *gdb, TbContext_t *context, TbMemory_t *memory, TbBrowseCache_t *cache);
 void tb_stack_destroy(TbStack_t *stack);
 void tb_stack_reset(TbStack_t *stack);
 void tb_stack_clear(TbStack_t *stack, int view);
 void tb_stack_visible(TbStack_t *stack, int view, bool visible);
-void tb_stack_target(TbStack_t *stack, bool octets, unsigned address_bits, TbMemoryOrder order,
+void tb_stack_target(TbStack_t *stack, bool octets, unsigned address_bits, TbMemoryOrder_e order,
                      const char *architecture);
 void tb_stack_invalidate(TbStack_t *stack);
 bool tb_stack_event(TbStack_t *stack, const TbGdbEvent_t *event);

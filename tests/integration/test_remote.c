@@ -21,7 +21,7 @@ static void mmio_close(const char *peer, bool dispatched)
         for (size_t i = 0; i < tb_session_log_count(s); ++i) { fprintf(stderr, "%s\n", tb_session_log_line(s, i)); }
     }
     CHECK(context->ready && !context->stale);
-    TbMemory *m = tb_session_memory(s); TbMemoryBackend review;
+    TbMemory_t *m = tb_session_memory(s); TbMemoryBackend_t review;
     CHECK(tb_session_mmio_review(s, &review) && tb_session_mmio_confirm(s, &review));
     CHECK(tb_memory_range_set(m, 0, 0, 0x40020010, 0x40020020, TB_MEMORY_MMIO, 32, "Authored peer only"));
     CHECK(tb_memory_range_authorize(m, 0, 0) && tb_memory_read_register(m, 0, 0x40020014, 32));
@@ -51,7 +51,7 @@ static void run(const char *peer, const char *mode)
     CHECK(setenv("TB_FAKE_MODE", mode, 1) == 0);
     TbSession *s = tb_session_create(); CHECK(s);
     TbSessionConfig config = {.kind = TB_SESSION_REMOTE, .gdb = peer, .endpoint = "localhost:3333"};
-    const TbMemoryRegion regions[] = {{0x20000000, 0x20000100, true}, {0x08000000, 0x08000100, false}};
+    const TbMemoryRegion_t regions[] = {{0x20000000, 0x20000100, true}, {0x08000000, 0x08000100, false}};
     if (strcmp(mode, "remote-regions") == 0) {
         config.ordinary_regions = regions; config.ordinary_region_count = 2;
     }
@@ -87,8 +87,8 @@ static void run(const char *peer, const char *mode)
         while ((!snapshot->ready || snapshot->stale) && tb_gdb_now_ms() < ready_until) { tb_session_pump(s, 1); }
         CHECK(snapshot->ready && !snapshot->stale);
         if (strcmp(mode, "remote-big") == 0) {
-            TbMemory *m = tb_session_memory(s);
-            TbMemoryBackend setup;
+            TbMemory_t *m = tb_session_memory(s);
+            TbMemoryBackend_t setup;
             CHECK(tb_session_mmio_review(s, &setup));
             CHECK(!tb_memory_backend_confirmed(m));
             CHECK(strstr(setup.server, "localhost:3333") && strstr(setup.server, "board/st_nucleo_f4.cfg"));
@@ -106,7 +106,7 @@ static void run(const char *peer, const char *mode)
             CHECK(!tb_memory_read_register(m, 0, 0x40020014, 32));
             CHECK(!tb_session_mmio_confirm(s, &setup));
             for (unsigned i = 0; i < 30; ++i) { tb_session_pump(s, 1); }
-            TbMemoryBackend renewed;
+            TbMemoryBackend_t renewed;
             CHECK(tb_session_mmio_review(s, &renewed));
             CHECK(renewed.configuration != setup.configuration);
             CHECK(!tb_session_mmio_confirm(s, &setup));
@@ -114,7 +114,7 @@ static void run(const char *peer, const char *mode)
             CHECK(!tb_memory_range_authorized(m, 0, 0));
         }
         if (strcmp(mode, "remote-regions") == 0) {
-            TbMemory *m = tb_session_memory(s); CHECK(tb_memory_length(m, 0, 16));
+            TbMemory_t *m = tb_session_memory(s); CHECK(tb_memory_length(m, 0, 16));
             for (size_t i = 0; i < 2; ++i) {
                 CHECK(tb_memory_address(m, 0, i ? "0x08000000" : "0x20000000"));
                 until = tb_gdb_now_ms() + 1000;
@@ -210,11 +210,11 @@ static void ram_evidence(const char *peer)
     CHECK(!tb_session_ram_confirmed(s) && !tb_session_ram_confirm(s, &current));
     ram_close(s); ram_close(other);
     CHECK(tb_session_destroy(s) && tb_session_destroy(other));
-    const TbMemoryRegion invalid[] = {{1, 4, true}, {2, 3, false}};
+    const TbMemoryRegion_t invalid[] = {{1, 4, true}, {2, 3, false}};
     config.ordinary_regions = invalid; config.ordinary_region_count = 2;
     s = tb_session_create(); CHECK(s && !tb_session_start(s, &config));
     config.ordinary_region_count = TB_MEMORY_REGIONS + 1; CHECK(!tb_session_start(s, &config));
-    const TbMemoryRegion malformed[] = {{1, 4, true}, {8, 7, false}};
+    const TbMemoryRegion_t malformed[] = {{1, 4, true}, {8, 7, false}};
     config.ordinary_regions = malformed; config.ordinary_region_count = 2; CHECK(!tb_session_start(s, &config));
     CHECK(tb_session_destroy(s));
     puts("PASS F04 user-confirmed SRAM binding, cross-connection/reconnect rejection, atomic evidence, reset/Console revocation and quarantine preservation (authored peer)");

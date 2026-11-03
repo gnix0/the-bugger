@@ -36,7 +36,7 @@ int main(int argc, char **argv)
     TbSessionConfig config = {.gdb = "gdb", .executable = argv[1]}; CHECK(tb_session_start(owned, &config));
     TbLayout_t layout; tb_layout_init(&layout); layout.overlays = true; TbDemo workspace; tb_demo_init(&workspace);
     const char *expressions[TB_MAX_PANES]; for (int i = 0; i < TB_MAX_PANES; ++i) { expressions[i] = ""; }
-    TbCode_t *code = tb_session_code(owned); TbMemory *memory = tb_session_memory(owned); TbVariables *variables = tb_session_variables(owned);
+    TbCode_t *code = tb_session_code(owned); TbMemory_t *memory = tb_session_memory(owned); TbVariables_t *variables = tb_session_variables(owned);
     TbSetupCapture *c = tb_setup_capture_create(NULL); CHECK(c);
 #define CAPTURE() tb_setup_capture_update(c, &layout, &workspace, code, memory, variables, tb_session_breakpoints(owned), expressions)
     CHECK(CAPTURE()); TbSetup *saved = malloc(sizeof *saved); CHECK(saved); *saved = *tb_setup_capture_current(c);
@@ -103,7 +103,7 @@ int main(int argc, char **argv)
     CHECK(tb_code_tab_close(code, 0, 2) && tb_setup_capture_remove_break(c, saved->breaks[0].id));
     CHECK(CAPTURE() && tb_setup_capture_dirty(c) && tb_setup_capture_current(c)->break_count == 1);
     CHECK(tb_setup_capture_current(c)->panes[0].sources[0].id == saved->panes[0].sources[0].id);
-    TbWatchDefinition unsupported; CHECK(tb_variables_definition(variables, 1, &unsupported));
+    TbWatchDefinition_t unsupported; CHECK(tb_variables_definition(variables, 1, &unsupported));
     CHECK(tb_variables_remove_definition(variables, unsupported.identity));
     CHECK(CAPTURE() && tb_setup_capture_current(c)->watch_count == 1 && tb_setup_capture_current(c)->watches[0].id == saved->watches[0].id);
     CHECK(tb_setup_capture_saved(c)); CHECK(CAPTURE() && !tb_setup_capture_dirty(c));

@@ -4,13 +4,13 @@
 #include <string.h>
 
 static TbContext_t *context;
-static TbVariables *variables;
-static TbMemory *memory;
+static TbVariables_t *variables;
+static TbMemory_t *memory;
 static unsigned replies, reads, children, deletes, writes;
 static uint64_t proof_address = 0x1000;
 static bool proof_complete;
 static bool proof(void *unused, TbGdbGeneration_t generation, const char *expression,
-                  TbVariableRead operation, unsigned first, unsigned count, TbVariableAccess *access)
+                  TbVariableRead_e operation, unsigned first, unsigned count, TbVariableAccess_t *access)
 {
     (void)unused; (void)generation; (void)first; (void)count;
     if (!proof_complete || strcmp(expression, "scalar") || operation != TB_VARIABLE_CREATE) { return false; }
@@ -61,7 +61,7 @@ static void command_arg(TbGdb_t *gdb, const char *op, const char *arg, uint64_t 
     CHECK(replies > before); drain(gdb);
 }
 static void command(TbGdb_t *gdb, const char *op, uint64_t cookie) { command_arg(gdb, op, NULL, cookie); }
-static size_t find(TbVariableView view, const char *name)
+static size_t find(TbVariableView_e view, const char *name)
 {
     for (size_t row = 0; row < tb_variables_count(variables, view); ++row) {
         if (strcmp(tb_variables_row(variables, view, row)->name, name) == 0) { return row; }
@@ -78,7 +78,7 @@ static void queued_revoke(const char *peer)
     while (tb_gdb_state(gdb) != TB_GDB_READY && tb_gdb_now_ms() < until) { pump(gdb); }
     CHECK(tb_gdb_state(gdb) == TB_GDB_READY);
     tb_variables_visible(variables, true, true); command(gdb, "-stop", 999);
-    const TbVariableRegion region = {0x1000, 0x2000, TB_VARIABLE_ORDINARY, true};
+    const TbVariableRegion_t region = {0x1000, 0x2000, TB_VARIABLE_ORDINARY, true};
     tb_variables_regions(variables, &region, 1); tb_variables_target(variables, true);
     size_t scalar = find(TB_VARIABLE_LOCALS, "scalar");
     CHECK(tb_variables_read(variables, TB_VARIABLE_LOCALS, scalar)); drain(gdb);
@@ -106,7 +106,7 @@ int main(int argc, char **argv)
     CHECK(tb_variables_count(variables, TB_VARIABLE_LOCALS) == 4);
     command(gdb, "-variable-stats", 998); CHECK(reads == 0 && children == 0);
     tb_variables_authorizer(variables, proof, NULL);
-    const TbVariableRegion safe[] = {{0x1000, 0x2000, TB_VARIABLE_ORDINARY, true}};
+    const TbVariableRegion_t safe[] = {{0x1000, 0x2000, TB_VARIABLE_ORDINARY, true}};
     tb_variables_regions(variables, safe, 1);
     tb_variables_target(variables, true); drain(gdb);
     command(gdb, "-variable-stats", 998); CHECK(reads == 0); /* regions alone are not an expression proof */
@@ -114,7 +114,7 @@ int main(int argc, char **argv)
     command(gdb, "-variable-stats", 998); CHECK(reads == 0); /* unknown, not unsafe */
     proof_address = UINT64_MAX; drain(gdb); command(gdb, "-variable-stats", 998); CHECK(reads == 0);
     proof_address = 0x1ffe; drain(gdb); command(gdb, "-variable-stats", 998); CHECK(reads == 0); /* entire access, not base only */
-    const TbVariableRegion overlay[] = {{0x1000, 0x2000, TB_VARIABLE_ORDINARY, true}, {0x1002, 0x1004, TB_VARIABLE_SIDE_EFFECT, false}};
+    const TbVariableRegion_t overlay[] = {{0x1000, 0x2000, TB_VARIABLE_ORDINARY, true}, {0x1002, 0x1004, TB_VARIABLE_SIDE_EFFECT, false}};
     proof_address = 0x1000; tb_variables_regions(variables, overlay, 2); drain(gdb);
     command(gdb, "-variable-stats", 998); CHECK(reads == 0); /* deny takes precedence, including partial overlap */
     tb_variables_regions(variables, safe, 1); drain(gdb);
@@ -150,7 +150,7 @@ int main(int argc, char **argv)
     CHECK(tb_variables_read(variables, TB_VARIABLE_LOCALS, scalar)); drain(gdb);
     CHECK(tb_variables_edit_reconcile(variables));
     CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_NONE);
-    const TbVariableRegion read_only[] = {{0x1000, 0x2000, TB_VARIABLE_ORDINARY, false}};
+    const TbVariableRegion_t read_only[] = {{0x1000, 0x2000, TB_VARIABLE_ORDINARY, false}};
     tb_variables_regions(variables, read_only, 1);
     CHECK(tb_variables_edit_begin(variables, TB_VARIABLE_LOCALS, scalar)); drain(gdb);
     CHECK(tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_NONE);

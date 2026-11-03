@@ -22,7 +22,7 @@ enum {
 struct tb_stack {
     TbGdb_t              *gdb;
     TbContext_t          *context;
-    TbMemory             *memory;
+    TbMemory_t             *memory;
     TbBrowseCache_t      *cache;
     TbStackView_t         views[TB_STACK_VIEWS];
     TbStackDeclaration_t  declarations[TB_STACK_VIEWS][TB_CONTEXT_THREADS];
@@ -45,7 +45,7 @@ struct tb_stack {
     unsigned              bits;
     unsigned              job;
     unsigned              request_job;
-    TbMemoryOrder         order;
+    TbMemoryOrder_e         order;
     int                   owner;
     int                   frame;
     int                   sp_id;
@@ -171,7 +171,7 @@ static bool position(TbStack_t *s, TbStackView_t *v)
 }
 
 
-TbStack_t *tb_stack_create(TbGdb_t *gdb, TbContext_t *context, TbMemory *memory, TbBrowseCache_t *cache)
+TbStack_t *tb_stack_create(TbGdb_t *gdb, TbContext_t *context, TbMemory_t *memory, TbBrowseCache_t *cache)
 {
     TbStack_t *s = calloc(1, sizeof(*s));
     if (s) {
@@ -295,7 +295,7 @@ void tb_stack_invalidate(TbStack_t *s)
 }
 
 
-void tb_stack_target(TbStack_t *s, bool octets, unsigned bits, TbMemoryOrder order, const char *architecture)
+void tb_stack_target(TbStack_t *s, bool octets, unsigned bits, TbMemoryOrder_e order, const char *architecture)
 {
     if (!architecture)
         architecture = "";
@@ -1082,7 +1082,7 @@ static void synchronize(TbStack_t *s)
                 "Thread changed: following frame-0 SP; bytes UNREAD. Old samples require cached inspection.");
         }
         if (v->reading) {
-            const TbMemoryView *bytes = tb_memory_view(s->memory, tb_memory_stack_client(i));
+            const TbMemoryView_t *bytes = tb_memory_view(s->memory, tb_memory_stack_client(i));
             if (!bytes->pending && !tb_memory_client_busy(s->memory, tb_memory_stack_client(i))) {
                 v->reading = false;
                 if (bytes->ready && same(bytes->generation, generation) && bytes->address == v->start &&
