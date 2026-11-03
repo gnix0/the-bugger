@@ -295,7 +295,8 @@ void tb_stack_invalidate(TbStack_t *s)
 }
 
 
-void tb_stack_target(TbStack_t *s, bool octets, unsigned bits, TbMemoryOrder_e order, const char *architecture)
+void tb_stack_target(TbStack_t *s, bool octets, unsigned bits, TbMemoryOrder_e order,
+                     const char *architecture)
 {
     if (!architecture)
         architecture = "";
