@@ -5,7 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 
-static TbContext *context;
+static TbContext_t *context;
 static TbCode *code;
 static unsigned completions;
 static void emit(void *unused, const TbGdbEvent_t *event)
@@ -75,7 +75,7 @@ static void image_review(TbGdb_t *gdb, const char *elf)
     uint64_t anchor = view->anchor, revision = view->assembly_revision;
     size_t rows = view->instruction_count;
     tb_code_native(code, 0, elf); /* Authored remote assertion, not hardware proof. */
-    TbCodeImageReview review; TbImageRange range;
+    TbCodeImageReview review; TbImageRange_t range;
     CHECK(tb_code_image_review(code, 0, &review));
     CHECK(tb_code_image_range(code, &review, 0, &range) && range.trust == TB_IMAGE_UNVERIFIED);
     CHECK(tb_code_image_confirm(code, &review));
@@ -104,16 +104,16 @@ static void retained_origin(const TbCodeView *view, const TbCodeView *saved)
 static void reconstruction(TbGdb_t *gdb)
 {
     const TbCodeView *view = tb_code_view(code, 0);
-    TbBrowseCache *cache = tb_code_cache(code);
+    TbBrowseCache_t *cache = tb_code_cache(code);
     uint64_t revision = view->assembly_revision;
     CHECK(tb_code_address(code, 0, "0x8000")); ready(gdb, revision);
-    TbBrowseKey old = {.kind = TB_BROWSE_CODE, .view = 0, .begin = 0x8000};
+    TbBrowseKey_t old = {.kind = TB_BROWSE_CODE, .view = 0, .begin = 0x8000};
     for (unsigned i = 0; i < 40; ++i) {
         revision = view->assembly_revision;
         CHECK(tb_code_assembly_page(code, 0, 1)); ready(gdb, revision);
         CHECK(tb_browse_allocated(cache) <= TB_BROWSE_LIMIT);
     }
-    TbBrowseSample sample;
+    TbBrowseSample_t sample;
     CHECK(!tb_browse_find(cache, old, &sample)); /* Actual shared-pool eviction. */
     revision = view->assembly_revision;
     CHECK(tb_code_address(code, 0, "0x8040")); ready(gdb, revision);
@@ -359,9 +359,9 @@ static void run(const char *peer, const char *mode)
     CHECK(tb_gdb_state(gdb) == TB_GDB_DISCONNECTED);
     tb_code_clear(code, 0);
     CHECK(tb_code_view(code, 0)->instruction_count == 0 && tb_code_tab_count(code, 0) == 1);
-    TbBrowseSample cleared;
-    CHECK(!tb_browse_find(tb_code_cache(code), (TbBrowseKey){.kind = TB_BROWSE_CODE, .view = 0, .begin = 0x5000}, &cleared));
-    CHECK(!tb_browse_find(tb_code_cache(code), (TbBrowseKey){.kind = TB_BROWSE_ANCHORS, .view = 0, .begin = 0}, &cleared));
+    TbBrowseSample_t cleared;
+    CHECK(!tb_browse_find(tb_code_cache(code), (TbBrowseKey_t){.kind = TB_BROWSE_CODE, .view = 0, .begin = 0x5000}, &cleared));
+    CHECK(!tb_browse_find(tb_code_cache(code), (TbBrowseKey_t){.kind = TB_BROWSE_ANCHORS, .view = 0, .begin = 0}, &cleared));
     tb_code_reset(code); CHECK(tb_code_file_count(code) == 0 && tb_code_view(code, 0)->line_count == 0 && tb_code_tab_count(code, 0) == 1);
     tb_code_destroy(code); tb_context_destroy(context); CHECK(tb_gdb_destroy(gdb)); code = NULL; context = NULL;
     CHECK(unlink(path) == 0 && unlink(other_path) == 0);

@@ -19,8 +19,8 @@ typedef struct {
     TbMemoryRange ranges[TB_MEMORY_RANGES];
 } View;
 struct TbMemory {
-    TbGdb_t *gdb; TbContext *context;
-    TbBrowseCache *cache; TbMmio *mmio;
+    TbGdb_t *gdb; TbContext_t *context;
+    TbBrowseCache_t *cache; TbMmio_t *mmio;
     uint64_t revision, request_version;
     size_t region_count;
     uint64_t backend_session, backend_epoch, register_epoch, register_address, register_lifetime;
@@ -43,7 +43,7 @@ struct TbMemory {
     unsigned char edit_old[TB_MEMORY_ROW], edit_new[TB_MEMORY_ROW];
     char edit_old_text[TB_MEMORY_ROW * 2 + 1], edit_error[192];
 };
-static TbBrowseKind byte_kind(int id) { return id < TB_MEMORY_VIEWS ? TB_BROWSE_MEMORY : TB_BROWSE_STACK_BYTES; }
+static TbBrowseKind_e byte_kind(int id) { return id < TB_MEMORY_VIEWS ? TB_BROWSE_MEMORY : TB_BROWSE_STACK_BYTES; }
 static bool valid_view(int id) { return id >= 0 && id < TB_MEMORY_CLIENTS; }
 static const char *spaces(const char *p) { while (*p == ' ' || *p == '\t') { ++p; } return p; }
 static int hex(unsigned char c)
@@ -101,7 +101,7 @@ static void error(TbMemory *m, View *v, const char *message)
     (void)snprintf(v->data.error, sizeof v->data.error, "%s", message);
     ++v->version; v->data.pending = false; v->data.ready = false; ++m->revision;
 }
-TbMemory *tb_memory_create(TbGdb_t *gdb, TbContext *context)
+TbMemory *tb_memory_create(TbGdb_t *gdb, TbContext_t *context)
 {
     TbMemory *m = calloc(1, sizeof *m);
     if (m) {
@@ -114,7 +114,7 @@ void tb_memory_destroy(TbMemory *m)
 {
     if (m && tb_mmio_destroy(m->mmio)) { tb_browse_release(m->cache); free(m); }
 }
-void tb_memory_cache(TbMemory *m, TbBrowseCache *cache)
+void tb_memory_cache(TbMemory *m, TbBrowseCache_t *cache)
 {
     if (!cache || m->cache == cache) { return; }
     tb_browse_release(m->cache); m->cache = tb_browse_retain(cache);
@@ -130,8 +130,8 @@ void tb_memory_clear(TbMemory *m, int id)
 }
 void tb_memory_reset(TbMemory *m)
 {
-    TbGdb_t *gdb = m->gdb; TbContext *context = m->context; uint64_t revision = m->revision;
-    TbBrowseCache *cache = m->cache; TbMmio *mmio = m->mmio; uint64_t epoch = m->backend_epoch + 1;
+    TbGdb_t *gdb = m->gdb; TbContext_t *context = m->context; uint64_t revision = m->revision;
+    TbBrowseCache_t *cache = m->cache; TbMmio_t *mmio = m->mmio; uint64_t epoch = m->backend_epoch + 1;
     memset(m, 0, sizeof *m); m->gdb = gdb; m->context = context; m->cache = cache; m->revision = revision + 1;
     m->mmio = mmio; m->backend_epoch = epoch; m->register_view = -1;
     for (int i = 0; i < TB_MEMORY_CLIENTS; ++i) { tb_memory_clear(m, i); }
@@ -253,7 +253,7 @@ bool tb_memory_range_set(TbMemory *m, int id, unsigned range, uint64_t begin, ui
 bool tb_memory_range_authorize(TbMemory *m, int id, unsigned range)
 {
     if (!valid_view(id) || range >= TB_MEMORY_RANGES || tb_gdb_state(m->gdb) != TB_GDB_STOPPED) { return false; }
-    const TbContextSnapshot *s = tb_context_snapshot(m->context);
+    const TbContextSnapshot_t *s = tb_context_snapshot(m->context);
     TbMemoryRange *r = &m->views[id].ranges[range];
     if (!r->used || !s->ready || s->stale || m->unsupported ||
         (m->address_bits && m->address_bits < 64 && r->end > (UINT64_C(1) << m->address_bits))) { return false; }
@@ -275,7 +275,7 @@ static bool register_allowed(const TbMemory *m, int id, uint64_t address, unsign
     if (!valid_view(id) || !capability || m->unsupported || !m->address_bits || !tb_memory_backend_confirmed(m) ||
         !(m->backend.widths & capability) || address % (width / 8) || address > UINT64_MAX - width / 8 ||
         (m->address_bits < 64 && address + width / 8 > (UINT64_C(1) << m->address_bits))) { return false; }
-    const TbContextSnapshot *s = tb_context_snapshot(m->context);
+    const TbContextSnapshot_t *s = tb_context_snapshot(m->context);
     if (tb_gdb_state(m->gdb) != TB_GDB_STOPPED || !s->ready || s->stale) { return false; }
     for (unsigned i = 0; i < TB_MEMORY_RANGES; ++i) {
         const TbMemoryRange *r = &m->views[id].ranges[i];
@@ -303,8 +303,8 @@ bool tb_memory_read_register(TbMemory *m, int id, uint64_t address, unsigned wid
 }
 bool tb_memory_register_sample(const TbMemory *m, int id, uint64_t address, unsigned width, TbMemoryRegister *sample)
 {
-    if (!valid_view(id) || !sample) { return false; } TbBrowseSample entry;
-    TbBrowseKey key = {.kind = TB_BROWSE_MMIO, .view = id, .format = width, .begin = address};
+    if (!valid_view(id) || !sample) { return false; } TbBrowseSample_t entry;
+    TbBrowseKey_t key = {.kind = TB_BROWSE_MMIO, .view = id, .format = width, .begin = address};
     if (!tb_browse_find(m->cache, key, &entry) || entry.size != sizeof *sample) { return false; }
     memcpy(sample, entry.data, sizeof *sample); return true;
 }
@@ -366,7 +366,7 @@ static uint64_t ordinary_end(const TbMemory *m, int id, uint64_t begin, unsigned
 bool tb_memory_stale(const TbMemory *m, int id)
 {
     if (!valid_view(id)) { return true; }
-    const TbContextSnapshot *s = tb_context_snapshot(m->context); const TbMemoryView *v = &m->views[id].data;
+    const TbContextSnapshot_t *s = tb_context_snapshot(m->context); const TbMemoryView *v = &m->views[id].data;
     return !v->ready || v->pending || tb_gdb_state(m->gdb) != TB_GDB_STOPPED || s->stale || !s->ready || !same(v->generation, s->generation);
 }
 bool tb_memory_refresh(TbMemory *m, int id)
@@ -492,8 +492,8 @@ bool tb_memory_browse(TbMemory *m, int id, int direction)
     if (safe) { start = direction < 0 ? start - step : start + step; }
     int64_t offset = v->data.offset;
     if (!safe || (direction > 0 && offset > INT64_MAX - step) || (direction < 0 && offset < INT64_MIN + step)) { return false; }
-    TbBrowseSample sample;
-    TbBrowseKey key = {.kind = byte_kind(id), .view = id, .format = length, .begin = start};
+    TbBrowseSample_t sample;
+    TbBrowseKey_t key = {.kind = byte_kind(id), .view = id, .format = length, .begin = start};
     if (tb_browse_find(m->cache, key, &sample) && sample.size == sizeof(TbMemoryView)) {
         TbMemoryView saved; memcpy(&saved, sample.data, sizeof saved);
         memcpy(v->data.bytes, saved.bytes, sizeof v->data.bytes); memcpy(v->data.valid, saved.valid, sizeof v->data.valid);
@@ -544,12 +544,12 @@ bool tb_memory_event(TbMemory *m, const TbGdbEvent_t *event)
 {
     if (tb_mmio_event(m->mmio, event)) {
         if (valid_view(m->register_view) && m->register_lifetime == m->views[m->register_view].lifetime) {
-            View *v = &m->views[m->register_view]; const TbMmioResult *result = tb_mmio_result(m->mmio);
+            View *v = &m->views[m->register_view]; const TbMmioResult_t *result = tb_mmio_result(m->mmio);
             v->data.register_pending = false;
             if (result->status == TB_MMIO_COMPLETE && m->register_epoch == m->backend_epoch) {
                 TbMemoryRegister sample = {.address = result->address, .value = result->value, .width = result->width,
                     .generation = result->generation, .sampled_ms = tb_gdb_now_ms()};
-                TbBrowseKey key = {.kind = TB_BROWSE_MMIO, .view = m->register_view, .format = result->width,
+                TbBrowseKey_t key = {.kind = TB_BROWSE_MMIO, .view = m->register_view, .format = result->width,
                     .begin = result->address, .end = result->address + result->width / 8,
                     .generation = result->generation, .epoch = m->backend_epoch};
                 bool saved = tb_browse_store(m->cache, key, &sample, sizeof sample);
@@ -599,7 +599,7 @@ bool tb_memory_event(TbMemory *m, const TbGdbEvent_t *event)
         !(event->kind == TB_GDB_REPLY || event->kind == TB_GDB_STALE || event->kind == TB_GDB_TIMEOUT || event->kind == TB_GDB_CANCELLED)) { return false; }
     m->waiting = false; View *v = &m->views[m->active];
     if (v->version != m->request_version) { return true; }
-    const TbContextSnapshot *s = tb_context_snapshot(m->context);
+    const TbContextSnapshot_t *s = tb_context_snapshot(m->context);
     if (event->kind == TB_GDB_STALE || event->kind == TB_GDB_CANCELLED || s->stale || !same(s->generation, m->request_generation)) {
         error(m, v, "Context changed; Refresh explicitly to read this range."); return true;
     }
@@ -641,7 +641,7 @@ bool tb_memory_event(TbMemory *m, const TbGdbEvent_t *event)
     v->data.error[0] = 0;
     if (readable < v->read_length) { (void)snprintf(v->data.error, sizeof v->data.error, "Partial read: %zu/%u bytes; ?? marks unavailable bytes.", readable, v->read_length); }
     else if (v->read_length < v->data.length) { (void)snprintf(v->data.error, sizeof v->data.error, "Read clipped to authorized boundary: %u/%u bytes.", v->read_length, v->data.length); }
-    TbBrowseKey key = {.kind = byte_kind(m->active), .view = m->active, .format = v->data.length,
+    TbBrowseKey_t key = {.kind = byte_kind(m->active), .view = m->active, .format = v->data.length,
         .begin = v->data.address, .end = v->data.address + v->data.data_size, .generation = v->data.generation};
     (void)tb_browse_store(m->cache, key, &v->data, sizeof v->data);
     ++m->revision; return true;
@@ -696,7 +696,7 @@ void tb_memory_pump(TbMemory *m)
         } else { return; }
     }
     if (m->waiting || tb_gdb_state(m->gdb) != TB_GDB_STOPPED) { return; }
-    const TbContextSnapshot *s = tb_context_snapshot(m->context); if (!s->ready || s->stale) { return; }
+    const TbContextSnapshot_t *s = tb_context_snapshot(m->context); if (!s->ready || s->stale) { return; }
     for (int i = 0; i < TB_MEMORY_CLIENTS; ++i) {
         int id = (m->cursor + i) % TB_MEMORY_CLIENTS; View *v = &m->views[id];
         if (!v->visible || !v->data.pending) { continue; }
@@ -795,7 +795,7 @@ bool tb_memory_client_read(TbMemory *m, int id, uint64_t address, unsigned bytes
 {
     if (id < TB_MEMORY_VIEWS || !valid_view(id) || !thread || !*thread || strlen(thread) >= 32 ||
         !bytes || bytes > TB_MEMORY_BYTES || m->unsupported || !m->address_bits || tb_memory_client_busy(m, id)) { return false; }
-    const TbContextSnapshot *s = tb_context_snapshot(m->context);
+    const TbContextSnapshot_t *s = tb_context_snapshot(m->context);
     if (tb_gdb_state(m->gdb) != TB_GDB_STOPPED || !s->ready || s->stale || strcmp(s->selected_thread, thread) != 0) { return false; }
     View *v = &m->views[id];
     v->data.length = bytes; v->data.offset = 0;

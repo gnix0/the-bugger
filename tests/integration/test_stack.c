@@ -62,9 +62,9 @@ static int peer(void)
     return 0;
 }
 static TbGdb_t *g;
-static TbContext *c;
+static TbContext_t *c;
 static TbMemory *m;
-static TbStack *s;
+static TbStack_t *s;
 static unsigned completed, reads, values, anchors, guards;
 static void event(void *unused, const TbGdbEvent_t *e)
 {
@@ -106,7 +106,7 @@ static void idle(void)
 }
 static void annotations(void)
 {
-    const TbStackView *v = tb_stack_view(s, 0); char text[24576];
+    const TbStackView_t *v = tb_stack_view(s, 0); char text[24576];
     CHECK(tb_stack_names(s, 0)); settle(); CHECK(v->names_ready && v->name_count == 9);
     CHECK(!v->names[5].eligible && !v->names[6].eligible && !v->names[7].eligible);
     CHECK(!tb_stack_variable_point(s, 0, 5)); idle();
@@ -143,13 +143,13 @@ int main(int argc, char **argv)
     if (argc > 1 && strcmp(argv[1], "--quiet") == 0) { return peer(); }
     CHECK(argc == 1);
     g = tb_gdb_create(event, NULL); CHECK(g); c = tb_context_create(g); CHECK(c); m = tb_memory_create(g, c); CHECK(m);
-    TbBrowseCache *cache = tb_browse_create(); CHECK(cache); tb_memory_cache(m, cache); s = tb_stack_create(g, c, m, cache); CHECK(s);
+    TbBrowseCache_t *cache = tb_browse_create(); CHECK(cache); tb_memory_cache(m, cache); s = tb_stack_create(g, c, m, cache); CHECK(s);
     tb_memory_target(m, true, 64); tb_memory_order(m, TB_MEMORY_LITTLE); tb_stack_target(s, true, 64, TB_MEMORY_LITTLE, "i386:x86-64");
     CHECK(tb_gdb_start(g, argv[0], 1000)); uint64_t until = tb_gdb_now_ms() + 2000;
     while (tb_gdb_state(g) != TB_GDB_READY && tb_gdb_now_ms() < until) { pump(); }
     CHECK(tb_gdb_state(g) == TB_GDB_READY); command("-fstop", NULL);
     tb_context_visible(c, true, true); tb_stack_visible(s, 0, true); tb_stack_visible(s, 1, true); settle();
-    const TbStackView *v = tb_stack_view(s, 0), *other = tb_stack_view(s, 1);
+    const TbStackView_t *v = tb_stack_view(s, 0), *other = tb_stack_view(s, 1);
     CHECK(v->anchor_valid && v->sp == 0x1080 && v->start == 0x1040 && v->size == 128 && v->grouping == 8);
     char unread[512]; size_t value_column = 0;
     for (size_t row = 0; row < tb_stack_rows(s, 0); ++row) {

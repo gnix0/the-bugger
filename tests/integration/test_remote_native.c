@@ -63,7 +63,7 @@ static void state(TbSessionState expected)
 }
 static void stopped(void)
 {
-    const TbContextSnapshot *s = tb_context_snapshot(tb_session_context(session));
+    const TbContextSnapshot_t *s = tb_context_snapshot(tb_session_context(session));
     uint64_t until = tb_gdb_now_ms() + 5000;
     do { tb_session_pump(session, 1); }
     while ((tb_session_state(session) != TB_SESSION_STOPPED || !s->ready || s->stale) && tb_gdb_now_ms() < until);

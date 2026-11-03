@@ -23,7 +23,7 @@ static void stopped(TbNative *n, uint64_t after)
 {
     uint64_t end = tb_gdb_now_ms() + 6000;
     const TbCodeView *v = tb_code_view(tb_native_code(n), 0);
-    const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(n));
+    const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(n));
     while (tb_gdb_now_ms() < end) {
         tb_native_pump(n, 5);
         if (tb_native_state(n) == TB_NATIVE_STOPPED && s->generation.stop > after && !s->stale && !v->stale && v->line_count) { return; }

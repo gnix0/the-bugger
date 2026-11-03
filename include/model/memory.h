@@ -53,8 +53,8 @@ typedef enum {
     TB_MEMORY_EDIT_ACKNOWLEDGED, TB_MEMORY_EDIT_UNCERTAIN
 } TbMemoryEditState;
 typedef struct TbMemory TbMemory;
-TbMemory *tb_memory_create(TbGdb_t *gdb, TbContext *context);
-void tb_memory_cache(TbMemory *memory, TbBrowseCache *cache);
+TbMemory *tb_memory_create(TbGdb_t *gdb, TbContext_t *context);
+void tb_memory_cache(TbMemory *memory, TbBrowseCache_t *cache);
 /* Metadata-only: no debugger requests, reads or polling. NULL invalidates.
  * Confirm exactly the identity displayed in the review; stale reviews fail. */
 bool tb_memory_backend_set(TbMemory *memory, const TbMemoryBackend *backend);

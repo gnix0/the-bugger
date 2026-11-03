@@ -5,7 +5,7 @@
 static void stopped(TbNative *n, uint64_t after)
 {
     uint64_t end = tb_gdb_now_ms() + 5000;
-    const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(n));
+    const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(n));
     while (tb_gdb_now_ms() < end) {
         tb_native_pump(n, 5);
         if (tb_native_state(n) == TB_NATIVE_STOPPED && s->ready && !s->stale && s->generation.stop > after) { return; }
@@ -27,7 +27,7 @@ static void write_done(TbNative *n, TbMemory *m, TbMemoryEditState state)
     uint64_t end = tb_gdb_now_ms() + 5000;
     while (tb_memory_edit_state(m) == TB_MEMORY_EDIT_PENDING && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
     CHECK(tb_memory_edit_state(m) == state);
-    const TbContextSnapshot *snapshot = tb_context_snapshot(tb_native_context(n));
+    const TbContextSnapshot_t *snapshot = tb_context_snapshot(tb_native_context(n));
     while (snapshot->stale && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
     CHECK(snapshot->ready && !snapshot->stale);
 }
@@ -40,7 +40,7 @@ int main(int argc, char **argv)
     CHECK(tb_native_state(n) == TB_NATIVE_READY);
     TbMemory *m = tb_native_memory(n); tb_memory_visible(m, 0, true); tb_memory_visible(m, 1, true);
     CHECK(tb_native_console(n, "start")); stopped(n, 0);
-    const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(n)); uint64_t stop = s->generation.stop;
+    const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(n)); uint64_t stop = s->generation.stop;
     TbBreakpoints *bp = tb_native_breakpoints(n); end = tb_gdb_now_ms() + 5000;
     while ((!tb_break_ready(bp) || tb_break_busy(bp)) && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
     CHECK(tb_native_run_to(n, "memory_checkpoint")); stopped(n, stop);

@@ -3,7 +3,7 @@
 #include "../support/check.h"
 #include <string.h>
 
-static TbContext *context;
+static TbContext_t *context;
 static unsigned completions;
 static void emit(void *unused, const TbGdbEvent_t *event)
 {
@@ -53,7 +53,7 @@ static void run_case(const char *binary, const char *mode)
         tb_context_refresh(context); command(gdb, "-ctx-release");
     }
     fresh(gdb);
-    const TbContextSnapshot *snapshot = tb_context_snapshot(context);
+    const TbContextSnapshot_t *snapshot = tb_context_snapshot(context);
     CHECK(snapshot->thread_count == (strcmp(mode, "context-many") == 0 ? TB_CONTEXT_THREADS : 2));
     CHECK(snapshot->threads_limited == (strcmp(mode, "context-many") == 0));
     CHECK(strcmp(snapshot->threads[1].id, "42") == 0);

@@ -3,14 +3,14 @@
 #include <string.h>
 
 static TbSession *session;
-static TbStack *stack;
+static TbStack_t *stack;
 static void settle(void)
 {
     uint64_t until = tb_gdb_now_ms() + 6000;
     while (tb_gdb_now_ms() < until) {
         tb_session_pump(session, 2);
-        const TbContextSnapshot *c = tb_context_snapshot(tb_session_context(session));
-        const TbStackView *v = tb_stack_view(stack, 0);
+        const TbContextSnapshot_t *c = tb_context_snapshot(tb_session_context(session));
+        const TbStackView_t *v = tb_stack_view(stack, 0);
         if (c->ready && !c->stale && v->anchor_valid && !v->reading) {
             uint64_t before = tb_session_revision(session);
             for (int i = 0; i < 10; ++i) { tb_session_pump(session, 2); }
@@ -32,7 +32,7 @@ static void names(void)
 }
 static size_t name(const char *wanted)
 {
-    const TbStackView *v = tb_stack_view(stack, 0);
+    const TbStackView_t *v = tb_stack_view(stack, 0);
     for (size_t i = 0; i < v->name_count; ++i) { if (strcmp(v->names[i].name, wanted) == 0) { return i; } }
     return v->name_count;
 }
@@ -48,7 +48,7 @@ static void run(const char *fixture, bool symbols, bool optimized)
         CHECK(tb_session_continue(session));
     }
     state(TB_SESSION_STOPPED); settle();
-    const TbStackView *v = tb_stack_view(stack, 0), *other = tb_stack_view(stack, 1);
+    const TbStackView_t *v = tb_stack_view(stack, 0), *other = tb_stack_view(stack, 1);
     CHECK(v->anchor_valid && v->sp && v->sp == other->sp && !v->sample.sequence && !other->sample.sequence);
     uint64_t anchor = v->sp; CHECK(tb_stack_read(stack, 0)); settle(); CHECK(v->sample.sequence && !tb_stack_stale(stack, 0));
     char bounds[1024]; tb_stack_bounds(stack, 0, bounds, sizeof bounds); CHECK(strstr(bounds, "Verified bounds: unknown"));
@@ -81,7 +81,7 @@ static void threads(const char *fixture)
     TbSessionConfig config = {.gdb = "gdb", .executable = fixture}; CHECK(tb_session_start(session, &config)); state(TB_SESSION_READY);
     tb_context_visible(tb_session_context(session), true, true); tb_stack_visible(stack, 0, true);
     CHECK(tb_session_continue(session)); state(TB_SESSION_STOPPED); settle();
-    const TbContextSnapshot *c = tb_context_snapshot(tb_session_context(session)); const TbStackView *v = tb_stack_view(stack, 0);
+    const TbContextSnapshot_t *c = tb_context_snapshot(tb_session_context(session)); const TbStackView_t *v = tb_stack_view(stack, 0);
     CHECK(c->thread_count == 3 && c->frame_count >= 3); uint64_t main_lifetime = v->lifetime;
     char main_thread[32], worker[32]; (void)snprintf(main_thread, sizeof main_thread, "%s", c->selected_thread);
     (void)snprintf(worker, sizeof worker, "%s", c->threads[1].id);

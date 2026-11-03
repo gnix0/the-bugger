@@ -5,70 +5,73 @@
 
 enum { TB_CONTEXT_THREADS = 128, TB_CONTEXT_FRAMES = 32, TB_CONTEXT_MAX_LEVEL = 4095 };
 typedef struct {
-    int level, line;
-    char path[4096]; /* Exact filesystem bytes; file below is a render-safe label. */
+    int  level, line;
+    char path[4096];            /* Exact filesystem bytes; file below is a render-safe label. */
     char address[48], function[160], file[384], from[160], architecture[64];
     char arguments[256], argument_names[256];
     bool arguments_read;
-} TbFrame;
+} TbFrame_t;
+
 typedef struct {
-    char id[32], name[96], target[128], state[24];
-    TbFrame frame;
-    uint64_t lifetime; /* Session-local identity; numeric ID reuse never inherits it. */
-} TbThread;
+    char      id[32], name[96], target[128], state[24];
+    TbFrame_t frame;
+    uint64_t  lifetime;         /* Session-local identity; numeric ID reuse never inherits it. */
+} TbThread_t;
+
 typedef struct {
     TbGdbGeneration_t generation;
-    bool ready, stale, refreshing, threads_limited, more_frames;
-    char selected_thread[32], stopped_thread[32];
-    TbFrame selected, stopped;
-    TbThread threads[TB_CONTEXT_THREADS];
-    TbFrame frames[TB_CONTEXT_FRAMES];
-    size_t thread_count, frame_count;
-    int first_frame;
-    char error[192], stack_error[192], arguments_error[192];
-} TbContextSnapshot;
-typedef struct TbContext TbContext;
+    bool              ready, stale, refreshing, threads_limited, more_frames;
+    char              selected_thread[32], stopped_thread[32];
+    TbFrame_t         selected, stopped;
+    TbThread_t        threads[TB_CONTEXT_THREADS];
+    TbFrame_t         frames[TB_CONTEXT_FRAMES];
+    size_t            thread_count, frame_count;
+    int               first_frame;
+    char              error[192], stack_error[192], arguments_error[192];
+} TbContextSnapshot_t;
 
-TbContext *tb_context_create(TbGdb_t *gdb);
-void tb_context_destroy(TbContext *context);
-void tb_context_reset(TbContext *context);
+typedef struct tb_context TbContext_t;
+
+TbContext_t *tb_context_create(TbGdb_t *gdb);
+void tb_context_destroy(TbContext_t *context);
+void tb_context_reset(TbContext_t *context);
 /* Called from the controller callback: copies borrowed data only. Returns true
  * for completions owned by this module, so other request owners ignore them. */
-bool tb_context_event(TbContext *context, const TbGdbEvent_t *event);
+bool tb_context_event(TbContext_t *context, const TbGdbEvent_t *event);
 /* No controller mutation from callbacks. Pump only when session setup/manual
  * operations are idle. No polling reads while running or with no visible view. */
 /* One stopped mutation at a time across inspectors. Acquire only immediately
  * before dispatch on an idle controller; finish outside event callbacks.
  * Uncertain mutations quarantine all inspector writes until explicit recovery. */
-typedef enum { TB_WRITE_ACKNOWLEDGED, TB_WRITE_UNCERTAIN, TB_WRITE_UNRESOLVED } TbWriteOutcome;
-bool tb_context_write_begin(TbContext *context, uint64_t cookie);
-void tb_context_write_finish(TbContext *context, uint64_t cookie, TbWriteOutcome outcome);
-bool tb_context_write_blocked(const TbContext *context);
+typedef enum { TB_WRITE_ACKNOWLEDGED, TB_WRITE_UNCERTAIN, TB_WRITE_UNRESOLVED } TbWriteOutcome_e;
+bool tb_context_write_begin(TbContext_t *context, uint64_t cookie);
+void tb_context_write_finish(TbContext_t *context, uint64_t cookie, TbWriteOutcome_e outcome);
+bool tb_context_write_blocked(const TbContext_t *context);
 /* Mutation in this stop requires deliberate value reads, including aliases. */
-bool tb_context_written(const TbContext *context);
-bool tb_context_write_reconcile(TbContext *context, uint64_t cookie);
-void tb_context_pump(TbContext *context);
-void tb_context_visible(TbContext *context, bool threads, bool frames);
-void tb_context_require(TbContext *context, bool required);
-void tb_context_registers(TbContext *context, bool required);
-void tb_context_memory(TbContext *context, bool required);
-void tb_context_variables(TbContext *context, bool required);
-void tb_context_stack(TbContext *context, bool required);
-uint64_t tb_context_thread_lifetime(const TbContext *context, const char *id);
-bool tb_context_lifetime_live(const TbContext *context, uint64_t lifetime);
-void tb_context_interlock(TbContext *context, bool active);
-bool tb_context_interlocked(const TbContext *context);
-bool tb_context_frame_pending(const TbContext *context);
-void tb_context_refresh(TbContext *context); /* Outside controller callbacks. */
-bool tb_context_select_thread(TbContext *context, const char *id);
-bool tb_context_return_stopped(TbContext *context);
+bool tb_context_written(const TbContext_t *context);
+bool tb_context_write_reconcile(TbContext_t *context, uint64_t cookie);
+void tb_context_pump(TbContext_t *context);
+void tb_context_visible(TbContext_t *context, bool threads, bool frames);
+void tb_context_require(TbContext_t *context, bool required);
+void tb_context_registers(TbContext_t *context, bool required);
+void tb_context_memory(TbContext_t *context, bool required);
+void tb_context_variables(TbContext_t *context, bool required);
+void tb_context_stack(TbContext_t *context, bool required);
+uint64_t tb_context_thread_lifetime(const TbContext_t *context, const char *id);
+bool tb_context_lifetime_live(const TbContext_t *context, uint64_t lifetime);
+void tb_context_interlock(TbContext_t *context, bool active);
+bool tb_context_interlocked(const TbContext_t *context);
+bool tb_context_frame_pending(const TbContext_t *context);
+void tb_context_refresh(TbContext_t *context); /* Outside controller callbacks. */
+bool tb_context_select_thread(TbContext_t *context, const char *id);
+bool tb_context_return_stopped(TbContext_t *context);
 /* Frame rows must belong to a fresh snapshot, never the previous thread. */
-bool tb_context_select_frame(TbContext *context, int level);
+bool tb_context_select_frame(TbContext_t *context, int level);
 /* Deliberate value read of the selected frame only. Never repeated automatically.
  * Unknown storage is not authorized for automatic argument reads. */
-bool tb_context_read_arguments(TbContext *context);
-bool tb_context_page(TbContext *context, int direction);
-const TbContextSnapshot *tb_context_snapshot(const TbContext *context);
-uint64_t tb_context_revision(const TbContext *context);
+bool tb_context_read_arguments(TbContext_t *context);
+bool tb_context_page(TbContext_t *context, int direction);
+const TbContextSnapshot_t *tb_context_snapshot(const TbContext_t *context);
+uint64_t tb_context_revision(const TbContext_t *context);
 
-#endif
+#endif // THE_BUGGER_CONTEXT_H

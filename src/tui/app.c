@@ -134,7 +134,7 @@ typedef struct {
     int execution_pane, break_pane, break_action, memory_pane, variable_pane;
     struct {
         bool open;
-        TbFrame frame;
+        TbFrame_t frame;
         TbGdbGeneration_t generation;
         char thread[32];
         int offset, list_horizontal;
@@ -384,13 +384,13 @@ static int paragraph_rows(const char *text, int width)
 static int frame_detail_lines(const App *app, int pane, TbRect_t area, int first)
 {
     int width = area.w;
-    const TbFrame *f = &app->frame_details[pane].frame;
+    const TbFrame_t *f = &app->frame_details[pane].frame;
     char raw[25000], text[40000], line_number[32], path[16384];
     const char *source = *f->path ? f->path : *f->file ? f->file : "unavailable";
     tb_code_safe(path, sizeof path, source, strlen(source));
     if (f->line > 0) { (void)snprintf(line_number, sizeof line_number, "%d", f->line); }
     else { (void)snprintf(line_number, sizeof line_number, "unavailable"); }
-    const TbContextSnapshot *c = tb_context_snapshot(tb_session_context(app->debugger));
+    const TbContextSnapshot_t *c = tb_context_snapshot(tb_session_context(app->debugger));
     TbGdbGeneration_t saved = app->frame_details[pane].generation;
     bool stale = app->frame_details[pane].stale || c->stale || !c->ready || c->generation.session != saved.session ||
                  c->generation.stop != saved.stop || c->generation.context != saved.context;
@@ -1032,7 +1032,7 @@ static void draw_menu(App *app, int pane, TbRect_t rect)
 }
 
 static int assembly_rows(const TbCodeView *view);
-static void context_row(const TbContextSnapshot *snapshot, TbView view, int item,
+static void context_row(const TbContextSnapshot_t *snapshot, TbView view, int item,
                         char *text, size_t capacity, bool *selected);
 
 static void mixed_summary(const App *app, int index, const TbInstruction *instruction,
@@ -1073,7 +1073,7 @@ static TbScroll workspace_scroll(const App *app, const TbDemoPane *pane, int vis
         return axis_scroll(frame_detail_lines(app, index, (TbRect_t){.w = app->panes[index].w - 2}, 0),
                            visible, app->frame_details[index].offset);
     }
-    const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
+    const TbContextSnapshot_t *context = tb_context_snapshot(tb_session_context(app->debugger));
     const TbCodeView *code = tb_code_view(tb_session_code(app->debugger), (int)(pane - app->demo.panes));
     int total = view == TB_CONSOLE ? (int)tb_session_log_count(app->debugger) :
                        view == TB_BREAKPOINTS ? (int)tb_break_count(tb_session_breakpoints(app->debugger)) :
@@ -1099,7 +1099,7 @@ static void break_text(const TbBreakpoint *bp, char *text, size_t capacity)
     tb_code_safe(text, capacity, raw, strlen(raw));
 }
 
-static void register_text(const TbRegister *row, char *text, size_t capacity)
+static void register_text(const TbRegister_t *row, char *text, size_t capacity)
 {
     (void)snprintf(text, capacity, "%c %-16s %s%s%s", row->changed && row->fresh ? '*' : ' ', row->name,
                    *row->value ? row->value : "Awaiting read", row->fresh ? "" : " [stale]", row->truncated ? " [bounded]" : "");
@@ -1143,7 +1143,7 @@ static int native_content_width(const App *app, int index)
     if (view == TB_CALL_STACK && app->frame_details[index].open) { return 0; }
     const TbCodeView *code = tb_code_view(tb_session_code(app->debugger), index);
     TbAssemblyColumns columns = assembly_columns(code);
-    const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
+    const TbContextSnapshot_t *context = tb_context_snapshot(tb_session_context(app->debugger));
     TbCodeRow assembly[TB_CODE_ROWS];
     size_t rows = view == TB_LOCALS || view == TB_WATCHES ? tb_variables_count(tb_session_variables(app->debugger), view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES) : view == TB_STACK ? tb_stack_rows(tb_session_stack(app->debugger), index) : view == TB_MEMORY ? tb_memory_rows(tb_session_memory(app->debugger), index) : view == TB_REGISTERS ? tb_registers_count(tb_session_registers(app->debugger)) : view == TB_SOURCE ? code->line_count : view == TB_DISASSEMBLY ? tb_code_rows(code, assembly) :
                   view == TB_CONSOLE ? tb_session_log_count(app->debugger) : view == TB_BREAKPOINTS ? tb_break_count(tb_session_breakpoints(app->debugger)) : view == TB_CALL_STACK && context->ready && !context->stale ? context->frame_count :
@@ -1197,7 +1197,7 @@ static void source_tab_save(App *app, int pane)
     app->source_tabs[pane][tab].row = app->demo.panes[pane].row[TB_SOURCE];
     app->source_tabs[pane][tab].horizontal = app->horizontal[pane][TB_SOURCE];
     if (tab == 0) {
-        const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
+        const TbContextSnapshot_t *context = tb_context_snapshot(tb_session_context(app->debugger));
         app->source_tabs[pane][0].stop = context->generation.stop;
         app->source_tabs[pane][0].context = context->generation.context;
     }
@@ -1209,7 +1209,7 @@ static void source_tab_restore(App *app, int pane)
     app->demo.panes[pane].scroll[TB_SOURCE] = app->source_tabs[pane][tab].scroll;
     app->demo.panes[pane].row[TB_SOURCE] = app->source_tabs[pane][tab].row;
     app->horizontal[pane][TB_SOURCE] = app->source_tabs[pane][tab].horizontal;
-    const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
+    const TbContextSnapshot_t *context = tb_context_snapshot(tb_session_context(app->debugger));
     bool changed = tab == 0 && (app->source_tabs[pane][0].stop != context->generation.stop ||
                                 app->source_tabs[pane][0].context != context->generation.context);
     app->source_revision[pane] = changed ? 0 : tb_code_view(tb_session_code(app->debugger), pane)->source_revision;
@@ -1356,7 +1356,7 @@ static void draw_code_pane(App *app, int index, TbRect_t rect)
 {
     TbCode *code = tb_session_code(app->debugger);
     const TbCodeView *view = tb_code_view(code, index);
-    const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
+    const TbContextSnapshot_t *context = tb_context_snapshot(tb_session_context(app->debugger));
     TbDemoPane *pane = &app->demo.panes[index];
     bool source = pane->tabs[pane->active] == TB_SOURCE;
     int content_y = rect.y + body_top(app, index);
@@ -1470,7 +1470,7 @@ static void draw_code_pane(App *app, int index, TbRect_t rect)
                 *error ? error : "Stop a program to inspect live code.");
     }
     const char *notice = source ? "" : tb_code_assembly_notice(code, index, visible_first, visible_end > visible_first ? visible_end - visible_first : 0);
-    TbImageTrust mapping = source ? TB_IMAGE_UNVERIFIED :
+    TbImageTrust_e mapping = source ? TB_IMAGE_UNVERIFIED :
         tb_code_assembly_mapping(code, index, visible_first, visible_end > visible_first ? visible_end - visible_first : 0);
     if (*notice && mapping == TB_IMAGE_UNVERIFIED) {
         tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_ORANGE, 0, notice);
@@ -1498,11 +1498,11 @@ static void draw_code_pane(App *app, int index, TbRect_t rect)
 
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): view kind and its row index identify one bounded display row.
-static void context_row(const TbContextSnapshot *snapshot, TbView view, int item,
+static void context_row(const TbContextSnapshot_t *snapshot, TbView view, int item,
                         char *text, size_t capacity, bool *selected)
 {
     if (view == TB_CALL_STACK) {
-        const TbFrame *frame = &snapshot->frames[item];
+        const TbFrame_t *frame = &snapshot->frames[item];
         *selected = frame->level == snapshot->selected.level;
         bool stopped = strcmp(snapshot->selected_thread, snapshot->stopped_thread) == 0 && frame->level == 0;
         char location[416];
@@ -1515,7 +1515,7 @@ static void context_row(const TbContextSnapshot *snapshot, TbView view, int item
                        *selected ? '>' : ' ', stopped ? '*' : ' ', frame->level,
                        *frame->function ? frame->function : "<unknown>", location);
     } else {
-        const TbThread *thread = &snapshot->threads[item];
+        const TbThread_t *thread = &snapshot->threads[item];
         *selected = strcmp(thread->id, snapshot->selected_thread) == 0;
         (void)snprintf(text, capacity, "%c T%.31s %.23s %.95s | %.159s | %.127s",
                        *selected ? '>' : ' ', thread->id, thread->state, thread->name,
@@ -1527,7 +1527,7 @@ static void draw_context_pane(App *app, int index, TbRect_t rect)
 {
     TbDemoPane *pane = &app->demo.panes[index];
     TbView view = pane->tabs[pane->active];
-    const TbContextSnapshot *snapshot = tb_context_snapshot(tb_session_context(app->debugger));
+    const TbContextSnapshot_t *snapshot = tb_context_snapshot(tb_session_context(app->debugger));
     bool stack = view == TB_CALL_STACK;
     if (stack && !app->frame_details[index].open && snapshot->ready && !snapshot->stale &&
         (pane->row[view] < 0 || (size_t)pane->row[view] >= snapshot->frame_count)) {
@@ -1609,7 +1609,7 @@ static void frame_display_clear(App *app)
 
 static void frame_display_begin(App *app, int target)
 {
-    const TbContextSnapshot *c = tb_context_snapshot(tb_session_context(app->debugger));
+    const TbContextSnapshot_t *c = tb_context_snapshot(tb_session_context(app->debugger));
     frame_display_clear(app);
     app->frame_display.origin = c->generation;
     app->frame_display.started = tb_gdb_now_ms();
@@ -1636,7 +1636,7 @@ static void frame_display_begin(App *app, int target)
 static void frame_display_present(App *app)
 {
     if (!app->frame_display.active) { return; }
-    const TbContextSnapshot *c = tb_context_snapshot(tb_session_context(app->debugger));
+    const TbContextSnapshot_t *c = tb_context_snapshot(tb_session_context(app->debugger));
     TbGdbGeneration_t old = app->frame_display.origin;
     if (app->page != WORKSPACE || tb_session_state(app->debugger) != TB_SESSION_STOPPED ||
         (c->stale && !tb_context_frame_pending(tb_session_context(app->debugger))) ||
@@ -1682,8 +1682,8 @@ static void select_context_row(App *app, int pane_index)
     TbDemoPane *pane = &app->demo.panes[pane_index];
     TbView view = pane->tabs[pane->active];
     if (view == TB_CALL_STACK && app->frame_details[pane_index].open) { return; }
-    TbContext *context = tb_session_context(app->debugger);
-    const TbContextSnapshot *snapshot = tb_context_snapshot(context);
+    TbContext_t *context = tb_session_context(app->debugger);
+    const TbContextSnapshot_t *snapshot = tb_context_snapshot(context);
     int row = pane->row[view];
     bool okay = false;
     if (row >= 0 && snapshot->ready && !snapshot->stale) {
@@ -1706,7 +1706,7 @@ static void select_context_row(App *app, int pane_index)
 
 static void draw_stack_pane(App *app, int index, TbRect_t rect)
 {
-    TbStack *stack = tb_session_stack(app->debugger); const TbStackView *v = tb_stack_view(stack, index);
+    TbStack_t *stack = tb_session_stack(app->debugger); const TbStackView_t *v = tb_stack_view(stack, index);
     TbDemoPane *pane = &app->demo.panes[index]; char header[512];
     const char *state = v->reading ? "READING" : v->historical ? "HISTORY" : (!v->sample.sequence || v->sample.address != v->start || (!v->historical && v->sample.lifetime != v->lifetime)) ? "UNREAD" : tb_stack_stale(stack, index) ? "STALE" : "SAMPLED";
     bool other_lifetime = v->historical && v->sample.lifetime != v->lifetime;
@@ -1742,7 +1742,7 @@ static void draw_native_pane(App *app, int index, TbRect_t rect)
         TbVariableView kind = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
         const char *error = tb_variables_error(v, kind);
         bool stale = tb_variables_stale(v, kind);
-        char header[160]; const TbContextSnapshot *s = tb_context_snapshot(tb_session_context(app->debugger));
+        char header[160]; const TbContextSnapshot_t *s = tb_context_snapshot(tb_session_context(app->debugger));
         (void)snprintf(header, sizeof header, "%s | T%s frame %d | * changed ? read required ! unavailable%s",
                        tb_session_state(app->debugger) != TB_SESSION_STOPPED || s->stale ? "STALE" : stale ? "READ REQUIRED" : "LIVE",
                        s->selected_thread, s->selected.level, tb_variables_limited(v, kind) ? " | limited" : "");
@@ -1768,8 +1768,8 @@ static void draw_native_pane(App *app, int index, TbRect_t rect)
         return;
     }
     if (view == TB_REGISTERS) {
-        TbRegisters *r = tb_session_registers(app->debugger); bool stale = tb_registers_stale(r);
-        char header[256]; const TbContextSnapshot *s = tb_context_snapshot(tb_session_context(app->debugger));
+        TbRegisters_t *r = tb_session_registers(app->debugger); bool stale = tb_registers_stale(r);
+        char header[256]; const TbContextSnapshot_t *s = tb_context_snapshot(tb_session_context(app->debugger));
         (void)snprintf(header, sizeof header, "%s | registers | T%s frame %d | * changed%s",
                        stale ? "STALE" : "LIVE", s->selected_thread, s->selected.level,
                        tb_registers_limited(r) ? " | limited" : "");
@@ -1778,7 +1778,7 @@ static void draw_native_pane(App *app, int index, TbRect_t rect)
         TbScroll scroll = workspace_scroll(app, pane, rect.h - 3);
         tb_registers_want(r, (size_t)scroll.offset, (size_t)scroll.visible);
         for (int i = 0; i < scroll.visible && i + scroll.offset < scroll.total; ++i) {
-            const TbRegister *row = tb_registers_row(r, (size_t)i + (size_t)scroll.offset); char text[1400];
+            const TbRegister_t *row = tb_registers_row(r, (size_t)i + (size_t)scroll.offset); char text[1400];
             register_text(row, text, sizeof text);
             size_t offset = (size_t)app->horizontal[index][TB_REGISTERS]; if (offset > strlen(text)) { offset = strlen(text); }
             TbStyle style = stale || !row->fresh || !row->available ? TB_MUTED : row->changed ? TB_YELLOW : TB_GREEN;
@@ -2308,7 +2308,7 @@ static void draw_image_review(App *app)
 {
     TbRect_t card = menu_card(100, 20); TbCode *code = tb_session_code(app->debugger);
     draw_header(app, "Confirm remote ELF mapping?");
-    TbImageRange range;
+    TbImageRange_t range;
     if (!tb_code_image_range(code, &app->image_review, 0, &range)) {
         tb_text(card.y, card.x + 2, card.w - 4, TB_ORANGE, 0, "Review expired or image unavailable. Open a new review.");
     } else {
@@ -2415,7 +2415,7 @@ static void draw_code_files(App *app)
 
 static void data_watch_open(App *app, const char *expression, bool address, unsigned width)
 {
-    const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
+    const TbContextSnapshot_t *context = tb_context_snapshot(tb_session_context(app->debugger));
     if (tb_session_state(app->debugger) != TB_SESSION_STOPPED || context->stale) {
         status(app, "Data watchpoints need a fresh stopped context."); return;
     }
@@ -2744,8 +2744,8 @@ static void draw_break_menu(App *app)
 static bool stack_page(Page current) { return current >= STACK_MENU && current <= STACK_GUARD_PAGE; }
 static void draw_stack_pages(App *app)
 {
-    TbStack *stack = tb_session_stack(app->debugger); int id = app->stack_pane;
-    const TbStackView *v = tb_stack_view(stack, id); TbRect_t card = menu_card(100, 24);
+    TbStack_t *stack = tb_session_stack(app->debugger); int id = app->stack_pane;
+    const TbStackView_t *v = tb_stack_view(stack, id); TbRect_t card = menu_card(100, 24);
     int left = card.x + 2, width = card.w - 4, visible = card.h - 6;
     const char *title = app->page == STACK_MENU ? "Stack options" : app->page == STACK_INPUT ? "Stack literal setting" :
         app->page == STACK_DETAILS ? "Stack row details" : app->page == STACK_NAMES_PAGE ? "Stack local/argument names" :
@@ -4191,9 +4191,9 @@ static void stack_input(App *app, int operation, uint64_t initial)
 static void stack_activate(App *app, Control control)
 {
     if (!app->live) { return; }
-    TbStack *stack = tb_session_stack(app->debugger);
+    TbStack_t *stack = tb_session_stack(app->debugger);
     if (app->page == WORKSPACE) { app->stack_pane = control.pane; }
-    int id = app->stack_pane; const TbStackView *v = tb_stack_view(stack, id);
+    int id = app->stack_pane; const TbStackView_t *v = tb_stack_view(stack, id);
     if (!v) { return; } bool okay = true;
     StackAction action = (StackAction)control.value;
     switch (action) {
@@ -4214,7 +4214,7 @@ static void stack_activate(App *app, Control control)
         if (okay) { app->stack_page = 0; page(app, STACK_MENU); return; }
         break;
     case ST_BOUNDS: {
-        const TbStackDeclaration *d = tb_stack_declaration(stack, id);
+        const TbStackDeclaration_t *d = tb_stack_declaration(stack, id);
         app->stack_low = d ? d->low : 0; app->stack_high = d ? d->high : 0;
         app->stack_upward = d && d->upward; app->stack_declaration_lifetime = v->lifetime;
         page(app, STACK_BOUNDS); return;
@@ -4754,8 +4754,8 @@ static void activate(App *app, Control control)
         tb_registers_refresh(tb_session_registers(app->debugger));
         status(app, "Register refresh requested; reads wait until stopped."); break;
     case REGISTER_FORMAT: {
-        TbRegisters *r = tb_session_registers(app->debugger);
-        tb_registers_format(r, (TbRegisterFormat)((tb_registers_get_format(r) + 1) % TB_REG_FORMATS));
+        TbRegisters_t *r = tb_session_registers(app->debugger);
+        tb_registers_format(r, (TbRegisterFormat_e)((tb_registers_get_format(r) + 1) % TB_REG_FORMATS));
         status(app, "Register display format changed; target values are not written."); break;
     }
     case FRAME_DETAILS: {
@@ -4764,7 +4764,7 @@ static void activate(App *app, Control control)
             app->frame_details[id].open = false;
             app->horizontal[id][TB_CALL_STACK] = app->frame_details[id].list_horizontal; break;
         }
-        const TbContextSnapshot *c = tb_context_snapshot(tb_session_context(app->debugger));
+        const TbContextSnapshot_t *c = tb_context_snapshot(tb_session_context(app->debugger));
         int row = app->demo.panes[id].row[TB_CALL_STACK];
         if (row < 0 || (size_t)row >= c->frame_count) { status(app, "No cached frame metadata available."); break; }
         app->frame_details[id].frame = c->frames[row];
@@ -4948,7 +4948,7 @@ static void activate(App *app, Control control)
             break;
         }
         if (app->page == STACK_INPUT) {
-            TbStack *stack = tb_session_stack(app->debugger); bool okay = false;
+            TbStack_t *stack = tb_session_stack(app->debugger); bool okay = false;
             if (app->stack_input == 1) { okay = tb_stack_navigate(stack, app->stack_pane, input); }
             else {
                 uint64_t number = 0; char *end = NULL; errno = 0;
@@ -4968,7 +4968,7 @@ static void activate(App *app, Control control)
         }
         if (app->page == PROFILE_TEXT) { profile_text_submit(app, input); break; }
         if (app->page == DATA_WATCH_INPUT) {
-            const TbContextSnapshot *context = tb_context_snapshot(tb_session_context(app->debugger));
+            const TbContextSnapshot_t *context = tb_context_snapshot(tb_session_context(app->debugger));
             if (context->stale || context->generation.session != app->watch_context.session ||
                 context->generation.stop != app->watch_context.stop || context->generation.context != app->watch_context.context) {
                 status(app, "Context changed; cancel and reopen data-watchpoint creation."); break;

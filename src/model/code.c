@@ -49,9 +49,9 @@ typedef struct {
     char resolved[TB_CODE_TABS - 1][TB_CODE_PATH];
 } View;
 struct TbCode {
-    TbGdb_t *gdb; TbContext *context;
-    TbBrowseCache *cache;
-    TbImages *images;
+    TbGdb_t *gdb; TbContext_t *context;
+    TbBrowseCache_t *cache;
+    TbImages_t *images;
     pid_t pid;
     char executable[TB_CODE_PATH];
     View views[TB_CODE_VIEWS];
@@ -154,7 +154,7 @@ static bool address_value(const TbMiValue_t *value, uint64_t *address)
     return tb_code_location(text, address, &symbol) && !symbol;
 }
 static bool valid_view(int view) { return view >= 0 && view < TB_CODE_VIEWS; }
-TbCode *tb_code_create(TbGdb_t *gdb, TbContext *context)
+TbCode *tb_code_create(TbGdb_t *gdb, TbContext_t *context)
 {
     TbCode *code = calloc(1, sizeof *code);
     if (code) {
@@ -166,9 +166,9 @@ TbCode *tb_code_create(TbGdb_t *gdb, TbContext *context)
 }
 void tb_code_reset(TbCode *code)
 {
-    TbGdb_t *gdb = code->gdb; TbContext *context = code->context; uint64_t revision = code->revision;
-    TbImages *images = code->images; tb_images_reset(images);
-    TbBrowseCache *cache = code->cache; tb_browse_clear(cache, TB_BROWSE_CODE, -1);
+    TbGdb_t *gdb = code->gdb; TbContext_t *context = code->context; uint64_t revision = code->revision;
+    TbImages_t *images = code->images; tb_images_reset(images);
+    TbBrowseCache_t *cache = code->cache; tb_browse_clear(cache, TB_BROWSE_CODE, -1);
     tb_browse_clear(cache, TB_BROWSE_ANCHORS, -1);
     tb_browse_clear(cache, TB_BROWSE_SOURCE, -1);
     for (int i = 0; i < TB_CODE_VIEWS; ++i) { free(code->views[i].source); free(code->views[i].offsets); free(code->views[i].forward); free(code->views[i].scan_prefix); }
@@ -187,7 +187,7 @@ void tb_code_destroy(TbCode *code)
     for (int i = 0; i < TB_CODE_VIEWS; ++i) { free(code->views[i].source); free(code->views[i].offsets); free(code->views[i].forward); free(code->views[i].scan_prefix); }
     tb_images_destroy(code->images); tb_browse_release(code->cache); free(code);
 }
-TbBrowseCache *tb_code_cache(TbCode *code) { return code->cache; }
+TbBrowseCache_t *tb_code_cache(TbCode *code) { return code->cache; }
 void tb_code_native(TbCode *code, pid_t pid, const char *executable)
 {
     if (pid != code->pid || strcmp(code->executable, executable ? executable : "") != 0) {
@@ -196,7 +196,7 @@ void tb_code_native(TbCode *code, pid_t pid, const char *executable)
     code->pid = pid;
     (void)snprintf(code->executable, sizeof code->executable, "%s", executable ? executable : "");
 }
-static bool image_lookup(const TbCode *code, uint64_t address, TbImageRange *range)
+static bool image_lookup(const TbCode *code, uint64_t address, TbImageRange_t *range)
 {
     return tb_images_trusted_lookup(code->images, address, range);
 }
@@ -215,13 +215,13 @@ void tb_code_image_invalidate(TbCode *code)
 bool tb_code_image_review(TbCode *code, uint64_t bias, TbCodeImageReview *review)
 {
     if (!review || code->pid > 1 || !*code->executable || tb_gdb_state(code->gdb) != TB_GDB_STOPPED) { return false; }
-    TbImageReview image;
+    TbImageReview_t image;
     bool loaded = tb_images_review(code->images, code->executable, bias, &image); image_changes(code);
     if (!loaded) { return false; }
     *review = (TbCodeImageReview){.image = image, .generation = tb_gdb_generation(code->gdb), .epoch = code->epoch};
     return true;
 }
-bool tb_code_image_range(const TbCode *code, const TbCodeImageReview *review, size_t index, TbImageRange *range)
+bool tb_code_image_range(const TbCode *code, const TbCodeImageReview *review, size_t index, TbImageRange_t *range)
 {
     return review && review->epoch == code->epoch && review->generation.session == tb_gdb_generation(code->gdb).session &&
            tb_images_review_range(code->images, &review->image, index, range);
@@ -261,17 +261,17 @@ size_t tb_code_rows(const TbCodeView *view, TbCodeRow *rows)
 const char *tb_code_gap_label(const TbCode *code, int id, uint64_t begin, uint64_t end)
 {
     if (!valid_view(id) || code->views[id].data.assembly_historical) { return "historical gap"; }
-    TbImageRange range;
+    TbImageRange_t range;
     return image_lookup(code, begin, &range) && range.kind == TB_IMAGE_DATA && range.end >= end ? "data gap" : "not decoded";
 }
-TbImageTrust tb_code_assembly_mapping(const TbCode *code, int id, size_t first, size_t count)
+TbImageTrust_e tb_code_assembly_mapping(const TbCode *code, int id, size_t first, size_t count)
 {
     if (!valid_view(id)) { return TB_IMAGE_UNVERIFIED; }
     const TbCodeView *view = &code->views[id].data;
     if (!count || first >= view->instruction_count || view->assembly_historical || tb_images_limited(code->images)) { return TB_IMAGE_UNVERIFIED; }
-    TbImageTrust trust = TB_IMAGE_BACKEND_VERIFIED;
+    TbImageTrust_e trust = TB_IMAGE_BACKEND_VERIFIED;
     for (size_t i = first; count && i < view->instruction_count; ++i, --count) {
-        TbImageRange range;
+        TbImageRange_t range;
         if (!image_lookup(code, view->instructions[i].numeric, &range) || range.kind != TB_IMAGE_CODE) { return TB_IMAGE_UNVERIFIED; }
         if (range.trust == TB_IMAGE_USER_CONFIRMED) { trust = TB_IMAGE_USER_CONFIRMED; }
     }
@@ -284,7 +284,7 @@ const char *tb_code_assembly_notice(const TbCode *code, int id, size_t first, si
     if (view->assembly_historical) { return "Historical cached instructions; not fresh decoding evidence"; }
     bool unknown = false, data = false, user = false, backend = false;
     for (size_t i = first; count && i < view->instruction_count; ++i, --count) {
-        TbImageRange range;
+        TbImageRange_t range;
         if (!image_lookup(code, view->instructions[i].numeric, &range)) { unknown = true; }
         else {
             data = data || range.kind == TB_IMAGE_DATA;
@@ -383,7 +383,7 @@ typedef struct {
     int line;
     bool available;
 } SourceAnnotation;
-static TbBrowseKey annotation_key(int id, const TbInstruction *instruction)
+static TbBrowseKey_t annotation_key(int id, const TbInstruction *instruction)
 {
     uint64_t hash = UINT64_C(14695981039346656037);
     for (const unsigned char *p = (const unsigned char *)instruction->source; *p; ++p) {
@@ -391,7 +391,7 @@ static TbBrowseKey annotation_key(int id, const TbInstruction *instruction)
     }
     hash = (hash ^ (unsigned)instruction->line) * UINT64_C(1099511628211);
     if (hash == UINT64_MAX) { --hash; }
-    return (TbBrowseKey){.kind = TB_BROWSE_SOURCE, .view = id, .begin = hash, .end = hash + 1};
+    return (TbBrowseKey_t){.kind = TB_BROWSE_SOURCE, .view = id, .begin = hash, .end = hash + 1};
 }
 bool tb_code_mixed_line(const TbCode *code, int id, const TbInstruction *instruction, char *out, size_t capacity)
 {
@@ -400,7 +400,7 @@ bool tb_code_mixed_line(const TbCode *code, int id, const TbInstruction *instruc
     if (strcmp(instruction->source, code->views[id].data.path) == 0) {
         return tb_code_source_line(code, id, (size_t)instruction->line - 1, out, capacity);
     }
-    TbBrowseSample sample;
+    TbBrowseSample_t sample;
     if (!tb_browse_find(code->cache, annotation_key(id, instruction), &sample) || sample.size != sizeof(SourceAnnotation)) { return false; }
     SourceAnnotation annotation; memcpy(&annotation, sample.data, sizeof annotation);
     if (!annotation.available || annotation.line != instruction->line || strcmp(annotation.path, instruction->source) != 0) { return false; }
@@ -530,7 +530,7 @@ bool tb_code_tab_select(TbCode *code, int id, size_t tab)
     view->tab_active = tab;
     view->data.source_follow = tab == 0;
     if (!tab) {
-        const TbContextSnapshot *context = tb_context_snapshot(code->context);
+        const TbContextSnapshot_t *context = tb_context_snapshot(code->context);
         (void)snprintf(view->data.path, sizeof view->data.path, "%s", context->ready ? context->selected.path : "");
         view->file_key[0] = '\0';
     } else {
@@ -845,7 +845,7 @@ bool tb_code_event(TbCode *code, const TbGdbEvent_t *event)
             view->scan_rows += decoded;
             uint64_t next = view->data.next_address;
             if (view->indexed && !view->raw && next < view->scan_target) {
-                TbImageRange range;
+                TbImageRange_t range;
                 if (!image_lookup(code, next, &range) || range.kind != TB_IMAGE_CODE) {
                     if (tb_images_trusted_neighbor(code->images, next, 1, &range) && range.anchor <= view->scan_target) {
                         next = range.anchor;
@@ -928,7 +928,7 @@ bool tb_code_settled(const TbCode *code, int id)
 {
     if (id < 0 || id >= TB_CODE_VIEWS) { return false; }
     const View *v = &code->views[id];
-    const TbContextSnapshot *c = tb_context_snapshot(code->context);
+    const TbContextSnapshot_t *c = tb_context_snapshot(code->context);
     return c->ready && !c->stale && !v->data.stale && generation_equal(v->generation, c->generation) &&
         !v->source_dirty && (!v->visible_assembly || (!v->assembly_dirty && !v->precontext)) &&
         !(code->waiting && code->active == id);
@@ -961,7 +961,7 @@ void tb_code_pump(TbCode *code)
         } else if (job == CODE_CLEAR_DIRS) { code->directory_count = 0; }
         invalidate_sources(code); message(code, "GDB source settings applied; refreshing context.");
     }
-    const TbContextSnapshot *context = tb_context_snapshot(code->context);
+    const TbContextSnapshot_t *context = tb_context_snapshot(code->context);
     if (code->restoring && !code->waiting) {
         TbGdbState_e state = tb_gdb_state(code->gdb);
         if (state != TB_GDB_READY && state != TB_GDB_STOPPED) { return; }
@@ -1073,7 +1073,7 @@ void tb_code_pump(TbCode *code)
             cancel_precontext(view); ++view->data.assembly_revision;
             message(code, view->data.assembly_error); continue;
         }
-        TbImageRange range;
+        TbImageRange_t range;
         if (!image_lookup(code, view->data.anchor, &range) && code->pid > 1) {
             tb_images_native(code->images, code->pid, code->executable, view->data.anchor);
             image_changes(code);
@@ -1087,7 +1087,7 @@ void tb_code_pump(TbCode *code)
         if (image_lookup(code, view->data.anchor, &range)) {
             view->indexed = true; view->range_end = range.end;
             if (range.kind == TB_IMAGE_DATA && view->scan_target) {
-                TbImageRange next;
+                TbImageRange_t next;
                 if (tb_images_trusted_neighbor(code->images, range.end, 1, &next) && next.anchor < view->scan_target) {
                     view->data.anchor = next.anchor; view->assembly_dirty = true; continue;
                 }
@@ -1097,7 +1097,7 @@ void tb_code_pump(TbCode *code)
             }
             if (range.kind == TB_IMAGE_DATA && !view->raw && !view->data.assembly_follow && !view->scan_target) {
                 view->data.gap_begin = view->data.anchor; view->data.gap_end = range.end;
-                TbImageRange next;
+                TbImageRange_t next;
                 if (tb_images_trusted_neighbor(code->images, range.end, 1, &next)) {
                     view->data.anchor = next.anchor; view->assembly_dirty = true; continue;
                 }
@@ -1145,7 +1145,7 @@ void tb_code_return(TbCode *code, int id)
 static bool assembly_follow(TbCode *code, int id, bool stopped)
 {
     if (!valid_view(id) || tb_gdb_state(code->gdb) != TB_GDB_STOPPED) { return false; }
-    const TbContextSnapshot *context = tb_context_snapshot(code->context);
+    const TbContextSnapshot_t *context = tb_context_snapshot(code->context);
     bool symbol; uint64_t address;
     if (!context->ready || context->stale ||
         !tb_code_location(stopped ? context->stopped.address : context->selected.address, &address, &symbol) || symbol) {
@@ -1165,7 +1165,7 @@ bool tb_code_return_stop(TbCode *code, int id) { return assembly_follow(code, id
 bool tb_code_follow_frame(TbCode *code, int id) { return assembly_follow(code, id, false); }
 bool tb_code_stopped(TbCode *code)
 {
-    const TbContextSnapshot *context = tb_context_snapshot(code->context);
+    const TbContextSnapshot_t *context = tb_context_snapshot(code->context);
     if (!*context->stopped_thread || !tb_context_return_stopped(code->context)) {
         message(code, "Original stopped thread is unavailable; pause and refresh context."); return false;
     }
@@ -1202,23 +1202,23 @@ bool tb_code_address(TbCode *code, int id, const char *location)
     }
     view->data.anchor = address; view->have_anchor = true; view->assembly_dirty = true; ++code->revision; return true;
 }
-static TbBrowseKey listing_key(const View *view, int id)
+static TbBrowseKey_t listing_key(const View *view, int id)
 {
-    return (TbBrowseKey){.kind = TB_BROWSE_CODE, .view = id,
+    return (TbBrowseKey_t){.kind = TB_BROWSE_CODE, .view = id,
         .format = (view->data.mixed ? 1U : 0U) | (view->raw ? 2U : 0U),
         .begin = view->data.instruction_count ? view->data.instructions[0].numeric : view->data.anchor,
         .end = view->data.next_address, .generation = view->data.assembly_generation,
         .epoch = view->data.assembly_epoch};
 }
-static TbBrowseKey anchor_key(const View *view, int id)
+static TbBrowseKey_t anchor_key(const View *view, int id)
 {
-    TbBrowseKey key = listing_key(view, id);
+    TbBrowseKey_t key = listing_key(view, id);
     key.kind = TB_BROWSE_ANCHORS; key.begin = 0; key.end = 1; return key;
 }
 static void anchors_store(TbCode *code, int id)
 {
-    const View *view = &code->views[id]; AnchorHistory history = {0}; TbBrowseSample sample;
-    TbBrowseKey key = anchor_key(view, id);
+    const View *view = &code->views[id]; AnchorHistory history = {0}; TbBrowseSample_t sample;
+    TbBrowseKey_t key = anchor_key(view, id);
     if (tb_browse_find(code->cache, key, &sample) && sample.size == sizeof history) { memcpy(&history, sample.data, sizeof history); }
     if (history.count > CODE_ANCHORS || history.next >= CODE_ANCHORS) { memset(&history, 0, sizeof history); }
     const size_t indices[] = {0, view->data.instruction_count / 2, view->data.instruction_count - 1};
@@ -1239,14 +1239,14 @@ static void anchors_store(TbCode *code, int id)
 }
 static bool anchor_before(TbCode *code, int id, uint64_t *address)
 {
-    View *view = &code->views[id]; TbBrowseSample sample;
+    View *view = &code->views[id]; TbBrowseSample_t sample;
     uint64_t target = view->data.instructions[0].numeric;
     if (!tb_browse_find(code->cache, anchor_key(view, id), &sample) || sample.size != sizeof(AnchorHistory)) { return false; }
     AnchorHistory history; memcpy(&history, sample.data, sizeof history);
     if (history.count > CODE_ANCHORS) { return false; }
     TbGdbGeneration_t current = tb_gdb_generation(code->gdb); bool found = false;
     for (size_t i = 0; i < history.count; ++i) {
-        const CodeAnchor *anchor = &history.entries[i]; TbImageRange range;
+        const CodeAnchor *anchor = &history.entries[i]; TbImageRange_t range;
         if (anchor->epoch != code->epoch || anchor->generation.session != current.session || anchor->generation.stop != current.stop ||
             anchor->address >= target || target - anchor->address > 1024 ||
             (!view->raw && image_lookup(code, anchor->address, &range) && range.kind == TB_IMAGE_DATA)) { continue; }
@@ -1264,7 +1264,7 @@ static void listing_store(TbCode *code, int id)
 }
 static bool listing_cached(TbCode *code, int id, int direction)
 {
-    View *view = &code->views[id]; TbBrowseSample sample;
+    View *view = &code->views[id]; TbBrowseSample_t sample;
     if (!tb_browse_neighbor(code->cache, listing_key(view, id), direction, &sample) || sample.size != sizeof(TbCodeView)) { return false; }
     TbCodeView saved; memcpy(&saved, sample.data, sizeof saved);
     memcpy(view->data.instructions, saved.instructions, sizeof view->data.instructions);
@@ -1315,7 +1315,7 @@ bool tb_code_assembly_page(TbCode *code, int id, int direction)
     uint64_t retained_anchor = 0;
     bool retained = direction < 0 && anchor_before(code, id, &retained_anchor);
     if (view->indexed) {
-        TbImageRange range; uint64_t anchor;
+        TbImageRange_t range; uint64_t anchor;
         if (direction < 0) {
             bool mapped = tb_images_trusted_neighbor(code->images, view->data.anchor, -1, &range);
             if (!mapped && !retained) { message(code, "No reliable earlier boundary; historical rows remain available."); return false; }

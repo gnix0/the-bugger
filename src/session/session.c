@@ -31,12 +31,12 @@ struct TbSession {
     char endpoint[256];
     TbMemoryRegion ordinary_regions[TB_MEMORY_REGIONS];
     size_t ordinary_region_count;
-    TbContext *context;
+    TbContext_t *context;
     TbCode *code;
     TbBreakpoints *breakpoints;
-    TbRegisters *registers;
+    TbRegisters_t *registers;
     TbMemory *memory;
-    TbStack *stack;
+    TbStack_t *stack;
     TbVariables *variables;
     TbSessionState state;
     bool attach, configured, waiting, completed, success, want_close, failed, reply_cancelled;
@@ -600,7 +600,7 @@ bool tb_session_step(TbSession *native, TbStep step, bool instruction)
     if (setup_blocked(native, true)) { return false; }
     if (register_read_pending(native)) { return false; }
     if (tb_code_restoring(native->code)) { diagnostic(native, "Wait for profile source settings to finish applying."); return false; }
-    const TbContextSnapshot *context = tb_context_snapshot(native->context);
+    const TbContextSnapshot_t *context = tb_context_snapshot(native->context);
     if (native->waiting || native->want_close || native->target_action || !native->configured || tb_break_busy(native->breakpoints) ||
         native->state != TB_SESSION_STOPPED || context->stale || !context->ready ||
         !*context->selected_thread || step < TB_STEP_OVER || step > TB_STEP_OUT) {
@@ -1048,7 +1048,7 @@ void tb_session_pump(TbSession *native, int wait_ms)
         else {
         tb_break_pump(native->breakpoints);
         tb_context_pump(native->context);
-        const TbContextSnapshot *snapshot = tb_context_snapshot(native->context);
+        const TbContextSnapshot_t *snapshot = tb_context_snapshot(native->context);
         if (snapshot->ready && !snapshot->stale && *snapshot->selected.architecture) {
             (void)snprintf(native->capabilities.architecture, sizeof native->capabilities.architecture, "%s", snapshot->selected.architecture);
         }
@@ -1089,7 +1089,7 @@ const char *tb_session_state_name(const TbSession *native)
 }
 const char *tb_session_message(const TbSession *native) { return native->message; }
 uint64_t tb_session_revision(const TbSession *native) { return native->revision + tb_context_revision(native->context) + tb_code_revision(native->code) + tb_break_revision(native->breakpoints) + tb_registers_revision(native->registers) + tb_memory_revision(native->memory) + tb_stack_revision(native->stack) + tb_variables_revision(native->variables); }
-TbRegisters *tb_session_registers(TbSession *native) { return native->registers; }
+TbRegisters_t *tb_session_registers(TbSession *native) { return native->registers; }
 TbMemory *tb_session_memory(TbSession *native) { return native->memory; }
 TbVariables *tb_session_variables(TbSession *native) { return native->variables; }
 size_t tb_session_log_count(const TbSession *native) { return native->count; }
@@ -1097,14 +1097,14 @@ const char *tb_session_log_line(const TbSession *native, size_t row) { return ro
 pid_t tb_session_target_pid(const TbSession *native) { return native->target_pid; }
 pid_t tb_session_debugger_pid(const TbSession *native) { return tb_gdb_pid(native->gdb); }
 bool tb_session_attached(const TbSession *native) { return native->attach; }
-TbContext *tb_session_context(TbSession *native) { return native->context; }
+TbContext_t *tb_session_context(TbSession *native) { return native->context; }
 TbCode *tb_session_code(TbSession *native) { return native->code; }
 TbBreakpoints *tb_session_breakpoints(TbSession *native) { return native->breakpoints; }
 bool tb_session_run_at(TbSession *native, TbBreakLocation location)
 {
     if (setup_blocked(native, true)) { return false; }
     if (register_read_pending(native)) { return false; }
-    const TbContextSnapshot *context = tb_context_snapshot(native->context);
+    const TbContextSnapshot_t *context = tb_context_snapshot(native->context);
     if (native->waiting || native->want_close || native->target_action || native->state != TB_SESSION_STOPPED || context->stale || !context->ready) {
         diagnostic(native, "Run to Selected needs a fresh stopped context."); return false;
     }
@@ -1233,4 +1233,4 @@ static void remote_setup(TbSession *session)
     }
 }
 
-TbStack *tb_session_stack(TbSession *session) { return session->stack; }
+TbStack_t *tb_session_stack(TbSession *session) { return session->stack; }

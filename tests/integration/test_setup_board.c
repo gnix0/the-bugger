@@ -37,7 +37,7 @@ static void cleanup(void) { close_session(); free(plan); }
 static void stopped(uint64_t previous)
 {
     uint64_t end = tb_gdb_now_ms() + 12000;
-    const TbContextSnapshot *ctx = tb_context_snapshot(tb_session_context(session));
+    const TbContextSnapshot_t *ctx = tb_context_snapshot(tb_session_context(session));
     while ((tb_session_state(session) != TB_SESSION_STOPPED || ctx->stale || !ctx->ready || ctx->generation.stop <= previous) && tb_gdb_now_ms() < end) { pump(); }
     if (tb_session_state(session) != TB_SESSION_STOPPED || ctx->stale || !ctx->ready || ctx->generation.stop <= previous) { dump(); CHECK(false); }
     CHECK(*ctx->stopped.address && strtoull(ctx->stopped.address, NULL, 0));
@@ -99,12 +99,12 @@ static void arm_core(void)
         if (in->numeric == pc) { decoded = in->bytes && *in->opcodes && *in->text && *in->text != '.' && !strstr(in->text, "(bad)"); }
     }
     CHECK(decoded);
-    TbRegisters *r = tb_session_registers(session); tb_registers_visible(r, true); bool have_pc = false, have_sp = false;
+    TbRegisters_t *r = tb_session_registers(session); tb_registers_visible(r, true); bool have_pc = false, have_sp = false;
     end = tb_gdb_now_ms() + 5000;
     do {
         tb_registers_begin(r); tb_registers_want(r, 0, 32); pump();
         for (size_t i = 0; i < tb_registers_count(r); ++i) {
-            const TbRegister *reg = tb_registers_row(r, i);
+            const TbRegister_t *reg = tb_registers_row(r, i);
             if (!reg->available || !reg->fresh) { continue; }
             if (!strcmp(reg->name, "pc")) { have_pc = strtoull(reg->value, NULL, 0) == pc; }
             if (!strcmp(reg->name, "sp")) { have_sp = strtoull(reg->value, NULL, 0) != 0; }

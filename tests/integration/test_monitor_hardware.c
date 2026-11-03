@@ -9,7 +9,7 @@
  * only Tcl constants/metadata/sleep/error, then disconnects. No memory read,
  * flash, reset, target write or resume command is sent by this test. */
 typedef struct {
-    TbMonitorFrame frame;
+    TbMonitorFrame_t frame;
     uint64_t token;
     bool reply, done, timeout, late, framing;
     unsigned requests;

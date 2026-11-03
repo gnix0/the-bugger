@@ -4,33 +4,43 @@
 #include "model/context.h"
 
 enum { TB_REGISTERS_MAX = 512, TB_REGISTERS_PAGE = 32, TB_REGISTER_VALUE = 1024 };
-typedef enum { TB_REG_HEX, TB_REG_DECIMAL, TB_REG_OCTAL, TB_REG_BINARY,
-               TB_REG_RAW, TB_REG_NATURAL, TB_REG_FORMATS } TbRegisterFormat;
+typedef enum {
+    TB_REG_HEX,
+    TB_REG_DECIMAL,
+    TB_REG_OCTAL,
+    TB_REG_BINARY,
+    TB_REG_RAW,
+    TB_REG_NATURAL,
+    TB_REG_FORMATS
+} TbRegisterFormat_e;
+
 typedef struct {
     unsigned number;
-    char name[96], value[TB_REGISTER_VALUE];
-    bool available, changed, truncated, fresh;
-} TbRegister;
-typedef struct TbRegisters TbRegisters;
-TbRegisters *tb_registers_create(TbGdb_t *gdb, TbContext *context);
-void tb_registers_destroy(TbRegisters *registers);
-void tb_registers_reset(TbRegisters *registers);
-bool tb_registers_event(TbRegisters *registers, const TbGdbEvent_t *event);
-void tb_registers_pump(TbRegisters *registers);
-/* Begin a render pass, then request each visible pane's row range. */
-void tb_registers_visible(TbRegisters *registers, bool visible);
-void tb_registers_begin(TbRegisters *registers);
-void tb_registers_want(TbRegisters *registers, size_t first, size_t count);
-void tb_registers_refresh(TbRegisters *registers);
-void tb_registers_format(TbRegisters *registers, TbRegisterFormat format);
-TbRegisterFormat tb_registers_get_format(const TbRegisters *registers);
-const char *tb_registers_format_name(TbRegisterFormat format);
-size_t tb_registers_count(const TbRegisters *registers);
-const TbRegister *tb_registers_row(const TbRegisters *registers, size_t row);
-bool tb_registers_settled(const TbRegisters *registers);
-bool tb_registers_stale(const TbRegisters *registers);
-bool tb_registers_limited(const TbRegisters *registers);
-const char *tb_registers_error(const TbRegisters *registers);
-uint64_t tb_registers_revision(const TbRegisters *registers);
+    char     name[96], value[TB_REGISTER_VALUE];
+    bool     available, changed, truncated, fresh;
+} TbRegister_t;
 
-#endif
+typedef struct tb_registers TbRegisters_t;
+
+TbRegisters_t *tb_registers_create(TbGdb_t *gdb, TbContext_t *context);
+void tb_registers_destroy(TbRegisters_t *registers);
+void tb_registers_reset(TbRegisters_t *registers);
+bool tb_registers_event(TbRegisters_t *registers, const TbGdbEvent_t *event);
+void tb_registers_pump(TbRegisters_t *registers);
+/* Begin a render pass, then request each visible pane's row range. */
+void tb_registers_visible(TbRegisters_t *registers, bool visible);
+void tb_registers_begin(TbRegisters_t *registers);
+void tb_registers_want(TbRegisters_t *registers, size_t first, size_t count);
+void tb_registers_refresh(TbRegisters_t *registers);
+void tb_registers_format(TbRegisters_t *registers, TbRegisterFormat_e format);
+TbRegisterFormat_e tb_registers_get_format(const TbRegisters_t *registers);
+const char *tb_registers_format_name(TbRegisterFormat_e format);
+size_t tb_registers_count(const TbRegisters_t *registers);
+const TbRegister_t *tb_registers_row(const TbRegisters_t *registers, size_t row);
+bool tb_registers_settled(const TbRegisters_t *registers);
+bool tb_registers_stale(const TbRegisters_t *registers);
+bool tb_registers_limited(const TbRegisters_t *registers);
+const char *tb_registers_error(const TbRegisters_t *registers);
+uint64_t tb_registers_revision(const TbRegisters_t *registers);
+
+#endif // THE_BUGGER_REGISTERS_H

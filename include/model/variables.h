@@ -40,7 +40,7 @@ typedef enum {
 /* Root definitions only; no values, permissions or backend objects. */
 size_t tb_variables_definitions(const TbVariables *variables);
 bool tb_variables_definition(const TbVariables *variables, size_t index, TbWatchDefinition *definition);
-TbVariables *tb_variables_create(TbGdb_t *gdb, TbContext *context);
+TbVariables *tb_variables_create(TbGdb_t *gdb, TbContext_t *context);
 /* Destroy/reset after session shutdown; live root cleanup runs in pump. */
 void tb_variables_destroy(TbVariables *variables);
 void tb_variables_reset(TbVariables *variables);
