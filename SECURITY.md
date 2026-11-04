@@ -69,9 +69,9 @@ Explicit inspection still requires deliberate access decisions; some peripheral
 registers change state when read. Backend-internal accesses and initialization
 scripts are not controlled solely by the frontend's inspection policy.
 
-Deliberate variable, ordinary-RAM and CPU-register edits in the development
-build require a stopped context, review and explicit Apply. They can still corrupt
-firmware state or execution; register editability is not proof that every bit is
+Deliberate variable, ordinary-RAM and CPU-register edits require a stopped
+context, review and explicit Apply. They can still corrupt firmware state or
+execution; register editability is not proof that every bit is
 physically writable. The STM32 RAM description is user-confirmed, not detected
 device identity. Backend acknowledgment is not verification: read/verify explicitly.
 Uncertain writes are not automatically retried or rolled back. See the

@@ -16,10 +16,14 @@ recorded. ESP32-S3/Xtensa and ESP32-C6/RISC-V validation was reported by the
 maintainer; supporting evidence and limitations are documented separately below.
 The [acceptance closeout](#f05-acceptance-closeout--2026-11-04) supersedes the
 historical pending-acceptance statements. The C style standardization is also
-accepted and merged. v0.1.6 is not yet published; release-specific evidence,
-artifacts, hosted checks and final release acceptance remain to be assembled.
+accepted and merged. **v0.1.6 is prepared locally**, with a fresh fortified host
+baseline and release archives checked below. It is not yet published. Hosted
+checks for the release-preparation commit and final release acceptance remain
+pending; the preceding documentation commit passed both hosted jobs.
 
 Useful starting points:
+
+- [v0.1.6 release preparation](#v016-release-preparation--2026-11-04).
 
 - [v0.1.4 publication](#v014-publication) and [RISC-V hardware validation](#v014-task-21--risc-v-hardware-validation).
 - [v0.1.5 physical manual acceptance](#v015-physical-manual-acceptance--2026-10-30)
@@ -4123,3 +4127,96 @@ Check results, release/API responses, source notices, rendered Markdown and the
 build log/exit status are retained under `build/docs-v016-review/`. This prose-only
 review ran no application test suite or hardware operations. It establishes no
 new v0.1.6 release-matrix or hosted-CI result.
+
+## v0.1.6 release preparation — 2026-11-04
+
+Prepared on `chore/refine_docs` from documentation revision
+`1fd4869101cd521352097d83359e37f9d5af468e`, with the version header set to 0.1.6
+and release documentation updated. The source archive contains the tracked
+working-tree files, including these preparation changes. The final release
+commit/tag must be recorded after publication; none is implied by local packaging.
+
+Relevant implementation revisions:
+
+| Scope | Revision |
+|---|---|
+| F03 variable editing | `9aceec2bd312bbbb7cdda7536ed4919fa812a429` |
+| F04 ordinary-RAM editing and navigation | `41500196b150ce3712986c5f0bdfc7b525d7d6f3` |
+| User-confirmed STM32F446RE SRAM evidence | `18917c2b8087fa2c0b28d857f76b14b84be224e0` |
+| F05 CPU-register editing | `f1ea4e831f73009d5704159da513f71c358a4925` |
+
+### Host regression and analysis
+
+Environment: Linux 7.2.14-arch1-1 x86-64, glibc 2.44, GCC/G++ 16.2.1,
+GDB 18.1, tmux 3.8, clang-tidy 23.1.4 and OpenOCD
+0.12.0-01004-g9ea7f3d64-dirty. Exact version output and frozen input hashes are
+in `build/v016-release-evidence/environment.json` and `tested-inputs.json`.
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/v016-release-ci-20261104 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make analyze
+```
+
+Both PASS, exit 0. Fortified strict compilation of all 85 test/support C sources
+in `build/v016-release-compile` also PASS, exit 0. Analysis reported no
+unsuppressed project findings. Commands and full logs/exit statuses are retained
+under `build/v016-release-evidence/`: `test-ci-command.json`, `test-ci.log` /
+`.exit`, `analysis-commands.json`, `analyze.log` / `.exit` and
+`test-compilation.log` / `.exit`. These are local host results.
+
+The [hosted documentation workflow](https://github.com/gnix0/the-bugger/actions/runs/41852271707)
+for `1fd4869` completed successfully: **Tests** and **Static analysis** both passed.
+That run precedes the version/preparation changes; required hosted checks for the
+new preparation commit and release PR remain separate.
+
+### Physical evidence boundary
+
+The release includes the accepted F03/F04 and F05 physical results linked in the
+[current summary](#current-evidence-boundary). Comparison with the frozen F05
+source/build/test manifest checked 164 inputs; only the version header differs
+(`build/v016-release-evidence/f05-input-comparison.json`). No firmware programming,
+reset, target read or target write was performed during release preparation.
+No new physical regression or sanitizer execution is claimed. The recorded
+STM32 results and maintainer-reported ESP32-S3/ESP32-C6 validation retain their
+original evidence and limitations; no missing transcripts or tool versions are
+inferred. Final release acceptance remains the maintainer's decision.
+
+### Distribution checks
+
+```sh
+SOURCE_DATE_EPOCH=1793804017 make BUILD_DIR=build/v016-release-host RELEASE_DIST_DIR=build/dist/v0.1.6 release
+```
+
+The hardened Linux x86-64 executable and matching source archive are prepared
+under `build/dist/v0.1.6/`:
+
+- `the-bugger-v0.1.6-linux-x86_64.tar.gz`
+- `the-bugger-v0.1.6-source.tar.gz`
+- `SHA256SUMS`
+
+Candidate checks established matching archive checksums, complete tracked source,
+private-file exclusion, matching licenses/notices, CLI version/help and an
+independent source build outside the repository. ELF inspection confirmed x86-64
+PIE, non-executable stack and full RELRO. The executable requires GLIBC symbols
+through 2.38 on this host; this is not a guarantee of compatibility with older
+distributions or their libraries. `BUILD-INFO.txt` records actual dependencies
+and the matching source archive checksum. Invalid packaging arguments, a missing
+executable and a mismatched executable version were rejected.
+
+Existing CLI, terminal and workspace harnesses passed against the extracted
+packaged executable outside the repository. The initial tmux invocation reached
+its final capture step but failed because the temporary working directory lacked
+`build/`, where the harness writes its capture. That failure is retained in
+`packaged-test-tmux-initial.log` / `.exit`; no source or test was changed.
+After creating that capture directory, the same tmux check passed, exit 0.
+
+Final archives include this record. `sealed-package-verification.json` records
+checksums, exact source-content comparison and the independent source rebuild;
+`packaged-test-*.log` / `.exit` record CLI/terminal/workspace/tmux outcomes.
+The final packaged executable is checked byte-for-byte against the executable
+used for those passing tests. All evidence is under
+`build/v016-release-evidence/`; archives must be rebuilt after any further tracked
+content changes. These local checks do not establish upload or publication.
+Upload both archives and `SHA256SUMS` separately; GitHub's two automatic source
+snapshots do not replace them. Published asset inventory/checksums and the final
+release revision remain to be verified after publication.

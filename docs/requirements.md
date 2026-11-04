@@ -245,9 +245,9 @@ extensions are identified below.
 **Design allowance:** device descriptions such as **CMSIS-SVD** should later enrich peripheral register naming and fields, but CPU register inspection must work without a device file. Register/memory reads of MMIO can have side effects: no aggressive automatic peripheral polling.
 
 **Later extensions:** dedicated Stack inspection shipped in **v0.1.5**.
-Deliberate Locals/Watches, ordinary-RAM and CPU-register editing (F03–F05) are
-accepted for **v0.1.6**, subject to the contracts below. Memory search/export/
-comparison and specialized STL display remain planned. The [roadmap](roadmap.md)
+**v0.1.6** adds deliberate Locals/Watches, ordinary-RAM and CPU-register editing
+(F03–F05), subject to the contracts below. Memory search, export and comparison
+and specialized STL display remain planned. The [roadmap](roadmap.md)
 retains the remaining versioned scope through v1.0.0. No simulator feature or
 dedicated simulator integration is planned.
 
