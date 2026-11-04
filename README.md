@@ -24,13 +24,17 @@ and use hardware data watchpoints when supported. Execute GDB commands and inspe
 the integrated Console.
 
 - **Make the workspace yours:** Arrange, split, and resize panes; navigate between tabs;
-and save connection profiles and workspace layouts for later sessions.
+and save connection profiles, workspace arrangements and inspection definitions
+for later sessions. Saved setups restore definitions, not sampled values or access permissions.
 
-Stopped-target integer/bool, ordinary-RAM and CPU-register edits use explicit
-review and verification; see [deliberate editing](docs/usage.md#deliberate-editing) for limits.
-Peripheral reads can still have
-side effects: MMIO sampling requires explicit access decisions and is available
-for the validated STM32/OpenOCD configuration; navigation never samples MMIO.
+The development build adds deliberate stopped-target edits for integer/bool
+variables, ordinary RAM and CPU registers, with Review/Apply and separate explicit
+verification. These are accepted for v0.1.6; the latest published release,
+[v0.1.5](https://github.com/gnix0/the-bugger/releases/tag/v0.1.5), provides read-only
+inspectors. See [deliberate editing](docs/usage.md#deliberate-editing) for limits.
+
+Peripheral reads can have side effects: MMIO sampling requires explicit access
+decisions and is available for the validated STM32/OpenOCD configuration; navigation never samples MMIO.
 See [Memory access controls](docs/usage.md#memory-inspection) and
 [Stack inspection](docs/usage.md#stack-inspection). Console commands and debugger
 scripts can change target state. Firmware programming remains external.
@@ -104,7 +108,7 @@ make build/code-fixture
 ./build/the-bugger
 ```
 
-Choose **Linux application → Launch**, enter `./build/code-fixture`, then
+Choose **Linux application**, select **Launch**, enter `./build/code-fixture`, then
 **Review session → Start native**. Expand **Console** with `^`, enter `start`
 in its **Command** field and press Enter to stop at `main`.
 
@@ -165,7 +169,7 @@ variants across the catalogue. See [themes](docs/usage.md#configuration-and-them
 | Development and implementation | [Contributing](CONTRIBUTING.md), [architecture](docs/architecture.md) |
 | Test commands, fixtures and coverage | [Testing](docs/testing.md), [suite catalog](tests/README.md) |
 | Maintenance and releases | [Maintaining](docs/maintaining.md), [changelog](CHANGELOG.md) |
-| Reporting vulnerabilities | [Security policy](SECURITY.md) |
+| Security and licensing | [Security policy](SECURITY.md), [license](LICENSE), [third-party notices](THIRD_PARTY_NOTICES) |
 
 Bug reports and contributions are welcome. Include the target, GDB/server versions
 and reproduction steps when reporting a problem. Check the roadmap before starting

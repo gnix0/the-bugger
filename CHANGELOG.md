@@ -4,20 +4,36 @@
 
 ### Added
 
-- Deliberate stopped frame-zero CPU-register editing through discovered GDB IDs,
-  bounded raw hexadecimal Review/Apply, backend capability checks and explicit
-  Verify. Register, variable and RAM edits share serialization and uncertainty
-  quarantine; no implicit read-back, retry or rollback.
-
-- Session-scoped, user-confirmed STM32F446RE main-SRAM eligibility for deliberate
-  Memory and memory-backed variable edits. Connection-bound review, atomic region
-  publication and evidence-generation checks revoke stale permissions without
+- Deliberate integer/bool editing in Locals and Watches, with target-sized
+  conversion, writable-storage checks, Review/Apply/Cancel and explicit verification.
+- Exact ordinary-RAM byte editing in Memory, with bounded hexadecimal input,
+  writable-region evidence and separate per-view range authorization.
+- Stopped frame-zero CPU-register editing through discovered GDB IDs, with
+  bounded raw hexadecimal input, backend capability checks and explicit Verify.
+  All three editors share serialization and uncertainty handling; none performs
+  automatic read-back, retry or rollback. Flash and MMIO writes remain excluded.
+- Session-scoped, user-confirmed STM32F446RE main-SRAM evidence for Memory and
+  memory-backed variable edits. Confirmation binds the live connection and
+  configuration; evidence changes revoke dependent permissions and drafts without
   clearing write quarantine. No silicon detection or automatic target access.
 
-- Deliberate integer/bool variable and exact ordinary-RAM byte editing, with
-  target-sized conversion, writable-storage checks, review/cancel, explicit
-  verification and shared uncertainty handling. Flash/MMIO and CPU-register
-  editing remain excluded.
+### Changed
+
+- Fresh connection forms start without sample values and preserve saved profile
+  defaults. Keyboard navigation follows visual rows.
+- The installed OpenOCD script browser uses a scrollable list with filtering,
+  keyboard and mouse navigation, track paging and thumb dragging. It shares a
+  centered, height-limited card with Keybinds; scrollbars appear only on overflow.
+
+### Fixed
+
+- Profile titles and descriptions remain inside centered cards, with spacing
+  between list content and paging controls. Script browsing separates its list
+  from Filter/Back, and Theme Preview retains a top margin.
+
+## [0.1.5] - 2026-10-30
+
+### Added
 
 - Gruber Darker, Zenburn, eight Modus variants and Solarized dark/light themes,
   bringing the catalogue to 49 palettes across eleven families. Includes
@@ -30,13 +46,6 @@
 
 ### Changed
 
-- Fresh connection forms omit sample values and retain profile defaults.
-  Vertical keyboard navigation follows visual rows; the installed OpenOCD
-  script browser scrolls while preserving Filter/Back focus through redraws
-  and terminal resizing. Keybinds and script browsing share a centered,
-  height-limited card; overflowing script lists support mouse-wheel scrolling,
-  scrollbar track paging and thumb dragging.
-
 - Compact Call Stack entries show function and filename/line. Pane-local cached
   Details wraps complete available metadata without selecting a frame or querying
   GDB; Escape preserves the frame-list selection and scroll.
@@ -44,13 +53,9 @@
   Debugger function keys work with focused fields in ordinary/Vim Normal mode.
 - Expanded lower panes use their former dock row for content and retain their
   top minimize/menu controls. Header/footer spacing uses available chrome space
-  without moving the primary panes. UI/CLI target version is v0.1.5.
+  without moving the primary panes.
 
 ### Fixed
-
-- Profile titles and descriptions stay inside their centered cards; list content
-  is separated from paging controls. Script browsing separates its list from
-  Filter/Back, and Theme Preview retains a top margin.
 
 - Frame changes retain the previous labelled panes until replacement data is
   ready, avoiding transient stale/clearing flashes. Slow changes report progress

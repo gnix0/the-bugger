@@ -18,7 +18,7 @@ Agree on scope changes before implementation.
 Routine feature and fix commits include their source, tests, build changes and
 relevant requirements, architecture, usage, changelog and validation updates.
 Use separate commits for independent documentation work, already-committed code
-or an agreed review boundary. List exact staging paths.
+or an agreed review boundary.
 
 Record implementation hashes when assembling release evidence, and earlier only
 when a regression, security finding or other investigation needs an exact revision.
@@ -36,12 +36,15 @@ starting release preparation. Maintainers approve publication.
 
 ## Evidence records
 
-Use states `planned`, `implemented`, `automated-verified`, `awaiting-user` and
-`accepted`. Record commands, results, artifacts, environment and physical setup.
-Mark acceptance after maintainer review. Record revisions at release or when
-needed for an investigation.
+Distinguish planned work, implementation, automated verification, physical
+validation, maintainer acceptance and publication. Passing tests alone establishes
+neither acceptance nor release. Record commands, results, artifacts, environment
+and physical setup, including who performed or reported each check.
+
 Keep current status in the roadmap and durable results in the validation register.
-Store raw logs under ignored `build/`. Update README after technical documents.
+Store raw logs under ignored `build/`. Preserve earlier failures and pending states
+as historical evidence; add a closeout entry when later results resolve them.
+Keep README capability claims consistent with the technical references.
 
 ## Required checks
 
@@ -51,7 +54,8 @@ fortified baseline with commands, tool versions and logs recorded.
 Existing input and terminal tests remain necessary when adding shortcuts; new
 shortcut tests alone do not establish compatibility with frame selection, text
 entry or terminal restoration. Report local and hosted results separately. See the
-[reproduction command](testing.md#hosted-ci).
+[reproduction command](testing.md#hosted-ci). Documentation-only changes use
+link, command and consistency checks; they do not require unrelated local suites.
 
 ## Release procedure
 
@@ -72,7 +76,11 @@ For every release, including patches:
    changelog, provenance/license status and the validation evidence summary.
    Record the actual release tag/commit, relevant implementation revisions and
    artifact checksums without upgrading unrun checks to PASS.
-5. Obtain final maintainer acceptance before tagging and publishing.
+5. Obtain final maintainer acceptance before tagging and publishing. Follow the
+   repository's branch protections and required checks, and attach all three
+   distribution files below before publication.
+6. Verify the published asset inventory and checksums against the approved files.
+   Record the released revision, publication and any unresolved evidence gaps.
 
 Agree on acquisition hardware and backend capabilities before implementing a
 hardware-dependent gate. Review unavailable capabilities with the maintainer.
@@ -98,6 +106,12 @@ Each version directory contains:
   instructions, including packaging infrastructure.
 - `SHA256SUMS`: checksums for both archives. The binary archive also identifies
   its matching source archive by checksum.
+
+Upload the two versioned archives and `SHA256SUMS` as **three separate files**.
+GitHub also supplies automatic **Source code (zip)** and **Source code (tar.gz)**
+tag snapshots. Those do not contain the separately packaged executable and do
+not replace either uploaded archive. A normal release page therefore has five
+assets. Local packaging success alone does not establish that they were published.
 
 Packaging needs Bash, Git, GNU binutils, tar, gzip and coreutils. It packages
 tracked working-tree files, so rebuild after final source/documentation changes.
