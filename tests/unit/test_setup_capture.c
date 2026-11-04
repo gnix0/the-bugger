@@ -3,18 +3,18 @@
 #include "../support/check.h"
 #include <string.h>
 #include <unistd.h>
-static void event(void *user, const TbGdbEvent *record) { (void)user; (void)record; }
+static void event(void *user, const TbGdbEvent_t *record) { (void)user; (void)record; }
 
 int main(void)
 {
-    TbGdb *gdb = tb_gdb_create(event, NULL); CHECK(gdb);
-    TbContext *context = tb_context_create(gdb); CHECK(context);
-    TbCode *code = tb_code_create(gdb, context); TbMemory *memory = tb_memory_create(gdb, context);
-    TbVariables *variables = tb_variables_create(gdb, context); TbBreakpoints *breaks = tb_break_create(gdb);
+    TbGdb_t *gdb = tb_gdb_create(event, NULL); CHECK(gdb);
+    TbContext_t *context = tb_context_create(gdb); CHECK(context);
+    TbCode_t *code = tb_code_create(gdb, context); TbMemory_t *memory = tb_memory_create(gdb, context);
+    TbVariables_t *variables = tb_variables_create(gdb, context); TbBreakpoints_t *breaks = tb_break_create(gdb);
     CHECK(code && memory && variables && breaks);
-    TbLayout layout; tb_layout_init(&layout); TbDemo workspace; tb_demo_init(&workspace);
+    TbLayout_t layout; tb_layout_init(&layout); TbDemo_t workspace; tb_demo_init(&workspace);
     const char *expressions[TB_MAX_PANES]; for (size_t i = 0; i < TB_MAX_PANES; ++i) { expressions[i] = ""; }
-    TbSetupCapture *c = tb_setup_capture_create(NULL); CHECK(c);
+    TbSetupCapture_t *c = tb_setup_capture_create(NULL); CHECK(c);
 #define CAPTURE() tb_setup_capture_update(c, &layout, &workspace, code, memory, variables, breaks, expressions)
     CHECK(CAPTURE() && !tb_setup_capture_dirty(c));
     uint64_t original = tb_setup_capture_current(c)->panes[0].id;
@@ -25,7 +25,7 @@ int main(void)
     CHECK(strcmp(tb_setup_capture_current(c)->panes[3].memory_expression, "&mmio_word") == 0);
     CHECK(!tb_memory_view(memory, 3)->ready && !tb_memory_view(memory, 3)->pending);
     CHECK(tb_variables_watch(variables, "watched.value")); CHECK(CAPTURE());
-    const TbSetup *s = tb_setup_capture_current(c); CHECK(s->watch_count == 1);
+    const TbSetup_t *s = tb_setup_capture_current(c); CHECK(s->watch_count == 1);
     uint64_t watch_id = s->watches[0].id; CHECK(s->panes[0].id == original);
     CHECK(strcmp(tb_variables_row(variables, TB_VARIABLE_WATCHES, 0)->value, "Read required") == 0);
     CHECK(tb_setup_capture_saved(c) && !tb_setup_capture_dirty(c));
@@ -36,15 +36,15 @@ int main(void)
     CHECK(tb_setup_capture_current(c)->watches[0].id == retained);
     CHECK(tb_variables_watch(variables, "watched.value")); CHECK(CAPTURE());
     CHECK(tb_setup_capture_current(c)->watches[1].id != watch_id);
-    CHECK(tb_layout_arrange(&layout, (TbRect){0, 0, 250, 100}, 0));
+    CHECK(tb_layout_arrange(&layout, (TbRect_t){0, 0, 250, 100}, 0));
     int added = tb_layout_split(&layout, 0, TB_SPLIT_RIGHT); CHECK(added >= 0);
-    workspace.panes[added] = (TbDemoPane){.tabs = {TB_MEMORY}, .count = 1};
+    workspace.panes[added] = (TbDemoPane_t){.tabs = {TB_MEMORY}, .count = 1};
     CHECK(CAPTURE()); uint64_t pane_id = tb_setup_capture_current(c)->panes[added].id;
     CHECK(tb_layout_close(&layout, added) >= 0);
     CHECK(tb_layout_split(&layout, 0, TB_SPLIT_RIGHT) == added);
     CHECK(CAPTURE() && tb_setup_capture_current(c)->panes[added].id != pane_id);
     CHECK(tb_setup_capture_current(c)->panes[0].id == original);
-    TbSetupCapture *skipped = tb_setup_capture_create(tb_setup_capture_current(c)); CHECK(skipped);
+    TbSetupCapture_t *skipped = tb_setup_capture_create(tb_setup_capture_current(c)); CHECK(skipped);
     while (tb_variables_definitions(variables)) { CHECK(tb_variables_remove(variables, 0)); }
     CHECK(tb_setup_capture_update(skipped, &layout, &workspace, code, memory, variables, breaks, expressions));
     CHECK(tb_setup_capture_current(skipped)->watch_count == 0 && tb_setup_capture_dirty(skipped));
@@ -53,7 +53,7 @@ int main(void)
     expressions[3] = oversized; CHECK(!CAPTURE());
     CHECK(strcmp(tb_setup_capture_current(c)->panes[3].memory_expression, "&mmio_word") == 0);
     CHECK(tb_gdb_state(gdb) == TB_GDB_DISCONNECTED);
-    TbProfile *a = malloc(sizeof *a), *b = malloc(sizeof *b); CHECK(a && b);
+    TbProfile_t *a = malloc(sizeof *a), *b = malloc(sizeof *b); CHECK(a && b);
     tb_profile_defaults(a, 0); *b = *a;
     (void)snprintf(b->name, sizeof b->name, "cosmetic name"); (void)snprintf(b->endpoint, sizeof b->endpoint, "inactive");
     CHECK(!tb_profile_differences(a, b));

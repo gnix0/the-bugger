@@ -9,15 +9,27 @@ GDB 17+ for literal native launch arguments, Linux PTYs/pidfds and ptrace permis
 tmux checks need tmux and a usable
 local socket. Tests use C without an external test framework.
 
+For a build and focused development checks:
+
 ```sh
 make all fixtures
 make test
-make test-native
-make test-tmux
+make test-native          # Actual GDB integration
+make test-tmux            # Isolated tmux input and rendering
+git diff --check
+```
+
+Run the relevant focused checks while iterating. Before submitting code, test or
+build changes, complete the fresh fortified [host baseline](#hosted-ci). A local
+PASS is not a hosted Ubuntu result. Documentation-only edits need link, command
+and consistency checks rather than unrelated application suites.
+
+Additional compiler, sanitizer and analyzer checks are available separately:
+
+```sh
 make CC=clang CXX=clang++ BUILD_DIR=build/clang test test-native
 make sanitize sanitize-native
 make analyze
-git diff --check
 ```
 
 Use a fresh `BUILD_DIR` when changing compilers/flags. `make clean` removes ignored
@@ -32,15 +44,23 @@ cannot operate in a deliberately ptraced target. Sanitizers run with leak checki
 
 `make analyze` enables clang-analyzer and bugprone checks and fails on warnings.
 The Annex K replacement recommendation is excluded because Linux libc does not
-provide those optional `_s` functions. Record missing tools and ptrace/socket restrictions.
+provide those optional `_s` functions. clang-tidy can also print cumulative
+generated/suppressed counts for system headers and NOLINT exclusions; assess
+unsuppressed diagnostics and the exit status rather than treating those counts as
+project compilation warnings. Record missing tools and ptrace/socket restrictions.
 
 | Layer | Entry points | Evidence boundary |
 |---|---|---|
-| Deterministic models and PTY UI | `make test`, focused `test-mNN-model` targets | Authored MI, owned-file/profile and terminal behavior; no real target required |
-| Native GDB/API/TUI | `make test-native`, focused `test-mNN-native` | Actual Linux debugger/fixture behavior, not embedded support |
+| Deterministic models and PTY UI | `make test`; focused examples: `test-mi`, `test-m15-model` | Authored MI, owned-file/profile and terminal behavior; no real target required |
+| Native GDB/API/TUI | `make test-native`; focused examples: `test-m09-native`, `test-register-edit-native` | Actual Linux debugger/fixture behavior, not embedded support |
 | Real tmux forwarding | `make test-tmux` | Isolated server, click/drag/keys/resize; physical appearance remains manual |
 | Existing remote / OpenOCD | `make test-m15-model test-m15-native`, `test-m16-*` below | Actual server negotiation/ownership plus offline failure cases |
 | Physical embedded | M17 and per-feature fixtures | Named board/probe/server/toolchain, capability and recovery evidence |
+
+For editing coverage, see [F03/F04](#f03f04-editing-and-connection-navigation),
+[STM32 RAM evidence](#stm32f446re-ordinary-ram-evidence) and
+[F05](#cpu-register-editing-f05). Hardware procedures below are opt-in and may
+halt, run or modify a target; read each procedure before executing it.
 
 The [suite catalog](../tests/README.md) lists individual binaries; fixture READMEs
 specify authored data and target behavior. Record results in the [validation register](validation.md) and raw logs under
@@ -95,14 +115,23 @@ The physical runner is opt-in and never dispatched by `test-ci`. It requires
 an already-programmed matching STM32 fixture, an explicitly selected probe and
 authorization to halt/run/step and sample 32 SRAM bytes. Build the runner with
 `make BUILD_DIR=build/stack-focused build/stack-focused/test-stack-board`.
-For the NUCLEO-F446RE test setup, start an owned server and run separately:
+For the NUCLEO-F446RE test setup, start the server in one terminal:
 
 ```sh
-openocd -c 'adapter serial 066CFF495154787867161137' \
+# Select the authorized probe:
+probe_serial=YOUR_PROBE_SERIAL
+openocd -c "adapter serial $probe_serial" \
   -f tests/fixtures/embedded/openocd/nucleo-f446re.cfg
+```
+
+In another terminal, from the repository root, set `firmware_elf` to the same
+matching ELF and run:
+
+```sh
+firmware_elf=/absolute/path/to/matching/firmware.elf
 TB_STACK_BOARD_LOG="$PWD/build/stack-focused/stm32-session.log" \
   build/stack-focused/test-stack-board arm-none-eabi-gdb 127.0.0.1:3333 \
-  "$PWD/build/v0.1.4-release-host/m17/stm32f446re/firmware.elf"
+  "$firmware_elf"
 ```
 
 Substitute the actual authorized probe and matching ELF. The runner connects with
@@ -507,20 +536,23 @@ ptrace and (for the second) tmux; they exercise remapped Continue/Pause, literal
 Console input and spatial content transfer after loading a connection profile.
 They are included in `test`/`test-native` and therefore `test-ci`.
 
+Use a temporary `XDG_CONFIG_HOME` for this manual check so saved personal
+bindings are preserved and the expected factory keys apply.
+
 1. Open Config → Keybinds. At ≥112 columns expect two Action/Key tables;
    at 111 columns expect one. Scroll or use Tab/Home/End/Page Up/Down to reach
    all 30 actions; repeat at 48×18 without inaccessible bottom controls.
 2. Click Continue's Key cell or press Enter on it. Its old value disappears;
    only its border has capture emphasis. Press F11: a conflict keeps capture
    active. Ctrl+Q is reserved during capture, not a quit request. Escape restores
-   the previous value. Capture F6: its edited border differs from capture.
+   the previous value. Capture F7: its edited border differs from capture.
 3. Undo restores F5. With no history, click Undo: no screen/status/file change.
    Save is inert with no differences; Restore Defaults is inert at factory keys.
    Capture a binding and Delete to clear it; Undo must recover that binding.
 4. Edit again. Back/Escape/configured Back and Ctrl+Q ask before discarding;
    Cancel retains the draft, confirmation discards it. Restore Defaults similarly
    asks before changing the draft, remains unsaved and can be undone.
-5. Save F6 and restart. Load any connection profile: Continue still shows F6.
+5. Save F7 and restart. Load any connection profile: Continue still shows F7.
    Change theme: bindings remain. Test remapped navigation and content transfer,
    fixed arrows/Ctrl+arrows and literal aliases in Console/Memory fields.
 6. Repeat direct capture, inactive buttons, confirmations and resize while
@@ -700,8 +732,10 @@ Additional manual breakpoint checks:
    thread/task restrictions must exclude the entire entry. Change a managed
    breakpoint externally; review or explicitly exclude its full definition.
 
-Owner manual acceptance and physical ARM/Xtensa/RV32 reopening/restoration remain
-outstanding. Use disposable fixtures for physical checks.
+F01 acceptance and physical ARM/Xtensa/RV32 restoration results are recorded in
+the [v0.1.4 evidence](validation.md#v014-release-preparation) and
+[publication closeout](validation.md#v014-publication). Repeat applicable checks
+on disposable fixtures for each release; those earlier results are not a new run.
 
 ## Hardware data watchpoints
 
@@ -1306,7 +1340,8 @@ or hardware debugging acceptance.
 3. Edit paths with spaces and UTF-8 text. Exercise Left/Right, Home/End,
    Backspace/Delete, Ctrl+U, Tab and Shift+Tab. Switch native Launch/Attach and
    embedded Board/Adapter+target using clicks or Left/Right/Enter. Inputs are
-   preview text only; there is no tool/script discovery or validation yet.
+   preview configuration only. Installed-script browsing can inspect local metadata,
+   but previewing never starts GDB/OpenOCD or connects to a target.
 4. Choose Review preview; check that fields retain your edits. Back returns to
    editing. Preview workspace opens the six default panes, with DEMO in each.
    Every preview uses the explicitly identified Cortex-M4F visual sample.
@@ -1667,7 +1702,8 @@ Prepare the Linux x86-64 host distribution from a reviewed checkout:
 
 ```sh
 make release
-(cd build/dist/v0.1.4 && sha256sum --check SHA256SUMS)
+release_version=$(sed -n 's/^#define THE_BUGGER_VERSION "\([0-9.]*\)"$/\1/p' include/the_bugger/version.h)
+(cd "build/dist/v$release_version" && sha256sum --check SHA256SUMS)
 ```
 
 The [packaging procedure](maintaining.md#linux-x86-64-release-artifacts) describes
@@ -1701,9 +1737,8 @@ Apply the explicit [version-specific physical RISC-V deferrals](requirements.md#
 v0.1.0 deferred it, and the maintainer separately deferred v0.1.3 RISC-V validation to
 v0.1.4. Neither is a hardware support claim or a general waiver for future
 releases. Record actual commands, results and release acceptance for the
-applicable matrix below. Exact ESP/probe setup is not a
-P00 prerequisite; fill it in when conducting the tests. Tool/server paths stay
-editable; OpenOCD is not a requirement for every architecture.
+applicable matrix below. Record the exact ESP/probe setup when conducting the
+tests. Tool/server paths stay editable; OpenOCD is not a requirement for every architecture.
 
 | Environment | Minimum evidence | Current live evidence |
 |---|---|---|
@@ -1722,7 +1757,7 @@ product. Do not claim unsupported target-specific features or untested boards.
 
 ## Post-release embedded validation
 
-After v0.1.0, native fixtures remain a required, repeatable regression foundation;
+Native fixtures remain a required, repeatable regression foundation;
 feature acceptance increasingly requires real embedded evidence. No native-only
 feature parity goal is imposed. M14's complete native acceptance and M15–M18's
 remote/hardware/release criteria are unchanged. The F ordering is in
@@ -1739,7 +1774,7 @@ QEMU run or successful native test substitutes for the named physical check.
 | Gates / planning target | Automated validation available without feature hardware | Physical acceptance and required setup |
 |---|---|---|
 | F01/F02, v0.1.x | Schema/state migration, unknown stack bounds and bounded/partial reads; native stack fixtures. | Release boards for restored definitions and stack context; known bounds from actual firmware metadata where used. No invented usage/high-water result. |
-| F03–F05, v0.2.0 | Write authorization before dispatch, widths/endian, partial failures/read-only/context changes, no collateral writes. | Disposable RAM/CPU-register fixtures on STM32 and applicable ESP32 setups via tested GDB/server. MMIO writes require deliberate documented safe access; Flash remains F22. |
+| F03–F05, v0.1.6 | Write authorization before dispatch, widths/endian, partial failures/read-only/context changes, no collateral writes. | Disposable RAM/CPU-register fixtures on STM32 and applicable ESP32 setups via tested GDB/server. MMIO writes remain excluded; Flash programming remains F22. |
 | F11/F34/F35, v0.3.x | Register/description variants, malformed SVD/inheritance/arrays/access modes, side-effect-policy denial before reads; fault combinations/corrupt exception frames. | NUCLEO-F446RE/GDB/OpenOCD for safe peripheral inspection and injected Cortex-M faults; check metadata against actual device/firmware. ESP32 metadata only with tested descriptions/backends; Cortex-M fault decoder unavailable there. |
 | F07–F09/F12, v0.3.x | Bounded symbol/duplicate-name queries, no automatic unknown reads, relocation/import validation, exclude personal/runtime state. | Reopen/share an actual embedded setup and inspect intended symbols without programming/resetting on load; existing release boards/tools suffice. |
 | F13, v0.4.0 | PTY RX/TX, line endings/echo, configuration failures, fragmented/control bytes, queue/history bounds, backpressure, unplug/reconnect and ownership. | Known firmware output and command/response through a named UART/USB-serial endpoint; verify framing/flow control and reset-line behavior actually claimed. See the F13 procedure below. |
@@ -2018,3 +2053,193 @@ and removal of existing-footer feedback. `TB_CONTEXT_TIMEOUT=1` additionally
 checks a metadata timeout and rejected late reply. These modes run through
 `test-native` and `test-context-tmux`, both included in `test-ci`. The relay does
 not synthesize GDB results.
+
+## F03–F04 editing and connection navigation
+
+The normal fortified `test-ci` baseline includes conversion/storage/dispatch
+checks in `test-variables` and `test-memory`, real GDB write/read-back in
+`test-variables-native` and `test-memory-native`, and direct/tmux review, cancel,
+Apply, resize and explicit verification. `test-edit-tmux` runs the two inspection
+terminal tests in isolated tmux servers. `test-openocd-tui` exercises a catalog
+larger than its viewport, keyboard/wheel navigation, scrollbar track paging
+and dragging, minimum size and keyboard Filter/Back access. `test-script-tmux`
+repeats this through an isolated tmux server. Both menus are checked for equal
+height and centering across terminal sizes, including resize back to a large
+window. Scrollbars disappear when the filtered results fit.
+
+For manual host review, use a freshly built binary and its matching fixtures:
+
+1. Launch the Variables fixture (`build/<directory>/variables-fixture`), enter
+   `start` in Console, open Watches and add `variables_global`. Read it explicitly.
+   Review an edit to `42`, Cancel, and Read again: the value remains `17`.
+2. Repeat and Apply. The old snapshot becomes stale. Read explicitly: the value
+   is `42`. Restore `17` through another reviewed edit and explicit Read. Repeat
+   with Vim enabled and resize while the draft/review is open.
+3. Launch the Memory fixture (`build/<directory>/memory-fixture`) and enter
+   `start`. Read `&memory_buffer`, authorize the current ordinary range and open
+   Edit selected row. Review the exact address/extent and edit its hexadecimal
+   bytes. Cancel preserves bytes; Apply requires explicit Refresh afterward.
+   Keep the original hex string, reauthorize the ordinary range, and restore it
+   through a second reviewed edit.
+4. In each connection form, put focus on the last field/toggle. Down reaches
+   Review (native/remote) or Browse boards (OpenOCD). Up returns to the previous
+   visual row. Check Tab, literal `q` in fields, and Back outside fields.
+5. Open installed OpenOCD scripts. Scroll beyond one screen, resize to 48×18,
+   use Filter through Tab/Enter, and return through Back. Check track paging
+   and thumb dragging, then filter to one result: the scrollbar disappears.
+   Compare the card height with Config → Keybinds at the same terminal size;
+   both remain centered when resized or maximized. Repeat through tmux.
+   No script executes.
+
+The owner reports F03/F04 accepted and validated across the supported
+architectures; see the [validation record](validation.md#f04-owner-acceptance).
+Do not substitute host or synthetic results for future physical regression evidence. Use only disposable fixture RAM whose complete
+writable region and target capabilities are supplied by the adapter/session.
+Read-range consent does not create that evidence. A remote TUI session lacking
+writable-region metadata must refuse edits; the current connection forms do not
+let a user invent such metadata. The fixed STM32F446RE review below supplies
+user-confirmed eligibility; each release still requires its physical regression. Existing
+embedded inspection, MMIO read and release regression procedures remain applicable.
+
+
+## STM32F446RE ordinary-RAM evidence
+
+`test-m15-model` exercises authored session confirmation, stale/tampered tokens,
+same-endpoint cross-session rejection, reconnect/reset/Console revocation and
+quarantine preservation. Memory/Variables model tests cover atomic rejection,
+identical-bounds replacement and revocation before dispatch; the Variables peer
+counts assignments to establish that rejected operations send no write.
+`test-mmio-tui` includes the separate ordinary-RAM review, cancellation, 48×18
+pagination, resize and explicit revocation. `test-ram-tmux` repeats that review
+through isolated tmux. These checks are included in `test-ci`.
+
+`make BUILD_DIR=build/<directory> test-m17-fixture` builds the default and LED
+STM32 ELF fixtures and inspects them offline; it never flashes or connects.
+The symbol check includes `fixture_edit_scalar` and its SRAM extent.
+
+For a separately authorized physical acceptance session:
+
+1. Record board/probe, GDB/server versions, firmware/ELF SHA-256 and current
+   connection. Use the matching STM32 fixture with `fixture_edit_scalar`; prepare
+   and flash it externally only when replacing firmware is authorized.
+2. Break at `fixture_checkpoint` and halt. Record the original 64 buffer bytes
+   and scalar. Inspect the device/setup independently, then use **Setup → Review
+   STM32F446RE RAM evidence**. Check the complete description and user-confirmed
+   provenance before confirming. No access occurs in that review.
+3. Explicitly read a 16-byte interior slice, for example `&fixture_buffer[16]`.
+   Add/authorize exactly that ordinary range. Review a chosen hex edit and Cancel:
+   an explicit Refresh must show unchanged bytes. Repeat with Apply, explicitly
+   Refresh, and compare the surrounding bytes inside the buffer. Restore the
+   original bytes through a new authorized review and verify deliberately.
+4. Explicitly Read `fixture_edit_scalar` in Watches. Review/Cancel and then
+   Review/Apply a supported integer. Read to verify and restore its recorded
+   original value through another reviewed assignment.
+5. Check that boundary-crossing, Flash/MMIO/unknown destinations remain ineligible.
+   These refusal checks must send no write; do not attempt speculative target
+   reads merely to prepare an unsafe destination. Use authored peers for forced
+   timeouts/lost replies; do not induce physical transport faults casually.
+6. Revoke evidence, issue a deliberate Console command, reset only when authorized,
+   and reconnect. Old confirmation tokens, range grants and drafts must not be
+   reused. No write permission follows merely from a successful read or a GDB
+   RAM label. Retain logs and distinguish request extent from actual bus width.
+
+Historical pending F03/F04 checks are superseded by the recorded owner acceptance;
+new release checks must retain their own actual results.
+
+## CPU-register editing (F05)
+
+Focused host commands (also included in `test-ci`):
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/f05-check CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-register-edit test-register-edit-native test-register-edit-tui test-register-edit-tmux
+```
+
+`test-register-edit` uses authored MI to check sparse IDs, exact one-ID/one-value
+commands, invalid/oversized hex, unsupported or malformed capability metadata,
+permission/editability revocation before dispatch, caller-frame/stale drafts,
+cancel, rejected creation/ownership, cleanup failure, ignored stores, backend
+errors, running/stale completion,
+explicit verification and shared quarantine. A late acknowledgment cannot clear
+a timed-out write. No physical hardware is involved.
+
+`test-register-edit-native` changes and restores `rax` in the stopped native
+fixture, verifies both values explicitly and checks that PC is unchanged. The PTY
+checks exercise mouse selection, literal input/Backspace/Enter, Review/Cancel,
+leaving a draft through close-session confirmation, 48×18 pagination/resize, Apply,
+explicit Verify, restoration, Vim and isolated tmux/terminal cleanup.
+
+### Physical write/verify/restore
+
+The same native runner accepts an explicit existing server, compatible GDB,
+discovered register name and architecture check. It performs real writes; use it
+only on an authorized disposable stopped target. No firmware replacement, ELF,
+Flash programming, reset, peripheral access or guessed numeric register ID is
+needed for this CPU-register check. Stop any competing debugger first. On a
+multi-core target it edits only the discovered selected thread's frame zero.
+
+1. Activate the matching tool environment and start the appropriate server in a
+   separate terminal. For the existing USB/JTAG ESP setups, from the repository
+   root, use **one** of:
+
+   ```sh
+   # Espressif OpenOCD and its matching scripts, ESP32-S3 native USB/JTAG:
+   openocd -f tests/fixtures/embedded/openocd/esp32s3.cfg
+   # Espressif OpenOCD and its matching scripts, ESP32-C6 native USB/JTAG:
+   openocd -f tests/fixtures/embedded/openocd/esp32c6.cfg
+   # System OpenOCD and its matching scripts, NUCLEO-F446RE/ST-LINK:
+   openocd -f board/st_nucleo_f4.cfg
+   ```
+
+   Do not mix system OpenOCD with an ESP-IDF `OPENOCD_SCRIPTS` root. Use the
+   matching distribution. Existing server ownership remains external to the
+   runner. No new firmware fixture is required; retain firmware identity in the
+   evidence when available. The [embedded fixture instructions](../tests/fixtures/embedded/README.md)
+   describe connector/tool setup and separately authorized flashing if needed.
+2. Build the runner without running its host checks:
+
+   ```sh
+   make build/test-register-edit-native
+   ```
+
+   Record board/probe, firmware identity, GDB/OpenOCD versions and endpoint. Run
+   the matching command from the repository root (one connected setup at a time):
+
+   ```sh
+   TB_REGISTER_EDIT_LOG="$PWD/build/f05-s3.log" \
+     ./build/test-register-edit-native --board \
+     xtensa-esp32s3-elf-gdb 127.0.0.1:3333 a4 xtensa
+
+   TB_REGISTER_EDIT_LOG="$PWD/build/f05-c6.log" \
+     ./build/test-register-edit-native --board \
+     riscv32-esp-elf-gdb 127.0.0.1:3333 t0 riscv
+
+   TB_REGISTER_EDIT_LOG="$PWD/build/f05-stm32.log" \
+     ./build/test-register-edit-native --board \
+     arm-none-eabi-gdb 127.0.0.1:3333 r4 arm
+   ```
+
+   Names are looked up in the actual catalog; missing names or unsupported
+   evidence must refuse the edit. The runner captures and prints original bits,
+   exercises Review/Cancel and invalid input, changes the lowest bit, explicitly
+   verifies the new bits, then deliberately restores and verifies the original.
+   Expect two `VERIFIED` lines, `RESTORED`, unchanged PC, final `PASS` and exit 0.
+   There is no automatic rollback after a failure. If interrupted or failed,
+   retain the printed original value and logs; inspect the target before any
+   further mutation. The runner does not issue Continue/reset, and server-specific
+   disconnect behavior determines the target's final execution disposition.
+3. Review the same flow in `./build/the-bugger`: connect to that server using its
+   compatible GDB, select a stopped hardware thread and frame 0, then select the
+   same general-purpose register. Record the old bits. **Edit → Review → Cancel**
+   followed by explicit Refresh must preserve them. Repeat **Review → Apply →
+   Verify**, compare the observed bits, then deliberately restore/Verify the
+   original. Resize during review and ensure all pages precede Apply. A fresh
+   value and width must be shown; no cached caller-frame write is allowed.
+4. Use authored host checks for forced timeouts, unsupported metadata and ignored
+   writes; do not induce transport faults or mutate PC/SP/status to manufacture
+   a failure on physical hardware. Retain actual results per architecture.
+
+The current F05 record includes native/STM32 results and maintainer-reported
+ESP32-S3/Xtensa and ESP32-C6/RISC-V validation. New native/STM32 results do not
+substitute for either ESP architecture in later regressions. Existing general
+embedded/release regression remains separate from this focused procedure.

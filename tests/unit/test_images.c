@@ -47,12 +47,12 @@ static void fixture(const char *path, int bits, int order)
 }
 static void exercise(const char *path, int bits, int order)
 {
-    fixture(path, bits, order); TbImages *images = tb_images_create(); CHECK(images);
-    CHECK(tb_images_load(images, path, 0x100000)); TbImageRange range;
+    fixture(path, bits, order); TbImages_t *images = tb_images_create(); CHECK(images);
+    CHECK(tb_images_load(images, path, 0x100000)); TbImageRange_t range;
     CHECK(tb_images_lookup(images, 0x101010, &range) && range.kind == TB_IMAGE_CODE && range.anchor == 0x101000);
     CHECK(range.trust == TB_IMAGE_UNVERIFIED);
     CHECK(!tb_images_trusted_neighbor(images, 0x101010, -1, &range));
-    TbImageReview review;
+    TbImageReview_t review;
     CHECK(tb_images_review(images, path, 0x100000, &review) && review.ranges == 2);
     CHECK(tb_images_review_range(images, &review, 0, &range) && range.start == 0x101000 && range.kind == TB_IMAGE_CODE);
     CHECK(tb_images_review_range(images, &review, 1, &range) && range.start == 0x102000 && range.kind == TB_IMAGE_DATA);
@@ -68,12 +68,12 @@ static void exercise(const char *path, int bits, int order)
     CHECK(tb_images_lookup(images, 0x101010, &range) && range.trust == TB_IMAGE_UNVERIFIED);
     CHECK(!tb_images_confirm(images, &review, TB_IMAGE_USER_CONFIRMED));
     CHECK(!tb_images_trusted_neighbor(images, 0x101010, -1, &range));
-    TbImageReview renewed; CHECK(tb_images_review(images, path, 0x100000, &renewed));
+    TbImageReview_t renewed; CHECK(tb_images_review(images, path, 0x100000, &renewed));
     CHECK(renewed.revision != review.revision && tb_images_confirm(images, &renewed, TB_IMAGE_USER_CONFIRMED));
     tb_images_unverify(images);
     CHECK(!tb_images_confirm(images, &renewed, TB_IMAGE_USER_CONFIRMED));
     CHECK(tb_images_review(images, path, 0x100000, &renewed) && tb_images_confirm(images, &renewed, TB_IMAGE_USER_CONFIRMED));
-    TbImageReview shifted; CHECK(tb_images_review(images, path, 0x200000, &shifted));
+    TbImageReview_t shifted; CHECK(tb_images_review(images, path, 0x200000, &shifted));
     CHECK(tb_images_confirm(images, &shifted, TB_IMAGE_USER_CONFIRMED));
     CHECK(tb_images_lookup(images, 0x101010, &range) && range.trust == TB_IMAGE_UNVERIFIED);
     CHECK(tb_images_lookup(images, 0x201010, &range) && range.trust == TB_IMAGE_USER_CONFIRMED);
@@ -89,7 +89,7 @@ static void exercise(const char *path, int bits, int order)
     }
     CHECK(tb_images_neighbor(images, 0x101010, -1, &range) && range.anchor == 0x101000);
     /* An overlapping old, unverified bias must not mask the current declaration. */
-    TbImageReview overlap;
+    TbImageReview_t overlap;
     CHECK(tb_images_review(images, path, 0x100010, &overlap));
     CHECK(tb_images_confirm(images, &overlap, TB_IMAGE_USER_CONFIRMED));
     CHECK(tb_images_trusted_lookup(images, 0x101010, &range) && range.trust == TB_IMAGE_USER_CONFIRMED);
@@ -101,7 +101,7 @@ static void exercise(const char *path, int bits, int order)
 }
 int main(void)
 {
-    TbImages *native = tb_images_create(); CHECK(native); TbImageRange mapped;
+    TbImages_t *native = tb_images_create(); CHECK(native); TbImageRange_t mapped;
     uint64_t pc = (uint64_t)(uintptr_t)&main;
     tb_images_native(native, getpid(), NULL, pc);
     CHECK(tb_images_lookup(native, pc, &mapped) && mapped.trust == TB_IMAGE_BACKEND_VERIFIED);
@@ -118,9 +118,9 @@ int main(void)
         bytes[at] ^= (unsigned char)(random >> 24);
         size_t size = iteration % 3 == 0 ? iteration % (size_t)length : (size_t)length;
         fd = open(path, O_WRONLY | O_TRUNC); CHECK(fd >= 0 && write(fd, bytes, size) == (ssize_t)size && close(fd) == 0);
-        TbImages *images = tb_images_create(); CHECK(images);
+        TbImages_t *images = tb_images_create(); CHECK(images);
         if (tb_images_load(images, path, 0)) {
-            TbImageRange range;
+            TbImageRange_t range;
             if (tb_images_lookup(images, 0x1010, &range)) { CHECK(range.start <= 0x1010 && range.end > 0x1010 && range.anchor <= 0x1010); }
         }
         tb_images_destroy(images);

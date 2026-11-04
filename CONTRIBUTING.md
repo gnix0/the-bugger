@@ -12,10 +12,11 @@ contains stable release history. Create `feature/<description>` or
 `fix/<description>` branches from `develop`, and open focused pull requests back
 to `develop`. Discuss scope before starting a new roadmap feature.
 
-Release branches start from `develop` and merge into both `main` and `develop`.
-Urgent `hotfix/<description>` branches start from `main` and merge into both.
-Preserve commits referenced by validation records. Record exact release revisions
-with release evidence.
+Release preparation starts from `develop`; published releases belong to `main`.
+Keep the integration and release branches consistent, preserving commits referenced
+by validation records. Urgent `hotfix/<description>` branches start from `main`;
+integrate their fixes into both branches. See the
+[release procedure](docs/maintaining.md#release-procedure).
 
 Explain the problem, behavior change, relevant tests and limitations in the pull
 request. Confirm that CI passes and address review conversations before merging.
@@ -27,13 +28,13 @@ and read authorization as well as the happy path.
 
 Build prerequisites and a first session are in [README](README.md#build-and-first-session).
 The [testing guide](docs/testing.md) describes commands, focused suites, fixtures,
-sanitizers, static analysis and physical validation. A typical development check is:
+sanitizers, static analysis and physical validation. Start with a build and the
+checks relevant to your change:
 
 ```sh
-make all fixtures
-make test
-make test-native
-make test-tmux
+make
+make test                 # Model and terminal checks
+make test-native          # When changing debugger integration
 git diff --check
 ```
 
@@ -43,6 +44,8 @@ than counting them as passed. C++ is permitted for debug-target fixtures only.
 Before submitting code, tests or build changes, run the complete fortified
 [`test-ci` baseline](docs/testing.md#hosted-ci) in an unused build directory and
 retain its log. Focused tests support iteration but do not replace that baseline.
+Documentation-only changes need link, command and consistency checks rather than
+unrelated local application test runs; hosted PR checks still apply.
 
 ## Continuous integration
 
@@ -100,7 +103,8 @@ Documentation responsibilities are:
 | [Architecture](docs/architecture.md) | Implemented modules, interfaces, invariants and extension boundaries |
 | [Roadmap](docs/roadmap.md) | Completion status, planned scope, dependencies and version targets |
 | [Testing](docs/testing.md) | Reproducible procedures and evidence requirements |
-| [Design](docs/requirements.md#interface-constraints) | Interface constraints, terminal mapping and reference rationale |
+| [Maintaining](docs/maintaining.md) | Review, release procedures and distribution artifacts |
+| [Changelog](CHANGELOG.md) | User-visible changes and compatibility between releases |
 | [Validation records](docs/validation.md) | Recorded hashes, results, failures and decisions |
 
 ## Security reports
@@ -111,8 +115,8 @@ data out of public reports and pull requests before coordinated disclosure.
 
 ## Change review
 
-Work is divided into the existing M/F gates. Coordinate scope before starting;
-do not combine unrelated gates. Proposed Conventional Commit titles are at most
+Coordinate roadmap feature scope before starting and keep unrelated work in
+separate pull requests. Proposed Conventional Commit titles are at most
 50 characters, with a short body for relevant behavior and validation details.
 Routine commits include relevant implementation, tests and documentation together.
 Separate documentation follow-ups remain useful when the code is already committed.

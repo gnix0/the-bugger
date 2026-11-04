@@ -3,14 +3,14 @@
 #include "../support/check.h"
 #include <string.h>
 
-static TbBreakpoints *b;
+static TbBreakpoints_t *b;
 static unsigned replies, command_replies, inserts, enables, queries;
-static void event(void *unused, const TbGdbEvent *e)
+static void event(void *unused, const TbGdbEvent_t *e)
 {
     (void)unused; (void)tb_break_event(b, e);
     if (e->kind == TB_GDB_REPLY) {
         ++replies; if (e->cookie == 777) { ++command_replies; }
-        const TbMiValue *v = e->record ? tb_mi_find(e->record->results, "inserts") : NULL;
+        const TbMiValue_t *v = e->record ? tb_mi_find(e->record->results, "inserts") : NULL;
         if (v) {
             inserts = (unsigned)strtoul(v->string.data, NULL, 10);
             enables = (unsigned)strtoul(tb_mi_find(e->record->results, "enables")->string.data, NULL, 10);
@@ -18,8 +18,8 @@ static void event(void *unused, const TbGdbEvent *e)
         }
     }
 }
-static void pump(TbGdb *g) { tb_gdb_pump(g, 5); tb_break_pump(b); }
-static void command(TbGdb *g, const char *op, const char *argument)
+static void pump(TbGdb_t *g) { tb_gdb_pump(g, 5); tb_break_pump(b); }
+static void command(TbGdb_t *g, const char *op, const char *argument)
 {
     unsigned before = command_replies; const char *args[] = {argument};
     CHECK(tb_gdb_request(g, op, args, argument ? 1 : 0, TB_GDB_SESSION, 777, 1000, NULL));
@@ -27,7 +27,7 @@ static void command(TbGdb *g, const char *op, const char *argument)
     while (command_replies == before && tb_gdb_now_ms() < end) { pump(g); }
     CHECK(command_replies > before);
 }
-static void settled(TbGdb *g)
+static void settled(TbGdb_t *g)
 {
     uint64_t end = tb_gdb_now_ms() + 6000;
     while ((tb_break_restoration_active(b) || !tb_break_ready(b)) && tb_gdb_now_ms() < end) { pump(g); }
@@ -36,14 +36,14 @@ static void settled(TbGdb *g)
 static void run(const char *peer, unsigned scenario)
 {
     CHECK(setenv("TB_FAKE_MODE", "f01", 1) == 0);
-    TbGdb *g = tb_gdb_create(event, NULL); CHECK(g); b = tb_break_create(g); CHECK(b);
+    TbGdb_t *g = tb_gdb_create(event, NULL); CHECK(g); b = tb_break_create(g); CHECK(b);
     CHECK(tb_gdb_start(g, peer, 1000)); uint64_t end = tb_gdb_now_ms() + 3000;
     while (!tb_break_ready(b) && tb_gdb_now_ms() < end) { pump(g); }
     CHECK(tb_break_ready(b)); char mode[16]; (void)snprintf(mode, sizeof mode, "%u", scenario == 12 ? 1 : scenario);
     command(g, "-fcase", mode);
     if (scenario == 9 || scenario == 10) { tb_break_refresh(b); for (int i = 0; i < 30; ++i) { pump(g); } }
-    TbSetupBreak d = {.id = 7, .location = "main", .enabled = true, .condition = "1", .ignore_set = true, .ignore = 2, .hardware = scenario == 7};
-    TbSetupBreak address = {.id = 9, .location = "*0x1000", .enabled = true};
+    TbSetupBreak_t d = {.id = 7, .location = "main", .enabled = true, .condition = "1", .ignore_set = true, .ignore = 2, .hardware = scenario == 7};
+    TbSetupBreak_t address = {.id = 9, .location = "*0x1000", .enabled = true};
     CHECK(tb_break_restore(b, &address, false)); CHECK(tb_break_restoration(b, 9)->state == TB_RESTORE_ADDRESS);
     CHECK(!tb_break_restoration_active(b) && tb_break_definition_count(b) == 0);
     CHECK(tb_break_restore(b, &d, false)); CHECK(tb_break_definition_count(b) == 0);
@@ -72,7 +72,7 @@ static void run(const char *peer, unsigned scenario)
         if (scenario == 4) { command(g, "-fcase", "0"); CHECK(tb_break_reconcile(b)); settled(g); }
     } else {
         settled(g);
-        const TbBreakRestoration *r = tb_break_restoration(b, 7); CHECK(r);
+        const TbBreakRestoration_t *r = tb_break_restoration(b, 7); CHECK(r);
         if (scenario == 1 || scenario == 2 || scenario == 12) {
             CHECK(r->state == TB_RESTORE_UNRESOLVED && !tb_break_row(b, 0)->enabled);
             CHECK(tb_break_definition_count(b) == 0);
@@ -83,7 +83,7 @@ static void run(const char *peer, unsigned scenario)
         CHECK(tb_break_definition_count(b) == 1 && tb_break_definition(b, 0)->enabled);
         CHECK(tb_break_definition(b, 0)->ignore_set && tb_break_definition(b, 0)->ignore == 2);
         command(g, "-fstats", NULL); CHECK(inserts == (scenario == 12 ? 2 : 1) && enables == 1);
-        TbBreakDefinition imported; CHECK(tb_break_importable(b, "1", &imported));
+        TbBreakDefinition_t imported; CHECK(tb_break_importable(b, "1", &imported));
         CHECK(!imported.ignore_set && !imported.hardware); /* Never infer historical policy/count. */
         command(g, "-fcase", "5"); tb_break_refresh(b);
         end = tb_gdb_now_ms() + 2000; while (!tb_break_ready(b) && tb_gdb_now_ms() < end) { pump(g); }

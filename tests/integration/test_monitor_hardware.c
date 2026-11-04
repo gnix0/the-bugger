@@ -9,16 +9,16 @@
  * only Tcl constants/metadata/sleep/error, then disconnects. No memory read,
  * flash, reset, target write or resume command is sent by this test. */
 typedef struct {
-    TbMonitorFrame frame;
+    TbMonitorFrame_t frame;
     uint64_t token;
     bool reply, done, timeout, late, framing;
     unsigned requests;
 } Probe;
-static void emit(void *context, const TbGdbEvent *event)
+static void emit(void *context, const TbGdbEvent_t *event)
 {
     Probe *p = context;
     if (p->framing && event->kind == TB_GDB_RECORD && event->record && event->record->kind == TB_MI_TARGET) {
-        const TbMiString *s = &event->record->stream;
+        const TbMiString_t *s = &event->record->stream;
         for (size_t i = 0; i < s->length; ++i) { tb_monitor_feed(&p->frame, s->data + i, 1); }
     }
     if (event->cookie == 19901 && event->token == p->token) {
@@ -34,7 +34,7 @@ static void emit(void *context, const TbGdbEvent *event)
         }
     }
 }
-static void request(TbGdb *gdb, Probe *p, const char *operation, const char *const args[], size_t count, unsigned timeout)
+static void request(TbGdb_t *gdb, Probe *p, const char *operation, const char *const args[], size_t count, unsigned timeout)
 {
     CHECK(!tb_gdb_pending(gdb)); p->reply = p->done = p->timeout = p->late = false;
     CHECK(tb_gdb_request(gdb, operation, args, count, TB_GDB_SESSION, 19901, timeout, &p->token)); ++p->requests;
@@ -42,7 +42,7 @@ static void request(TbGdb *gdb, Probe *p, const char *operation, const char *con
     while (!p->reply && !p->timeout && tb_gdb_now_ms() < end) { tb_gdb_pump(gdb, 2); }
     CHECK(p->reply || p->timeout);
 }
-static void framing(TbGdb *gdb, Probe *p, unsigned variant)
+static void framing(TbGdb_t *gdb, Probe *p, unsigned variant)
 {
     char id[64], script[1024], command[1100];
     (void)snprintf(id, sizeof id, "live-%lu-%u", (unsigned long)getpid(), variant);
@@ -80,7 +80,7 @@ static void framing(TbGdb *gdb, Probe *p, unsigned variant)
 int main(int argc, char **argv)
 {
     CHECK(argc == 3 && *argv[2] && strspn(argv[2], "0123456789.:[]") == strlen(argv[2]));
-    Probe p = {0}; TbGdb *gdb = tb_gdb_create(emit, &p); CHECK(gdb);
+    Probe p = {0}; TbGdb_t *gdb = tb_gdb_create(emit, &p); CHECK(gdb);
     CHECK(tb_gdb_start(gdb, argv[1], 3000)); uint64_t end = tb_gdb_now_ms() + 4000;
     while (tb_gdb_state(gdb) != TB_GDB_READY && tb_gdb_now_ms() < end) { tb_gdb_pump(gdb, 2); }
     CHECK(tb_gdb_state(gdb) == TB_GDB_READY);

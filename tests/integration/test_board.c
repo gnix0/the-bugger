@@ -7,8 +7,8 @@
 
 /* Explicit hardware exerciser. No programming, inferred memory ranges or
  * deletion of breakpoints not created by this process. The server is external. */
-static TbSession *session;
-static TbOpenOcdPlan *server_plan;
+static TbSession_t *session;
+static TbOpenOcdPlan_t *server_plan;
 static char owned_break[32], owned_watch[32];
 static const char *log_path(void)
 {
@@ -24,7 +24,7 @@ static bool logged(const char *text)
 static void cleanup(void)
 {
     if (!session) { return; }
-    TbBreakpoints *b = tb_session_breakpoints(session);
+    TbBreakpoints_t *b = tb_session_breakpoints(session);
     if (tb_session_state(session) == TB_SESSION_RUNNING) {
         (void)tb_session_halt(session);
         uint64_t until = tb_gdb_now_ms() + 2000;
@@ -48,7 +48,7 @@ static void cleanup(void)
     free(server_plan); server_plan = NULL;
 }
 static void pump(void) { tb_session_pump(session, 5); }
-static const TbContextSnapshot *context(void) { return tb_context_snapshot(tb_session_context(session)); }
+static const TbContextSnapshot_t *context(void) { return tb_context_snapshot(tb_session_context(session)); }
 static void stop(uint64_t previous)
 {
     uint64_t end = tb_gdb_now_ms() + 10000;
@@ -63,15 +63,15 @@ static void stop(uint64_t previous)
 }
 static void breaks(void)
 {
-    TbBreakpoints *b = tb_session_breakpoints(session); uint64_t end = tb_gdb_now_ms() + 5000;
+    TbBreakpoints_t *b = tb_session_breakpoints(session); uint64_t end = tb_gdb_now_ms() + 5000;
     while ((!tb_break_ready(b) || tb_break_busy(b)) && tb_gdb_now_ms() < end) { pump(); }
     CHECK(tb_break_ready(b) && !tb_break_busy(b));
 }
 static void identifier(char out[32], bool watch)
 {
-    TbBreakpoints *b = tb_session_breakpoints(session);
+    TbBreakpoints_t *b = tb_session_breakpoints(session);
     for (size_t i = 0; i < tb_break_count(b); ++i) {
-        const TbBreakpoint *row = tb_break_row(b, i);
+        const TbBreakpoint_t *row = tb_break_row(b, i);
         if (row->watchpoint == watch && strstr(row->location, watch ? "fixture_counter" : "fixture_checkpoint")) {
             CHECK(row->hardware && row->enabled && !row->pending);
             (void)snprintf(out, 32, "%s", row->id); return;
@@ -81,9 +81,9 @@ static void identifier(char out[32], bool watch)
 }
 static void memory(int view, const char *expression, size_t size, const char *expected)
 {
-    TbMemory *m = tb_session_memory(session); tb_memory_visible(m, view, true);
+    TbMemory_t *m = tb_session_memory(session); tb_memory_visible(m, view, true);
     CHECK(tb_memory_length(m, view, 16) && tb_memory_address(m, view, expression));
-    const TbMemoryView *v = tb_memory_view(m, view); uint64_t end = tb_gdb_now_ms() + 5000;
+    const TbMemoryView_t *v = tb_memory_view(m, view); uint64_t end = tb_gdb_now_ms() + 5000;
     while ((!v->ready || v->pending) && tb_gdb_now_ms() < end) { pump(); }
     if (!v->ready || v->readable != 16) { fprintf(stderr, "Memory %s: %s\n", expression, v->error); CHECK(false); }
     for (size_t i = 0; i < 16; ++i) { CHECK(v->valid[i]); }
@@ -93,13 +93,13 @@ static void memory(int view, const char *expression, size_t size, const char *ex
 }
 static void registers(void)
 {
-    TbRegisters *r = tb_session_registers(session); tb_registers_visible(r, true);
+    TbRegisters_t *r = tb_session_registers(session); tb_registers_visible(r, true);
     uint64_t end = tb_gdb_now_ms() + 5000;
-    const TbRegister *pc = NULL, *sp = NULL;
+    const TbRegister_t *pc = NULL, *sp = NULL;
     do {
         tb_registers_begin(r); tb_registers_want(r, 0, 32);
         for (size_t i = 0; i < tb_registers_count(r); ++i) {
-            const TbRegister *row = tb_registers_row(r, i);
+            const TbRegister_t *row = tb_registers_row(r, i);
             if (!strcmp(row->name, "pc") || !strcmp(row->name, "r15")) {
                 pc = row; tb_registers_want(r, i, 1);
             }
@@ -127,7 +127,7 @@ static void frame(int level)
 }
 static void locals(void)
 {
-    TbVariables *v = tb_session_variables(session); uint64_t end = tb_gdb_now_ms() + 5000;
+    TbVariables_t *v = tb_session_variables(session); uint64_t end = tb_gdb_now_ms() + 5000;
     size_t selected = SIZE_MAX;
     while (selected == SIZE_MAX && tb_gdb_now_ms() < end) {
         pump();
@@ -142,22 +142,22 @@ static void locals(void)
 }
 static void watch_value(void)
 {
-    TbVariables *v = tb_session_variables(session); tb_variables_visible(v, true, true);
+    TbVariables_t *v = tb_session_variables(session); tb_variables_visible(v, true, true);
     CHECK(tb_variables_watch(v, "fixture_sample")); uint64_t end = tb_gdb_now_ms() + 5000;
     bool sent = false;
     while (tb_gdb_now_ms() < end) {
         pump();
         if (!sent) { sent = tb_variables_read(v, TB_VARIABLE_WATCHES, 0); }
-        const TbVariable *row = tb_variables_row(v, TB_VARIABLE_WATCHES, 0);
+        const TbVariable_t *row = tb_variables_row(v, TB_VARIABLE_WATCHES, 0);
         if (sent && row && row->fresh) { CHECK(row->available && row->children >= 3); return; }
     }
     fprintf(stderr, "Variables: %s\n", tb_variables_error(v, TB_VARIABLE_WATCHES)); CHECK(false);
 }
 static uint32_t counter(void)
 {
-    TbMemory *m = tb_session_memory(session); tb_memory_visible(m, 0, true);
+    TbMemory_t *m = tb_session_memory(session); tb_memory_visible(m, 0, true);
     CHECK(tb_memory_length(m, 0, 4) && tb_memory_address(m, 0, "&fixture_counter"));
-    const TbMemoryView *v = tb_memory_view(m, 0); uint64_t end = tb_gdb_now_ms() + 5000;
+    const TbMemoryView_t *v = tb_memory_view(m, 0); uint64_t end = tb_gdb_now_ms() + 5000;
     while ((!v->ready || v->pending) && tb_gdb_now_ms() < end) { pump(); }
     CHECK(v->ready && v->readable == 4 && !tb_memory_stale(m, 0));
     return (uint32_t)v->bytes[0] | (uint32_t)v->bytes[1] << 8U | (uint32_t)v->bytes[2] << 16U | (uint32_t)v->bytes[3] << 24U;
@@ -177,16 +177,16 @@ int main(int argc, char **argv)
     session = tb_session_create(); CHECK(session && atexit(cleanup) == 0);
     server_plan = calloc(1, sizeof *server_plan); CHECK(server_plan);
     CHECK(strlen(argv[2]) < sizeof server_plan->endpoint); (void)snprintf(server_plan->endpoint, sizeof server_plan->endpoint, "%s", argv[2]);
-    TbSessionConfig config = {.kind = TB_SESSION_REMOTE, .endpoint = argv[2], .gdb = argv[1], .executable = argv[3], .openocd = server_plan};
+    TbSessionConfig_t config = {.kind = TB_SESSION_REMOTE, .endpoint = argv[2], .gdb = argv[1], .executable = argv[3], .openocd = server_plan};
     CHECK(tb_session_start(session, &config));
     tb_context_visible(tb_session_context(session), true, true); stop(0);
     printf("TARGET architecture %s, address bits %u, byte order %d\n", tb_session_capabilities(session)->architecture,
            tb_session_capabilities(session)->address_bits, tb_session_capabilities(session)->byte_order);
     CHECK(strstr(tb_session_capabilities(session)->architecture, argv[4]));
     CHECK(!tb_session_capabilities(session)->server_owned && tb_session_target_pid(session) == 0);
-    breaks(); TbBreakpoints *b = tb_session_breakpoints(session);
+    breaks(); TbBreakpoints_t *b = tb_session_breakpoints(session);
     for (size_t i = 0; i < tb_break_count(b); ++i) {
-        const TbBreakpoint *row = tb_break_row(b, i);
+        const TbBreakpoint_t *row = tb_break_row(b, i);
         CHECK(!strstr(row->location, "fixture_checkpoint") && !strstr(row->location, "fixture_counter"));
     }
     CHECK(tb_break_add(b, "fixture_checkpoint", true)); breaks(); identifier(owned_break, false);
@@ -194,13 +194,13 @@ int main(int argc, char **argv)
     CHECK(tb_session_continue(session)); stop(before);
     CHECK(strstr(context()->selected.function, "fixture_checkpoint"));
     CHECK(context()->selected.line > 0 && context()->frame_count >= 2);
-    TbCode *code = tb_session_code(session); tb_code_visible(code, 0, true, true);
+    TbCode_t *code = tb_session_code(session); tb_code_visible(code, 0, true, true);
     uint64_t code_end = tb_gdb_now_ms() + 5000;
-    const TbCodeView *listing = tb_code_view(code, 0);
+    const TbCodeView_t *listing = tb_code_view(code, 0);
     while ((listing->stale || !listing->line_count || !listing->instruction_count) && tb_gdb_now_ms() < code_end) { pump(); }
     CHECK(!listing->stale && listing->line_count && listing->instruction_count);
     CHECK(strstr(listing->path, "workload.c"));
-    const TbInstruction *stopped_instruction = NULL;
+    const TbInstruction_t *stopped_instruction = NULL;
     uint64_t stopped_pc = strtoull(context()->stopped.address, NULL, 0);
     for (size_t i = 0; i < listing->instruction_count; ++i) {
         if (listing->instructions[i].numeric == stopped_pc) { stopped_instruction = &listing->instructions[i]; break; }
@@ -234,7 +234,7 @@ int main(int argc, char **argv)
     CHECK(logged("watchpoint-trigger"));
     bool hit = false;
     for (size_t i = 0; i < tb_break_count(b); ++i) {
-        const TbBreakpoint *row = tb_break_row(b, i);
+        const TbBreakpoint_t *row = tb_break_row(b, i);
         if (!strcmp(row->id, owned_watch)) { hit = row->hits > 0; }
     }
     CHECK(hit);

@@ -3,20 +3,20 @@
 #include "../support/check.h"
 #include <string.h>
 
-static TbContext *context;
-static TbRegisters *registers;
+static TbContext_t *context;
+static TbRegisters_t *registers;
 static unsigned replies;
-static void emit(void *unused, const TbGdbEvent *event)
+static void emit(void *unused, const TbGdbEvent_t *event)
 {
     (void)unused;
     if (!tb_registers_event(registers, event)) { (void)tb_context_event(context, event); }
     if (event->kind == TB_GDB_REPLY) { ++replies; }
 }
-static void pump(TbGdb *gdb)
+static void pump(TbGdb_t *gdb)
 {
     tb_gdb_pump(gdb, 2); tb_context_pump(context); tb_registers_pump(registers);
 }
-static void command(TbGdb *gdb, const char *op)
+static void command(TbGdb_t *gdb, const char *op)
 {
     unsigned before = replies;
     CHECK(tb_gdb_request(gdb, op, NULL, 0, TB_GDB_SESSION, 999, 1000, NULL));
@@ -24,7 +24,7 @@ static void command(TbGdb *gdb, const char *op)
     while (replies == before && tb_gdb_now_ms() < end) { pump(gdb); }
     CHECK(replies > before);
 }
-static void stopped(TbGdb *gdb, uint64_t previous_stop)
+static void stopped(TbGdb_t *gdb, uint64_t previous_stop)
 {
     uint64_t end = tb_gdb_now_ms() + 2000;
     while ((tb_gdb_state(gdb) != TB_GDB_STOPPED || tb_gdb_generation(gdb).stop == previous_stop) &&
@@ -32,12 +32,12 @@ static void stopped(TbGdb *gdb, uint64_t previous_stop)
     CHECK(tb_gdb_state(gdb) == TB_GDB_STOPPED);
     CHECK(tb_gdb_generation(gdb).stop != previous_stop);
 }
-static void ready(TbGdb *gdb)
+static void ready(TbGdb_t *gdb)
 {
     uint64_t end = tb_gdb_now_ms() + 3000;
     while (tb_gdb_now_ms() < end) {
         tb_registers_want(registers, 0, 8); pump(gdb);
-        const TbRegister *row = tb_registers_row(registers, 0);
+        const TbRegister_t *row = tb_registers_row(registers, 0);
         if (!tb_registers_stale(registers) && row && row->fresh && !tb_gdb_pending(gdb)) { return; }
     }
     fprintf(stderr, "registers not ready: %s\n", tb_registers_error(registers)); CHECK(false);
@@ -45,7 +45,7 @@ static void ready(TbGdb *gdb)
 static void run(const char *peer, const char *mode)
 {
     CHECK(setenv("TB_FAKE_MODE", mode, 1) == 0);
-    TbGdb *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
+    TbGdb_t *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
     context = tb_context_create(gdb); registers = tb_registers_create(gdb, context); CHECK(context && registers);
     CHECK(tb_gdb_start(gdb, peer, 1000)); uint64_t end = tb_gdb_now_ms() + 2000;
     while (tb_gdb_state(gdb) != TB_GDB_READY && tb_gdb_now_ms() < end) { pump(gdb); }
@@ -53,7 +53,7 @@ static void run(const char *peer, const char *mode)
     tb_registers_visible(registers, true); tb_context_visible(context, false, true);
     uint64_t previous_stop = tb_gdb_generation(gdb).stop;
     command(gdb, "-stop"); stopped(gdb, previous_stop); ready(gdb);
-    const TbRegister *row = tb_registers_row(registers, 0);
+    const TbRegister_t *row = tb_registers_row(registers, 0);
     CHECK(row->number == 0 && row->available && !row->changed && strcmp(row->value, "0x10") == 0);
     if (strstr(mode, "bounds")) { CHECK(tb_registers_count(registers) == TB_REGISTERS_MAX && tb_registers_limited(registers)); }
     else {

@@ -374,9 +374,8 @@ create a change. Selecting another frame/thread resets the comparison baseline.
 
 Click the format control to cycle Hex, Decimal, Octal, Binary, Raw and Natural.
 **Refresh** rereads stopped values. Running values remain visibly stale; hidden
-or idle panes do not poll. Register editing is not implemented. GDB/MI does not
-provide standard structured register groups here, so the pane says **All
-(ungrouped)** rather than guessing groups from register names.
+or idle panes do not poll. Groups remain unclassified: GDB/MI provides no standard
+structured group discovery here, and register names are not used to guess groups.
 
 Visible rows are fetched in batches of 32, with a 512-ID catalog and bounded
 1024-byte value buffers. Unavailable values, bounded output and errors are
@@ -385,6 +384,39 @@ launch `build/code-fixture`, enter `start` in Console, focus Disassembly and ste
 F11. Compare `rip` with the stopped instruction address, then change formats.
 See the [register checklist](testing.md#cpu-registers)
 for frame selection and further checks.
+
+### Edit a CPU register
+
+1. Stop the target and select **frame 0** in Call Stack. Select a fresh register
+   row, then click **Edit** or press Enter with its content selected.
+2. Enter raw hexadecimal bits, optionally prefixed by `0x`. **Review** (or Enter)
+   shows the register name, discovered ID, width, thread, old bits and new bits.
+   Read every review page; **Apply** appears on the last page. **Cancel** sends
+   no write. In Vim Insert mode, Escape first returns to Normal.
+3. Apply once, then choose **Verify**, or return to the pane and **Refresh**.
+   Acknowledgment alone does not establish the contents. A mismatch stays visible
+   in the pane; **Edit** shows the requested and observed values. Cancel closes
+   that result before starting another edit.
+4. To restore the old bits, make a second reviewed edit and explicitly verify it.
+   Restoration is never automatic. An uncertain result blocks all three editors;
+   explicitly Verify the original register before **Reconcile**. Lost completion
+   requires a new session even if later contents match.
+
+Editing requires a complete scalar sample, a target-reported size of 8–64 bits
+on an octet-addressed target, an unambiguous discovered name/ID, GDB's structured
+write command, enabled `may-write-registers`, and an editable GDB register object.
+The frontend never enables GDB writes implicitly. Caller frames, unavailable,
+truncated, wide/compound and unsupported registers are refused. No integer
+expressions, typed floating-point conversion, bitfield editor or peripheral
+register writes are provided.
+
+**GDB editability does not prove every bit is physically writable.** Targets can
+reject, ignore or normalize bits; only an explicit fresh sample establishes what
+was observed. Changing PC, SP, status or control registers can redirect execution,
+corrupt state or make debugging unavailable. Use a disposable stopped fixture and
+an appropriate general-purpose register for initial validation. Changing context
+or refreshing invalidates a draft; evidence is checked again before dispatch.
+See the [CPU-register editing checks](testing.md#cpu-register-editing-f05).
 
 ## Memory inspection
 
@@ -957,3 +989,62 @@ The complete no-call explanation and buttons are centered when they fit;
 smaller terminals retain paginated text. The workspace has one blank top row,
 using one row from the top of the debugging area. Reselecting the current fresh
 Call Stack frame retains its context and displayed values.
+
+## Deliberate editing
+
+For a stopped target, explicitly Read a supported integer/bool in Locals or
+Watches, select **Actions → Edit selected integer/bool**, enter a value and
+choose **Review**, then **Apply** or **Cancel**. Integer bounds come from the
+target type's storage size; boolean input accepts `true`, `false`, `1` or `0`.
+Pressing Enter in the field opens review, then applies on the review screen.
+Cancel discards the draft. Escape cancels outside Vim Insert mode; in Insert
+mode, the first Escape returns to Normal. Insert mode keeps input literal.
+
+For Memory, explicitly read ordinary RAM, review its **Temporary ranges** and
+authorize the intended ordinary byte extent. Select the row and choose
+**Options → Edit selected row**. Enter exactly two hexadecimal digits per byte,
+without separators, for the displayed extent (at most 16 bytes). Review the
+address, byte count, old bytes and proposed bytes before Apply. Permission also
+requires affirmative writable-region metadata; an authorized read range alone
+is insufficient. Native Linux derives this metadata from process mappings. A
+remote session without supplied writable-region evidence cannot use either
+editor; no peripheral/Flash permission is inferred from its ELF image.
+
+For an STM32F446RE, stop the target and choose **Setup → Review STM32F446RE RAM
+evidence**. Review all pages and confirm only if this connection reaches your
+identified board. The description covers main SRAM `[0x20000000, 0x20020000)`
+from ST DS10693. Identity and region binding are **user-confirmed**, never detected
+or hardware-verified. A little-endian, 32-bit ARM target is a compatibility
+prerequisite, not MCU identification. Default Back cancels without confirmation.
+
+This establishes eligibility for both editors, not permission to overwrite live
+stack, heap, DMA buffers or other application state. Choose a disposable buffer;
+Memory still requires separate ordinary-range authorization and every mutation
+requires Review/Apply. Confirmation and revocation request no target access.
+Console commands, reset, reconnect, inferior replacement and configuration or
+connection loss revoke evidence. **Setup → Revoke RAM evidence** revokes it
+explicitly. Replacement invalidates existing reviews even with identical bounds.
+Nothing is saved in profiles/setups, and reconfirming cannot clear write quarantine.
+
+After acknowledgment, choose **Read** for the original variable or **Refresh**
+for the original Memory extent. A write invalidates the stopped context and its
+temporary grants; reauthorize the ordinary range before another Memory edit. The displayed acknowledgment is not verification.
+Memory and variable snapshots become stale; no automatic read-back verifies the
+edit. An uncertain write
+blocks further edits in all three inspectors: explicitly inspect the original
+value/bytes, then use **Reconcile uncertain write** in its Actions/Options menu.
+If the original variable scope is gone, start a new session. No automatic retry,
+rollback, MMIO write or Flash programming is performed. CPU-register editing has
+its separate [frame-zero review](#edit-a-cpu-register).
+
+A timed-out, cancelled or otherwise lost write completion requires a new session
+before further edits. A controller with no pending tokens is not proof that the
+backend can no longer complete that mutation. Explicit verification can reconcile
+a completed backend error reply, but cannot clear an unresolved transport.
+
+Fresh connection forms start without sample paths or endpoints. Saved profiles
+retain their values; an empty tool path uses the documented launcher fallback.
+Up/Down follows form rows, Left/Right reaches neighboring actions, and Tab visits
+controls in order. `q` is literal in a text field and Back on non-text controls.
+The installed OpenOCD script list scrolls with arrows, Page Up/Down, mouse wheel
+and Vim `j`/`k` when enabled; Filter and Back remain keyboard accessible.

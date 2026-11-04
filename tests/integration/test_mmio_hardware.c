@@ -9,8 +9,8 @@
  * GPIOA_ODR 0x40020014, count 1 each, widths 8/16/32. No flash/reset/write,
  * resume, polling or retry command. Backend physical attempts may differ.
  * This tests transport; it does not test or grant interactive range consent. */
-typedef struct { TbGdb *gdb; TbMmio *mmio; bool reply, success; } Probe;
-static void emit(void *context, const TbGdbEvent *event)
+typedef struct { TbGdb_t *gdb; TbMmio_t *mmio; bool reply, success; } Probe;
+static void emit(void *context, const TbGdbEvent_t *event)
 {
     Probe *p = context;
     (void)tb_mmio_event(p->mmio, event);
@@ -46,7 +46,7 @@ int main(int argc, char **argv)
         CHECK(tb_mmio_read(p.mmio, "stm32f4x.cpu", 0x40020014, width));
         until = tb_gdb_now_ms() + 4000;
         while (tb_mmio_busy(p.mmio) && tb_gdb_now_ms() < until) { pump(&p); }
-        const TbMmioResult *r = tb_mmio_result(p.mmio);
+        const TbMmioResult_t *r = tb_mmio_result(p.mmio);
         CHECK(r->status == TB_MMIO_COMPLETE && r->address == 0x40020014 && r->width == width);
         printf("PASS production MMIO transport GPIOA_ODR width %u value 0x%llx; one frontend request, physical attempts not asserted\n",
                width, (unsigned long long)r->value);

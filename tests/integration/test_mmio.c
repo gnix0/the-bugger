@@ -3,14 +3,14 @@
 #include "../support/check.h"
 #include <string.h>
 
-typedef struct { TbGdb *gdb; TbMmio *mmio; unsigned replies, reads; } Fixture;
-static void emit(void *context, const TbGdbEvent *event)
+typedef struct { TbGdb_t *gdb; TbMmio_t *mmio; unsigned replies, reads; } Fixture;
+static void emit(void *context, const TbGdbEvent_t *event)
 {
     Fixture *f = context;
     (void)tb_mmio_event(f->mmio, event);
     if (event->kind == TB_GDB_REPLY) {
         ++f->replies;
-        const TbMiValue *reads = tb_mi_find(event->record->results, "reads");
+        const TbMiValue_t *reads = tb_mi_find(event->record->results, "reads");
         if (reads) { CHECK(reads->type == TB_MI_STRING); f->reads = (unsigned)strtoul(reads->string.data, NULL, 10); }
     }
 }
@@ -57,7 +57,7 @@ int main(int argc, char **argv)
         CHECK(!tb_mmio_destroy(f.mmio));
         CHECK(!tb_gdb_request(f.gdb, "-echo", NULL, 0, TB_GDB_SESSION, 777, 1000, NULL));
         CHECK(!tb_mmio_read(f.mmio, "stm32f4x.cpu", 0x40020014, width)); complete(&f);
-        const TbMmioResult *r = tb_mmio_result(f.mmio);
+        const TbMmioResult_t *r = tb_mmio_result(f.mmio);
         CHECK(r->status == TB_MMIO_COMPLETE && r->width == width && r->address == 0x40020014);
         CHECK(r->value == (width == 8 ? 0x5a : width == 16 ? 0x125a : 0x1234125a));
         CHECK(r->generation.stop == tb_gdb_generation(f.gdb).stop);
@@ -79,7 +79,7 @@ int main(int argc, char **argv)
         start(&f, argv[1]); char text[16]; (void)snprintf(text, sizeof text, "%u", mode);
         command(&f, "-mmio-mode", text);
         CHECK(tb_mmio_read(f.mmio, "stm32f4x.cpu", 0x40020014, 32)); complete(&f);
-        TbMmioStatus expected = mode == 9 || mode == 10 ? TB_MMIO_FAILED : TB_MMIO_UNCERTAIN;
+        TbMmioStatus_e expected = mode == 9 || mode == 10 ? TB_MMIO_FAILED : TB_MMIO_UNCERTAIN;
         CHECK(tb_mmio_result(f.mmio)->status == expected);
         if (expected == TB_MMIO_UNCERTAIN) { CHECK(!tb_mmio_read(f.mmio, "stm32f4x.cpu", 0x40020014, 32)); }
         command(&f, "-mmio-stats", NULL); CHECK(f.reads == 1); /* No automatic retry or fallback. */

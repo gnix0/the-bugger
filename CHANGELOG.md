@@ -2,6 +2,39 @@
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-11-04
+
+### Added
+
+- Deliberate integer/bool editing in Locals and Watches, with target-sized
+  conversion, writable-storage checks, Review/Apply/Cancel and explicit verification.
+- Exact ordinary-RAM byte editing in Memory, with bounded hexadecimal input,
+  writable-region evidence and separate per-view range authorization.
+- Stopped frame-zero CPU-register editing through discovered GDB IDs, with
+  bounded raw hexadecimal input, backend capability checks and explicit Verify.
+  All three editors share serialization and uncertainty handling; none performs
+  automatic read-back, retry or rollback. Flash and MMIO writes remain excluded.
+- Session-scoped, user-confirmed STM32F446RE main-SRAM evidence for Memory and
+  memory-backed variable edits. Confirmation binds the live connection and
+  configuration; evidence changes revoke dependent permissions and drafts without
+  clearing write quarantine. No silicon detection or automatic target access.
+
+### Changed
+
+- Fresh connection forms start without sample values and preserve saved profile
+  defaults. Keyboard navigation follows visual rows.
+- The installed OpenOCD script browser uses a scrollable list with filtering,
+  keyboard and mouse navigation, track paging and thumb dragging. It shares a
+  centered, height-limited card with Keybinds; scrollbars appear only on overflow.
+
+### Fixed
+
+- Profile titles and descriptions remain inside centered cards, with spacing
+  between list content and paging controls. Script browsing separates its list
+  from Filter/Back, and Theme Preview retains a top margin.
+
+## [0.1.5] - 2026-10-30
+
 ### Added
 
 - Gruber Darker, Zenburn, eight Modus variants and Solarized dark/light themes,
@@ -22,7 +55,7 @@
   Debugger function keys work with focused fields in ordinary/Vim Normal mode.
 - Expanded lower panes use their former dock row for content and retain their
   top minimize/menu controls. Header/footer spacing uses available chrome space
-  without moving the primary panes. UI/CLI target version is v0.1.5.
+  without moving the primary panes.
 
 ### Fixed
 

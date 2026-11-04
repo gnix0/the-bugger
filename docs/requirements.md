@@ -9,7 +9,7 @@ interaction; [architecture](architecture.md) defines the implemented boundaries.
 ## Product direction
 
 The Bugger is primarily a terminal-native GDB frontend for embedded development:
-microcontrollers and other embedded targets across GDB-supported architectures.
+microcontrollers and other embedded targets through compatible GDB/server setups.
 Native Linux debugging is a supported product capability as well as the practical
 development/validation focus through M14. This sequencing does not make Linux
 the product's primary target or permit weakening existing native functionality.
@@ -39,7 +39,7 @@ pane/window in **tmux** and provide a consistent workflow for:
 - **Native Linux C/C++ processes on x86-64** (GDB controls locally launched programs; attaching to permitted processes is also in scope).
 - **Embedded ARM firmware** (GDB connects to an OpenOCD GDB server; initial reference board is the STM32 NUCLEO-F446RE with onboard ST-LINK).
 - **Xtensa and 32-bit RISC-V firmware** through appropriate editable GDB/server choices, included in recorded release regression. Distinguish architecture support from physical validation of a particular device/backend configuration. QEMU ARM/RISC-V guest/native tests are supplementary test infrastructure, not a simulator product feature.
-- General firmware and system-level C/C++ across GDB-supported architectures without replacing the TUI or assuming ARM registers. Validation targets do not limit the product architecture.
+- Architecture-neutral firmware and system-level C/C++ inspection without assuming ARM registers. A GDB-supported architecture alone does not establish frontend compatibility; target capabilities and physical validation remain explicit.
 
 This is **a GDB frontend, not a replacement debugger engine**. Use structured **GDB/MI** for debugger communication. OpenOCD is an **optional remote server backend**, not the universal backend for every architecture or a prerequisite for native Linux debugging.
 
@@ -139,14 +139,16 @@ Performance numbers are targets to measure, not grounds for hiding failures. The
    v0.1.4; it remains UNVERIFIED and is not a support claim. Native, STM32/ARM
    and ESP32-S3/Xtensa release checks remain required. QEMU adds coverage without
    substituting for boards. Target-specific features list their actual setups.
-7. Final end-to-end validation and release authorization follow the [maintainer release procedure](maintaining.md#release-procedure). The original baseline release was **`v0.1.0`**, without a prerelease suffix; the current release target is recorded in the roadmap and version header.
+7. Final end-to-end validation and release authorization follow the [maintainer release procedure](maintaining.md#release-procedure). The original baseline release was **`v0.1.0`**, without a prerelease suffix; the next release target is recorded in the roadmap. The version header identifies the build and changes during release preparation.
 
-The current development branch adds [physical RISC-V core-workflow evidence](validation.md#v014-task-21--risc-v-hardware-validation)
-for Task2.1, using ESP32-C6FH4 as its validation device.
+Physical RISC-V core-workflow validation was completed for v0.1.4 through
+[Task2.1](validation.md#v014-task-21--risc-v-hardware-validation), using
+ESP32-C6FH4. The earlier deferrals above remain historical release decisions.
 
 ## Release exclusions
 
-Do **not** allow these features to delay the release:
+The following exclusions apply to the original v0.1.0 release. Later approved
+extensions and their version targets are recorded in the roadmap:
 
 - Windows/macOS support; core-dump debugging, reverse/time-travel debugging; custom debug probes beyond what GDB/OpenOCD already supports; simulator features/dedicated simulator integration. Xtensa/RISC-V real-board regression remains required.
 - CMSIS-SVD peripheral bitfield UI, RTOS awareness, advanced instruction trace, timeline, profiling, cycle-accurate performance analysis, coverage, fault decoding.
@@ -158,13 +160,14 @@ Do **not** allow these features to delay the release:
 ### Visual identity
 
 - The original v0.1.0 visual reference uses **Monokai Pro**. F19 adds selectable
-  themes and makes **Catppuccin Macchiato** the development-build default when no
+  themes and makes **Catppuccin Macchiato** the default since v0.1.1 when no
   valid preference exists. Preserve the tiled interface and semantic roles.
 - Retained Monokai Pro palette: background `#221f22`, panel `#2d2a2e`, raised surface `#353236`, border `#49454b`, foreground `#fcfcfa`, muted `#939293`, pink `#ff6188`, green `#a9dc76`, orange `#fc9867`, yellow `#ffd866`, purple `#ab9df2`, cyan `#78dce8`.
 - Use colors semantically and consistently: current execution line, breakpoints, selected row, changed registers/variables, running/halted/error statuses, assembly mnemonics, addresses, and C/C++ source syntax.
 - Provide a **256-color fallback** if truecolor is unavailable, with legible monochrome/minimal-color behavior rather than invisible text. No need to vendor proprietary Monokai assets.
 - Compact borders, understated tabs, a persistent status bar, and visible toolbar/action hints. Keep it fast and restrained rather than decorative.
-- F19 provides seven built-in themes and 37 variants through centered
+- F19 shipped seven theme families and 37 variants; v0.1.5 expands the catalogue
+  to eleven families and 49 palettes. Selection uses centered
   **Config → Themes** controls: a Theme row, a dependent Variant row, Back,
   Preview and Save. Preview uses simulated data and never saves or reads a
   target; Back cancels and restores the saved palette. Save persists the choice
@@ -221,15 +224,18 @@ Other characteristics already accepted:
 
 ### View inventory
 
-**Functional by v0.1.0** (underlying data must be live, not fabricated):
+These core views were introduced by v0.1.0. The descriptions include later
+interaction refinements; the original FR/NFR tables above retain their release
+scope. Underlying data must be live, not fabricated. Later views and editing
+extensions are identified below.
 
 - **Source**: current file/line, breakpoint gutter, scroll, syntax-aware coloring, GDB-known file selection, current-file text find, line navigation and missing-source recovery via GDB search directories/path substitutions.
 - **Disassembly**: addresses, bytes if available, mnemonics/operands, PC highlighting, optional mixed source/assembly and source connection where symbols permit. **AT&T syntax for x86-64**, not Intel. Address/symbol navigation and return to stopped context do not move execution.
-- **Registers**: discover register names from active GDB target; per-group display where supported, selectable numeric format, highlights for values changed since last stop; CPU architecture-neutral model.
-- **Memory**: persistent pane with an inline address/expression field and Go above hex/ASCII data; no initial address-entry page. Independent instances retain address, grouping and scroll. Wheel/keyboard browsing fetches bounded adjacent blocks within established ordinary readable regions, without speculative prefetch. Preserve a prior location; otherwise keep controls visible with a concise empty state. No mandatory SP initialization, fixed target addresses or broad scans. Explicit Go permits RAM/Flash inspection even without region metadata; unknown/MMIO boundaries require deliberate exact-range navigation. Show target byte order and partial/read errors. No editing/search/export/comparison yet.
+- **Registers**: discover register names from active GDB target; selectable numeric format and highlights for values changed since last stop; architecture-neutral model. The current catalog uses All (ungrouped); custom register groups remain F11.
+- **Memory**: persistent pane with an inline address/expression field and Go above hex/ASCII data; no initial address-entry page. Independent instances retain address, grouping and scroll. Wheel/keyboard browsing fetches bounded adjacent blocks within established ordinary readable regions, without speculative prefetch. Preserve a prior location; otherwise keep controls visible with a concise empty state. No mandatory SP initialization, fixed target addresses or broad scans. Explicit Go permits RAM/Flash inspection even without region metadata; unknown/MMIO boundaries require deliberate exact-range navigation. Show target byte order and partial/read errors. Deliberate byte editing is specified under F04 below; search, export and comparison remain planned.
 - **Locals**: scoped variables for selected frame, values/types and lazy expandable structs/unions/arrays/pointers/C++ fields with bounded array paging; honest optimized-out/unavailable states.
-- **Console**: readable debugger/transport/target events/errors, captured native output, inline manual GDB command input below the log through MI (Enter/Send), and basic Save Log with visible file-write errors. Command drafts are pane-local and separate from captured output. No dedicated program-input/serial/RTT/SWO controls yet.
-- **Watches**: add/remove/refresh expressions, the same bounded expansion, formats/types/change indicators as Locals; GDB-resolvable global/static expressions work without a dedicated Statics view. No specialized STL display or value editing yet.
+- **Console**: readable debugger/transport/target events/errors, captured native output, inline manual GDB command input below the log through MI (Enter/Send, added in v0.1.2), and basic Save Log with visible file-write errors. Command drafts are pane-local and separate from captured output. No dedicated program-input/serial/RTT/SWO controls yet.
+- **Watches**: add/remove/refresh expressions, the same bounded expansion, formats/types/change indicators as Locals; GDB-resolvable global/static expressions work without a dedicated Statics view. Deliberate scalar editing is specified under F03 below; specialized STL display remains planned.
 - **Call Stack**: show frames and select a frame, updating source and locals.
 - **Breakpoints**: gutter/F9 and list management, conditions, GDB ignore counts, pending/multiple locations and Default / Require hardware. Run to Selected uses temporary backend state without damaging user breakpoints. Hardware-assisted value-change/read/access watchpoints are capability-dependent, with clear slot/width/support errors and no silent software fallback.
 - **Threads**: list and switch when GDB reports multiple threads; simple/single-core embedded targets can show one.
@@ -238,7 +244,12 @@ Other characteristics already accepted:
 
 **Design allowance:** device descriptions such as **CMSIS-SVD** should later enrich peripheral register naming and fields, but CPU register inspection must work without a device file. Register/memory reads of MMIO can have side effects: no aggressive automatic peripheral polling.
 
-Locals/Watches, memory and CPU-register editing are targeted for **v0.2.0**. Dedicated Stack is **v0.1.5**. The complete versioned deferred inventory in docs/roadmap.md is retained through v1.0.0; deferral never means forgetting a feature. No simulator feature or dedicated simulator integration is planned.
+**Later extensions:** dedicated Stack inspection shipped in **v0.1.5**.
+**v0.1.6** adds deliberate Locals/Watches, ordinary-RAM and CPU-register editing
+(F03–F05), subject to the contracts below. Memory search, export and comparison
+and specialized STL display remain planned. The [roadmap](roadmap.md)
+retains the remaining versioned scope through v1.0.0. No simulator feature or
+dedicated simulator integration is planned.
 
 ### Interaction conventions
 
@@ -271,13 +282,13 @@ centered horizontally and vertically, theme-aware title/version and subtle rules
 three full-row choices with terminal-friendly icons, descriptions and chevrons,
 and recent-session information below. The selected row has a clear surface and
 non-color indicator. Adapt spacing for small terminals; preserve all mouse and
-keyboard actions, honest preview/profile availability and v0.1.0 without suffixes.
+keyboard actions, honest preview/profile availability and the current application version.
 This launcher refinement does not change the approved debugging workspace.
 
 The startup screen should read approximately:
 
 ```text
- THE BUGGER                                            v0.1.0
+ THE BUGGER                                         v<version>
  ────────────────────────────────────────────────────────────
  Start a debugging session
 
@@ -297,7 +308,7 @@ This is a TUI with clickable items, not an actual GUI/dialog wrapper. A compact 
 Ask for:
 
 - Mode: **Launch** or **Attach**.
-- Launch: executable/ELF path, optional arguments, optional working directory, optional environment variables, optional GDB path (default `gdb`).
+- Launch: executable/ELF path, optional arguments, optional working directory, optional environment variables, explicit GDB path (`gdb` for a typical system installation).
 - Attach: PID/process selection and optional symbols path. Show actionable Linux permission/`ptrace` diagnostics when the user is not permitted to attach.
 - Validate the executable or PID and tools *before* claiming connection; retain input on failure for correction.
 - Source search directories and ordered build-prefix → local-prefix mappings are available as source settings, with a recovery action for missing source. Save these in basic profiles; test correct file and breakpoint resolution after relocation.
@@ -309,8 +320,10 @@ Default **simple path**:
 
 - Firmware ELF **with symbols** (may already be flashed to hardware).
 - **Board** selection from OpenOCD's actual installed `board/*.cfg` scripts; show a friendly display label plus the exact underlying path. Search/filter list; don't claim a perfect human-readable identity can be derived from every file name.
-- GDB executable, default preference `arm-none-eabi-gdb` for ARM, but always editable.
-- OpenOCD executable (default `openocd`), editable host/port (default GDB port 3333 when applicable), and **Start OpenOCD for me** toggle.
+- Explicit GDB executable appropriate to the target, for example `arm-none-eabi-gdb`
+  for the documented ARM setup. Fresh forms do not insert a sample tool path.
+- Explicit OpenOCD executable, host/port and **Start OpenOCD for me** toggle.
+  Saved profiles retain their configured tools and endpoint.
 - A summary/confirmation showing the selected paths and **argument-vector preview**, e.g. `openocd -f board/st_nucleo_f4.cfg`. Show the resolved GDB endpoint and whether the tool will start a process or connect to an existing one.
 - Connection should normally be **non-destructive**: attach and halt/read where supported, but **do not automatically flash firmware, erase flash, force reset or resume** without the user's deliberate action/configuration.
 
@@ -326,11 +339,17 @@ Default **simple path**:
 
 Handle failed board discovery, missing `.cfg`, busy ST-LINK, USB permission error, GDB port collision, absent device, GDB incompatible architecture, and server startup timeout with clear recoverable diagnostics.
 
-Embedded disconnect/exit asks whether to leave halted or resume where supported. Disclose backend/script limitations and state-transition failures. Do not silently rewrite external server scripts or kill external servers. Reset/Halt is explicit and confirmed; native Launch can Restart with confirmation, while native Attach has no Reset action.
+Embedded disconnect/exit asks whether to leave halted or resume where supported. Disclose
+backend/script limitations and state-transition failures. Do not silently rewrite external server
+scripts or kill external servers. OpenOCD Reset is explicit and confirmed; Halt is a deliberate
+action. Native Launch/Attach currently have no Reset/Restart action.
 
 ### Existing server configuration
 
-Inputs: host, port, GDB executable, optional symbol-bearing ELF and remote protocol choice when needed. Support a locally running GDB server/`gdbserver`/OpenOCD remote endpoint without taking ownership of server lifecycle. Default to safe local host values; don't launch OpenOCD in this mode.
+Inputs: host, port, GDB executable, optional symbol-bearing ELF and remote protocol choice when
+needed. Support a locally running GDB server/`gdbserver`/OpenOCD remote endpoint without taking
+ownership of server lifecycle. Fresh forms leave connection values for the user to supply; saved
+profiles retain them. Do not launch OpenOCD in this mode.
 
 ### Profile persistence
 
@@ -530,3 +549,69 @@ tab/layout restoration without new setup fields.
 - Expanded lower groups retain top minimize/menu controls and omit duplicate
   bottom docks. Use available chrome spacing while retaining primary pane
   positions/sizes and compact navigation. No workspace-schema change is needed.
+
+## Deliberate variable and RAM editing (F03–F04)
+
+Inspection remains explicit. Editing is a separate stopped-target action with
+Review, Apply and Cancel; opening a dialog or changing a draft never writes.
+
+- F03 supports built-in integer and boolean scalar lvalues, including members
+  and fixed-array elements selected through a value tree. GDB must report an
+  editable object, a direct path, its target storage size and its exact address.
+  The complete footprint must fit ordinary writable storage. Pointer/reference
+  paths, register-only values, bitfields without an address, aggregates, floating
+  point, ambiguous plain `char`, unsupported typedef spellings and dynamic
+  objects are excluded. Conversion uses target size, not the frontend ABI.
+- F04 writes one selected Memory row, at most 16 bytes, as exact hexadecimal
+  pairs without separators. The old bytes must all be available in a fresh
+  sample. Both affirmative writable ordinary-region metadata and this view's
+  current ordinary-range authorization are required. Readability, ELF section
+  flags and a user-created read range alone do not prove writability.
+- A session-scoped STM32F446RE review may establish user-confirmed main-SRAM
+  eligibility from the fixed device description. It does not detect silicon or
+  prove device identity from an architecture, endpoint, inferior ID or script.
+  Confirmation binds the connection instance/configuration and expires on their
+  relevant transitions. No arbitrary map editing or persisted write grants.
+  Region publication is atomic; replacement, including identical bounds, revokes
+  dependent grants and drafts. Both paths recheck the evidence generation at
+  dispatch; changing evidence cannot clear mutation quarantine.
+- Both require a current stopped session/context and serialize one mutation on
+  an idle controller. Apply is single-shot; cancellation cannot retract a
+  dispatched request. Policy and identity changes invalidate draft permission.
+- Acknowledgment does not establish a fresh sample. Related inspector snapshots
+  become stale; verification requires deliberate Read or Refresh. Errors,
+  cancellation after dispatch, stale completion and timeouts are conservatively
+  uncertain. Uncertainty blocks both editors until explicit reconciliation of
+  the original destination or a new session. No automatic retry or rollback.
+
+These editors do not program Flash or write MMIO, peripheral registers or CPU
+registers. F05 supplies the separate CPU-register path below. Physical embedded
+write behavior requires its own
+recorded validation; existing read-only validation does not establish it.
+
+A timed-out, cancelled or otherwise lost write completion requires a new session
+before further edits. A controller with no pending tokens is not proof that the
+backend can no longer complete that mutation. Explicit verification can reconcile
+a completed backend error reply, but cannot clear an unresolved transport.
+
+## Deliberate CPU-register editing (F05)
+
+- Use discovered CPU-register IDs/names only, a fresh stopped frame-zero context,
+  and the existing shared F03/F04 mutation reservation and quarantine. Caller
+  frames must not write unwound stack storage through a register operation.
+- Require a complete scalar hexadecimal sample, target-reported storage size
+  of 1–8 octets, unique safely representable name, structured write-command
+  availability, enabled GDB write permission and an editable register object.
+  Missing, malformed, contradictory or unsupported evidence refuses editing.
+  No architecture-specific writable-register list is inferred.
+- Review raw hexadecimal bits with register/thread/width/old/new identity;
+  explicit Apply sends one numeric-ID `-data-write-register-values` request.
+  Recheck name/ID, permission, editability and stopped/context identity before
+  dispatch. No typed floating-point/vector, peripheral or bitfield editor.
+- GDB object editability is backend metadata, not physical bit-writability proof.
+  Backend refusal, ignored or normalized bits and stale/uncertain completions
+  remain visible. Require explicit Refresh/Verify; acknowledgment is not verified
+  contents. Never retry or roll back automatically. Preserve the shared lost-
+  completion rule and require the original destination for reconciliation.
+- Record native and physical ARM/Xtensa/RISC-V write/verify/restore evidence
+  separately. Existing inspection results do not establish write behavior.

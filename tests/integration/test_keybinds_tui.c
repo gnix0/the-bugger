@@ -134,7 +134,7 @@ static void scrollbar_layout(void)
     test_terminal_expect(&term, "Rows 14-15/15"); clean_key_borders();
     test_terminal_send(&term, "\033[<64;50;10M"); settle(); clean_key_borders();
     test_terminal_send(&term, "\033[<65;50;10M"); settle(); clean_key_borders();
-    resize_keys(64, 160); CHECK(!test_terminal_find(&term, "#", NULL, NULL));
+    resize_keys(90, 160); CHECK(!test_terminal_find(&term, "#", NULL, NULL));
     test_terminal_send(&term, "\033OH"); settle();
     resize_keys(60, 140); selected = 0;
 }
@@ -186,7 +186,7 @@ static void stop(void) { test_terminal_stop(&term, 0); active = false; }
 
 static void native_bindings(const char *binary, const char *fixture)
 {
-    TbProfiles *store = tb_profiles_create(); TbProfile *profile = malloc(sizeof *profile); CHECK(store && profile);
+    TbProfiles_t *store = tb_profiles_create(); TbProfile_t *profile = malloc(sizeof *profile); CHECK(store && profile);
     CHECK(tb_profiles_load(store)); tb_profile_defaults(profile, 0);
     (void)snprintf(profile->name, sizeof profile->name, "Shared connection");
     (void)snprintf(profile->executable, sizeof profile->executable, "%s", fixture);
@@ -312,7 +312,7 @@ int main(int argc, char **argv)
     scrollbar_layout();
     int x, y; CHECK(test_terminal_find(&term, "Keybinds", &x, &y) && x > 0 && y > 0);
     inactive("[ Undo ]"); inactive("[ Save ]"); inactive("[ Restore Defaults ]");
-    TbPreferences prefs; CHECK(tb_preferences_load(&prefs) && !prefs.existed);
+    TbPreferences_t prefs; CHECK(tb_preferences_load(&prefs) && !prefs.existed);
     edit("F11"); test_terminal_expect(&term, "Already assigned to Step into");
     test_terminal_send(&term, "\021"); test_terminal_expect(&term, "Key unavailable or reserved");
     test_terminal_send(&term, "\033"); test_terminal_expect(&term, "Capture cancelled.");

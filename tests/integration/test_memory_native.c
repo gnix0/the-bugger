@@ -5,7 +5,7 @@
 static void stopped(TbNative *n, uint64_t after)
 {
     uint64_t end = tb_gdb_now_ms() + 5000;
-    const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(n));
+    const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(n));
     while (tb_gdb_now_ms() < end) {
         tb_native_pump(n, 5);
         if (tb_native_state(n) == TB_NATIVE_STOPPED && s->ready && !s->stale && s->generation.stop > after) { return; }
@@ -14,13 +14,22 @@ static void stopped(TbNative *n, uint64_t after)
 }
 static void read_done(TbNative *n, int id, bool success)
 {
-    const TbMemoryView *v = tb_memory_view(tb_native_memory(n), id); uint64_t end = tb_gdb_now_ms() + 5000;
+    const TbMemoryView_t *v = tb_memory_view(tb_native_memory(n), id); uint64_t end = tb_gdb_now_ms() + 5000;
     while (v->pending && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
     if (v->pending || v->ready != success) {
         fprintf(stderr, "memory: %s\n", v->error);
         for (size_t i = 0; i < tb_native_log_count(n); ++i) { fprintf(stderr, "%s\n", tb_native_log_line(n, i)); }
         CHECK(false);
     }
+}
+static void write_done(TbNative *n, TbMemory_t *m, TbMemoryEditState_e state)
+{
+    uint64_t end = tb_gdb_now_ms() + 5000;
+    while (tb_memory_edit_state(m) == TB_MEMORY_EDIT_PENDING && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
+    CHECK(tb_memory_edit_state(m) == state);
+    const TbContextSnapshot_t *snapshot = tb_context_snapshot(tb_native_context(n));
+    while (snapshot->stale && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
+    CHECK(snapshot->ready && !snapshot->stale);
 }
 int main(int argc, char **argv)
 {
@@ -29,16 +38,27 @@ int main(int argc, char **argv)
     uint64_t end = tb_gdb_now_ms() + 5000;
     while (tb_native_state(n) != TB_NATIVE_READY && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
     CHECK(tb_native_state(n) == TB_NATIVE_READY);
-    TbMemory *m = tb_native_memory(n); tb_memory_visible(m, 0, true); tb_memory_visible(m, 1, true);
+    TbMemory_t *m = tb_native_memory(n); tb_memory_visible(m, 0, true); tb_memory_visible(m, 1, true);
     CHECK(tb_native_console(n, "start")); stopped(n, 0);
-    const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(n)); uint64_t stop = s->generation.stop;
-    TbBreakpoints *bp = tb_native_breakpoints(n); end = tb_gdb_now_ms() + 5000;
+    const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(n)); uint64_t stop = s->generation.stop;
+    TbBreakpoints_t *bp = tb_native_breakpoints(n); end = tb_gdb_now_ms() + 5000;
     while ((!tb_break_ready(bp) || tb_break_busy(bp)) && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
     CHECK(tb_native_run_to(n, "memory_checkpoint")); stopped(n, stop);
     CHECK(tb_memory_get_order(m) == TB_MEMORY_LITTLE);
     CHECK(tb_memory_length(m, 0, 64)); CHECK(tb_memory_address(m, 0, "&memory_buffer")); read_done(n, 0, true);
-    const TbMemoryView *a = tb_memory_view(m, 0), *b = tb_memory_view(m, 1);
+    const TbMemoryView_t *a = tb_memory_view(m, 0), *b = tb_memory_view(m, 1);
     CHECK(a->readable == 64 && memcmp(a->bytes, "THE BUGGER MEMORY", 17) == 0 && !tb_memory_stale(m, 0));
+    CHECK(tb_memory_range_set(m, 0, 0, a->address, a->address + 64, TB_MEMORY_ORDINARY, 0, "Reviewed writable RAM"));
+    CHECK(tb_memory_range_authorize(m, 0, 0));
+    CHECK(tb_memory_edit_begin(m, 0, a->address, 4));
+    CHECK(tb_memory_edit_apply(m, "41424344"));
+    write_done(n, m, TB_MEMORY_EDIT_ACKNOWLEDGED);
+    CHECK(tb_memory_refresh(m, 0)); read_done(n, 0, true); CHECK(memcmp(a->bytes, "ABCD", 4) == 0);
+    CHECK(tb_memory_range_authorize(m, 0, 0));
+    CHECK(tb_memory_edit_begin(m, 0, a->address, 4));
+    CHECK(tb_memory_edit_apply(m, "54484520"));
+    write_done(n, m, TB_MEMORY_EDIT_ACKNOWLEDGED);
+    CHECK(tb_memory_refresh(m, 0)); read_done(n, 0, true); CHECK(memcmp(a->bytes, "THE ", 4) == 0);
     CHECK(tb_memory_length(m, 1, 256)); CHECK(tb_memory_address(m, 1, "&memory_other")); read_done(n, 1, true);
     CHECK(b->address != a->address && memcmp(b->bytes, "INDEPENDENT MEMORY", 18) == 0);
     CHECK(tb_memory_group(m, 0, 4)); char line[160]; tb_memory_line(m, 0, 0, line, sizeof line); CHECK(strstr(line, "20454854"));

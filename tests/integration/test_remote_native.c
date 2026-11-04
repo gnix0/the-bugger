@@ -13,7 +13,7 @@
 #include <unistd.h>
 
 static pid_t server = -1, fixture = -1;
-static TbSession *session;
+static TbSession_t *session;
 static void cleanup(void)
 {
     if (session) {
@@ -52,7 +52,7 @@ static pid_t spawn(char *const args[], const char *ready)
     return child;
 }
 
-static void state(TbSessionState expected)
+static void state(TbSessionState_e expected)
 {
     uint64_t until = tb_gdb_now_ms() + 5000;
     while (tb_session_state(session) != expected && tb_gdb_now_ms() < until) { tb_session_pump(session, 1); }
@@ -63,7 +63,7 @@ static void state(TbSessionState expected)
 }
 static void stopped(void)
 {
-    const TbContextSnapshot *s = tb_context_snapshot(tb_session_context(session));
+    const TbContextSnapshot_t *s = tb_context_snapshot(tb_session_context(session));
     uint64_t until = tb_gdb_now_ms() + 5000;
     do { tb_session_pump(session, 1); }
     while ((tb_session_state(session) != TB_SESSION_STOPPED || !s->ready || s->stale) && tb_gdb_now_ms() < until);
@@ -84,13 +84,13 @@ int main(int argc, char **argv)
     char endpoint[64]; (void)snprintf(endpoint, sizeof endpoint, "127.0.0.1:%u", ntohs(address.sin_port));
     char *const command[] = {"gdbserver", "--multi", endpoint, NULL}; server = spawn(command, "Listening on port");
     session = tb_session_create(); CHECK(session);
-    TbSessionConfig config = {.kind = TB_SESSION_EXTENDED_REMOTE, .gdb = "gdb", .endpoint = endpoint, .executable = argv[1]};
+    TbSessionConfig_t config = {.kind = TB_SESSION_EXTENDED_REMOTE, .gdb = "gdb", .endpoint = endpoint, .executable = argv[1]};
     CHECK(tb_session_start(session, &config)); state(TB_SESSION_READY);
     char attach[64]; (void)snprintf(attach, sizeof attach, "attach %ld", (long)fixture);
     tb_context_visible(tb_session_context(session), true, false);
     CHECK(tb_session_console(session, attach)); stopped();
     CHECK(tb_session_target_pid(session) == 0 && !tb_session_capabilities(session)->server_owned);
-    TbMemory *memory = tb_session_memory(session); tb_memory_visible(memory, 0, true);
+    TbMemory_t *memory = tb_session_memory(session); tb_memory_visible(memory, 0, true);
     CHECK(tb_memory_length(memory, 0, 32)); CHECK(tb_memory_address(memory, 0, "&remote_buffer"));
     uint64_t until = tb_gdb_now_ms() + 5000;
     while (tb_memory_view(memory, 0)->pending && tb_gdb_now_ms() < until) { tb_session_pump(session, 1); }
@@ -116,7 +116,7 @@ int main(int argc, char **argv)
         test_terminal_start_argv(&term, args, "xterm-256color", false);
         test_terminal_click(&term, "Connect to GDB server");
         test_terminal_expect(&term, "GDB endpoint");
-        test_terminal_send(&term, "\025"); test_terminal_send(&term, endpoint);
+        test_terminal_send(&term, "\t\025"); test_terminal_send(&term, endpoint);
         test_terminal_send(&term, "\t\025"); test_terminal_send(&term, argv[1]);
         test_terminal_send(&term, "\t\025gdb");
         test_terminal_click(&term, "Review session");

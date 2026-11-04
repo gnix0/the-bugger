@@ -5,4 +5,4 @@
 #include <stdbool.h>
 int tb_tui_run(bool demo);
 
-#endif
+#endif // THE_BUGGER_TUI_H

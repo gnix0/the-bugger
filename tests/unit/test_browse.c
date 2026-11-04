@@ -39,16 +39,16 @@ void __wrap_free(void *pointer)
 int main(void)
 {
     fail = true; CHECK(!tb_browse_create()); fail = false;
-    TbBrowseCache *cache = tb_browse_create(); CHECK(cache);
+    TbBrowseCache_t *cache = tb_browse_create(); CHECK(cache);
     size_t empty = tb_browse_allocated(cache); CHECK(empty == allocated && empty < 1024);
     static unsigned char payload[65536];
-    TbBrowseKey key = {.kind = TB_BROWSE_CODE, .view = 3, .generation = {1, 2, 3}, .epoch = 7};
+    TbBrowseKey_t key = {.kind = TB_BROWSE_CODE, .view = 3, .generation = {1, 2, 3}, .epoch = 7};
     for (unsigned i = 0; i < 100; ++i) {
         key.begin = i; key.end = i + 1; payload[0] = (unsigned char)i;
         CHECK(tb_browse_store(cache, key, payload, sizeof payload)); CHECK(tb_browse_allocated(cache) == allocated);
     }
     CHECK(peak <= TB_BROWSE_LIMIT && allocated > TB_BROWSE_LIMIT - 2 * sizeof payload);
-    TbBrowseSample sample; key.begin = 0; CHECK(!tb_browse_find(cache, key, &sample));
+    TbBrowseSample_t sample; key.begin = 0; CHECK(!tb_browse_find(cache, key, &sample));
     key.begin = 99; CHECK(tb_browse_find(cache, key, &sample));
     CHECK(sample.size == sizeof payload && ((const unsigned char *)sample.data)[0] == 99);
     CHECK(sample.key.generation.stop == 2 && sample.key.epoch == 7);

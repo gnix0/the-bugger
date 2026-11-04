@@ -8,6 +8,32 @@
 #include <time.h>
 #include <unistd.h>
 
+static char tmux_socket[80], tmux_config[] = "/tmp/the-bugger-m11-tmux-XXXXXX";
+static void tmux_cleanup(void)
+{
+    pid_t child = fork();
+    if (child == 0) {
+        if (freopen("/dev/null", "w", stderr) == NULL) { _exit(127); }
+        execlp("tmux", "tmux", "-L", tmux_socket, "kill-server", (char *)NULL); _exit(127);
+    }
+    if (child > 0) { while (waitpid(child, NULL, 0) < 0 && errno == EINTR) { } }
+    (void)unlink(tmux_config);
+}
+static void start(TestTerminal *t, const char *binary)
+{
+    if (!getenv("TB_VARIABLES_TEST_TMUX")) {
+        char *const args[] = {(char *)binary, NULL}; test_terminal_start_argv(t, args, "xterm-256color", false); return;
+    }
+    (void)snprintf(tmux_socket, sizeof tmux_socket, "the-bugger-m11-%ld", (long)getpid());
+    int fd = mkstemp(tmux_config); CHECK(fd >= 0);
+    const char config[] = "set -g mouse on\nset -g status off\nset -g default-terminal tmux-256color\n";
+    CHECK(write(fd, config, sizeof config - 1) == (ssize_t)(sizeof config - 1)); CHECK(close(fd) == 0);
+    CHECK(atexit(tmux_cleanup) == 0); CHECK(unsetenv("TMUX") == 0);
+    char *args[] = {"tmux", "-L", tmux_socket, "-f", tmux_config, "new-session", "-s", "variables", (char *)binary, NULL};
+    test_terminal_start_argv(t, args, "xterm-256color", false);
+}
+
+
 static TestTerminal term;
 static bool active;
 static long long milliseconds(void)
@@ -102,8 +128,7 @@ int main(int argc, char **argv)
 {
     CHECK(argc == 3 || (argc == 4 && strcmp(argv[3], "--startup-only") == 0)); CHECK(atexit(cleanup) == 0);
     /* test_terminal_start is the demo helper; live tests need a bare argv. */
-    char *const arguments[] = {argv[1], NULL};
-    test_terminal_start_argv(&term, arguments, "xterm-256color", false); active = true;
+    start(&term, argv[1]); active = true;
     test_terminal_resize(&term, 54, 200);
     test_terminal_expect(&term, "Native Linux");
     CHECK(!test_terminal_find(&term, "DEMO / VISUAL REFERENCE", NULL, NULL));
@@ -128,7 +153,20 @@ int main(int argc, char **argv)
     test_terminal_click(&term, "Cycle selected value format");
     watch_wait(NULL); watch_click("Actions");
     test_terminal_expect(&term, "Hex"); selected_value("0x11");
-    test_terminal_send(&term, "\033"); add_watch("variables_sample");
+    test_terminal_click(&term, "Edit selected integer/bool");
+    test_terminal_expect(&term, "Edit variable");
+    test_terminal_send(&term, "\02542\r"); test_terminal_expect(&term, "Review variable edit");
+    test_terminal_click(&term, "Cancel"); watch_click("Actions"); selected_value("0x11");
+    test_terminal_click(&term, "Edit selected integer/bool"); test_terminal_expect(&term, "Edit variable");
+    test_terminal_send(&term, "\02542\r"); test_terminal_expect(&term, "Review variable edit");
+    test_terminal_resize(&term, 28, 100); test_terminal_expect(&term, "Review variable edit");
+    test_terminal_send(&term, "\r"); test_terminal_expect(&term, "Backend acknowledged; Verify");
+    test_terminal_resize(&term, 54, 200); watch_click("Read"); watch_wait(NULL);
+    watch_click("Actions"); selected_value("0x2a");
+    test_terminal_click(&term, "Edit selected integer/bool"); test_terminal_expect(&term, "Edit variable");
+    test_terminal_send(&term, "\02517\r"); test_terminal_expect(&term, "Review variable edit");
+    test_terminal_click(&term, "Apply"); watch_click("Read"); watch_wait(NULL);
+    add_watch("variables_sample");
     watch_click("variables_sample"); watch_click("Read"); watch_wait(NULL);
     watch_click("Actions"); test_terminal_click(&term, "Expand / collapse");
     watch_wait("variables_sample");

@@ -5,23 +5,23 @@
 #include <string.h>
 #include <unistd.h>
 
-static TbContext *context;
-static TbCode *code;
+static TbContext_t *context;
+static TbCode_t *code;
 static unsigned completions;
-static void emit(void *unused, const TbGdbEvent *event)
+static void emit(void *unused, const TbGdbEvent_t *event)
 {
     (void)unused;
     if (!tb_code_event(code, event)) { (void)tb_context_event(context, event); }
     if (event->kind == TB_GDB_REPLY) { ++completions; }
 }
-static void pump(TbGdb *gdb) { tb_gdb_pump(gdb, 5); tb_context_pump(context); tb_code_pump(code); }
-static void command(TbGdb *gdb, const char *operation)
+static void pump(TbGdb_t *gdb) { tb_gdb_pump(gdb, 5); tb_context_pump(context); tb_code_pump(code); }
+static void command(TbGdb_t *gdb, const char *operation)
 {
     CHECK(tb_gdb_request(gdb, operation, NULL, 0, TB_GDB_SESSION, 999, 1000, NULL));
 }
-static void ready(TbGdb *gdb, uint64_t revision)
+static void ready(TbGdb_t *gdb, uint64_t revision)
 {
-    const TbCodeView *view = tb_code_view(code, 0);
+    const TbCodeView_t *view = tb_code_view(code, 0);
     uint64_t until = tb_gdb_now_ms() + 5000;
     while ((view->stale || view->assembly_revision <= revision) && tb_gdb_now_ms() < until) { pump(gdb); }
     if (view->stale || view->assembly_revision <= revision) {
@@ -30,11 +30,11 @@ static void ready(TbGdb *gdb, uint64_t revision)
 }
 static void grammar(void)
 {
-    TbCodeView view = {.mixed = true, .mixed_available = true, .instruction_count = 3,
+    TbCodeView_t view = {.mixed = true, .mixed_available = true, .instruction_count = 3,
         .instructions = {{.numeric = 0x1000, .bytes = 2, .line = 7, .source = "a.c"},
                          {.numeric = 0x1002, .bytes = 2, .line = 7, .source = "a.c"},
                          {.numeric = 0x1010, .bytes = 2, .line = 1, .source = "b.c"}}};
-    TbCodeRow rows[TB_CODE_ROWS];
+    TbCodeRow_t rows[TB_CODE_ROWS];
     CHECK(tb_code_rows(&view, rows) == 6 && tb_code_rows(&view, NULL) == 6);
     CHECK(rows[0].kind == TB_CODE_SOURCE && rows[1].kind == TB_CODE_INSTRUCTION && rows[1].instruction == 0);
     CHECK(rows[2].kind == TB_CODE_INSTRUCTION && rows[2].instruction == 1);
@@ -52,7 +52,7 @@ static void grammar(void)
     char text[64]; tb_code_safe(text, sizeof text, "a\033\a\t\377", 5);
     CHECK(strstr(text, "\\x1b") && strstr(text, "\\x07") && strstr(text, "\\xff") && !strchr(text, '\033'));
 }
-static void source_bounds(const char *path, TbGdb *gdb)
+static void source_bounds(const char *path, TbGdb_t *gdb)
 {
     int fd = open(path, O_WRONLY | O_TRUNC); CHECK(fd >= 0);
     char *bytes = malloc(TB_CODE_SOURCE_BYTES + 32); CHECK(bytes);
@@ -67,20 +67,20 @@ static void source_bounds(const char *path, TbGdb *gdb)
     CHECK(tb_code_view(code, 0)->line_count == TB_CODE_LINES && tb_code_view(code, 0)->truncated);
     CHECK(tb_code_find(code, 0, "OUTSIDE_LIMIT", 0) == -1);
 }
-static void image_review(TbGdb *gdb, const char *elf)
+static void image_review(TbGdb_t *gdb, const char *elf)
 {
     while (tb_gdb_pending(gdb)) { pump(gdb); }
     unsigned before = completions;
-    const TbCodeView *view = tb_code_view(code, 0);
+    const TbCodeView_t *view = tb_code_view(code, 0);
     uint64_t anchor = view->anchor, revision = view->assembly_revision;
     size_t rows = view->instruction_count;
     tb_code_native(code, 0, elf); /* Authored remote assertion, not hardware proof. */
-    TbCodeImageReview review; TbImageRange range;
+    TbCodeImageReview_t review; TbImageRange_t range;
     CHECK(tb_code_image_review(code, 0, &review));
     CHECK(tb_code_image_range(code, &review, 0, &range) && range.trust == TB_IMAGE_UNVERIFIED);
     CHECK(tb_code_image_confirm(code, &review));
     CHECK(tb_code_image_range(code, &review, 0, &range) && range.trust == TB_IMAGE_USER_CONFIRMED);
-    TbCodeImageReview bad = review; memset(bad.image.path, 'x', sizeof bad.image.path);
+    TbCodeImageReview_t bad = review; memset(bad.image.path, 'x', sizeof bad.image.path);
     CHECK(!tb_code_image_confirm(code, &bad));
     CHECK(!tb_code_image_review(code, UINT64_MAX, &bad));
     tb_code_image_invalidate(code);
@@ -92,7 +92,7 @@ static void image_review(TbGdb *gdb, const char *elf)
     tb_code_refresh(code); ready(gdb, revision);
 }
 
-static void retained_origin(const TbCodeView *view, const TbCodeView *saved)
+static void retained_origin(const TbCodeView_t *view, const TbCodeView_t *saved)
 {
     CHECK(view->instruction_count == saved->instruction_count && view->anchor == saved->anchor);
     CHECK(memcmp(view->instructions, saved->instructions, sizeof view->instructions) == 0);
@@ -101,19 +101,19 @@ static void retained_origin(const TbCodeView *view, const TbCodeView *saved)
     CHECK(view->gap_begin == saved->gap_begin && view->gap_end == saved->gap_end);
     CHECK(view->mixed_available == saved->mixed_available && view->truncated == saved->truncated && view->more == saved->more);
 }
-static void reconstruction(TbGdb *gdb)
+static void reconstruction(TbGdb_t *gdb)
 {
-    const TbCodeView *view = tb_code_view(code, 0);
-    TbBrowseCache *cache = tb_code_cache(code);
+    const TbCodeView_t *view = tb_code_view(code, 0);
+    TbBrowseCache_t *cache = tb_code_cache(code);
     uint64_t revision = view->assembly_revision;
     CHECK(tb_code_address(code, 0, "0x8000")); ready(gdb, revision);
-    TbBrowseKey old = {.kind = TB_BROWSE_CODE, .view = 0, .begin = 0x8000};
+    TbBrowseKey_t old = {.kind = TB_BROWSE_CODE, .view = 0, .begin = 0x8000};
     for (unsigned i = 0; i < 40; ++i) {
         revision = view->assembly_revision;
         CHECK(tb_code_assembly_page(code, 0, 1)); ready(gdb, revision);
         CHECK(tb_browse_allocated(cache) <= TB_BROWSE_LIMIT);
     }
-    TbBrowseSample sample;
+    TbBrowseSample_t sample;
     CHECK(!tb_browse_find(cache, old, &sample)); /* Actual shared-pool eviction. */
     revision = view->assembly_revision;
     CHECK(tb_code_address(code, 0, "0x8040")); ready(gdb, revision);
@@ -127,7 +127,7 @@ static void reconstruction(TbGdb *gdb)
     tb_browse_clear(cache, TB_BROWSE_ANCHORS, 0);
     revision = view->assembly_revision;
     CHECK(tb_code_address(code, 0, "0xa000")); ready(gdb, revision);
-    TbCodeView *saved = malloc(sizeof *saved); CHECK(saved); *saved = *view;
+    TbCodeView_t *saved = malloc(sizeof *saved); CHECK(saved); *saved = *view;
     before = completions;
     CHECK(!tb_code_assembly_page(code, 0, -1));
     retained_origin(view, saved); CHECK(completions == before && !tb_gdb_pending(gdb));
@@ -179,7 +179,7 @@ static void run(const char *peer, const char *mode)
     CHECK(write(fd, other_source, sizeof other_source - 1) == (ssize_t)sizeof other_source - 1 && close(fd) == 0);
     CHECK(setenv("TB_FAKE_SOURCE2", other_path, 1) == 0);
     CHECK(setenv("TB_FAKE_SOURCE", path, 1) == 0 && setenv("TB_FAKE_MODE", mode, 1) == 0);
-    TbGdb *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
+    TbGdb_t *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
     context = tb_context_create(gdb); code = tb_code_create(gdb, context); CHECK(context && code);
     CHECK(tb_gdb_start(gdb, peer, 1000));
     uint64_t until = tb_gdb_now_ms() + 2000;
@@ -191,7 +191,7 @@ static void run(const char *peer, const char *mode)
         tb_code_mixed(code, 0, true); command(gdb, "-ctx-release");
     }
     ready(gdb, 0);
-    const TbCodeView *view = tb_code_view(code, 0);
+    const TbCodeView_t *view = tb_code_view(code, 0);
     CHECK(tb_code_file_count(code) == 3 && view->line_count == 3 && view->selected_line == 2);
     CHECK(view->instruction_count == TB_CODE_INSNS && view->more);
     CHECK(view->instructions[4].numeric == 0x1234 && view->instructions[0].numeric == 0x1230);
@@ -238,7 +238,7 @@ static void run(const char *peer, const char *mode)
             until = tb_gdb_now_ms() + 1000;
             while (completions == before && tb_gdb_now_ms() < until) { pump(gdb); }
             CHECK(completions > before);
-            TbCodeView *saved = malloc(sizeof *saved); CHECK(saved); *saved = *view;
+            TbCodeView_t *saved = malloc(sizeof *saved); CHECK(saved); *saved = *view;
             earlier = view->assembly_revision;
             CHECK(tb_code_address(code, 0, "0x6000")); ready(gdb, earlier);
             CHECK(strstr(view->assembly_error, "prior listing retained"));
@@ -315,11 +315,11 @@ static void run(const char *peer, const char *mode)
         uint64_t catalog_end = tb_gdb_now_ms() + 3000;
         while ((!tb_code_files_ready(code) || tb_code_file_count(code) != 4) && tb_gdb_now_ms() < catalog_end) { pump(gdb); }
         CHECK(tb_code_file_count(code) == 4);
-        TbCodeFile ambiguous = {.file = "duplicate.c", .full = "/former/duplicate.c"};
+        TbCodeFile_t ambiguous = {.file = "duplicate.c", .full = "/former/duplicate.c"};
         CHECK(tb_code_tab_restore(code, 1, &ambiguous) && !tb_code_tab_retry(code, 1, 1));
         CHECK(tb_code_open(code, 1, 3) && tb_code_tab_count(code, 1) == 3 && tb_code_tab_unavailable(code, 1, 1));
         CHECK(!tb_code_tab_retry(code, 1, 1));
-        TbCodeFile relocated = {.file = "unit.c", .full = "/former/unit.c"};
+        TbCodeFile_t relocated = {.file = "unit.c", .full = "/former/unit.c"};
         CHECK(tb_code_tab_restore(code, 1, &relocated) && tb_code_tab_retry(code, 1, 3));
         CHECK(tb_code_open(code, 1, 0) && tb_code_tab_count(code, 1) == 4);
         CHECK(strcmp(tb_code_tab_file(code, 1, 3)->full, "/former/unit.c") == 0);
@@ -359,9 +359,9 @@ static void run(const char *peer, const char *mode)
     CHECK(tb_gdb_state(gdb) == TB_GDB_DISCONNECTED);
     tb_code_clear(code, 0);
     CHECK(tb_code_view(code, 0)->instruction_count == 0 && tb_code_tab_count(code, 0) == 1);
-    TbBrowseSample cleared;
-    CHECK(!tb_browse_find(tb_code_cache(code), (TbBrowseKey){.kind = TB_BROWSE_CODE, .view = 0, .begin = 0x5000}, &cleared));
-    CHECK(!tb_browse_find(tb_code_cache(code), (TbBrowseKey){.kind = TB_BROWSE_ANCHORS, .view = 0, .begin = 0}, &cleared));
+    TbBrowseSample_t cleared;
+    CHECK(!tb_browse_find(tb_code_cache(code), (TbBrowseKey_t){.kind = TB_BROWSE_CODE, .view = 0, .begin = 0x5000}, &cleared));
+    CHECK(!tb_browse_find(tb_code_cache(code), (TbBrowseKey_t){.kind = TB_BROWSE_ANCHORS, .view = 0, .begin = 0}, &cleared));
     tb_code_reset(code); CHECK(tb_code_file_count(code) == 0 && tb_code_view(code, 0)->line_count == 0 && tb_code_tab_count(code, 0) == 1);
     tb_code_destroy(code); tb_context_destroy(context); CHECK(tb_gdb_destroy(gdb)); code = NULL; context = NULL;
     CHECK(unlink(path) == 0 && unlink(other_path) == 0);

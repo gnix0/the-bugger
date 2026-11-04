@@ -25,7 +25,7 @@ static void pump(TbNative *n)
 }
 static void stopped(TbNative *n, uint64_t after)
 {
-    const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(n));
+    const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(n));
     uint64_t deadline = tb_gdb_now_ms() + 8000;
     while (tb_gdb_now_ms() < deadline) {
         pump(n);
@@ -43,16 +43,16 @@ static void run(TbNative *n, const char *fixture)
     uint64_t deadline = tb_gdb_now_ms() + 8000;
     while (tb_native_state(n) != TB_NATIVE_READY && tb_gdb_now_ms() < deadline) { pump(n); }
     CHECK(tb_native_state(n) == TB_NATIVE_READY);
-    TbContext *context = tb_native_context(n); TbCode *code = tb_native_code(n);
-    TbRegisters *registers = tb_native_registers(n); TbVariables *variables = tb_native_variables(n);
-    TbMemory *memory = tb_native_memory(n);
+    TbContext_t *context = tb_native_context(n); TbCode_t *code = tb_native_code(n);
+    TbRegisters_t *registers = tb_native_registers(n); TbVariables_t *variables = tb_native_variables(n);
+    TbMemory_t *memory = tb_native_memory(n);
     tb_context_visible(context, true, true); tb_code_visible(code, 0, true, true);
     tb_registers_visible(registers, true); tb_variables_visible(variables, true, true);
     tb_memory_visible(memory, 0, true); tb_memory_visible(memory, 1, true);
     /* Continue correctly runs until a real stop; it does not insert a main
      * breakpoint. Explicit start supplies the initial stop for this fixture. */
     CHECK(tb_native_console(n, "start")); stopped(n, 0);
-    const TbContextSnapshot *s = tb_context_snapshot(context);
+    const TbContextSnapshot_t *s = tb_context_snapshot(context);
     uint64_t stop = s->generation.stop;
     CHECK(tb_native_run_to(n, "variables_ready")); stopped(n, stop);
     CHECK(strstr(s->selected.function, "variables_ready"));
@@ -79,14 +79,14 @@ static void run(TbNative *n, const char *fixture)
     deadline = tb_gdb_now_ms() + 8000;
     while (tb_gdb_now_ms() < deadline) {
         pump(n);
-        const TbVariable *value = tb_variables_row(variables, TB_VARIABLE_WATCHES, 0);
+        const TbVariable_t *value = tb_variables_row(variables, TB_VARIABLE_WATCHES, 0);
         if (value && value->fresh && tb_memory_view(memory, 0)->ready && tb_memory_view(memory, 1)->ready &&
             tb_registers_count(registers) && tb_registers_row(registers, 0)->fresh &&
             tb_code_view(code, 0)->instruction_count && !tb_code_view(code, 0)->stale) { break; }
     }
     CHECK(tb_variables_row(variables, TB_VARIABLE_WATCHES, 0)->fresh);
     CHECK(strcmp(tb_variables_row(variables, TB_VARIABLE_WATCHES, 0)->value, "17") == 0);
-    const TbMemoryView *a = tb_memory_view(memory, 0), *b = tb_memory_view(memory, 1);
+    const TbMemoryView_t *a = tb_memory_view(memory, 0), *b = tb_memory_view(memory, 1);
     CHECK(a->ready && b->ready && a->readable == 16 && b->readable == 16 && a->address != b->address);
     CHECK(a->bytes[tb_memory_get_order(memory) == TB_MEMORY_LITTLE ? 0 : 3] == 17);
     CHECK(tb_registers_count(registers) && tb_registers_row(registers, 0)->fresh);

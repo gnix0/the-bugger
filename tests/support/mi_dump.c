@@ -19,7 +19,7 @@ static void string_print(const char *data, size_t length)
     (void)putchar('"');
 }
 
-static void values_print(const TbMiValue *value, int depth)
+static void values_print(const TbMiValue_t *value, int depth)
 {
     for (; value != NULL; value = value->next) {
         (void)printf("%*s", depth * 2, "");
@@ -37,7 +37,7 @@ static void values_print(const TbMiValue *value, int depth)
     }
 }
 
-static void emit(void *context, TbMiRecord *record, const TbMiError *error)
+static void emit(void *context, TbMiRecord_t *record, const TbMiError_t *error)
 {
     Summary *summary = context;
     ++summary->records;
@@ -92,10 +92,10 @@ int main(int argc, char *argv[])
         input = fopen(argv[at], "rb");
         if (input == NULL) { perror(argv[at]); return 2; }
     }
-    TbMiParser parser = {0};
+    TbMiParser_t parser = {0};
     Summary summary = {0};
     char buffer[65536];
-    TbMiStatus status = TB_MI_OK;
+    TbMiStatus_e status = TB_MI_OK;
     while (status == TB_MI_OK) {
         size_t length = fread(buffer, 1, chunk, input);
         if (length == 0) { break; }

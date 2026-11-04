@@ -39,14 +39,12 @@ static void settle(void)
     while ((long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000 < end);
 }
 static void click(const char *text) { test_terminal_click(&term, text); settle(); }
-static void back(void)
+static void back(const char *destination)
 {
-    char header[TEST_COLS + 1]; memcpy(header, term.cells[0], sizeof header);
     test_terminal_send(&term, "\033");
-    /* Wait for a deferred multiplexer Escape before sending another
-     * escape-prefixed mouse sequence. */
-    for (int i = 0; i < 200 && memcmp(header, term.cells[0], sizeof header) == 0; ++i) { test_terminal_pump(&term, 10); }
-    CHECK(memcmp(header, term.cells[0], sizeof header) != 0); settle();
+    /* Wait for the destination before sending another escape-prefixed mouse
+     * sequence; centered menus intentionally leave terminal row zero blank. */
+    test_terminal_expect(&term, destination); settle();
 }
 static void input(const char *text)
 {
@@ -79,21 +77,21 @@ static void setup_review(void)
     }
     CHECK(false);
 }
-static void restored_setup(const char *binary, TbProfiles *store)
+static void restored_setup(const char *binary, TbProfiles_t *store)
 {
-    TbSetup *saved = tb_profiles_setup(store, "saved copy"); CHECK(saved && saved->panes[0].source_count == 1);
+    TbSetup_t *saved = tb_profiles_setup(store, "saved copy"); CHECK(saved && saved->panes[0].source_count == 1);
     saved->panes[0].source_count = 2;
-    TbSetupSource *missing = &saved->panes[0].sources[1]; missing->id = saved->next_id++;
+    TbSetupSource_t *missing = &saved->panes[0].sources[1]; missing->id = saved->next_id++;
     (void)snprintf(missing->file, sizeof missing->file, "missing-saved-source.c");
     (void)snprintf(missing->full, sizeof missing->full, "/missing-saved-source.c");
     saved->panes[0].source_selected = missing->id;
     saved->panes[3].memory_bytes = 96; saved->panes[3].memory_group = 4;
     (void)snprintf(saved->panes[3].memory_expression, 256, "&saved_memory");
     saved->watch_count = 2;
-    saved->watches[0] = (TbSetupWatch){.id = saved->next_id++, .expression = "saved_watch", .format = 1};
-    saved->watches[1] = (TbSetupWatch){.id = saved->next_id++, .expression = "unsafe_call()", .format = 2};
+    saved->watches[0] = (TbSetupWatch_t){.id = saved->next_id++, .expression = "saved_watch", .format = 1};
+    saved->watches[1] = (TbSetupWatch_t){.id = saved->next_id++, .expression = "unsafe_call()", .format = 2};
     saved->break_count = 1;
-    saved->breaks[0] = (TbSetupBreak){.id = saved->next_id++, .location = "main", .condition = "1", .enabled = true, .ignore_set = true, .ignore = 2, .hardware = true};
+    saved->breaks[0] = (TbSetupBreak_t){.id = saved->next_id++, .location = "main", .condition = "1", .enabled = true, .ignore_set = true, .ignore = 2, .hardware = true};
     char directory[TB_SETUP_PATH]; CHECK(getcwd(directory, sizeof directory));
     CHECK(tb_profiles_save_setup(store, "saved copy", saved, tb_profiles_find(store, "saved copy"), directory));
     json_object *root = json_object_from_file(tb_profiles_path(store)); CHECK(root);
@@ -116,7 +114,7 @@ static void restored_setup(const char *binary, TbProfiles *store)
     test_terminal_expect(&term, "Saved Source unavailable");
     setup_review(); test_terminal_expect(&term, "2 Watches | 1 code breakpoints"); click("[ Save setup ]");
     test_terminal_expect(&term, "Setup saved. Connection profile unchanged."); CHECK(!test_terminal_find(&term, "Save setup*", NULL, NULL));
-    CHECK(tb_profiles_load(store)); TbSetup *partial = tb_profiles_setup(store, "saved copy"); CHECK(partial && tb_setup_equal(partial, saved)); free(partial);
+    CHECK(tb_profiles_load(store)); TbSetup_t *partial = tb_profiles_setup(store, "saved copy"); CHECK(partial && tb_setup_equal(partial, saved)); free(partial);
     click("Unresolved setup entries"); test_terminal_expect(&term, "missing-saved-source.c"); test_terminal_expect(&term, "unsupported saved expression");
     test_terminal_expect(&term, "enabled intent"); test_terminal_expect(&term, "unresolved");
     test_terminal_expect(&term, "Acknowledge failures"); click("Acknowledge failures");
@@ -150,7 +148,7 @@ static bool workspace_geometry(int notice_row, int pane_row, bool tiled)
         text_at_row("Setup", 1) && text_at_row("Session", 1) && text_at_row("Quit", 1) &&
         strspn(term.cells[0], " ") == (size_t)term.cols;
 }
-static void live_setup(const char *binary, const char *fixture, TbProfiles *store)
+static void live_setup(const char *binary, const char *fixture, TbProfiles_t *store)
 {
     const char *root = getenv("XDG_CONFIG_HOME"); char preference[1024], source_directory[1024];
     (void)snprintf(source_directory, sizeof source_directory, "%s/source lookup", root); CHECK(mkdir(source_directory, 0700) == 0);
@@ -166,6 +164,7 @@ static void live_setup(const char *binary, const char *fixture, TbProfiles *stor
     CHECK(json_object_to_file_ext(preference, prefs, JSON_C_TO_STRING_PLAIN) == 0); json_object_put(prefs);
     start(binary); test_terminal_send(&term, "\r"); test_terminal_expect(&term, "Executable / ELF");
     test_terminal_send(&term, "\t\025"); test_terminal_send(&term, fixture);
+    test_terminal_send(&term, "\t\t\t\t\025gdb");
     click("Review session"); click("Start native"); test_terminal_expect(&term, "LIVE | Loaded");
     const int widths[] = {48, 80, 123, 124, 152, 160};
     const char *names[] = {"Continue", "Pause", "Over", "Into", "Out", "BP", "Reset"};
@@ -209,19 +208,19 @@ static void live_setup(const char *binary, const char *fixture, TbProfiles *stor
     click("Save setup"); test_terminal_expect(&term, "Save setup review"); click("[ Save setup ]");
     test_terminal_expect(&term, "Setup saved. Connection profile unchanged.");
     CHECK(!test_terminal_find(&term, "Save setup*", NULL, NULL)); CHECK(tb_profiles_load(store));
-    TbSetup *saved = tb_profiles_setup(store, "on demand"); CHECK(saved && saved->panes[0].source_count == 1 && saved->panes[0].source_selected);
-    TbProfile *profile = malloc(sizeof *profile); CHECK(profile); *profile = *tb_profiles_find(store, "on demand");
+    TbSetup_t *saved = tb_profiles_setup(store, "on demand"); CHECK(saved && saved->panes[0].source_count == 1 && saved->panes[0].source_selected);
+    TbProfile_t *profile = malloc(sizeof *profile); CHECK(profile); *profile = *tb_profiles_find(store, "on demand");
     click("[ Back ]"); click("Session"); click("Close session"); test_terminal_expect(&term, "[ Config ]"); stop();
     start(binary); click("[ Config ]"); click("Profiles"); click("on demand");
-    click("Profile..."); click("Source directories"); click("Add entry"); input(source_directory); back();
+    click("Profile..."); click("Source directories"); click("Add entry"); input(source_directory); back("Profile options");
     click("[ Duplicate ]"); input("saved copy"); test_terminal_expect(&term, "Unsaved draft unchanged.");
     CHECK(tb_profiles_load(store) && tb_profiles_find(store, "saved copy")->directory_count == 0);
-    TbSetup *copy = tb_profiles_setup(store, "saved copy"); CHECK(copy && tb_setup_equal(copy, saved)); free(copy);
-    back(); click("Review session"); click("Start native");
+    TbSetup_t *copy = tb_profiles_setup(store, "saved copy"); CHECK(copy && tb_setup_equal(copy, saved)); free(copy);
+    back("Configure session"); click("Review session"); click("Start native");
     test_terminal_expect(&term, "[x] Restore saved setup"); click("Restore saved setup"); click("[ Start session ]");
     test_terminal_expect(&term, "LIVE | Loaded");
-    setup_review(); test_terminal_expect(&term, "Replace discards"); test_terminal_expect(&term, "Source directory"); back(); test_terminal_expect(&term, "Restoration information");
-    CHECK(tb_profiles_load(store)); TbSetup *preserved = tb_profiles_setup(store, "on demand"); CHECK(preserved && tb_setup_equal(saved, preserved)); free(preserved);
+    setup_review(); test_terminal_expect(&term, "Replace discards"); test_terminal_expect(&term, "Source directory"); back("Restoration information");
+    CHECK(tb_profiles_load(store)); TbSetup_t *preserved = tb_profiles_setup(store, "on demand"); CHECK(preserved && tb_setup_equal(saved, preserved)); free(preserved);
     click("Save setup"); test_terminal_expect(&term, "Save setup review"); click("[ Replace setup ]"); test_terminal_expect(&term, "Setup saved. Connection profile unchanged.");
     CHECK(tb_profiles_load(store)); preserved = tb_profiles_setup(store, "on demand"); CHECK(preserved && !preserved->panes[0].source_count); free(preserved);
     CHECK(memcmp(profile, tb_profiles_find(store, "on demand"), sizeof *profile) == 0);
@@ -245,7 +244,7 @@ static void recovery(const char *binary, const char *path)
     click("remote definition"); click("Save profile"); input("remote definition"); click("[ Confirm ]");
     test_terminal_expect(&term, "Profile writes blocked");
     json_object *unchanged = json_object_from_file(path); CHECK(unchanged && json_object_equal(root, unchanged)); json_object_put(unchanged);
-    back(); back(); click("[ Config ]"); click("Profiles"); test_terminal_expect(&term, "READ ONLY");
+    back("Configure session"); back("[ Config ]"); click("[ Config ]"); click("Profiles"); test_terminal_expect(&term, "READ ONLY");
     CHECK(json_object_object_add(root, "setups", json_object_new_array()) == 0);
     CHECK(json_object_to_file_ext(path, root, JSON_C_TO_STRING_PRETTY) == 0); json_object_put(root);
     click("Reload file"); test_terminal_expect(&term, "Profile file reloaded.");
@@ -253,10 +252,11 @@ static void recovery(const char *binary, const char *path)
     click("remote definition"); save("remote definition", true); stop();
     puts("PASS F01 schema-3 read-only recovery, valid connection review, blocked save, 48-column indication and repaired reload");
 }
-static void import_setup(const char *binary, const char *fixture, TbProfiles *store)
+static void import_setup(const char *binary, const char *fixture, TbProfiles_t *store)
 {
     start(binary); test_terminal_send(&term, "\r"); test_terminal_expect(&term, "Executable / ELF");
     test_terminal_send(&term, "\t\025"); test_terminal_send(&term, fixture);
+    test_terminal_send(&term, "\t\t\t\t\025gdb");
     click("Review session"); click("Start native"); test_terminal_expect(&term, "LIVE | Loaded");
     test_terminal_lower(&term, 2, true); click("Command"); test_terminal_send(&term, "break main\r");
     test_terminal_expect(&term, "Breakpoint 1"); click("Setup"); click("Review GDB breakpoints");
@@ -269,7 +269,7 @@ static void import_setup(const char *binary, const char *fixture, TbProfiles *st
     click("[ Back ]"); test_terminal_expect(&term, "Save setup*");
     save("imported definition", false); click("Save setup"); click("[ Save setup ]");
     test_terminal_expect(&term, "Setup saved. Connection profile unchanged.");
-    CHECK(tb_profiles_load(store)); TbSetup *saved = tb_profiles_setup(store, "imported definition");
+    CHECK(tb_profiles_load(store)); TbSetup_t *saved = tb_profiles_setup(store, "imported definition");
     CHECK(saved && saved->break_count == 1 && !strcmp(saved->breaks[0].location, "main") && !saved->breaks[0].hardware && !saved->breaks[0].ignore_set); free(saved);
     click("Unresolved setup entries"); test_terminal_expect(&term, "imported draft; not restored");
     CHECK(!test_terminal_find(&term, "Acknowledge failures", NULL, NULL)); click("[ Remove ]");
@@ -292,19 +292,20 @@ int main(int argc, char **argv)
     start(argv[1]); test_terminal_send(&term, "\r"); test_terminal_expect(&term, "Executable / ELF");
     test_terminal_send(&term, "\t\025"); test_terminal_send(&term, argv[2]);
     test_terminal_send(&term, "\t\025\"two words\" \"\" '$HOME;$(false)'");
+    test_terminal_send(&term, "\t\t\t\025gdb");
     save("native saved", false);
     click("Profile..."); CHECK(!test_terminal_find(&term, "Action keys", NULL, NULL));
-    click("Source directories"); click("Add entry"); input(root); back();
-    click("Source mappings"); click("Add entry"); input("/old build"); input(root); back(); back();
+    click("Source directories"); click("Add entry"); input(root); back("Profile options");
+    click("Source mappings"); click("Add entry"); input("/old build"); input(root); back("Profile options"); back("Configure session");
     save("native saved", true);
-    click("[ Delete ]"); test_terminal_expect(&term, "Delete profile:"); back();
+    click("[ Delete ]"); test_terminal_expect(&term, "Delete profile:"); back("Configure session");
     stop(); start(argv[1]); click("[ Config ]"); click("Profiles"); click("native saved");
     test_terminal_expect(&term, "two words"); CHECK(test_terminal_find(&term, "$HOME;$(false)", NULL, NULL));
     if (argc == 4) {
         click("Review session"); click("Start native"); test_terminal_expect(&term, "LIVE | Loaded");
         test_terminal_expect(&term, "Continue F5"); test_terminal_expect(&term, "Into F11");
         click("Actions"); click("Source lookup settings"); test_terminal_expect(&term, root);
-        test_terminal_expect(&term, "/old build"); back();
+        test_terminal_expect(&term, "/old build"); back("LIVE | Loaded");
         test_terminal_lower(&term, 2, true);
         test_terminal_send(&term, "\033[15~"); test_terminal_expect(&term, "FIXTURE PID=");
         click("Pause"); test_terminal_expect(&term, "LIVE | Stopped");
@@ -312,20 +313,26 @@ int main(int argc, char **argv)
         click("Close session"); test_terminal_expect(&term, "Recent: native saved");
         stop(); start(argv[1]); click("Recent: native saved"); test_terminal_expect(&term, "Executable / ELF");
     }
-    back(); click("[ Config ]"); click("Profiles"); click("New OpenOCD"); click("Profile...");
+    back("[ Config ]"); click("[ Config ]"); click("Profiles"); click("New OpenOCD"); click("Profile...");
+    back("Configure session");
+    test_terminal_send(&term, "\t\025board/test.cfg\t\025target.elf\t\025arm-none-eabi-gdb\t\025localhost:3333\t\025openocd");
+    click("Profile...");
     click("Ordered OpenOCD scripts"); click("Add entry"); input("board/first with spaces.cfg");
-    click("Add entry"); input("custom/second.cfg"); back(); back(); save("board definition", false);
-    back(); click("[ Config ]"); click("Profiles"); click("New remote"); click("Profile...");
-    click("Remote protocol: remote"); back(); save("remote definition", false);
+    click("Add entry"); input("custom/second.cfg"); back("Profile options"); back("Configure session"); save("board definition", false);
+    back("[ Config ]"); click("[ Config ]"); click("Profiles"); click("New remote"); click("Profile...");
+    back("Configure session");
+    test_terminal_send(&term, "\t\025localhost:3333\t\t\025gdb");
+    click("Profile...");
+    click("Remote protocol: remote"); back("Configure session"); save("remote definition", false);
     stop();
-    TbProfiles *store = tb_profiles_create(); CHECK(store && tb_profiles_load(store));
+    TbProfiles_t *store = tb_profiles_create(); CHECK(store && tb_profiles_load(store));
     CHECK(tb_profiles_count(store) == 3);
-    const TbProfile *native = tb_profiles_find(store, "native saved"); CHECK(native && native->arguments.count == 3);
+    const TbProfile_t *native = tb_profiles_find(store, "native saved"); CHECK(native && native->arguments.count == 3);
     CHECK(native->directory_count == 1 && native->rule_count == 1);
     CHECK(strcmp(native->arguments.values[0], "two words") == 0 && !*native->arguments.values[1]);
-    const TbProfile *board = tb_profiles_find(store, "board definition"); CHECK(board && board->kind == 1 && board->scripts.count == 2);
+    const TbProfile_t *board = tb_profiles_find(store, "board definition"); CHECK(board && board->kind == 1 && board->scripts.count == 2);
     CHECK(strcmp(board->scripts.values[0], "board/first with spaces.cfg") == 0 && strcmp(board->scripts.values[1], "custom/second.cfg") == 0);
-    const TbProfile *remote = tb_profiles_find(store, "remote definition"); CHECK(remote && remote->kind == 2 && strcmp(remote->protocol, "extended-remote") == 0);
+    const TbProfile_t *remote = tb_profiles_find(store, "remote definition"); CHECK(remote && remote->kind == 2 && strcmp(remote->protocol, "extended-remote") == 0);
     if (argc == 4) { CHECK(strcmp(tb_profiles_recent(store, 0), "native saved") == 0); }
     start(argv[1]); click("[ Config ]"); click("Profiles"); click("native saved"); click("[ Delete ]"); click("[ Confirm ]"); stop();
     CHECK(tb_profiles_load(store) && tb_profiles_count(store) == 2 && !tb_profiles_find(store, "native saved"));

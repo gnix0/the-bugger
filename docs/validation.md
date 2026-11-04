@@ -4,15 +4,38 @@ Commands, results, revisions and acceptance records for The Bugger.
 
 ## Current evidence boundary
 
-Latest release: [v0.1.4](#v014-publication), published and accepted. F01 storage,
-saving, restoration, breakpoint import and reconciliation are shipped. Uploaded
-distribution files match the approved artifacts, hosted release checks passed,
-and branch synchronization is complete. F02 and the inspection UX corrections
-are accepted for v0.1.5. The owner reports successful manual validation on
-STM32/Cortex-M, ESP32-S3/Xtensa and ESP32-C6/RISC-V. Hosted release checks,
-artifact verification and publication remain pending.
-Earlier checkpoint exclusions and pending states below describe their original
-trees; the publication record closes the v0.1.4 release gate.
+Latest published release: **[v0.1.5](https://github.com/gnix0/the-bugger/releases/tag/v0.1.5)**,
+published October 30, 2026. It includes F02 Stack inspection and the accepted
+inspection UX corrections. The release's Tests and Static analysis jobs succeeded;
+its three uploaded distribution files and archive checksums were independently
+checked on November 4. See the [publication verification](#v015-publication-verification--2026-11-04).
+
+**F03–F05 are accepted and merged for v0.1.6.** F03/F04 physical validation across
+the supported architectures is owner-reported. Native and STM32 F05 results are
+recorded. ESP32-S3/Xtensa and ESP32-C6/RISC-V validation was reported by the
+maintainer; supporting evidence and limitations are documented separately below.
+The [acceptance closeout](#f05-acceptance-closeout--2026-11-04) supersedes the
+historical pending-acceptance statements. The C style standardization is also
+accepted and merged. **v0.1.6 is prepared locally**, with a fresh fortified host
+baseline and release archives checked below. It is not yet published. Hosted
+checks for the release-preparation commit and final release acceptance remain
+pending; the preceding documentation commit passed both hosted jobs.
+
+Useful starting points:
+
+- [v0.1.6 release preparation](#v016-release-preparation--2026-11-04).
+
+- [v0.1.4 publication](#v014-publication) and [RISC-V hardware validation](#v014-task-21--risc-v-hardware-validation).
+- [v0.1.5 physical manual acceptance](#v015-physical-manual-acceptance--2026-10-30)
+  and [publication verification](#v015-publication-verification--2026-11-04).
+- [F03/F04 review and corrections](#f03f04-implementation-and-navigation-review--2026-11-01),
+  [STM32 RAM evidence](#f04-user-confirmed-stm32f446re-ram-evidence--2026-11-01)
+  and [owner acceptance](#f04-owner-acceptance).
+- [F05 implementation and validation](#f05-cpu-register-editing--2026-11-03)
+  and [acceptance closeout](#f05-acceptance-closeout--2026-11-04).
+
+Earlier exclusions, failures and pending states below describe their original
+trees. Later entries close the relevant checks without replacing those records.
 
 Entries are chronological. Raw logs are stored under ignored `build/`; summaries
 and references below retain the results, including failures and unrun checks.
@@ -45,6 +68,9 @@ and references below retain the results, including failures and unrun checks.
 | M18 | v0.1.0 release evidence/acceptance | accepted; published | v0.1.0; preparation revision recorded below |
 | F19 | Themes, variants and Config | accepted; shipped in v0.1.1 | [Focused checks](#f19--themes-and-configuration); implementation committed per maintainer report |
 | F01 | Saved setup restoration | accepted; shipped in v0.1.4 | `a460648`; [publication and verification](#v014-publication) |
+| F02 | Stack inspection and inspection UX | accepted; shipped in v0.1.5 | [Published release verification](#v015-publication-verification--2026-11-04) |
+| F03–F04 | Variable and ordinary-RAM editing | accepted; pending v0.1.6 publication | [Owner acceptance](#f04-owner-acceptance) |
+| F05 | CPU-register editing | accepted; pending v0.1.6 publication | [Acceptance closeout](#f05-acceptance-closeout--2026-11-04) |
 
 ### Full recorded commit identifiers
 
@@ -3338,7 +3364,7 @@ revisions, authors, source files, mapping adjustments and MIT/GPL notices are in
 `THIRD_PARTY_NOTICES`; distribution packaging already includes that file and
 the full GPLv3 `LICENSE` in both source and binary archives.
 
-Agent-run on Linux x86-64, Arch kernel 7.2.11-arch1-1, GCC 16.2.1,
+Local checks ran on Linux x86-64, Arch kernel 7.2.11-arch1-1, GCC 16.2.1,
 GDB 18.1 and tmux 3.8, with TERM=xterm-256color:
 
 - `make BUILD_DIR=build/themes-focused-20261029 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-themes`:
@@ -3378,11 +3404,11 @@ tmux 3.8; TERM=xterm-256color and CPPFLAGS=-D_FORTIFY_SOURCE=3.
 
 | Execution | Result and retained evidence |
 |---|---|
-| Agent: `make BUILD_DIR=build/f02-focused-20261029 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-stack test-stack-native` | PASS, authored MI and actual debug/optimized/stripped/multithread GDB; `build/f02-evidence/model-native-final.log` |
-| Agent: focused existing context/Memory checks | PASS; `build/f02-evidence/context-memory.log` |
+| Local run: `make BUILD_DIR=build/f02-focused-20261029 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-stack test-stack-native` | PASS, authored MI and actual debug/optimized/stripped/multithread GDB; `build/f02-evidence/model-native-final.log` |
+| Local run: focused existing context/Memory checks | PASS; `build/f02-evidence/context-memory.log` |
 | Owner: `TERM=xterm-256color make BUILD_DIR=build/f02-focused-20261029 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-stack-tui test-stack-tmux` | Both PASS, reported in CLI; minimum 20-column panes, widths 48/80/123/124/160, paginated guard/details, bounds and cleanup |
 | Owner: `TERM=xterm-256color make BUILD_DIR=build/f02-ci-owner-20261029 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci` | Saved log reaches the final passing OpenOCD target, no failure markers; `build/f02-evidence/test-ci-owner.log`. Shell exit status was not separately captured. Includes all registered Stack and existing host suites; not a hosted Ubuntu result |
-| Agent and owner: opt-in STM32 runner | PASS before extended-remote correction; evidence below |
+| Initial local run and maintainer rerun: opt-in STM32 runner | PASS before extended-remote correction; evidence below |
 | Extended-remote physical correction | Unrun at first delivery; subsequent owner evidence below records PASS |
 
 Focused development failures remain in `build/f02-evidence/`: `model.log`,
@@ -3403,7 +3429,7 @@ a fresh byte-for-byte comparison of live Flash and ELF.
 
 Commands: the serial-selected OpenOCD command and opt-in runner invocation in
 [Stack procedures](testing.md#stack-inspection-f02), using
-`BUILD_DIR=build/f02-focused-20261029`. Agent evidence is `stm32-openocd.log`,
+`BUILD_DIR=build/f02-focused-20261029`. Initial-run evidence is `stm32-openocd.log`,
 `stm32-check.log`, `stm32-session.log`; owner evidence is
 `stm32-openocd-final.log`, `stm32-check-final.log`, `stm32-session-final.log`,
 all under `build/f02-evidence/`. Owner run: frame-zero SP `0x2001ffe0`, unread
@@ -3456,7 +3482,7 @@ checks now verify synchronized text writes and no full clear/alternate exit
 during caller inspection, and preserve untouched Source cells during wheel/drag.
 Physical terminal appearance remains an owner check.
 
-Agent-run focused evidence under `build/ui-polish-evidence/`:
+Local focused-check evidence under `build/ui-polish-evidence/`:
 
 | Check | Result / log |
 |---|---|
@@ -3471,11 +3497,11 @@ Agent-run focused evidence under `build/ui-polish-evidence/`:
 | Final Stack model/native, tmux frame Details and direct Stack UI checks | PASS; `final-focused.log`, exit 0 |
 | All C test sources, strict fortified compilation | PASS, exit 0; `compile-all.log` |
 | Rendering stress, direct PTY and isolated tmux | PASS, 30 seconds / 91 rounds each; `render-stress-direct-3.log`, `render-stress-tmux.log` |
-| Complete fresh fortified baseline | PASS agent and owner, exit 0; commands and artifacts below |
+| Complete fresh fortified baseline | PASS in the initial run and maintainer rerun, exit 0; commands and artifacts below |
 
 The host environment is Linux x86-64, Arch kernel 7.2.11-arch1-1, GCC 16.2.1,
 GDB 18.1 and tmux 3.8; exact versions/TERM/flags are in `environment.txt`.
-The final agent baseline command was:
+The final local baseline command was:
 
 ```sh
 TERM=xterm-256color make BUILD_DIR=build/v015-ui-ci-20261029-6 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
@@ -3489,7 +3515,7 @@ including untracked feature sources. `test-ci-6.log` retains full output and
 The owner independently ran the complete fresh fortified baseline in
 `build/v015-owner-20261029T174801Z`, with the same TERM and CPPFLAGS:
 PASS, exit 0. Its full `test-ci.log` and `test-ci.exit` are retained in that
-build directory. Source/tests match the final agent snapshot; only documentation
+build directory. Source/tests match the final tested snapshot; only documentation
 result updates followed. `final-tree.sha256.json` and `final-tree.patch` retain
 those result updates. These are local host results, not hosted Ubuntu checks.
 
@@ -3611,7 +3637,7 @@ panes until replacement inspectors settle. Generation invalidation and request
 authorization remain active. Slow switches use the existing footer after 150 ms;
 context errors discard retained presentation and report the actual failure.
 
-Agent-run focused checks used `TERM=xterm-256color`, fortified C17 objects in
+Local focused checks used `TERM=xterm-256color`, fortified C17 objects in
 `build/frame-transition-focused`, real native GDB and isolated tmux. Evidence is
 in `build/frame-transition-evidence`: `build-5.log`/`.exit`,
 `model-final.log`/`.exit`, `registers.log`/`.exit` and `code.log`/`.exit` passed.
@@ -3695,7 +3721,7 @@ disconnect policies with external-server survival. Existing shared firmware was
 sufficient; flashing instructions were conditional. No new automated suite or
 application-source change accompanied this report.
 
-Evidence is the owner's CLI report, separate from agent-run checks and the
+Evidence is the owner's CLI report, separate from the logged checks and the
 owner-run fortified host baseline/analysis above. No per-target transcripts,
 firmware hashes, tool-version captures or reflash choices were supplied for this
 manual round; exact new values and commands are not inferred from older records.
@@ -3719,7 +3745,7 @@ geometry together: notice, pane headers, toolbar controls and blank top margin.
 Expected rows, widths and the existing bounded wait are unchanged. Failure output
 includes the full screen. Application code and physical behavior are unchanged.
 
-Agent-run focused results: original tmux runner passed one local attempt;
+Local focused results: original tmux runner passed one local attempt;
 corrected direct and isolated-tmux profile runners both passed, exit 0. The
 hosted-only timing failure was not reproduced locally. Logs, exit records,
 commands and tool environment are in `build/profile-tmux-geometry-evidence/`.
@@ -3727,3 +3753,470 @@ The runner was rebuilt with `CPPFLAGS=-D_FORTIFY_SOURCE=3` against the previousl
 validated `build/frame-return-owner-20261029T222103Z` application and fixture.
 Whitespace review passed. The full baseline was not rerun locally; hosted rerun
 is pending and must establish whether this resolves the reported CI failure.
+
+## F03/F04 implementation and navigation review — 2026-11-01
+
+The owner handed over accepted F03 work and an unfinished F04/form-navigation
+working tree. This review preserves the requested empty fresh forms, profile
+values, literal text entry, spatial row navigation and scrolling script browser.
+Current corrections and F04 remain awaiting owner acceptance; F05 is not
+implemented. Earlier physical inspection results remain unchanged.
+
+The editing corrections cover target-sized integer/bool conversion, direct
+lvalues, dispatch-time writable-region/identity checks, duplicate Apply,
+pre-dispatch cancellation, shared write serialization, alias invalidation and
+uncertainty across Variables and Memory. A completed backend error requires
+explicit verification before reconciliation. A timeout or lost completion
+requires a new session; removing a pending token does not prove backend
+completion. Native C/C++ write/read-back and direct/tmux review/cancel/Apply
+checks supplement the synthetic policy/timeout cases.
+
+Local test environment: Linux 7.2.11-arch1-1 x86-64, GCC 16.2.1, GDB 18.1, tmux 3.8
+and OpenOCD 0.12.0-01004-g9ea7f3d64-dirty. This is local host evidence, not a
+hosted Ubuntu result. Artifacts are under `build/review-recovery-evidence/`:
+initial `before.patch`, final tested source diff `tested.patch`, base revision,
+tool environment, source manifest, full logs and exit records. The fresh final
+baseline command is:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/recovery-delivery-20261101 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make analyze
+```
+
+The first completed baseline failed the existing MMIO terminal assertion:
+reconciliation had reused the Read-unit action ID. The collision was corrected;
+the retained MMIO assertion then passed in `mmio-fixed.log`. Initial static
+analysis rejected layout/conversion/string-comparison issues; the corrected
+four-file analysis passed in `analyze-focused.log`, exit 0. Failed and interrupted
+runs remain in the artifact directory and are not successful baselines.
+
+Final local results: complete fresh fortified `test-ci` PASS, exit 0
+(`test-ci.log` / `test-ci.exit`), and complete `make analyze` PASS, exit 0
+(`analyze.log` / `analyze.exit`). This includes the preserved MMIO assertions,
+native C/C++ editing, direct/tmux RAM and variable review/cancel/Apply/read-back,
+context delay/timeout, literal input, terminal cleanup, remote lifecycle and
+OpenOCD script navigation. No physical hardware was exercised.
+
+The normal launcher was rebuilt with `make -B CPPFLAGS=-D_FORTIFY_SOURCE=3 all`,
+exit 0 (`default-build.log`). Its SHA-256 matches the tested fresh-build binary
+(`binary.sha256`). `tested-source.sha256` and `source-integrity.log` establish
+unchanged source/build inputs; `delivery.patch` includes the final documentation
+and evidence updates. Whitespace and changed-document local-link checks passed.
+
+Physical F03/F04 writes and hosted checks remain **UNVERIFIED**. Remote sessions without
+explicit writable-region metadata refuse editing; the current connection forms
+do not supply that metadata. Existing read consent, ELF mappings and synthetic
+results are not substitutes for that proof or physical write validation.
+
+### Centered selection menus and script scrollbar — 2026-11-01
+
+Keybinds and installed OpenOCD scripts share a height limit and center within the
+usable terminal area. Large windows retain vertical margins; compact terminals
+keep the actions accessible. The script scrollbar appears only on overflow and
+supports track paging and thumb dragging. Filter/Back focus, keyboard paging and
+mouse-wheel navigation remain available.
+
+Focused local checks passed with fortification:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/center-menus-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 test-m16-tui test-script-tmux test-keybinds
+```
+
+The checks compare both menu heights and centering through 256×60, 160×44,
+160×90, 110×28, 48×18 and restored large terminals, directly and through isolated
+tmux. They exercise track paging, dragging to both ends, release outside the
+track, wheel/keyboard navigation and scrollbar removal after filtering.
+
+Artifacts are in `build/center-menus-evidence/`: tested diff, source manifest,
+environment, focused logs and exit records. Early focused failures included
+incomplete PTY-output draining, restricted localhost sockets, tmux configuration
+reuse and applying a direct-process signal-exit expectation to the tmux client.
+The runner was corrected without removing application behavior assertions;
+direct OpenOCD signal cleanup remains covered separately. Full `make analyze`
+passed, exit 0. This is local host evidence; hosted and physical evidence are
+unchanged. Menu appearance and current editing corrections await owner review.
+
+Final follow-up baseline:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/center-menus-ci-20261101 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+PASS, exit 0 (`test-ci.log` / `test-ci.exit`), including the new isolated tmux
+menu target. The workflow's fortified compilation of all unit/integration/support
+C sources also passed, exit 0 (`test-compilation.log` / `.exit`). The default
+launcher was rebuilt with `make -B CPPFLAGS=-D_FORTIFY_SOURCE=3 all`, exit 0;
+`binary.sha256` records its match with the fresh baseline binary.
+`source-integrity.log` confirms unchanged source/build inputs during verification.
+The full final diff is retained as `delivery.patch`; this follow-up does not
+complete F04's embedded authorization or physical write validation.
+
+### Profile, script-list and theme-preview spacing — 2026-11-01
+
+Profiles, profile options and entry lists place their titles/descriptions inside
+centered cards. Empty-list text precedes the paging row with a blank separator;
+populated lists retain the same separation. Installed scripts reserve a blank
+row before Filter/Back. Theme Preview leaves a top margin and separates its two
+header rows from the sample panes. Running-session layout is unchanged.
+
+No new tests were added. An initial strict fortified build and existing theme
+checks passed, but that command ended on an invalid subsequent target name.
+The corrected focused run was stopped at the owner's request to perform checks
+personally. The final text adjustment, complete focused run, fresh full baseline
+and static analysis remain pending for this follow-up. Earlier successful
+baselines above apply to their recorded trees, not these spacing changes.
+Logs are in `build/menu-spacing-evidence/` and the initial run's complete log is
+retained there as `initial-focused.log`.
+
+The owner reported a `test-m13-native` failure in the profile TUI runner's Back
+helper: it required terminal row zero to change after Escape. Centered profile
+cards intentionally leave that row blank. The helper now waits for each call's
+explicit destination text, including when both source and destination have no
+screen-top header. The existing navigation checks are retained. Static review of
+the affected profile/theme/script/keybind tests found no other obsolete header
+or spacing expectations; running-session geometry assertions remain unchanged.
+This correction had not been rerun at this checkpoint; owner reruns were pending.
+
+### Owner verification and acceptance — 2026-11-01
+
+The owner ran the corrected tree with:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/menu-spacing-final-20261101T182959Z CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make analyze
+```
+
+Both passed, exit 0. Full owner-run logs and exit records are in
+`build/menu-spacing-final-20261101T182959Z/`. Analysis suppressed 882 non-user
+and 33 NOLINT diagnostics; no unsuppressed diagnostic failed the configured
+checks. This is local host evidence, not hosted CI or physical write evidence.
+The owner then rebuilt the normal launcher, reviewed the menu appearance and
+accepted the host editing corrections, navigation and presentation changes.
+This supersedes the pending-review/rerun states above; the earlier failed and
+interrupted runs remain historical evidence. Remaining F04 embedded writable-RAM
+authorization and physical write validation are deferred, not accepted as complete.
+
+## F04 user-confirmed STM32F446RE RAM evidence — 2026-11-01
+
+The fixed SRAM-description review binds user-confirmed device identity to a unique
+connection instance, configuration generation and consumed evidence revision.
+It performs no silicon detection. Endpoint, inferior ID, ELF and script selection
+are not device proof. Atomic publication supplies the same eligible SRAM extent
+to Memory and Variables; malformed, excessive, contradictory and unrepresentable
+catalogs are rejected rather than truncated. Replacing evidence, including with
+identical bounds, revokes dependent permissions and drafts. Queued mutations use
+the existing controller's obsolete-generation pipe guard; both model tests use
+peers that fail if a revoked write actually arrives. Started/uncertain operations
+retain shared quarantine independently of evidence confirmation or revocation.
+
+Local focused Memory/Variables/session and isolated tmux review checks passed
+(`wire-focused.log`, exit 0). Native Memory/Variables write/read-back checks passed
+in `native-tmux.log`, exit 0; the final full baseline covers the later pipe-guard
+refinement. Direct review, default Back, compact pagination/resize, confirmation,
+revoke and Console invalidation passed against authored ARM peers. These are
+host/synthetic results, not physical STM32 evidence.
+
+Offline `test-m17-fixture` passed, exit 0 (`fixture-final.log`), for the default
+and LED ELF variants. The fixture now contains a built-in `int`
+`fixture_edit_scalar`; the existing buffer supplies the F04 interior test slice.
+No firmware was flashed and no hardware connection or mutation was performed.
+
+Artifacts are in `build/f04-evidence-logs/`: environment, tested source manifests,
+diffs, logs and exit records. Development failures include invalid Make target
+invocations, an incorrect new assertion that cached browsing requires a current
+region catalog, the fixture check's old five-symbol mask and four explicit
+`memcmp` comparison diagnostics. They were corrected without weakening existing
+application assertions. Earlier baseline attempts were interrupted when later
+refinements superseded their source; they are not passing final baselines.
+
+F04 acceptance remains pending owner review and physical STM32 write/verify.
+
+Final frozen-tree verification:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/f04-evidence-verified-20261101 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make analyze
+```
+
+Both PASS, exit 0 (`test-ci-verified.log` / `.exit`, `analyze-verified.log` /
+`.exit`). The complete baseline includes direct/tmux review and editing, preserved
+input/context/terminal-restoration assertions, native GDB, remote lifecycle and
+offline OpenOCD checks. Fortified compilation of every unit/integration/support C
+source also passed, exit 0 (`compilation-verified.log` / `.exit`). Session checks
+include a consumer capability mismatch: neither model retains a partial grant.
+
+The normal launcher was rebuilt successfully (`default-verified.log`, exit 0).
+`binary-verified.sha256` records its byte-for-byte match with the verified fresh
+build. `verified-tested-source.json`, `source-integrity.log` and `delivery.patch`
+identify the tested inputs and delivered diff; fixture hashes are in
+`fixture.sha256`. Source/build inputs remained unchanged during this final run.
+These are local Linux results, not hosted Ubuntu or physical results.
+F04 remains awaiting owner review and actual STM32 F03/F04 write/verify evidence.
+
+## F04 owner acceptance
+
+After the 2026-11-01 implementation handoff, the owner reported approval and
+physical testing/validation across all supported architectures. This supersedes
+F04's historical pending-review and pending-physical-check status above. These
+are owner-reported results; no additional hardware logs, versions or
+per-device measurements were supplied with that report. It does not establish
+F05 CPU-register editing results.
+
+## F05 CPU-register editing — 2026-11-03
+
+Implemented discovered-ID, stopped frame-zero scalar register editing with raw
+hexadecimal Review/Apply, GDB command/permission/editability/size evidence,
+dispatch-time identity checks and the shared F03–F05 write reservation/quarantine.
+The frozen scalar varobj supplies backend editability evidence; it does not prove
+physical writability of every bit. Explicit Verify records matching or different
+observed bits. No implicit read-back, retry, rollback, caller-frame assignment,
+peripheral editor or architecture-specific writable-register list was added.
+
+Local focused authored-MI, native GDB and direct/Vim/isolated-tmux PTY checks
+passed, exit 0 (`build/f05-evidence/ownership-pagination-final.log`). Model coverage includes
+sparse IDs, exact command extent, unsupported evidence, stale/caller frames,
+pre-dispatch permission/editability changes, cancellation/cleanup, ignored writes,
+backend errors, stale running completion and unresolved timeout/late reply. The
+PTY regression caught and corrected focus retention on Cancel while asynchronous
+proof completed; compact review pagination is checked before Apply.
+
+### Physical ARM/Cortex-M result
+
+Scripted checks ran on the owner-identified connected STM32 NUCLEO-F446RE using ST-LINK
+V2J48M35 (0483:374B), system OpenOCD
+`0.12.0-01004-g9ea7f3d64-dirty (2026-08-27-22:55)` and
+`arm-none-eabi-gdb` 18.1. OpenOCD reported Cortex-M4 r0p1, device ID `0x10006421`,
+512-KiB Flash and 3.284-V target supply on the initial run. These server reports
+are recorded facts, not automatic device-identity authorization.
+
+The runner connected to a separately started OpenOCD process at `127.0.0.1:3337` in the final run, using
+`board/st_nucleo_f4.cfg`. Earlier focused runs used port 3333. Existing firmware was retained; no flashing, reset or
+ELF load was performed. This focused check concerns live CPU-register behavior,
+not firmware-level acceptance. It discovered thread 1, frame 0, `r4`, numeric
+ID 4 and 32-bit storage. Review/Cancel preserved `0x00000000`; an explicit Apply
+requested `0x00000001`, and explicit Verify observed `0x00000001`. A second
+reviewed Apply restored `0x00000000`; explicit Verify observed `0x00000000`.
+PC remained `0x08000220`. Final runner exit was 0. Only the server started for
+this check was stopped afterward; no explicit Continue was issued.
+
+The physical terminal flow also passed on the final application: keyboard
+register selection/Enter, mouse Edit, Review/Cancel, close-confirmation
+cancellation, 48×18 complete review pagination, Apply/Verify and a second
+reviewed restoration. It observed `r4` restored to `0x00000000` before closing.
+`stm32-ui-final.log` / `.exit` record PASS and exit 0; the shared final OpenOCD
+log, commands and temporary physical PTY harness source are retained beside them.
+
+Final commands and results are retained in `build/f05-evidence/`:
+`stm32-final-commands.txt`, `stm32-register-edit-final.log` / `.exit`,
+`stm32-openocd-final.log`, `stm32-session-final.log` and tool-version files.
+The physical register/session inputs and final terminal application match the
+final host input manifest. Initial development failures remain in earlier focused
+logs. Static analysis also caught a missing pane-index guard for the new control;
+it was corrected before the final frozen-tree baseline. Superseded runs are not
+reported as final passing baselines.
+
+### Owner-reported Xtensa and RISC-V results
+
+During this handoff, the owner reported ESP32-S3/Xtensa and ESP32-C6/RISC-V
+validation already completed and authorized marking both validated. These are
+owner-run PASS results, distinct from the scripted STM32 evidence. No additional
+ESP logs, exact values or tool/firmware versions were supplied with that report;
+none are inferred from host or STM32 checks. The F05 physical architecture matrix
+is therefore complete. Final implementation acceptance remains pending.
+
+No hosted Ubuntu result is claimed. See the
+[focused procedure](testing.md#cpu-register-editing-f05).
+
+### Final host verification
+
+Local Linux x86-64 verification on the frozen final inputs:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/f05-finalchecked-20261103 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make analyze
+```
+
+Both PASS, exit 0 (`build/f05-evidence/test-ci.log` / `.exit`, `analyze.log` /
+`.exit`). The complete baseline includes existing input/context/terminal and
+remote ownership assertions, plus F05 model/native, ordinary/Vim terminal and
+isolated tmux checks. Fortified compilation of all 85 unit/integration/support C
+sources also PASS, exit 0 (`test-compilation.log` / `.exit`). Suppressed non-user
+and existing NOLINT analysis diagnostics are not actionable project warnings.
+No hosted Ubuntu result is claimed.
+
+`tested-final-inputs.json`, `environment.json`, `input-integrity.log` and
+`delivery.patch` identify the tested inputs, commands and delivered changes.
+Implementation/build/test inputs remained unchanged throughout this final run.
+Earlier superseded results and the interrupted baseline retain separate logs;
+they do not replace final-tree verification. `default-build.log` / `.exit`
+record the normal launcher rebuild. F05 remains awaiting final owner acceptance;
+the reported physical checks are complete. Tests alone do not mark acceptance.
+
+
+## v0.1.5 publication verification — 2026-11-04
+
+A read-only GitHub release/API check confirms that v0.1.5 was published on
+2026-10-30 at 13:56:32 UTC, targeting
+`d32966073b4bc16edb57fd847f1dc6fe8e504794`. It is neither a draft nor a prerelease.
+The release includes F02 and the inspection UX changes previously recorded here.
+The tag's changelog still called those changes Unreleased. Their release date
+and scope are established by the tagged tree and published release, rather than
+by the later editing implementation.
+
+The [hosted workflow](https://github.com/gnix0/the-bugger/actions/runs/41067511976)
+for that exact revision reports **Tests: success** and **Static analysis: success**.
+Its PR-triggered run completed October 30 at 14:07:27 UTC. These are hosted results
+for v0.1.5, not new local tests or evidence for the later v0.1.6 implementation.
+They close the earlier pending hosted-profile/resize follow-up for that release.
+
+The release API lists three uploaded files. Each was downloaded and hashed;
+the two archives match the published `SHA256SUMS`, and all three file hashes match
+the API digests:
+
+| Uploaded file | SHA-256 |
+|---|---|
+| `the-bugger-v0.1.5-linux-x86_64.tar.gz` | `428928992d71fe43a210e30d7d586cdd1081caff15ff5716c060fa916562eede` |
+| `the-bugger-v0.1.5-source.tar.gz` | `ae89e3a423751906be0f4202cbae48ca35160a070eb203f547972c560e7b2804` |
+| `SHA256SUMS` | `cd3426f13a3cada9fd767bcc5556bd81ae1c1a1af9e252ffbec52e0d6f8a9d57` |
+
+Both archives contain LICENSE and THIRD_PARTY_NOTICES; the binary archive also
+contains BUILD-INFO.txt. No downloaded executable was run. This check establishes
+publication and checksum consistency, not a new source rebuild, archive-to-tag
+content comparison or physical regression. GitHub's automatic source ZIP and
+TAR snapshots are separate from these three uploads.
+
+Evidence: `build/docs-v016-review/latest-release.json`, `release-verification.json`,
+`v015-action-runs.json`, `v015-action-jobs.json` and downloaded files under `release/`.
+No published assets or tags were modified.
+
+## F05 acceptance closeout — 2026-11-04
+
+After the F05 handoff, the maintainer reported that the implementation was
+committed, pushed and merged and that local `develop` was updated. This establishes
+maintainer acceptance independently of the passing tests. The reviewed repository
+contains `f1ea4e8` (`feat(registers): add reviewed CPU edits`). The earlier F05
+pending-acceptance statements remain records of the handoff stage.
+
+The recorded native/STM32 results and maintainer-reported ESP32-S3/ESP32-C6
+results retain exactly the evidence boundaries recorded above. No additional
+ESP transcripts, versions, write values or firmware identity are supplied by
+this closeout.
+F03/F04 acceptance and the completed, accepted C style standardization are also
+part of the approved v0.1.6 scope. None of these statements constitutes v0.1.6
+release acceptance or publication.
+
+## Pre-v0.1.6 documentation checks — 2026-11-04
+
+Documentation reviewed against the implementation at `f1ea4e8`, the v0.1.5 tag,
+published release metadata and the existing validation records. No application,
+build or test inputs changed.
+
+- PASS: 195 relative links and heading anchors; Markdown parsing with tables,
+  paired code fences and the four referenced PNG assets.
+- PASS: 180 documented Make target references and 57 source paths checked against
+  the repository; current architecture type names match their declarations.
+- PASS: syntax-only `bash -n` checks for all 37 shell code blocks. Commands were
+  not executed by this check, including hardware and packaging examples.
+- PASS: pinned upstream theme notices checked; legal text remains unchanged.
+  The original FR/NFR sections and v0.1.4-and-older changelog entries remain
+  byte-for-byte unchanged. Historical commands, results, revisions, failures and
+  evidence paths are preserved. `docs/usage.md` is unchanged.
+- PASS: normal `make`, exit 0, updating `build/the-bugger`; `git diff --check`.
+
+Check results, release/API responses, source notices, rendered Markdown and the
+build log/exit status are retained under `build/docs-v016-review/`. This prose-only
+review ran no application test suite or hardware operations. It establishes no
+new v0.1.6 release-matrix or hosted-CI result.
+
+## v0.1.6 release preparation — 2026-11-04
+
+Prepared on `chore/refine_docs` from documentation revision
+`1fd4869101cd521352097d83359e37f9d5af468e`, with the version header set to 0.1.6
+and release documentation updated. The source archive contains the tracked
+working-tree files, including these preparation changes. The final release
+commit/tag must be recorded after publication; none is implied by local packaging.
+
+Relevant implementation revisions:
+
+| Scope | Revision |
+|---|---|
+| F03 variable editing | `9aceec2bd312bbbb7cdda7536ed4919fa812a429` |
+| F04 ordinary-RAM editing and navigation | `41500196b150ce3712986c5f0bdfc7b525d7d6f3` |
+| User-confirmed STM32F446RE SRAM evidence | `18917c2b8087fa2c0b28d857f76b14b84be224e0` |
+| F05 CPU-register editing | `f1ea4e831f73009d5704159da513f71c358a4925` |
+
+### Host regression and analysis
+
+Environment: Linux 7.2.14-arch1-1 x86-64, glibc 2.44, GCC/G++ 16.2.1,
+GDB 18.1, tmux 3.8, clang-tidy 23.1.4 and OpenOCD
+0.12.0-01004-g9ea7f3d64-dirty. Exact version output and frozen input hashes are
+in `build/v016-release-evidence/environment.json` and `tested-inputs.json`.
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/v016-release-ci-20261104 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make analyze
+```
+
+Both PASS, exit 0. Fortified strict compilation of all 85 test/support C sources
+in `build/v016-release-compile` also PASS, exit 0. Analysis reported no
+unsuppressed project findings. Commands and full logs/exit statuses are retained
+under `build/v016-release-evidence/`: `test-ci-command.json`, `test-ci.log` /
+`.exit`, `analysis-commands.json`, `analyze.log` / `.exit` and
+`test-compilation.log` / `.exit`. These are local host results.
+
+The [hosted documentation workflow](https://github.com/gnix0/the-bugger/actions/runs/41852271707)
+for `1fd4869` completed successfully: **Tests** and **Static analysis** both passed.
+That run precedes the version/preparation changes; required hosted checks for the
+new preparation commit and release PR remain separate.
+
+### Physical evidence boundary
+
+The release includes the accepted F03/F04 and F05 physical results linked in the
+[current summary](#current-evidence-boundary). Comparison with the frozen F05
+source/build/test manifest checked 164 inputs; only the version header differs
+(`build/v016-release-evidence/f05-input-comparison.json`). No firmware programming,
+reset, target read or target write was performed during release preparation.
+No new physical regression or sanitizer execution is claimed. The recorded
+STM32 results and maintainer-reported ESP32-S3/ESP32-C6 validation retain their
+original evidence and limitations; no missing transcripts or tool versions are
+inferred. Final release acceptance remains the maintainer's decision.
+
+### Distribution checks
+
+```sh
+SOURCE_DATE_EPOCH=1793804017 make BUILD_DIR=build/v016-release-host RELEASE_DIST_DIR=build/dist/v0.1.6 release
+```
+
+The hardened Linux x86-64 executable and matching source archive are prepared
+under `build/dist/v0.1.6/`:
+
+- `the-bugger-v0.1.6-linux-x86_64.tar.gz`
+- `the-bugger-v0.1.6-source.tar.gz`
+- `SHA256SUMS`
+
+Candidate checks established matching archive checksums, complete tracked source,
+private-file exclusion, matching licenses/notices, CLI version/help and an
+independent source build outside the repository. ELF inspection confirmed x86-64
+PIE, non-executable stack and full RELRO. The executable requires GLIBC symbols
+through 2.38 on this host; this is not a guarantee of compatibility with older
+distributions or their libraries. `BUILD-INFO.txt` records actual dependencies
+and the matching source archive checksum. Invalid packaging arguments, a missing
+executable and a mismatched executable version were rejected.
+
+Existing CLI, terminal and workspace harnesses passed against the extracted
+packaged executable outside the repository. The initial tmux invocation reached
+its final capture step but failed because the temporary working directory lacked
+`build/`, where the harness writes its capture. That failure is retained in
+`packaged-test-tmux-initial.log` / `.exit`; no source or test was changed.
+After creating that capture directory, the same tmux check passed, exit 0.
+
+Final archives include this record. `sealed-package-verification.json` records
+checksums, exact source-content comparison and the independent source rebuild;
+`packaged-test-*.log` / `.exit` record CLI/terminal/workspace/tmux outcomes.
+The final packaged executable is checked byte-for-byte against the executable
+used for those passing tests. All evidence is under
+`build/v016-release-evidence/`; archives must be rebuilt after any further tracked
+content changes. These local checks do not establish upload or publication.
+Upload both archives and `SHA256SUMS` separately; GitHub's two automatic source
+snapshots do not replace them. Published asset inventory/checksums and the final
+release revision remain to be verified after publication.

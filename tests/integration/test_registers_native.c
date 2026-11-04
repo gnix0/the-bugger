@@ -4,7 +4,7 @@
 
 static void ready(TbNative *n, uint64_t after)
 {
-    TbRegisters *r = tb_native_registers(n); const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(n));
+    TbRegisters_t *r = tb_native_registers(n); const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(n));
     uint64_t end = tb_gdb_now_ms() + 5000;
     while (tb_gdb_now_ms() < end) {
         tb_registers_want(r, 0, 32); tb_native_pump(n, 5);
@@ -14,10 +14,10 @@ static void ready(TbNative *n, uint64_t after)
     }
     fprintf(stderr, "native registers: %s / %s\n", tb_native_message(n), tb_registers_error(r)); CHECK(false);
 }
-static const TbRegister *pc(TbRegisters *r)
+static const TbRegister_t *pc(TbRegisters_t *r)
 {
     for (size_t i = 0; i < tb_registers_count(r); ++i) {
-        const TbRegister *row = tb_registers_row(r, i);
+        const TbRegister_t *row = tb_registers_row(r, i);
         if (strcmp(row->name, "rip") == 0) { return row; }
     }
     CHECK(false); return NULL;
@@ -29,10 +29,10 @@ int main(int argc, char **argv)
     uint64_t end = tb_gdb_now_ms() + 5000;
     while (tb_native_state(n) != TB_NATIVE_READY && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
     CHECK(tb_native_state(n) == TB_NATIVE_READY);
-    TbRegisters *r = tb_native_registers(n); tb_registers_visible(r, true);
+    TbRegisters_t *r = tb_native_registers(n); tb_registers_visible(r, true);
     CHECK(tb_native_console(n, "start")); ready(n, 0);
-    const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(n));
-    const TbRegister *instruction = pc(r); CHECK(instruction->fresh && instruction->available && !instruction->changed);
+    const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(n));
+    const TbRegister_t *instruction = pc(r); CHECK(instruction->fresh && instruction->available && !instruction->changed);
     CHECK(strtoull(instruction->value, NULL, 16) == strtoull(s->selected.address, NULL, 16));
     uint64_t stop = s->generation.stop; CHECK(tb_native_step(n, TB_STEP_INTO, true)); ready(n, stop);
     CHECK(instruction->changed && strtoull(instruction->value, NULL, 16) == strtoull(s->selected.address, NULL, 16));
@@ -42,7 +42,7 @@ int main(int argc, char **argv)
     tb_registers_refresh(r); ready(n, stop - 1); CHECK(instruction->changed);
     /* GDB normally ends its backtrace at main. Establish an actual caller
      * instead of assuming libc startup frames are exposed. */
-    TbBreakpoints *breakpoints = tb_native_breakpoints(n);
+    TbBreakpoints_t *breakpoints = tb_native_breakpoints(n);
     end = tb_gdb_now_ms() + 5000;
     while ((!tb_break_ready(breakpoints) || tb_break_busy(breakpoints)) && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
     CHECK(tb_break_ready(breakpoints) && !tb_break_busy(breakpoints));

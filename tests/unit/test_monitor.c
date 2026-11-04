@@ -4,22 +4,22 @@
 #include <string.h>
 
 static const char good[] = "TBM1|probe-1|stm32f4x.cpu|20000000|32|1|12345678|END\n";
-static void begin(TbMonitorFrame *f)
+static void begin(TbMonitorFrame_t *f)
 {
     CHECK(tb_monitor_start(f, "probe-1", "stm32f4x.cpu", 0x20000000, 32));
 }
 static void malformed(const char *text)
 {
-    TbMonitorFrame frame; begin(&frame); uint64_t value = 77;
+    TbMonitorFrame_t frame; begin(&frame); uint64_t value = 77;
     tb_monitor_feed(&frame, text, strlen(text)); CHECK(!tb_monitor_finish(&frame, true, &value)); CHECK(value == 77);
 }
-typedef struct { TbMonitorFrame frame; unsigned active, completed; } Replay;
+typedef struct { TbMonitorFrame_t frame; unsigned active, completed; } Replay;
 static void next(Replay *r, unsigned token)
 {
     char id[64]; (void)snprintf(id, sizeof id, "d2304c391cb1698bb6c4cc6293930c53-%u", token);
     CHECK(tb_monitor_start(&r->frame, id, "stm32f4x.cpu", 0x20000000, 32)); r->active = token;
 }
-static void record(void *context, TbMiRecord *mi, const TbMiError *error)
+static void record(void *context, TbMiRecord_t *mi, const TbMiError_t *error)
 {
     Replay *r = context; CHECK(!error && mi);
     if (mi->kind == TB_MI_TARGET && r->active) { tb_monitor_feed(&r->frame, mi->stream.data, mi->stream.length); }
@@ -38,13 +38,13 @@ static void record(void *context, TbMiRecord *mi, const TbMiError *error)
 }
 static void replay(const char *path, size_t chunk)
 {
-    FILE *file = fopen(path, "rb"); CHECK(file); char bytes[4096]; TbMiParser parser = {0}; Replay r = {0};
+    FILE *file = fopen(path, "rb"); CHECK(file); char bytes[4096]; TbMiParser_t parser = {0}; Replay r = {0};
     size_t n;
     while ((n = fread(bytes, 1, chunk, file)) != 0) { CHECK(tb_mi_feed(&parser, bytes, n, record, &r) == TB_MI_OK); }
     CHECK(!ferror(file) && fclose(file) == 0); CHECK(tb_mi_finish(&parser, record, &r) == TB_MI_OK);
     CHECK(r.completed == 5 && !r.active); tb_mi_parser_destroy(&parser);
 }
-static void width_record(void *context, TbMiRecord *mi, const TbMiError *error)
+static void width_record(void *context, TbMiRecord_t *mi, const TbMiError_t *error)
 {
     Replay *r = context; CHECK(!error && mi);
     if (mi->kind == TB_MI_TARGET && r->active) { tb_monitor_feed(&r->frame, mi->stream.data, mi->stream.length); }
@@ -64,14 +64,14 @@ static void width_record(void *context, TbMiRecord *mi, const TbMiError *error)
 }
 static void width_replay(const char *path)
 {
-    FILE *file = fopen(path, "rb"); CHECK(file); TbMiParser parser = {0}; Replay r = {0}; int c;
+    FILE *file = fopen(path, "rb"); CHECK(file); TbMiParser_t parser = {0}; Replay r = {0}; int c;
     while ((c = fgetc(file)) != EOF) { char byte = (char)c; CHECK(tb_mi_feed(&parser, &byte, 1, width_record, &r) == TB_MI_OK); }
     CHECK(!ferror(file) && fclose(file) == 0 && tb_mi_finish(&parser, width_record, &r) == TB_MI_OK);
     CHECK(r.completed == 3 && !r.active); tb_mi_parser_destroy(&parser);
 }
 int main(int argc, char **argv)
 {
-    CHECK(argc == 2 || argc == 3); TbMonitorFrame f; uint64_t value = 0;
+    CHECK(argc == 2 || argc == 3); TbMonitorFrame_t f; uint64_t value = 0;
     for (size_t chunk = 1; chunk < sizeof good; ++chunk) {
         begin(&f);
         for (size_t at = 0; at < sizeof good - 1; at += chunk) {

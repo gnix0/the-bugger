@@ -6,22 +6,32 @@ The Linux frontend shares target-neutral models between native launch/attach
 and remote GDB sessions. OpenOCD management handles reviewed startup and target
 actions. [Validation records](validation.md) cover the tested architectures.
 
-`src/main.c` handles help/version and starts the terminal application.
-`src/tui/app.c` owns startup/configuration/review/workspace pages, keyboard
-and mouse controls, form editing and terminal lifetime. Rendering and theme
-selection are in separate files. `src/tui/demo.c` owns explicitly simulated
-sample data, demo actions and tabs. The layout module owns tiled geometry.
+The frontend is C17, built with Make. Its runtime libraries are ncursesw for
+terminal presentation, libelf for ELF metadata and json-c for profiles and
+preferences. GDB performs instruction decoding and target operations.
 
-The build and tests are C17 with strict warnings; Make is the only build driver.
-C tests use POSIX pipes, processes and PTYs.  Application libraries are ncursesw and libelf (ELF metadata
-only; GDB performs instruction decoding) and json-c (versioned profiles and appearance preferences).
-The MI parser/controller and shared session module serve native launch/attach
-and existing remote GDB-server sessions through the TUI. Console/output and Continue/Pause are
-live. Source/Disassembly and stepping use the code model; Call Stack and Threads
-use the selected-context model. Code breakpoints and Run to Selected use the
-breakpoint model, which now also provides M12 hardware data watchpoints.
-CPU Registers, Memory and Locals/Watches use the inspection models described below. Unavailable views are labelled. Profiles require review before connection;
-keybinds are separate personal preferences.
+| Location | Responsibility |
+|---|---|
+| `src/main.c` | CLI help/version and terminal entry point |
+| `src/tui/` | Pages, input, rendering, themes, preferences and explicitly simulated demo data |
+| `src/layout/` | Tiled geometry, splits, resizing and pane membership |
+| `src/gdb/` | Owned MI parsing, nonblocking transport, request correlation and debugger lifecycle |
+| `src/session/` | Session setup, ownership, capability/region evidence, profiles and OpenOCD lifecycle |
+| `src/model/` | Context, code, breakpoints and bounded inspection/editing state |
+
+Module headers live in the matching `include/<module>/` directories.
+`include/the_bugger/tui.h` and `version.h` retain the application-facing namespace.
+Models own debugger data; the TUI presents it and requests deliberate actions.
+Unavailable views are labelled, profiles require review before connection, and
+keybindings are separate personal preferences.
+
+For backend work, start with [data flow](#data-flow-and-invariants),
+[session ownership](#shared-native-and-remote-sessions) and the
+[controller](#nonblocking-controller-and-process-ownership). Changes to inspectors
+also need the [request audit](#value-producing-request-audit) and
+[shared mutation lifecycle](#stopped-inspector-mutations-f03f05).
+
+### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
 descriptors together, redrawing after input or session revisions. Idle waits are
@@ -44,6 +54,8 @@ their existing byte-escaping policy; this adds neither ANSI Console interpretati
 nor a Unicode Console decoding feature. Curses-cell regression checks cover
 controls, invalid UTF-8, accented/combining/double-width text and the bottom-right
 screen boundary.
+
+### Input and focus
 
 Focused text fields retain `(page, kind, value, pane)` identity. Newly acquired
 fields start Normal; Insert is retained only while that field remains focused.
@@ -86,6 +98,8 @@ Ctrl+H there. Outside content focus, existing handling applies.
 Startup explicitly calls `nonl()` after `raw()` so curses preserves Enter's
 carriage return separately from Ctrl+J's line feed, including in `get_wch`.
 
+### Terminal capabilities
+
 Theme roles separate workspace, panel, raised header, notice and footer
 surfaces. Selected-row variants retain semantic foreground colors. Direct-color
 terminfo supplies exact RGB values. `src/tui/terminal.c` selects matching
@@ -102,6 +116,8 @@ These capability signals follow the established conventions described by
 [ncurses terminfo](https://invisible-island.net/ncurses/man/terminfo.5.html)
 provides the matching direct-color descriptions. See the
 [interface constraints](requirements.md#interface-constraints) for rendering adaptations.
+
+### Workspace and menu presentation
 
 The workspace preserves per-view scroll/selection and tabs through compact
 rendering, with interactive split-tree geometry, dragging and closing as
@@ -153,7 +169,7 @@ without underlining box glyphs, which produces extra strokes in terminal fonts.
 
 ## Source fullscreen rendering
 
-`App.fullscreen_source` is a temporary pane identifier, or -1 for ordinary tiled
+`App_t.fullscreen_source` is a temporary pane identifier, or -1 for ordinary tiled
 rendering. The Source Actions and Source pane-actions entries share one toggle;
 Restore and workspace Escape/q leave it. Entry selects Source stepping without
 moving execution. Leaving for the launcher clears the override.
@@ -174,7 +190,8 @@ paths. No saved layout, new session backend or target-access policy is introduce
 
 ## Theme selection and preferences
 
-`src/tui/theme.{h,c}` defines the built-in palette catalog, stable family/variant
+`src/tui/theme.c` and `include/tui/theme.h`
+define the built-in palette catalog, stable family/variant
 identifiers and semantic curses pairs. Catppuccin Macchiato is the default;
 All eleven families remain selectable. The
 49 palettes use shared workspace/panel/raised/selection surfaces and semantic
@@ -186,15 +203,16 @@ its background, the text color supplies a contrasting fallback.
 `app.c` owns Config, Themes and theme-preview page state. A draft palette is
 separate from the saved choice. Changing a family chooses a valid variant;
 preview reinitializes curses pairs and requests a full repaint. Preview renders
-an independent `TbDemo`/`TbLayout`, never the live session or inspection models.
+an independent `TbDemo_t`/`TbLayout_t`, never the live session or inspection models.
 Back restores the saved palette; Save returns to Config only after persistence
 succeeds. Theme operations do not modify workspace geometry or session profiles.
 
-`src/tui/preferences.{h,c}` owns global version-1 `preferences.json`, independently
+`src/tui/preferences.c` and `include/tui/preferences.h`
+own global version-1 `preferences.json`, independently
 of `profiles.json`. It stores theme/variant identifiers and an optional 30-integer
 `keys` array and optional `vim` boolean, not runtime color data or debugger state.
 A missing boolean defaults false; saves include it. A theme-only file loads
-factory bindings. `tui/keybinds.{h,c}` defines the action catalog, defaults,
+factory bindings. `src/tui/keybinds.c` and `include/tui/keybinds.h` define the action catalog, defaults,
 key names/encoding, reserved-key/duplicate validation and curses matching;
 it has no profile dependency. Encoding is 0 for None, 1–24 for function keys,
 -1 through -26 for Ctrl letters and 256 plus printable ASCII for plain keys.
@@ -217,7 +235,7 @@ uncertain crash durability, not as a rolled-back save.
 
 The catalog adapts the referenced upstream palettes; it does not embed Neovim or
 execute Lua. [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES) retains exact upstream
-revisions, authors and MIT/GPL notices and accompanies the binary distribution
+revisions, authors and MIT, Apache-2.0 and GPL notices and accompanies the binary distribution
 with the GPLv3 text in LICENSE. Modus color-deficiency variants preserve upstream
 semantic substitutions; terminal adaptations carry no accessibility certification.
 
@@ -246,12 +264,12 @@ from starving terminal input. Demo samples never become live debugger state.
 
 ## Shared native and remote sessions
 
-`src/session/session.c` owns `TbSession`: MI event routing, setup, model pumping,
-execution actions, logs and teardown. `session.h` describes local, `remote` and
-`extended-remote` configurations. `native.h` retains source aliases for existing
-native consumers; `native.c` holds the strict Linux mapping parser. Native PTY,
-pidfd and `/proc` work is conditional on the local session kind. Remote IDs are
-opaque display strings, never local PIDs or inputs to process signaling/maps.
+`src/session/session.c` owns `TbSession_t`: MI event routing, setup, model pumping, execution
+actions, logs and teardown. `include/session/session.h` describes local, `remote` and
+`extended-remote` configurations. `include/session/native.h` retains source aliases for existing
+native consumers; `native.c` holds the strict Linux mapping parser. Native PTY, pidfd and `/proc`
+work is conditional on the local session kind. Remote IDs are opaque display strings, never local
+PIDs or inputs to process signaling/maps.
 
 Remote configuration accepts a validated TCP endpoint, GDB executable and optional
 symbol ELF. It loads symbols without programming firmware, then uses structured
@@ -273,7 +291,7 @@ Memory retains single-byte formatting until the user supplies one.
 Remote ordinary-memory evidence is empty by default. Readable target descriptions,
 ELF sections and a successful read do not prove side-effect-free RAM/Flash. An
 adapter may supply affirmative bounded ordinary-region evidence through
-`TbSessionConfig`; this is not currently a generic UI map editor. Without it,
+`TbSessionConfig_t`; this is not currently a generic UI map editor. Without it,
 Memory Go/Refresh and explicit Previous/Next read actions remain available, while
 wheel/key browsing cannot silently cross unknown regions. Opening views causes
 no speculative memory scan. New remote inferiors revoke previous region evidence
@@ -293,7 +311,8 @@ and [byte order](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Byte-Ord
 
 ## OpenOCD setup and owned lifecycle
 
-`src/session/openocd.{h,c}` provides a bounded script catalog, immutable reviewed
+`src/session/openocd.c` and `include/session/openocd.h`
+provide a bounded script catalog, immutable reviewed
 argument plan and nonblocking server process/log management. The catalog inspects
 installed `board`, `interface` and `target` paths from explicit search directories,
 `OPENOCD_SCRIPTS`, user OpenOCD locations and conventional system prefixes. It
@@ -400,7 +419,7 @@ when the PTY and real tmux forwarding tests pass.
 
 ## Owned MI parser
 
-`src/gdb/mi.h` defines an internal C API; `mi.c` uses only the C library.
+`include/gdb/mi.h` defines an internal C API; `mi.c` uses only the C library.
 `tb_mi_parse` parses one record without its line delimiter. The returned record,
 token, class, ordered result tree and decoded strings are independently owned;
 release them together with `tb_mi_record_free`. Duplicate names and unnamed
@@ -408,7 +427,7 @@ list elements are preserved. `tb_mi_find` returns the first matching sibling.
 Strings carry an authoritative byte length, including embedded decoded NULs;
 tokens retain their exact digits rather than assuming an integer width.
 
-Zero-initialize `TbMiParser`, feed arbitrary byte chunks, finish at EOF and
+Zero-initialize `TbMiParser_t`, feed arbitrary byte chunks, finish at EOF and
 destroy its buffer. CR, LF and CRLF frame records, including a split CRLF.
 Blank lines are ignored; an unterminated EOF tail is reported as truncated.
 Callbacks receive either an owned record or a temporary error with a zero-based
@@ -420,8 +439,8 @@ partially consumed input. No callbacks retain pointers into input buffers.
 
 Bounds are 1 MiB per encoded record excluding its delimiter, 16,384 value nodes
 including containers, and 64 nested containers. Overlong lines are discarded
-without growing the buffer further. Limit diagnostics are explicit; a future
-controller must fail the affected operation rather than publish partial data.
+without growing the buffer further. Limit diagnostics are explicit; the
+controller fails on parser errors rather than publishing partial data.
 These are defensive internal limits, not target architecture restrictions.
 
 The parser handles result, execution/status/notification async, console/target/
@@ -444,14 +463,13 @@ Synthetic fixture provenance and expectations are in `tests/fixtures/mi/README.m
 
 ## Nonblocking controller and process ownership
 
-`src/gdb/controller.{h,c}` is an internal, single-threaded C interface independent
-of curses. It owns one spawned GDB child, three close-on-exec pipes, the parser
-and up to 64 requests. `posix_spawnp` passes a literal executable and fixed argv:
-`--quiet --nx --interpreter=mi3`. No shell, target arguments or connection command
-is used. The child has a separate process group, reset signal mask and default
-signal dispositions; cleanup signals only its owned PID, never the group.
-All pipe endpoints stay above stdio, even when the host closed descriptors 0–2.
-Parent endpoints are nonblocking; child endpoints remain blocking.
+`src/gdb/controller.c` implements the interface in `include/gdb/controller.h`. It is single-threaded
+and independent of curses. It owns one spawned GDB child, three close-on-exec pipes, the parser and
+up to 64 requests. `posix_spawnp` passes a literal executable and fixed argv: `--quiet --nx
+--interpreter=mi3`. No shell, target arguments or connection command is used. The child has a
+separate process group, reset signal mask and default signal dispositions; cleanup signals only its
+owned PID, never the group. All pipe endpoints stay above stdio, even when the host closed
+descriptors 0–2. Parent endpoints are nonblocking; child endpoints remain blocking.
 
 Startup waits for the MI prompt and successful `-gdb-set mi-async on` and
 `-gdb-set non-stop off` replies before reporting READY (no target). One MI2 retry
@@ -523,7 +541,8 @@ and [interpreter options](https://sourceware.org/gdb/current/onlinedocs/gdb.html
 
 ## Native session and logs
 
-`src/session/session.{h,c}` owns sequential configuration/actions over the
+`src/session/session.c` and `include/session/session.h`
+own sequential configuration/actions over the
 controller. Callbacks copy status and mark completions; requests are issued
 after callbacks return, respecting controller ownership/reentrancy rules.
 Startup validates a readable ELF/PID and directory, resolves the ELF before
@@ -600,19 +619,18 @@ themes remain F44. F19's built-in themes affect presentation only.
 ## Selected context, Call Stack and Threads
 
 The Call Stack list renders compact function and basename/line entries. Its
-pane-local Details action copies one highlighted `TbFrame`, thread and context
+pane-local Details action copies one highlighted `TbFrame_t`, thread and context
 generation into a session-only snapshot. It does not call context selection,
 argument acquisition or the MI controller. The pane wraps complete retained
 fields, keeps a separate details offset and marks snapshots stale when context
 changes. Escape/Frames restores the list's row, vertical offset and horizontal
 position. New sessions and reused pane slots clear snapshots.
 
-`src/model/context.{h,c}` owns a bounded debugger snapshot independently of curses
-and target architecture. The native session owns this model and passes controller
-events to it first. Context requests use distinct cookies so their completion
-cannot complete a native configuration/action request. Callbacks only copy
-borrowed MI fields and mark work; the native pump issues new requests after
-callbacks return and while session actions are idle.
+`src/model/context.c` and `include/model/context.h` own a bounded debugger snapshot independently of
+curses and target architecture. The shared session owns this model and passes controller events to
+it first. Context requests use distinct cookies so their completion cannot complete a session
+configuration/action request. Callbacks only copy borrowed MI fields and mark work; the session pump
+issues new requests after callbacks return and while session actions are idle.
 
 Stopped snapshots carry session/stop/context generations, the original stopped
 thread/PC frame and the independently selected thread/frame. Selecting a caller
@@ -663,14 +681,13 @@ and [thread commands](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB
 
 ## Source, disassembly and execution navigation
 
-`src/model/code.{h,c}` owns per-pane source buffers, assembly windows, mixed-mode
-settings and browsing positions independently of curses. The native session owns
-it alongside context, routes distinct request cookies, and pumps both only after
-controller callbacks return. Session/stop/context generations reject obsolete
-backend replies; per-view versions additionally reject an outstanding assembly
-reply after a local mixed/follow change. Resume retains explicitly stale code.
-Stopped source/assembly follow GDB's selected frame; original stopped-PC markers
-remain distinct from inspected caller markers. No compiler semantics are inferred.
+`src/model/code.c` and `include/model/code.h` own per-pane source buffers, assembly windows,
+mixed-mode settings and browsing positions independently of curses. The shared session owns it
+alongside context, routes distinct request cookies, and pumps both only after controller callbacks
+return. Session/stop/context generations reject obsolete backend replies; per-view versions
+additionally reject an outstanding assembly reply after a local mixed/follow change. Resume retains
+explicitly stale code. Stopped source/assembly follow GDB's selected frame; original stopped-PC
+markers remain distinct from inspected caller markers. No compiler semantics are inferred.
 
 `-file-list-exec-source-files` supplies a bounded file catalog, including before
 execution. Exact file/fullname identities preserve spaces and duplicate basenames.
@@ -759,7 +776,9 @@ Timeouts quarantine further MMIO until an exact late completion reconciles the
 request or the connection is replaced. An untrustworthy completed frame requires
 reconnection. No outcome causes an automatic retry. Actual protocol and width-path
 probes provide evidence for the recorded setup, not arbitrary OpenOCD servers;
-product-level physical validation of this adapter remains pending.
+the recorded production-width and owner acceptance results remain limited to
+that setup. See the [MMIO evidence](validation.md#task-13-production-mmio-checkpoint)
+and [Task 1.3 acceptance](validation.md#task-13-elf-trust-and-bounded-reconstruction).
 
 MMIO navigation displays one declared access-width-sized unit per row; alignment
 does not identify a hardware register. Navigation and cached sample inspection
@@ -813,7 +832,8 @@ removal preserves active selection when another tab is removed and protects
 the final tab. Adding activates the new view; promotion and per-view positions
 remain. No global membership state or persistence is introduced.
 
-`src/model/images.{c,h}` uses libelf/GElf for ELF32/64 in either byte order.
+`src/model/images.c` and `include/model/images.h`
+use libelf/GElf for ELF32/64 in either byte order.
 Allocated/executable sections, function/object symbols and ARM mapping symbols
 classify ranges and supply anchors only through trusted catalog queries. Loading
 an ELF starts UNVERIFIED. Remote metadata-only review binds its full path,
@@ -855,7 +875,8 @@ selected-frame/file context. Manual headers use retained instruction source
 attribution or an address-window label, never a different selected frame's
 filename/caller label; unknown/data/error notices still take priority.
 
-`src/model/breakpoints.{c,h}` owns a bounded 256-row MI snapshot, parent/child and
+`src/model/breakpoints.c` and `include/model/breakpoints.h`
+own a bounded 256-row MI snapshot, parent/child and
 pending locations, conditions, ignore counts, hits, enabled state and hardware
 policy. Structured source/line arguments preserve literal quoted paths.
 Notifications/stops mark the table dirty; no idle polling or parsed CLI table.
@@ -876,12 +897,12 @@ not evidence of execution state. Remote-board validation remains separate.
 
 ## CPU registers
 
-`src/model/registers.{c,h}` owns discovered numeric IDs/names and cached values.
-`-data-list-register-names` preserves empty-name positions; no ARM/x86 list is
-canonical. `-data-list-register-values --thread ... --frame ...` reads only
-requested visible rows, in batches of at most 32. Catalog capacity is 512 IDs;
-values are bounded to 1024 bytes and flagged when bounded. Missing values and
-errors are explicit, not zero-filled registers. Failures require explicit retry.
+`src/model/registers.c` and `include/model/registers.h` own discovered numeric IDs/names and cached
+values. `-data-list-register-names` preserves empty-name positions; no ARM/x86 list is canonical.
+`-data-list-register-values --thread ... --frame ...` reads only requested visible rows, in batches
+of at most 32. Catalog capacity is 512 IDs; values are bounded to 1024 bytes and flagged when
+bounded. Missing values and errors are explicit, not zero-filled registers. Failures require
+explicit retry.
 
 The TUI declares visible row ranges each render pass. A separate context-demand
 flag allows a Registers-only workspace without conflicting with code demand.
@@ -895,14 +916,44 @@ not claim changes that cannot be established from complete samples.
 The pane uses existing horizontal/vertical scrolling, Refresh and `*` plus color
 for changed values. It labels selected context and stale data. GDB/MI provides
 no standard structured group-discovery command here; All (ungrouped) is honest
-fallback, without CLI-table parsing or guessed metadata. Writes, peripheral polling, SVD interpretation and register editing are not
-implemented in this model.
+fallback, without CLI-table parsing or guessed metadata. The footer offers
+Refresh, format and Edit; peripheral polling and SVD interpretation remain outside
+this model.
+
+F05 keeps a single frozen register varobj for backend editability evidence.
+Opening Edit explicitly requests command capability, exact numeric-ID/name
+binding, `may-write-registers`, scalar varobj creation, attributes and a built-in
+C `sizeof($name)` probe. Names must be complete, unique ASCII identifiers; values
+must be complete scalar hex and sizes 1–8 octets. No user expression or overloaded
+operation enters that probe. Frame zero avoids writes to caller unwind storage.
+GDB's `editable` attribute establishes an assignable object, not a hardware
+writability guarantee; backend errors and explicit observed mismatches remain
+separate outcomes.
+
+Apply rechecks ID/name, permission and attributes, then checks current generation,
+thread lifetime, catalog/version and octet capability at shared reservation
+acquisition. It sends one `-data-write-register-values --thread ... --frame 0 x
+ID VALUE` request. The bounded frozen object is deleted after cancel/failure/
+completion; failed cleanup blocks further register edits until reconnect rather
+than leaking successive object names. A rejected or corrupt creation reply does
+not establish ownership: no object is deleted on that assumption, and another
+probe requires reconnect. No varobj assignment or new write transport
+is introduced. Opening/Review/Cancel never dispatches a target write.
+
+Register completion refreshes the shared context outside callbacks, invalidating
+all dependent inspector snapshots. Registers suppresses automatic samples for
+that stop after any inspector write; explicit Refresh/Verify grants the current
+generation's requested samples. Verification compares raw canonical bits with
+the request, including a visible mismatch for ignored/normalized writes. An
+explicit original-register sample can reconcile a completed backend error; a
+lost completion stays quarantined until a new session.
 
 Reference: GDB [MI data commands, register names and values](https://sourceware.org/gdb/current/onlinedocs/gdb.html/GDB_002fMI-Data-Manipulation.html).
 
 ## Memory inspector
 
-`src/model/memory.{h,c}` owns up to
+`src/model/memory.c` and `include/model/memory.h`
+own up to
 32 independent locations/settings and bounded byte/validity snapshots; `app.c`
 owns per-pane inline drafts/cursors and viewport scrolling. The toolbar stays
 above the body while body scrollbars use the adjusted body geometry. Enter and
@@ -920,16 +971,23 @@ authorization. Missing metadata is an honest unknown state.
 
 Snapshots never exceed 1024 bytes; one backend request is active at a time.
 Addresses are at most 64 bits and units are 8-bit bytes for the initial supported
-targets. The metadata catalog holds at most 128 regions; omitted or unavailable
-regions require explicit Go. Unknown or unsupported wider/non-octet targets produce capability diagnostics,
+targets. The metadata catalog holds at most 128 regions. Invalid, excessive or
+contradictory region evidence is rejected as a whole, not truncated into an
+accepted prefix. Without ordinary-region evidence, reads require explicit
+range decisions; read consent alone never establishes writable RAM. Unknown or unsupported wider/non-octet targets produce capability diagnostics,
 not fabricated values. GDB memory reads may use heuristic
 partial reads; the frontend preserves the exact reported bytes/validity rather
 than reconstructing inaccessible memory. Scalar address conversion suppresses
 character-pointer string printing. User calls/writes/casts remain rejected.
 
+F04 uses this model for reviewed byte edits; Stack clients cannot use its editor.
+See the [shared mutation lifecycle](#stopped-inspector-mutations-f03f05) and
+[RAM evidence](#user-confirmed-stm32-sram-evidence) for authorization and uncertainty.
+
 ## Stack inspector
 
-`model/stack.{h,c}` owns 32 independent Stack views, raw samples, navigation,
+`src/model/stack.c` and `include/model/stack.h`
+own 32 independent Stack views, raw samples, navigation,
 point annotations and per-thread declarations. Context maintains monotonic
 session-local thread-lifetime identities from create/exit notifications and
 validated complete inventories. Numeric ID reuse or changed target identity
@@ -1040,7 +1098,8 @@ Errors use the existing error presentation.
 
 ## Locals and Watches
 
-`src/model/variables.{h,c}` owns separate shared Locals/Watches trees; panes
+`src/model/variables.c` and `include/model/variables.h`
+own separate shared Locals/Watches trees; panes
 retain their own selection and scroll, but do not create independent watch lists.
 `session/session.c` routes events and drives the model without blocking the TUI.
 Local names come from `-stack-list-variables --no-values`; value inspection uses
@@ -1083,6 +1142,10 @@ retain unknown-region denial before automatic inspection. Target descriptions mu
 as complete MMIO safety evidence. Without sufficient proof, explicit inspection
 remains the fallback. M17 validates real hardware; synthetic policy tests do not
 establish peripheral safety on a board.
+
+F03 adds a separate reviewed scalar-edit path. Inspection expressions still reject
+assignment; only the [deliberate mutation path](#stopped-inspector-mutations-f03f05)
+can assign an eligible lvalue. Read authorization does not grant write permission.
 
 ## Hardware data watchpoints
 
@@ -1129,7 +1192,8 @@ and [Setting Watchpoints, hardware limits and scope](https://www.sourceware.org/
 
 ## Profiles and source restoration
 
-`session/profiles.{c,h}` owns bounded connection definitions and
+`src/session/profiles.c` and `include/session/profiles.h`
+own bounded connection definitions and
 recent saved sessions, independent of curses, local process IDs or target values.
 The launcher loads into configuration for review; it never starts a tool merely
 because a profile was selected. Successfully initialized saved sessions enter recents. Remote profiles connect
@@ -1161,11 +1225,13 @@ Names hold up to 63 bytes; paths/source prefixes up to 1023, endpoint up to 255.
 JSON quoting is not shell execution; arguments/scripts remain arrays.
 Connection profile definitions exclude personal keys/themes, PID, environment overrides, geometry/tabs,
 watch/breakpoint definitions, region grants, values and temporary backend state.
-F01 and F12 own later restoration/sharing and schema evolution.
+F01 stores setup definitions separately, as described below; F12 shareable import/
+export remains planned. Neither establishes value or write permissions.
 
 ### Setup definitions and saving (F01)
 
-`session/setup.{h,c}` defines bounded, independently owned setup definitions.
+`src/session/setup.c` and `include/session/setup.h`
+define bounded, independently owned setup definitions.
 The model contains split nodes, column/row proportions, pane view membership and
 selection, Source context-role selection or pinned-file identity, Memory
 expression/count/grouping, Watch expressions/formats and code-breakpoint intent.
@@ -1195,7 +1261,8 @@ including recents, until a repaired file loads successfully. The Profiles header
 indicates read-only mode; Reload reports recovery rather than successful repair.
 Schema-1/2 builds cannot read schema 3; there is no downgrade operation.
 
-`tui/setup_capture.{h,c}` captures metadata only. Pane lifecycle identities and
+`src/tui/setup_capture.c` and `include/tui/setup_capture.h`
+capture metadata only. Pane lifecycle identities and
 model-local Watch/breakpoint identities map to stable setup-local entries; Source
 selection uses the context role or a pinned identity. Resize, samples, permissions,
 fullscreen and lower-overlay geometry do not change the definition. Memory saves
@@ -1216,7 +1283,8 @@ ignore counts do not alter definitions. Temporary/data/backend-only breakpoints
 are excluded. Detected external conflicts and uncertain managed mutations block
 saving until explicit complete-definition review/exclusion or bounded metadata reconciliation.
 
-`tui/setup_restore.{h,c}` coordinates bounded setup restoration. Session Review
+`src/tui/setup_restore.c` and `include/tui/setup_restore.h`
+coordinate bounded setup restoration. Session Review
 adds a saved-setup review with restoration enabled by default. It displays scope
 and active parsed connection differences, relative-path launch-context changes
 and local ELF metadata changes/unavailability. Starting confirms that review;
@@ -1390,3 +1458,80 @@ limits are described in the [RISC-V procedure](testing.md#risc-v-hardware-valida
 
 The [Memory validation record](validation.md#m10) summarizes the corrections
 and their evidence limits; the roadmap assigns the remaining integration gaps.
+
+## Stopped inspector mutations (F03–F05)
+
+`model/context.c` coordinates one inspector mutation across Variables, Memory and Registers.
+An idle-controller reservation belongs to the request cookie. Acquisition checks
+the published stopped generation and marks the shared snapshot stale; release
+runs outside controller callbacks and refreshes the context generation. Memory,
+Stack, Registers, Code and Variables then reject their previous-context samples.
+Automatic variable and register acquisition is suppressed for the remainder of that stop;
+explicit reads remain available. A later stop starts normal read-policy checks.
+
+Variable drafts retain object/key, thread/frame, target size, address and
+provenance. Attribute/path/address/size probes precede review. Assignment checks
+identity and writable-region proof again immediately before dispatch; a stale
+root, replaced child, context change or revoked region cannot reuse the proof.
+Direct paths exclude pointer/reference traversal and calls. Address conversion
+uses GDB's C language with an integer result, avoiding symbol annotations and
+C++ overloaded address operators. The target's octet capability and reported
+`sizeof` determine accepted integer bounds.
+
+Memory drafts retain view lifetime/version, backend epoch, generation and exact
+old extent. One `-data-write-memory-bytes` request contains the address and exact
+hex bytes, without repeat-count/fill syntax. Contradictory ordinary-region
+catalogs are rejected atomically, including writable/read-only overlaps. MMIO views and
+Stack byte clients cannot use this editor.
+
+Callbacks record acknowledgment or uncertainty without dispatching follow-up
+requests. Uncertainty quarantines all three editors. Register reconciliation
+requires an explicit sample of the original register, as described in
+[CPU registers](#cpu-registers). Memory reconciliation requires an explicit
+complete valid sample covering the original bytes. Variable
+reconciliation requires an explicit fresh read of the original identity in the
+same stopped thread/frame. An unavailable original destination requires a new
+session; changing selection cannot clear the quarantine. No implicit read-back,
+retry, rollback or refresh of aggregates accompanies a write.
+
+A timed-out, cancelled or otherwise lost write completion requires a new session
+before further edits. A controller with no pending tokens is not proof that the
+backend can no longer complete that mutation. Explicit verification can reconcile
+a completed backend error reply, but cannot clear an unresolved transport.
+
+
+### User-confirmed STM32 SRAM evidence
+
+`TbSessionRamReview_t` binds the fixed STM32F446RE main-SRAM description to a
+process-unique connection instance, configuration generation and evidence
+revision. Endpoint and GDB inferior ID are displayed context, not device proof.
+The owner asserts the device identity; architecture, ELF and OpenOCD script names
+never select or confirm it automatically. The source is ST DS10693 memory mapping:
+`[0x20000000, 0x20020000)`. Device-specific bounds stay in the session adapter.
+
+The stopped-session review is available for compatible little-endian, octet,
+32-bit ARM remote sessions. Review and confirmation perform no GDB requests.
+Confirm compares every displayed binding against current session state and
+consumes the evidence revision. No profile/schema change or arbitrary map editor
+is involved. Existing `TbSessionConfig_t` regions remain affirmative adapter input;
+passing them does not label device identity user-confirmed.
+
+Session publication validates the complete catalog before updating Memory and
+Variables together, without pumping between consumers. Excessive, malformed,
+contradictory or unrepresentable catalogs are refused; no accepted prefix is
+published. Native mapping collection also refuses incomplete/overflowed catalogs.
+Each model advances an evidence epoch on every replacement, even identical
+bounds. Memory revokes dependent ordinary-range consent and queued read versions;
+both editors discard untransmitted drafts and recheck the epoch before dispatch.
+If a mutation is already queued, evidence replacement advances the controller
+context generation: its existing pipe-dispatch guard drops wholly unsent stale
+commands. Started commands retain conservative stale/uncertain completion; no
+mutation is retried or treated as rolled back.
+Value authorization remains separate; a region alone does not authorize automatic
+Variables acquisition.
+
+Console, reset, inferior/configuration change and disconnect revoke remote evidence.
+Metadata renegotiation never restores an earlier user confirmation. These paths
+retain the existing mutation reservation, uncertainty and lost-completion state;
+reconfirmation cannot reconcile a write. Eligibility publication is independent
+of context reset and requests no automatic read-back.

@@ -3,32 +3,32 @@
 #include "../support/check.h"
 #include <string.h>
 
-static TbContext *context;
+static TbContext_t *context;
 static unsigned completions;
-static void emit(void *unused, const TbGdbEvent *event)
+static void emit(void *unused, const TbGdbEvent_t *event)
 {
     (void)unused;
     if (context) { (void)tb_context_event(context, event); }
     if (event->kind == TB_GDB_REPLY) { ++completions; }
 }
-static void pump(TbGdb *gdb) { tb_gdb_pump(gdb, 5); tb_context_pump(context); }
-static void ready(TbGdb *gdb)
+static void pump(TbGdb_t *gdb) { tb_gdb_pump(gdb, 5); tb_context_pump(context); }
+static void ready(TbGdb_t *gdb)
 {
     uint64_t until = tb_gdb_now_ms() + 4000;
     while (tb_gdb_state(gdb) == TB_GDB_STARTING && tb_gdb_now_ms() < until) { pump(gdb); }
     CHECK(tb_gdb_state(gdb) == TB_GDB_READY);
 }
-static void fresh(TbGdb *gdb)
+static void fresh(TbGdb_t *gdb)
 {
     uint64_t until = tb_gdb_now_ms() + 4000;
     while ((!tb_context_snapshot(context)->ready || tb_context_snapshot(context)->stale) && tb_gdb_now_ms() < until) { pump(gdb); }
     CHECK(tb_context_snapshot(context)->ready && !tb_context_snapshot(context)->stale);
 }
-static void command(TbGdb *gdb, const char *operation)
+static void command(TbGdb_t *gdb, const char *operation)
 {
     CHECK(tb_gdb_request(gdb, operation, NULL, 0, TB_GDB_SESSION, 999, 1000, NULL));
 }
-static void stop(TbGdb *gdb)
+static void stop(TbGdb_t *gdb)
 {
     command(gdb, "-stop");
     uint64_t until = tb_gdb_now_ms() + 3000;
@@ -38,7 +38,7 @@ static void stop(TbGdb *gdb)
 static void run_case(const char *binary, const char *mode)
 {
     CHECK(setenv("TB_FAKE_MODE", mode, 1) == 0);
-    TbGdb *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
+    TbGdb_t *gdb = tb_gdb_create(emit, NULL); CHECK(gdb);
     context = tb_context_create(gdb); CHECK(context);
     CHECK(tb_gdb_start(gdb, binary, 1000)); ready(gdb); stop(gdb);
     for (int i = 0; i < 10; ++i) { pump(gdb); }
@@ -53,7 +53,7 @@ static void run_case(const char *binary, const char *mode)
         tb_context_refresh(context); command(gdb, "-ctx-release");
     }
     fresh(gdb);
-    const TbContextSnapshot *snapshot = tb_context_snapshot(context);
+    const TbContextSnapshot_t *snapshot = tb_context_snapshot(context);
     CHECK(snapshot->thread_count == (strcmp(mode, "context-many") == 0 ? TB_CONTEXT_THREADS : 2));
     CHECK(snapshot->threads_limited == (strcmp(mode, "context-many") == 0));
     CHECK(strcmp(snapshot->threads[1].id, "42") == 0);
@@ -98,7 +98,7 @@ static void run_case(const char *binary, const char *mode)
         }
         /* Selecting the current context preserves values and freshness. */
         uint64_t revision = tb_context_revision(context);
-        TbGdbGeneration generation = tb_gdb_generation(gdb);
+        TbGdbGeneration_t generation = tb_gdb_generation(gdb);
         bool arguments_read = snapshot->frames[1].arguments_read;
         CHECK(tb_context_select_frame(context, snapshot->selected.level));
         CHECK(tb_context_select_thread(context, snapshot->selected_thread));

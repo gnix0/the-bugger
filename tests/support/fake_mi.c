@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "mi.h"
 
+#include <inttypes.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -43,13 +44,19 @@ int main(int argc, char *argv[])
     if (mode == NULL) { mode = "normal"; }
     unsigned register_value = 16; bool register_error = false, register_malformed = false;
     bool register_stop_held = false;
+    unsigned register_edit_mode = 0;
+    unsigned register_edit_reads = 0;
+    unsigned register_edit_writes = 0;
+    unsigned register_edit_number = 0;
+    uint64_t register_edit_values[5] = {16, 0, 16, 0, 0};
+    char register_edit_held[32] = {0};
     unsigned memory_mode = 0;
     unsigned mmio_mode = strcmp(mode, "remote-mmio-slow") == 0 ? 1 : 0, mmio_reads = 0;
     bool mmio_peer = strcmp(mode, "mmio") == 0 || strcmp(mode, "context-mmio") == 0 || strncmp(mode, "remote-mmio", 11) == 0;
     bool code_page_error = false, code_duplicate_source = false, code_limited_sources = false;
     unsigned code_bad_reply = 0;
     char variable_name[64] = {0}; unsigned variable_reads = 0, variable_children = 0, variable_deletes = 0;
-    unsigned variable_mode = 0;
+    unsigned variable_mode = 0, variable_writes = 0;
     unsigned variable_value = 17;
     if ((strcmp(mode, "fallback") == 0 || strcmp(mode, "fallback-fail") == 0) &&
         strcmp(argv[3], "--interpreter=mi3") == 0) {
@@ -164,10 +171,10 @@ int main(int argc, char *argv[])
                 }
             } else if (strncmp(command, "-data-evaluate-expression ", 26) == 0) {
                 if (strstr(command, "unsigned char")) { reply(token, strcmp(mode, "remote-wide") == 0 ? "^done,value=\"256\"" : "^done,value=\"0\""); }
-                else if (strstr(command, "sizeof(void*)")) { reply(token, "^done,value=\"4\""); }
+                else if (strstr(command, "sizeof(void*)")) { reply(token, variable_mode == 8 ? "^done,value=\"1\"" : "^done,value=\"4\""); }
                 else { reply(token, "^error,msg=\"Unexpected automatic value evaluation\""); }
             } else if (strcmp(command, "-gdb-show endian\n") == 0) {
-                reply(token, strcmp(mode, "remote-unknown") == 0 ? "^done,value=\"auto\"" : "^done,value=\"big\"");
+                reply(token, strstr(mode, "-ram") ? "^done,value=\"little\"" : strcmp(mode, "remote-unknown") == 0 ? "^done,value=\"auto\"" : "^done,value=\"big\"");
             } else if (strcmp(command, "-stack-info-frame\n") == 0) {
                 reply(token, remote_resets ? "^done,frame={level=\"0\",addr=\"0x8000200\",func=\"remote_main\",arch=\"arm\"}" : "^done,frame={level=\"0\",addr=\"0x8000100\",func=\"remote_main\",arch=\"arm\"}");
             } else if (strcmp(command, "-thread-info\n") == 0 && !strcmp(mode, "remote-openocd-verify-error")) {
@@ -321,9 +328,22 @@ int main(int argc, char *argv[])
                 char value[32]; (void)snprintf(value, sizeof value, "%u", variable_value);
                 (void)printf("%s^done,name=\"%s\",numchild=\"%u\",type=\"%s\",value=\"%s\"\n", token, variable_name,
                     strstr(command, "aggregate") ? (variable_mode == 6 ? 1U : 100U) : strstr(command, "pointer") ? 1U : 0U,
-                    strstr(command, "aggregate") ? (variable_mode == 6 ? "Sample" : "int [100]") : strstr(command, "pointer") ? "int *" : "int",
+                    strstr(command, "aggregate") ? (variable_mode == 6 ? "Sample" : "int [100]") : strstr(command, "pointer") ? "int *" : variable_mode == 8 ? "bool" : variable_mode == 9 ? "unsigned long" : "int",
                     strstr(command, "unavailable") ? "<optimized out>" : strstr(command, "pointer") ? "0x40000000" : value);
             }
+        } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-show-attributes ", 21) == 0) {
+            reply(token, "^done,attr=\"editable\"");
+        } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-info-path-expression ", 26) == 0) {
+            reply(token, variable_mode == 10 ? "^done,path_expr=\"danger()\"" : "^done,path_expr=\"scalar\"");
+        } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-data-evaluate-expression ", 26) == 0) {
+            if (strstr(command, "&(scalar)")) { reply(token, "^done,value=\"0x1000\""); }
+            else if (strstr(command, "sizeof(scalar)")) { reply(token, variable_mode == 8 ? "^done,value=\"1\"" : "^done,value=\"4\""); }
+            else { reply(token, "^error,msg=\"FAKE unexpected edit expression\""); }
+        } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-assign ", 12) == 0) {
+            if (getenv("TB_FAKE_FORBID_WRITES")) { free(line); return 90; }
+            ++variable_writes;
+            if (variable_mode == 7) { reply(token, "^error,msg=\"FAKE ambiguous assignment\""); }
+            else { reply(token, "^done,value=\"42\""); }
         } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-list-children ", 19) == 0) {
             unsigned first, end; char object[256];
             if (sscanf(command, "-var-list-children --all-values %255s %u %u", object, &first, &end) != 3 || end < first || end - first > 32) { free(line); return 27; }
@@ -351,7 +371,7 @@ int main(int argc, char *argv[])
         } else if (strcmp(mode, "context-variables") == 0 && strncmp(command, "-var-delete ", 12) == 0) {
             ++variable_deletes; reply(token, "^done,ndeleted=\"1\"");
         } else if (strcmp(mode, "context-variables") == 0 && strcmp(command, "-variable-stats\n") == 0) {
-            (void)printf("%s^done,reads=\"%u\",children=\"%u\",deletes=\"%u\"\n", token, variable_reads, variable_children, variable_deletes);
+            (void)printf("%s^done,reads=\"%u\",children=\"%u\",deletes=\"%u\",writes=\"%u\"\n", token, variable_reads, variable_children, variable_deletes, variable_writes);
         } else if (strcmp(mode, "context-memory") == 0 && strncmp(command, "-memory-mode ", 13) == 0) {
             memory_mode = (unsigned)strtoul(command + 13, NULL, 10); reply(token, "^done");
         } else if (strcmp(mode, "context-memory") == 0 && strncmp(command, "-data-evaluate-expression ", 26) == 0) {
@@ -375,6 +395,97 @@ int main(int argc, char *argv[])
                 puts("\"}]");
                 if (memory_mode == 8) { puts("*stopped,reason=\"end-stepping-range\",thread-id=\"7\",frame={level=\"0\",addr=\"0x1234\",func=\"main\"}"); }
             }
+        } else if (strcmp(mode, "context-memory") == 0 && strncmp(command, "-data-write-memory-bytes ", 25) == 0) {
+            if (getenv("TB_FAKE_FORBID_WRITES")) { free(line); return 90; }
+            if (memory_mode == 9) { reply(token, "^error,msg=\"FAKE write rejected\""); }
+            else if (memory_mode == 10) { continue; }
+            else {
+                unsigned long long address; char contents[2049];
+                if (sscanf(command + 25, "%llx %1024s", &address, contents) != 2 ||
+                    !*contents || strlen(contents) % 2 != 0) { free(line); return 21; }
+                reply(token, "^done");
+            }
+        } else if (strncmp(mode, "context-registers-edit", 22) == 0 &&
+                   strncmp(command, "-register-edit-mode ", 20) == 0) {
+            register_edit_mode = (unsigned)strtoul(command + 20, NULL, 10);
+            reply(token, "^done");
+        } else if (strncmp(mode, "context-registers-edit", 22) == 0 &&
+                   strcmp(command, "-register-edit-stats\n") == 0) {
+            (void)printf("%s^done,writes=\"%u\",reads=\"%u\",number=\"%u\"\n", token,
+                         register_edit_writes, register_edit_reads, register_edit_number);
+        } else if (strncmp(mode, "context-registers-edit", 22) == 0 &&
+                   strcmp(command, "-register-edit-release\n") == 0) {
+            if (*register_edit_held) {
+                reply(register_edit_held, "^done");
+                register_edit_held[0] = 0;
+            }
+            reply(token, "^done");
+        } else if (strncmp(mode, "context-registers-edit", 22) == 0 &&
+                   strcmp(command, "-info-gdb-mi-command data-write-register-values\n") == 0) {
+            reply(token, register_edit_mode == 4 ? "^done,command={exists=\"false\"}"
+                                               : "^done,command={exists=\"true\"}");
+        } else if (strncmp(mode, "context-registers-edit", 22) == 0 &&
+                   strncmp(command, "-data-list-register-names ", 26) == 0) {
+            unsigned id = (unsigned)strtoul(command + 26, NULL, 10);
+            reply(token, register_edit_mode == 13 ? "^done,register-names=[\"wrong\"]"
+                         : id == 0 ? "^done,register-names=[\"rax\"]"
+                                   : "^done,register-names=[\"rip\"]");
+        } else if (strncmp(mode, "context-registers-edit", 22) == 0 &&
+                   strcmp(command, "-gdb-show may-write-registers\n") == 0) {
+            reply(token, register_edit_mode == 1 ? "^done,value=\"off\"" : "^done,value=\"on\"");
+        } else if (strncmp(mode, "context-registers-edit", 22) == 0 &&
+                   strncmp(command, "-var-create ", 12) == 0) {
+            if (!strstr(command, "tb_register_edit \"*\" \"$")) {
+                free(line);
+                return 90;
+            }
+            reply(token, register_edit_mode == 14 ? "^error,msg=\"Duplicate variable object name\""
+                : "^done,name=\"tb_register_edit\",numchild=\"0\",type=\"unsigned long\",value=\"16\"");
+        } else if (strncmp(mode, "context-registers-edit", 22) == 0 &&
+                   strcmp(command, "-var-set-frozen tb_register_edit 1\n") == 0) {
+            reply(token, "^done");
+        } else if (strncmp(mode, "context-registers-edit", 22) == 0 &&
+                   strcmp(command, "-var-show-attributes tb_register_edit\n") == 0) {
+            reply(token, register_edit_mode == 2 || register_edit_mode == 10
+                             ? "^done,attr=\"noneditable\""
+                         : register_edit_mode == 9 ? "^done,attr=[\"editable\"]"
+                                                   : "^done,attr=\"editable\"");
+        } else if (strncmp(mode, "context-registers-edit", 22) == 0 &&
+                   strncmp(command, "-data-evaluate-expression ", 26) == 0 && strstr(command, "sizeof($")) {
+            reply(token, register_edit_mode == 3 ? "^done,value=\"16\"" : "^done,value=\"8\"");
+        } else if (strncmp(mode, "context-registers-edit", 22) == 0 &&
+                   strcmp(command, "-var-delete tb_register_edit\n") == 0) {
+            if (register_edit_mode == 14) {
+                free(line);
+                return 92;
+            }
+            reply(token, register_edit_mode == 12 ? "^error,msg=\"FAKE cleanup failed\"" : "^done");
+        } else if (strncmp(mode, "context-registers-edit", 22) == 0 &&
+                   strncmp(command, "-data-write-register-values ", 28) == 0) {
+            unsigned id;
+            unsigned long long value;
+            unsigned thread;
+            int consumed = 0;
+            if (sscanf(command, "-data-write-register-values --thread %u --frame 0 x %u %llx%n",
+                       &thread, &id, &value, &consumed) != 3 || id >= 5 ||
+                strcmp(command + consumed, "\n") != 0) {
+                free(line);
+                return 91;
+            }
+            register_edit_number = id;
+            ++register_edit_writes;
+            if (register_edit_mode != 7 && register_edit_mode != 11)
+                register_edit_values[id] = (uint64_t)value;
+
+            if (register_edit_mode == 6) {
+                (void)snprintf(register_edit_held, sizeof(register_edit_held), "%s", token);
+            } else if (register_edit_mode == 8) {
+                puts("*running,thread-id=\"all\"");
+                reply(token, "^done");
+            } else {
+                reply(token, register_edit_mode == 5 || register_edit_mode == 7
+                                 ? "^error,msg=\"FAKE register store rejected\"" : "^done");
+            }
         } else if (strncmp(mode, "context-registers", 17) == 0 && strcmp(command, "-register-change\n") == 0) {
             register_value += 16; reply(token, "^done");
         } else if (strncmp(mode, "context-registers", 17) == 0 && strcmp(command, "-register-error\n") == 0) {
@@ -388,6 +499,7 @@ int main(int argc, char *argv[])
             } else { reply(token, strstr(mode, "arm") ? "^done,register-names=[\"r0\",\"\",\"pc\",\"q0\",\"unreadable\"]" :
                                                       "^done,register-names=[\"rax\",\"\",\"rip\",\"xmm0\",\"unreadable\"]"); }
         } else if (strncmp(mode, "context-registers", 17) == 0 && strncmp(command, "-data-list-register-values ", 27) == 0) {
+            ++register_edit_reads;
             if (register_error) { reply(token, "^error,msg=\"FAKE register read error\""); }
             else if (register_malformed) { reply(token, "^done,register-values=\"bad\""); }
             else {
@@ -401,6 +513,10 @@ int main(int argc, char *argv[])
                     if (id == 4) { continue; }
                     (void)printf("%s{number=\"%lu\",value=\"", comma ? "," : "", id); comma = true;
                     if (id == 3) { for (int i = 0; i < 1200; ++i) { (void)putchar('a'); } }
+                    else if (strncmp(mode, "context-registers-edit", 22) == 0 && id < 5) {
+                        if (format == 'x') { (void)printf("0x%" PRIx64, register_edit_values[id]); }
+                        else { (void)printf("%" PRIu64, register_edit_values[id]); }
+                    }
                     else if (format == 'x') { (void)printf("0x%x", register_value + (unsigned)frame_value); }
                     else { (void)printf("%u", register_value + (unsigned)frame_value); }
                     fputs("\"}", stdout);
@@ -589,9 +705,9 @@ int main(int argc, char *argv[])
             if (record_text == NULL) { free(line); return 4; }
             memcpy(record_text, "^done,v=", 8);
             memcpy(record_text + 8, command + 6, length);
-            TbMiRecord *record = NULL;
-            TbMiError error;
-            TbMiStatus status = tb_mi_parse(record_text, length + 7, &record, &error);
+            TbMiRecord_t *record = NULL;
+            TbMiError_t error;
+            TbMiStatus_e status = tb_mi_parse(record_text, length + 7, &record, &error);
             free(record_text);
             if (status != TB_MI_OK) { free(line); return 5; }
             size_t bytes = record->results->string.length;

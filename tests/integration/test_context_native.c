@@ -5,7 +5,7 @@
 static void dump(TbNative *native)
 {
     for (size_t i = 0; i < tb_native_log_count(native); ++i) { fprintf(stderr, "%s\n", tb_native_log_line(native, i)); }
-    const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(native));
+    const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(native));
     fprintf(stderr, "context: ready=%d stale=%d T%s frames=%zu errors=%s / %s / %s\n", s->ready, s->stale, s->selected_thread, s->frame_count, s->error, s->stack_error, s->arguments_error);
     fprintf(stderr, "selected #%d / stopped T%s #%d PC %s\n", s->selected.level, s->stopped_thread, s->stopped.level, s->stopped.address);
 }
@@ -17,12 +17,12 @@ static void wait_state(TbNative *native, TbNativeState state)
 }
 static void fresh(TbNative *native)
 {
-    const TbContextSnapshot *s = tb_context_snapshot(tb_native_context(native));
+    const TbContextSnapshot_t *s = tb_context_snapshot(tb_native_context(native));
     uint64_t until = tb_gdb_now_ms() + 8000;
     while ((!s->ready || s->stale) && tb_gdb_now_ms() < until) { tb_native_pump(native, 5); }
     if (!s->ready || s->stale) { dump(native); CHECK(false); }
 }
-static bool function(const TbContextSnapshot *snapshot, const char *name)
+static bool function(const TbContextSnapshot_t *snapshot, const char *name)
 {
     for (size_t i = 0; i < snapshot->frame_count; ++i) {
         if (strstr(snapshot->frames[i].function, name)) { return true; }
@@ -36,10 +36,10 @@ static void run(const char *fixture, bool symbols, bool deep)
     CHECK(tb_native_words(deep ? "--deep" : "", &arguments, error, sizeof error));
     TbNativeConfig config = {.gdb = "gdb", .executable = fixture, .arguments = &arguments};
     CHECK(tb_native_start(native, &config)); wait_state(native, TB_NATIVE_READY);
-    TbContext *context = tb_native_context(native);
+    TbContext_t *context = tb_native_context(native);
     tb_context_visible(context, true, true);
     CHECK(tb_native_continue(native)); wait_state(native, TB_NATIVE_STOPPED); fresh(native);
-    const TbContextSnapshot *s = tb_context_snapshot(context);
+    const TbContextSnapshot_t *s = tb_context_snapshot(context);
     CHECK(s->thread_count == 3 && *s->selected_thread && s->selected.level == 0);
     CHECK(strcmp(s->selected_thread, s->stopped_thread) == 0 && s->stopped.level == 0);
     CHECK(*s->stopped.address && *s->selected.address);
