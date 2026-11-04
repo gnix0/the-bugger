@@ -8,8 +8,10 @@ implemented features or hardware support claims. See [architecture](architecture
 
 The latest published release is **v0.1.5**, including F02 Stack inspection and
 inspection UX improvements. **F03–F05 are accepted and merged for v0.1.6**, along
-with the completed C style standardization. Documentation revisions await maintainer
-review; v0.1.6 release preparation and final publication approval remain separate.
+with the completed C style standardization. The documentation review is accepted.
+**v0.1.6 is in release preparation**; [local release checks](validation.md#v016-release-preparation--2026-11-04)
+are recorded. Required hosted checks and final publication approval remain
+separate from feature acceptance.
 
 F03/F04 physical validation across the supported architectures is owner-reported.
 STM32 F05 write/verify/restore results are recorded. ESP32-S3/Xtensa and

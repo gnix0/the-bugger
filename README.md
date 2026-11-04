@@ -27,11 +27,9 @@ the integrated Console.
 and save connection profiles, workspace arrangements and inspection definitions
 for later sessions. Saved setups restore definitions, not sampled values or access permissions.
 
-The development build adds deliberate stopped-target edits for integer/bool
-variables, ordinary RAM and CPU registers, with Review/Apply and separate explicit
-verification. These are accepted for v0.1.6; the latest published release,
-[v0.1.5](https://github.com/gnix0/the-bugger/releases/tag/v0.1.5), provides read-only
-inspectors. See [deliberate editing](docs/usage.md#deliberate-editing) for limits.
+Deliberate stopped-target edits support integer/bool variables, eligible ordinary
+RAM and CPU registers, with Review/Apply and separate explicit verification.
+See [deliberate editing](docs/usage.md#deliberate-editing) for limits.
 
 Peripheral reads can have side effects: MMIO sampling requires explicit access
 decisions and is available for the validated STM32/OpenOCD configuration; navigation never samples MMIO.
