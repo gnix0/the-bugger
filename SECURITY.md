@@ -69,6 +69,15 @@ Explicit inspection still requires deliberate access decisions; some peripheral
 registers change state when read. Backend-internal accesses and initialization
 scripts are not controlled solely by the frontend's inspection policy.
 
+Deliberate variable, ordinary-RAM and CPU-register edits in the development
+build require a stopped context, review and explicit Apply. They can still corrupt
+firmware state or execution; register editability is not proof that every bit is
+physically writable. The STM32 RAM description is user-confirmed, not detected
+device identity. Backend acknowledgment is not verification: read/verify explicitly.
+Uncertain writes are not automatically retried or rolled back. See the
+[variable and RAM editing contract](docs/requirements.md#deliberate-variable-and-ram-editing-f03f04)
+and the [CPU-register editing contract](docs/requirements.md#deliberate-cpu-register-editing-f05).
+
 Logs, profiles and exported memory can contain sensitive paths, expressions,
 program output and target data. Inspect them before sharing. Release checksums
 check artifact integrity against a trusted checksum source; they are not digital

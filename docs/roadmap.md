@@ -6,12 +6,16 @@ implemented features or hardware support claims. See [architecture](architecture
 
 ## Current development sequence
 
-F01–F04 are accepted. The owner reports F03/F04 validation across the supported
-architectures; detailed historical evidence remains in [validation records](validation.md).
-F05 CPU-register editing is implemented and host verified. Agent-run physical
-STM32 write/verify/restore checks pass; the owner also reports ESP32-S3/Xtensa
-and ESP32-C6/RISC-V validation complete. Final implementation acceptance remains
-pending. Read-only hardware results do not count as F05 write validation.
+The latest published release is **v0.1.5**, including F02 Stack inspection and
+inspection UX improvements. **F03–F05 are accepted and merged for v0.1.6**, along
+with the completed C style standardization. Documentation revisions await maintainer
+review; v0.1.6 release preparation and final publication approval remain separate.
+
+F03/F04 physical validation across the supported architectures is owner-reported.
+STM32 F05 write/verify/restore results are recorded. ESP32-S3/Xtensa and
+ESP32-C6/RISC-V validation was reported by the maintainer. See the
+[current evidence summary](validation.md#current-evidence-boundary) for provenance
+and limitations; read-only checks do not establish write behavior.
 
 | Task | Scope | Current state |
 |---|---|---|
@@ -21,22 +25,28 @@ pending. Read-only hardware results do not count as F05 write validation.
 | 1.5 | Prepare v0.1.3 | Published; uploaded artifacts verified |
 | 2.1 | Validate ESP RISC-V hardware for v0.1.4 | Accepted; recorded RISC-V RV32 hardware checks use ESP32-C6FH4 |
 | F01 | Setup restoration for v0.1.4 | Accepted and shipped; host/physical checks and published artifacts verified |
-| F02 | Dedicated Stack inspection and inspection UX for v0.1.5 | Accepted; owner host and three-target inspection validation pass |
+| F02 | Dedicated Stack inspection and inspection UX | Accepted; shipped in v0.1.5 |
 | F03 | Deliberate integer/bool variable editing | Accepted, including current safety corrections |
 | F04 | Exact ordinary-RAM byte editing and form/script navigation | Accepted; owner reports architecture validation |
-| F05 | Deliberate CPU-register editing | Host and all three physical architectures validated; final acceptance pending |
+| F05 | Deliberate CPU-register editing | Accepted and merged; host and three-architecture write validation recorded |
 | 2.4 | Release v0.1.4 | Published; hosted checks passed, uploaded artifacts verified and branch synchronization complete |
+| Release | v0.1.5 | Published October 30; [uploaded assets and checksums verified](validation.md#v015-publication-verification--2026-11-04) |
 
 Current controls are in [usage](usage.md); the accepted browsing scope is in
 [requirements](requirements.md#approved-v013-browsing-work).
 
-F02 targets v0.1.5; F03–F05 target
-v0.2.0, each retaining separate planning and acceptance gates. After those features
-and stabilization, complete several-day real-world evaluation and fixes, the
-comprehensive documentation review, agreed formatting conventions/`.editorconfig`
-with controlled application, and owner-led codebase/maintainability review.
-These precede the owner-exclusive build-system review, agreed testing-strategy
-work and final v0.2.0 publication.
+The next releases have distinct purposes:
+
+- **v0.1.6:** deliver F03 variable editing, F04 ordinary-RAM editing and F05
+  CPU-register editing, the completed maintenance cleanup and reviewed documentation.
+  Complete the release checks and maintainer acceptance before publication.
+- **v0.2.0:** exercise existing features in day-to-day combinations, review UX/UI
+  and reported bugs, then validate the resulting corrections. Replace the monolithic
+  usage reference with task-oriented tutorials after those interactions stabilize.
+
+The broader maintainability, build-system and testing-strategy reviews remain
+planning work requiring their own scope decisions. F06 and later feature gates
+are separately scheduled; this evaluation does not authorize a workspace redesign.
 
 Physical RISC-V validation was deferred for v0.1.3. Task2.1 now records real
 RISC-V RV32 checks using ESP32-C6FH4 as the test device. Acceptance adds no new
@@ -52,8 +62,8 @@ Accepted post-release work includes themes, Source fullscreen, spatial navigatio
 (`53b1e5a`), multi-file Source tabs, inline Console, personal keybinds, Vim-like
 input, tmux RGB, rendering fixes, lower overlays and browsing history. Release
 contents are in [CHANGELOG](../CHANGELOG.md); results are in
-[validation records](validation.md). F01 shipped in v0.1.4. F02–F04 acceptance and the current F05 gate are
-recorded above; later gates remain planned.
+[validation records](validation.md). F01 shipped in v0.1.4 and F02 in v0.1.5. F03–F05 are accepted for
+v0.1.6; later gates remain planned.
 
 | Milestone | Deliverable | State | Commit / release reference |
 |---|---|---|---|
@@ -81,7 +91,10 @@ recorded above; later gates remain planned.
 | M18 | v0.1.0 release evidence/acceptance | accepted; published | v0.1.0; `ad606dc6d7af7a3384401fb97e7c328ea1d8b62b` (preparation) |
 | F19 | Config, built-in themes and variants | accepted; shipped in v0.1.1 | [Recorded checks](validation.md#f19--themes-and-configuration) |
 | F01 | Setup restoration | accepted; shipped in v0.1.4 | `a460648`; [release closeout](validation.md#v014-publication) |
-| F02–F18, F20–F47 | Independent versioned future gates below | planned | — |
+| F02 | Stack inspection and inspection UX | accepted; shipped in v0.1.5 | [Release verification](validation.md#v015-publication-verification--2026-11-04) |
+| F03–F04 | Variable and ordinary-RAM editing | accepted; pending v0.1.6 publication | [Owner acceptance](validation.md#f04-owner-acceptance) |
+| F05 | CPU-register editing | accepted; pending v0.1.6 publication | [Acceptance closeout](validation.md#f05-acceptance-closeout--2026-11-04) |
+| F06–F18, F20–F47 | Independent versioned future gates below | planned | — |
 
 ## Development priorities
 
@@ -176,7 +189,9 @@ a board substitute or a simulator feature. Capabilities are claimed only for
 actually tested setups; missing evidence is UNVERIFIED. See the
 [release matrix](testing.md#every-release-regression-matrix).
 
-## Versioned future gates
+<a id="versioned-future-gates"></a>
+
+## Versioned feature gates
 
 Every F gate requires the released v0.1.0 core and its named prerequisites.
 Each includes its own code/tests, relevant NFRs, documented demonstration and
@@ -197,10 +212,12 @@ remains available throughout development and after the flashing feature ships.
 | Planning target | Useful workflow and execution order | Change from previous roadmap |
 |---|---|---|
 | v0.1.4 → v0.1.5 | F01 restore a known setup, then F02 stack contents/bounds where established. | Preserve early setup/inspection targets. |
-| v0.2.0 → v0.2.1 | F03/F04/F05 deliberate variable/RAM/CPU-register editing, then F06 decide how to organize growing information. | Preserve editing and organization targets; F06 precedes new inspectors. Pages/presets are not approved here. |
+| v0.1.6 | F03/F04/F05 deliberate variable/RAM/CPU-register editing, completed C maintenance and documentation review. | Editing moves forward from v0.2.0; implementation is accepted, publication remains separate. |
+| v0.2.0 | Real-workflow evaluation, UX/UI and bug corrections, followed by task-oriented usage documentation. | Consolidate existing capabilities before adding new inspectors. |
+| v0.2.1 | F06 decides how to organize growing information. | F06 precedes new inspectors. Pages/presets are not approved here. |
 | v0.3.x | F11 register metadata/groups, F34 peripherals/SVD, F35 Cortex-M fault diagnosis; F07→F08 symbols/statics, F09 Quick Watch and F12 shareable setups as supporting gates. | Bring F34/F35 forward from v0.9.1; defer specialized STL F10. Supporting gates need not ship together. |
 | v0.4.0–v0.4.x | F22 deliberate firmware Load/Flash first; independent F13/F14/F15/F16 UART/RTT/semihosting/SWO text as backends become ready, then F18 shared log tools. | Flashing moves from v0.5.x ahead of text integrations; RTT/SWO readiness cannot delay it. Native PTY input F17 moves later. |
-| v0.5.x | F20/F21 memory search/export/comparison. F19 themes was delivered early after v0.1.0 and is accepted and included in v0.1.1 preparation. | Memory tools move from v0.6.x; themes do not block firmware correctness. |
+| v0.5.x | F20/F21 memory search/export/comparison. F19 themes shipped early in v0.1.1; the catalogue expanded in v0.1.5. | Memory tools move from v0.6.x; themes do not block firmware correctness. |
 | v0.6.x | F31 version-specific RTOS inspection, F33 bootloader/application images, F23 task/thread stops where IDs are backend-usable; F24 supported event catchpoints and F26 logpoints. | RTOS moves from v0.8.x, images from v0.9.0; stopping tools serve these workflows. Images do not require RTOS. |
 | v0.7.x | F29 non-halting values, F41 supported counters, F32 plots from proven F13–F16/F29 sources. F27 software watchpoints and F28 execution overrides remain opt-in gates. | Bring monitoring/counters forward; no universal capability or hidden halt/resume. |
 | v0.8.x | F30 safe Auto and F10 backend STL presentation. | Shared convenience follows embedded diagnosis. |
@@ -260,9 +277,9 @@ the native/STM32/Xtensa/RISC-V regression gate.
 |---|---|---|---|
 | F01 / v0.1.4 | Rich setup restoration: workspace/tabs/Memory settings/watches/code-breakpoint definitions; basic profiles first; exclude runtime values/temp breakpoints/old hardware allocations. | Round-trip/migration/corruption/missing files/unresolved breakpoints/terminal size. | Reopen setup without presenting saved values as live. |
 | F02 / v0.1.5 | Dedicated Stack: raw contents, SP offsets, available variable/frame annotations and explicit point annotations and per-thread declared bounds/SP displacement; context/Memory first; verified bounds unknown without authoritative evidence; no usage/high-water inference. | Native/ARM stacks, unknown bounds, unreadable data/optimized locations. | Follow known SP and distinguish available annotations/bounds from unknown information. |
-| F03 / v0.2.0 | Locals/Watches editing after M15 capability/read-policy validation; deliberate stopped writes with bounded footprint, no automatic writes or unsafe aggregate rereads. | Conversion/scope/optimized/read-only/error/refresh. | Deliberately edit a target value and verify it. |
-| F04 / v0.2.0 | Memory editing after M15/M16 lifecycle/capabilities; exact width/endian and isolated RAM first. No implicit Flash programming or peripheral writes. | Bounds/partial writes/encoding/failures/refresh. | Verify exact bytes and visible failed writes. |
-| F05 / v0.2.0 | CPU-register editing after M15 discovery/capabilities; stopped target only, no peripheral editor or guessed writable registers. | Writable/read-only/unavailable, generic IDs and refresh. | Change an appropriate fixture register and verify backend result. |
+| F03 / v0.1.6 | Locals/Watches editing after M15 capability/read-policy validation; deliberate stopped writes with bounded footprint, no automatic writes or unsafe aggregate rereads. | Conversion/scope/optimized/read-only/error/refresh. | Deliberately edit a target value and verify it. |
+| F04 / v0.1.6 | Memory editing after M15/M16 lifecycle/capabilities; exact byte extents in eligible ordinary writable RAM. Display grouping does not establish bus width. No implicit Flash programming or peripheral writes. | Bounds/partial writes/encoding/failures/refresh. | Verify exact bytes and visible failed writes. |
+| F05 / v0.1.6 | CPU-register editing after M15 discovery/capabilities; stopped target only, no peripheral editor or guessed writable registers. | Writable/read-only/unavailable, generic IDs and refresh. | Change an appropriate fixture register and verify backend result. |
 | F06 / v0.2.1 | Workspace information-organization **decision gate**, before new views. Evaluate pages/tab discovery/mouse/keys/small terminals; existing workspace baseline, no production redesign yet. | Geometry/input/state-preservation prototypes as needed. | Design review approves organization and implementation stages; pages remain a candidate, not a preset or preapproved design. |
 | F07 / v0.3.x | Searchable Symbols after F06, with code/Watch/Memory actions and bounded GDB queries; preserve pre-dispatch value-read policy. | Filters/duplicate names/no debug info/result limits/capabilities. | Find and open intended symbol/code/data. |
 | F08 / v0.3.x | Globals/Statics selection after F07/F06; symbol discovery first, with the same pre-dispatch region/complete-footprint policy as Watches. | Qualified/duplicate statics/scope/unavailable. | Monitor selected static-storage variables. |
@@ -276,7 +293,7 @@ the native/STM32/Xtensa/RISC-V regression gate.
 | F16 / v0.4.0 | SWO/ITM text acquisition/decoder after F06 and verified core/probe/server/clock setup; no full instruction-trace claim. | Corpus/fragmentation/overflow/clock errors. | Known text captured on verified hardware. |
 | F17 / v0.9.8+ review | Basic native PTY line input, pending renewed priority approval; no full terminal emulator, not a default pre-v1 commitment. | Echo/lines/EOF/exit/input focus. | Answer fixture prompts without sending input to GDB. |
 | F18 / v0.4.x | Shared log find/filter/continuous recording after validated text sources; independent of native input F17. | Retention/filter/file failures/flood/lifecycle. | Find/filter/record responsively. |
-| F19 / v0.1.1 preparation; accepted (original target v0.5.0 or earlier) | Seven built-in themes / 37 variants; Catppuccin Macchiato default; centered Config → Themes with dependent variants, Back/Preview/Save and retained Profiles. | Role/color fallbacks, contrast, non-color signals, atomic preferences, all-variant PTY preview and profile regression. | Inspect each variant directly/in tmux and restore selection; see [procedures](testing.md#themes-and-configuration) and [evidence](validation.md#f19--themes-and-configuration). |
+| F19 / shipped v0.1.1 (original target v0.5.0 or earlier) | Seven built-in themes / 37 variants; Catppuccin Macchiato default; centered Config → Themes with dependent variants, Back/Preview/Save and retained Profiles. | Role/color fallbacks, contrast, non-color signals, atomic preferences, all-variant PTY preview and profile regression. | Inspect each variant directly/in tmux and restore selection; see [procedures](testing.md#themes-and-configuration) and [evidence](validation.md#f19--themes-and-configuration). |
 | F20 / v0.5.x | Bounded memory search using M15 region policy; explicit ranges, no automatic unknown/MMIO scans. | Patterns/limits/gaps/cancel/latency. | Find fixture bytes and cancel large search responsively. |
 | F21 / v0.5.x | Memory export/snapshot comparison after M10/M15 region policy; exact deliberate ranges, no implied full address-space capture. | File failure/identity/gaps/diffs/storage bounds. | Save range and correctly identify changed bytes. |
 | F22 / v0.4.x | Deliberate firmware Load/Flash after M16/M17 lifecycle and capability evidence; confirmation/progress/verification/recovery/reset policy, no auto programming on attach. | Download events/interruption/failures/sequencing. | Program/verify real fixture, preserving independent attach workflow. |
