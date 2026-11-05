@@ -120,7 +120,7 @@ int main(int argc, char **argv)
     test_terminal_send(&t, "\025+0\r"); test_terminal_expect(&t, "Stack options"); back(&t);
     test_terminal_expect(&t, "UNREAD | Manual");
     click(&t, "Options"); option(&t, "Follow frame-0 SP"); back(&t); test_terminal_expect(&t, "SAMPLED | Follow SP");
-    const int widths[] = {48, 80, 123, 124, 160};
+    const int widths[] = {80, 123, 124, 160};
     for (size_t i = 0; i < sizeof widths / sizeof widths[0]; ++i) {
         test_terminal_resize(&t, 24, widths[i]); test_terminal_expect(&t, "Stack");
         click(&t, "Options"); option(&t, "Selected row: complete details"); test_terminal_expect(&t, "Stack row details");
@@ -165,6 +165,6 @@ int main(int argc, char **argv)
     CHECK(t.cells[narrow_y + 2][2] == '<');
     test_terminal_send(&t, "\r"); test_terminal_expect(&t, "Stack row details"); back(&t); back(&t);
     test_terminal_send(&t, "\021"); test_terminal_expect(&t, "Terminate the launched program"); click(&t, "Close session"); test_terminal_stop(&t, 0);
-    puts("PASS F02 native PTY Stack read/navigation/follow, exact size errors, complete paginated details, declared bounds, minimum pane and widths 48/80/123/124/160 with cleanup");
+    puts("PASS F02 native PTY Stack read/navigation/follow, exact size errors, complete paginated details, declared bounds, minimum pane and widths 80/123/124/160 with cleanup");
     return 0;
 }

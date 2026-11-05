@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Require an 80×20 terminal and show complete connection-field labels.
+- Theme and variant selectors open choice lists; Left/Right retains direct cycling.
+- Keybinds and installed-script browsing scroll independently of selection.
+
+### Fixed
+
+- Profile options identify the session type and highlight the Save profile action.
+- Host-local paths accept `~/` without changing saved input, argument quoting or
+  OpenOCD script-search behavior. Unset/empty HOME uses the account home;
+  nonempty relative HOME is rejected when expanding a path.
+- Relative source directories and `$cwd`/`$cdir` retain GDB's resolution semantics
+  instead of being validated against the frontend's working directory.
+
 ## [0.1.6] - 2026-11-04
 
 ### Added

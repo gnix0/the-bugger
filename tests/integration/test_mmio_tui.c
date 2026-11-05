@@ -42,7 +42,7 @@ static void ram_review(const char *binary, const char *peer)
     test_terminal_expect(&t, "USER-CONFIRMED device identity");
     test_terminal_send(&t, "\r"); test_terminal_expect(&t, "Review STM32F446RE RAM evidence"); /* Back is default. */
     test_terminal_click(&t, "Review STM32F446RE RAM evidence");
-    test_terminal_resize(&t, 18, 48);
+    test_terminal_resize(&t, 20, 80);
     for (unsigned i = 0; i < 30 && !test_terminal_find(&t, "Confirm user-described", NULL, NULL); ++i) { test_terminal_click(&t, "Next"); }
     test_terminal_expect(&t, "Confirm user-described");
     test_terminal_resize(&t, 50, 180); test_terminal_expect(&t, "USER-CONFIRMED device identity");
@@ -80,7 +80,7 @@ int main(int argc, char **argv)
     test_terminal_click(&t, "Setup: NOT CONFIRMED");
     test_terminal_expect(&t, "USER CONFIRMATION, not automatic verification");
     test_terminal_expect(&t, "V2J48M35"); test_terminal_expect(&t, "localhost:3333");
-    test_terminal_resize(&t, 18, 48);
+    test_terminal_resize(&t, 20, 80);
     for (unsigned i = 0; i < 16 && !test_terminal_find(&t, "I confirm every setup", NULL, NULL); ++i) {
         test_terminal_click(&t, "Next");
     }

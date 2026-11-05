@@ -1,6 +1,7 @@
 #define _GNU_SOURCE /* NOLINT(bugprone-reserved-identifier) -- Linux pidfds/PTY. */
 #include "session/session.h"
 #include "session/native.h"
+#include "session/host_paths.h"
 
 #include <ctype.h>
 #include <elf.h>
@@ -763,11 +764,15 @@ bool tb_session_start(TbSession_t *native, const TbSessionConfig_t *config)
     if (!copy_path(native->endpoint, sizeof(native->endpoint), config->endpoint))
         return false;
 
-    if (!copy_path(native->executable, sizeof(native->executable), config->executable) ||
-        !copy_path(native->directory, sizeof(native->directory), config->directory) ||
-        !copy_path(native->debugger, sizeof(native->debugger),
-                   config->gdb && *config->gdb ? config->gdb : "gdb")) {
-        diagnostic(native, "Path is too long.");
+    char path_error[160];
+    if (!tb_path_expand(native->executable, sizeof(native->executable), config->executable,
+                        path_error, sizeof(path_error)) ||
+        !tb_path_expand(native->directory, sizeof(native->directory), config->directory,
+                        path_error, sizeof(path_error)) ||
+        !tb_path_expand(native->debugger, sizeof(native->debugger),
+                        config->gdb && *config->gdb ? config->gdb : "gdb",
+                        path_error, sizeof(path_error))) {
+        diagnostic(native, path_error);
         return false;
     }
     native->attach     = config->attach || config->kind != TB_SESSION_LOCAL;
@@ -1237,10 +1242,17 @@ bool tb_session_save_log(TbSession_t *native, const char *path)
         return false;
     }
 
+    char effective[PATH_MAX];
+    char error[160];
+    if (!tb_path_expand(effective, sizeof(effective), path, error, sizeof(error))) {
+        diagnostic(native, error);
+        return false;
+    }
+
     for (size_t i = 0; i < 5; ++i)
         partial_flush(native, i);
 
-    int fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NONBLOCK, 0600);
+    int fd = open(effective, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NONBLOCK, 0600);
 
     if (fd < 0) {
         char text[256];

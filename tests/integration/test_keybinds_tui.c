@@ -132,6 +132,14 @@ static void scrollbar_layout(void)
     (void)snprintf(event, sizeof event, "\033[<32;%d;%dM", x + 1, bottom + 1); test_terminal_send(&term, event); settle();
     (void)snprintf(event, sizeof event, "\033[<0;%d;%dm", x + 1, bottom + 1); test_terminal_send(&term, event);
     test_terminal_expect(&term, "Rows 14-15/15"); clean_key_borders();
+    /* Scrolling away must retain Continue as the Enter target. */
+    test_terminal_send(&term, "\r"); test_terminal_expect(&term, "Press a key.");
+    test_terminal_expect(&term, "Continue");
+    test_terminal_send(&term, "\033"); test_terminal_expect(&term, "Capture cancelled.");
+    capture(15); test_terminal_send(&term, "\033"); test_terminal_expect(&term, "Capture cancelled.");
+    test_terminal_send(&term, "\033[<65;50;10M\r"); test_terminal_expect(&term, "Press a key.");
+    test_terminal_expect(&term, "Previous pane");
+    test_terminal_send(&term, "\033\033OH"); settle();
     test_terminal_send(&term, "\033[<64;50;10M"); settle(); clean_key_borders();
     test_terminal_send(&term, "\033[<65;50;10M"); settle(); clean_key_borders();
     resize_keys(90, 160); CHECK(!test_terminal_find(&term, "#", NULL, NULL));
@@ -245,7 +253,7 @@ static void vim_input(const char *binary, const char *fixture)
     test_terminal_send(&term, "\t"); test_terminal_expect(&term, "VIM NORMAL");
     test_terminal_send(&term, "i\025literal"); test_terminal_expect(&term, "literal");
     test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
-    test_terminal_resize(&term, 18, 48); test_terminal_expect(&term, "VIM NORMAL");
+    test_terminal_resize(&term, 20, 80); test_terminal_expect(&term, "VIM NORMAL");
     test_terminal_resize(&term, 54, 166); test_terminal_expect(&term, "VIM NORMAL");
     test_terminal_send(&term, "\033"); test_terminal_expect(&term, "[ Config ]");
     stop();
@@ -372,7 +380,7 @@ int main(int argc, char **argv)
     test_terminal_expect(&term, "Restore Defaults");
     choose(TB_BIND_COUNT - 1); test_terminal_send(&term, "\033[6~");
     bind_action(TB_BIND_COUNT - 1, "F8");
-    resize_keys(18, 48); CHECK(headers() == 1);
+    resize_keys(20, 80); CHECK(headers() == 1);
     test_terminal_expect(&term, "Restore Defaults");
     choose(TB_BIND_CONTINUE); edit("F7"); test_terminal_expect(&term, "Binding captured.");
     resize_keys(60, 112); CHECK(headers() == 2);

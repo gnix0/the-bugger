@@ -56,7 +56,7 @@ static void reopen(void)
 {
     click("[ Config ]"); click("Profiles"); click("physical-f01-ui"); click("Review session"); click("[ Connect ]");
     test_terminal_expect(&terminal, "[x] Restore saved setup");
-    review_resize(18, 48); test_terminal_expect(&terminal, "Restore saved setup"); test_terminal_expect(&terminal, "[ Start session ]");
+    review_resize(20, 80); test_terminal_expect(&terminal, "Restore saved setup"); test_terminal_expect(&terminal, "[ Start session ]");
     review_resize(55, 200); click("[ Start session ]"); test_terminal_expect(&terminal, "LIVE | Stopped");
     click("Setup"); click("Unresolved setup entries"); test_terminal_expect(&terminal, "Acknowledge failures");
     test_terminal_expect(&terminal, "missing-physical-source.c"); test_terminal_expect(&terminal, "enabled intent");
@@ -96,7 +96,7 @@ int main(int argc, char **argv)
     click("[ Back ]"); test_terminal_lower(&terminal, 2, true); click("Continue"); test_terminal_expect(&terminal, "breakpoint-hit");
     click("Setup"); click("Unresolved setup entries"); CHECK(!test_terminal_find(&terminal, "Acknowledge failures", NULL, NULL));
     click("[ Back ]"); CHECK(!test_terminal_find(&terminal, "Save setup*", NULL, NULL)); click("[ Back ]");
-    const int widths[] = {48, 80, 123, 124, 160};
+    const int widths[] = {80, 123, 124, 160};
     for (size_t i = 0; i < sizeof widths / sizeof widths[0]; ++i) {
         test_terminal_resize(&terminal, 44, widths[i]); test_terminal_expect(&terminal, "Setup"); test_terminal_expect(&terminal, "Session"); test_terminal_expect(&terminal, "Quit");
     }

@@ -65,7 +65,7 @@ int main(int argc, char **argv)
     actions(&t); test_terminal_click(&t, "Review ELF/load address mapping");
     test_terminal_expect(&t, "Additive load bias"); test_terminal_send(&t, "\r");
     test_terminal_expect(&t, "Current mapping: UNVERIFIED"); test_terminal_expect(&t, "target image.elf");
-    test_terminal_resize(&t, 18, 48);
+    test_terminal_resize(&t, 20, 80);
     for (unsigned i = 0; i < 32 && !test_terminal_find(&t, "I confirm the ELF", NULL, NULL); ++i) { test_terminal_click(&t, "Next"); }
     test_terminal_click(&t, "I confirm the ELF"); test_terminal_resize(&t, 50, 180);
     test_terminal_expect(&t, "ELF/load addresses USER-CONFIRMED");

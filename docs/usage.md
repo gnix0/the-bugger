@@ -14,6 +14,21 @@ target setup. Use the board's native USB/JTAG connector for debugging. This
 configuration keeps CPU context available across reset; it does not implement
 FreeRTOS task inspection. See the [RISC-V setup and tool limitations](testing.md#risc-v-hardware-validation).
 
+## Host-local paths
+
+Host-local path fields accept `~/` (or `~`) for the current user's home directory.
+An absolute `HOME` is used when set; an unset or empty value falls back to the
+account home. A nonempty relative `HOME` produces an error. Saved profiles keep
+the entered text; session review shows effective launch paths. Other shell
+expansion is not performed. Bare tool names still use PATH, and relative OpenOCD
+script names still use OpenOCD's search directories. Source mapping origins are
+build paths and are left unchanged; destinations accept home shorthand.
+
+Source directories such as `../src`, `.`, `$cwd` and `$cdir` are passed to GDB
+unchanged. In particular, GDB resolves `.` when adding it, while `$cwd` follows
+later GDB working-directory changes. Absolute and expanded-home source directories
+are checked locally before submission.
+
 ## Native Linux sessions
 
 Choose **Linux application**, configure **Launch** or **Attach**, then choose
@@ -28,7 +43,8 @@ Launch accepts an executable ELF, arguments, working directory, optional
 whitespace, quotes and backslashes for grouping, without shell expansion. For
 example, arguments `"two words" "" '$HOME;$(false)'` preserve a spaced argument,
 an empty argument and literal metacharacters. An environment entry such as
-`THE_BUGGER_TEST="hello world"` preserves its value. Paths are entered literally.
+`THE_BUGGER_TEST="hello world"` preserves its value. Host-local paths also accept
+current-user home shorthand (`~/`).
 Environment overrides are session-only.
 
 The session starts **Loaded**. Click **Continue** or press **F5** to run; click
@@ -98,6 +114,7 @@ file-destination dialog. Command history and multiline command editing are not
 added by this change.
 The current Console sends commands to GDB; it is not a UART terminal. A separate
 interactive serial console is [planned as F13](roadmap.md#f13--uartserial-console-planned).
+
 
 ## Existing remote GDB servers
 
@@ -666,7 +683,7 @@ The workspace supports up to 32 panes with a minimum tiled size of 20x7 cells pe
 pane. Wide terminals show three primary columns; lower groups cover those
 columns when restored. Smaller terminals show a primary pane and restored
 groups across the workspace, with controls to reach every retained pane.
-Below 48x18 a mode-neutral resize warning shows the current dimensions and the
+Below 80x20 a mode-neutral resize warning shows the current dimensions and the
 minimum required size, retaining state without pausing or disconnecting the target.
 Tabs, splits and proportions survive
 shrinking and return when space permits.
@@ -721,9 +738,11 @@ configuration menu and theme selector are centered horizontally and vertically.
 The demo launcher also offers Themes; its Profiles option remains unavailable.
 
 With no valid saved preference, the default is **Catppuccin / macchiato**.
-Select the Theme row, then use Left/Right, Enter or clicks to cycle themes.
-The Variant row lists only variants belonging to the selected theme; changing
-families resets that row to the family's initial variant (Macchiato for Catppuccin).
+Use Left/Right to cycle the focused Theme or Variant row. Enter, Space or a click
+opens its choice list. Navigate with Up/Down, then Enter/Space or click to choose;
+Escape or a click outside cancels. The Variant list contains only variants of the
+selected theme; changing families resets that row to the family's initial variant
+(Macchiato for Catppuccin).
 
 | Theme | Variants |
 |---|---|
@@ -770,8 +789,10 @@ Compact action columns keep the key cells close to their labels;
 additional Quit/control-traversal keys have concise row labels.
 At 112 columns and wider, two tables sit side by side; narrower
 terminals use a single longer table. Short terminals scroll the rows. Use
-arrows/default movement aliases, Tab/Shift+Tab, Home/End, Page Up/Down or the
-mouse wheel to reach bindings. The minimum remains 48×18.
+arrows/default movement aliases, Tab/Shift+Tab or Home/End to select bindings.
+Page Up/Down, the wheel and scrollbar move the viewport without changing the
+focused binding, including its column. Enter reveals and captures that binding
+in one press. The minimum is 80×20.
 
 Click a Key cell, or focus it and press Enter, then **press the actual key**.
 The cell value disappears and only its border is highlighted in orange while

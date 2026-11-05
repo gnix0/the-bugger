@@ -46,6 +46,27 @@ int main(int argc, char **argv)
     CHECK(tb_code_directory_count(code) == 1 && tb_code_rule_count(code) == 0 && strstr(tb_code_message(code), "rejected"));
     unsigned before = replies; for (int i = 0; i < 20; ++i) { pump(gdb); } CHECK(replies == before);
     tb_code_reset(code); CHECK(tb_code_directory_count(code) == 0 && !tb_code_restoring(code));
+    /* Relative entries and GDB tokens must reach GDB without frontend cwd validation. */
+    const char *relative[] = {"../nonexistent-gdb-relative", ".", "$cwd", "$cdir"};
+    CHECK(tb_code_restore_settings(code, relative, 4, NULL, 0)); restored(gdb);
+    CHECK(tb_code_directory_count(code) == 4);
+    for (size_t i = 0; i < 4; ++i) { CHECK(!strcmp(tb_code_directory(code, i), relative[i])); }
+    tb_code_reset(code);
+    CHECK(setenv("HOME", root, 1) == 0);
+    const char *home_dirs[] = {"~/first path"};
+    TbSourceRule_t home_rule = {0}; (void)snprintf(home_rule.from, sizeof home_rule.from, "~/build-origin"); (void)snprintf(home_rule.to, sizeof home_rule.to, "~/first path");
+    CHECK(tb_code_restore_settings(code, home_dirs, 1, &home_rule, 1));
+    CHECK(setenv("HOME", "/different-home-after-queue", 1) == 0); restored(gdb);
+    CHECK(!strcmp(tb_code_directory(code, 0), "~/first path") && !strcmp(tb_code_effective_directory(code, 0), first));
+    CHECK(!strcmp(tb_code_rule(code, 0)->to, "~/first path") && !strcmp(tb_code_effective_rule(code, 0)->to, first));
+    CHECK(!strcmp(tb_code_effective_rule(code, 0)->from, "~/build-origin"));
+    tb_code_reset(code); CHECK(setenv("HOME", "relative", 1) == 0);
+    CHECK(!tb_code_add_directory(code, "~/first path") && !tb_code_add_rule(code, "/build", "~/first path"));
+    CHECK(!tb_code_restore_settings(code, home_dirs, 1, &home_rule, 1) && !tb_code_restoring(code));
+    CHECK(setenv("HOME", "/tmp/path\nwith-line-break", 1) == 0);
+    CHECK(!tb_code_add_rule(code, "/build", "~/source"));
+    CHECK(!tb_code_add_directory(code, "~/source"));
+    CHECK(!tb_code_restore_settings(code, home_dirs, 1, &home_rule, 1) && !tb_code_restoring(code));
     tb_gdb_close(gdb); end = tb_gdb_now_ms() + 2000;
     while (tb_gdb_state(gdb) != TB_GDB_DISCONNECTED && tb_gdb_now_ms() < end) { pump(gdb); }
     CHECK(tb_gdb_state(gdb) == TB_GDB_DISCONNECTED); tb_code_destroy(code); tb_context_destroy(context); CHECK(tb_gdb_destroy(gdb));

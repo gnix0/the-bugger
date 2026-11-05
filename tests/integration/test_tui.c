@@ -40,7 +40,7 @@ static void launcher_reference(const char *binary)
     test_terminal_expect(&term, "Configure session"); test_terminal_send(&term, "\033");
     test_terminal_expect(&term, "Start a debugging session");
     test_terminal_resize(&term, 60, 200); launcher_centered(&term);
-    test_terminal_resize(&term, 18, 48);
+    test_terminal_resize(&term, 20, 80);
     test_terminal_expect(&term, "Linux application");
     test_terminal_expect(&term, "Embedded target");
     test_terminal_expect(&term, "Connect to GDB server");
@@ -188,13 +188,13 @@ int main(int argc, char *argv[])
     test_terminal_expect(&term, "Terminal too");
     test_terminal_expect(&term, "Current: 15x5");
     CHECK(!test_terminal_find(&term, "DEMO:", NULL, NULL));
-    test_terminal_resize(&term, 18, 47);
-    test_terminal_expect(&term, "Current: 47x18");
-    test_terminal_expect(&term, "Resize to at least 48x18.");
+    test_terminal_resize(&term, 20, 79);
+    test_terminal_expect(&term, "Current: 79x20");
+    test_terminal_expect(&term, "Resize to at least 80x20.");
     test_terminal_expect(&term, "State retained. Ctrl+Q quits.");
-    test_terminal_resize(&term, 17, 48);
-    test_terminal_expect(&term, "Current: 48x17");
-    test_terminal_resize(&term, 18, 48);
+    test_terminal_resize(&term, 19, 80);
+    test_terminal_expect(&term, "Current: 80x19");
+    test_terminal_resize(&term, 20, 80);
     test_terminal_expect(&term, "1 Source");
     CHECK(!test_terminal_find(&term, "Terminal too small", NULL, NULL));
     test_terminal_resize(&term, 44, 140);

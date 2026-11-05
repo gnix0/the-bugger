@@ -135,7 +135,7 @@ static void ranges(TestTerminal *t)
     test_terminal_expect(t, "NOT AUTHORIZED"); test_terminal_expect(t, "owner reviewed RAM");
     test_terminal_click(t, "Width:"); test_terminal_expect(t, "Width: 8 bits");
     test_terminal_click(t, "Policy: MMIO"); test_terminal_expect(t, "Policy: ordinary");
-    test_terminal_resize(t, 18, 48); test_terminal_click(t, "Authorize");
+    test_terminal_resize(t, 20, 80); test_terminal_click(t, "Authorize");
     for (int i = 0; i < 8 && !test_terminal_find(t, "Authorize without reading", NULL, NULL); ++i) {
         test_terminal_click(t, "Next"); settle(t);
     }

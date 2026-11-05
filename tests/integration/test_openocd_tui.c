@@ -75,7 +75,7 @@ static int panel_geometry(bool keys)
 }
 static void centered_menus(const char *binary)
 {
-    static const int sizes[][2] = {{60, 256}, {44, 160}, {90, 160}, {28, 110}, {18, 48}, {60, 256}};
+    static const int sizes[][2] = {{60, 256}, {44, 160}, {90, 160}, {28, 110}, {20, 80}, {60, 256}};
     int heights[sizeof sizes / sizeof *sizes];
     start(&term, binary); test_terminal_click(&term, "[ Config ]"); test_terminal_click(&term, "Keybinds");
     for (size_t i = 0; i < sizeof sizes / sizeof *sizes; ++i) {
@@ -110,7 +110,11 @@ static void script_navigation(const char *binary, const char *root)
     /* The first row stays selected through redraw; page movement reveals later scripts. */
     test_terminal_send(&term, "\033[6~\033[6~\033[6~\033[6~");
     test_terminal_expect(&term, "scroll-059.cfg");
-    test_terminal_send(&term, "\033[5~"); test_terminal_resize(&term, 18, 48);
+    /* Enter activates the original first script, not the newly visible page. */
+    test_terminal_send(&term, "\r"); test_terminal_expect(&term, "Configure session");
+    test_terminal_expect(&term, "scroll-000.cfg");
+    test_terminal_click(&term, "Browse boards"); test_terminal_expect(&term, "Installed OpenOCD");
+    test_terminal_send(&term, "\033[5~"); test_terminal_resize(&term, 20, 80);
     test_terminal_expect(&term, "Installed OpenOCD");
     /* Reverse Tab from a list row eventually reaches Back. Enter must not be stolen by redraw. */
     test_terminal_click(&term, "[ Filter ]");
@@ -171,7 +175,7 @@ int main(int argc, char **argv)
         return 0;
     }
     configure(argv[1], argv[2], argv[3]);
-    test_terminal_resize(&term, 18, 80); test_terminal_expect(&term, "Review OpenOCD session");
+    test_terminal_resize(&term, 20, 80); test_terminal_expect(&term, "Review OpenOCD session");
     test_terminal_click(&term, "Next argv"); test_terminal_click(&term, "Previous argv");
     test_terminal_resize(&term, 44, 160);
     test_terminal_click(&term, "Start session"); test_terminal_expect(&term, "LIVE OPENOCD");

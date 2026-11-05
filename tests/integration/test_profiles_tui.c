@@ -107,7 +107,7 @@ static void restored_setup(const char *binary, TbProfiles_t *store)
     start(binary); click("[ Config ]"); click("Profiles"); click("saved copy"); click("Review session"); click("Start native");
     test_terminal_expect(&term, "[x] Restore saved setup"); test_terminal_expect(&term, "ELF metadata changed");
     test_terminal_expect(&term, "code-breakpoint intent");
-    test_terminal_resize(&term, 18, 48); test_terminal_expect(&term, "Restore saved setup");
+    test_terminal_resize(&term, 20, 80); test_terminal_expect(&term, "Restore saved setup");
     test_terminal_expect(&term, "[ Start session ]"); test_terminal_expect(&term, "[ Back ]");
     test_terminal_resize(&term, 44, 160); test_terminal_expect(&term, "ELF metadata changed");
     click("[ Start session ]"); test_terminal_expect(&term, "LIVE | Loaded");
@@ -166,7 +166,7 @@ static void live_setup(const char *binary, const char *fixture, TbProfiles_t *st
     test_terminal_send(&term, "\t\025"); test_terminal_send(&term, fixture);
     test_terminal_send(&term, "\t\t\t\t\025gdb");
     click("Review session"); click("Start native"); test_terminal_expect(&term, "LIVE | Loaded");
-    const int widths[] = {48, 80, 123, 124, 152, 160};
+    const int widths[] = {80, 123, 124, 152, 160};
     const char *names[] = {"Continue", "Pause", "Over", "Into", "Out", "BP", "Reset"};
     for (size_t w = 0; w < sizeof widths / sizeof widths[0]; ++w) {
         int cols = widths[w]; test_terminal_resize(&term, 44, cols); settle();
@@ -239,7 +239,7 @@ static void recovery(const char *binary, const char *path)
     CHECK(json_object_object_add(root, "setups", setups) == 0);
     CHECK(json_object_to_file_ext(path, root, JSON_C_TO_STRING_PRETTY) == 0);
     start(binary); click("[ Config ]"); click("Profiles"); test_terminal_expect(&term, "READ ONLY");
-    test_terminal_resize(&term, 18, 48); test_terminal_expect(&term, "READ ONLY");
+    test_terminal_resize(&term, 20, 80); test_terminal_expect(&term, "READ ONLY");
     test_terminal_resize(&term, 44, 160); settle();
     click("remote definition"); click("Save profile"); input("remote definition"); click("[ Confirm ]");
     test_terminal_expect(&term, "Profile writes blocked");
@@ -250,7 +250,7 @@ static void recovery(const char *binary, const char *path)
     click("Reload file"); test_terminal_expect(&term, "Profile file reloaded.");
     CHECK(!test_terminal_find(&term, "READ ONLY", NULL, NULL));
     click("remote definition"); save("remote definition", true); stop();
-    puts("PASS F01 schema-3 read-only recovery, valid connection review, blocked save, 48-column indication and repaired reload");
+    puts("PASS F01 schema-3 read-only recovery, valid connection review, blocked save, 80-column indication and repaired reload");
 }
 static void import_setup(const char *binary, const char *fixture, TbProfiles_t *store)
 {

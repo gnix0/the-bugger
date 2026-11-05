@@ -62,6 +62,8 @@ Current scope and planned features are documented in the
 
 ## Build and first session
 
+Use a terminal of at least **80×20 cells**.
+
 Build on Linux with a **C17 compiler**, **GNU Make**, **pkg-config**, and development
 files for **ncursesw**, **libelf** and **json-c**. Native launch needs **GDB 17+** and
 ptrace permission. Embedded debugging needs the appropriate GDB, probe and server.

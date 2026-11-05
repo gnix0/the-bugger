@@ -173,4 +173,8 @@ const TbSourceRule_t *tb_code_rule(const TbCode_t *code, size_t index);
 bool tb_code_location(const char *text, uint64_t *address, bool *symbol);
 void tb_code_safe(char *out, size_t capacity, const char *bytes, size_t length);
 
+/* Applied command paths for setup snapshots; display/profile values remain literal. */
+const char *tb_code_effective_directory(const TbCode_t *code, size_t index);
+const TbSourceRule_t *tb_code_effective_rule(const TbCode_t *code, size_t index);
+
 #endif // THE_BUGGER_CODE_H
