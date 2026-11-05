@@ -1,5 +1,6 @@
 #define _GNU_SOURCE /* NOLINT(bugprone-reserved-identifier) -- Linux spawn/pipe interfaces. */
 #include "session/openocd.h"
+#include "session/host_paths.h"
 
 #include <arpa/inet.h>
 #include <dirent.h>
@@ -220,7 +221,7 @@ static bool add(TbOpenOcdPlan_t *p, const char *word)
     if (p->count == TB_OPENOCD_ARGS || !clean(word, TB_PROFILE_PATH))
         return false;
 
-    (void)snprintf(p->argv[p->count++], TB_PROFILE_PATH, "%s", word);
+    memcpy(p->argv[p->count++], word, strlen(word) + 1);
 
     return true;
 }
@@ -230,10 +231,15 @@ bool tb_openocd_plan(const TbProfile_t *p, TbOpenOcdPlan_t *plan, char *error, s
 {
     memset(plan, 0, sizeof(*plan));
     error[0] = 0;
+    TbProfile_t effective;
+    if (!tb_profile_paths(p, &effective, error, size))
+        return false;
+
+    p = &effective;
     if (!clean(p->endpoint, sizeof(p->endpoint)))
         return fail(error, size, "Enter a valid GDB endpoint.");
 
-    (void)snprintf(plan->endpoint, sizeof(plan->endpoint), "%s", p->endpoint);
+    memcpy(plan->endpoint, p->endpoint, strlen(p->endpoint) + 1);
     plan->start_server = p->start_server;
     if (!p->start_server)
         return true;

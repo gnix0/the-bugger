@@ -4,22 +4,18 @@ Commands, results, revisions and acceptance records for The Bugger.
 
 ## Current evidence boundary
 
-Latest published release: **[v0.1.5](https://github.com/gnix0/the-bugger/releases/tag/v0.1.5)**,
-published October 30, 2026. It includes F02 Stack inspection and the accepted
-inspection UX corrections. The release's Tests and Static analysis jobs succeeded;
-its three uploaded distribution files and archive checksums were independently
-checked on November 4. See the [publication verification](#v015-publication-verification--2026-11-04).
+Latest published release: **[v0.1.6](https://github.com/gnix0/the-bugger/releases/tag/v0.1.6)**,
+published November 4, 2026. It delivers the accepted F03–F05 editors. The uploaded
+binary archive, source archive and SHA256SUMS match the approved local artifacts;
+see [publication verification](#v016-publication).
 
-**F03–F05 are accepted and merged for v0.1.6.** F03/F04 physical validation across
-the supported architectures is owner-reported. Native and STM32 F05 results are
-recorded. ESP32-S3/Xtensa and ESP32-C6/RISC-V validation was reported by the
-maintainer; supporting evidence and limitations are documented separately below.
-The [acceptance closeout](#f05-acceptance-closeout--2026-11-04) supersedes the
-historical pending-acceptance statements. The C style standardization is also
-accepted and merged. **v0.1.6 is prepared locally**, with a fresh fortified host
-baseline and release archives checked below. It is not yet published. Hosted
-checks for the release-preparation commit and final release acceptance remain
-pending; the preceding documentation commit passed both hosted jobs.
+F03/F04 physical validation across the supported architectures is maintainer-reported.
+Native and STM32 F05 results are recorded. ESP32-S3/Xtensa and ESP32-C6/RISC-V
+validation was reported by the maintainer; supporting evidence and limitations
+remain documented below. The [acceptance closeout](#f05-acceptance-closeout--2026-11-04)
+supersedes earlier pending-acceptance statements. Subsequent v0.2.0 menu/path
+corrections remain subject to review and do not extend the physical validation
+claims.
 
 Useful starting points:
 
@@ -4220,3 +4216,53 @@ content changes. These local checks do not establish upload or publication.
 Upload both archives and `SHA256SUMS` separately; GitHub's two automatic source
 snapshots do not replace them. Published asset inventory/checksums and the final
 release revision remain to be verified after publication.
+
+## v0.1.6 publication
+
+The release was published November 4, 2026. The maintainer reported completed
+branch synchronization. The publication check in
+`build/v016-publication-verification/verification.json` records these three uploaded
+assets matching their approved local counterparts:
+
+- `the-bugger-v0.1.6-linux-x86_64.tar.gz`
+- `the-bugger-v0.1.6-source.tar.gz`
+- `SHA256SUMS`
+
+Archive checksums passed. GitHub's automatic source ZIP/tar links are separate
+from these uploaded assets. This closes the publication state described as
+pending in the earlier release-preparation record.
+
+## Menu and host-path corrections — November 5, 2026
+
+The working tree based on `7c672a1d711b1fbcd6e39c0b5aa37793dc32ae23`
+passed the fresh fortified host baseline:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/menu-ux-20261105 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+The checks cover the 80×20 minimum, readable connection labels, profile context,
+Theme/Variant choice lists, independent menu scrolling and activation of retained
+focus. Path checks cover literal saved values, effective home expansion,
+absolute HOME validation, account-home fallback, native launch/log destinations,
+OpenOCD arguments and GDB source-directory resolution. Real GDB checks preserve
+the different meanings of relative directories, `.`, `$cwd` and `$cdir`.
+
+The complete baseline returned 0, including direct-terminal and isolated tmux
+checks. Static analysis returned 0, and all 85 existing test source files compiled
+with the fortified configuration. `build/menu-ux-20261105/` contains the commands,
+environment, input hashes, `test-ci.log`, `analysis.log`, `test-compilation.log`
+and their exit records. `verification.json` confirms that tested source, header,
+test and build inputs remained unchanged during the final run. The normal
+`build/the-bugger` build also passed.
+
+Earlier runs exposed stale theme click-cycling and collapsed resize sequences in
+the tmux harnesses. The updated sequences exercise dropdown selection and an
+actual 80→96→80-column resize; the RGB and state-preservation assertions remain.
+Those failures are retained in `build/refine-menu-20261105/`,
+`build/refine-menu-final-20261105/` and
+`build/refine-menu-verified-20261105/`.
+
+These are local Linux results, not a hosted Ubuntu CI result. No physical target
+operations were performed. Maintainer review of the menu and path changes remains
+pending; passing tests do not establish acceptance of this review slice.

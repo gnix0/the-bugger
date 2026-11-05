@@ -6,12 +6,14 @@ implemented features or hardware support claims. See [architecture](architecture
 
 ## Current development sequence
 
-The latest published release is **v0.1.5**, including F02 Stack inspection and
-inspection UX improvements. **F03–F05 are accepted and merged for v0.1.6**, along
-with the completed C style standardization. The documentation review is accepted.
-**v0.1.6 is in release preparation**; [local release checks](validation.md#v016-release-preparation--2026-11-04)
-are recorded. Required hosted checks and final publication approval remain
-separate from feature acceptance.
+The latest published release is **v0.1.6**, delivering the accepted F03 variable,
+F04 ordinary-RAM and F05 CPU-register editors. Distribution checksums and uploaded
+assets are recorded in the [validation records](validation.md#v016-publication).
+
+The **v0.2.0 workflow and UX/UI review is underway**. The first correction pass
+covers connection labels, profile context, host paths, independent menu scrolling
+and theme selection. Implementation and regression results remain subject to
+maintainer review; this does not open a new feature gate.
 
 F03/F04 physical validation across the supported architectures is owner-reported.
 STM32 F05 write/verify/restore results are recorded. ESP32-S3/Xtensa and
@@ -37,14 +39,10 @@ and limitations; read-only checks do not establish write behavior.
 Current controls are in [usage](usage.md); the accepted browsing scope is in
 [requirements](requirements.md#approved-v013-browsing-work).
 
-The next releases have distinct purposes:
-
-- **v0.1.6:** deliver F03 variable editing, F04 ordinary-RAM editing and F05
-  CPU-register editing, the completed maintenance cleanup and reviewed documentation.
-  Complete the release checks and maintainer acceptance before publication.
-- **v0.2.0:** exercise existing features in day-to-day combinations, review UX/UI
-  and reported bugs, then validate the resulting corrections. Replace the monolithic
-  usage reference with task-oriented tutorials after those interactions stabilize.
+**v0.2.0** will exercise existing features in day-to-day combinations, review UX/UI
+and reported bugs, then validate the resulting corrections. The monolithic usage
+reference will be replaced with task-oriented tutorials after those interactions
+stabilize.
 
 The broader maintainability, build-system and testing-strategy reviews remain
 planning work requiring their own scope decisions. F06 and later feature gates

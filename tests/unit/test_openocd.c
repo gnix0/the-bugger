@@ -1,5 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "openocd.h"
+#include "session/host_paths.h"
+#include <pwd.h>
 #include "../support/check.h"
 #include <fcntl.h>
 #include <string.h>
@@ -7,8 +9,35 @@
 #include <unistd.h>
 static void file(const char *path)
 { int fd = open(path, O_CREAT | O_WRONLY | O_EXCL, 0600); CHECK(fd >= 0); CHECK(write(fd, "# metadata only\n", 16) == 16); CHECK(close(fd) == 0); }
+static void home_paths(void)
+{
+    char *saved = getenv("HOME") ? strdup(getenv("HOME")) : NULL;
+    char path[TB_PROFILE_PATH], error[160];
+    CHECK(setenv("HOME", "/tmp/home with spaces", 1) == 0);
+    CHECK(tb_path_expand(path, sizeof path, "~/src", error, sizeof error));
+    CHECK(!strcmp(path, "/tmp/home with spaces/src"));
+    CHECK(tb_path_expand(path, sizeof path, "~", error, sizeof error) && !strcmp(path, "/tmp/home with spaces"));
+    const char *literal[] = {"~somebody/src", "~+", "~-", "$HOME/src", "$cwd", "$cdir", "../src", ".", "gdb", "board/st_nucleo_f4.cfg", "$(false)"};
+    for (size_t i = 0; i < sizeof literal / sizeof *literal; ++i) {
+        CHECK(tb_path_expand(path, sizeof path, literal[i], error, sizeof error) && !strcmp(path, literal[i]));
+    }
+    CHECK(!tb_path_expand(path, 8, "~/src", error, sizeof error));
+    CHECK(setenv("HOME", "relative", 1) == 0);
+    CHECK(!tb_path_expand(path, sizeof path, "~/src", error, sizeof error) && strstr(error, "absolute"));
+    CHECK(tb_path_expand(path, sizeof path, "gdb", error, sizeof error) && !strcmp(path, "gdb"));
+    struct passwd *account = getpwuid(getuid()); CHECK(account && account->pw_dir[0] == '/');
+    char expected[TB_PROFILE_PATH]; (void)snprintf(expected, sizeof expected, "%s", account->pw_dir);
+    CHECK(unsetenv("HOME") == 0);
+    CHECK(tb_path_expand(path, sizeof path, "~", error, sizeof error) && !strcmp(path, expected));
+    CHECK(setenv("HOME", "", 1) == 0);
+    CHECK(tb_path_expand(path, sizeof path, "~", error, sizeof error) && !strcmp(path, expected));
+    CHECK(setenv("HOME", "/", 1) == 0);
+    CHECK(tb_path_expand(path, sizeof path, "~/src", error, sizeof error) && !strcmp(path, "/src"));
+    if (saved) { CHECK(setenv("HOME", saved, 1) == 0); free(saved); } else { CHECK(unsetenv("HOME") == 0); }
+}
 int main(void)
 {
+    home_paths();
     char root[] = "/tmp/the-bugger-m16-XXXXXX"; CHECK(mkdtemp(root));
     char board[1024], adapter[1024], target[1024], custom[1024], path[1024];
     (void)snprintf(path, sizeof path, "%s/board", root); CHECK(mkdir(path, 0700) == 0);
@@ -34,6 +63,19 @@ int main(void)
     p->search.count = 1; (void)snprintf(p->search.values[0], TB_PROFILE_WORD, "%s", root);
     p->scripts.count = 2; (void)snprintf(p->scripts.values[0], TB_PROFILE_WORD, "board/selected board.cfg"); (void)snprintf(p->scripts.values[1], TB_PROFILE_WORD, "extra.cfg");
     CHECK(tb_openocd_plan(p, plan, error, sizeof error)); CHECK(!strcmp(plan->argv[8], root) && !strcmp(plan->argv[10], "board/selected board.cfg") && !strcmp(plan->argv[12], "extra.cfg"));
+    char *home = getenv("HOME") ? strdup(getenv("HOME")) : NULL; CHECK(setenv("HOME", root, 1) == 0);
+    (void)snprintf(p->search.values[0], TB_PROFILE_WORD, "~");
+    (void)snprintf(p->scripts.values[1], TB_PROFILE_WORD, "~/extra.cfg");
+    CHECK(tb_openocd_plan(p, plan, error, sizeof error));
+    CHECK(!strcmp(plan->argv[8], root) && !strcmp(plan->argv[10], "board/selected board.cfg") && !strcmp(plan->argv[12], custom));
+    CHECK(!strcmp(p->search.values[0], "~") && !strcmp(p->scripts.values[1], "~/extra.cfg"));
+    TbProfile_t effective; memset(&effective, 0x5a, sizeof effective); TbProfile_t previous = effective;
+    CHECK(setenv("HOME", "relative", 1) == 0);
+    CHECK(!tb_profile_paths(p, &effective, error, sizeof error) && !memcmp(&effective, &previous, sizeof effective));
+    CHECK(setenv("HOME", "/tmp/path\nwith-line-break", 1) == 0);
+    CHECK(!tb_profile_paths(p, &effective, error, sizeof error) && !memcmp(&effective, &previous, sizeof effective));
+    if (home) { CHECK(setenv("HOME", home, 1) == 0); free(home); } else { CHECK(unsetenv("HOME") == 0); }
+    (void)snprintf(p->search.values[0], TB_PROFILE_WORD, "%s", root);
     (void)snprintf(p->scripts.values[1], TB_PROFILE_WORD, "%s", p->scripts.values[0]); CHECK(!tb_openocd_plan(p, plan, error, sizeof error));
     (void)snprintf(p->scripts.values[1], TB_PROFILE_WORD, "missing.cfg"); CHECK(!tb_openocd_plan(p, plan, error, sizeof error));
     (void)snprintf(p->scripts.values[1], TB_PROFILE_WORD, "literal#bad.cfg"); CHECK(!tb_openocd_plan(p, plan, error, sizeof error));

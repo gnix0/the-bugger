@@ -18,6 +18,12 @@ static void cleanup(void)
 }
 static void click(const char *text) { test_terminal_click(&term, text); test_terminal_pump(&term, 60); }
 static void back(void) { test_terminal_send(&term, "\033"); test_terminal_pump(&term, 60); }
+static void cycle(const char *text, bool forward)
+{
+    click(text); test_terminal_expect(&term, "Choose ");
+    back(); test_terminal_send(&term, forward ? "\033OC" : "\033OD");
+    test_terminal_pump(&term, 60);
+}
 static void start(const char *binary, const char *type, bool no_color)
 {
     char *const args[] = {(char *)binary, NULL};
@@ -75,12 +81,12 @@ static void contextual_footers(const char *binary, bool demo, bool no_color)
             }
             previous_x = x; previous_y = y;
         }
-        test_terminal_resize(&term, 18, 48); test_terminal_expect(&term, "Reload file");
+        test_terminal_resize(&term, 20, 80); test_terminal_expect(&term, "Reload file");
         int new_x, new_y, reload_x, reload_y, back_x, back_y;
         CHECK(test_terminal_find(&term, "New native", &new_x, &new_y));
         CHECK(test_terminal_find(&term, "Reload file", &reload_x, &reload_y));
         CHECK(test_terminal_find(&term, "[ Back ]", &back_x, &back_y));
-        CHECK(new_y + 1 == reload_y && reload_y == back_y);
+        CHECK(new_y == reload_y && reload_y == back_y);
         CHECK(back_x > reload_x + (int)strlen("Reload file") && new_x < reload_x);
         click("Reload file"); footer("Profile file reloaded.");
         test_terminal_resize(&term, 44, 160); test_terminal_expect(&term, "New OpenOCD");
@@ -109,7 +115,7 @@ static void contextual_footers(const char *binary, bool demo, bool no_color)
             CHECK(browse_y == last_y + 2 && note_y == browse_y + 2);
         }
         if (!demo) {
-            const char *const endings[] = {"literal.", "Profile options.", "profile options."};
+            const char *const endings[] = {"expansion.", "Profile options.", "profile options."};
             int note_x, note_y, review_x, review_y, save_x, save_y;
             test_terminal_expect(&term, endings[i]);
             CHECK(test_terminal_find(&term, endings[i], &note_x, &note_y));
@@ -118,7 +124,14 @@ static void contextual_footers(const char *binary, bool demo, bool no_color)
             CHECK(review_y == note_y + 2 && save_y == review_y + 2);
         }
         if (i == 0) {
+            if (!demo) {
+                test_terminal_expect(&term, "Environment (NAME=value)");
+                test_terminal_resize(&term, 20, 80); test_terminal_send(&term, "\t\t\t\t");
+                test_terminal_expect(&term, "Environment (NAME=value)");
+                test_terminal_resize(&term, 44, 160);
+            }
             int title_x, title_y, action_x, action_y;
+            test_terminal_expect(&term, "Linux application");
             CHECK(test_terminal_find(&term, "Linux application", &title_x, &title_y));
             CHECK(test_terminal_find(&term, demo ? "[ Review preview ]" : "[ Review session ]", &action_x, &action_y));
             CHECK(action_x >= title_x && action_x <= title_x + 2 && title_x > 20 && title_y > 8);
@@ -150,7 +163,7 @@ static void contextual_footers(const char *binary, bool demo, bool no_color)
         }
         back(); footer(demo ? "DEMO only." : "Choose native launch/attach");
     }
-    test_terminal_resize(&term, 18, 48);
+    test_terminal_resize(&term, 20, 80);
     click("[ Config ]"); footer("Choose personal");
     click("Themes"); footer("Preview a theme and variant.");
     test_terminal_stop(&term, 0); active = false;
@@ -168,9 +181,27 @@ int main(int argc, char **argv)
     puts("PASS contextual menu footers, navigation clears stale notices, errors remain visible, compact and monochrome");
     start(argv[1], "xterm-256color", false); open_themes();
     test_terminal_expect(&term, "< Catppuccin >"); test_terminal_expect(&term, "< macchiato >");
-    click("Variant"); test_terminal_expect(&term, "< mocha >");
-    click("< mocha >"); test_terminal_expect(&term, "< macchiato >");
-    click("Variant"); test_terminal_expect(&term, "< mocha >");
+    test_terminal_resize(&term, 20, 80);
+    click("Theme       <"); test_terminal_expect(&term, "Choose theme"); test_terminal_expect(&term, "#");
+    test_terminal_send(&term, "\033[<65;40;10M\r"); test_terminal_expect(&term, "< Catppuccin >");
+    test_terminal_send(&term, " "); test_terminal_expect(&term, "Choose theme");
+    test_terminal_send(&term, "\033[6~"); click("Solarized"); test_terminal_expect(&term, "< Solarized >");
+    click("Theme       <"); test_terminal_expect(&term, "Choose theme");
+    test_terminal_send(&term, "\033OH"); click("Catppuccin"); test_terminal_expect(&term, "< macchiato >");
+    click("Variant"); test_terminal_expect(&term, "Choose variant");
+    test_terminal_send(&term, "\033[<0;1;1M\033[<0;1;1m"); test_terminal_expect(&term, "< macchiato >");
+    CHECK(!test_terminal_find(&term, "Choose variant", NULL, NULL));
+    test_terminal_resize(&term, 44, 160);
+    click("Variant"); test_terminal_expect(&term, "Choose variant");
+    test_terminal_send(&term, "\033OB\r"); test_terminal_expect(&term, "< mocha >");
+    click("Theme       <"); test_terminal_expect(&term, "Choose theme");
+    test_terminal_send(&term, "\r"); test_terminal_expect(&term, "< mocha >");
+    click("Theme       <"); test_terminal_expect(&term, "Choose theme");
+    test_terminal_send(&term, "\033OB\033"); test_terminal_expect(&term, "< Catppuccin >");
+    cycle("Variant", false); test_terminal_expect(&term, "< macchiato >");
+    cycle("Variant", true); test_terminal_expect(&term, "< mocha >");
+    cycle("< mocha >", false); test_terminal_expect(&term, "< macchiato >");
+    cycle("Variant", true); test_terminal_expect(&term, "< mocha >");
     click("[ Preview ]"); test_terminal_expect(&term, "THEME PREVIEW | Catppuccin / mocha");
     test_terminal_expect(&term, "simulated data"); test_terminal_expect(&term, "Source");
     back(); test_terminal_expect(&term, "< mocha >"); back(); back();
@@ -181,15 +212,15 @@ int main(int argc, char **argv)
         char label[80]; (void)snprintf(label, sizeof label, "< %s >", names[family]); test_terminal_expect(&term, label);
         for (int variant = 0; variant < counts[family]; ++variant) {
             click("[ Preview ]"); test_terminal_expect(&term, "THEME PREVIEW");
-            test_terminal_resize(&term, 18, 48); test_terminal_expect(&term, "THEME PREVIEW");
+            test_terminal_resize(&term, 20, 80); test_terminal_expect(&term, "THEME PREVIEW");
             back(); test_terminal_expect(&term, "Variant");
-            test_terminal_resize(&term, 44, 160); click("Variant");
+            test_terminal_resize(&term, 44, 160); cycle("Variant", true);
         }
-        click("Theme       <");
+        cycle("Theme       <", true);
     }
     char path[512]; (void)snprintf(path, sizeof path, "%s/the-bugger/preferences.json", root);
     CHECK(access(path, F_OK) != 0); /* Every preview so far remained unsaved. */
-    test_terminal_expect(&term, "< macchiato >"); click("Variant"); click("[ Save ]");
+    test_terminal_expect(&term, "< macchiato >"); cycle("Variant", true); click("[ Save ]");
     test_terminal_expect(&term, "Configuration"); footer("Theme saved.");
     click("Themes"); footer("Preview a theme and variant.");
     CHECK(!test_terminal_find(&term, "Theme saved.", NULL, NULL));
@@ -201,7 +232,7 @@ int main(int argc, char **argv)
     /* Keyboard changes theme and the dependent variant, including backward wrap. */
     test_terminal_send(&term, "\033OD"); test_terminal_expect(&term, "< Solarized >");
     test_terminal_send(&term, "\t\033OD"); test_terminal_expect(&term, "< light >");
-    test_terminal_resize(&term, 18, 48); test_terminal_expect(&term, "Variant");
+    test_terminal_resize(&term, 20, 80); test_terminal_expect(&term, "Variant");
     /* Resize retains Variant focus; Back then Preview are the next two controls. */
     int variant_x, variant_y; CHECK(test_terminal_find(&term, "Variant", &variant_x, &variant_y));
     CHECK(term.inverse[variant_y][variant_x]);

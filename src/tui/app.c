@@ -8,6 +8,7 @@
 #include "tui/preferences.h"
 #include "session/session.h"
 #include "session/profiles.h"
+#include "session/host_paths.h"
 #include "tui/setup_capture.h"
 #include "tui/setup_restore.h"
 #include "model/images.h"
@@ -159,6 +160,8 @@ typedef enum {
     SCROLLBAR,
     KEY_SCROLLBAR,
     SCRIPT_SCROLLBAR,
+    THEME_PICK,
+    THEME_SCROLLBAR,
     COMMAND_FIELD,
     COMMAND_SEND,
     SAVE_OPEN,
@@ -301,6 +304,8 @@ typedef struct {
     int              scroll_drag_grab;
     bool             scroll_drag_horizontal;
     Control_t        last_control;
+    Control_t        viewport_focus;
+    bool             viewport_refocus;
     Control_t        controls[MAX_CONTROLS];
     TbRect_t         panes[TB_MAX_PANES];
     int              content_pane; /* -1 navigates controls; a pane ID navigates its content. */
@@ -308,6 +313,11 @@ typedef struct {
     const char      *colors;
     TbPreferences_t  preferences;
     size_t           theme_draft;
+    int              theme_menu;
+    int              theme_selected;
+    int              theme_offset;
+    int              theme_drag_grab;
+    TbRect_t         theme_list_rect;
     int              key_draft[TB_BIND_COUNT];
     int              key_selected;
     int              key_capture;
@@ -428,6 +438,10 @@ typedef struct {
     char                  profile_original_name[TB_PROFILE_NAME];
     TbSetupCapture_t     *setup;
     TbProfile_t          *session_profile;
+    TbProfile_t          *review_paths;
+    char                  review_directory[TB_SETUP_PATH];
+    char                  review_stamp[256];
+    bool                  review_ready;
     TbProfile_t          *setup_review_connection;
     TbSetup_t            *setup_review;
     char                  setup_profile[TB_PROFILE_NAME];
@@ -460,6 +474,8 @@ static void profile_activate(App_t *app, Control_t control);
 static void draw_server_review(App_t *app);
 static void draw_scripts(App_t *app);
 static bool prepare_server(App_t *app);
+static bool prepare_paths(App_t *app);
+static TbScroll_t axis_scroll(int total, int visible, int offset);
 static void draw_setup(App_t *app);
 static bool setup_capture(App_t *app);
 // action code and entry index come from separate control fields.
@@ -512,6 +528,7 @@ static void page(App_t *app, Page_e next)
     app->key_drag_grab  = app->script_drag_grab = -1;
     app->field_tracking = app->field_insert = false;
 
+    app->theme_menu   = 0;
     app->page         = next;
     app->count        = 0;
     app->content_pane = -1;
@@ -852,6 +869,10 @@ static int add_control(App_t *app, TbRect_t rect, ControlKind_e kind, int value,
         return -1;
 
     int index = app->count++;
+
+    if (app->viewport_refocus && app->viewport_focus.kind == kind &&
+        app->viewport_focus.value == value && app->viewport_focus.pane == pane)
+        app->focus = index;
 
     app->controls[index] = (Control_t) {
         rect,
@@ -1261,6 +1282,112 @@ static void theme_cycle(App_t *app, bool family, int direction)
 }
 
 
+static int theme_choices(const App_t *app, size_t choices[64])
+{
+    int         count  = 0;
+    const char *family = tb_theme_palette(app->theme_draft)->family;
+    for (size_t i = 0; i < tb_theme_count() && count < 64; ++i) {
+        const TbPalette_t *palette = tb_theme_palette(i);
+        if (app->theme_menu == 1) {
+            if (i && strcmp(palette->family, tb_theme_palette(i - 1)->family) == 0)
+                continue;
+        } else if (strcmp(palette->family, family) != 0) {
+            continue;
+        }
+
+        choices[count++] = i;
+    }
+
+    return count;
+}
+
+
+static void theme_list_close(App_t *app, bool choose)
+{
+    size_t choices[64];
+    int    count = theme_choices(app, choices);
+    if (choose && app->theme_selected >= 0 && app->theme_selected < count) {
+        size_t selected = choices[app->theme_selected];
+        if (app->theme_menu == 2 || strcmp(tb_theme_palette(selected)->family,
+                                          tb_theme_palette(app->theme_draft)->family) != 0) {
+            app->theme_draft = selected;
+            if (app->theme_menu == 1 &&
+                strcmp(tb_theme_palette(selected)->family, "catppuccin") == 0)
+                app->theme_draft = tb_theme_find("catppuccin", "macchiato");
+        }
+    }
+
+    app->focus      = app->theme_menu - 1;
+    app->theme_menu = 0;
+    app->count      = 0;
+}
+
+
+static void theme_list_open(App_t *app, int menu)
+{
+    app->theme_menu      = menu;
+    app->theme_selected  = 0;
+    app->theme_offset    = 0;
+    app->theme_drag_grab = -1;
+
+    size_t choices[64];
+    int    count = theme_choices(app, choices);
+    for (int i = 0; i < count; ++i) {
+        if ((menu == 1 && strcmp(tb_theme_palette(choices[i])->family,
+                                tb_theme_palette(app->theme_draft)->family) == 0) ||
+            (menu == 2 && choices[i] == app->theme_draft))
+            app->theme_selected = i;
+    }
+
+    int visible = count < LINES - 11 ? count : LINES - 11;
+    if (app->theme_selected >= visible)
+        app->theme_offset = app->theme_selected - visible + 1;
+}
+
+
+static void draw_theme_list(App_t *app)
+{
+    size_t choices[64];
+    int    count = theme_choices(app, choices);
+    int        visible = count < LINES - 11 ? count : LINES - 11;
+    TbScroll_t bar     = axis_scroll(count, visible, app->theme_offset);
+    TbRect_t   card    = menu_card(48, visible + 4);
+
+    app->theme_offset    = bar.offset;
+    app->theme_list_rect = card;
+    app->count           = 0;
+    app->focus           = app->theme_selected - app->theme_offset;
+
+    tb_text(card.y, card.x + 2, card.w - 4, TB_PINK, A_BOLD,
+            app->theme_menu == 1 ? "Choose theme" : "Choose variant");
+    for (int row = 0; row < visible; ++row) {
+        size_t      index = choices[app->theme_offset + row];
+        const char *label = app->theme_menu == 1 ? tb_theme_name(theme_family(index))
+                                                : tb_theme_palette(index)->variant;
+        button(app, card.y + 2 + row, card.x + 2, card.w - 5, label,
+               THEME_PICK, app->theme_offset + row, 0);
+    }
+
+    if (bar.maximum > 0) {
+        for (int row = 0; row < visible; ++row) {
+            bool thumb = row >= bar.thumb_start && row < bar.thumb_start + bar.thumb_size;
+            tb_text(card.y + 2 + row, card.x + card.w - 2, 1, thumb ? TB_CYAN : TB_MUTED,
+                    0, thumb ? "#" : "|");
+        }
+
+        (void)add_control(app, (TbRect_t) {
+            card.x + card.w - 2,
+            card.y + 2,
+            1,
+            visible
+        }, THEME_SCROLLBAR, 0, 0);
+    }
+
+    if (app->focus < 0 || app->focus >= visible)
+        app->focus = add_control(app, (TbRect_t) {0}, THEME_PICK, app->theme_selected, 0);
+}
+
+
 static void draw_config(App_t *app)
 {
     bool themes = app->page == THEMES;
@@ -1287,7 +1414,7 @@ static void draw_config(App_t *app)
                        tb_theme_palette(app->theme_draft)->variant);
         button(app, top + 7, left + 2, width - 4, label, THEME_ACTION, 2, 0);
         tb_text(top + 9, left + 2, width - 4, TB_MUTED, 0,
-                "Left/Right or Enter changes selection. Preview before saving.");
+                "Enter opens a list; Left/Right cycles. Preview before saving.");
         button(app, top + 12, left + 2, 10, "[ Back ]", BACK, 0, 0);
         button(app, top + 12, left + 14, 13, "[ Preview ]", THEME_ACTION, 3, 0);
         button(app, top + 12, left + width - 11, 9, "[ Save ]", THEME_ACTION, 4, 0);
@@ -1302,6 +1429,9 @@ static void draw_config(App_t *app)
 
     draw_footer(footer_message(app), "Tab / arrows / Enter or click | Esc back | Ctrl+Q quit app",
                 TB_STATUS_TEXT, TB_HINT_TEXT);
+    if (app->theme_menu)
+        draw_theme_list(app);
+
 }
 
 
@@ -1334,7 +1464,6 @@ static void keybind_remember(App_t *app)
 }
 
 
-static TbScroll_t axis_scroll(int total, int visible, int offset);
 
 /* Leave breathing room on large screens, retaining compact access on small ones. */
 static int selection_menu_limit(void)
@@ -1393,17 +1522,6 @@ static void keybind_scroll(App_t *app, int offset)
     int maximum = total - rows;
 
     app->key_scroll = offset < 0 ? 0 : offset > maximum ? maximum : offset;
-
-    int column = COLS >= 112 ? app->key_selected / 15 : 0;
-    int local  = app->key_selected - column * 15;
-
-    if (local < app->key_scroll)
-        local = app->key_scroll;
-
-    if (local >= app->key_scroll + rows)
-        local = app->key_scroll + rows - 1;
-
-    keybind_select(app, column * 15 + local);
 }
 
 
@@ -1506,13 +1624,6 @@ static void draw_keybinds(App_t *app)
 
     if (app->key_selected < 0 || app->key_selected >= TB_BIND_COUNT)
         app->key_selected = 0;
-
-    int local = dual ? app->key_selected % 15 : app->key_selected;
-    if (local < app->key_scroll)
-        app->key_scroll = local;
-
-    if (local >= app->key_scroll + rows)
-        app->key_scroll = local - rows + 1;
 
     int      width     = dual ? 80 : (COLS > 60 ? 56 : COLS - 4);
     int      height    = selection_menu_height();
@@ -1701,7 +1812,7 @@ static void draw_form(App_t *app, bool review)
                 ? "Connect may halt the target. Server stays externally owned; symbol loading does not "
                    "flash."
                 : "Preview only. Nothing will be launched, connected or saved.")
-            : (native ? "Quotes group arguments/NAME=value entries. No shell expansion. Paths are literal."
+            : (native ? "Quotes group arguments/NAME=value entries. Paths accept ~/; no shell expansion."
                 : remote
                 ? "TCP host:port (IPv6 in brackets). Optional ELF supplies symbols. Protocol is in "
                    "profile options."
@@ -1750,7 +1861,7 @@ static void draw_form(App_t *app, bool review)
     for (int i = 0; i < n; ++i) {
         int  y       = first + i - app->form_scroll + (i > 0 ? mode_gap : 0) + (i == n - 1 ? last_gap : 0);
         bool shown   = i >= app->form_scroll && i < app->form_scroll + visible;
-        int  input_x = left + (COLS >= 64 ? 24 : 21);
+        int  input_x = left + 25;
         TbRect_t rect = shown ? (TbRect_t) {
             input_x,
             y,
@@ -1764,7 +1875,30 @@ static void draw_form(App_t *app, bool review)
 
         tb_text(y, left, input_x - left - 1, TB_MUTED, 0, list[i].label);
 
-        const wchar_t *value    = field_value(app, list[i]);
+        const wchar_t *value = field_value(app, list[i]);
+        wchar_t        effective_value[TB_PROFILE_PATH];
+        if (review && !app->demo_mode && app->review_ready && !list[i].toggle) {
+            const TbProfile_t *paths     = app->review_paths;
+            const char        *effective = NULL;
+            int                field     = list[i].index;
+            if (app->session == 0) {
+                if (field == 1 || field == 4)
+                    effective = paths->executable;
+                else if (field == 3)
+                    effective = paths->directory;
+                else if (field == 5)
+                    effective = paths->gdb;
+            } else if (app->session == 2) {
+                if (field == 1)
+                    effective = paths->executable;
+                else if (field == 2)
+                    effective = paths->gdb;
+            }
+
+            if (effective && mbstowcs(effective_value, effective, TB_PROFILE_PATH) < TB_PROFILE_PATH)
+                value = effective_value;
+        }
+
         size_t         length   = wcslen(value);
         size_t         start    = 0;
         bool           selected = index == app->focus && !review;
@@ -5274,6 +5408,14 @@ static void draw_page(App_t *app)
         }
     }
 
+    app->viewport_refocus = app->count > 0 &&
+        ((app->page == KEYBINDS && !app->key_confirm) ||
+         (app->page == SCRIPT_LIST && !app->script_refocus));
+    if (app->viewport_refocus) {
+        app->viewport_focus = app->controls[app->focus];
+        app->focus = -1;
+    }
+
     app->count           = 0;
     app->command_caret_y = -1;
 
@@ -5284,12 +5426,12 @@ static void draw_page(App_t *app)
         COLS,
         LINES
     }, TB_WORKSPACE);
-    if (COLS < 48 || LINES < 18) {
+    if (COLS < 80 || LINES < 20) {
         char dimensions[64];
         (void)snprintf(dimensions, sizeof(dimensions), "Current: %dx%d", COLS, LINES);
         tb_text(0, 0, COLS, TB_ORANGE, A_BOLD, "Terminal too small");
         tb_text(1, 0, COLS, TB_PANEL, 0, dimensions);
-        tb_text(2, 0, COLS, TB_PANEL, 0, "Resize to at least 48x18.");
+        tb_text(2, 0, COLS, TB_PANEL, 0, "Resize to at least 80x20.");
         tb_text(4, 0, COLS, TB_PANEL, 0, "State retained. Ctrl+Q quits.");
     } else if (app->page == LAUNCHER) {
         draw_launcher(app);
@@ -5387,7 +5529,14 @@ static void draw_page(App_t *app)
         draw_workspace(app);
     }
 
-    if (app->focus >= app->count)
+    /* An offscreen selection keeps its identity without a mouse hit region. */
+    if (app->viewport_refocus && app->focus < 0 && app->count > 0) {
+        Control_t selected = app->viewport_focus;
+        app->focus = add_control(app, (TbRect_t) {0}, selected.kind, selected.value, selected.pane);
+    }
+
+    app->viewport_refocus = false;
+    if (app->focus < 0 || app->focus >= app->count)
         app->focus = app->count > 0 ? app->count - 1 : 0;
 }
 
@@ -5403,7 +5552,8 @@ static bool navigable(const App_t *app, Control_t control)
 {
     return exposed_control(app, control) && control.rect.w > 0 && control.rect.h > 0 &&
            control.kind != BODY && control.kind != SCROLLBAR && control.kind != HSCROLLBAR &&
-           control.kind != KEY_SCROLLBAR && control.kind != SCRIPT_SCROLLBAR && control.kind != DIVIDER;
+           control.kind != KEY_SCROLLBAR && control.kind != SCRIPT_SCROLLBAR &&
+           control.kind != THEME_SCROLLBAR && control.kind != DIVIDER;
 }
 
 
@@ -5552,7 +5702,8 @@ static void draw(App_t *app)
         (void)fflush(stdout); /* ncurses may write directly to the descriptor. */
     }
 
-    bool      retain   = app->count > 0 && !app->menu_focus && !app->resizing && app->page != SCRIPT_LIST;
+    bool      viewport = app->page == SCRIPT_LIST || (app->page == KEYBINDS && !app->key_confirm);
+    bool      retain   = app->count > 0 && !app->menu_focus && !app->resizing && !viewport;
     Control_t previous = retain ? app->controls[app->focus] : (Control_t) {0};
 
     draw_page(app);
@@ -5571,7 +5722,7 @@ static void draw(App_t *app)
         }
     }
 
-    if (app->count && !app->resizing) {
+    if (app->count && !app->resizing && !viewport) {
         if (next < 0) {
             app->content_pane = -1;
             next              = navigable(app, app->controls[app->focus]) ? app->focus : 0;
@@ -5988,13 +6139,13 @@ static bool profile_load(App_t *app, const TbProfile_t *p)
 }
 
 
-static bool profile_sources(App_t *app, TbProfile_t *next)
+static bool profile_sources(App_t *app, TbProfile_t *next, bool effective)
 {
     TbCode_t *code = tb_session_code(app->debugger);
     next->directory_count = tb_code_directory_count(code);
     next->rule_count      = tb_code_rule_count(code);
     for (size_t i = 0; i < next->directory_count; ++i) {
-        const char *path = tb_code_directory(code, i);
+        const char *path = effective ? tb_code_effective_directory(code, i) : tb_code_directory(code, i);
         if (strlen(path) >= TB_PROFILE_PATH) {
             status(app, "Applied source path exceeds profile field limit.");
             return false;
@@ -6004,7 +6155,7 @@ static bool profile_sources(App_t *app, TbProfile_t *next)
     }
 
     for (size_t i = 0; i < next->rule_count; ++i) {
-        const TbSourceRule_t *rule = tb_code_rule(code, i);
+        const TbSourceRule_t *rule = effective ? tb_code_effective_rule(code, i) : tb_code_rule(code, i);
         if (strlen(rule->from) >= TB_PROFILE_PATH || strlen(rule->to) >= TB_PROFILE_PATH) {
             status(app, "Applied source mapping exceeds profile field limit.");
             return false;
@@ -6078,7 +6229,7 @@ static bool profile_capture(App_t *app)
         (void)snprintf(next.gdb, sizeof(next.gdb), "%s", values[2]);
     }
 
-    if (app->live && !profile_sources(app, &next))
+    if (app->live && !profile_sources(app, &next, false))
         return false;
 
     *app->profile = next;
@@ -6331,8 +6482,11 @@ static bool setup_prepare_restore(App_t *app)
         return false;
     }
 
-    *app->setup_review_connection = *app->profile;
-    tb_profile_image_stamp(app->profile, app->restore_directory, app->restore_stamp);
+    if (!prepare_paths(app))
+        return false;
+
+    *app->setup_review_connection = *app->review_paths;
+    tb_profile_image_stamp(app->review_paths, app->restore_directory, app->restore_stamp);
     (void)tb_profiles_setup_stamp(app->profiles, app->profile->name, app->restore_saved_stamp);
     app->restore_selected = true;
     app->setup_offset     = 0;
@@ -6439,7 +6593,8 @@ static void draw_setup(App_t *app)
             setup_differences(&text, app->setup_review_connection, app->restore_connection);
 
         if (strcmp(app->restore_directory, app->restore_saved_directory) != 0 &&
-            (tb_profile_relative_paths(app->profile) || tb_profile_relative_paths(app->restore_connection))) {
+            (tb_profile_relative_paths(app->setup_review_connection) ||
+             tb_profile_relative_paths(app->restore_connection))) {
             setup_text(&text, "Relative-path launch context changed. Renew consent before restoring.");
             setup_pair(&text, "Launch context", app->restore_directory, app->restore_saved_directory);
         }
@@ -6744,8 +6899,15 @@ static void setup_activate(App_t *app, int action, int entry)
         if (!profile_capture(app) || !getcwd(directory, sizeof(directory)))
             return;
 
-        tb_profile_image_stamp(app->profile, directory, stamp);
-        if (tb_profile_differences(app->profile, app->setup_review_connection) ||
+        TbProfile_t effective;
+        char        error[160];
+        if (!tb_profile_paths(app->profile, &effective, error, sizeof(error))) {
+            status(app, error);
+            return;
+        }
+
+        tb_profile_image_stamp(&effective, directory, stamp);
+        if (tb_profile_differences(&effective, app->setup_review_connection) ||
             strcmp(directory, app->restore_directory) != 0 || strcmp(stamp, app->restore_stamp) != 0) {
             if (setup_prepare_restore(app))
                 status(app, "Connection or ELF changed during review. Review again before starting.");
@@ -6798,7 +6960,7 @@ static void setup_activate(App_t *app, int action, int entry)
 
         *app->setup_review            = *tb_setup_capture_current(app->setup);
         *app->setup_review_connection = *app->session_profile;
-        if (!profile_sources(app, app->setup_review_connection))
+        if (!profile_sources(app, app->setup_review_connection, true))
             return;
 
         page(app, SETUP_SAVE);
@@ -7020,7 +7182,7 @@ static void setup_activate(App_t *app, int action, int entry)
         }
 
         TbProfile_t snapshot = *app->session_profile;
-        if (!profile_sources(app, &snapshot))
+        if (!profile_sources(app, &snapshot, true))
             return;
 
         if (!app->setup_review || !app->setup_review_connection ||
@@ -7148,16 +7310,22 @@ static void draw_profiles(App_t *app)
     const char *title =
         app->page == PROFILE_LIST
             ? (tb_profiles_read_only(app->profiles) ? "READ ONLY: profiles (repair and Reload)" : "Profiles")
-            : app->page == PROFILE_OPTIONS ? "Profile options"
+            : app->page == PROFILE_OPTIONS ? (app->profile->kind == 0 ? "Profile options | Linux application"
+                : app->profile->kind == 1 ? "Profile options | Embedded target"
+                : "Profile options | GDB server")
             : app->page == PROFILE_CONFIRM ? "Confirm profile change"
             : app->profile_group >= 0 && app->profile_group < 4 ? groups[app->profile_group]
             : "Profile entries";
 
     tb_text(top + (compact_options ? 0 : 1), left, width, TB_PINK, A_BOLD, title);
-    tb_text(top + (compact_options ? 1 : 2), left, width, TB_MUTED, 0,
-            app->page == PROFILE_LIST ? "Saved profiles / recent sessions"
-                : app->page == PROFILE_CONFIRM ? "Review before confirming"
-                : "Unsaved until Save profile");
+    int subtitle = top + (compact_options ? 1 : 2);
+    if (app->page == PROFILE_LIST || app->page == PROFILE_CONFIRM) {
+        tb_text(subtitle, left, width, TB_MUTED, 0,
+                app->page == PROFILE_LIST ? "Saved profiles / recent sessions" : "Review before confirming");
+    } else {
+        tb_text(subtitle, left, width, TB_MUTED, 0, "Unsaved until ");
+        tb_text(subtitle, left + 14, width - 14, TB_CYAN, A_BOLD, "Save profile");
+    }
     draw_footer(footer_message(app), "Tab / arrows / Enter | Esc back | Ctrl+Q quit app", TB_STATUS_TEXT,
                 TB_HINT_TEXT);
     if (app->page == PROFILE_CONFIRM) {
@@ -7479,6 +7647,33 @@ static void profile_text_submit(App_t *app, const char *input)
 }
 
 
+static bool prepare_paths(App_t *app)
+{
+    app->review_ready = false;
+    if (!profile_capture(app))
+        return false;
+
+    if (!app->review_paths)
+        app->review_paths = malloc(sizeof(*app->review_paths));
+
+    char error[160];
+    if (!app->review_paths || !getcwd(app->review_directory, sizeof(app->review_directory))) {
+        status(app, "Cannot record effective connection paths.");
+        return false;
+    }
+
+    if (!tb_profile_paths(app->profile, app->review_paths, error, sizeof(error))) {
+        status(app, error);
+        return false;
+    }
+
+    tb_profile_image_stamp(app->review_paths, app->review_directory, app->review_stamp);
+    app->review_ready = true;
+
+    return true;
+}
+
+
 static bool prepare_server(App_t *app)
 {
     if (!profile_capture(app))
@@ -7522,9 +7717,9 @@ static void draw_server_review(App_t *app)
     (void)snprintf(summary, sizeof(summary), "Endpoint: %s | %s", p->endpoint,
                    p->start_server ? "Start owned OpenOCD" : "Connect to existing server (never owned)");
     tb_text(top, left, width, TB_CYAN, A_BOLD, summary);
-    (void)snprintf(summary, sizeof(summary), "GDB: %s", app->profile->gdb);
+    (void)snprintf(summary, sizeof(summary), "GDB: %s", app->review_paths->gdb);
     tb_text(top + 1, left, width, TB_MUTED, 0, summary);
-    (void)snprintf(summary, sizeof(summary), "Symbols: %s", app->profile->executable);
+    (void)snprintf(summary, sizeof(summary), "Symbols: %s", app->review_paths->executable);
     tb_text(top + 2, left, width, TB_MUTED, 0, summary);
     tb_text(top + 3, left, width, TB_PANEL, A_BOLD,
             "Literal argument vector (each indexed item is one argument)");
@@ -7596,13 +7791,6 @@ static void script_scroll(App_t *app, int offset)
 {
     TbScroll_t bar = axis_scroll(script_count(app), script_visible(), offset);
     app->script_offset = bar.offset;
-    if (app->script_selected < bar.offset)
-        app->script_selected = bar.offset;
-
-    if (app->script_selected >= bar.offset + bar.visible)
-        app->script_selected = bar.offset + bar.visible - 1;
-
-    app->script_refocus = true;
 }
 
 
@@ -7634,15 +7822,22 @@ static void script_move(App_t *app, int delta)
 
 static void draw_scripts(App_t *app)
 {
-    Control_t previous = app->controls[app->focus];
-    if (!app->script_refocus && previous.kind == SCRIPT_PICK)
-        app->script_selected = app->script_offset + app->focus;
+    script_scroll(app, app->script_offset);
+    if (app->viewport_refocus && app->viewport_focus.kind == SCRIPT_PICK) {
+        int ordinal = 0;
+        for (size_t i = 0; app->catalog && i < app->catalog->count; ++i) {
+            if (!script_matches(app, &app->catalog->scripts[i]))
+                continue;
+            if ((int)i == app->viewport_focus.value)
+                app->script_selected = ordinal;
+            ++ordinal;
+        }
+    }
 
-    bool toolbar = !app->script_refocus && (previous.kind == SCRIPT_ACTION || previous.kind == BACK);
-    script_move(app, 0);
-    app->script_refocus = false;
-    if (!toolbar)
+    if (app->script_refocus)
         app->focus = app->script_selected - app->script_offset;
+
+    app->script_refocus = false;
 
     TbRect_t card  = menu_card(96, selection_menu_height());
     int      left  = card.x + 2;
@@ -7704,9 +7899,6 @@ static void draw_scripts(App_t *app)
                           0);
     }
 
-    if (toolbar)
-        app->focus = app->count + (previous.kind == BACK ? 1 : 0);
-
     button(app, top + card.h - 2, left, 12, "[ Filter ]", SCRIPT_ACTION, 0, 0);
     button(app, top + card.h - 2, left + 14, 12, "[ Back ]", BACK, 0, 0);
 }
@@ -7718,6 +7910,27 @@ static bool start_session(App_t *app)
         if (!*app->status)
             status(app, "Cannot record the session launch directory.");
 
+        return false;
+    }
+
+    TbProfile_t effective;
+    char        path_error[160];
+    char        stamp[256];
+    if (!tb_profile_paths(app->profile, &effective, path_error, sizeof(path_error))) {
+        status(app, path_error);
+        return false;
+    }
+
+    tb_profile_image_stamp(&effective, app->launch_directory, stamp);
+    if (!app->review_ready || tb_profile_differences(&effective, app->review_paths) ||
+        strcmp(app->launch_directory, app->review_directory) != 0 ||
+        strcmp(stamp, app->review_stamp) != 0) {
+        if (prepare_paths(app)) {
+            if (app->session == 1 && !prepare_server(app))
+                return false;
+            page(app, REVIEW);
+            status(app, "Connection paths or ELF changed. Review again before starting.");
+        }
         return false;
     }
 
@@ -7759,9 +7972,9 @@ static bool start_session(App_t *app)
     TbSessionConfig_t config = {
         .attach      = app->forms[0].alternate,
         .pid         = pid,
-        .gdb         = values[5],
-        .executable  = app->forms[0].alternate ? values[4] : values[1],
-        .directory   = app->forms[0].alternate ? "" : values[3],
+        .gdb         = effective.gdb,
+        .executable  = effective.executable,
+        .directory   = app->forms[0].alternate ? "" : effective.directory,
         .arguments   = &arguments,
         .environment = &environment
     };
@@ -7772,8 +7985,8 @@ static bool start_session(App_t *app)
                 ? TB_SESSION_EXTENDED_REMOTE
                 : TB_SESSION_REMOTE,
             .endpoint   = values[0],
-            .executable = values[1],
-            .gdb        = values[2]
+            .executable = effective.executable,
+            .gdb        = effective.gdb
         };
     }
 
@@ -7786,8 +7999,8 @@ static bool start_session(App_t *app)
                 ? TB_SESSION_EXTENDED_REMOTE
                 : TB_SESSION_REMOTE,
             .endpoint   = app->server_plan->endpoint,
-            .executable = app->profile->executable,
-            .gdb        = app->profile->gdb,
+            .executable = effective.executable,
+            .gdb        = effective.gdb,
             .openocd    = app->server_plan
         };
     }
@@ -7797,7 +8010,7 @@ static bool start_session(App_t *app)
         return false;
     }
 
-    *app->session_profile = *app->profile;
+    *app->session_profile = effective;
     if (!*app->session_profile->gdb)
         (void)snprintf(app->session_profile->gdb, sizeof(app->session_profile->gdb), "gdb");
 
@@ -8231,7 +8444,7 @@ static void activate(App_t *app, Control_t control)
             app->theme_draft = app->preferences.palette;
             page(app, THEMES);
         } else if (control.value == 1 || control.value == 2) {
-            theme_cycle(app, control.value == 1, 1);
+            theme_list_open(app, control.value);
         } else if (control.value == 3) {
             apply_theme(app, app->theme_draft);
             page(app, THEME_PREVIEW);
@@ -8259,7 +8472,19 @@ static void activate(App_t *app, Control_t control)
             break;
         }
 
-        tb_openocd_catalog(app->catalog, &app->profile->search);
+        TbProfileWords_t search = app->profile->search;
+        char             error[160];
+        bool             valid = true;
+        for (size_t i = 0; i < search.count && valid; ++i) {
+            valid = tb_path_expand(search.values[i], sizeof(search.values[i]),
+                                   app->profile->search.values[i], error, sizeof(error));
+        }
+        if (!valid) {
+            status(app, error);
+            break;
+        }
+
+        tb_openocd_catalog(app->catalog, &search);
         app->script_kind    = control.value;
         app->script_offset  = app->script_selected = 0;
         app->script_refocus = true;
@@ -8315,6 +8540,8 @@ static void activate(App_t *app, Control_t control)
         request_leave(app, false);
         break;
     case SUBMIT:
+        if (!app->demo_mode && !prepare_paths(app))
+            break;
         if (!app->demo_mode && app->session == 1 && !prepare_server(app))
             break;
         app->review_offset = 0;
@@ -8579,6 +8806,8 @@ static void activate(App_t *app, Control_t control)
         break;
     case KEY_SCROLLBAR:
     case SCRIPT_SCROLLBAR:
+    case THEME_PICK:
+    case THEME_SCROLLBAR:
         break;
     case SCROLLBAR:
     case HSCROLLBAR:
@@ -9967,8 +10196,62 @@ static void scroll_body(App_t *app, Control_t control, int amount)
 
 static void mouse_event(App_t *app, MEVENT event)
 {
-    if (event.x < 0 || event.x >= COLS || event.y < 0 || event.y >= LINES)
+    if (COLS < 80 || LINES < 20 || event.x < 0 || event.x >= COLS || event.y < 0 || event.y >= LINES)
         return;
+
+    if (app->theme_menu) {
+        size_t     choices[64];
+        int        count   = theme_choices(app, choices);
+        int        visible = app->theme_list_rect.h - 4;
+        TbScroll_t bar     = axis_scroll(count, visible, app->theme_offset);
+        if (event.bstate & (BUTTON4_PRESSED | BUTTON5_PRESSED)) {
+            app->theme_offset = axis_scroll(count, visible, app->theme_offset +
+                                 (event.bstate & BUTTON4_PRESSED ? -3 : 3)).offset;
+            return;
+        }
+
+        for (int i = 0; i < app->count; ++i) {
+            Control_t item = app->controls[i];
+            if (item.kind == THEME_SCROLLBAR &&
+                (app->theme_drag_grab >= 0 || tb_rect_contains(item.rect, event.x, event.y))) {
+                int position = event.y - item.rect.y;
+                if (app->theme_drag_grab >= 0) {
+                    int travel = bar.visible - bar.thumb_size;
+                    int next   = position - app->theme_drag_grab;
+                    if (next < 0)
+                        next = 0;
+                    if (next > travel)
+                        next = travel;
+                    if (travel > 0)
+                        app->theme_offset = next * bar.maximum / travel;
+                    if (event.bstate & BUTTON1_RELEASED)
+                        app->theme_drag_grab = -1;
+                } else if (event.bstate & (BUTTON1_PRESSED | BUTTON1_CLICKED)) {
+                    if (position >= bar.thumb_start && position < bar.thumb_start + bar.thumb_size) {
+                        if (event.bstate & BUTTON1_PRESSED)
+                            app->theme_drag_grab = position - bar.thumb_start;
+                    } else {
+                        app->theme_offset = axis_scroll(count, visible, app->theme_offset +
+                            (position < bar.thumb_start ? -visible : visible)).offset;
+                    }
+                }
+                return;
+            }
+
+            if (item.kind == THEME_PICK && tb_rect_contains(item.rect, event.x, event.y) &&
+                (event.bstate & (BUTTON1_CLICKED | BUTTON1_PRESSED))) {
+                app->theme_selected = item.value;
+                theme_list_close(app, true);
+                return;
+            }
+        }
+
+        if (!tb_rect_contains(app->theme_list_rect, event.x, event.y) &&
+            (event.bstate & (BUTTON1_CLICKED | BUTTON1_PRESSED)))
+            theme_list_close(app, false);
+
+        return;
+    }
 
     if (app->frame_display.active) {
         for (int i = 0; i < TB_MAX_PANES; ++i) {
@@ -9981,7 +10264,7 @@ static void mouse_event(App_t *app, MEVENT event)
 
     app->keyboard_focus = false;
     if (app->page == SCRIPT_LIST && (event.bstate & (BUTTON4_PRESSED | BUTTON5_PRESSED))) {
-        script_move(app, event.bstate & BUTTON4_PRESSED ? -3 : 3);
+        script_scroll(app, app->script_offset + (event.bstate & BUTTON4_PRESSED ? -3 : 3));
         return;
     }
 
@@ -10160,14 +10443,7 @@ static void mouse_event(App_t *app, MEVENT event)
     if (event.bstate & (BUTTON4_PRESSED | BUTTON5_PRESSED)) {
         int direction = event.bstate & BUTTON4_PRESSED ? -1 : 1;
         if (app->page == KEYBINDS && !app->key_confirm && app->key_capture < 0) {
-            int target = app->key_selected + direction * 3;
-            if (target < 0)
-                target = 0;
-
-            if (target >= TB_BIND_COUNT)
-                target = TB_BIND_COUNT - 1;
-
-            keybind_select(app, target);
+            keybind_scroll(app, app->key_scroll + direction * 3);
             return;
         }
 
@@ -10271,12 +10547,6 @@ static void mouse_event(App_t *app, MEVENT event)
         bool text_field =
             control.kind == FIELD && (input_page || !((app->session < 2 && control.value == 0) ||
                                                       (app->session == 1 && control.value == 8)));
-
-        if (app->page == THEMES && control.kind == THEME_ACTION &&
-            (control.value == 1 || control.value == 2) && event.x == control.rect.x + 12) {
-            theme_cycle(app, control.value == 1, -1);
-            return;
-        }
 
         if (control.kind == COMMAND_FIELD) {
             app->demo.pane                    = control.pane;
@@ -10501,12 +10771,49 @@ static void key_event(App_t *app, wint_t key, bool special)
         if (app->page == REGISTER_EDIT)
             app->register_offset = 0;
 
-        app->key_drag_grab    = app->script_drag_grab = -1;
+        app->key_drag_grab    = app->script_drag_grab = app->theme_drag_grab = -1;
         app->drag             = -1;
         app->scroll_drag_pane = -1;
         app->resizing         = false;
 
         (void)clearok(stdscr, TRUE);
+        return;
+    }
+
+    if (COLS < 80 || LINES < 20)
+        return;
+
+    if (app->theme_menu && !(special && key == KEY_MOUSE)) {
+        size_t choices[64];
+        int    count   = theme_choices(app, choices);
+        int    visible = count < LINES - 11 ? count : LINES - 11;
+        if (!special && key == 27) {
+            theme_list_close(app, false);
+        } else if ((!special && (key == '\n' || key == '\r' || key == ' ')) ||
+                   (special && key == KEY_ENTER)) {
+            theme_list_close(app, true);
+        } else if (special && (key == KEY_PPAGE || key == KEY_NPAGE)) {
+            app->theme_offset = axis_scroll(count, visible, app->theme_offset +
+                                (key == KEY_PPAGE ? -visible : visible)).offset;
+        } else {
+            if ((special && key == KEY_UP) || (!special && app->preferences.vim && key == 'k'))
+                --app->theme_selected;
+            else if ((special && key == KEY_DOWN) || (!special && app->preferences.vim && key == 'j'))
+                ++app->theme_selected;
+            else if (special && key == KEY_HOME)
+                app->theme_selected = 0;
+            else if (special && key == KEY_END)
+                app->theme_selected = count - 1;
+
+            if (app->theme_selected < 0)
+                app->theme_selected = 0;
+            if (app->theme_selected >= count)
+                app->theme_selected = count - 1;
+            if (app->theme_selected < app->theme_offset)
+                app->theme_offset = app->theme_selected;
+            if (app->theme_selected >= app->theme_offset + visible)
+                app->theme_offset = app->theme_selected - visible + 1;
+        }
         return;
     }
 
@@ -10605,6 +10912,16 @@ static void key_event(App_t *app, wint_t key, bool special)
         }
     }
 
+    if (special && (key == KEY_PPAGE || key == KEY_NPAGE) &&
+        (app->page == SCRIPT_LIST || (app->page == KEYBINDS && !app->key_confirm))) {
+        int direction = key == KEY_PPAGE ? -1 : 1;
+        if (app->page == SCRIPT_LIST)
+            script_scroll(app, app->script_offset + direction * script_visible());
+        else
+            keybind_scroll(app, app->key_scroll + direction * keybind_rows());
+        return;
+    }
+
     if (app->page == SCRIPT_LIST && control.kind == SCRIPT_PICK &&
         ((special && (key == KEY_UP || key == KEY_DOWN || key == KEY_PPAGE || key == KEY_NPAGE)) ||
          (!special && app->preferences.vim && !app->field_insert && (key == 'j' || key == 'k')))) {
@@ -10613,7 +10930,11 @@ static void key_event(App_t *app, wint_t key, bool special)
             : (key == KEY_PPAGE ? -script_visible() : script_visible())
             : (key == 'k' ? -1 : 1);
 
-        script_move(app, delta);
+        if (special && (key == KEY_PPAGE || key == KEY_NPAGE))
+            script_scroll(app, app->script_offset + delta);
+        else
+            script_move(app, delta);
+
         return;
     }
 
@@ -10715,16 +11036,14 @@ static void key_event(App_t *app, wint_t key, bool special)
                 } else if (key == KEY_END) {
                     target = TB_BIND_COUNT - 1;
                 } else if (key == KEY_PPAGE || key == KEY_NPAGE) {
-                    target = action + (key == KEY_PPAGE ? -keybind_rows() : keybind_rows());
-                    if (target < 0)
-                        target = 0;
-
-                    if (target >= TB_BIND_COUNT)
-                        target = TB_BIND_COUNT - 1;
+                    keybind_scroll(app, app->key_scroll +
+                                   (key == KEY_PPAGE ? -keybind_rows() : keybind_rows()));
+                    return;
                 }
             }
 
-            if (target != action) {
+            if (target != action || (special && (key == KEY_HOME || key == KEY_END ||
+                key == KEY_UP || key == KEY_DOWN || key == KEY_LEFT || key == KEY_RIGHT))) {
                 keybind_select(app, target);
                 return;
             }
@@ -10735,6 +11054,15 @@ static void key_event(App_t *app, wint_t key, bool special)
         (control.value == 1 || control.value == 2) && (key == KEY_LEFT || key == KEY_RIGHT)) {
         theme_cycle(app, control.value == 1, key == KEY_LEFT ? -1 : 1);
         return;
+    }
+
+    if ((!special && (key == '\n' || key == '\r' || key == ' ')) ||
+        (special && key == KEY_ENTER)) {
+        if (app->page == KEYBINDS && control.kind == KEY_ACTION && control.value == 1) {
+            keybind_select(app, control.pane);
+        } else if (app->page == SCRIPT_LIST && control.kind == SCRIPT_PICK) {
+            script_move(app, 0);
+        }
     }
 
     if (!special && key == 27) {
@@ -11288,6 +11616,7 @@ int tb_tui_run(bool demo)
         tb_profiles_destroy(app.profiles);
         free(app.profile);
         free(app.session_profile);
+        free(app.review_paths);
         tb_setup_capture_destroy(app.setup);
         free(app.setup_review);
         free(app.setup_review_connection);

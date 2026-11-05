@@ -310,7 +310,7 @@ int main(int argc, char *argv[])
     /* A ninth-row click must survive resize and drive scrolling past row four. */
     start(&term, argv[1], "xterm-256color", false);
     test_terminal_click(&term, "0800043A");
-    test_terminal_resize(&term, 18, 80);
+    test_terminal_resize(&term, 20, 80);
     test_terminal_expect(&term, "2 Asm");
     test_terminal_click(&term, "Disassembly");
     test_terminal_click(&term, "08000434"); /* Last visible row with the top margin. */
@@ -320,7 +320,7 @@ int main(int argc, char *argv[])
     test_terminal_stop(&term, 0);
 
     start(&term, argv[1], "xterm-256color", false);
-    test_terminal_resize(&term, 18, 80);
+    test_terminal_resize(&term, 20, 80);
     test_terminal_send(&term, "2");
     test_terminal_expect(&term, "0800042A  B5 10");
     test_terminal_click(&term, "0800042A  B5 10");
@@ -337,7 +337,7 @@ int main(int argc, char *argv[])
     puts("PASS disassembly selection: ninth-row click, keyboard and wheel reach all instructions");
 
     start(&term, argv[1], "xterm-256color", false);
-    test_terminal_resize(&term, 18, 80);
+    test_terminal_resize(&term, 20, 80);
     test_terminal_expect(&term, "main.c | Cortex-M4F sample");
     CHECK(test_terminal_find(&term, "...", &x, &y));
     int scrollbar_x = x + 4;

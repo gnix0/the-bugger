@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- Standard POSIX interfaces. */
 #include "model/code.h"
 #include "model/images.h"
+#include "session/host_paths.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -129,15 +130,21 @@ struct tb_code {
     uint64_t           stop;
     char               message[192];
     char               directories[TB_CODE_RULES][TB_CODE_PATH];
+    char               effective_directories[TB_CODE_RULES][TB_CODE_PATH];
+    char               pending_effective_directory[TB_CODE_PATH];
     size_t             directory_count;
     TbSourceRule_t     rules[TB_CODE_RULES];
     TbSourceRule_t     pending_rule;
+    TbSourceRule_t     effective_rules[TB_CODE_RULES];
+    TbSourceRule_t     pending_effective_rule;
     size_t             rule_count;
     char               pending_directory[TB_CODE_PATH];
     char               restore_directories[TB_CODE_RULES][TB_CODE_PATH];
+    char               restore_effective_directories[TB_CODE_RULES][TB_CODE_PATH];
     size_t             restore_dirs;
     size_t             restore_dir;
     TbSourceRule_t     restore_rules[TB_CODE_RULES];
+    TbSourceRule_t     restore_effective_rules[TB_CODE_RULES];
     size_t             restore_count;
     size_t             restore_rule;
     bool               restoring;
@@ -1959,6 +1966,8 @@ void tb_code_pump(TbCode_t *code)
                     memmove(code->directories[i], code->directories[i + 1],
                             (code->directory_count - i - 1) * sizeof(code->directories[0]));
 
+                    memmove(code->effective_directories[i], code->effective_directories[i + 1],
+                            (code->directory_count - i - 1) * sizeof(code->effective_directories[0]));
                     --code->directory_count;
                     break;
                 }
@@ -1971,6 +1980,10 @@ void tb_code_pump(TbCode_t *code)
                 (void)snprintf(code->directories[0], sizeof(code->directories[0]), "%s",
                                code->pending_directory);
 
+                memmove(code->effective_directories[1], code->effective_directories[0],
+                        code->directory_count * sizeof(code->effective_directories[0]));
+                memcpy(code->effective_directories[0], code->pending_effective_directory,
+                       sizeof(code->effective_directories[0]));
                 ++code->directory_count;
             }
         } else if (job == CODE_RULE) {
@@ -1979,13 +1992,17 @@ void tb_code_pump(TbCode_t *code)
                     memmove(&code->rules[i], &code->rules[i + 1],
                             (code->rule_count - i - 1) * sizeof(code->rules[0]));
 
+                    memmove(&code->effective_rules[i], &code->effective_rules[i + 1],
+                            (code->rule_count - i - 1) * sizeof(code->effective_rules[0]));
                     --code->rule_count;
                     break;
                 }
             }
 
-            if (code->rule_count < TB_CODE_RULES)
+            if (code->rule_count < TB_CODE_RULES) {
+                code->effective_rules[code->rule_count] = code->pending_effective_rule;
                 code->rules[code->rule_count++] = code->pending_rule;
+            }
         } else if (job == CODE_CLEAR_RULES) {
             code->rule_count = 0;
 
@@ -2010,16 +2027,24 @@ void tb_code_pump(TbCode_t *code)
 
         if (code->restore_dir < code->restore_dirs) {
             size_t index = (code->restore_dirs - 1) - (code->restore_dir++);
-            if (!tb_code_add_directory(code, code->restore_directories[index]))
+            if (!tb_code_add_directory(code, code->restore_effective_directories[index])) {
                 code->restoring = false;
+            } else {
+                memcpy(code->pending_directory, code->restore_directories[index],
+                       sizeof(code->pending_directory));
+            }
 
             return;
         }
 
         if (code->restore_rule < code->restore_count) {
-            const TbSourceRule_t *rule = &code->restore_rules[code->restore_rule++];
-            if (!tb_code_add_rule(code, rule->from, rule->to))
+            size_t                index = code->restore_rule++;
+            const TbSourceRule_t *rule  = &code->restore_effective_rules[index];
+            if (!tb_code_add_rule(code, rule->from, rule->to)) {
                 code->restoring = false;
+            } else {
+                code->pending_rule = code->restore_rules[index];
+            }
 
             return;
         }
@@ -2874,14 +2899,28 @@ bool tb_code_add_directory(TbCode_t *code, const char *path)
         return false;
     }
 
+    char effective[TB_CODE_PATH];
+    char error[160];
+    if (!tb_path_expand(effective, sizeof(effective), path, error, sizeof(error))) {
+        message(code, error);
+        return false;
+    }
+
+    if (!path_valid(effective)) {
+        message(code, "Expanded source directory contains unsupported line breaks.");
+        return false;
+    }
+
     struct stat info;
-    if (stat(path, &info) != 0 || !S_ISDIR(info.st_mode)) {
+    /* Relative entries, . and GDB tokens retain GDB's resolution semantics. */
+    if (effective[0] == '/' && (stat(effective, &info) != 0 || !S_ISDIR(info.st_mode))) {
         message(code, "Source directory does not exist or is inaccessible.");
         return false;
     }
 
     (void)snprintf(code->pending_directory, sizeof(code->pending_directory), "%s", path);
-    const char *const args[] = {path};
+    memcpy(code->pending_effective_directory, effective, strlen(effective) + 1);
+    const char *const args[] = {effective};
 
     return request(code, CODE_DIRECTORY, "-environment-directory", args, 1, TB_GDB_SESSION);
 }
@@ -2910,6 +2949,35 @@ bool tb_code_restore_settings(TbCode_t *code, const char *const dirs[], size_t c
         if (!path_valid(rules[i].from) || !path_valid(rules[i].to))
             return false;
     }
+
+    char           expanded_directories[TB_CODE_RULES][TB_CODE_PATH];
+    TbSourceRule_t expanded_rules[TB_CODE_RULES];
+    char           error[160];
+    for (size_t i = 0; i < count; ++i) {
+        if (!tb_path_expand(expanded_directories[i], TB_CODE_PATH, dirs[i], error, sizeof(error))) {
+            message(code, error);
+            return false;
+        }
+        if (!path_valid(expanded_directories[i])) {
+            message(code, "Expanded source directory contains unsupported line breaks.");
+            return false;
+        }
+    }
+
+    for (size_t i = 0; i < rule_count; ++i) {
+        expanded_rules[i] = rules[i];
+        if (!tb_path_expand(expanded_rules[i].to, TB_CODE_PATH, rules[i].to, error, sizeof(error))) {
+            message(code, error);
+            return false;
+        }
+        if (!path_valid(expanded_rules[i].to)) {
+            message(code, "Expanded source mapping contains unsupported line breaks.");
+            return false;
+        }
+    }
+
+    memcpy(code->restore_effective_directories, expanded_directories, count * TB_CODE_PATH);
+    memcpy(code->restore_effective_rules, expanded_rules, rule_count * sizeof(*expanded_rules));
 
     for (size_t i = 0; i < count; ++i)
         (void)snprintf(code->restore_directories[i], TB_CODE_PATH, "%s", dirs[i]);
@@ -2967,15 +3035,31 @@ bool tb_code_add_rule(TbCode_t *code, const char *from, const char *to)
         return false;
     }
 
+    char effective[TB_CODE_PATH];
+    char error[160];
+    if (!tb_path_expand(effective, sizeof(effective), to, error, sizeof(error))) {
+        message(code, error);
+        return false;
+    }
+
+    if (!path_valid(effective)) {
+        message(code, "Expanded source mapping contains unsupported line breaks.");
+        return false;
+    }
+
     char quoted_from[TB_CODE_PATH * 2 + 3], quoted_to[TB_CODE_PATH * 2 + 3], command[TB_CODE_PATH * 4 + 32];
 
-    if (!cli_quote(quoted_from, sizeof(quoted_from), from) || !cli_quote(quoted_to, sizeof(quoted_to), to))
+    if (!cli_quote(quoted_from, sizeof(quoted_from), from) ||
+        !cli_quote(quoted_to, sizeof(quoted_to), effective)) {
         return false;
+    }
 
     (void)snprintf(command, sizeof(command), "set substitute-path %s %s", quoted_from, quoted_to);
     (void)snprintf(code->pending_rule.from, sizeof(code->pending_rule.from), "%s", from);
     (void)snprintf(code->pending_rule.to, sizeof(code->pending_rule.to), "%s", to);
 
+    code->pending_effective_rule = code->pending_rule;
+    memcpy(code->pending_effective_rule.to, effective, strlen(effective) + 1);
     const char *const args[] = {"console", command};
 
     return request(code, CODE_RULE, "-interpreter-exec", args, 2, TB_GDB_SESSION);
@@ -3017,4 +3101,16 @@ size_t tb_code_rule_count(const TbCode_t *code)
 const TbSourceRule_t *tb_code_rule(const TbCode_t *code, size_t index)
 {
     return index < code->rule_count ? &code->rules[index] : NULL;
+}
+
+
+const char *tb_code_effective_directory(const TbCode_t *code, size_t index)
+{
+    return index < code->directory_count ? code->effective_directories[index] : "";
+}
+
+
+const TbSourceRule_t *tb_code_effective_rule(const TbCode_t *code, size_t index)
+{
+    return index < code->rule_count ? &code->effective_rules[index] : NULL;
 }

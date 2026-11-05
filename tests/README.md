@@ -235,7 +235,7 @@ records remain in the [validation records](../docs/validation.md).
   confirmation, tabs/view selection, compact/tiny resize, direct/256-color and
   monochrome rendering, and normal/SIGINT/SIGTERM/SIGHUP terminal restoration.
   Launcher regressions check both-axis centering at 140x44 and 200x60, whole-row
-  description clicks, suffix-free version and all three choices at 48x18.
+  description clicks, suffix-free version and all three choices at 80x20.
 - `test-workspace`: real PTY mouse press/move/release, global column/row and
   internal dividers, nested seventh/eighth views, tab/split closing, compact
   pane access, keyboard resizing and monochrome keyboard-only splitting.

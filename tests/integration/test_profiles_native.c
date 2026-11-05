@@ -30,6 +30,50 @@ static void stopped(TbNative *n, uint64_t after)
     }
     fprintf(stderr, "Profile stop/source failed: %s / %s\n", tb_native_message(n), v->source_error); CHECK(false);
 }
+static void console_done(TbNative *n, const char *command, unsigned serial)
+{
+    uint64_t end = tb_gdb_now_ms() + 5000;
+    while (!tb_native_console(n, command) && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
+    CHECK(tb_gdb_now_ms() < end);
+    char marker[80], echo[96]; (void)snprintf(marker, sizeof marker, "[gdb] SOURCE-PATH-%u", serial); (void)snprintf(echo, sizeof echo, "echo SOURCE-PATH-%u", serial);
+    while (!tb_native_console(n, echo) && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
+    bool found = false;
+    while (!found && tb_gdb_now_ms() < end) {
+        tb_native_pump(n, 5);
+        for (size_t i = 0; i < tb_native_log_count(n); ++i) { found = found || strstr(tb_native_log_line(n, i), marker) != NULL; }
+    }
+    CHECK(found);
+    for (int i = 0; i < 10; ++i) { tb_native_pump(n, 5); }
+}
+static void source_paths(TbNative *n, const char *source)
+{
+    char cwd[4096], command[4128]; CHECK(getcwd(cwd, sizeof cwd));
+    console_done(n, "cd /tmp", 1);
+    TbCode_t *code = tb_native_code(n);
+    const char *entries[] = {".", "$cwd", "$cdir", "../tb-gdb-relative-not-present"};
+    for (size_t i = 0; i < sizeof entries / sizeof *entries; ++i) {
+        uint64_t end = tb_gdb_now_ms() + 5000;
+        while (!tb_code_add_directory(code, entries[i]) && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
+        CHECK(tb_gdb_now_ms() < end);
+        while (tb_code_settings_busy(code) && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
+        CHECK(!tb_code_settings_busy(code) && !strcmp(tb_code_directory(code, 0), entries[i]));
+    }
+    console_done(n, "cd /", 2); console_done(n, "show directories", 3);
+    bool resolved = false;
+    for (size_t i = 0; i < tb_native_log_count(n); ++i) {
+        const char *line = tb_native_log_line(n, i);
+        resolved = resolved || (strstr(line, "Source directories searched:") && strstr(line, "$cwd") && strstr(line, "$cdir") && strstr(line, "/tmp/../tb-gdb-relative-not-present") && strstr(line, ":/tmp"));
+    }
+    CHECK(resolved);
+    (void)snprintf(command, sizeof command, "cd %s", cwd); console_done(n, command, 4);
+    char *home = getenv("HOME") ? strdup(getenv("HOME")) : NULL; CHECK(setenv("HOME", source, 1) == 0);
+    uint64_t end = tb_gdb_now_ms() + 5000;
+    while (!tb_code_add_directory(code, "~") && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
+    CHECK(tb_gdb_now_ms() < end);
+    while (tb_code_settings_busy(code) && tb_gdb_now_ms() < end) { tb_native_pump(n, 5); }
+    CHECK(!tb_code_settings_busy(code) && !strcmp(tb_code_directory(code, 0), "~") && !strcmp(tb_code_effective_directory(code, 0), source));
+    if (home) { CHECK(setenv("HOME", home, 1) == 0); free(home); } else { CHECK(unsetenv("HOME") == 0); }
+}
 int main(int argc, char **argv)
 {
     CHECK(argc == 3); CHECK(atexit(cleanup) == 0);
@@ -58,6 +102,7 @@ int main(int argc, char **argv)
     CHECK(interlocked);
     CHECK(tb_native_state(n) == TB_NATIVE_READY && !tb_code_restoring(code));
     CHECK(tb_code_directory_count(code) == 1 && tb_code_rule_count(code) == 1);
+    source_paths(n, argv[2]);
     CHECK(tb_native_console(n, "start")); stopped(n, 0); breaks_ready(n);
     const TbCodeView_t *view = tb_code_view(code, 0); CHECK(strstr(view->path, argv[2]));
     const TbCodeFile_t *left = NULL;

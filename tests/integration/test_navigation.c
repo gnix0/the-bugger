@@ -170,7 +170,7 @@ static void fullscreen_focus(void)
     keys("\033[1;5B", "\012"); content_selected("Source | fullscreen");
     keys("\033OB", "j"); both("\033");
     test_terminal_expect(&motions, "Source | fullscreen"); selected("Quit");
-    test_terminal_resize(&arrows, 18, 48); test_terminal_resize(&motions, 18, 48); same();
+    test_terminal_resize(&arrows, 20, 80); test_terminal_resize(&motions, 20, 80); same();
     selected("Quit");
     test_terminal_resize(&arrows, 54, 166); test_terminal_resize(&motions, 54, 166); same();
     selected("Quit");
@@ -219,7 +219,7 @@ int main(int argc, char **argv)
     keys("\033OB", "j"); keys("\033OA", "k"); both("\r");
     click("Reset"); test_terminal_expect(&motions, "Reset simulated execution?");
     keys("\033OC", "l"); keys("\033OD", "h"); both("\033");
-    test_terminal_resize(&arrows, 18, 48); test_terminal_resize(&motions, 18, 48); same();
+    test_terminal_resize(&arrows, 20, 80); test_terminal_resize(&motions, 20, 80); same();
     keys("\033OB", "j"); keys("\033OA", "k");
     for (int i = 0; i < 3; ++i) {
         test_terminal_lower(&arrows, i, false); test_terminal_lower(&motions, i, false);

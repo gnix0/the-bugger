@@ -69,8 +69,10 @@ int main(int argc, char **argv)
     preview(); colors();
     test_terminal_click(&term, "[ Back ]");
     /* A different light palette must update both channels through tmux too. */
-    for (int i = 0; i < 3; ++i) { test_terminal_click(&term, "Theme       <"); }
-    test_terminal_click(&term, "Variant     <"); test_terminal_click(&term, "Variant     <");
+    test_terminal_click(&term, "Theme       <"); test_terminal_expect(&term, "Choose theme");
+    test_terminal_click(&term, "Rose Pine");
+    test_terminal_click(&term, "Variant     <"); test_terminal_expect(&term, "Choose variant");
+    test_terminal_click(&term, "dawn");
     test_terminal_click(&term, "[ Preview ]"); test_terminal_expect(&term, "Rose Pine / dawn"); settle();
     CHECK(rgb(0xf8f0e7, true) && rgb(0xfaf4ed, true) && rgb(0x464261, false));
     test_terminal_stop(&term, 0); active = false;

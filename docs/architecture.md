@@ -201,7 +201,9 @@ existing 8-color/monochrome fallbacks. If quantization merges a foreground with
 its background, the text color supplies a contrasting fallback.
 
 `app.c` owns Config, Themes and theme-preview page state. A draft palette is
-separate from the saved choice. Changing a family chooses a valid variant;
+separate from the saved choice. Theme/variant rows offer modal choice lists and
+direct Left/Right cycling. List scrolling preserves selection; cancellation keeps
+the draft. Changing a family chooses a valid variant;
 preview reinitializes curses pairs and requests a full repaint. Preview renders
 an independent `TbDemo_t`/`TbLayout_t`, never the live session or inspection models.
 Back restores the saved palette; Save returns to Config only after persistence
@@ -416,6 +418,17 @@ or keyboard capabilities. Keyboard resize mode
 selects the same dividers and uses the same constrained coordinate updates.
 Physical mouse appearance/usability requires manual validation, even
 when the PTY and real tmux forwarding tests pass.
+
+Host path expansion is shared by session startup, OpenOCD planning, source
+settings and log export. Only leading current-user home shorthand is expanded;
+relative paths, bare tool names and GDB source tokens retain their existing
+resolution rules. Profiles keep raw fields. Review snapshots hold effective
+connection paths, frontend working directory and the existing ELF metadata stamp;
+startup rechecks these before spawning. Queued source restoration captures
+effective command paths separately from its raw display/profile values. Saved
+setup snapshots use paths actually applied, rather than expanding them again
+under a potentially different HOME. This does not change the profile schema.
+
 
 ## Owned MI parser
 

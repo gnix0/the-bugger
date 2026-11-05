@@ -54,6 +54,8 @@ typedef struct tb_profiles TbProfiles_t;
 
 void tb_profile_defaults(TbProfile_t *profile, int kind);
 bool tb_profile_valid(const TbProfile_t *profile);
+/* Effective active host paths; publish only on success and leave raw fields intact. */
+bool tb_profile_paths(const TbProfile_t *raw, TbProfile_t *effective, char *error, size_t error_size);
 
 #define TB_PROFILE_MODE      UINT32_C(1)
 #define TB_PROFILE_TOOLS     UINT32_C(2)
