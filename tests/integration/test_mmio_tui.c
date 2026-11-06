@@ -73,7 +73,7 @@ int main(int argc, char **argv)
     test_terminal_expect(&t, "LIVE REMOTE"); test_terminal_expect(&t, "LIVE | Stopped");
     test_terminal_lower(&t, 0, true);
     test_terminal_click(&t, "Options"); test_terminal_expect(&t, "Memory inspection options");
-    test_terminal_click(&t, "Temporary ranges"); test_terminal_click(&t, "[ Add ]");
+    test_terminal_menu_click(&t, "Memory inspection options", "Temporary ranges"); test_terminal_click(&t, "[ Add ]");
     test_terminal_click(&t, "End (excluded)"); test_terminal_send(&t, "\0250x40020020\r");
     test_terminal_click(&t, "Begin:"); test_terminal_send(&t, "\0250x40020010\r");
     test_terminal_click(&t, "Policy: ordinary"); test_terminal_expect(&t, "Policy: MMIO");
@@ -99,7 +99,7 @@ int main(int argc, char **argv)
     test_terminal_send(&t, "echo harmless\r");
     /* Open Memory Options by minimizing Console again, removing ambiguity. */
     test_terminal_lower(&t, 2, false); test_terminal_click(&t, "Options");
-    test_terminal_click(&t, "Temporary ranges"); test_terminal_click(&t, "1: 0x40020010");
+    test_terminal_menu_click(&t, "Memory inspection options", "Temporary ranges"); test_terminal_click(&t, "1: 0x40020010");
     test_terminal_expect(&t, "NOT AUTHORIZED"); test_terminal_expect(&t, "Setup: NOT CONFIRMED");
     test_terminal_send(&t, "\021"); test_terminal_click(&t, "Close session"); test_terminal_stop(&t, 0);
     CHECK(rmdir(root) == 0);

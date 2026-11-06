@@ -47,11 +47,12 @@ static void click(TestTerminal *t, const char *label)
 static void back(TestTerminal *t) { test_terminal_send(t, "\033"); settle_ui(t); }
 static void option(TestTerminal *t, const char *label)
 {
-    for (int page = 0; page < 8; ++page) {
-        if (test_terminal_find(t, label, NULL, NULL)) { click(t, label); return; }
-        click(t, "Next");
+    if (!test_terminal_find(t, "Stack options", NULL, NULL)) {
+        click(t, "Options");
+        test_terminal_expect(t, "Stack options");
     }
-    test_terminal_expect(t, label);
+    test_terminal_menu_click(t, "Stack options", label);
+    settle_ui(t);
 }
 int main(int argc, char **argv)
 {
@@ -101,8 +102,9 @@ int main(int argc, char **argv)
     click(&t, "object (query address)"); test_terminal_expect(&t, "may-call-functions is ON");
     int review_y, back_y;
     CHECK(test_terminal_find(&t, "Review session-wide no-call change", NULL, &review_y));
-    CHECK(test_terminal_find(&t, "[ Back ]", NULL, &back_y));
-    CHECK(back_y >= review_y + 2); /* A blank row separates the action and navigation. */
+    int menu_y;
+    CHECK(test_terminal_find(&t, "Stack options", NULL, &menu_y));
+    CHECK(review_y == menu_y + 1); /* The pending safety review stays immediately visible. */
     click(&t, "Review session-wide no-call change"); test_terminal_expect(&t, "Disable inferior calls session-wide?");
     int explanation_y, confirm_y;
     CHECK(test_terminal_find(&t, "The variable-address query is blocked", NULL, &explanation_y));

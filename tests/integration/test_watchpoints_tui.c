@@ -75,6 +75,17 @@ static void pane_click(const char *label, int column)
 }
 static void menu_click(const char *label)
 {
+    if (test_terminal_find(&term, "Breakpoint / data-watchpoint management", NULL, NULL)) {
+        test_terminal_menu_click(&term, "Breakpoint / data-watchpoint management", label); settle(); return;
+    }
+
+    if (test_terminal_find(&term, "Locals / Watches inspection", NULL, NULL)) {
+        test_terminal_menu_click(&term, "Locals / Watches inspection", label); settle(); return;
+    }
+    if (test_terminal_find(&term, "Memory inspection options", NULL, NULL)) {
+        test_terminal_menu_click(&term, "Memory inspection options", label); settle(); return;
+    }
+
     test_terminal_click(&term, label); settle();
 }
 int main(int argc, char **argv)

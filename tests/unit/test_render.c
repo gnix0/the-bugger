@@ -10,8 +10,87 @@
 
 static int pair_at(int y, int x)
 {
-    return PAIR_NUMBER(mvinch(y, x));
+    cchar_t cell;
+    wchar_t glyph[CCHARW_MAX]; attr_t attrs; short pair;
+    CHECK(mvin_wch(y, x, &cell) == OK);
+    CHECK(getcchar(&cell, glyph, &attrs, &pair, NULL) == OK);
+    return pair;
 }
+
+static void pane_frames(void)
+{
+    TbLayout_t layout;
+    tb_layout_init(&layout); layout.overlays = true;
+    layout.lower_height[0] = 12; layout.lower_height[1] = 9; layout.lower_height[2] = 7;
+    for (int mask = 0; mask < 8; ++mask) {
+        for (int i = 0; i < 3; ++i) { layout.lower_open[i] = (mask & (1 << i)) != 0; }
+        CHECK(tb_layout_arrange(&layout, (TbRect_t){1, 4, 138, 38}, 0));
+        TbRect_t frames[TB_MAX_PANES + 3];
+        memcpy(frames, layout.panes, sizeof layout.panes);
+        size_t count = TB_MAX_PANES;
+        for (int i = 0; i < 3; ++i) {
+            if (!layout.lower_open[i]) { frames[count++] = layout.lower_bars[i]; }
+        }
+        tb_fill((TbRect_t){0, 0, 140, 44}, TB_WORKSPACE);
+        for (size_t i = 0; i < count; ++i) {
+            if (frames[i].w) { tb_text(frames[i].y, frames[i].x, 1, TB_YELLOW, 0, "X"); }
+        }
+        tb_pane_frames(frames, count, (TbRect_t){0});
+        chtype before[44][140];
+        for (int y = 0; y < 44; ++y) {
+            for (int x = 0; x < 140; ++x) { before[y][x] = mvinch(y, x); }
+        }
+        for (size_t i = 0; i < count; ++i) {
+            TbRect_t r = frames[i];
+            if (!r.w) { continue; }
+            CHECK((mvinch(r.y, r.x) & A_CHARTEXT) == 'X');
+            for (int x = r.x; x < r.x + r.w; ++x) {
+                CHECK((mvinch(r.y - 1, x) & A_CHARTEXT) == (ACS_HLINE & A_CHARTEXT));
+                CHECK((mvinch(r.y + r.h, x) & A_CHARTEXT) == (ACS_HLINE & A_CHARTEXT));
+            }
+        }
+        for (int i = 0; i < 2; ++i) {
+            int x = layout.panes[i].x + layout.panes[i].w;
+            for (int y = 4; y < 42; ++y) {
+                chtype cell = mvinch(y, x) & A_CHARTEXT;
+                CHECK(cell == (ACS_VLINE & A_CHARTEXT) || cell == (ACS_LTEE & A_CHARTEXT) ||
+                      cell == (ACS_RTEE & A_CHARTEXT) || cell == (ACS_PLUS & A_CHARTEXT));
+            }
+        }
+        for (size_t i = 0; i < count / 2; ++i) {
+            TbRect_t r = frames[i]; frames[i] = frames[count - i - 1]; frames[count - i - 1] = r;
+        }
+        tb_pane_frames(frames, count, (TbRect_t){0});
+        for (int y = 0; y < 44; ++y) {
+            for (int x = 0; x < 140; ++x) { CHECK(before[y][x] == mvinch(y, x)); }
+        }
+    }
+}
+
+static void source_slices(void)
+{
+    const char *const samples[] = {
+        "volatile int value = 123; // return 456", "#define VALUE 123", "return function(123);",
+        "const char *value = \"string with return 123\";"
+    };
+    for (int selected = 0; selected < 2; ++selected) {
+        for (size_t i = 0; i < sizeof samples / sizeof samples[0]; ++i) {
+            size_t length = strlen(samples[i]);
+            tb_fill((TbRect_t){0, 0, 140, 2}, TB_PANEL);
+            tb_render_source_text(0, 0, 100, samples[i], selected);
+            chtype reference[100];
+            for (size_t j = 0; j < length; ++j) { reference[j] = mvinch(0, (int)j); }
+            for (size_t offset = 0; offset < length; ++offset) {
+                tb_fill((TbRect_t){0, 1, 100, 1}, TB_PANEL);
+                tb_render_source_slice(1, 0, 17, samples[i], (int)offset, selected);
+                for (size_t j = 0; j < 17 && j + offset < length; ++j) {
+                    CHECK(mvinch(1, (int)j) == reference[offset + j]);
+                }
+            }
+        }
+    }
+}
+
 
 static void text_bounds(void)
 {
@@ -96,7 +175,18 @@ int main(void)
     CHECK(resizeterm(44, 140) == OK);
     CHECK(strcmp(tb_theme_palette(tb_theme_current())->variant, "macchiato") == 0);
     CHECK(strcmp(tb_theme_init(), "truecolor") == 0);
+    TbRect_t bounds = {1, 1, 138, 41};
+    TbRect_t down = tb_dropdown_rect((TbRect_t){10, 3, 12, 1}, bounds, 30, 17);
+    CHECK(down.x == 10 && down.y == 4 && down.w == 30 && down.h == 10);
+    TbRect_t up = tb_dropdown_rect((TbRect_t){130, 39, 8, 1}, bounds, 30, 17);
+    CHECK(up.x == 109 && up.y == 29 && up.h == 10);
+    TbRect_t short_list = tb_dropdown_rect((TbRect_t){2, 8, 8, 1}, (TbRect_t){1, 1, 78, 14}, 100, 17);
+    CHECK(short_list.x == 1 && short_list.w == 78 && short_list.y >= 1 && short_list.y + short_list.h <= 15);
+    CHECK(short_list.h < 10 && short_list.h >= 3);
+    CHECK(tb_dropdown_rect((TbRect_t){0}, (TbRect_t){0}, 30, 5).h == 0);
     text_bounds();
+    source_slices();
+    pane_frames();
     int default_fg, default_bg;
     CHECK(extended_pair_content(TB_PANEL, &default_fg, &default_bg) == OK);
     CHECK(default_fg == 0xcad3f5 && default_bg == 0x24273a);
@@ -216,8 +306,11 @@ int main(void)
     tb_fill(horizontal_bar, TB_PANEL);
     tb_render_scrollbar(horizontal_bar, bar, true);
     for (int col = 0; col < 10; ++col) {
-        CHECK(pair_at(30, 60 + col) == (col >= 4 && col < 6 ? TB_SCROLL_THUMB : TB_SCROLL_TRACK));
-        CHECK((mvinch(30, 60 + col) & A_CHARTEXT) == ' ');
+        CHECK(pair_at(30, 60 + col) == (col >= 4 && col < 6 ? TB_SCROLL_H_THUMB : TB_SCROLL_H_TRACK));
+        cchar_t block; wchar_t glyph[CCHARW_MAX]; attr_t block_attrs; short block_pair;
+        CHECK(mvin_wch(30, 60 + col, &block) == OK);
+        CHECK(getcchar(&block, glyph, &block_attrs, &block_pair, NULL) == OK);
+        CHECK(glyph[0] == L'\u2584');
     }
     TbRect_t vertical_bar = {72, 25, 1, 10};
     tb_render_scrollbar(vertical_bar, bar, false);
@@ -230,8 +323,13 @@ int main(void)
     CHECK(pair_at(30, 64) == TB_PANEL);
     bar.maximum = 1; bar.visible = 1; bar.thumb_start = 0; bar.thumb_size = 1;
     tb_render_scrollbar((TbRect_t){75, 30, 1, 1}, bar, true);
-    CHECK(pair_at(30, 75) == TB_SCROLL_THUMB);
+    CHECK(pair_at(30, 75) == TB_SCROLL_H_THUMB);
     tb_render_scrollbar((TbRect_t){-1, 30, 1, 1}, bar, true);
+    CHECK(setlocale(LC_CTYPE, "C") != NULL);
+    tb_render_scrollbar((TbRect_t){75, 30, 1, 1}, bar, true);
+    CHECK(pair_at(30, 75) == TB_SCROLL_THUMB);
+    CHECK((mvinch(30, 75) & A_CHARTEXT) == ' ');
+    CHECK(setlocale(LC_CTYPE, "C.UTF-8") != NULL);
     CHECK(setenv("NO_COLOR", "1", 1) == 0);
     CHECK(strcmp(tb_theme_init(), "monochrome") == 0);
     CHECK(!tb_theme_has_color());
@@ -261,6 +359,9 @@ int main(void)
                 CHECK(extended_pair_content(TB_SCROLL_TRACK, &track_fg, &track_bg) == OK);
                 CHECK(extended_pair_content(TB_SCROLL_THUMB, &thumb_fg, &thumb_bg) == OK);
                 CHECK(track_bg != thumb_bg);
+                CHECK(extended_pair_content(TB_SCROLL_H_TRACK, &track_fg, &track_bg) == OK);
+                CHECK(extended_pair_content(TB_SCROLL_H_THUMB, &thumb_fg, &thumb_bg) == OK);
+                CHECK(track_fg != thumb_fg && track_bg == thumb_bg);
                 for (int pair_id = 1; pair_id < 2 * TB_COLOR_COUNT; ++pair_id) {
                     if (pair_id == TB_COLOR_COUNT) { continue; }
                     CHECK(extended_pair_content(pair_id, &fg, &bg) == OK);

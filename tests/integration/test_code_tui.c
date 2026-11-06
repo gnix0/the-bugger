@@ -88,7 +88,11 @@ static void mouse_at(TestTerminal *term, int button, int x, int y, bool release)
 
 static void horizontal_drag(TestTerminal *term, const char *footer, int right, bool to_end)
 {
-    int x, y; CHECK(test_terminal_find(term, footer, &x, &y)); --y;
+    int x, y; CHECK(test_terminal_find(term, footer, &x, &y)); y -= 2;
+    for (int column = x; column < right; ++column) {
+        CHECK(!test_terminal_scroll_cell(term, y + 1, column, true));
+        CHECK(!test_terminal_scroll_cell(term, y + 1, column, false));
+    }
     int first = -1, last = -1, thumb = -1;
     for (int column = x; column < right; ++column) {
         bool thumb_cell = test_terminal_scroll_cell(term, y, column, true);
@@ -108,7 +112,7 @@ static void scrolling(TestTerminal *term)
 {
     unsigned long long pc = assembly_pc(term); CHECK(pc);
     /* Keep this short source fixture taller than the primary viewport. */
-    test_terminal_resize(term, 28, 140);
+    test_terminal_resize(term, 29, 140);
     test_terminal_expect(term, "LIVE | C/C++ | code.c");
     int menu_x, menu_y; CHECK(test_terminal_find(term, "...", &menu_x, &menu_y));
     CHECK(test_terminal_scroll_cell(term, menu_y + 2, menu_x + 4, true) || test_terminal_scroll_cell(term, menu_y + 2, menu_x + 4, false));
@@ -121,7 +125,7 @@ static void scrolling(TestTerminal *term)
     horizontal_drag(term, "Actions", 46, false);
     CHECK(source_pc_line(term) > 0);
     int track_x, track_y; CHECK(test_terminal_find(term, "Actions", &track_x, &track_y));
-    --track_y; track_x = 45;
+    track_y -= 2; track_x = 45;
     while (track_x > 10 && !test_terminal_scroll_cell(term, track_y, track_x, false)) { --track_x; }
     CHECK(track_x > 10);
     mouse_at(term, 0, track_x, track_y, false);
@@ -384,8 +388,20 @@ int main(int argc, char *argv[])
     test_terminal_click(&term, "Stopped"); source_pc(&term, "code_counter += 2");
     actions(&term, false); test_terminal_click(&term, "Go to address / symbol"); input(&term, "code_callee");
     test_terminal_expect(&term, "Instruction window loaded");
-    actions(&term, false); test_terminal_click(&term, "Toggle mixed source/assembly");
+    test_terminal_click(&term, "Mixed");
     test_terminal_expect(&term, "mixed: browsing | code.c");
+    int mixed_x, mixed_y, registers_x;
+    CHECK(test_terminal_find(&term, "Disassembly", &mixed_x, &mixed_y));
+    CHECK(test_terminal_find(&term, "Registers", &registers_x, NULL));
+    bool source_text = false;
+    for (int row = mixed_y + 2; row < term.rows - 4; ++row) {
+        char rendered[TEST_COLS + 1] = {0};
+        size_t width = (size_t)(registers_x - mixed_x - 2);
+        memcpy(rendered, term.cells[row] + mixed_x, width);
+        CHECK(!strstr(rendered, "/home/") && !strstr(rendered, "code.c:L"));
+        if (strstr(rendered, "code_local")) { source_text = true; }
+    }
+    CHECK(source_text);
     actions(&term, true); test_terminal_click(&term, "Source lookup settings");
     test_terminal_expect(&term, "Directories: newest first"); test_terminal_click(&term, "Add directory"); input(&term, "/tmp");
     test_terminal_expect(&term, "GDB source settings applied");

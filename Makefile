@@ -50,7 +50,7 @@ $(BUILD_DIR)/test-cli: $(BUILD_DIR)/tests/integration/test_cli.o
 $(BUILD_DIR)/test-tui: $(BUILD_DIR)/tests/integration/test_tui.o $(BUILD_DIR)/tests/support/terminal.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
-$(BUILD_DIR)/test-render: $(BUILD_DIR)/tests/unit/test_render.o $(BUILD_DIR)/src/tui/render.o $(BUILD_DIR)/src/tui/theme.o $(BUILD_DIR)/src/tui/demo.o
+$(BUILD_DIR)/test-render: $(BUILD_DIR)/tests/unit/test_render.o $(BUILD_DIR)/src/tui/render.o $(BUILD_DIR)/src/tui/theme.o $(BUILD_DIR)/src/tui/demo.o $(BUILD_DIR)/src/layout/layout.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(NCURSES_LIBS) $(ELF_LIBS) -lm $(LDLIBS)
 
 $(BUILD_DIR)/test-layout: $(BUILD_DIR)/tests/unit/test_layout.o $(BUILD_DIR)/src/layout/layout.o
@@ -881,3 +881,18 @@ test-native: test-register-edit-tui
 test-tmux: test-register-edit-tmux
 
 -include $(BUILD_DIR)/tests/integration/test_register_edit_tui.d
+
+$(BUILD_DIR)/test-popups-tui: $(BUILD_DIR)/tests/integration/test_popups_tui.o $(BUILD_DIR)/tests/support/terminal.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-popups test-popups-tmux
+test-popups: all $(BUILD_DIR)/test-popups-tui $(BUILD_DIR)/code-fixture
+	$(BUILD_DIR)/test-popups-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/code-fixture)
+
+test-popups-tmux: all $(BUILD_DIR)/test-popups-tui $(BUILD_DIR)/code-fixture
+	TB_POPUPS_TMUX=1 $(BUILD_DIR)/test-popups-tui $(abspath $(BINARY)) $(abspath $(BUILD_DIR)/code-fixture)
+
+test-native: test-popups
+test-tmux: test-popups-tmux
+
+-include $(BUILD_DIR)/tests/integration/test_popups_tui.d

@@ -59,8 +59,8 @@ typedef struct {
     int            minimum_columns[3];
     int            minimum_rows[2];
     bool           tiled;
-    /* Lower roots retain their split trees while hidden or over the primary
-     * roots. Preferred heights survive temporary terminal-size clamping. */
+    /* Lower roots share their columns with the primary roots. Preferred heights
+     * and split trees survive minimization and temporary terminal clamping. */
     bool     overlays;
     bool     lower_open[3];
     int      lower_height[3];

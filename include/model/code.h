@@ -146,6 +146,8 @@ bool tb_code_mixed_line(const TbCode_t *code, int view, const TbInstruction_t *i
 int tb_code_find(const TbCode_t *code, int view, const char *needle, int after);
 bool tb_code_address(TbCode_t *code, int view, const char *address_or_symbol);
 bool tb_code_assembly_page(TbCode_t *code, int view, int direction);
+/* Extend the current viewport without replacing it with a contained cached window. */
+bool tb_code_assembly_scroll(TbCode_t *code, int view, int direction);
 void tb_code_mixed(TbCode_t *code, int view, bool mixed);
 void tb_code_return(TbCode_t *code, int view); /* Follow selected stopped context. */
 bool tb_code_stopped(TbCode_t *code); /* Inspect original stopped thread/frame zero. */

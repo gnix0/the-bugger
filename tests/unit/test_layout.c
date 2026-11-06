@@ -76,7 +76,7 @@ static uint32_t random_value(uint32_t *state)
     return *state;
 }
 
-static void overlays(void)
+static void independent_columns(void)
 {
     TbLayout_t layout;
     tb_layout_init(&layout); layout.overlays = true;
@@ -85,43 +85,82 @@ static void overlays(void)
     TbRect_t upper[3]; memcpy(upper, layout.panes, sizeof upper);
     for (int i = 0; i < 3; ++i) {
         CHECK(layout.panes[i + 3].h == 0 && !layout.lower_open[i]);
-        CHECK(layout.lower_bars[i].y == area.y + area.h - 1);
+        CHECK(layout.panes[i].h == area.h - 2);
     }
-    layout.lower_open[0] = layout.lower_open[1] = true;
-    layout.lower_height[0] = 12; layout.lower_height[1] = 9;
+    layout.lower_open[1] = true; layout.lower_height[1] = 9;
+    CHECK(tb_layout_arrange(&layout, area, 4));
+    CHECK(memcmp(&upper[0], &layout.panes[0], sizeof upper[0]) == 0);
+    CHECK(memcmp(&upper[2], &layout.panes[2], sizeof upper[2]) == 0);
+    CHECK(layout.panes[4].h == 9);
+    CHECK(layout.panes[1].y + layout.panes[1].h + 1 == layout.panes[4].y);
+    layout.lower_open[0] = layout.lower_open[2] = true;
+    layout.lower_height[0] = 12; layout.lower_height[2] = 7;
     CHECK(tb_layout_arrange(&layout, area, 3));
-    CHECK(memcmp(upper, layout.panes, sizeof upper) == 0);
-    CHECK(layout.panes[3].h == 13 && layout.panes[4].h == 10);
+    CHECK(layout.panes[3].h == 12 && layout.panes[4].h == 9 && layout.panes[5].h == 7);
+    TbRect_t other[2] = {layout.panes[1], layout.panes[4]};
     int divider = tb_layout_divider_at(&layout, layout.panes[3].x, layout.panes[3].y - 1);
     CHECK(divider >= 0 && layout.dividers[divider].node == -4);
     CHECK(tb_layout_move_divider(&layout, divider, layout.panes[3].y - 4));
     CHECK(tb_layout_arrange(&layout, area, 3));
-    CHECK(layout.panes[3].h == 16 && layout.panes[4].h == 10);
-    CHECK(memcmp(upper, layout.panes, sizeof upper) == 0);
-    CHECK(tb_layout_pane_at(&layout, layout.panes[3].x, layout.panes[3].y) == 3);
-    CHECK(tb_layout_pane_at(&layout, upper[0].x, upper[0].y) == 0);
+    CHECK(layout.panes[3].h == 15);
+    CHECK(memcmp(&other[0], &layout.panes[1], sizeof other[0]) == 0);
+    CHECK(memcmp(&other[1], &layout.panes[4], sizeof other[1]) == 0);
     int child = tb_layout_split(&layout, 3, TB_SPLIT_BELOW);
     CHECK(child >= 6 && tb_layout_root(&layout, child) == 3);
-    CHECK(layout.panes[3].h >= 7 && layout.panes[child].h >= 7);
     int preferred = layout.lower_height[0];
-    CHECK(!tb_layout_arrange(&layout, (TbRect_t){1, 4, 70, 12}, child));
-    CHECK(layout.lower_height[0] == preferred && layout.panes[child].h >= 7);
-    CHECK(layout.lower_order[2] == 0);
-    CHECK(tb_layout_pane_at(&layout, layout.panes[child].x, layout.panes[child].y) == child);
-    CHECK(!tb_layout_arrange(&layout, (TbRect_t){1, 4, 70, 12}, 4));
-    CHECK(layout.lower_order[2] == 1);
-    CHECK(tb_layout_pane_at(&layout, layout.panes[4].x, layout.panes[4].y) == 4);
+    for (int height = 9; height <= 50; ++height) {
+        for (int width = 78; width <= 178; width += 10) {
+            for (int focus = 0; focus < 6; ++focus) {
+                (void)tb_layout_arrange(&layout, (TbRect_t){1, 4, width, height}, focus);
+                CHECK(layout.lower_height[0] == preferred);
+                for (int i = 0; i < TB_MAX_PANES; ++i) {
+                    TbRect_t r = layout.panes[i];
+                    if (!r.w) { continue; }
+                    CHECK(r.w >= 20 && r.h >= 7);
+                    CHECK(r.x >= 1 && r.y >= 4 && r.x + r.w <= width + 1 && r.y + r.h <= height + 4);
+                    CHECK(tb_layout_pane_at(&layout, r.x, r.y) == i);
+                    for (int j = 0; j < i; ++j) {
+                        TbRect_t q = layout.panes[j];
+                        CHECK(!q.w || r.x >= q.x + q.w || q.x >= r.x + r.w ||
+                              r.y >= q.y + q.h || q.y >= r.y + r.h);
+                    }
+                }
+            }
+        }
+    }
     CHECK(tb_layout_arrange(&layout, area, child));
-    CHECK(layout.lower_height[0] == preferred && layout.panes[child].h >= 7 && layout.panes[3].h >= 7);
+    CHECK(layout.panes[3].h >= 7 && layout.panes[child].h >= 7);
     layout.lower_open[0] = false;
     CHECK(tb_layout_arrange(&layout, area, 0));
     CHECK(layout.panes[3].h == 0 && layout.panes[child].h == 0);
-    CHECK(memcmp(upper, layout.panes, sizeof upper) == 0);
+    CHECK(memcmp(&upper[0], &layout.panes[0], sizeof upper[0]) == 0);
+    /* Extreme divider requests leave both trees usable and preserve their IDs. */
+    divider = tb_layout_divider_at(&layout, layout.panes[4].x, layout.panes[4].y - 1);
+    CHECK(tb_layout_move_divider(&layout, divider, -999));
+    CHECK(tb_layout_arrange(&layout, area, 4));
+    CHECK(layout.panes[1].h == 7);
+    CHECK(tb_layout_move_divider(&layout, tb_layout_divider_at(&layout, layout.panes[4].x, layout.panes[4].y - 1), 999));
+    CHECK(tb_layout_arrange(&layout, area, 4));
+    CHECK(layout.panes[4].h == 7);
+    /* Reopening a retained wider lower tree must not steal another column's width. */
+    tb_layout_init(&layout); layout.overlays = true; layout.lower_open[0] = true;
+    CHECK(tb_layout_arrange(&layout, area, 3));
+    child = tb_layout_split(&layout, 3, TB_SPLIT_RIGHT); CHECK(child >= 6);
+    layout.lower_open[0] = false;
+    CHECK(tb_layout_arrange(&layout, area, 0));
+    divider = tb_layout_divider_at(&layout, layout.panes[0].x + layout.panes[0].w, area.y);
+    CHECK(tb_layout_move_divider(&layout, divider, area.x + 30));
+    CHECK(tb_layout_arrange(&layout, area, 0));
+    int widths[3]; memcpy(widths, layout.widths, sizeof widths);
+    layout.lower_open[0] = true;
+    CHECK(tb_layout_arrange(&layout, area, child));
+    CHECK(memcmp(widths, layout.widths, sizeof widths) == 0);
+    CHECK(tb_layout_has_pane(&layout, 3) && layout.panes[child].w == widths[0]);
 }
 
 int main(void)
 {
-    overlays();
+    independent_columns();
     TbLayout_t layout;
     tb_layout_init(&layout);
     CHECK(tb_layout_arrange(&layout, (TbRect_t){1, 4, 138, 38}, 0));

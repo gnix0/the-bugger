@@ -29,6 +29,21 @@ unchanged. In particular, GDB resolves `.` when adding it, while `$cwd` follows
 later GDB working-directory changes. Absolute and expanded-home source directories
 are checked locally before submission.
 
+## Workspace menus
+
+Pane **Actions**, **Options** and **...** selectors open bounded dropdowns next
+to their controls. They open upward when space below is limited, without moving
+or expanding panes. Use arrows, Page Up/Down, Home/End, wheel or scrollbar; Enter
+selects and Escape dismisses. Clicking outside a dropdown closes it without
+activating the control underneath.
+
+Actions needing input or review open centered dialogs over the workspace.
+Cancel/Escape return focus to the invoking control; outside clicks leave the
+dialog open. Immediate actions and toggles close the menu. Execution shortcuts
+such as Continue/Pause remain available in contextual lists, and debugger events
+continue to update the underlying session. Connection/profile configuration and
+board, target and adapter selection retain their dedicated workflows.
+
 ## Native Linux sessions
 
 Choose **Linux application**, configure **Launch** or **Attach**, then choose
@@ -76,9 +91,10 @@ another terminal and enter its printed PID. That option changes only the
 fixture's per-process tracing permission. An attached process retains its
 original stdout/stderr destination.
 
-**Session** and **Quit** ask before closing an active native session. A launched
+**Close Session** and **Quit** ask before closing an active native session. A launched
 program is terminated; an attached process is detached and resumed. Cancel keeps
-the session. Outside text fields, `q` closes/backs out of the current screen;
+the session. Close Session returns to the launcher; Quit exits the application.
+Outside text fields, `q` closes/backs out of the current screen;
 from the workspace it closes the session after confirmation and returns to the
 launcher. At the launcher `q` stays open. `Ctrl+Q` quits the application from any
 screen, with confirmation for an active session. Text fields accept `q` normally;
@@ -353,12 +369,16 @@ closing the view selector preserves the listing and viewport. Addresses, bytes,
 mnemonics and operands use aligned columns, with full lines available through
 horizontal scrolling.
 Source, Disassembly and Registers occupy the workspace above the lower dock.
-Expanded lower groups cover their lower portions without changing that geometry.
+Each expanded lower group shares its column with the primary pane; other columns
+retain their independent sizes.
 Live code, Console, Call Stack and Threads show a horizontal scrollbar only when
 rows exceed the pane width: drag its thumb, click the track to page, or focus the
 body and use Left/Right. Each view retains its own position; Source keeps its line
 numbers fixed. Vertical scrollbars are one terminal cell wide and match the
-horizontal bar's colors: continuous background-filled tracks and distinct thumbs.
+horizontal bar's distinct track and thumb colors. Horizontal bars use lower-half
+blocks in compatible UTF-8 color terminals; other color terminals retain full cells.
+A blank row separates a horizontal bar from the pane buttons. Panning preserves
+text colors and selection highlights.
 Thumbs use a theme-specific interface accent consistently across views; they do
 not indicate the state or meaning of the displayed data.
 Monochrome uses line-drawing tracks and reverse-video thumbs. Each bar
@@ -379,9 +399,16 @@ and can survive eviction of larger listings; historical records never establish
 fresh boundaries. Failure or exhaustion keeps the previous rows and provenance;
 there is no automatic retry. Closing a split clears its Code history before its
 pane slot can be reused.
+The **Mixed** toggle beside Actions enables source/assembly presentation; it is
+not repeated in the Actions menu. Source rows show only code, without repeating
+the path or original line number. The pane header identifies the current file.
+
 Mixed groups use bounded local source annotations across mapped files, loading at
 most one file per view per pump. Blank lines and braces remain verbatim; missing
-or evicted source text shows its location and an unavailable notice.
+or evicted source text shows an unavailable notice. Locations remain attached to
+instructions internally. Toggling cached source rows keeps the same instruction
+listing. Ordinary scrolling stops at the end of known code; use Go to, the explicit
+page controls or Decode bytes for deliberate inspection beyond that boundary.
 See the [code checklist](testing.md#source-and-instruction-stepping)
 for optimized, stripped and relocated-source examples.
 
@@ -665,16 +692,17 @@ Minimal terminals use `*` when a single-cell filled circle is unavailable.
 Wheel or a focused body with
 arrows/PageUp/PageDown scrolls; vertical scrollbar tracks page and thumbs drag.
 Keys `1`–`9` focus retained pane IDs; `[`/`]` cycles panes. There are no layout
-presets, layout selector, floating windows or full Vim editor emulation.
+presets, layout selector, floating debugging panes or full Vim editor emulation.
 
 The Memory/Stack, Locals/Watches and Console/Breakpoints groups start minimized.
-Click a dock title or `^` to restore a group over the primary views; click `_`
-immediately left of `...` to minimize it. Drag its top edge to adjust its height
-independently. Multiple groups can stay open. Where they overlap, the most
-recently focused group is on top; click an exposed header or select its pane to
-bring another forward. Expanded groups have only the top tab/minimize/menu row;
-the duplicate bottom dock is removed, leaving the action buttons at the bottom. Minimize it to access fully covered content. Heights and
-visibility are session-only; resizing the terminal preserves preferred heights.
+Click a dock title or `^` to expand its group below the corresponding primary
+view; click `_` immediately left of `...` to minimize it. Drag the separating
+horizontal grip to adjust that column's split. Memory/Source, Locals/Disassembly
+and Console/Registers resize independently. Both partners remain usable while
+expanded; click either body or use Ctrl+Up/Down to transfer content focus.
+Multiple lower groups can remain open at different heights. Minimizing restores
+height to the primary partner. Heights and visibility are session-only; terminal
+resizing preserves preferred heights and retained view state.
 
 Drag one-cell gutters to resize columns or nested splits. Pane actions
 split right/below, close a tab, close a nested pane or enter keyboard resizing.
@@ -683,9 +711,10 @@ finishes. Closing a nested pane expands its sibling. Each pane retains at least
 one tab; each of the six root tiles retains at least one pane.
 
 The workspace supports up to 32 panes with a minimum tiled size of 20x7 cells per
-pane. Wide terminals show three primary columns; lower groups cover those
-columns when restored. Smaller terminals show a primary pane and restored
-groups across the workspace, with controls to reach every retained pane.
+pane. Wide terminals show three primary columns with independent lower splits.
+Smaller terminals show the selected column's pair when space permits, otherwise
+one retained view. Dock controls, numbered selectors and pane cycling keep the
+other groups accessible. Returning to a larger terminal restores the splits.
 Below 80x20 a mode-neutral resize warning shows the current dimensions and the
 minimum required size, retaining state without pausing or disconnecting the target.
 Tabs, splits and proportions survive
@@ -888,13 +917,13 @@ See the [format](architecture.md#profiles-and-source-restoration) and
 
 ## Saving a setup
 
-In a live session, choose **Setup → Save setup** beside Session/Quit. The asterisk
+In a live session, choose **Setup → Save setup** beside Close Session/Quit. The asterisk
 marks changed persistable definitions. Saving requires an associated saved
 connection profile; the review provides **Save profile** when one is needed.
 It saves pane splits/proportions, tab membership/order/selection, Source context
 role and pinned files, Memory expressions/count/grouping, Watch roots/formats and
 supported frontend-created code-breakpoint definitions. Values, permissions,
-temporary/data breakpoints, fullscreen and lower-overlay state are excluded.
+temporary/data breakpoints, fullscreen and lower-pane expansion state are excluded.
 
 Review shows effective connection differences from the saved profile. **Save
 setup** saves that snapshot separately and never changes the connection profile.

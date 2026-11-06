@@ -98,12 +98,12 @@ int main(int argc, char **argv)
     click("[ Back ]"); CHECK(!test_terminal_find(&terminal, "Save setup*", NULL, NULL)); click("[ Back ]");
     const int widths[] = {80, 123, 124, 160};
     for (size_t i = 0; i < sizeof widths / sizeof widths[0]; ++i) {
-        test_terminal_resize(&terminal, 44, widths[i]); test_terminal_expect(&terminal, "Setup"); test_terminal_expect(&terminal, "Session"); test_terminal_expect(&terminal, "Quit");
+        test_terminal_resize(&terminal, 44, widths[i]); test_terminal_expect(&terminal, "Setup"); test_terminal_expect(&terminal, "Close Session"); test_terminal_expect(&terminal, "Quit");
     }
     test_terminal_resize(&terminal, 55, 200);
     bool wide = false; for (int i = 0; i < 300; ++i) { int x, y; if (test_terminal_find(&terminal, "Setup", &x, &y) && y == 0 && x >= 176) { wide = true; break; } test_terminal_pump(&terminal, 10); }
-    CHECK(wide); click("Session"); click("Close session"); test_terminal_expect(&terminal, "[ Config ]");
-    reopen(); click("[ Back ]"); click("[ Back ]"); click("Session"); click("Close session"); test_terminal_expect(&terminal, "[ Config ]");
+    CHECK(wide); click("Close Session"); click("Close session"); test_terminal_expect(&terminal, "[ Config ]");
+    reopen(); click("[ Back ]"); click("[ Back ]"); click("Close Session"); click("Close session"); test_terminal_expect(&terminal, "[ Config ]");
     test_terminal_send(&terminal, "\021"); test_terminal_stop(&terminal, 0); active = false;
     CHECK(tb_profiles_load(store) && tb_profiles_remove(store, profile.name)); char path[2048]; (void)snprintf(path, sizeof path, "%s", tb_profiles_path(store)); tb_profiles_destroy(store); free(saved);
     CHECK(unlink(path) == 0); (void)snprintf(path, sizeof path, "%s/the-bugger/.lock", settings); CHECK(unlink(path) == 0);

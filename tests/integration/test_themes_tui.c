@@ -361,7 +361,8 @@ int main(int argc, char **argv)
     int source_x, source_y;
     CHECK(test_terminal_find(&term, "Source", &source_x, &source_y));
     CHECK(border_glyph(source_y - 1, source_x - 3, '+', 'l'));
-    CHECK(strncmp(term.cells[source_y - 1] + 1, "Linux application", 17) == 0);
+    CHECK(strncmp(term.cells[source_y - 2] + 1, "Linux application", 17) == 0);
+    CHECK(border_glyph(source_y - 1, source_x - 2, '-', 'q'));
     CHECK(border_glyph(source_y - 1, source_x + 20, '-', 'q'));
     CHECK(border_glyph(source_y + 2, source_x - 3, '|', 'x'));
     click("Symbols"); click("Source");

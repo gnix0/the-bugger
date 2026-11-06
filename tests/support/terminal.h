@@ -22,6 +22,7 @@ typedef struct {
     bool reverse, inverse[TEST_ROWS][TEST_COLS];
     bool underlined, underline[TEST_ROWS][TEST_COLS];
     int background, backgrounds[TEST_ROWS][TEST_COLS];
+    int foreground, foregrounds[TEST_ROWS][TEST_COLS];
     unsigned utf8_value, utf8_remaining;
     char sequence[128];
     size_t sequence_length;
@@ -34,12 +35,16 @@ void test_terminal_start_argv(TestTerminal *term, char *const arguments[], const
 void test_terminal_send(TestTerminal *term, const char *input);
 void test_terminal_pump(TestTerminal *term, int milliseconds);
 bool test_terminal_find(const TestTerminal *term, const char *text, int *x, int *y);
-/* Default Macchiato scrollbar fills, in RGB or indexed terminal output. */
+/* Default Macchiato scrollbar fills/half-block ink, in RGB or indexed output. */
 bool test_terminal_scroll_cell(const TestTerminal *term, int y, int x, bool thumb);
 bool test_terminal_find_scrollbar(const TestTerminal *term, bool thumb, int *x, int *y);
 void test_terminal_expect_scrollbar(TestTerminal *term, bool thumb);
 void test_terminal_expect(TestTerminal *term, const char *text);
 void test_terminal_click(TestTerminal *term, const char *text);
+/* Find only within the bounded popup and scroll its list when necessary. */
+void test_terminal_menu_click(TestTerminal *term, const char *title, const char *label);
+void test_terminal_dialog_click(TestTerminal *term, const char *title, const char *label);
+bool test_terminal_dialog_find(const TestTerminal *term, const char *title, const char *label, int *x, int *y);
 /* Open through a collapsed dock; minimize through the expanded pane header. */
 void test_terminal_lower(TestTerminal *term, int lower, bool open);
 void test_terminal_resize(TestTerminal *term, int rows, int cols);

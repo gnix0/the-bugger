@@ -10,6 +10,8 @@
 
 ### Changed
 
+- The workspace toolbar labels its closing control Close Session and separates
+  Setup, Close Session and Quit with visible gaps.
 - Theme families are listed alphabetically in both dropdowns and cycling.
 - Require an 80×20 terminal and show complete connection-field labels.
 - Theme and variant selectors open compact, anchored dropdowns with bounded
@@ -18,9 +20,26 @@
 - Scrollbars use continuous tracks and family-specific interface accents throughout
   the UI;
   borders and split dividers use ncurses line drawing.
+- Pane Actions and view selectors open contextual dropdowns. Input, review and
+  confirmation dialogs retain the debugging workspace behind them, with focus
+  restored on dismissal and adaptive placement near screen edges.
+- Horizontal scrollbars use half-height blocks in compatible color terminals;
+  vertical bars retain their full-cell appearance.
 - Keybinds and installed-script browsing scroll independently of selection.
 
 ### Fixed
+
+- Horizontal scrollbars leave a blank row before pane buttons; horizontal panning
+  preserves source token colors and visible disassembly address colors.
+- Disassembly scrolling extends cached listings without bouncing between contained
+  windows, preserves mixed-source mappings and stops at established code bounds.
+- Disassembly headers no longer retain fragments of superseded notices, and shorter
+  instruction windows retain column widths.
+- Expanded lower panes share independently resizable column space with their
+  primary partners, preserving access to both panes and their controls.
+- Workspace frames join shared boundaries without depending on paint order.
+- Mixed disassembly rows show source text without repeating paths or line numbers;
+  the Mixed toolbar toggle replaces its duplicate Actions entry.
 
 - Ashen high-contrast frames occupy exterior gutters without reducing pane content
   capacity or causing theme-dependent overflow.

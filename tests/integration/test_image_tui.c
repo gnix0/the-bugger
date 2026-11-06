@@ -62,20 +62,20 @@ int main(int argc, char **argv)
     test_terminal_send(&t, "\t\025"); test_terminal_send(&t, argv[2]);
     test_terminal_click(&t, "Review session"); test_terminal_click(&t, "[ Connect ]");
     test_terminal_expect(&t, "LIVE REMOTE"); test_terminal_expect(&t, "LIVE | Stopped");
-    actions(&t); test_terminal_click(&t, "Review ELF/load address mapping");
+    actions(&t); test_terminal_menu_click(&t, "Code view actions", "Review ELF/load address mapping");
     test_terminal_expect(&t, "Additive load bias"); test_terminal_send(&t, "\r");
     test_terminal_expect(&t, "Current mapping: UNVERIFIED"); test_terminal_expect(&t, "target image.elf");
     test_terminal_resize(&t, 20, 80);
     for (unsigned i = 0; i < 32 && !test_terminal_find(&t, "I confirm the ELF", NULL, NULL); ++i) { test_terminal_click(&t, "Next"); }
     test_terminal_click(&t, "I confirm the ELF"); test_terminal_resize(&t, 50, 180);
     test_terminal_expect(&t, "ELF/load addresses USER-CONFIRMED");
-    actions(&t); test_terminal_click(&t, "Review ELF/load address mapping"); test_terminal_send(&t, "\r");
+    actions(&t); test_terminal_menu_click(&t, "Code view actions", "Review ELF/load address mapping"); test_terminal_send(&t, "\r");
     test_terminal_expect(&t, "Current mapping: USER-CONFIRMED");
     test_terminal_send(&t, "\033"); test_terminal_expect(&t, "Code view actions");
     test_terminal_send(&t, "\033"); test_terminal_lower(&t, 2, true); test_terminal_click(&t, "Command");
     test_terminal_send(&t, "echo changed\r"); test_terminal_expect(&t, "Image mapping UNVERIFIED");
     test_terminal_lower(&t, 2, false); actions(&t);
-    test_terminal_click(&t, "Review ELF/load address mapping"); test_terminal_send(&t, "\r");
+    test_terminal_menu_click(&t, "Code view actions", "Review ELF/load address mapping"); test_terminal_send(&t, "\r");
     test_terminal_expect(&t, "Current mapping: UNVERIFIED");
     test_terminal_send(&t, "\021"); test_terminal_click(&t, "Close session"); test_terminal_stop(&t, 0);
     CHECK(unlink(image) == 0 && rmdir(root) == 0);

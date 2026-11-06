@@ -120,8 +120,8 @@ static void browse(TestTerminal *t)
 }
 static void ranges(TestTerminal *t)
 {
-    test_terminal_click(t, "Temporary ranges"); test_terminal_expect(t, "Temporary Memory ranges");
-    test_terminal_click(t, "Add"); test_terminal_expect(t, "Inspect temporary Memory range");
+    test_terminal_menu_click(t, "Memory inspection options", "Temporary ranges"); test_terminal_expect(t, "Temporary Memory ranges");
+    test_terminal_dialog_click(t, "Temporary Memory ranges", "Add"); test_terminal_expect(t, "Inspect temporary Memory range");
     test_terminal_expect(t, "NOT AUTHORIZED"); test_terminal_expect(t, "Side effects: UNKNOWN");
     test_terminal_click(t, "Side effects"); test_terminal_expect(t, "Known side effects");
     test_terminal_send(t, "owner reviewed RAMx\177\r"); test_terminal_expect(t, "Side effects: owner reviewed RAM");
@@ -143,22 +143,22 @@ static void ranges(TestTerminal *t)
     test_terminal_expect(t, "AUTHORIZED | temporary");
     test_terminal_resize(t, 44, 140);
     test_terminal_click(t, "Back"); test_terminal_click(t, "Back");
-    test_terminal_click(t, "Edit selected row"); test_terminal_expect(t, "Review ordinary RAM edit");
+    test_terminal_menu_click(t, "Memory inspection options", "Edit selected row"); test_terminal_expect(t, "Review ordinary RAM edit");
     test_terminal_send(t, "\02541424344000000000000000000000000\r");
     test_terminal_expect(t, "[ Apply ]"); test_terminal_click(t, "Cancel");
     test_terminal_expect(t, "Memory inspection options");
-    test_terminal_click(t, "Edit selected row"); test_terminal_expect(t, "Review ordinary RAM edit");
+    test_terminal_menu_click(t, "Memory inspection options", "Edit selected row"); test_terminal_expect(t, "Review ordinary RAM edit");
     test_terminal_send(t, "\02541424344000000000000000000000000\r"); test_terminal_expect(t, "[ Apply ]");
     test_terminal_send(t, "\r"); test_terminal_expect(t, "Memory write acknowledged");
     pane_click(t, "Refresh", 0, true); test_terminal_expect(t, "4241 4443");
-    pane_click(t, "Options", 0, true); test_terminal_click(t, "Temporary ranges");
+    pane_click(t, "Options", 0, true); test_terminal_menu_click(t, "Memory inspection options", "Temporary ranges");
     test_terminal_click(t, "1: 0x"); test_terminal_click(t, "Authorize"); test_terminal_click(t, "Authorize without reading");
     test_terminal_click(t, "Back"); test_terminal_click(t, "Back");
-    test_terminal_click(t, "Edit selected row"); test_terminal_expect(t, "Review ordinary RAM edit");
+    test_terminal_menu_click(t, "Memory inspection options", "Edit selected row"); test_terminal_expect(t, "Review ordinary RAM edit");
     test_terminal_send(t, "\02554484520425547474552204d454d4f52\r"); test_terminal_expect(t, "[ Apply ]");
     test_terminal_click(t, "Apply"); test_terminal_expect(t, "Memory write acknowledged");
     pane_click(t, "Refresh", 0, true); test_terminal_expect(t, "4854 2045");
-    pane_click(t, "Options", 0, true); test_terminal_click(t, "Temporary ranges");
+    pane_click(t, "Options", 0, true); test_terminal_menu_click(t, "Memory inspection options", "Temporary ranges");
     test_terminal_click(t, "1: 0x");
     test_terminal_click(t, "Revoke"); test_terminal_expect(t, "NOT AUTHORIZED");
     test_terminal_send(t, "\033"); test_terminal_expect(t, "Temporary Memory ranges");
@@ -183,8 +183,20 @@ int main(int argc, char **argv)
     test_terminal_expect(&t, "THE BUGGER MEMOR"); test_terminal_expect(&t, "Address");
     for (int i = 0; i < 20; ++i) { test_terminal_send(&t, "\033OD"); }
     test_terminal_expect(&t, "54 48 45 20");
+    unsigned long long top_address = first_memory_address(&t);
+    int memory_x, memory_y; CHECK(test_terminal_find(&t, "Memory  Stack", &memory_x, &memory_y));
+    char wheel[64]; (void)snprintf(wheel, sizeof wheel, "\033[<65;%d;%dM", memory_x + 2, memory_y + 5);
+    test_terminal_send(&t, wheel); settle(&t);
+    unsigned long long scrolled_address = first_memory_address(&t);
+    CHECK(scrolled_address > top_address);
     pane_click(&t, "Options", 0, true); test_terminal_expect(&t, "Memory inspection options");
-    test_terminal_click(&t, "Cycle grouping"); test_terminal_expect(&t, "grouping 2B");
+    test_terminal_click(&t, "Cycle grouping");
+    CHECK(!test_terminal_find(&t, "Memory inspection options", NULL, NULL));
+    CHECK(first_memory_address(&t) == scrolled_address);
+    (void)snprintf(wheel, sizeof wheel, "\033[<64;%d;%dM", memory_x + 2, memory_y + 5);
+    test_terminal_send(&t, wheel); settle(&t);
+    CHECK(first_memory_address(&t) == top_address);
+    pane_click(&t, "Options", 0, true); test_terminal_expect(&t, "grouping 2B");
     ranges(&t);
     test_terminal_click(&t, "Byte count"); test_terminal_expect(&t, "Memory byte count");
     test_terminal_send(&t, "\0251025\r"); test_terminal_expect(&t, "Enter a byte count from 1 to 1024.");

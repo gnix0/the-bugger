@@ -27,6 +27,11 @@ the integrated Console.
 and save connection profiles, workspace arrangements and inspection definitions
 for later sessions. Saved setups restore definitions, not sampled values or access permissions.
 
+Each primary column has an independently expandable lower inspector. Expanded
+panes share the column's space, keeping both views and their controls accessible.
+Contextual menus and input dialogs keep the debugging workspace visible while
+you navigate or adjust an inspector. See [workspace menus](docs/usage.md#workspace-menus).
+
 Deliberate stopped-target edits support integer/bool variables, eligible ordinary
 RAM and CPU registers, with Review/Apply and separate explicit verification.
 See [deliberate editing](docs/usage.md#deliberate-editing) for limits.

@@ -15,9 +15,14 @@ covers connection labels, profile context, host paths, independent menu scrollin
 and theme selection. The theme catalog now includes seventeen families and 66
 palettes, with alphabetical dropdown selection and an Ashen high-contrast variant.
 Continuous scrollbars and ncurses line drawing replace graphical character
-approximations.
-Implementation and regression results remain subject to
-maintainer review; this does not open a new feature gate.
+approximations. Contextual workspace menus and centered dialogs now preserve the
+underlying panes, with adaptive placement shared by theme selectors. Horizontal
+scrollbars use half-height blocks on compatible terminals. Independent lower
+panes share column space with their primary partners rather than covering them;
+frame junctions derive from the complete visible geometry.
+The workspace menu, layout, scrolling and toolbar corrections are accepted;
+see the [review closeout](validation.md#workspace-review-closeout--2026-11-06).
+The broader workflow review continues; this does not open a new feature gate.
 
 F03/F04 physical validation across the supported architectures is owner-reported.
 STM32 F05 write/verify/restore results are recorded. ESP32-S3/Xtensa and
