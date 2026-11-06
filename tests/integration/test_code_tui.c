@@ -91,11 +91,11 @@ static void horizontal_drag(TestTerminal *term, const char *footer, int right, b
     int x, y; CHECK(test_terminal_find(term, footer, &x, &y)); --y;
     int first = -1, last = -1, thumb = -1;
     for (int column = x; column < right; ++column) {
-        char cell = term->cells[y][column];
-        if (cell == '=' || cell == '-') {
+        bool thumb_cell = test_terminal_scroll_cell(term, y, column, true);
+        if (thumb_cell || test_terminal_scroll_cell(term, y, column, false)) {
             if (first < 0) { first = column; }
             last = column;
-            if (cell == '=' && thumb < 0) { thumb = column; }
+            if (thumb_cell && thumb < 0) { thumb = column; }
         }
     }
     CHECK(first >= 0 && last - first > 8 && thumb >= 0);
@@ -111,8 +111,8 @@ static void scrolling(TestTerminal *term)
     test_terminal_resize(term, 28, 140);
     test_terminal_expect(term, "LIVE | C/C++ | code.c");
     int menu_x, menu_y; CHECK(test_terminal_find(term, "...", &menu_x, &menu_y));
-    CHECK(term->cells[menu_y + 2][menu_x + 4] == '#' || term->cells[menu_y + 2][menu_x + 4] == '|');
-    CHECK(term->cells[menu_y + 2][menu_x + 3] != term->cells[menu_y + 2][menu_x + 4]);
+    CHECK(test_terminal_scroll_cell(term, menu_y + 2, menu_x + 4, true) || test_terminal_scroll_cell(term, menu_y + 2, menu_x + 4, false));
+    CHECK(term->backgrounds[menu_y + 2][menu_x + 3] != term->backgrounds[menu_y + 2][menu_x + 4]);
     horizontal_drag(term, "Actions", 46, true);
     test_terminal_expect(term, "CODE_FIND_MARKER");
     test_terminal_click(term, "CODE_FIND_MARKER");
@@ -122,7 +122,7 @@ static void scrolling(TestTerminal *term)
     CHECK(source_pc_line(term) > 0);
     int track_x, track_y; CHECK(test_terminal_find(term, "Actions", &track_x, &track_y));
     --track_y; track_x = 45;
-    while (track_x > 10 && term->cells[track_y][track_x] != '-') { --track_x; }
+    while (track_x > 10 && !test_terminal_scroll_cell(term, track_y, track_x, false)) { --track_x; }
     CHECK(track_x > 10);
     mouse_at(term, 0, track_x, track_y, false);
     mouse_at(term, 0, track_x, track_y, true);
@@ -148,8 +148,8 @@ static void scrolling(TestTerminal *term)
     mouse_at(term, 0, x + 30, y + 2, true);
     CHECK(test_terminal_find(term, "...", &x, &y)); int edge = x + 5;
     CHECK(test_terminal_find(term, "Actions", &x, &y));
-    CHECK(!memchr(term->cells[y - 1], '=', (size_t)edge));
-    CHECK(term->cells[y - 2][edge - 1] != '#' && term->cells[y - 2][edge - 1] != '|');
+    for (int col = 0; col < edge; ++col) { CHECK(!test_terminal_scroll_cell(term, y - 1, col, true)); }
+    CHECK(!test_terminal_scroll_cell(term, y - 2, edge - 1, true) && !test_terminal_scroll_cell(term, y - 2, edge - 1, false));
     test_terminal_resize(term, 44, 140);
     test_terminal_expect(term, "LIVE | C/C++ | code.c");
     puts("PASS M07 source/Console horizontal thumb drag, independent offsets, PC preservation and resize overflow visibility");

@@ -80,7 +80,7 @@ int main(int argc, char **argv)
     test_terminal_send(&t, scroll_event); settle_ui(&t);
     const char *menu = strstr(t.cells[stack_y], "..."); CHECK(menu);
     int gutter = (int)(menu - t.cells[stack_y]) + 4, thumb = stack_y + 2;
-    while (thumb < t.rows - 3 && t.cells[thumb][gutter] != '#') { ++thumb; }
+    while (thumb < t.rows - 3 && !test_terminal_scroll_cell(&t, thumb, gutter, true)) { ++thumb; }
     CHECK(thumb < t.rows - 3);
     (void)snprintf(scroll_event, sizeof scroll_event, "\033[<0;%d;%dM", gutter + 1, thumb + 1);
     test_terminal_send(&t, scroll_event); settle_ui(&t);

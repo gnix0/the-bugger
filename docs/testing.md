@@ -253,7 +253,7 @@ Manual review:
 The same PTY checks assert right-aligned help and compact centered session forms.
 `make test-keybinds` checks the short-terminal scrollbar, track paging, thumb drag
 to the final rows and disappearance when all bindings fit. The render unit test
-checks footer backgrounds against the workspace color for all 49 palettes;
+checks footer backgrounds against the workspace color for all 66 palettes;
 existing direct/256/8-color/monochrome and real-tmux checks remain in the baseline.
 The native Console TUI suite also checks centered close-confirmation controls.
 
@@ -370,12 +370,18 @@ make test-m13-tui
 additionally builds its ordinary native fixture but does not start GDB unless
 using the separate native target.
 
-Automated checks cover all 49 palettes and their identifiers, RGB text contrast
+Automated checks cover all 66 palettes and their identifiers, alphabetical family
+order, Ashen high-contrast black surfaces/red borders, RGB text contrast
 of at least 4.5:1 and muted/accent contrast of at least 3:1 against catalog
 surfaces, direct/256/8-color/monochrome pairs, semantic source/register rendering,
-execution-only highlighting and scrollbars. Preference tests cover default,
+execution-only highlighting and background-filled scrollbar tracks/thumbs on
+both axes, including family-specific accents, overflow removal, single-cell
+tracks and monochrome. Source content and geometry are compared across all
+palettes and between both Ashen variants at several terminal sizes.
+Preference tests cover default,
 private atomic persistence, stale writers, invalid schema/variants, mismatched
 families and preservation of invalid files. PTY checks exercise centered Config,
+anchored dropdown placement, upward opening, resize, outside-click dismissal,
 dependent variants, every preview, cancellation without writes, save/restart,
 mouse/keyboard controls and compact 80×20 monochrome rendering. These numerical
 and screen-label checks do not establish physical visual quality or new hardware
@@ -386,9 +392,20 @@ Manual review:
 1. Start `./build/the-bugger` with no existing appearance preference (use a
    temporary `XDG_CONFIG_HOME` to preserve personal settings). Open **Config →
    Themes**: expect centered menus and Catppuccin / macchiato.
-2. Change Theme and Variant with keyboard and mouse. Each family exposes only
-   its listed variants. Preview dark and light choices: sample data is labeled
-   simulated; semantic highlights and text remain legible.
+2. Change Theme and Variant with keyboard and mouse. Families appear A–Z in
+   both the dropdown and Left/Right cycling; each exposes only its listed variants.
+   At 80×20, open the Theme dropdown: it stays attached to the field and shows
+   at most eight choices. Scroll with Page keys, wheel, track clicks and thumb
+   dragging. Resize while open, choose an item and check that the field updates.
+   Select Modus, then open Variant at 80×20: the list opens upward. Escape and
+   clicks outside must close it without saving or activating the control beneath.
+   Preview Ashen / high-contrast: workspace and panel backgrounds are black,
+   with red frames around panels. Check a saved theme in the demo workspace too;
+   tabs and compact/large resizing must still work. Compare with Ashen / default
+   at the same terminal dimensions: content positions, visible lines and overflow
+   must match. Frames occupy the surrounding gutters, without reducing capacity.
+   Preview dark and light choices: sample data is labeled simulated; semantic
+   highlights and text remain legible.
 3. Back out of Preview: the saved colors return and the draft remains in Themes.
    Back to Config, reopen Themes: the unsaved draft is discarded. No preference
    file is created by previewing alone.
@@ -2088,7 +2105,8 @@ For manual host review, use a freshly built binary and its matching fixtures:
    visual row. Check Tab, literal `q` in fields, and Back outside fields.
 5. Open installed OpenOCD scripts. Scroll beyond one screen, resize to 80×20,
    use Filter through Tab/Enter, and return through Back. Check track paging
-   and thumb dragging, then filter to one result: the scrollbar disappears.
+   and thumb dragging: track and thumb form distinct continuous strips, without
+   character gaps. Then filter to one result: the scrollbar disappears.
    Compare the card height with Config → Keybinds at the same terminal size;
    both remain centered when resized or maximized. Repeat through tmux.
    No script executes.

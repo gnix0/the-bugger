@@ -100,7 +100,20 @@ int main(void)
     int default_fg, default_bg;
     CHECK(extended_pair_content(TB_PANEL, &default_fg, &default_bg) == OK);
     CHECK(default_fg == 0xcad3f5 && default_bg == 0x24273a);
-    CHECK(tb_theme_count() == 49 && tb_theme_family_count() == 11);
+    CHECK(tb_theme_count() == 66 && tb_theme_family_count() == 17);
+    const int scrollbar_colors[] = {7, 11, 11, 8, 8, 9, 11, 6, 7, 11, 11, 12, 12, 9, 6, 11, 8};
+    for (size_t family = 0; family < tb_theme_family_count(); ++family) {
+        CHECK(tb_theme_family(family) && tb_theme_name(family));
+        if (family) { CHECK(strcmp(tb_theme_name(family - 1), tb_theme_name(family)) < 0); }
+        size_t variants = 0;
+        for (size_t i = 0; i < tb_theme_count(); ++i) {
+            variants += strcmp(tb_theme_palette(i)->family, tb_theme_family(family)) == 0;
+        }
+        CHECK(variants > 0);
+    }
+    CHECK(tb_theme_palette(tb_theme_find("ashen", "high-contrast"))->colors[0] == 0);
+    CHECK(tb_theme_palette(tb_theme_find("ashen", "high-contrast"))->colors[1] == 0);
+    CHECK(tb_theme_palette(tb_theme_find("ashen", "high-contrast"))->colors[4] == 0xdf6464);
     for (size_t i = 0; i < tb_theme_count(); ++i) {
         const TbPalette_t *palette = tb_theme_palette(i);
         CHECK(tb_theme_find(palette->family, palette->variant) == i);
@@ -109,6 +122,14 @@ int main(void)
             for (int role = 6; role < 13; ++role) { CHECK(contrast(palette->colors[role], palette->colors[surface]) >= 3.0); }
         }
         CHECK(tb_theme_select(i) && strcmp(tb_theme_init(), "truecolor") == 0);
+        CHECK(extended_pair_content(TB_SCROLL_TRACK, &default_fg, &default_bg) == OK);
+        CHECK((unsigned)default_bg == palette->colors[2]);
+        CHECK(extended_pair_content(TB_SCROLL_THUMB, &default_fg, &default_bg) == OK);
+        size_t family = 0;
+        while (family < tb_theme_family_count() && strcmp(palette->family, tb_theme_family(family)) != 0) { ++family; }
+        CHECK(family < sizeof scrollbar_colors / sizeof scrollbar_colors[0]);
+        CHECK((unsigned)default_bg == palette->colors[scrollbar_colors[family]]);
+        CHECK(contrast(palette->colors[scrollbar_colors[family]], palette->colors[2]) >= 3.0);
         for (int role = TB_STATUS_TEXT; role <= TB_INSERT_TEXT; ++role) {
             CHECK(extended_pair_content(role, &default_fg, &default_bg) == OK);
             CHECK((unsigned)default_bg == palette->colors[0]);
@@ -154,8 +175,8 @@ int main(void)
     CHECK(pair_at(7, 3) == (int)tb_selected_style(TB_YELLOW));
     CHECK(pair_at(7, 48) == TB_SELECTED); /* selection stops before the narrow bar */
     CHECK(pair_at(13, 2) == TB_FOOTER);
-    CHECK(pair_at(6, 49) == TB_MUTED); /* one-cell track matches horizontal styling */
-    CHECK(pair_at(11, 49) == TB_CYAN); /* thumb near the end of the source */
+    CHECK(pair_at(6, 49) == TB_SCROLL_TRACK); /* one-cell track matches horizontal styling */
+    CHECK(pair_at(11, 49) == TB_SCROLL_THUMB); /* thumb near the end of the source */
     tb_demo_action(&demo, TB_NEXT);
     tb_fill(rect, TB_PANEL);
     tb_render_demo(&demo, 0, rect);
@@ -171,8 +192,54 @@ int main(void)
     tb_demo_action(&demo, TB_NEXT);
     tb_render_demo(&demo, 2, rect);
     CHECK(pair_at(6, 11) == TB_YELLOW);
+    tb_border((TbRect_t){60, 20, 10, 4}, TB_BORDER, false);
+    CHECK((mvinch(20, 60) & A_CHARTEXT) == (ACS_ULCORNER & A_CHARTEXT));
+    CHECK((mvinch(20, 69) & A_CHARTEXT) == (ACS_URCORNER & A_CHARTEXT));
+    CHECK((mvinch(23, 60) & A_CHARTEXT) == (ACS_LLCORNER & A_CHARTEXT));
+    CHECK((mvinch(23, 69) & A_CHARTEXT) == (ACS_LRCORNER & A_CHARTEXT));
+    for (int x = 61; x < 69; ++x) { CHECK((mvinch(20, x) & A_CHARTEXT) == (ACS_HLINE & A_CHARTEXT)); }
+    for (int y = 21; y < 23; ++y) { CHECK((mvinch(y, 60) & A_CHARTEXT) == (ACS_VLINE & A_CHARTEXT)); }
+    tb_border((TbRect_t){69, 20, 10, 4}, TB_BORDER, false);
+    CHECK((mvinch(20, 69) & A_CHARTEXT) == (ACS_TTEE & A_CHARTEXT));
+    CHECK((mvinch(23, 69) & A_CHARTEXT) == (ACS_BTEE & A_CHARTEXT));
+    tb_border((TbRect_t){60, 23, 10, 4}, TB_BORDER, false);
+    CHECK((mvinch(23, 69) & A_CHARTEXT) == (ACS_PLUS & A_CHARTEXT));
+    tb_text(20, 60, 1, TB_YELLOW, 0, "X");
+    tb_border((TbRect_t){60, 20, 10, 4}, TB_BORDER, true);
+    CHECK((mvinch(20, 60) & A_CHARTEXT) == 'X');
+    CHECK(pair_at(20, 60) == TB_YELLOW);
+    tb_fill((TbRect_t){61, 20, 1, 1}, TB_SURFACE);
+    tb_border((TbRect_t){60, 20, 10, 4}, TB_BORDER, true);
+    CHECK(pair_at(20, 61) == TB_SURFACE); /* Preserve blank control padding too. */
+    TbScroll_t bar = {.total = 100, .visible = 10, .offset = 45, .maximum = 90, .thumb_start = 4, .thumb_size = 2};
+    TbRect_t horizontal_bar = {60, 30, 10, 1};
+    tb_fill(horizontal_bar, TB_PANEL);
+    tb_render_scrollbar(horizontal_bar, bar, true);
+    for (int col = 0; col < 10; ++col) {
+        CHECK(pair_at(30, 60 + col) == (col >= 4 && col < 6 ? TB_SCROLL_THUMB : TB_SCROLL_TRACK));
+        CHECK((mvinch(30, 60 + col) & A_CHARTEXT) == ' ');
+    }
+    TbRect_t vertical_bar = {72, 25, 1, 10};
+    tb_render_scrollbar(vertical_bar, bar, false);
+    for (int row = 0; row < 10; ++row) {
+        CHECK(pair_at(25 + row, 72) == (row >= 4 && row < 6 ? TB_SCROLL_THUMB : TB_SCROLL_TRACK));
+    }
+    bar.maximum = 0;
+    tb_fill(horizontal_bar, TB_PANEL);
+    tb_render_scrollbar(horizontal_bar, bar, true);
+    CHECK(pair_at(30, 64) == TB_PANEL);
+    bar.maximum = 1; bar.visible = 1; bar.thumb_start = 0; bar.thumb_size = 1;
+    tb_render_scrollbar((TbRect_t){75, 30, 1, 1}, bar, true);
+    CHECK(pair_at(30, 75) == TB_SCROLL_THUMB);
+    tb_render_scrollbar((TbRect_t){-1, 30, 1, 1}, bar, true);
     CHECK(setenv("NO_COLOR", "1", 1) == 0);
     CHECK(strcmp(tb_theme_init(), "monochrome") == 0);
+    CHECK(!tb_theme_has_color());
+    bar = (TbScroll_t){.total = 100, .visible = 10, .maximum = 90, .thumb_start = 4, .thumb_size = 2};
+    tb_render_scrollbar(horizontal_bar, bar, true);
+    CHECK((mvinch(30, 64) & A_REVERSE) != 0);
+    CHECK((mvinch(30, 61) & A_REVERSE) == 0);
+
     tb_style(TB_ACTIVE_TAB, A_UNDERLINE);
     attr_t attributes;
     short pair;
@@ -190,6 +257,10 @@ int main(void)
             CHECK(tb_theme_select(i));
             CHECK(strcmp(tb_theme_init(), terminal == 0 ? "256-color" : terminal == 1 ? "8-color" : "monochrome") == 0);
             if (terminal < 2) {
+                int track_fg, track_bg, thumb_fg, thumb_bg;
+                CHECK(extended_pair_content(TB_SCROLL_TRACK, &track_fg, &track_bg) == OK);
+                CHECK(extended_pair_content(TB_SCROLL_THUMB, &thumb_fg, &thumb_bg) == OK);
+                CHECK(track_bg != thumb_bg);
                 for (int pair_id = 1; pair_id < 2 * TB_COLOR_COUNT; ++pair_id) {
                     if (pair_id == TB_COLOR_COUNT) { continue; }
                     CHECK(extended_pair_content(pair_id, &fg, &bg) == OK);
@@ -201,6 +272,6 @@ int main(void)
         }
         (void)endwin(); delscreen(screen); CHECK(fclose(input) == 0 && fclose(output) == 0);
     }
-    puts("PASS cell/control/UTF-8 text bounds, 49 palettes, contrast, direct/256/8-color/monochrome, execution highlight and scrollbar");
+    puts("PASS cell/control/UTF-8 text bounds, 66 palettes, contrast, direct/256/8-color/monochrome, execution highlight and scrollbar");
     return EXIT_SUCCESS;
 }

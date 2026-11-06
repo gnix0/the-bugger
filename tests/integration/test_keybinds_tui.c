@@ -119,14 +119,14 @@ static void clean_key_borders(void)
 static void scrollbar_layout(void)
 {
     resize_keys(20, 160); clean_key_borders();
-    int x, y; CHECK(test_terminal_find(&term, "#", &x, &y));
+    int x, y; CHECK(test_terminal_find_scrollbar(&term, true, &x, &y));
     int top = y, bottom = y;
-    while (top > 0 && strchr("|#", term.cells[top - 1][x])) { --top; }
-    while (bottom + 1 < term.rows && strchr("|#", term.cells[bottom + 1][x])) { ++bottom; }
+    while (top > 0 && (test_terminal_scroll_cell(&term, top - 1, x, false) || test_terminal_scroll_cell(&term, top - 1, x, true))) { --top; }
+    while (bottom + 1 < term.rows && (test_terminal_scroll_cell(&term, bottom + 1, x, false) || test_terminal_scroll_cell(&term, bottom + 1, x, true))) { ++bottom; }
     CHECK(bottom > top && bottom < term.rows - 3);
     mouse_at(x, bottom); test_terminal_expect(&term, "Rows 3-4/15");
     test_terminal_send(&term, "\033OH"); test_terminal_expect(&term, "Rows 1-2/15"); settle();
-    CHECK(test_terminal_find(&term, "#", &x, &y));
+    CHECK(test_terminal_find_scrollbar(&term, true, &x, &y));
     char event[80];
     (void)snprintf(event, sizeof event, "\033[<0;%d;%dM", x + 1, y + 1); test_terminal_send(&term, event); settle();
     (void)snprintf(event, sizeof event, "\033[<32;%d;%dM", x + 1, bottom + 1); test_terminal_send(&term, event); settle();
@@ -142,7 +142,7 @@ static void scrollbar_layout(void)
     test_terminal_send(&term, "\033\033OH"); settle();
     test_terminal_send(&term, "\033[<64;50;10M"); settle(); clean_key_borders();
     test_terminal_send(&term, "\033[<65;50;10M"); settle(); clean_key_borders();
-    resize_keys(90, 160); CHECK(!test_terminal_find(&term, "#", NULL, NULL));
+    resize_keys(90, 160); CHECK(!test_terminal_find_scrollbar(&term, true, NULL, NULL));
     test_terminal_send(&term, "\033OH"); settle();
     resize_keys(60, 140); selected = 0;
 }

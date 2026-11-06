@@ -14,7 +14,7 @@ Native and STM32 F05 results are recorded. ESP32-S3/Xtensa and ESP32-C6/RISC-V
 validation was reported by the maintainer; supporting evidence and limitations
 remain documented below. The [acceptance closeout](#f05-acceptance-closeout--2026-11-04)
 supersedes earlier pending-acceptance statements. Subsequent v0.2.0 menu/path
-corrections remain subject to review and do not extend the physical validation
+corrections and theme additions remain subject to review and do not extend the physical validation
 claims.
 
 Useful starting points:
@@ -4266,3 +4266,136 @@ Those failures are retained in `build/refine-menu-20261105/`,
 These are local Linux results, not a hosted Ubuntu CI result. No physical target
 operations were performed. Maintainer review of the menu and path changes remains
 pending; passing tests do not establish acceptance of this review slice.
+
+## Theme catalog expansion — November 5, 2026
+
+The development catalog adds seventeen palettes across Ashen, Dracula, Kanagawa,
+Moonfly, Nord and One Dark, for 66 palettes across seventeen families. Ashen's
+high-contrast variant follows ashen-hc-theme with black workspace and panel
+backgrounds. All seven Monokai Pro variants were already present and remain
+available. The 49 existing palettes, preference identifiers and Macchiato default
+are unchanged. Family selection lists and Left/Right cycling now use A–Z order.
+
+Upstream revisions, palette source files, licenses and adaptation notes are in
+`THIRD_PARTY_NOTICES`. Nord's colors come directly from the original MIT-licensed
+Nord palette; no implementation from the GPLv2 Neovim port is included.
+
+Focused fortified `test-themes` passed in `build/theme-expansion-focused/`.
+Coverage includes all 66 previews, preference round-trips, family order, Ashen
+high-contrast surfaces, contrast, direct/256/8-color/monochrome rendering,
+keyboard/mouse selection, cancel/save/reload and compact rendering. Static
+analysis also passed. Logs and exit records are under `build/theme-expansion/`.
+
+The fresh fortified host baseline also passed, exit 0:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/theme-expansion-ci-20261105 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+This includes native GDB, direct-terminal/tmux, localhost remote and offline
+OpenOCD checks. The host was Linux x86-64, kernel 7.2.14-arch1-1, GCC 16.2.1,
+GDB 18.1 and tmux 3.8. The command, environment, full log, exit record and frozen
+input hashes are under `build/theme-expansion-ci-20261105/`. `verification.json`
+confirms unchanged tested inputs and preservation of the original 49 palettes.
+These are local results, not a hosted Ubuntu CI result.
+
+These checks do not establish visual acceptance on the maintainer's terminal.
+No physical target operations were performed; theme review remains pending.
+
+### Ashen high-contrast panel frames
+
+High-contrast adds red panel frames using the same ncurses line-drawing
+characters as menu rules, with connected corners. Other themes retain their
+existing presentation. Frames reserve space inside the tile; content, controls
+and scrollbars use that inset. Small tiles omit frames to retain usable content,
+including the preview's additional title row.
+
+The updated focused theme checks passed (`build/ashen-borders/solid-focused-final.log`
+and `.exit`). They check frame edges in Preview and the saved demo workspace,
+tab switching, compact/large resizing and the small-preview boundary. The harness
+accepts its normalized UTF-8 box glyphs or the equivalent DEC ACS bytes.
+
+A focused native PTY probe passed directly and through an isolated tmux server:
+Console input, Continue/Pause, compact/large resizing and owned-session cleanup.
+Its source, configuration and logs are under `build/ashen-borders/`, including
+`live-probe.c`, `live-probe.log` and `live-probe-tmux.log` with exit records.
+An exploratory invocation of the unchanged general native TUI harness with this
+palette stopped at its fixed unframed lower-title column assumption; that log is
+retained as `live-native.log`. No assertions in that harness were changed.
+The initial probe input synchronization and ASCII glyph expectations were also
+corrected; their earlier logs are retained in the same directory.
+
+The baselines under `build/ashen-borders-ci-20261105/` and
+`build/ashen-borders-final-20261105/` were interrupted, exit 130, while the preview
+boundary and solid line drawing were being corrected. They are not passing
+baseline evidence. No physical target operations were performed.
+
+
+### Solid scrollbars and anchored dropdowns
+
+Scrollbar rendering now uses background-filled tracks and proportional thumbs
+throughout workspace views, previews, Keybinds, installed scripts and theme
+selection. Monochrome retains line-drawing tracks and reverse-video thumbs.
+Theme and Variant dropdowns are attached to their fields, show at most eight
+choices and open upward when needed. Existing selection, Preview/Save and
+independent scrolling semantics remain intact.
+
+The complete fresh fortified host baseline passed, exit 0:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/tui-controls-ci-20261105 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+This includes native GDB, direct-terminal and isolated tmux coverage, local
+remote-server sessions and offline OpenOCD checks. The host/toolchain matches the
+theme-expansion run above. The command, environment, full log and exit record are
+in `build/tui-controls-ci-20261105/`; `verification.json` confirms that all 187
+tested inputs remained unchanged during the run. These are local results, not a
+hosted Ubuntu CI result.
+
+Focused checks passed for all 66 previews, ACS edges/corners, both scrollbar
+axes, overflow removal, track paging, thumb dragging, anchored placement,
+current-item highlighting, upward opening, outside-click dismissal and resize.
+Additional PTY probes passed directly and through tmux for dropdown dragging,
+undersize recovery and Preview, plus live native Console input, Continue/Pause,
+Ashen high-contrast resizing and cleanup. Their sources, configuration, logs and
+exit records are under `build/tui-controls/` and `build/ashen-borders/`.
+
+`make analyze` passed, all 85 test sources compiled with fortification, and the
+normal build passed. Documentation checks found no broken relative links or
+heading anchors. Upstream notice checks matched the added license texts and
+confirmed preservation of the original 49 palettes.
+
+Earlier focused failures exposed obsolete glyph assumptions and terminal-harness
+synchronization errors; their logs remain under `build/tui-controls/`. The
+frame-only baseline in `build/ashen-solid-ci-20261105/` was interrupted, exit 130,
+when the rendering review expanded. It is not passing baseline evidence.
+No physical target operations were performed. Visual acceptance remains pending.
+
+
+### Exterior frames and theme-specific scrollbar accents
+
+Ashen high-contrast frames now sit outside the original pane bounds, joining
+shared gutters while preserving occupied controls and status text. Switching
+themes therefore preserves content capacity and overflow thresholds. Scrollbar
+thumbs use family-specific interface accents consistently across views; target
+value and status colors are unchanged.
+
+Regression checks compare Source geometry and visible text across all 66 palettes,
+and compare both Ashen variants at five terminal sizes. Border checks cover shared
+junctions and preservation of control padding. The existing workspace and native
+TUI checks also passed with Ashen high-contrast. Focused logs and exit records are
+under `build/scrollbar-refinement/`; `make analyze` passed, exit 0, with its result
+in `analysis-final.log` and `analysis-final.exit`.
+
+The maintainer completed the fresh fortified host baseline, exit 0:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/scrollbar-final-20261106T100552Z CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+The full log and exit record are in that build directory. This is local host
+evidence, not a hosted CI result. Earlier focused failures and interrupted
+baselines remain recorded under `build/scrollbar-refinement/` and
+`build/scrollbar-refinement-verified-ci-20261105/`; they are not passing evidence.
+No physical target operations were performed. Visual acceptance remains pending.

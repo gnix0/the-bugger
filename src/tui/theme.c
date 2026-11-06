@@ -451,37 +451,202 @@ static const TbPalette_t palettes[] = {
             0xcb4b16, 0xa0821a, 0x6c71c4, 0x37928e
         }
     },
+    {
+        "ashen",
+        "default",
+        false,
+        {
+            0x121212, 0x151515, 0x212121, 0x323232, 0x535353, 0xb4b4b4, 0x949494, 0xdf6464, 0xc4693d,
+            0xd87c4a, 0xe5a72a, 0xb26565, 0x4a8b8b
+        }
+    },
+    {
+        "ashen",
+        "high-contrast",
+        false,
+        {
+            0x000000, 0x000000, 0x212121, 0x323232, 0xdf6464, 0xb4b4b4, 0x949494, 0xdf6464, 0xc4693d,
+            0xd87c4a, 0xe5a72a, 0xb26565, 0x4a8b8b
+        }
+    },
+    {
+        "dracula",
+        "default",
+        false,
+        {
+            0x191a21, 0x282a36, 0x21222c, 0x3e4452, 0x4b5263, 0xf8f8f2, 0x828eb4, 0xff79c6, 0x50fa7b,
+            0xffb86c, 0xf1fa8c, 0xbd93f9, 0x8be9fd
+        }
+    },
+    {
+        "dracula",
+        "soft",
+        false,
+        {
+            0x1c1c1c, 0x292a35, 0x21222c, 0x3e4452, 0x4b5263, 0xf6f6f5, 0x8c8f98, 0xe48cc1, 0x87e58e,
+            0xfdc38e, 0xe8eda2, 0xbaa0e8, 0xa7dfef
+        }
+    },
+    {
+        "kanagawa",
+        "wave",
+        false,
+        {
+            0x16161d, 0x1f1f28, 0x2a2a37, 0x223249, 0x54546d, 0xdcd7ba, 0x7c7a70, 0xd27e99, 0x98bb6c,
+            0xffa066, 0xe6c384, 0x957fb8, 0x7fb4ca
+        }
+    },
+    {
+        "kanagawa",
+        "dragon",
+        false,
+        {
+            0x0d0c0c, 0x181616, 0x282727, 0x223249, 0x625e5a, 0xc5c9c5, 0x747d74, 0xc4746e, 0x87a987,
+            0xb6927b, 0xc4b28a, 0x8992a7, 0x8ea4a2
+        }
+    },
+    {
+        "kanagawa",
+        "lotus",
+        true,
+        {
+            0xd5cea3, 0xf2ecbc, 0xe7dba0, 0xc9cbd1, 0x8a8980, 0x545464, 0x716e61, 0xa45a76, 0x667656,
+            0x9e6426, 0x77713f, 0x624c83, 0x597773
+        }
+    },
+    {
+        "moonfly",
+        "dark",
+        false,
+        {
+            0x080808, 0x121212, 0x1c1c1c, 0x323437, 0x585858, 0xc6c6c6, 0x808080, 0xff5189, 0x8cc85f,
+            0xde935f, 0xe3c78a, 0xae81ff, 0x79dac8
+        }
+    },
+    {
+        "nord",
+        "dark",
+        false,
+        {
+            0x2e3440, 0x2e3440, 0x3b4252, 0x434c5e, 0x4c566a, 0xd8dee9, 0x9199a8, 0xc78891, 0xa3be8c,
+            0xd08770, 0xebcb8b, 0xb48ead, 0x88c0d0
+        }
+    },
+    {
+        "nord",
+        "light",
+        true,
+        {
+            0xd8dee9, 0xeceff4, 0xe5e9f0, 0xd8dee9, 0x4c566a, 0x2e3440, 0x4c566a, 0xbf616a, 0x71836b,
+            0xa67164, 0x897c64, 0x907690, 0x608291
+        }
+    },
+    {
+        "onedark",
+        "dark",
+        false,
+        {
+            0x21252b, 0x282c34, 0x31353f, 0x393f4a, 0x5c6370, 0xabb2bf, 0x848b98, 0xe86671, 0x98c379,
+            0xd19a66, 0xe5c07b, 0xc678dd, 0x56b6c2
+        }
+    },
+    {
+        "onedark",
+        "darker",
+        false,
+        {
+            0x181b20, 0x1f2329, 0x282c34, 0x30363f, 0x535965, 0xa0a8b7, 0x7a818e, 0xe55561, 0x8ebd6b,
+            0xcc9057, 0xe2b86b, 0xbf68d9, 0x48b0bd
+        }
+    },
+    {
+        "onedark",
+        "cool",
+        false,
+        {
+            0x1e242e, 0x242b38, 0x2d3343, 0x343e4f, 0x546178, 0xa5b0c5, 0x7d899f, 0xef5f6b, 0x97ca72,
+            0xd99a5e, 0xebc275, 0xca72e4, 0x4dbdcb
+        }
+    },
+    {
+        "onedark",
+        "deep",
+        false,
+        {
+            0x141b24, 0x1a212e, 0x21283b, 0x283347, 0x455574, 0x93a4c3, 0x6c7d9c, 0xf65866, 0x8bcd5b,
+            0xdd9046, 0xefbd5d, 0xc75ae8, 0x34bfd0
+        }
+    },
+    {
+        "onedark",
+        "warm",
+        false,
+        {
+            0x242628, 0x2c2d30, 0x35373b, 0x3e4045, 0x646568, 0xb1b4b9, 0x8b8d91, 0xe16d77, 0x99bc80,
+            0xc99a6e, 0xdfbe81, 0xc27fd7, 0x5fafb9
+        }
+    },
+    {
+        "onedark",
+        "warmer",
+        false,
+        {
+            0x1b1c1e, 0x232326, 0x2c2d31, 0x35363b, 0x5a5b5e, 0xa7aab0, 0x818387, 0xde5d68, 0x8fb573,
+            0xc49060, 0xdbb671, 0xbb70d2, 0x51a8b3
+        }
+    },
+    {
+        "onedark",
+        "light",
+        true,
+        {
+            0xc9c9c9, 0xfafafa, 0xf0f0f0, 0xe6e6e6, 0xa0a1a7, 0x383a42, 0x6d6f74, 0xb74f47, 0x477b4a,
+            0x906918, 0x956703, 0xa626a4, 0x0a77a7
+        }
+    },
 };
 
 /* Muted/accent colors are blended toward text where needed for legibility. */
 static size_t active_palette = 2; /* Catppuccin Macchiato. */
 
 static const char *const families[] = {
+    "ashen",
     "catppuccin",
+    "dracula",
     "everforest",
-    "tokyonight",
-    "rose-pine",
-    "nightfox",
-    "gruvbox",
-    "monokai-pro",
     "gruber-darker",
-    "zenburn",
+    "gruvbox",
+    "kanagawa",
     "modus",
-    "solarized"
+    "monokai-pro",
+    "moonfly",
+    "nightfox",
+    "nord",
+    "onedark",
+    "rose-pine",
+    "solarized",
+    "tokyonight",
+    "zenburn"
 };
 
 static const char *const names[] = {
+    "Ashen",
     "Catppuccin",
+    "Dracula",
     "Everforest",
-    "Tokyo Night",
-    "Rose Pine",
-    "Nightfox",
-    "Gruvbox Material",
-    "Monokai Pro",
     "Gruber Darker",
-    "Zenburn",
+    "Gruvbox Material",
+    "Kanagawa",
     "Modus",
-    "Solarized"
+    "Monokai Pro",
+    "Moonfly",
+    "Nightfox",
+    "Nord",
+    "One Dark",
+    "Rose Pine",
+    "Solarized",
+    "Tokyo Night",
+    "Zenburn"
 };
 
 size_t tb_theme_count(void)
@@ -574,6 +739,92 @@ static int color_index(unsigned rgb)
 }
 
 
+static TbStyle_e scrollbar_accent(const TbPalette_t *palette)
+{
+    /* Scrollbars are interface chrome; choose an accent independently of value semantics. */
+    static const struct {
+        const char *family;
+        TbStyle_e   accent;
+    } accents[] = {
+        {
+            .family = "ashen",
+            .accent = TB_PINK
+        },
+        {
+            .family = "catppuccin",
+            .accent = TB_PURPLE
+        },
+        {
+            .family = "dracula",
+            .accent = TB_PURPLE
+        },
+        {
+            .family = "everforest",
+            .accent = TB_GREEN
+        },
+        {
+            .family = "gruber-darker",
+            .accent = TB_GREEN
+        },
+        {
+            .family = "gruvbox",
+            .accent = TB_ORANGE
+        },
+        {
+            .family = "kanagawa",
+            .accent = TB_PURPLE
+        },
+        {
+            .family = "modus",
+            .accent = TB_MUTED
+        },
+        {
+            .family = "monokai-pro",
+            .accent = TB_PINK
+        },
+        {
+            .family = "moonfly",
+            .accent = TB_PURPLE
+        },
+        {
+            .family = "nightfox",
+            .accent = TB_PURPLE
+        },
+        {
+            .family = "nord",
+            .accent = TB_CYAN
+        },
+        {
+            .family = "onedark",
+            .accent = TB_CYAN
+        },
+        {
+            .family = "rose-pine",
+            .accent = TB_ORANGE
+        },
+        {
+            .family = "solarized",
+            .accent = TB_MUTED
+        },
+        {
+            .family = "tokyonight",
+            .accent = TB_PURPLE
+        },
+        {
+            .family = "zenburn",
+            .accent = TB_GREEN
+        }
+    };
+
+    for (size_t i = 0; i < sizeof(accents) / sizeof(accents[0]); ++i) {
+        if (strcmp(palette->family, accents[i].family) == 0)
+            return accents[i].accent;
+    }
+
+    return TB_MUTED;
+}
+
+
 const char *tb_theme_init(void)
 {
     theme_color = false;
@@ -582,7 +833,7 @@ const char *tb_theme_init(void)
     const unsigned    *c       = palette->colors;
     const unsigned foreground[TB_COLOR_COUNT] = {
         0, c[5], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], c[5], c[4], c[5], c[6], c[6], c[7],
-        c[6], c[9], c[7], c[12], c[8], c[10], c[10], c[6], c[12], c[8]
+        c[6], c[9], c[7], c[12], c[8], c[10], c[10], c[6], c[12], c[8], c[5], c[0]
     };
     const int fallback[TB_COLOR_COUNT] = {
         0,
@@ -610,13 +861,17 @@ const char *tb_theme_init(void)
         COLOR_YELLOW,
         COLOR_WHITE,
         COLOR_CYAN,
-        COLOR_GREEN
+        COLOR_GREEN,
+        COLOR_BLACK,
+        COLOR_BLACK
     };
 
     if (getenv("NO_COLOR") != NULL || !has_colors() || start_color() == ERR || COLORS < 8 ||
         COLOR_PAIRS < 2 * TB_COLOR_COUNT) {
         return "monochrome";
     }
+    TbStyle_e accent = scrollbar_accent(palette);
+
     for (int pair = 1; pair < 2 * TB_COLOR_COUNT; ++pair) {
         int i = pair % TB_COLOR_COUNT;
         unsigned background = i == TB_SURFACE || i == TB_TAB || i == TB_KEY ? c[2] :
@@ -633,11 +888,21 @@ const char *tb_theme_init(void)
             if (i == TB_NOTICE)
                 background = 0x322b34;
         }
+        if (i == TB_SCROLL_TRACK)
+            background = c[2];
+        if (i == TB_SCROLL_THUMB)
+            background = foreground[accent];
         if (pair >= TB_COLOR_COUNT)
             background = c[3];
 
         int fg = COLORS >= 256 ? color_index(foreground[i]) : fallback[i];
-        int bg = COLORS >= 256 ? color_index(background) : COLOR_BLACK;
+        int bg = COLORS >= 256 ? color_index(background) :
+                 i == TB_SCROLL_TRACK ? COLOR_WHITE :
+                 i == TB_SCROLL_THUMB ? fallback[accent] : COLOR_BLACK;
+        if (i == TB_SCROLL_THUMB && COLORS < 256 && bg == COLOR_WHITE)
+            bg = COLOR_BLACK;
+        if (i == TB_SCROLL_THUMB && COLORS >= 256 && bg == color_index(c[2]))
+            bg = color_index(c[5]);
         /* Quantization can merge subtle borders with a selected surface. */
         if (i != 0 && fg == bg)
             fg = COLORS >= 256 ? color_index(c[5]) : COLOR_WHITE;
@@ -650,9 +915,16 @@ const char *tb_theme_init(void)
 }
 
 
+bool tb_theme_has_color(void)
+{
+    return theme_color;
+}
+
+
 void tb_style(TbStyle_e style, attr_t attributes)
 {
-    if (!theme_color && (style == TB_ACTIVE_TAB || style == TB_SELECTED || style >= TB_COLOR_COUNT))
+    if (!theme_color && (style == TB_ACTIVE_TAB || style == TB_SELECTED ||
+                         style == TB_SCROLL_THUMB || style >= TB_COLOR_COUNT))
         attributes |= A_REVERSE;
 
     /* Pair zero is always valid, including when NO_COLOR is set. */

@@ -70,6 +70,7 @@ int main(int argc, char **argv)
     test_terminal_click(&term, "[ Back ]");
     /* A different light palette must update both channels through tmux too. */
     test_terminal_click(&term, "Theme       <"); test_terminal_expect(&term, "Choose theme");
+    test_terminal_send(&term, "\033OF"); test_terminal_expect(&term, "Rose Pine");
     test_terminal_click(&term, "Rose Pine");
     test_terminal_click(&term, "Variant     <"); test_terminal_expect(&term, "Choose variant");
     test_terminal_click(&term, "dawn");
