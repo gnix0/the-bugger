@@ -1286,14 +1286,23 @@ static int theme_choices(const App_t *app, size_t choices[64])
 {
     int         count  = 0;
     const char *family = tb_theme_palette(app->theme_draft)->family;
+    if (app->theme_menu == 1) {
+        for (size_t f = 0; f < tb_theme_family_count() && count < 64; ++f) {
+            for (size_t i = 0; i < tb_theme_count(); ++i) {
+                if (strcmp(tb_theme_palette(i)->family, tb_theme_family(f)) == 0) {
+                    choices[count++] = i;
+                    break;
+                }
+            }
+        }
+
+        return count;
+    }
+
     for (size_t i = 0; i < tb_theme_count() && count < 64; ++i) {
         const TbPalette_t *palette = tb_theme_palette(i);
-        if (app->theme_menu == 1) {
-            if (i && strcmp(palette->family, tb_theme_palette(i - 1)->family) == 0)
-                continue;
-        } else if (strcmp(palette->family, family) != 0) {
+        if (strcmp(palette->family, family) != 0)
             continue;
-        }
 
         choices[count++] = i;
     }
@@ -1323,6 +1332,47 @@ static void theme_list_close(App_t *app, bool choose)
 }
 
 
+static TbRect_t theme_dropdown_rect(const App_t *app, int count)
+{
+    int    width      = 24;
+    int    form_width = COLS > 80 ? 72 : COLS - 8;
+    int    field_x    = (COLS - form_width) / 2 + 14;
+    int    field_y    = (LINES - 16) / 2 + (app->theme_menu == 1 ? 5 : 7);
+    int    below      = LINES - 2 - field_y - 1;
+    int    above      = field_y - 1;
+    int    rows       = count < 8 ? count : 8;
+    bool   upward     = below < rows + 2 && above >= below;
+    int    available  = (upward ? above : below) - 2;
+    size_t choices[64];
+
+    (void)theme_choices(app, choices);
+    for (int i = 0; i < count; ++i) {
+        size_t      index  = choices[i];
+        const char *label  = app->theme_menu == 1 ? tb_theme_name(theme_family(index))
+                                                 : tb_theme_palette(index)->variant;
+        int         needed = (int)strlen(label) + 4;
+        if (needed > width)
+            width = needed;
+    }
+
+    if (rows > available)
+        rows = available;
+    if (rows < 1)
+        rows = 1;
+    if (width > COLS - 2)
+        width = COLS - 2;
+    if (field_x + width > COLS - 1)
+        field_x = COLS - width - 1;
+
+    return (TbRect_t) {
+        field_x,
+        upward ? field_y - rows - 2 : field_y + 1,
+        width,
+        rows + 2
+    };
+}
+
+
 static void theme_list_open(App_t *app, int menu)
 {
     app->theme_menu      = menu;
@@ -1339,7 +1389,7 @@ static void theme_list_open(App_t *app, int menu)
             app->theme_selected = i;
     }
 
-    int visible = count < LINES - 11 ? count : LINES - 11;
+    int visible = theme_dropdown_rect(app, count).h - 2;
     if (app->theme_selected >= visible)
         app->theme_offset = app->theme_selected - visible + 1;
 }
@@ -1347,40 +1397,47 @@ static void theme_list_open(App_t *app, int menu)
 
 static void draw_theme_list(App_t *app)
 {
-    size_t choices[64];
-    int    count = theme_choices(app, choices);
-    int        visible = count < LINES - 11 ? count : LINES - 11;
-    TbScroll_t bar     = axis_scroll(count, visible, app->theme_offset);
-    TbRect_t   card    = menu_card(48, visible + 4);
+    size_t     choices[64];
+    int        count   = theme_choices(app, choices);
+    TbRect_t   card    = theme_dropdown_rect(app, count);
+    int        visible = card.h - 2;
 
+    /* Geometry changes reveal the retained choice; ordinary scrolling stays independent. */
+    if (card.x != app->theme_list_rect.x || card.y != app->theme_list_rect.y ||
+        card.w != app->theme_list_rect.w || card.h != app->theme_list_rect.h) {
+        if (app->theme_selected < app->theme_offset)
+            app->theme_offset = app->theme_selected;
+        if (app->theme_selected >= app->theme_offset + visible)
+            app->theme_offset = app->theme_selected - visible + 1;
+    }
+
+    TbScroll_t bar = axis_scroll(count, visible, app->theme_offset);
     app->theme_offset    = bar.offset;
     app->theme_list_rect = card;
-    app->count           = 0;
-    app->focus           = app->theme_selected - app->theme_offset;
+    app->count          = 0;
+    app->focus          = app->theme_selected - app->theme_offset;
 
+    tb_fill(card, TB_PANEL);
+    tb_border(card, TB_BORDER, false);
     tb_text(card.y, card.x + 2, card.w - 4, TB_PINK, A_BOLD,
             app->theme_menu == 1 ? "Choose theme" : "Choose variant");
     for (int row = 0; row < visible; ++row) {
         size_t      index = choices[app->theme_offset + row];
         const char *label = app->theme_menu == 1 ? tb_theme_name(theme_family(index))
                                                 : tb_theme_palette(index)->variant;
-        button(app, card.y + 2 + row, card.x + 2, card.w - 5, label,
+        button(app, card.y + 1 + row, card.x + 1, card.w - 3, label,
                THEME_PICK, app->theme_offset + row, 0);
     }
 
     if (bar.maximum > 0) {
-        for (int row = 0; row < visible; ++row) {
-            bool thumb = row >= bar.thumb_start && row < bar.thumb_start + bar.thumb_size;
-            tb_text(card.y + 2 + row, card.x + card.w - 2, 1, thumb ? TB_CYAN : TB_MUTED,
-                    0, thumb ? "#" : "|");
-        }
-
-        (void)add_control(app, (TbRect_t) {
+        TbRect_t track = {
             card.x + card.w - 2,
-            card.y + 2,
+            card.y + 1,
             1,
             visible
-        }, THEME_SCROLLBAR, 0, 0);
+        };
+        tb_render_scrollbar(track, bar, false);
+        (void)add_control(app, track, THEME_SCROLLBAR, 0, 0);
     }
 
     if (app->focus < 0 || app->focus >= visible)
@@ -1414,7 +1471,7 @@ static void draw_config(App_t *app)
                        tb_theme_palette(app->theme_draft)->variant);
         button(app, top + 7, left + 2, width - 4, label, THEME_ACTION, 2, 0);
         tb_text(top + 9, left + 2, width - 4, TB_MUTED, 0,
-                "Enter opens a list; Left/Right cycles. Preview before saving.");
+                "Enter opens a dropdown; Left/Right cycles. Preview before saving.");
         button(app, top + 12, left + 2, 10, "[ Back ]", BACK, 0, 0);
         button(app, top + 12, left + 14, 13, "[ Preview ]", THEME_ACTION, 3, 0);
         button(app, top + 12, left + width - 11, 9, "[ Save ]", THEME_ACTION, 4, 0);
@@ -1686,11 +1743,12 @@ static void draw_keybinds(App_t *app)
 
     if (rows < total) {
         TbScroll_t bar = axis_scroll(total * 3, rows * 3, app->key_scroll * 3);
-        for (int row = 0; row < bar.visible; ++row) {
-            bool thumb = row >= bar.thumb_start && row < bar.thumb_start + bar.thumb_size;
-            tb_text(top + first_row - 1 + row, left + width - 2, 1, thumb ? TB_CYAN : TB_MUTED, 0,
-                    thumb ? "#" : "|");
-        }
+        tb_render_scrollbar((TbRect_t) {
+            left + width - 2,
+            top + first_row - 1,
+            1,
+            bar.visible
+        }, bar, false);
 
         (void)add_control(app, (TbRect_t) {
             left + width - 2,
@@ -1741,6 +1799,23 @@ static void draw_keybinds(App_t *app)
 }
 
 
+static void draw_panel_border(TbRect_t rect)
+{
+    const TbPalette_t *palette = tb_theme_palette(tb_theme_current());
+    if (rect.w < 10 || rect.h < 7 || strcmp(palette->family, "ashen") != 0 ||
+        strcmp(palette->variant, "high-contrast") != 0) {
+        return;
+    }
+
+    /* The frame occupies margins and shared gutters, never the pane's usable rectangle. */
+    --rect.x;
+    --rect.y;
+    rect.w += 2;
+    rect.h += 2;
+    tb_border(rect, TB_BORDER, true);
+}
+
+
 static void draw_theme_preview(App_t *app)
 {
     TbDemo_t   sample;
@@ -1764,6 +1839,8 @@ static void draw_theme_preview(App_t *app)
     for (int i = 0; i < layout.count; ++i) {
         int      pane = layout.order[i];
         TbRect_t rect = layout.panes[pane];
+
+        draw_panel_border(rect);
 
         tb_fill(rect, TB_PANEL);
         tb_text(rect.y, rect.x, rect.w, TB_ACTIVE_TAB, A_BOLD | A_UNDERLINE,
@@ -2413,11 +2490,12 @@ static void draw_scrollbars(App_t *app, int index, TbRect_t rect)
     TbScroll_t    vertical = workspace_scroll(app, pane, rect.h - 3);
 
     if (vertical.maximum > 0) {
-        for (int row = 0; row < vertical.visible; ++row) {
-            bool thumb = row >= vertical.thumb_start && row < vertical.thumb_start + vertical.thumb_size;
-            tb_text(rect.y + body_top(app, index) + row, rect.x + rect.w - 1, 1, thumb ? TB_CYAN : TB_MUTED,
-                    0, thumb ? "#" : "|");
-        }
+        tb_render_scrollbar((TbRect_t) {
+            rect.x + rect.w - 1,
+            rect.y + body_top(app, index),
+            1,
+            vertical.visible
+        }, vertical, false);
 
         (void)add_control(app,
                           (TbRect_t) {
@@ -2434,12 +2512,12 @@ static void draw_scrollbars(App_t *app, int index, TbRect_t rect)
         int x = rect.x + 1 + code_gutter(view);
         int y = rect.y + rect.h - 2 - console_footer_rows(view, rect.h);
 
-        for (int col = 0; col < horizontal.visible; ++col) {
-            bool thumb =
-                col >= horizontal.thumb_start && col < horizontal.thumb_start + horizontal.thumb_size;
-
-            tb_text(y, x + col, 1, thumb ? TB_CYAN : TB_MUTED, 0, thumb ? "=" : "-");
-        }
+        tb_render_scrollbar((TbRect_t) {
+            x,
+            y,
+            horizontal.visible,
+            1
+        }, horizontal, true);
 
         (void)add_control(app, (TbRect_t) {
             x,
@@ -4044,8 +4122,9 @@ static void draw_workspace(App_t *app)
         int root = layer < 3 || !app->layout.overlays ? layer : app->layout.lower_order[layer - 3] + 3;
         for (int i = 0; i < app->layout.count; ++i) {
             int pane = app->layout.order[i];
-            if (tb_layout_root(&app->layout, pane) == root)
+            if (tb_layout_root(&app->layout, pane) == root) {
                 draw_pane(app, pane, app->panes[pane]);
+            }
         }
     }
 
@@ -4056,6 +4135,10 @@ static void draw_workspace(App_t *app)
         if (app->resizing && app->layout.dividers[i].node == app->resize_node)
             app->resize_divider = i;
     }
+
+    const TbPalette_t *palette = tb_theme_palette(tb_theme_current());
+    bool frames = strcmp(palette->family, "ashen") == 0 &&
+                  strcmp(palette->variant, "high-contrast") == 0;
 
     for (int i = 0; !fullscreen && i < app->layout.divider_count; ++i) {
         TbDivider_t divider = app->layout.dividers[i];
@@ -4087,8 +4170,9 @@ static void draw_workspace(App_t *app)
                     if (tb_layout_divider_at(&app->layout, draw_x, draw_y) != i)
                         continue;
 
-                    tb_text(draw_y, draw_x, 1, active ? TB_ACTIVE_TAB : TB_MUTED, active ? A_BOLD : 0,
-                            divider.direction == TB_SPLIT_RIGHT ? "|" : "-");
+                    tb_style(active ? TB_ACTIVE_TAB : frames ? TB_BORDER : TB_MUTED, active ? A_BOLD : 0);
+                    (void)mvaddch(draw_y, draw_x,
+                                  divider.direction == TB_SPLIT_RIGHT ? ACS_VLINE : ACS_HLINE);
                 }
             }
         }
@@ -4109,6 +4193,11 @@ static void draw_workspace(App_t *app)
             : app->live ? "Console: Command + Enter / Send | Save Log | Ctrl+Q quit app"
             : "DEMO | ... pane actions | drag dividers | q launcher | Ctrl+Q quit app",
         TB_HINT_TEXT, TB_HINT_TEXT, true);
+
+    for (int i = 0; i < app->layout.count; ++i) {
+        int pane = app->layout.order[i];
+        draw_panel_border(app->panes[pane]);
+    }
 }
 
 
@@ -5664,8 +5753,9 @@ static void draw_vim_fields(App_t *app)
         tb_fill(rect, TB_SURFACE);
 
         TbStyle_e edge = !focused ? TB_BORDER : app->field_insert ? TB_GREEN : TB_CYAN;
-        tb_text(rect.y, rect.x, 1, edge, focused ? A_BOLD : 0, "|");
-        tb_text(rect.y, rect.x + rect.w - 1, 1, edge, focused ? A_BOLD : 0, "|");
+        tb_style(edge, focused ? A_BOLD : 0);
+        (void)mvaddch(rect.y, rect.x, ACS_VLINE);
+        (void)mvaddch(rect.y, rect.x + rect.w - 1, ACS_VLINE);
         wide_text(rect.y, rect.x + 1, rect.w - 2, value, start, false);
         if (focused) {
             app->command_caret_x = rect.x + 1;
@@ -7885,10 +7975,12 @@ static void draw_scripts(App_t *app)
 
     TbScroll_t bar = axis_scroll(found, visible, app->script_offset);
     if (bar.maximum > 0) {
-        for (int row = 0; row < bar.visible; ++row) {
-            bool thumb = row >= bar.thumb_start && row < bar.thumb_start + bar.thumb_size;
-            tb_text(top + 2 + row, card.x + card.w - 2, 1, thumb ? TB_CYAN : TB_MUTED, 0, thumb ? "#" : "|");
-        }
+        tb_render_scrollbar((TbRect_t) {
+            card.x + card.w - 2,
+            top + 2,
+            1,
+            bar.visible
+        }, bar, false);
 
         (void)add_control(app, (TbRect_t) {
             card.x + card.w - 2,
@@ -10202,7 +10294,7 @@ static void mouse_event(App_t *app, MEVENT event)
     if (app->theme_menu) {
         size_t     choices[64];
         int        count   = theme_choices(app, choices);
-        int        visible = app->theme_list_rect.h - 4;
+        int        visible = app->theme_list_rect.h - 2;
         TbScroll_t bar     = axis_scroll(count, visible, app->theme_offset);
         if (event.bstate & (BUTTON4_PRESSED | BUTTON5_PRESSED)) {
             app->theme_offset = axis_scroll(count, visible, app->theme_offset +
@@ -10786,7 +10878,7 @@ static void key_event(App_t *app, wint_t key, bool special)
     if (app->theme_menu && !(special && key == KEY_MOUSE)) {
         size_t choices[64];
         int    count   = theme_choices(app, choices);
-        int    visible = count < LINES - 11 ? count : LINES - 11;
+        int    visible = theme_dropdown_rect(app, count).h - 2;
         if (!special && key == 27) {
             theme_list_close(app, false);
         } else if ((!special && (key == '\n' || key == '\r' || key == ' ')) ||

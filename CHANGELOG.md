@@ -2,14 +2,28 @@
 
 ## [Unreleased]
 
+### Added
+
+- Ashen, including a high-contrast variant based on ashen-hc-theme with black
+  panels and red borders; Dracula, Kanagawa, Moonfly, Nord and One Dark with
+  their built-in variants.
+
 ### Changed
 
+- Theme families are listed alphabetically in both dropdowns and cycling.
 - Require an 80×20 terminal and show complete connection-field labels.
-- Theme and variant selectors open choice lists; Left/Right retains direct cycling.
+- Theme and variant selectors open compact, anchored dropdowns with bounded
+  scrolling, keyboard/mouse selection and resize support. Left/Right retains
+  direct cycling.
+- Scrollbars use continuous tracks and family-specific interface accents throughout
+  the UI;
+  borders and split dividers use ncurses line drawing.
 - Keybinds and installed-script browsing scroll independently of selection.
 
 ### Fixed
 
+- Ashen high-contrast frames occupy exterior gutters without reducing pane content
+  capacity or causing theme-dependent overflow.
 - Profile options identify the session type and highlight the Save profile action.
 - Host-local paths accept `~/` without changing saved input, argument quoting or
   OpenOCD script-search behavior. Unset/empty HOME uses the account home;

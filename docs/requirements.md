@@ -166,9 +166,11 @@ extensions and their version targets are recorded in the roadmap:
 - Use colors semantically and consistently: current execution line, breakpoints, selected row, changed registers/variables, running/halted/error statuses, assembly mnemonics, addresses, and C/C++ source syntax.
 - Provide a **256-color fallback** if truecolor is unavailable, with legible monochrome/minimal-color behavior rather than invisible text. No need to vendor proprietary Monokai assets.
 - Compact borders, understated tabs, a persistent status bar, and visible toolbar/action hints. Keep it fast and restrained rather than decorative.
-- F19 shipped seven theme families and 37 variants; v0.1.5 expands the catalogue
-  to eleven families and 49 palettes. Selection uses centered
-  **Config → Themes** controls: a Theme row, a dependent Variant row, Back,
+- F19 shipped seven theme families and 37 variants; v0.1.5 expanded the catalogue
+  to eleven families and 49 palettes. The current development catalog provides
+  seventeen families and 66 palettes in alphabetical family order. Centered
+  **Config → Themes** controls provide anchored dropdowns for the Theme and
+  dependent Variant rows, alongside Back,
   Preview and Save. Preview uses simulated data and never saves or reads a
   target; Back cancels and restores the saved palette. Save persists the choice
   and returns to Config. Profiles remains available through Config.
@@ -254,7 +256,11 @@ dedicated simulator integration is planned.
 ### Interaction conventions
 
 - Mouse-first **and** keyboard-accessible. The visible controls are authoritative; key bindings are accelerators, not the only mechanism.
-- Overflow scrollbars appear only when needed. Vertical bars are one terminal cell wide, with a vertical `|` track and `#` thumb, retaining the horizontal bar's colors/weight rather than its sideways glyphs. Live Source/Disassembly, Console and context views support independent horizontal scrolling with thumb dragging, track paging and Left/Right keys, preserving pane sizes and execution context. Source line numbers stay fixed.
+- Overflow scrollbars appear only when needed. Vertical bars are one terminal cell wide. Both axes
+  use continuous background-filled tracks and distinct proportional thumbs from the theme;
+  monochrome retains line-drawing tracks and reverse-video thumbs. Live Source/Disassembly, Console
+  and context views support independent horizontal scrolling with thumb dragging, track paging and
+  Left/Right keys, preserving pane sizes and execution context. Source line numbers stay fixed.
 - Disassembly retains surrounding instructions across steps. Initially show about four valid preceding instructions where GDB metadata permits; keep the viewport still through its middle, scrolling only to preserve roughly five visible rows above and below the PC (smaller margins in short panes, clamped to available context). Manual browsing stays put until stepping or Return to Stopped. Bounded earlier/later windows remain browsable without moving PC; never guess x86 instruction boundaries or treat this as execution history.
 - `q` closes/backs out of the current screen outside text fields; in the workspace it leaves the session for the launcher after confirmation. At the launcher it does not exit. `Ctrl+Q` quits from any screen, retaining active-session confirmation. Text fields accept a literal `q` during ordinary or Insert editing; with Vim-like input enabled, Escape first returns Insert to Normal, then backs out. Footers distinguish these actions.
 - Standard desired shortcuts: `F5` continue, `F9` breakpoint, `F10` next/step over, `F11` step into, `Shift+F11` step out **where the terminal reports it**. Provide clickable alternatives and allow remapping if tmux/terminal intercepts or collapses special keys.

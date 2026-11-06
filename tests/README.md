@@ -22,12 +22,14 @@ records remain in the [validation records](../docs/validation.md).
   compact rendering and literal field editing. Included in `make test`; no
   debugger required. See [navigation procedures](../docs/testing.md#letter-key-navigation).
 
-- `make test-themes`: global appearance preferences, all 49 theme palettes and
+- `make test-themes`: global appearance preferences, all 66 theme palettes and
   a Config/Themes PTY flow; included in `make test`. `test-preferences` checks
   defaults, private atomic saves, stale writers and invalid-file preservation.
-  `test-render` checks contrast and direct/256/8-color/monochrome fallbacks.
+  `test-render` checks contrast, direct/256/8-color/monochrome fallbacks and
+  background-filled scrollbar geometry and family-specific accents on both axes.
   `test-themes-tui` checks every preview, dependent variants, Back/Save/restart,
-  keyboard/mouse and compact rendering. See the [theme procedure](../docs/testing.md#themes-and-configuration).
+  keyboard/mouse, anchored dropdowns, upward placement, dismissal, resize and
+  compact rendering and identical Source capacity across palettes. See the [theme procedure](../docs/testing.md#themes-and-configuration).
 
 - `make test-stack`: bounded authored-MI Stack model, explicit reads, policies,
   cache/provenance, lifetimes, annotations, declarations and asynchronous failure
@@ -377,7 +379,7 @@ for native milestone acceptance. ptrace/pidfd/LeakSanitizer restrictions are
 reported as failures, not silently skipped or disabled. The fixture's optional
 per-process attach permission does not modify Yama or system configuration.
 
-`unit/test_render.c` checks all 49 adapted palettes, contrast, direct/256/8-color
+`unit/test_render.c` checks all 66 adapted palettes, contrast, direct/256/8-color
 and monochrome pairs, semantic source/register colors, selected rows and the
 monochrome active-tab indicator using temporary-file ncurses screens. It needs
 `xterm-direct`, `xterm-256color`, `xterm` and `vt100` terminfo,

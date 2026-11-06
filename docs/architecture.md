@@ -192,19 +192,38 @@ paths. No saved layout, new session backend or target-access policy is introduce
 
 `src/tui/theme.c` and `include/tui/theme.h`
 define the built-in palette catalog, stable family/variant
-identifiers and semantic curses pairs. Catppuccin Macchiato is the default;
-All eleven families remain selectable. The
-49 palettes use shared workspace/panel/raised/selection surfaces and semantic
+identifiers and semantic curses pairs. Catppuccin Macchiato is the default.
+The seventeen families appear alphabetically in dropdowns and cycling. The
+66 palettes use shared workspace/panel/raised/selection surfaces and semantic
 foregrounds. Muted/accent colors are adjusted toward text where required for
 contrast. RGB roles map to direct color, nearest xterm 256-color entries, or
 existing 8-color/monochrome fallbacks. If quantization merges a foreground with
 its background, the text color supplies a contrasting fallback.
 
+All view and menu scrollbars share a renderer and the existing viewport geometry.
+Tracks and proportional thumbs use background-filled cells with semantic theme
+roles derived from the raised surface and a family-specific interface accent.
+That accent is consistent across views and independent of value/status colors. Monochrome uses an
+ACS line track and reverse-video thumb. Bars appear only on overflow; their
+existing paging, dragging and keyboard behavior is unchanged. Borders and split
+dividers use ncurses line-drawing characters. Drawing remains batched through
+`wnoutrefresh()` and `doupdate()` in the ordinary event loop.
+
+Ashen/high-contrast draws red frames outside the existing pane bounds, using
+margins and shared gutters. Shared edges form line-drawing junctions. Pane
+content, controls, viewport capacity and divider hit regions retain the same
+geometry as other themes. Status, dock and navigation chrome take precedence
+where an exterior edge shares their space.
+
 `app.c` owns Config, Themes and theme-preview page state. A draft palette is
-separate from the saved choice. Theme/variant rows offer modal choice lists and
-direct Left/Right cycling. List scrolling preserves selection; cancellation keeps
-the draft. Changing a family chooses a valid variant;
-preview reinitializes curses pairs and requests a full repaint. Preview renders
+separate from the saved choice. Theme/variant fields open anchored dropdowns
+with at most eight visible choices, or cycle directly with Left/Right. Dropdowns
+open above the field when space below is insufficient. Resizing preserves the
+selection and brings it into view; scrolling alone does not select. Escape or an
+outside click dismisses the dropdown without activating an obscured control.
+These bounded overlays use the existing control routing and screen compositor,
+with no separate event loop or window allocation. Changing a family chooses a
+valid variant. Preview reinitializes curses pairs and requests a full repaint. It renders
 an independent `TbDemo_t`/`TbLayout_t`, never the live session or inspection models.
 Back restores the saved palette; Save returns to Config only after persistence
 succeeds. Theme operations do not modify workspace geometry or session profiles.

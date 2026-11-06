@@ -46,9 +46,10 @@ static void mouse_event_at(int button, int x, int y, bool release)
 }
 static void scrollbar(int *x, int *top, int *bottom)
 {
-    test_terminal_expect(&term, "#"); CHECK(test_terminal_find(&term, "#", x, top)); *bottom = *top;
-    while (*top > 0 && strchr("|#", term.cells[*top - 1][*x])) { --*top; }
-    while (*bottom + 1 < term.rows && strchr("|#", term.cells[*bottom + 1][*x])) { ++*bottom; }
+    test_terminal_expect_scrollbar(&term, true);
+    CHECK(test_terminal_find_scrollbar(&term, true, x, top)); *bottom = *top;
+    while (*top > 0 && (test_terminal_scroll_cell(&term, *top - 1, *x, false) || test_terminal_scroll_cell(&term, *top - 1, *x, true))) { --*top; }
+    while (*bottom + 1 < term.rows && (test_terminal_scroll_cell(&term, *bottom + 1, *x, false) || test_terminal_scroll_cell(&term, *bottom + 1, *x, true))) { ++*bottom; }
 }
 static int panel_geometry(bool keys)
 {
@@ -100,10 +101,10 @@ static void script_navigation(const char *binary, const char *root)
     int x, top, bottom; scrollbar(&x, &top, &bottom);
     mouse_event_at(0, x, bottom, false); mouse_event_at(0, x, bottom, true);
     CHECK(!test_terminal_find(&term, "scroll-000.cfg", NULL, NULL));
-    int thumb; CHECK(test_terminal_find(&term, "#", &x, &thumb));
+    int thumb; CHECK(test_terminal_find_scrollbar(&term, true, &x, &thumb));
     mouse_event_at(0, x, thumb, false); mouse_event_at(32, x + 3, bottom, false); mouse_event_at(0, x + 3, bottom, true);
     test_terminal_expect(&term, "selected-m16.cfg");
-    CHECK(test_terminal_find(&term, "#", &x, &thumb));
+    CHECK(test_terminal_find_scrollbar(&term, true, &x, &thumb));
     mouse_event_at(0, x, thumb, false); mouse_event_at(32, x, top, false); mouse_event_at(0, x, top, true);
     test_terminal_expect(&term, "scroll-000.cfg");
     mouse_event_at(65, x - 2, top + 1, false); mouse_event_at(64, x - 2, top + 1, false);
@@ -121,7 +122,7 @@ static void script_navigation(const char *binary, const char *root)
     test_terminal_send(&term, "\t\r"); test_terminal_expect(&term, "Installed OpenOCD");
     test_terminal_click(&term, "[ Filter ]"); test_terminal_expect(&term, "Filter installed");
     test_terminal_send(&term, "\025selected-m16.cfg\r");
-    CHECK(!test_terminal_find(&term, "#", NULL, NULL)); test_terminal_expect(&term, "/board/selected-m16.cfg");
+    CHECK(!test_terminal_find_scrollbar(&term, true, NULL, NULL)); test_terminal_expect(&term, "/board/selected-m16.cfg");
     test_terminal_send(&term, "\t\r"); test_terminal_expect(&term, "Filter installed");
     test_terminal_send(&term, "\033"); test_terminal_expect(&term, "Installed OpenOCD");
     test_terminal_click(&term, "[ Back ]"); test_terminal_expect(&term, "Configure session");

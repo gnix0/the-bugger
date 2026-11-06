@@ -22,10 +22,16 @@ static long long milliseconds(void)
     return (long long)now.tv_sec * 1000 + now.tv_nsec / 1000000;
 }
 
+static void paint_background(TestTerminal *term, int y, int x, int count)
+{
+    for (int i = 0; i < count; ++i) { term->backgrounds[y][x + i] = term->background; }
+}
+
 static void clear_screen(TestTerminal *term)
 {
     for (int y = 0; y < TEST_ROWS; ++y) {
         memset(term->cells[y], ' ', TEST_COLS);
+        paint_background(term, y, 0, TEST_COLS);
         memset(term->inverse[y], term->reverse, sizeof term->inverse[y]);
         memset(term->underline[y], term->underlined, sizeof term->underline[y]);
         term->cells[y][term->cols] = '\0';
@@ -41,10 +47,13 @@ static void scroll_lines(TestTerminal *term, int top, int bottom, int distance)
         if (size > 0) { memmove(term->cells[top], term->cells[top + count], size); }
         memmove(term->inverse[top], term->inverse[top + count],
                 (size_t)(bottom - top + 1 - count) * sizeof term->inverse[0]);
+        memmove(term->backgrounds[top], term->backgrounds[top + count],
+                (size_t)(bottom - top + 1 - count) * sizeof term->backgrounds[0]);
         memmove(term->underline[top], term->underline[top + count],
                 (size_t)(bottom - top + 1 - count) * sizeof term->underline[0]);
         for (int y = bottom - count + 1; y <= bottom; ++y) {
             memset(term->cells[y], ' ', (size_t)term->cols);
+            paint_background(term, y, 0, term->cols);
             memset(term->inverse[y], term->reverse, (size_t)term->cols * sizeof(bool));
             memset(term->underline[y], term->underlined, (size_t)term->cols * sizeof(bool));
         }
@@ -52,10 +61,13 @@ static void scroll_lines(TestTerminal *term, int top, int bottom, int distance)
         if (size > 0) { memmove(term->cells[top + count], term->cells[top], size); }
         memmove(term->inverse[top + count], term->inverse[top],
                 (size_t)(bottom - top + 1 - count) * sizeof term->inverse[0]);
+        memmove(term->backgrounds[top + count], term->backgrounds[top],
+                (size_t)(bottom - top + 1 - count) * sizeof term->backgrounds[0]);
         memmove(term->underline[top + count], term->underline[top],
                 (size_t)(bottom - top + 1 - count) * sizeof term->underline[0]);
         for (int y = top; y < top + count; ++y) {
             memset(term->cells[y], ' ', (size_t)term->cols);
+            paint_background(term, y, 0, term->cols);
             memset(term->inverse[y], term->reverse, (size_t)term->cols * sizeof(bool));
             memset(term->underline[y], term->underlined, (size_t)term->cols * sizeof(bool));
         }
@@ -64,27 +76,36 @@ static void scroll_lines(TestTerminal *term, int top, int bottom, int distance)
 
 static void sgr(TestTerminal *term)
 {
+    int values[64], count = 0;
     const char *next = term->sequence;
-    if (*next == '\0') { term->reverse = false; term->underlined = false; }
-    while (*next != '\0') {
+    if (!*next) { term->reverse = false; term->underlined = false; term->background = -1; }
+    while (*next && count < 64) {
         char *end;
-        long code = strtol(next, &end, 10);
-        if (end == next) { return; }
-        next = *end == ';' ? end + 1 : end;
+        long value = strtol(next, &end, 10);
+        values[count++] = end == next ? -1 : (int)value;
+        next = (*end == ';' || *end == ':') ? end + 1 : end;
+        if (end == next) { break; }
+    }
+    for (int i = 0; i < count; ++i) {
+        int code = values[i];
         if (code == 0 || code == 24) { term->underlined = false; }
         else if (code == 4) { term->underlined = true; }
         if (code == 0 || code == 27) { term->reverse = false; }
         else if (code == 7) { term->reverse = true; }
-        else if (code == 38 || code == 48 || code == 58) {
-            /* A palette index/RGB component of 7 is not an inverse attribute. */
-            long mode = strtol(next, &end, 10);
-            if (end == next) { return; }
-            next = *end == ';' ? end + 1 : end;
-            int components = mode == 2 ? 3 : mode == 5 ? 1 : 0;
-            for (int i = 0; i < components && *next != '\0'; ++i) {
-                (void)strtol(next, &end, 10);
-                if (end == next) { return; }
-                next = *end == ';' ? end + 1 : end;
+        if (code == 0 || code == 49) { term->background = -1; }
+        else if (code >= 40 && code <= 47) { term->background = 0x1000000 | (code - 40); }
+        else if (code >= 100 && code <= 107) { term->background = 0x1000000 | (code - 100 + 8); }
+        else if ((code == 38 || code == 48 || code == 58) && i + 1 < count) {
+            int mode = values[++i];
+            if (mode == 5 && i + 1 < count) {
+                int color = values[++i];
+                if (code == 48) { term->background = 0x1000000 | color; }
+            } else if (mode == 2) {
+                if (i + 1 < count && values[i + 1] < 0) { ++i; }
+                if (i + 3 >= count) { return; }
+                int red = values[i + 1], green = values[i + 2], blue = values[i + 3];
+                if (code == 48) { term->background = (red << 16) | (green << 8) | blue; }
+                i += 3;
             }
         }
     }
@@ -133,12 +154,14 @@ static void csi(TestTerminal *term, char command)
         if (first == 2 || first == 3) { ++term->full_clears; clear_screen(term); }
         else {
             memset(term->cells[term->y] + term->x, ' ', (size_t)(term->cols - term->x));
+            paint_background(term, term->y, term->x, term->cols - term->x);
             memset(term->inverse[term->y] + term->x, term->reverse,
                     (size_t)(term->cols - term->x) * sizeof(bool));
             memset(term->underline[term->y] + term->x, term->underlined,
                     (size_t)(term->cols - term->x) * sizeof(bool));
             for (int y = term->y + 1; y < term->rows; ++y) {
                 memset(term->cells[y], ' ', (size_t)term->cols);
+                paint_background(term, y, 0, term->cols);
                 memset(term->inverse[y], term->reverse, (size_t)term->cols * sizeof(bool));
                 memset(term->underline[y], term->underlined, (size_t)term->cols * sizeof(bool));
             }
@@ -151,6 +174,7 @@ static void csi(TestTerminal *term, char command)
         {
             int start = first == 1 || first == 2 ? 0 : term->x;
             int count = first == 1 ? term->x + 1 : term->cols - start;
+            paint_background(term, term->y, start, count);
             memset(term->inverse[term->y] + start, term->reverse, (size_t)count * sizeof(bool));
             memset(term->underline[term->y] + start, term->underlined, (size_t)count * sizeof(bool));
         }
@@ -160,9 +184,12 @@ static void csi(TestTerminal *term, char command)
         char *line = term->cells[term->y] + term->x;
         bool *inverse = term->inverse[term->y] + term->x;
         bool *underline = term->underline[term->y] + term->x;
+        int *background = term->backgrounds[term->y] + term->x;
         size_t tail = (size_t)(term->cols - term->x - count);
         if (command == 'P') {
             memmove(line, line + count, tail);
+            memmove(background, background + count, tail * sizeof(int));
+            paint_background(term, term->y, term->x + (int)tail, count);
             memset(line + tail, ' ', (size_t)count);
             memmove(inverse, inverse + count, tail * sizeof(bool));
             memmove(underline, underline + count, tail * sizeof(bool));
@@ -170,6 +197,8 @@ static void csi(TestTerminal *term, char command)
             memset(underline + tail, term->underlined, (size_t)count * sizeof(bool));
         } else {
             memmove(line + count, line, tail);
+            memmove(background + count, background, tail * sizeof(int));
+            paint_background(term, term->y, term->x, count);
             memset(line, ' ', (size_t)count);
             memmove(inverse + count, inverse, tail * sizeof(bool));
             memmove(underline + count, underline, tail * sizeof(bool));
@@ -181,6 +210,7 @@ static void csi(TestTerminal *term, char command)
     case 'X': {
         int count = distance < term->cols - term->x ? distance : term->cols - term->x;
         memset(term->cells[term->y] + term->x, ' ', (size_t)count);
+        paint_background(term, term->y, term->x, count);
         memset(term->inverse[term->y] + term->x, term->reverse, (size_t)count * sizeof(bool));
         memset(term->underline[term->y] + term->x, term->underlined, (size_t)count * sizeof(bool));
         break;
@@ -253,6 +283,7 @@ static void consume(TestTerminal *term, unsigned char character)
         term->x = 0;
         if (term->y < term->rows - 1) { ++term->y; }
     }
+    term->backgrounds[term->y][term->x] = term->background;
     term->inverse[term->y][term->x] = term->reverse;
     term->underline[term->y][term->x] = term->underlined;
     term->cells[term->y][term->x++] = (char)character;
@@ -269,6 +300,7 @@ void test_terminal_start_argv(TestTerminal *term, char *const arguments[], const
         config = isolated_config;
     }
     memset(term, 0, sizeof *term);
+    term->background = -1;
     term->rows = 44;
     term->cols = 140;
     term->scroll_bottom = term->rows - 1;
@@ -352,6 +384,45 @@ bool test_terminal_find(const TestTerminal *term, const char *text, int *x, int 
         }
     }
     return false;
+}
+
+bool test_terminal_scroll_cell(const TestTerminal *term, int y, int x, bool thumb)
+{
+    if (x < 0 || y < 0 || x >= term->cols || y >= term->rows) { return false; }
+    int color = term->backgrounds[y][x];
+    /* Exact reference palette and its nearest xterm/8-color fallbacks. */
+    return term->cells[y][x] == ' ' &&
+           (thumb ? color == 0xc6a0f6 || color == (0x1000000 | 183) || color == (0x1000000 | 5)
+                  : color == 0x363a4f || color == (0x1000000 | 238) || color == (0x1000000 | 7));
+}
+
+bool test_terminal_find_scrollbar(const TestTerminal *term, bool thumb, int *x, int *y)
+{
+    for (int row = 0; row < term->rows; ++row) {
+        for (int col = 0; col < term->cols; ++col) {
+            if (test_terminal_scroll_cell(term, row, col, thumb)) {
+                if (x) { *x = col; }
+                if (y) { *y = row; }
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void test_terminal_expect_scrollbar(TestTerminal *term, bool thumb)
+{
+    long long deadline = milliseconds() + 5000;
+    while (milliseconds() < deadline) {
+        if (test_terminal_find_scrollbar(term, thumb, NULL, NULL)) {
+            long long settle = milliseconds() + 40;
+            while (milliseconds() < settle) { test_terminal_pump(term, 5); }
+            if (test_terminal_find_scrollbar(term, thumb, NULL, NULL)) { return; }
+        }
+        test_terminal_pump(term, 20);
+    }
+    fprintf(stderr, "Expected scrollbar %s fill\n", thumb ? "thumb" : "track");
+    CHECK(false);
 }
 
 void test_terminal_expect(TestTerminal *term, const char *text)

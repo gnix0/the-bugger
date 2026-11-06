@@ -12,7 +12,11 @@ assets are recorded in the [validation records](validation.md#v016-publication).
 
 The **v0.2.0 workflow and UX/UI review is underway**. The first correction pass
 covers connection labels, profile context, host paths, independent menu scrolling
-and theme selection. Implementation and regression results remain subject to
+and theme selection. The theme catalog now includes seventeen families and 66
+palettes, with alphabetical dropdown selection and an Ashen high-contrast variant.
+Continuous scrollbars and ncurses line drawing replace graphical character
+approximations.
+Implementation and regression results remain subject to
 maintainer review; this does not open a new feature gate.
 
 F03/F04 physical validation across the supported architectures is owner-reported.
@@ -293,7 +297,7 @@ the native/STM32/Xtensa/RISC-V regression gate.
 | F16 / v0.4.0 | SWO/ITM text acquisition/decoder after F06 and verified core/probe/server/clock setup; no full instruction-trace claim. | Corpus/fragmentation/overflow/clock errors. | Known text captured on verified hardware. |
 | F17 / v0.9.8+ review | Basic native PTY line input, pending renewed priority approval; no full terminal emulator, not a default pre-v1 commitment. | Echo/lines/EOF/exit/input focus. | Answer fixture prompts without sending input to GDB. |
 | F18 / v0.4.x | Shared log find/filter/continuous recording after validated text sources; independent of native input F17. | Retention/filter/file failures/flood/lifecycle. | Find/filter/record responsively. |
-| F19 / shipped v0.1.1 (original target v0.5.0 or earlier) | Seven built-in themes / 37 variants; Catppuccin Macchiato default; centered Config → Themes with dependent variants, Back/Preview/Save and retained Profiles. | Role/color fallbacks, contrast, non-color signals, atomic preferences, all-variant PTY preview and profile regression. | Inspect each variant directly/in tmux and restore selection; see [procedures](testing.md#themes-and-configuration) and [evidence](validation.md#f19--themes-and-configuration). |
+| F19 / shipped v0.1.1 (original target v0.5.0 or earlier) | Originally seven built-in themes / 37 variants; current development catalog: seventeen families / 66 palettes, ordered A–Z. Catppuccin Macchiato default; centered Config → Themes with dependent variants, Back/Preview/Save and retained Profiles. | Role/color fallbacks, contrast, non-color signals, atomic preferences, all-variant PTY preview and profile regression. | Inspect each variant directly/in tmux and restore selection; see [procedures](testing.md#themes-and-configuration) and [evidence](validation.md#f19--themes-and-configuration). |
 | F20 / v0.5.x | Bounded memory search using M15 region policy; explicit ranges, no automatic unknown/MMIO scans. | Patterns/limits/gaps/cancel/latency. | Find fixture bytes and cancel large search responsively. |
 | F21 / v0.5.x | Memory export/snapshot comparison after M10/M15 region policy; exact deliberate ranges, no implied full address-space capture. | File failure/identity/gaps/diffs/storage bounds. | Save range and correctly identify changed bytes. |
 | F22 / v0.4.x | Deliberate firmware Load/Flash after M16/M17 lifecycle and capability evidence; confirmation/progress/verification/recovery/reset policy, no auto programming on attach. | Download events/interruption/failures/sequencing. | Program/verify real fixture, preserving independent attach workflow. |

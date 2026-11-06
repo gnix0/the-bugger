@@ -149,9 +149,10 @@ Choose **Config → Themes** for appearance and **Config → Keybinds** for cont
 Optional Vim-like navigation and field editing are available alongside the
 standard keyboard and mouse controls.
 
-Themes include Everforest, Rosé Pine, Tokyo Night, Catppuccin, Modus, Gruber Darker,
-Gruvbox Material, Solarized, Nightfox, Zenburn and Monokai Pro, with dark and light
-variants across the catalogue. See [themes](docs/usage.md#configuration-and-themes),
+Themes include Ashen (with black panels and red borders in high-contrast), Catppuccin, Dracula,
+Everforest, Gruber Darker, Gruvbox Material, Kanagawa, Modus, Monokai Pro, Moonfly,
+Nightfox, Nord, One Dark, Rosé Pine, Solarized, Tokyo Night and Zenburn.
+See [themes](docs/usage.md#configuration-and-themes),
 [keybindings](docs/usage.md#personal-keybinds) and
 [Vim-like input](docs/usage.md#vim-like-input) for configuration. Examples:
 

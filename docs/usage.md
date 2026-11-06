@@ -358,7 +358,10 @@ Live code, Console, Call Stack and Threads show a horizontal scrollbar only when
 rows exceed the pane width: drag its thumb, click the track to page, or focus the
 body and use Left/Right. Each view retains its own position; Source keeps its line
 numbers fixed. Vertical scrollbars are one terminal cell wide and match the
-horizontal bar's colors, with a vertical `|` track and `#` thumb. Each bar
+horizontal bar's colors: continuous background-filled tracks and distinct thumbs.
+Thumbs use a theme-specific interface accent consistently across views; they do
+not indicate the state or meaning of the displayed data.
+Monochrome uses line-drawing tracks and reverse-video thumbs. Each bar
 disappears when its content fits, and scrolling preserves pane sizes and PC.
 
 Source lookup settings apply GDB search directories and ordered build-prefix →
@@ -739,24 +742,35 @@ The demo launcher also offers Themes; its Profiles option remains unavailable.
 
 With no valid saved preference, the default is **Catppuccin / macchiato**.
 Use Left/Right to cycle the focused Theme or Variant row. Enter, Space or a click
-opens its choice list. Navigate with Up/Down, then Enter/Space or click to choose;
-Escape or a click outside cancels. The Variant list contains only variants of the
-selected theme; changing families resets that row to the family's initial variant
+opens a compact dropdown attached to that field. Navigate with Up/Down, then
+Enter/Space or click to choose. Escape or a click outside cancels without
+activating the control underneath.
+Long lists scroll with Page Up/Down, the wheel or the scrollbar. The dropdown
+opens upward when needed and retains its selection through resizing.
+The Variant dropdown contains only variants of the selected theme; changing families resets that row to the family's initial variant
 (Macchiato for Catppuccin).
+
+Theme families are listed alphabetically, including when cycling with Left/Right.
 
 | Theme | Variants |
 |---|---|
+| Ashen | default, high-contrast (black panels, red borders) |
 | Catppuccin | latte, frappe, macchiato, mocha |
+| Dracula | default, soft |
 | Everforest | dark/light × medium, hard, soft |
-| Tokyo Night | night, storm, moon, day |
-| Rose Pine | main, moon, dawn |
-| Nightfox | nightfox, dayfox, dawnfox, duskfox, nordfox, terafox, carbonfox |
-| Gruvbox Material | dark/light × medium, hard, soft; material foreground |
-| Monokai Pro | pro, classic, machine, octagon, ristretto, spectrum, light |
 | Gruber Darker | dark |
-| Zenburn | dark |
+| Gruvbox Material | dark/light × medium, hard, soft; material foreground |
+| Kanagawa | wave, dragon, lotus |
 | Modus | operandi, vivendi; each also has -tinted, -deuteranopia, -tritanopia |
+| Monokai Pro | pro, classic, machine, octagon, ristretto, spectrum, light |
+| Moonfly | dark |
+| Nightfox | nightfox, dayfox, dawnfox, duskfox, nordfox, terafox, carbonfox |
+| Nord | dark, light |
+| One Dark | dark, darker, cool, deep, warm, warmer, light |
+| Rose Pine | main, moon, dawn |
 | Solarized | dark, light |
+| Tokyo Night | night, storm, moon, day |
+| Zenburn | dark |
 
 **Preview** temporarily applies the draft to a simulated workspace. It does not
 start a debugger, read a target or save preferences. **Back** or Escape returns
@@ -775,7 +789,7 @@ silently overwritten. A stale writer must restart before saving.
 
 The palettes are adapted to semantic roles, with contrast adjustments where
 needed; 8-color/monochrome terminals cannot reproduce all palette differences.
-The 49 palettes across eleven families need no editor installation. Modus color-deficiency
+The 66 palettes across seventeen families need no editor installation. Modus color-deficiency
 variants retain semantic color substitutions. Terminal adaptations do not inherit
 upstream accessibility certification. Upstream revisions and licenses are in
 [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES). Custom palette files remain planned
