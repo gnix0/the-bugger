@@ -270,10 +270,57 @@ static void relocated(const char *fixture, const char *sources, bool right_first
     puts(right_first ? "PASS M07 duplicate-basename tabs opened right-first, source recovery and mapping lifecycle" :
                        "PASS M07 duplicate-basename tabs opened left-first, source recovery and mapping lifecycle");
 }
+static void continuous_scroll(const char *fixture)
+{
+    TbNative *native = start(fixture, "start");
+    TbCode_t *code = tb_native_code(native);
+    const TbCodeView_t *v = tb_code_view(code, 0);
+    uint64_t revision = v->assembly_revision;
+    CHECK(tb_code_address(code, 0, "_start")); code_ready(native, revision);
+    uint64_t first = v->instructions[0].numeric;
+    size_t original_count = v->instruction_count;
+    revision = v->assembly_revision;
+    tb_code_mixed(code, 0, true); code_ready(native, revision);
+    CHECK(v->mixed_available && v->instructions[0].numeric == first);
+    CHECK(v->instruction_count >= original_count);
+    uint64_t pc = strtoull(tb_context_snapshot(tb_native_context(native))->stopped.address, NULL, 16);
+    for (int i = 0; i < 12; ++i) {
+        uint64_t edge = v->instructions[0].numeric;
+        revision = v->assembly_revision;
+        if (!tb_code_assembly_scroll(code, 0, -1)) { break; }
+        code_ready(native, revision);
+        CHECK(v->instructions[0].numeric < edge);
+        bool retained = false;
+        for (size_t j = 0; j < v->instruction_count; ++j) {
+            if (v->instructions[j].numeric == edge) { retained = true; }
+        }
+        CHECK(retained && v->mixed_available);
+    }
+    bool ended = false;
+    for (int i = 0; i < 12; ++i) {
+        uint64_t edge = v->instructions[v->instruction_count - 1].numeric;
+        revision = v->assembly_revision;
+        if (!tb_code_assembly_scroll(code, 0, 1)) { ended = true; break; }
+        code_ready(native, revision);
+        CHECK(v->instructions[v->instruction_count - 1].numeric > edge);
+        CHECK(tb_code_assembly_mapping(code, 0, v->instruction_count - 1, 1) == TB_IMAGE_BACKEND_VERIFIED);
+    }
+    CHECK(ended && v->mixed_available);
+    TbCodeView_t *saved = malloc(sizeof *saved); CHECK(saved); *saved = *v;
+    tb_code_mixed(code, 0, false);
+    CHECK(!v->mixed && v->instruction_count == saved->instruction_count && v->anchor == saved->anchor);
+    tb_code_mixed(code, 0, true);
+    CHECK(v->mixed && v->mixed_available && v->anchor == saved->anchor);
+    CHECK(memcmp(v->instructions, saved->instructions, sizeof v->instructions) == 0);
+    CHECK(strtoull(tb_context_snapshot(tb_native_context(native))->stopped.address, NULL, 16) == pc);
+    free(saved); close_session(native);
+    puts("PASS mixed source survives continuous cached scrolling, known-code end and presentation-only toggles");
+}
+
 int main(int argc, char *argv[])
 {
     CHECK(argc == 7);
-    ordinary(argv[1]); degraded(argv[2], false); degraded(argv[3], true); cpp(argv[4]);
+    continuous_scroll(argv[1]); ordinary(argv[1]); degraded(argv[2], false); degraded(argv[3], true); cpp(argv[4]);
     relocated(argv[5], argv[6], false); relocated(argv[5], argv[6], true);
     return 0;
 }

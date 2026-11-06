@@ -124,14 +124,14 @@ static void restored_setup(const char *binary, TbProfiles_t *store)
     CHECK(!test_terminal_find(&term, "Acknowledge failures", NULL, NULL));
     /* Remove the Source entry by its row-specific control, then verify retained
      * breakpoint/Watch definitions remain and removal makes the draft dirty. */
-    int x, y; CHECK(test_terminal_find(&term, "missing-saved-source.c", &x, &y));
+    int x, y; CHECK(test_terminal_dialog_find(&term, "Setup information", "missing-saved-source.c", &x, &y));
     const char *remove = strstr(term.cells[y + 1], "[ Remove ]"); CHECK(remove); x = (int)(remove - term.cells[y + 1]) + 2;
     char mouse[80]; (void)snprintf(mouse, sizeof mouse, "\033[<0;%d;%dM\033[<0;%d;%dm", x, y + 2, x, y + 2);
-    test_terminal_send(&term, mouse); settle(); CHECK(!test_terminal_find(&term, "missing-saved-source.c", NULL, NULL));
+    test_terminal_send(&term, mouse); settle(); CHECK(!test_terminal_dialog_find(&term, "Setup information", "missing-saved-source.c", NULL, NULL));
     click("[ Back ]"); test_terminal_expect(&term, "Save setup*"); click("Save setup"); click("[ Save setup ]");
     CHECK(tb_profiles_load(store)); partial = tb_profiles_setup(store, "saved copy");
     CHECK(partial && partial->panes[0].source_count == 1 && partial->break_count == 1 && partial->breaks[0].id == saved->breaks[0].id && partial->watch_count == 2); free(partial);
-    click("[ Back ]"); click("Session"); click("Close session"); test_terminal_expect(&term, "[ Config ]"); stop(); free(saved);
+    click("[ Back ]"); click("Close Session"); click("Close session"); test_terminal_expect(&term, "[ Config ]"); stop(); free(saved);
     puts("PASS F01 restore review/default consent/ELF renewal, missing Source selection, partial saves, retained breakpoint/Watch definitions, failure acknowledgment and explicit removal");
 }
 static bool text_at_row(const char *text, int row)
@@ -139,14 +139,24 @@ static bool text_at_row(const char *text, int row)
     int actual = -1;
     return test_terminal_find(&term, text, NULL, &actual) && actual == row;
 }
+static bool toolbar_spacing(void)
+{
+    int setup_x, close_x, quit_x;
+    return test_terminal_find(&term, "Setup", &setup_x, NULL) && setup_x == term.cols - 30 &&
+        test_terminal_find(&term, "Close Session", &close_x, NULL) && close_x == term.cols - 22 &&
+        test_terminal_find(&term, "Quit", &quit_x, NULL) && quit_x == term.cols - 6 &&
+        term.cells[1][term.cols - 24] == ' ' && term.cells[1][term.cols - 8] == ' ' &&
+        term.backgrounds[1][term.cols - 24] == term.backgrounds[1][0] &&
+        term.backgrounds[1][term.cols - 8] == term.backgrounds[1][0];
+}
 static bool workspace_geometry(int notice_row, int pane_row, bool tiled)
 {
     return text_at_row("LIVE NATIVE", notice_row) &&
         text_at_row("Source  Symbols", pane_row) &&
         (!tiled || (text_at_row("Disassembly  Call Stack", pane_row) &&
                     text_at_row("Registers  Peripherals", pane_row))) &&
-        text_at_row("Setup", 1) && text_at_row("Session", 1) && text_at_row("Quit", 1) &&
-        strspn(term.cells[0], " ") == (size_t)term.cols;
+        text_at_row("Setup", 1) && text_at_row("Close Session", 1) && text_at_row("Quit", 1) &&
+        toolbar_spacing() && strspn(term.cells[0], " ") == (size_t)term.cols;
 }
 static void live_setup(const char *binary, const char *fixture, TbProfiles_t *store)
 {
@@ -181,25 +191,32 @@ static void live_setup(const char *binary, const char *fixture, TbProfiles_t *st
         /* The outer tmux redraw can deliver the notice before the pane
          * headers. Wait for the complete asserted geometry, not one label. */
         for (int wait = 0; wait < 500; ++wait) {
-            if (workspace_geometry(notice_row, y + 5, cols >= 124)) { break; }
+            if (workspace_geometry(notice_row, y + 6, cols >= 124)) { break; }
             test_terminal_pump(&term, 10);
         }
-        if (!workspace_geometry(notice_row, y + 5, cols >= 124)) {
-            fprintf(stderr, "Toolbar width %d: expected notice row %d and pane row %d\n", cols, notice_row, y + 5);
+        if (!workspace_geometry(notice_row, y + 6, cols >= 124)) {
+            fprintf(stderr, "Toolbar width %d: expected notice row %d and pane row %d\n", cols, notice_row, y + 6);
             for (int row = 0; row < term.rows; ++row) { fprintf(stderr, "%s\n", term.cells[row]); }
         }
-        CHECK(workspace_geometry(notice_row, y + 5, cols >= 124));
+        CHECK(workspace_geometry(notice_row, y + 6, cols >= 124));
         CHECK(test_terminal_find(&term, "LIVE NATIVE", NULL, &actual) && actual == notice_row);
         CHECK(strspn(term.cells[0], " ") == (size_t)cols);
-        /* One top margin row moves the toolbar and pane headers down once. */
-        CHECK(test_terminal_find(&term, "Source  Symbols", NULL, &actual) && actual == y + 5);
+        /* Keep a reserved frame row between the status/selector and pane chrome. */
+        CHECK(test_terminal_find(&term, "Source  Symbols", NULL, &actual) && actual == y + 6);
         if (cols >= 124) {
-            CHECK(test_terminal_find(&term, "Disassembly  Call Stack", NULL, &actual) && actual == y + 5);
-            CHECK(test_terminal_find(&term, "Registers  Peripherals", NULL, &actual) && actual == y + 5);
+            CHECK(test_terminal_find(&term, "Disassembly  Call Stack", NULL, &actual) && actual == y + 6);
+            CHECK(test_terminal_find(&term, "Registers  Peripherals", NULL, &actual) && actual == y + 6);
         }
         CHECK(test_terminal_find(&term, "Setup", NULL, &actual) && actual == 1);
-        CHECK(test_terminal_find(&term, "Session", NULL, &actual) && actual == 1);
+        CHECK(test_terminal_find(&term, "Close Session", NULL, &actual) && actual == 1);
         CHECK(test_terminal_find(&term, "Quit", NULL, &actual) && actual == 1);
+        int setup_x, close_x, quit_x;
+        CHECK(test_terminal_find(&term, "Setup", &setup_x, NULL) && setup_x == cols - 30);
+        CHECK(test_terminal_find(&term, "Close Session", &close_x, NULL) && close_x == cols - 22);
+        CHECK(test_terminal_find(&term, "Quit", &quit_x, NULL) && quit_x == cols - 6);
+        CHECK(term.cells[1][cols - 24] == ' ' && term.cells[1][cols - 8] == ' ');
+        CHECK(term.backgrounds[1][cols - 24] == term.backgrounds[1][0]);
+        CHECK(term.backgrounds[1][cols - 8] == term.backgrounds[1][0]);
     }
     click("Actions"); click("Choose source file"); test_terminal_expect(&term, "GDB source files");
     test_terminal_send(&term, "session.c\r"); settle(); click("tests/fixtures/native/session.c");
@@ -210,7 +227,7 @@ static void live_setup(const char *binary, const char *fixture, TbProfiles_t *st
     CHECK(!test_terminal_find(&term, "Save setup*", NULL, NULL)); CHECK(tb_profiles_load(store));
     TbSetup_t *saved = tb_profiles_setup(store, "on demand"); CHECK(saved && saved->panes[0].source_count == 1 && saved->panes[0].source_selected);
     TbProfile_t *profile = malloc(sizeof *profile); CHECK(profile); *profile = *tb_profiles_find(store, "on demand");
-    click("[ Back ]"); click("Session"); click("Close session"); test_terminal_expect(&term, "[ Config ]"); stop();
+    click("[ Back ]"); click("Close Session"); click("Close session"); test_terminal_expect(&term, "[ Config ]"); stop();
     start(binary); click("[ Config ]"); click("Profiles"); click("on demand");
     click("Profile..."); click("Source directories"); click("Add entry"); input(source_directory); back("Profile options");
     click("[ Duplicate ]"); input("saved copy"); test_terminal_expect(&term, "Unsaved draft unchanged.");
@@ -225,7 +242,7 @@ static void live_setup(const char *binary, const char *fixture, TbProfiles_t *st
     CHECK(tb_profiles_load(store)); preserved = tb_profiles_setup(store, "on demand"); CHECK(preserved && !preserved->panes[0].source_count); free(preserved);
     CHECK(memcmp(profile, tb_profiles_find(store, "on demand"), sizeof *profile) == 0);
     copy = tb_profiles_setup(store, "saved copy"); CHECK(copy && tb_setup_equal(copy, saved)); free(copy);
-    click("[ Back ]"); click("Session"); click("Close session"); test_terminal_expect(&term, "[ Config ]"); stop();
+    click("[ Back ]"); click("Close Session"); click("Close session"); test_terminal_expect(&term, "[ Config ]"); stop();
     restored_setup(binary, store);
     CHECK(tb_profiles_load(store) && tb_profiles_remove(store, "on demand") && tb_profiles_remove(store, "saved copy")); free(saved); free(profile); CHECK(unlink(preference) == 0 && rmdir(source_directory) == 0);
     puts("PASS F01 live saving/profile association, pinned identity, dirty state, skipped replacement, profile preservation and toolbar widths with long shortcuts");
@@ -274,7 +291,7 @@ static void import_setup(const char *binary, const char *fixture, TbProfiles_t *
     click("Unresolved setup entries"); test_terminal_expect(&term, "imported draft; not restored");
     CHECK(!test_terminal_find(&term, "Acknowledge failures", NULL, NULL)); click("[ Remove ]");
     click("[ Back ]"); test_terminal_expect(&term, "Save setup*"); click("[ Back ]");
-    click("Session"); click("Close session"); test_terminal_expect(&term, "[ Config ]"); stop();
+    click("Close Session"); click("Close session"); test_terminal_expect(&term, "[ Config ]"); stop();
     puts("PASS F01 actual GDB backend-only breakpoint review, explicit hardware/count decisions, unsaved import without duplicate, save and draft removal (direct/tmux)");
 }
 int main(int argc, char **argv)
@@ -307,7 +324,13 @@ int main(int argc, char **argv)
         click("Actions"); click("Source lookup settings"); test_terminal_expect(&term, root);
         test_terminal_expect(&term, "/old build"); back("LIVE | Loaded");
         test_terminal_lower(&term, 2, true);
-        test_terminal_send(&term, "\033[15~"); test_terminal_expect(&term, "FIXTURE PID=");
+        test_terminal_send(&term, "\033[15~"); test_terminal_expect(&term, "tick ");
+        /* Startup arguments can exceed the shorter Console tail viewport. */
+        click("tick ");
+        for (int page = 0; page < 20 && !test_terminal_find(&term, "FIXTURE PID=", NULL, NULL); ++page) {
+            test_terminal_send(&term, "\033[5~"); settle();
+        }
+        test_terminal_expect(&term, "FIXTURE PID=");
         click("Pause"); test_terminal_expect(&term, "LIVE | Stopped");
         test_terminal_send(&term, "q"); test_terminal_expect(&term, "Terminate the launched program");
         click("Close session"); test_terminal_expect(&term, "Recent: native saved");

@@ -63,30 +63,12 @@ static int first_pane(const TbLayout_t *layout, int node)
 }
 
 
-static int lower_at(const TbLayout_t *layout, int x, int y)
-{
-    if (!layout->overlays)
-        return -1;
-
-    for (int i = 2; i >= 0; --i) {
-        int lower = layout->lower_order[i];
-        if (tb_rect_contains(layout->lower_areas[lower], x, y))
-            return lower;
-    }
-
-    return -1;
-}
-
-
 int tb_layout_pane_at(const TbLayout_t *layout, int x, int y)
 {
-    int lower = lower_at(layout, x, y);
-    for (int i = layout->count - 1; i >= 0; --i) {
+    for (int i = 0; i < layout->count; ++i) {
         int pane = layout->order[i];
-        if (tb_rect_contains(layout->panes[pane], x, y) &&
-            (lower < 0 || tb_layout_root(layout, pane) == lower + 3)) {
+        if (tb_rect_contains(layout->panes[pane], x, y))
             return pane;
-        }
     }
 
     return -1;
@@ -193,13 +175,66 @@ static void arrange_node(TbLayout_t *layout, int node, TbRect_t area)
 }
 
 
-static bool arrange_overlays(TbLayout_t *layout, TbRect_t area, int focused)
+/* A root's retained tree may temporarily exceed the available column. */
+static void arrange_root(TbLayout_t *layout, int root, TbRect_t area)
 {
-    TbRect_t primary = area;
-    --primary.h; /* Persistent one-row access bars. */
-    if (primary.h <= 0)
-        return false;
+    TbRect_t m = minimum(layout, layout->roots[root]);
+    if (area.w >= m.w && area.h >= m.h) {
+        arrange_node(layout, layout->roots[root], area);
+    } else if (area.w >= TB_MIN_PANE_WIDTH && area.h >= TB_MIN_PANE_HEIGHT) {
+        layout->panes[layout->root_focus[root]] = area;
+    }
+}
 
+
+static void arrange_column(TbLayout_t *layout, int column, TbRect_t area, int focused_root)
+{
+    TbRect_t upper = minimum(layout, layout->roots[column]);
+    TbRect_t lower = minimum(layout, layout->roots[column + 3]);
+    if (lower.w > area.w)
+        lower.h = TB_MIN_PANE_HEIGHT;
+    bool open = layout->lower_open[column];
+
+    if (open && area.h >= upper.h + lower.h + 1) {
+        int maximum = area.h - upper.h - 1;
+        if (!layout->lower_height[column])
+            layout->lower_height[column] = clamp(area.h * 3800 / 10000, lower.h, maximum);
+
+        int height = clamp(layout->lower_height[column], lower.h, maximum);
+        TbRect_t top = area;
+        top.h -= height + 1;
+        TbRect_t bottom = area;
+        bottom.y += top.h + 1;
+        bottom.h = height;
+        TbRect_t grip = area;
+        grip.y += top.h;
+        grip.h = 1;
+        layout->lower_areas[column] = bottom;
+        layout->dividers[layout->divider_count++] = (TbDivider_t) {
+            .rect           = grip,
+            .area           = area,
+            .node           = -4 - column,
+            .minimum_first  = upper.h,
+            .minimum_second = lower.h,
+            .direction      = TB_SPLIT_BELOW
+        };
+        arrange_root(layout, column, top);
+        arrange_root(layout, column + 3, bottom);
+    } else {
+        /* Too few rows for two usable panes: show the selected root without
+         * changing expansion preferences or losing access to the other root. */
+        int root = open && focused_root == column + 3 ? column + 3 : column;
+        if (layout->tiled && root == column)
+            area.h -= 2; /* Dock and its separating gutter. */
+        arrange_root(layout, root, area);
+        if (root >= 3)
+            layout->lower_areas[column] = area;
+    }
+}
+
+
+static bool arrange_columns(TbLayout_t *layout, TbRect_t area, int focused)
+{
     int root = tb_layout_root(layout, focused);
     for (int i = 0; i < TB_DEFAULT_PANES; ++i) {
         if (tb_layout_root(layout, layout->root_focus[i]) != i)
@@ -212,32 +247,24 @@ static bool arrange_overlays(TbLayout_t *layout, TbRect_t area, int focused)
         tb_layout_root(layout, layout->primary_focus) >= 3) {
         layout->primary_focus = layout->root_focus[0];
     }
-    if (area.w < 8) {
-        layout->panes[layout->primary_focus] = primary;
-        return false;
-    }
-    if (root >= 3 && layout->lower_open[root - 3]) {
-        int position = 0;
-        while (layout->lower_order[position] != root - 3)
-            ++position;
-        for (int i = position; i < 2; ++i)
-            layout->lower_order[i] = layout->lower_order[i + 1];
-        layout->lower_order[2]     = root - 3;
-    }
 
     memset(layout->minimum_columns, 0, sizeof(layout->minimum_columns));
     memset(layout->minimum_rows, 0, sizeof(layout->minimum_rows));
     for (int i = 0; i < 3; ++i) {
-        TbRect_t m                 = minimum(layout, layout->roots[i]);
-        layout->minimum_columns[i] = m.w;
-        if (m.h > layout->minimum_rows[0])
-            layout->minimum_rows[0] = m.h;
+        TbRect_t upper = minimum(layout, layout->roots[i]);
+        layout->minimum_columns[i] = upper.w;
+        if (upper.h > layout->minimum_rows[0])
+            layout->minimum_rows[0] = upper.h;
     }
 
-    int  available = area.w - 2;
-    int *widths    = layout->widths, *columns = layout->minimum_columns;
-    layout->tiled = area.w >= 110 && primary.h >= layout->minimum_rows[0] &&
+    int available = area.w - 2;
+    int *widths = layout->widths;
+    int *columns = layout->minimum_columns;
+    layout->tiled = area.w >= 110 && area.h - 2 >= layout->minimum_rows[0] &&
                     available >= columns[0] + columns[1] + columns[2];
+    if (area.w < 8 || area.h < TB_MIN_PANE_HEIGHT)
+        return false;
+
     widths[0] = available * layout->columns[0] / 10000;
     widths[1] = available * layout->columns[1] / 10000;
     if (layout->tiled) {
@@ -249,92 +276,45 @@ static bool arrange_overlays(TbLayout_t *layout, TbRect_t area, int focused)
     int x = area.x;
     for (int i = 0; i < 3; ++i) {
         layout->lower_bars[i] = (TbRect_t) {
-            x,
-            primary.y + primary.h,
-            widths[i],
-            1
+            .x = x,
+            .y = area.y + area.h - 1,
+            .w = widths[i],
+            .h = 1
         };
-
         if (layout->tiled) {
-            arrange_node(layout, layout->roots[i], (TbRect_t) {
-                x,
-                primary.y,
-                widths[i],
-                primary.h
-            });
+            TbRect_t column = area;
+            column.x = x;
+            column.w = widths[i];
+            arrange_column(layout, i, column, root);
         }
         x += widths[i] + 1;
     }
+
     if (!layout->tiled) {
-        layout->panes[layout->primary_focus] = primary;
+        /* Compact terminals retain one column's upper/lower pair when it fits.
+         * All other groups remain reachable through the dock and pane selector. */
+        TbRect_t column = area;
+        column.h -= 2;
+        int selected = root % 3;
+        if (column.h >= TB_MIN_PANE_HEIGHT)
+            arrange_column(layout, selected, column, root);
+        else
+            arrange_root(layout, root, area);
     } else {
         x = area.x + widths[0];
         for (int i = 0; i < 2; ++i) {
-            layout->dividers[layout->divider_count++] =
-                (TbDivider_t) {
-                    {
-                        x,
-                        primary.y,
-                        1,
-                        primary.h
-                    },
-                    primary,
-                    -1 - i,
-                    0,
-                    0,
-                    TB_SPLIT_RIGHT
-                };
-            x += widths[1] + 1;
-        }
-    }
-    for (int i = 0; i < 3; ++i) {
-        int lower = layout->lower_order[i];
-        if (!layout->lower_open[lower] || primary.h <= TB_MIN_PANE_HEIGHT)
-            continue;
-
-        int maximum = primary.h - 1;
-        if (!layout->lower_height[lower])
-            layout->lower_height[lower] = clamp(primary.h * 3800 / 10000, TB_MIN_PANE_HEIGHT, maximum);
-        int      height = clamp(layout->lower_height[lower], TB_MIN_PANE_HEIGHT, maximum);
-        TbRect_t m      = minimum(layout, layout->roots[lower + 3]);
-        /* An expanded pane owns its former dock row; its header already
-         * provides minimize/menu controls. Keep its top and primary geometry. */
-        TbRect_t r = {
-            layout->lower_bars[lower].x,
-            primary.y + primary.h - height,
-            widths[lower],
-            height + 1
-        };
-
-        if (!layout->tiled || m.w > r.w) {
-            r.x = primary.x;
-            r.w = primary.w;
-        }
-        layout->lower_areas[lower] = (TbRect_t) {
-            r.x,
-            r.y - 1,
-            r.w,
-            r.h + 1
-        };
-
-        layout->dividers[layout->divider_count++] =
-            (TbDivider_t) {
-                {
-                    r.x,
-                    r.y - 1,
-                    r.w,
-                    1
+            layout->dividers[layout->divider_count++] = (TbDivider_t) {
+                .rect = {
+                    .x = x,
+                    .y = area.y,
+                    .w = 1,
+                    .h = area.h
                 },
-                primary,
-                -4 - lower,
-                TB_MIN_PANE_HEIGHT,
-                0,
-                TB_SPLIT_BELOW
+                .area      = area,
+                .node      = -1 - i,
+                .direction = TB_SPLIT_RIGHT
             };
-        if (r.w >= m.w && r.h >= m.h) {
-            arrange_node(layout, layout->roots[lower + 3], r);
-        } else {
-            layout->panes[layout->root_focus[lower + 3]] = r;
+            x += widths[1] + 1;
         }
     }
 
@@ -357,7 +337,7 @@ bool tb_layout_arrange(TbLayout_t *layout, TbRect_t area, int focused)
         return false;
 
     if (layout->overlays)
-        return arrange_overlays(layout, area, focused);
+        return arrange_columns(layout, area, focused);
 
     int *columns = layout->minimum_columns, *rows = layout->minimum_rows;
     memset(columns, 0, sizeof(layout->minimum_columns));
@@ -521,26 +501,9 @@ bool tb_rect_contains(TbRect_t rect, int x, int y)
 
 int tb_layout_divider_at(const TbLayout_t *layout, int x, int y)
 {
-    int lower = lower_at(layout, x, y);
     for (int i = layout->divider_count - 1; i >= 0; --i) {
-        const TbDivider_t *d = &layout->dividers[i];
-        if (!tb_rect_contains(d->rect, x, y))
-            continue;
-
-        if (lower >= 0) {
-            int root = d->node <= -4 ? -d->node - 1 : -1;
-            if (d->node >= 0) {
-                for (int r = 0; r < TB_DEFAULT_PANES; ++r) {
-                    if (contains_node(layout, layout->roots[r], d->node)) {
-                        root = r;
-                        break;
-                    }
-                }
-            }
-            if (root != lower + 3)
-                continue;
-        }
-        return i;
+        if (tb_rect_contains(layout->dividers[i].rect, x, y))
+            return i;
     }
 
     return -1;
@@ -556,9 +519,9 @@ bool tb_layout_move_divider(TbLayout_t *layout, int divider, int position)
 
     TbDivider_t d = layout->dividers[divider];
     if (layout->overlays && d.node <= -4 && d.node >= -6) {
-        int bottom                        = layout->area.y + layout->area.h - 1;
-        position = clamp(position, layout->area.y, bottom - TB_MIN_PANE_HEIGHT - 1);
-        layout->lower_height[-d.node - 4] = bottom - position - 1;
+        int total = d.area.h - 1;
+        int first = clamp(position - d.area.y, d.minimum_first, total - d.minimum_second);
+        layout->lower_height[-d.node - 4] = total - first;
         return true;
     }
     if (!layout->tiled || d.node < -3 || d.node >= TB_LAYOUT_NODES)

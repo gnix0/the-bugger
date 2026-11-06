@@ -833,7 +833,7 @@ const char *tb_theme_init(void)
     const unsigned    *c       = palette->colors;
     const unsigned foreground[TB_COLOR_COUNT] = {
         0, c[5], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], c[5], c[4], c[5], c[6], c[6], c[7],
-        c[6], c[9], c[7], c[12], c[8], c[10], c[10], c[6], c[12], c[8], c[5], c[0]
+        c[6], c[9], c[7], c[12], c[8], c[10], c[10], c[6], c[12], c[8], c[5], c[0], c[2], c[0]
     };
     const int fallback[TB_COLOR_COUNT] = {
         0,
@@ -863,6 +863,8 @@ const char *tb_theme_init(void)
         COLOR_CYAN,
         COLOR_GREEN,
         COLOR_BLACK,
+        COLOR_BLACK,
+        COLOR_WHITE,
         COLOR_BLACK
     };
 
@@ -903,6 +905,13 @@ const char *tb_theme_init(void)
             bg = COLOR_BLACK;
         if (i == TB_SCROLL_THUMB && COLORS >= 256 && bg == color_index(c[2]))
             bg = color_index(c[5]);
+        if (i == TB_SCROLL_H_TRACK || i == TB_SCROLL_H_THUMB) {
+            fg = COLORS >= 256 ? color_index(i == TB_SCROLL_H_TRACK ? c[2] : foreground[accent])
+                              : i == TB_SCROLL_H_TRACK ? COLOR_WHITE : fallback[accent];
+            bg = COLORS >= 256 ? color_index(c[1]) : COLOR_BLACK;
+            if (i == TB_SCROLL_H_THUMB && fg == (COLORS >= 256 ? color_index(c[2]) : COLOR_WHITE))
+                fg = COLORS >= 256 ? color_index(c[5]) : COLOR_MAGENTA;
+        }
         /* Quantization can merge subtle borders with a selected surface. */
         if (i != 0 && fg == bg)
             fg = COLORS >= 256 ? color_index(c[5]) : COLOR_WHITE;

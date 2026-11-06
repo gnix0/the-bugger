@@ -116,13 +116,13 @@ static void add_watch(const char *expression)
 }
 static void selected_value(const char *expected)
 {
-    int x, y;
     test_terminal_expect(&term, "children 0");
-    CHECK(test_terminal_find(&term, "variables_global", &x, &y));
-    CHECK(strstr(term.cells[y], "children 0") && y + 2 < term.rows - 2);
-    const char *value = term.cells[y + 2] + x;
+    CHECK(strstr(term.cells[term.rows - 2], "variables_global"));
+    CHECK(strstr(term.cells[term.rows - 2], "children 0"));
+    const char *value = strstr(term.cells[term.rows - 1], "Value: ");
+    CHECK(value != NULL); value += strlen("Value: ");
     CHECK(strncmp(value, expected, strlen(expected)) == 0 && value[strlen(expected)] == ' ');
-    fprintf(stderr, "Selected snapshot value %s verified at centered dialog row %d\n", expected, y + 2);
+    fprintf(stderr, "Selected snapshot value %s verified in popup context\n", expected);
 }
 int main(int argc, char **argv)
 {
@@ -153,17 +153,17 @@ int main(int argc, char **argv)
     test_terminal_click(&term, "Cycle selected value format");
     watch_wait(NULL); watch_click("Actions");
     test_terminal_expect(&term, "Hex"); selected_value("0x11");
-    test_terminal_click(&term, "Edit selected integer/bool");
+    test_terminal_menu_click(&term, "Locals / Watches inspection", "Edit selected integer/bool");
     test_terminal_expect(&term, "Edit variable");
     test_terminal_send(&term, "\02542\r"); test_terminal_expect(&term, "Review variable edit");
     test_terminal_click(&term, "Cancel"); watch_click("Actions"); selected_value("0x11");
-    test_terminal_click(&term, "Edit selected integer/bool"); test_terminal_expect(&term, "Edit variable");
+    test_terminal_menu_click(&term, "Locals / Watches inspection", "Edit selected integer/bool"); test_terminal_expect(&term, "Edit variable");
     test_terminal_send(&term, "\02542\r"); test_terminal_expect(&term, "Review variable edit");
     test_terminal_resize(&term, 28, 100); test_terminal_expect(&term, "Review variable edit");
     test_terminal_send(&term, "\r"); test_terminal_expect(&term, "Backend acknowledged; Verify");
     test_terminal_resize(&term, 54, 200); watch_click("Read"); watch_wait(NULL);
     watch_click("Actions"); selected_value("0x2a");
-    test_terminal_click(&term, "Edit selected integer/bool"); test_terminal_expect(&term, "Edit variable");
+    test_terminal_menu_click(&term, "Locals / Watches inspection", "Edit selected integer/bool"); test_terminal_expect(&term, "Edit variable");
     test_terminal_send(&term, "\02517\r"); test_terminal_expect(&term, "Review variable edit");
     test_terminal_click(&term, "Apply"); watch_click("Read"); watch_wait(NULL);
     add_watch("variables_sample");

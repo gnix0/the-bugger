@@ -202,7 +202,7 @@ int main(int argc, char *argv[])
     test_terminal_expect(&term, selected);
     test_terminal_click(&term, "...");
     test_terminal_expect(&term, "SHOW VIEW");
-    test_terminal_click(&term, "Threads");
+    test_terminal_menu_click(&term, "SHOW VIEW", "Threads");
     test_terminal_expect(&term, "T2 stopped");
     test_terminal_click(&term, "T2 stopped");
     test_terminal_expect(&term, "T2 frame #0");

@@ -83,8 +83,8 @@ seven days. Sanitizers, slow recovery, packaging and physical tests run separate
   Calls/assignment filters alone are not safety proofs. No implicit flash, reset,
   writes, peripheral polling or termination of external servers.
 - Preserve the [interface specification](docs/requirements.md#interface-constraints): semantic theme roles,
-  Catppuccin Macchiato default, six tiles, tabs, dynamic splits, mouse and keyboard access, no presets
-  or floating windows. Prototype samples never count as live functionality.
+  Catppuccin Macchiato default, three primary columns with independent lower panes,
+  tabs, dynamic splits, mouse and keyboard access, no presets or floating debugging panes. Prototype samples never count as live functionality.
 - Keep changes small and reviewable. Avoid unrelated formatting or framework
   changes. Shared changes retain native regression coverage; target-specific
   behavior requires explicit capabilities and appropriate evidence.

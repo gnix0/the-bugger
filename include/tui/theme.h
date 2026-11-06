@@ -51,6 +51,8 @@ typedef enum {
     TB_INSERT_TEXT,
     TB_SCROLL_TRACK,
     TB_SCROLL_THUMB,
+    TB_SCROLL_H_TRACK,
+    TB_SCROLL_H_THUMB,
     TB_COLOR_COUNT
 } TbStyle_e;
 

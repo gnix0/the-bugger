@@ -684,7 +684,7 @@ Manual capture/save review with a disposable configuration:
    remain. Confirm replacement: hidden old definitions disappear; the connection
    profile remains unchanged. Duplication excludes unsaved edits.
 4. Repeat in a direct terminal and tmux at the widths above. Inspect Setup,
-   Session/Quit, action names, focus, text entry, Escape and shortcut operation.
+   Close Session/Quit, action names, focus, text entry, Escape and shortcut operation.
 
 `make test-setup-restore` uses an actual native fixture to check local split/tab
 restoration, selected missing pins without prior contents, stable partial saves,
@@ -1224,7 +1224,7 @@ ptrace sandbox. No global permission/sysctl setting is changed.
    follow new output. Resize/split panes and switch views. The established tiled
    workspace remains usable, and unavailable views never display demo values.
    Stepping and breakpoints operate after a stop; Reset remains unavailable in native sessions.
-6. Click Session or Quit with the native session active. Verify the launch
+6. Click Close Session or Quit with the native session active. Verify the launch
    termination confirmation; Cancel preserves the session. Confirm closes GDB
    and the frontend-launched program, restoring the terminal. Repeat Ctrl+C,
    SIGTERM or SIGHUP cleanup. A running program must not remain orphaned.
@@ -1364,7 +1364,8 @@ or hardware debugging acceptance.
    Every preview uses the explicitly identified Cortex-M4F visual sample.
 5. Compare palette, borders, tabs, toolbar and status with
    the [interface constraints](requirements.md#interface-constraints). There is no layout selector or named layout.
-   All menus/configuration use pages or pane contents, without floating panes.
+   Pane menus overlay the workspace; input and confirmation dialogs retain it behind them.
+   Connection configuration remains a dedicated workflow. These overlays do not create floating panes.
 6. Click Continue/Pause, use F5/F10/F11/F9, and try Shift+F11 if your terminal
    reports it. Visible Out provides the alternative. Expect only sample changes,
    explicit simulated run state, PC markers, `*` breakpoints and `+` changes.
@@ -1412,27 +1413,38 @@ checks alone do not satisfy the visual gate.
 `tests/unit/test_render.c` inspects ncurses cells and exact direct-color pairs.
 It does not substitute for inspecting the rendered interface.
 
-## Lower dock and independent overlays
+## Lower dock and independent column splits
 
 1. Start a demo or live session at 140x44. Expect three primary groups and three
-   minimized lower title bars directly above the footer. No lower inspector body
-   should become visible or request values merely because its dock is present.
-2. Restore Memory, Locals and Console with their titles or `^` controls. Each
-   should cover its column, leaving primary geometry and browsing state intact.
-   Drag Memory's top grip; Locals and Console must keep their own heights.
-3. Minimize/restore a group with `_`/`^`. Confirm tabs, selection, drafts and
-   preferred height survive. Try keyboard pane IDs/cycling and resize mode;
-   Tab selects visible dividers, arrows resize, Enter/Escape finishes.
-4. Shrink to 80x24. Open groups overlap across the workspace. The most recently
-   focused one is on top. Click an exposed header or select the pane to raise
-   another open group. Expanded groups have no duplicate bottom dock. Covered
-   controls must not receive clicks or wheel input.
-5. Restore 140x44 and confirm independent preferred heights return. Enter/leave
-   Source fullscreen; restore must retain dock visibility, tabs and split trees.
-6. Close/start another session. Expect all lower groups minimized and default
-   heights on first restore; no values/permissions or pending requests carry over.
-7. Repeat mouse, keyboard, resize and Console output in an isolated tmux session.
-   These manual UX checks remain distinct from automated terminal-cell tests.
+   minimized lower title bars above the footer. A dock alone does not make its
+   inspector visible or authorize values.
+2. Expand Memory. Source must shrink vertically while retaining its bottom
+   controls. Disassembly and Registers must keep their original sizes. Repeat
+   separately with Locals and Console, then leave all three open.
+3. Drag each separating grip to a different height. Both partners must remain
+   usable; the other columns must not move. Use mouse clicks and Ctrl+Up/Down
+   to transfer content focus between each pair, then scroll each independently.
+4. Open an upper pane's Actions while its lower partner is expanded. Check
+   adaptive dropdown placement, open an input dialog, cancel it, and confirm
+   pane sizes, selection, scroll positions and focus are retained.
+5. Repeatedly minimize/expand each lower group. Check tabs, drafts, selection and
+   preferred heights. Enter/leave Source fullscreen and try nested split/close.
+6. Resize to 80x24, 80x20 and back, including with a menu/dialog open. Compact
+   navigation shows a column pair when both trees fit, otherwise one retained
+   view; other groups remain reachable. No persistent rectangles may overlap.
+   Preferred heights and expansion states must return at larger dimensions.
+7. Compare normal Ashen and high-contrast with only Locals expanded, two different
+   lower heights and all three expanded. Check continuous exterior corners,
+   shared T/cross junctions, minimized docks, terminal edges and footer spacing.
+8. With a native fixture, continue/pause, switch frames, update data and close the
+   session with lower panes open. Check that hidden controls never receive input
+   and all target-read permissions remain unchanged. A new session starts with
+   all lower groups minimized.
+9. Repeat directly and through an isolated tmux server. Automated layout tests
+   cover non-overlap, per-column minimums and temporary clamping; renderer tests
+   cover every expansion combination and drawing-order independence. The native
+   popup suite covers simultaneous pairs, independent grips, mouse/keyboard focus,
+   dialogs, resizing and backend events. Actual font appearance remains manual.
 
 ## Tiling, tabs and terminal resizing
 
@@ -1638,8 +1650,9 @@ aggregate/Flash/caller checks requiring the shared fixture.
 
 The terminal runner uses a private profile store and exercises actual Session
 Review, enabled-failure acknowledgment, Save setup and repeated reopening. It
-checks Setup/Session/Quit at widths 48/80/123/124/160. Run directly and in isolated
-tmux; these automated checks do not establish owner visual or unplug acceptance.
+checks Setup/Close Session/Quit at widths 48/80/123/124/160. Native profile checks
+also assert one-cell toolbar gaps at widths 80/123/124/152/160, with custom key
+bindings and retained pane geometry. Run directly and in isolated tmux; these automated checks do not establish owner visual or unplug acceptance.
 
 ## RISC-V hardware validation
 
@@ -2278,3 +2291,62 @@ frontend to check `.`, relative entries, `$cwd` and `$cdir`. Source restoration
 also checks that changing HOME after queuing does not change effective paths.
 Save Log retains its refusal to overwrite existing files or follow an existing
 symlink as a new destination.
+
+
+## Contextual menus and dialogs
+
+```sh
+make test-popups
+make test-popups-tmux
+```
+
+Both targets are included in `test-ci` and use the native `code-fixture`. They
+check Actions anchored above its footer, modal input over the existing panes,
+focus restoration, consumed outside clicks, immediate toggles, backend stop
+updates while a menu is open, minimized-dock selectors and terminal resizing.
+The tmux target starts an isolated server; it does not change personal settings.
+Continue/Pause are also exercised while Actions stays open.
+Renderer checks cover common dropdown bounds and lower-half horizontal bars,
+including a non-UTF-8 full-cell fallback. Existing inspector suites retain their
+read/write, explicit verification and uncertainty assertions.
+
+For visual review, open Source/Disassembly Actions, Locals/Watches Actions,
+Memory/Stack Options, Breakpoints management and each pane's `...` selector.
+Expect the same border, padding and adaptive placement as Theme/Variant. Use
+Up/Down, Home/End, Page Up/Down, wheel, track clicks and thumb dragging; long
+lists stay bounded and Back remains reachable. Click outside a dropdown: it
+closes without activating the underlying control. Open an input or safety review:
+it replaces the dropdown with a centered dialog, and outside clicks leave it
+open. Cancel and Escape preserve the original pane and selection.
+
+Repeat at 80×20, with a minimized lower pane and after resizing an open menu.
+Underlying panes must not expand or move to make room. In a color UTF-8 terminal,
+horizontal bars should appear thinner than their full-cell vertical counterparts;
+confirm the appearance directly and through tmux with the actual font. Board,
+target and adapter browsing retain their previous interaction flows.
+
+
+## Scrolling, mixed source and text colors
+
+1. Start the native `code-fixture`, expand Locals and leave Disassembly visible.
+   Enable Mixed at the pane footer. Expect source text between instructions,
+   without paths or line numbers. Toggle off/on: cached mappings should change
+   presentation while preserving the listing.
+2. Wheel upward through earlier functions, then downward through the stopped
+   function. Retained rows must extend continuously rather than alternate between
+   small cached windows. Source mappings must survive a prefix with no line info.
+   Continue to the last known code range: ordinary scrolling must stop before
+   decoding trailing padding. Explicit Go to/page/raw inspection remains separate.
+3. Pan Source and Disassembly horizontally, including stopping partway through
+   an address, keyword, number or comment. Compare each visible fragment's color
+   with its unscrolled form; selected execution rows must retain their highlight.
+   Check that a shorter header notice leaves no trailing characters.
+4. Repeat horizontal panning in Registers, Memory, Stack, Locals/Watches, Call
+   Stack, Threads, Breakpoints and Console. Preserve existing state colors,
+   selected-row styling and Memory's address/ASCII distinction. Plain rows remain
+   plain; scrolling must not assign them unrelated colors.
+5. Check each overflowing pane's horizontal bar: one blank row separates it from
+   the buttons, track/drag hit regions follow the drawn bar, and the blank row is
+   not a scrollbar target. Repeat in short panes and after terminal resizing.
+6. Repeat through tmux. Font appearance remains a visual check, distinct from
+   the renderer's cell/color comparisons and native integration tests.

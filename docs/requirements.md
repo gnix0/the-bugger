@@ -80,7 +80,7 @@ native behavior, and hardware-specific claims require corresponding evidence.
 | FR-10 | MUST | Locals, watches and call stack with frame selection | Inspect defined variable, step into function and change selected frame |
 | FR-11 | MUST | Breakpoint toggle from source gutter and list management | Set, hit, disable, remove breakpoint; breakpoint state stays in sync |
 | FR-12 | MUST | Debugger console & error log (safe command input), state indicator | Inspect MI/GDB diagnostics and recover from a nonfatal bad command |
-| FR-13 | MUST | Six-pane default, view selection/tabs, mouse resizing, **dynamic tiling split** | Create seventh visible view, resize, close it; no floating windows |
+| FR-13 | MUST | Six-pane default, view selection/tabs, mouse resizing, **dynamic tiling split** | Create seventh visible view, resize, close it; no floating debugging panes |
 | FR-14 | MUST | Basic saved connection/source profiles and recent sessions; no preset picker | Save/reopen/edit/delete native/OpenOCD settings; open approved default workspace. Rich workspace/watch/breakpoint restoration is F01, not v0.1.0 |
 | FR-15 | MUST | Real STM32 NUCLEO-F446RE firmware debug through OpenOCD and appropriate ARM GDB | Real hardware: halt/step, inspect ARM registers, memory, ELF source/disassembly |
 | FR-16 | MUST | Process cleanup, handling missing tools/symbols/device/disconnect | Terminal restored and errors visible; no stray owned subprocesses |
@@ -206,14 +206,13 @@ Other characteristics already accepted:
 - **No layout presets or layout selection UI.** The six root groups above form the approved default workspace. In particular, do not implement "Source focus", "Memory focus", or alternate named layouts.
 - **Dynamic split** of any pane horizontally or vertically, so more than six views can be shown; six is the **default**, not a limit. Resizing, tabs, and splitting modify the current workspace; they do **not** select predefined layout modes.
 - The primary workspace and each pane group use tiled split trees. Lower groups
-  start minimized as three title bars immediately above the footer. Restore them
-  over the primary area using `^`; `_` minimizes them. Each has an independent
-  top-edge height grip. Multiple groups may be open; the most recently focused
-  overlapping group is on top. Clicking an exposed part raises that group.
-  Covered content receives no pointer input; minimize a group to access it.
-  Underlying state is retained. Heights last for the session, survive temporary
-  size clamping, and reset with visibility on session startup. No detached
-  windows or layout presets. Toolbar, dock and footer remain accessible.
+  start minimized as three title bars above the footer. `^` expands a group below
+  its primary partner; `_` minimizes it. Each column has an independent vertical
+  split and height grip. Persistent panes share space and never overlap; all
+  visible headers, controls and bodies remain accessible. Heights and expansion
+  states last for the session and survive temporary size clamping. No detached
+  debugging panes or layout presets. Transient menus and dialogs may overlay the
+  workspace without resizing it.
 - When the terminal becomes too small, maintain a usable focused view with accessible tabs or a controlled compact mode. Never write outside the terminal, crash, or silently discard pane state.
 - The retired prototype used simulated example addresses, register contents, log entries and step behavior. The shipped debugger must clearly distinguish live data from demo/mock data.
 - A post-v0.1.0 workspace organization **decision gate** is planned for v0.2.1, before the v0.3.x view expansion. Evaluate pages and other navigation then; pages are an idea, not an approved layout or permission to redesign the current workspace now.
@@ -257,13 +256,19 @@ dedicated simulator integration is planned.
 
 - Mouse-first **and** keyboard-accessible. The visible controls are authoritative; key bindings are accelerators, not the only mechanism.
 - Overflow scrollbars appear only when needed. Vertical bars are one terminal cell wide. Both axes
-  use continuous background-filled tracks and distinct proportional thumbs from the theme;
-  monochrome retains line-drawing tracks and reverse-video thumbs. Live Source/Disassembly, Console
+  use distinct theme-colored tracks and proportional thumbs. Compatible UTF-8 color terminals
+  use half-height horizontal blocks; other color terminals use full cells. Monochrome retains
+  line-drawing tracks and reverse-video thumbs. Live Source/Disassembly, Console
   and context views support independent horizontal scrolling with thumb dragging, track paging and
   Left/Right keys, preserving pane sizes and execution context. Source line numbers stay fixed.
 - Disassembly retains surrounding instructions across steps. Initially show about four valid preceding instructions where GDB metadata permits; keep the viewport still through its middle, scrolling only to preserve roughly five visible rows above and below the PC (smaller margins in short panes, clamped to available context). Manual browsing stays put until stepping or Return to Stopped. Bounded earlier/later windows remain browsable without moving PC; never guess x86 instruction boundaries or treat this as execution history.
 - `q` closes/backs out of the current screen outside text fields; in the workspace it leaves the session for the launcher after confirmation. At the launcher it does not exit. `Ctrl+Q` quits from any screen, retaining active-session confirmation. Text fields accept a literal `q` during ordinary or Insert editing; with Vim-like input enabled, Escape first returns Insert to Normal, then backs out. Footers distinguish these actions.
 - Standard desired shortcuts: `F5` continue, `F9` breakpoint, `F10` next/step over, `F11` step into, `Shift+F11` step out **where the terminal reports it**. Provide clickable alternatives and allow remapping if tmux/terminal intercepts or collapses special keys.
+- Contextual menus anchor to their rendered controls and adapt above/below within usable
+  terminal bounds. Overflowing lists scroll without moving or expanding the underlying panes.
+  Input and confirmation dialogs retain the workspace, restore focus on dismissal and leave
+  debugger-event processing active. Connection/profile workflows remain dedicated screens;
+  board, target and adapter selection retain their existing flows.
 - Startup-menu selection, text fields, dialogs, confirmation prompts and view changes must all be operable by clicks plus straightforward arrow/Tab/Enter/Escape navigation.
 - Workspace arrow navigation follows visible control geometry: Left/Right stay
   in the visual row, Up/Down prefer aligned controls, and directions do not wrap.
@@ -391,7 +396,10 @@ future-work status are in [the roadmap](roadmap.md).
 ### Disassembly
 
 - Browse across function boundaries and unclassified ranges with bounded work
-  and visible uncertainty. Missing range metadata alone is not a navigation wall.
+  and visible uncertainty. Ordinary edge scrolling stops before decoding beyond
+  an established code boundary without another known code anchor; explicit Go to,
+  paging and raw inspection remain available. Missing range metadata alone is not
+  a navigation wall for explicit inspection.
 - Reconstruct evicted rows by decoding forward from reliable anchors, never by
   guessing variable-length instruction boundaries. Historical rows/anchors may
   remain inspectable but establish fresh boundaries only when their validity for
@@ -553,8 +561,9 @@ tab/layout restoration without new setup fields.
   on Escape. Source/Register caller context changes remain GDB-authoritative;
   Stack retains its frame-zero anchor.
 - Expanded lower groups retain top minimize/menu controls and omit duplicate
-  bottom docks. Use available chrome spacing while retaining primary pane
-  positions/sizes and compact navigation. No workspace-schema change is needed.
+  bottom docks. The corresponding primary viewport shrinks to share the column;
+  other columns retain their own sizes. Preserve view state and compact navigation.
+  No workspace-schema change is needed.
 
 ## Deliberate variable and RAM editing (F03–F04)
 

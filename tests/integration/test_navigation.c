@@ -158,7 +158,7 @@ static void fullscreen_focus(void)
     test_terminal_expect(&motions, "Source | fullscreen");
     for (int i = 0; i < 8; ++i) { keys("\033OC", "l"); }
     selected("Quit"); keys("\033OC", "l"); selected("Quit");
-    keys("\033OD", "h"); selected("Session");
+    keys("\033OD", "h"); selected("Close Session");
     both("\t"); selected("Quit"); both("\t"); selected("[ Restore ]");
     both("\t"); selected("Continue"); /* No hidden panes/body/dividers. */
     for (int i = 0; i < 8; ++i) { keys("\033OC", "l"); }

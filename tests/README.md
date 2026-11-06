@@ -16,6 +16,10 @@ records remain in the [validation records](../docs/validation.md).
   stepping and owned-session cleanup, and is included in `make test-native`.
   See [fullscreen procedures](../docs/testing.md#source-fullscreen).
 
+- `make test-popups` and `make test-popups-tmux`: native contextual menus,
+  workspace-preserving dialogs, focus/dismissal, backend events, minimized-dock
+  placement and resize. Both are included in `test-ci`.
+
 - `make test-navigation`: verifies spatial controls, deliberate content focus,
   fullscreen/resize focus retention and arrow-key versus opt-in h/j/k/l aliases
   through real demo PTYs, including menus, tabs/bodies, resize, confirmations,
@@ -26,7 +30,8 @@ records remain in the [validation records](../docs/validation.md).
   a Config/Themes PTY flow; included in `make test`. `test-preferences` checks
   defaults, private atomic saves, stale writers and invalid-file preservation.
   `test-render` checks contrast, direct/256/8-color/monochrome fallbacks and
-  background-filled scrollbar geometry and family-specific accents on both axes.
+  scrollbar geometry and family-specific accents on both axes, half-height UTF-8
+  horizontal blocks and non-UTF-8/monochrome fallbacks.
   `test-themes-tui` checks every preview, dependent variants, Back/Save/restart,
   keyboard/mouse, anchored dropdowns, upward placement, dismissal, resize and
   compact rendering and identical Source capacity across palettes. See the [theme procedure](../docs/testing.md#themes-and-configuration).
@@ -227,7 +232,7 @@ records remain in the [validation records](../docs/validation.md).
 - `test-unit`: demo state transitions, bounded logs, tab closing and per-view
   state preservation.
 - `test-layout`: tree ownership, unique pane IDs, geometry bounds/non-overlap,
-  gutter coverage, recursive minimum sizes, split/collapse, compact restoration,
+  gutter coverage, independent upper/lower columns, recursive minimum sizes, split/collapse, compact restoration,
   76,800 size/focus cases, 12,000 seeded operations, capacity and pool reuse.
 - `test-render`: exact palette, semantic colors, selected rows and monochrome tabs.
 - `test-cli`: help/version, non-TTY diagnostics and invalid/literal arguments.

@@ -14,8 +14,8 @@ Native and STM32 F05 results are recorded. ESP32-S3/Xtensa and ESP32-C6/RISC-V
 validation was reported by the maintainer; supporting evidence and limitations
 remain documented below. The [acceptance closeout](#f05-acceptance-closeout--2026-11-04)
 supersedes earlier pending-acceptance statements. Subsequent v0.2.0 menu/path
-corrections and theme additions remain subject to review and do not extend the physical validation
-claims.
+corrections, theme additions and workspace refinements remain subject to review
+and do not extend the physical validation claims.
 
 Useful starting points:
 
@@ -2330,7 +2330,7 @@ terminal so the 22-line fixture still overflows the enlarged primary viewport.
 Physical STM32 and direct-Alacritty human UX checks were not performed. Native,
 local gdbserver, simulated MI/OpenOCD fixtures and isolated tmux do not establish
 hardware behavior or hosted Ubuntu success. Task 1.3 MMIO remains unimplemented.
-Manual review procedure: [lower overlays](testing.md#lower-dock-and-independent-overlays).
+Manual review procedure: [lower overlays](testing.md#lower-dock-and-independent-column-splits).
 
 ## v0.1.3 Task 1.3 — documentation consolidation
 
@@ -4399,3 +4399,161 @@ evidence, not a hosted CI result. Earlier focused failures and interrupted
 baselines remain recorded under `build/scrollbar-refinement/` and
 `build/scrollbar-refinement-verified-ci-20261105/`; they are not passing evidence.
 No physical target operations were performed. Visual acceptance remains pending.
+
+
+## Independent column splits and contextual interactions — 2026-11-06
+
+Expanded lower inspectors now share a vertical split with their primary partners.
+Each column retains its own preferred height; persistent pane rectangles no longer
+overlap. Shared frame junctions derive from visible geometry, and reserved rows
+separate pane borders from status and dock controls. Mixed disassembly retains
+source text without the repeated path/line prefix; its toolbar owns the Mixed toggle.
+
+Focused layout checks passed, including independent heights, nested trees,
+minimum-size clamping, retained preferences, hit testing and non-overlap across
+terminal sizes. Renderer checks passed for all eight lower-group combinations,
+shared junctions, content preservation and reversed drawing order. Native terminal
+checks passed for workspace navigation, both partners' mouse/keyboard focus,
+independent height grips, fullscreen restoration, contextual dialogs, backend
+updates and mixed-source rendering. Popup and navigation checks also passed
+through an isolated tmux server. Logs are under `build/column-splits/`:
+`layout-final.log`, `unit.log`, `interaction-0.log`, `interaction-1.log`,
+`navigation-tmux.log` and `code-native.log`.
+
+Focused static analysis of `src/layout/layout.c`, `src/tui/render.c` and
+`src/tui/app.c` passed; `analysis.log` retains its output. A subsequent layout-only
+analysis passed after the narrow-column fallback correction; see
+`layout-analysis-final.log` and its exit record.
+
+Earlier full-baseline attempts remain recorded in
+`build/column-splits-ci-20261106T160022Z/test-ci.log` and `final-test-ci.log`, both
+exit 2. They exposed test assumptions about the former shared status/border row
+and startup output remaining visible in the Console tail. The checks now assert
+separate frame/status rows and explicitly browse retained Console output; the
+original status and process-ID assertions remain. A separate profile check also
+exposed the old pane-header offset; its geometry assertions include the reserved
+frame row. The interrupted `profiles-final.log` has no completion result and is
+not passing evidence.
+
+The final complete fortified host baseline passed, exit 0:
+
+```sh
+TERM=xterm-256color make -j1 BUILD_DIR=build/column-splits-ci-20261106T160022Z CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+This task-specific build directory began empty; subsequent attempts reused the
+same fortified flags. The successful run is recorded in `verified-test-ci.log`
+and `verified-test-ci.exit` in that directory. `verified-environment.txt` records
+Linux x86-64, GCC 16.2.1, GDB 18.1 and tmux 3.8. The input hashes and
+`verified-verification.json` confirm that no source, header, test or build inputs
+changed during the successful run. It includes native GDB, independent column
+interaction, real tmux, local gdbserver and OpenOCD host checks.
+
+These are local host results, not hosted Ubuntu CI or physical-target evidence.
+No physical target operations were performed. Visual review with the actual
+terminal/font and maintainer acceptance remain pending; see the
+[independent column review procedure](testing.md#lower-dock-and-independent-column-splits).
+
+
+## Mixed disassembly and scrollbar follow-up — 2026-11-06
+
+Terminal reproductions captured a mixed listing losing its source rows after
+upward expansion, then decoding zero-filled padding after downward expansion.
+A direct GDB comparison also returned a flat instruction list for a mixed request
+beginning in `_start`, while a request beginning in `main` returned source wrappers.
+The reproduction logs are in `build/disassembly-review/`: `ui-probe.log`,
+`gdb-wide-mode5.log` and `gdb-mixed.log`.
+
+Continuous wheel/keyboard scrolling now merges useful cached extensions and
+rejects contained windows that cannot extend the requested edge. It stops new
+unclassified decoding after an established code boundary unless raw inspection
+was explicitly selected; explicit address/page inspection remains available.
+Mixed refresh retains the original listing, segments requests at known function
+anchors and limits work to 128 decoded instructions. Identical retained
+instructions keep their source mappings. Cached Mixed toggles change presentation
+without replacing the listing. Header composition and retained column widths
+remove stale suffixes and shrinking-field shifts.
+
+Horizontal bars now reserve one blank row before pane controls, with viewport
+sizes and mouse hit regions adjusted together. Source coloring classifies whole
+tokens before clipping; visible address fragments in Disassembly retain their
+color. Rendering paths for Registers, Memory, Stack, Locals/Watches, Call Stack,
+Threads, Breakpoints and Console were inspected: uniform row state colors are
+independent of horizontal offset, and Memory clips its address/ASCII spans.
+This inspection is distinct from visual acceptance of every view.
+
+Focused checks passed under `build/disassembly-review/`:
+
+- `render-verified.log`: source fragments retain exact cell colors, including
+  selected rows, keywords, comments, strings and numbers; existing palette,
+  scrollbar and frame checks also passed.
+- `model-verified.log`: authored MI code-model checks passed.
+- `native-verified.log`: real GDB mixed refresh from `_start`, continuous edge
+  scrolling, known-code termination and retained instruction identity on toggles;
+  existing optimized, stripped, C++ and relocated-source checks also passed.
+- `code-tui-verified.log`: real source/disassembly/Console navigation, track
+  paging/dragging, blank scrollbar gap, stepping and mixed rows passed.
+- `inspectors-final.log`: Memory, Locals/Watches, Stack, context through tmux,
+  register editing, and contextual popup checks through tmux passed. Popup checks
+  include the color of a partially clipped disassembly address; direct checks
+  also passed in `popups-final.log`.
+
+Each final check above has a matching exit record of 0. The earlier
+`code-tui-focused.log` failure remains: adding the gap shortened its source
+viewport enough to hide the marker the test intended to pan to. Its test terminal
+height was increased by one row, preserving the original overflow and marker
+assertions; the later complete code-view check passed.
+
+Focused static analysis processed the Code model, renderer and TUI. Its initial
+run reported one warning about the adjacent pane-ID and signed-direction
+parameters; their distinct roles are now documented at the helper. The corrected
+Code-model check passed, exit 0, in `analysis-model-final.log` and its exit record;
+`analysis.log` preserves the original diagnostic and the renderer/TUI analysis.
+
+The earlier column-split full baseline applies to the preceding tree. The later
+fresh fortified result and maintainer acceptance are recorded in the
+[workspace review closeout](#workspace-review-closeout--2026-11-06). No physical
+hardware operations were performed by these host checks.
+
+
+## Workspace closing controls — 2026-11-06
+
+The toolbar now separates Setup, Close Session and Quit with one-cell gaps.
+Close Session is the former Session control: its close/confirmation behavior is
+unchanged, and Quit remains application-wide. Execution-key hints shorten where
+needed to preserve the toolbar row budget. Usage and testing references use the
+new label.
+
+Native profile checks passed directly and through isolated tmux, including exact
+button coordinates, gap backgrounds and retained pane geometry at widths
+80/123/124/152/160 with custom bindings. Navigation and fullscreen checks also
+passed. Logs are in `build/toolbar-spacing/focused.log` (direct profile pass,
+then an incomplete-redraw timing failure in the new tmux assertion) and
+`verified.log` (corrected tmux wait, navigation and fullscreen, exit 0).
+The wait now includes the asserted toolbar coordinates and gap colors, preserving
+the checks instead of accepting a partially redrawn resized screen.
+See the [workspace review closeout](#workspace-review-closeout--2026-11-06) for
+the full-baseline result, subsequent toolbar checks and acceptance.
+
+
+## Workspace review closeout — 2026-11-06
+
+The maintainer accepted the workspace and toolbar corrections. The broader
+v0.2.0 workflow review continues; this acceptance does not authorize publication
+or extend physical-target validation.
+
+The fresh fortified host baseline passed, exit 0:
+
+```sh
+TERM=xterm-256color make -j1 BUILD_DIR=build/ui-final-20261106T202713Z CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+The complete log and exit record are `test-ci.log` and `test-ci.exit` in that
+build directory. The log reaches the final real-OpenOCD host check without
+hardware access. This covers the contextual menus, independent column layout,
+mixed-disassembly and scrollbar corrections preceding the toolbar follow-up.
+
+The Close Session label and toolbar gaps were changed afterward. Their later
+native profile, tmux resize, navigation and fullscreen checks passed as recorded
+above. The earlier full baseline is not presented as a rerun of that later tree.
+These are local host results, not hosted Ubuntu CI results.
