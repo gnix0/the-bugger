@@ -1826,7 +1826,9 @@ bool tb_code_event(TbCode_t *code, const TbGdbEvent_t *event)
                         range.anchor <= view->scan_target) {
                         next = range.anchor;
                     } else {
-                        next = 0;
+                        /* The retained window may start beyond known code.
+                         * Join it across a labeled gap instead of decoding the gap. */
+                        next = view->scan_target;
                     }
                 }
             }
@@ -2721,6 +2723,9 @@ static bool listing_cached(TbCode_t *code, int id, int direction, bool extend)
     View_t           *view = &code->views[id];
     TbBrowseSample_t  sample;
 
+    if (extend && !view->data.instruction_count)
+        return false;
+
     TbBrowseKey_t key = listing_key(view, id);
     TbCodeView_t  saved;
 
@@ -2730,7 +2735,21 @@ static bool listing_cached(TbCode_t *code, int id, int direction, bool extend)
             return false;
         }
         memcpy(&saved, sample.data, sizeof(saved));
-        if (!extend || (saved.instruction_count &&
+        bool classified = true;
+        if (extend && !view->raw) {
+            uint64_t edge = view->data.instructions[
+                direction < 0 ? 0 : view->data.instruction_count - 1].numeric;
+            for (size_t i = 0; i < saved.instruction_count && classified; ++i) {
+                const TbInstruction_t *instruction = &saved.instructions[i];
+                if (direction < 0 ? instruction->numeric >= edge : instruction->numeric <= edge)
+                    continue;
+                TbImageRange_t range;
+                classified = image_lookup(code, instruction->numeric, &range) &&
+                             range.kind == TB_IMAGE_CODE && instruction->bytes > 0 &&
+                             instruction->bytes <= range.end - instruction->numeric;
+            }
+        }
+        if (!extend || (classified && saved.instruction_count &&
             generation_equal(sample.key.generation, view->data.assembly_generation) &&
             sample.key.epoch == view->data.assembly_epoch &&
             (direction < 0 ? saved.instructions[0].numeric < view->data.instructions[0].numeric
@@ -2738,7 +2757,8 @@ static bool listing_cached(TbCode_t *code, int id, int direction, bool extend)
                   view->data.instructions[view->data.instruction_count - 1].numeric))) {
             break;
         }
-        /* A contained cached window cannot extend this viewport's edge. */
+        /* Neither contained windows nor unclassified inspection history may
+         * extend an ordinary viewport's edge. Explicit paging retains access. */
         key.begin = sample.key.begin;
     }
 
@@ -2787,7 +2807,10 @@ static bool listing_cached(TbCode_t *code, int id, int direction, bool extend)
 static bool reconstruct(TbCode_t *code, View_t *view, uint64_t anchor)
 {
     uint64_t target = view->data.instructions[0].numeric;
-    if (anchor >= target || target - anchor > 1024) {
+    TbImageRange_t range;
+    bool gap = !view->raw && image_lookup(code, anchor, &range) && range.kind == TB_IMAGE_CODE &&
+               range.end <= target && range.end - anchor <= 1024;
+    if (anchor >= target || (target - anchor > 1024 && !gap)) {
         message(code, "No reliable anchor within the bounded reconstruction window; prior listing retained.");
         return false;
     }
@@ -2851,12 +2874,17 @@ static bool assembly_page(TbCode_t *code, int id, int direction, bool scroll)
     uint64_t retained_anchor = 0;
     bool     retained        = (direction < 0) && (anchor_before(code, id, &retained_anchor));
 
-    if (view->indexed) {
+    if (view->indexed || (scroll && !view->raw)) {
         TbImageRange_t range;
         uint64_t       anchor;
 
         if (direction < 0) {
             bool mapped = tb_images_trusted_neighbor(code->images, view->data.anchor, -1, &range);
+
+            if (scroll && !view->raw && retained) {
+                TbImageRange_t previous;
+                retained = image_lookup(code, retained_anchor, &previous) && previous.kind == TB_IMAGE_CODE;
+            }
 
             if (!mapped && !retained) {
                 message(code, "No reliable earlier boundary; historical rows remain available.");

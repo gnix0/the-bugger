@@ -4557,3 +4557,263 @@ The Close Session label and toolbar gaps were changed afterward. Their later
 native profile, tmux resize, navigation and fullscreen checks passed as recorded
 above. The earlier full baseline is not presented as a rerun of that later tree.
 These are local host results, not hosted Ubuntu CI results.
+
+
+## Scrollbar insets and Mixed annotations — 2026-11-08
+
+Mixed source annotations now omit leading spaces and tabs at presentation time;
+Source indentation and stored source text remain unchanged. Pane and menu tracks
+use a shared one-cell inset. Horizontal track length is independent of the Source
+gutter, and popup tracks extend beside pinned footer controls. Thumb geometry and
+mouse input use physical track length while paging retains the content viewport.
+
+Focused host checks passed sequentially. Logs and matching `.exit` records are
+in `build/scrollbar-insets/`:
+
+- `render-checked.log`: renderer geometry, unequal track/viewport lengths,
+  endpoint positions, palette and clipping assertions.
+- `code-final.log`: native Code TUI, left-aligned Mixed annotations, source
+  navigation, horizontal dragging, colors and resize behavior.
+- `pane-menus.log` and `pane-menus-tmux.log`: equal pane-relative horizontal
+  insets, popup footer tracks, anchored controls and focus, directly and through
+  isolated tmux.
+- `workspace-fixed.log`: workspace mouse paging, dragging and layout behavior.
+- `other-controls.log`: `test-keybinds`, `test-script-tmux` and `test-stack-tui`.
+- `memory.log`: `test-m10-native`, including native Memory TUI behavior.
+- `analysis.log`: `make SOURCES='src/tui/app.c src/tui/render.c' analyze`, exit 0.
+
+`workspace.log` preserves an initial failed mouse assertion: after the track
+moved inward, the demo body hit region still included its column. Reducing that
+region to the actual content width corrected the overlap; the rerun passed.
+A prepared zero-row native body also retains its actual height instead of borrowing
+a fallback viewport that could draw across controls in a tiny pane.
+
+The complete fresh fortified `test-ci` baseline is left for the maintainer to run.
+These focused results do not establish that baseline or hosted Ubuntu CI success.
+No hardware operations were performed. Font appearance, final visual review and
+acceptance remain pending.
+
+
+## Shared text-field paste isolation — 2026-11-08
+
+Tabs and newlines in clipboard input previously reached ordinary navigation and
+submission handlers. Field capacity was bounded, but the paste could continue in
+other fields. Shared bracketed-paste handling now retains the original text-field
+identity, converts tabs/line breaks to spaces, ignores other control characters
+and discards overflow at the existing field limit. Menu/button pastes are ignored.
+Payload decoding bypasses shortcuts and Vim commands; completion restores normal
+input. Resize and debugger pumping remain active without per-character redraws.
+
+Focused checks passed, exit 0, with logs and matching exit records under
+`build/paste-isolation/`:
+
+- `focused-fixed.log`: `make -j1 test-keybinds`, including the first overflow,
+  saved-value, split-delimiter, modal-field and Vim regression checks.
+- `tmux.log`: those checks through isolated real tmux.
+- `native-final.log`: `./build/test-keybinds-tui` with the normal application and
+  `debug-fixture` absolute paths, including the later menu-paste assertion and
+  a live Console draft that remains unsubmitted after pasted newlines.
+- `native-tmux-final.log`: the same native checks with `TB_KEYBINDS_TEST_TMUX=1`,
+  including existing shortcut, context-transfer, editing and terminal cleanup checks.
+
+`focused.log` preserves an initial test-setup failure: the saved-profile assertion
+ran with an empty GDB field. The regression now explicitly supplies the required
+configuration before testing paste isolation; profile validation was not relaxed.
+
+Focused TUI static analysis passed, exit 0, in `analysis.log`. Documentation
+link/anchor checks and the normal build passed in `document-checks-final.log`
+and `normal-build.log`.
+
+The complete fortified host baseline remains for the maintainer to run on the
+combined scrollbar and paste corrections. No hardware operations were performed;
+these local results do not claim hosted CI success or maintainer acceptance.
+
+
+## Disassembly cache bounds and warning recovery — 2026-11-08
+
+The earlier known-code edge restriction did not cover the complete navigation
+lifecycle. Ordinary forward expansion could fall through when the last listing
+was unindexed, and cached unknown rows from explicit inspection could bypass the
+new-read guard. Reverse recovery also depended on retained listing/anchor state.
+After eviction, an unindexed window did not consult available trusted ELF anchors;
+reconstruction treated the gap before the retained window as an unfinished scan.
+The viewport could therefore remain in unknown rows when navigating upward.
+
+Ordinary expansion now checks current mapping evidence independently of the last
+window's indexed flag. Cached extensions must classify their added instructions
+as code, including the instruction footprint. Reverse recovery can reconstruct a
+bounded known-code prefix from trusted metadata after eviction and join retained
+rows across a labeled gap. A long gap does not increase decoding work. Explicit
+paging and raw inspection retain their separate behavior.
+
+Classification remains based on the rendered instruction slice. The warning is
+not hidden to mask unknown rows: it clears once known instructions fill the
+viewport and remains valid where unknown instructions are actually visible.
+
+Regression failures were reproduced before the corresponding corrections:
+`regression-before.log` records the unindexed forward-scroll bypass;
+`native-recovery-before.log` records failed reverse recovery after dropping cached
+listings and anchors; `cached-reentry-before.log` records ordinary expansion
+merging unclassified inspection history after returning to known code.
+These logs and subsequent results are under `build/code-range-recovery/`.
+
+Final focused checks passed, each with exit 0 and a matching `.exit` record:
+
+- `checked-model.log`: `./build/test-code` with the absolute `fake-mi` path;
+  rejected ordinary unknown-range expansion queues no additional request.
+- `checked-native.log`: `./build/test-code-native` with the five Code fixtures
+  and relocated-source directory. This includes explicit unknown paging, a gap
+  exceeding 1 KiB, dropped listing/anchor caches, reverse recovery, visible-slice
+  classification, ordinary cached re-entry prevention, raw inspection and an
+  unchanged stopped PC, alongside the existing native Code checks.
+- `checked-tui.log`: `./build/test-code-tui` with the application, Code and debug
+  fixture absolute paths. Both assembly-only and Mixed sequences cover explicit
+  unknown paging, ordinary reverse scrolling, warning recovery, repeated edge
+  scrolling, return-to-stop and smaller/larger terminal dimensions. Existing
+  source, stepping, navigation, colors and popup roundtrip checks also passed.
+- `checked-tmux.log`: that complete TUI check through an isolated real tmux
+  server, using the recorded `tmux-app` wrapper and `tmux.conf`.
+- `analysis.log`: `make SOURCES=src/model/code.c analyze`.
+
+Intermediate TUI setup failures remain in the earlier logs: a narrow pane hid
+the expected ELF footer; overlapping cached windows could retain the same first
+row; and placing manual browsing before the stepping check changed its starting
+state. The final check uses visible headers, preserves classification assertions
+and runs the new browsing sequence after the existing stepping check.
+
+The final complete fortified baseline remains for the maintainer to run on this
+combined working tree. Earlier full-baseline runs do not cover these corrections.
+No hardware operations were performed; local focused results do not establish
+hosted CI success, manual acceptance or release authorization.
+
+
+## Boundary notices and floating session reviews — 2026-11-08
+
+This supersedes the header-warning expectations in the preceding disassembly
+entry. Missing verified ELF mapping metadata is not an unsuccessful navigation
+attempt. The frontend no longer promotes that classification to an automatic
+unknown-code banner on initial display, explicit paging or ordinary browsing.
+Mapping evidence remains represented by the existing `ELF:?`/native/user footer.
+
+Start/End notices are now pane-local results of unsuccessful ordinary edge-scroll
+attempts on fresh, settled stopped instructions. Reverse scrolling, a changed
+viewport, new listing, stale context, page navigation or terminal resize clears
+the notice. Mapping classification and its model API remain separate; no mapping
+is upgraded, and the earlier cache/reconstruction safeguards remain in place.
+
+Native launch/attach, OpenOCD and existing-server reviews now share centered
+floating dialogs over their configuration forms. The compositor retains the
+parent field viewport and restores the Review control on Back/Escape. Only the
+review's controls receive input. Start/Connect remains explicit; profile editing
+stays in configuration. Saved-profile entry receives the same return target.
+OpenOCD review warnings wrap at narrow widths, and an empty Symbols field now
+explicitly states that source stepping is unavailable.
+
+Focused host checks passed, exit 0, with logs and matching exit records under
+`build/session-review-boundaries/`:
+
+- `boundaries-rechecked.log`: complete direct Code TUI, including assembly and
+  Mixed notice transitions, explicit paging without an automatic banner, reverse
+  dismissal, source navigation and existing stepping checks.
+- `boundary-tmux.log`: complete Code TUI through isolated real tmux, including
+  both boundary notices, reverse dismissal and resizing with a notice visible.
+- `remote-rechecked.log`: `make -j1 test-m15-native`; real gdbserver connection
+  review containment, quiet initial display without verified mapping metadata,
+  notice after overscroll, reverse dismissal and existing remote lifecycle tests.
+- `openocd.log`: `make -j1 test-m16-tui`; floating review, argv paging at 80×20,
+  explicit startup and existing host fixture lifecycle/reset-confirmation tests.
+  The OpenOCD/MI peers in this check are fixtures, not physical hardware.
+- `final-popups.log` and `final-popups-tmux.log`: native review containment,
+  outside-click isolation, minimum-size rendering, Escape/Enter focus restoration
+  and existing workspace popup behavior directly and through isolated tmux.
+- `profile-reviews.log`: `make -j1 test-m13-native`, including actual GDB source
+  settings, saved-profile reopening, setup restoration and review workflows.
+- `input.log`: `make -j1 test-keybinds`, including paste isolation, Enter/Backspace,
+  Vim fields, capture and terminal cleanup.
+- `analysis.log`: `make SOURCES=src/tui/app.c analyze`.
+
+Earlier failures remain in the logs. The first new Code TUI setup assumed a
+particular opcode prefix after paging; the final test asserts navigation outcomes
+instead. The remote notice-dismissal assertion initially used a fixed short pump
+interval; it now waits up to a bounded deadline for the same single reverse event
+to be rendered, retaining the dismissal assertion. An initial command used a
+nonexistent Make target; the recorded passing OpenOCD check uses `test-m16-tui`.
+
+No physical board operations were performed. Final manual acceptance and a fresh
+complete fortified host baseline on the combined working tree remain pending;
+these focused results do not claim hosted CI success or release authorization.
+
+
+### Exposed configuration beneath session reviews — 2026-11-08
+
+The previous review compositor retained and painted the configuration, but the
+opaque review rectangle completely covered its centered form. The retained page
+header and bounded-dialog checks did not detect this presentation failure.
+Review width now reserves visible form labels beside the modal through one
+shared sizing rule for native launch/attach, OpenOCD and existing-server reviews.
+The configuration keeps its position and field viewport; only the review is
+constrained. Its paragraphs and OpenOCD arguments wrap to the resulting width.
+
+Focused host evidence is in `build/review-composition/`. The new native exposed-label
+assertion fails against the previous implementation (`before.log`). After the fix,
+`native.log` and `tmux.log` pass native launch/attach review, retained-label checks,
+80×20 resizing, dismissal and the existing workspace popup suite. `openocd.log`
+passes `test-m16-tui` with authored offline peers; `remote.log` passes
+`test-m15-native` with real GDB/gdbserver. Both assert configuration labels remain
+visible outside the review. Builds use `BUILD_DIR=build/session-review-boundaries`
+and `CPPFLAGS=-D_FORTIFY_SOURCE=3`, with targets run sequentially using `make -j1`.
+Each final test log has a matching zero `.exit` record. No physical target was
+exercised. Documentation links/render checks and the normal `make -j1` build
+passed. The complete fresh fortified baseline and manual presentation acceptance
+remain pending; these focused results do not replace them.
+
+
+### Session review action spacing — 2026-11-08
+
+OpenOCD review placed its argument paging directly below Start/Back and always
+showed Previous on the first page. Paging now occupies a separate row above the
+acceptance controls with a blank row between them, and only available directions
+are shown. Warning text also has a blank row before paging. Argument capacity is
+calculated from these footer positions, retaining at least one readable argument
+row at 80×20. Native/remote review action rows retain their horizontal gaps.
+
+Sequential focused host checks passed in `build/review-button-spacing/`:
+`test-m16-tui`, `test-popups`, `test-popups-tmux` and `test-m15-native`, using
+`make -j1 BUILD_DIR=build/session-review-boundaries CPPFLAGS=-D_FORTIFY_SOURCE=3`.
+The OpenOCD check asserts the two-row distance and blank separating cells at
+80×20, hides Previous on the first page, and exercises both paging directions.
+Its initial test compilation failure from an out-of-scope assertion variable is
+retained in `assertion-build-before.log`; the corrected complete check passes.
+Final test logs have zero `.exit` records. No hardware was exercised. Normal build
+and documentation checks passed. Full fresh baseline and manual acceptance remain
+pending.
+
+
+### Native launch retry after review focus restoration — 2026-11-08
+
+The maintainer-run fortified baseline stopped with exit 2 in `test-native-tui`;
+its unchanged full log is
+`build/ui-review-final-20261108T161017Z/test-ci.log`. The captured review shows
+GDB still set to the deliberately invalid `/nonexistent/gdb` after the retry.
+The test used five Tabs after Back, assuming focus returned to Mode. Review
+restoration now returns to the invoking Review control, so that sequence never
+replaced the GDB field. This was a stale test-navigation assumption, not evidence
+that the installed GDB executable was missing.
+
+The retry now selects the invalid GDB field explicitly before replacing its
+contents, and additionally asserts that Enter after Back reopens the review.
+The spawn-error, retained invalid path, successful real-GDB retry, Console and
+terminal-restoration assertions remain intact. No production behavior changed.
+The complete `test-native-tui` executable passed directly and with
+`TB_CONSOLE_TEST_TMUX=1`, using the fortified baseline binary and fixtures.
+Commands, full focused logs and zero exit records are in
+`build/native-review-retry/`. The test executable was rebuilt with:
+
+```sh
+make -j1 BUILD_DIR=build/ui-review-final-20261108T161017Z \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  build/ui-review-final-20261108T161017Z/test-native-tui
+```
+
+Documentation checks, `git diff --check` and normal `make -j1` passed. The failed
+baseline remains failed; a complete baseline rerun and acceptance remain pending.

@@ -147,8 +147,17 @@ static void configure(const char *binary, const char *helper, const char *peer)
     char endpoint[64]; (void)snprintf(endpoint, sizeof endpoint, "127.0.0.1:%u", ntohs(addr.sin_port));
     test_terminal_send(&term, "\t\025"); test_terminal_send(&term, endpoint);
     test_terminal_send(&term, "\t\025"); test_terminal_send(&term, helper);
+    int form_x, form_y;
+    CHECK(test_terminal_find(&term, "OpenOCD setup", &form_x, &form_y));
     test_terminal_click(&term, "Review session"); test_terminal_expect(&term, "Review OpenOCD session");
     test_terminal_expect(&term, "Start owned OpenOCD"); test_terminal_expect(&term, "argv[0]");
+    int review_x, review_y;
+    CHECK(test_terminal_find(&term, "Review OpenOCD session", &review_x, &review_y));
+    CHECK(review_x > 0 && review_y > 0);
+    CHECK(test_terminal_find(&term, "Configure session", NULL, NULL));
+    CHECK(form_x < review_x - 1);
+    CHECK(memcmp(term.cells[form_y] + form_x, "Open", 4) == 0);
+    CHECK(test_terminal_dialog_find(&term, "Review OpenOCD session", "Start session", NULL, NULL));
     test_terminal_expect(&term, "selected-m16.cfg");
 }
 int main(int argc, char **argv)
@@ -177,7 +186,17 @@ int main(int argc, char **argv)
     }
     configure(argv[1], argv[2], argv[3]);
     test_terminal_resize(&term, 20, 80); test_terminal_expect(&term, "Review OpenOCD session");
-    test_terminal_click(&term, "Next argv"); test_terminal_click(&term, "Previous argv");
+    int paging_y, action_y, action_x;
+    CHECK(test_terminal_find(&term, "Next argv", NULL, &paging_y));
+    CHECK(test_terminal_dialog_find(&term, "Review OpenOCD session", "Start session", &action_x, &action_y));
+    CHECK(action_y - paging_y == 2);
+    for (int x = action_x; x < action_x + 28; ++x)
+        CHECK(term.cells[action_y - 1][x] == ' ');
+    CHECK(!test_terminal_find(&term, "Previous argv", NULL, NULL));
+    test_terminal_click(&term, "Next argv");
+    CHECK(test_terminal_find(&term, "Previous argv", NULL, &paging_y));
+    CHECK(action_y - paging_y == 2);
+    test_terminal_click(&term, "Previous argv");
     test_terminal_resize(&term, 44, 160);
     test_terminal_click(&term, "Start session"); test_terminal_expect(&term, "LIVE OPENOCD");
     test_terminal_expect(&term, "LIVE | Stopped"); test_terminal_expect(&term, "Halt");

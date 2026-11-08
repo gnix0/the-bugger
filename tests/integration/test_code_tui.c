@@ -115,8 +115,8 @@ static void scrolling(TestTerminal *term)
     test_terminal_resize(term, 29, 140);
     test_terminal_expect(term, "LIVE | C/C++ | code.c");
     int menu_x, menu_y; CHECK(test_terminal_find(term, "...", &menu_x, &menu_y));
-    CHECK(test_terminal_scroll_cell(term, menu_y + 2, menu_x + 4, true) || test_terminal_scroll_cell(term, menu_y + 2, menu_x + 4, false));
-    CHECK(term->backgrounds[menu_y + 2][menu_x + 3] != term->backgrounds[menu_y + 2][menu_x + 4]);
+    CHECK(test_terminal_scroll_cell(term, menu_y + 2, menu_x + 3, true) || test_terminal_scroll_cell(term, menu_y + 2, menu_x + 3, false));
+    CHECK(term->backgrounds[menu_y + 2][menu_x + 2] != term->backgrounds[menu_y + 2][menu_x + 3]);
     horizontal_drag(term, "Actions", 46, true);
     test_terminal_expect(term, "CODE_FIND_MARKER");
     test_terminal_click(term, "CODE_FIND_MARKER");
@@ -243,6 +243,78 @@ static void disassembly_menu_roundtrip(TestTerminal *term)
     }
 }
 
+static void classification_roundtrip(TestTerminal *term, bool mixed)
+{
+    actions(term, false);
+    test_terminal_click(term, "Go to address / symbol");
+    input(term, "main");
+    test_terminal_expect(term, "Instruction window loaded");
+    if (mixed) {
+        test_terminal_click(term, "Mixed");
+        test_terminal_expect(term, "mixed: browsing");
+    }
+    int x, y;
+    CHECK(test_terminal_find(term, "Disassembly", &x, &y));
+    CHECK(!test_terminal_find(term, "Code range unknown", NULL, NULL));
+    CHECK(!test_terminal_find(term, "of available instructions", NULL, NULL));
+    for (int page = 0; page < 3; ++page) {
+        int footer = -1;
+        const char *next = NULL;
+        for (int row = y + 3; row < term->rows - 2; ++row) {
+            if (strstr(term->cells[row] + x, "Mixed")) {
+                next = strstr(term->cells[row] + x, " > ");
+                footer = row;
+                break;
+            }
+        }
+        CHECK(footer > y && next);
+        int button = (int)(next - term->cells[footer]) + 1;
+        mouse_at(term, 0, button, footer, false);
+        mouse_at(term, 0, button, footer, true);
+        long long until = now() + 150;
+        while (now() < until)
+            test_terminal_pump(term, 10);
+        CHECK(!test_terminal_find(term, "Code range unknown", NULL, NULL));
+        CHECK(!test_terminal_find(term, "of available instructions", NULL, NULL));
+    }
+    for (int wheel = 0; wheel < 100 &&
+         !test_terminal_find(term, "End of available", NULL, NULL); ++wheel)
+        mouse_at(term, 65, x + 3, y + 3, false);
+    test_terminal_expect(term, "End of available");
+    mouse_at(term, 64, x + 3, y + 3, false);
+    CHECK(!test_terminal_find(term, "End of available", NULL, NULL));
+    CHECK(!test_terminal_find(term, "Code range unknown", NULL, NULL));
+    for (int wheel = 0; wheel < 100 &&
+         !test_terminal_find(term, "Start of available", NULL, NULL); ++wheel)
+        mouse_at(term, 64, x + 3, y + 3, false);
+    test_terminal_expect(term, "Start of available");
+    mouse_at(term, 65, x + 3, y + 3, false);
+    CHECK(!test_terminal_find(term, "Start of available", NULL, NULL));
+    CHECK(!test_terminal_find(term, "Code range unknown", NULL, NULL));
+    for (int wheel = 0; wheel < 10 &&
+         !test_terminal_find(term, "Start of available", NULL, NULL); ++wheel)
+        mouse_at(term, 64, x + 3, y + 3, false);
+    test_terminal_expect(term, "Start of available");
+    test_terminal_resize(term, 28, 140);
+    test_terminal_expect(term, "Disassembly");
+    CHECK(!test_terminal_find(term, "of available instructions", NULL, NULL));
+    test_terminal_resize(term, 44, 140);
+    test_terminal_expect(term, "Disassembly");
+    CHECK(!test_terminal_find(term, "of available instructions", NULL, NULL));
+    if (mixed)
+        test_terminal_click(term, "Mixed");
+    actions(term, false);
+    test_terminal_click(term, "Follow selected frame (this view)");
+    long long until = now() + 5000;
+    while (!assembly_pc(term) && now() < until)
+        test_terminal_pump(term, 10);
+    CHECK(assembly_pc(term));
+    CHECK(!test_terminal_find(term, "of available instructions", NULL, NULL));
+    puts(mixed ? "PASS mixed boundary warning only after overscroll, reverse dismissal and resize" :
+                 "PASS assembly boundary warning only after overscroll, reverse dismissal and resize");
+}
+
+
 static void direct_start(const char *binary, const char *fixture)
 {
     TestTerminal term;
@@ -265,6 +337,8 @@ static void direct_start(const char *binary, const char *fixture)
     CHECK(source_pc_line(&term) > 0 && assembly_pc(&term) != 0);
     scrolling(&term);
     instruction_margin(&term);
+    classification_roundtrip(&term, false);
+    classification_roundtrip(&term, true);
     test_terminal_send(&term, "\021"); test_terminal_expect(&term, "Terminate the launched program");
     test_terminal_click(&term, "Close session"); test_terminal_stop(&term, 0);
     puts("PASS M07 direct Console start without file browsing clears stale source/assembly");
@@ -292,7 +366,7 @@ static void wheel_up_listing(const char *binary, const char *fixture)
         if (strstr(term.cells[row] + x - 2, "0x")) { ++rows; }
     }
     CHECK(rows >= 8 && assembly_pc(&term) == pc);
-    test_terminal_expect(&term, "address window");
+    CHECK(!test_terminal_find(&term, "Code range unknown", NULL, NULL));
     mouse_at(&term, 65, x + 3, y + 3, false);
     until = now() + 300; while (now() < until) { test_terminal_pump(&term, 10); }
     rows = 0;
@@ -400,6 +474,8 @@ int main(int argc, char *argv[])
         memcpy(rendered, term.cells[row] + mixed_x, width);
         CHECK(!strstr(rendered, "/home/") && !strstr(rendered, "code.c:L"));
         if (strstr(rendered, "code_local")) { source_text = true; }
+        const char *declaration = strstr(rendered, "volatile int code_local");
+        if (declaration) { CHECK(declaration == rendered + 2); }
     }
     CHECK(source_text);
     actions(&term, true); test_terminal_click(&term, "Source lookup settings");

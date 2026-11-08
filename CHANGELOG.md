@@ -10,6 +10,8 @@
 
 ### Changed
 
+- Native, OpenOCD and existing-server session reviews open floating dialogs over
+  their configuration forms, with explicit Start/Connect and Back controls.
 - The workspace toolbar labels its closing control Close Session and separates
   Setup, Close Session and Quit with visible gaps.
 - Theme families are listed alphabetically in both dropdowns and cycling.
@@ -29,10 +31,21 @@
 
 ### Fixed
 
+- Disassembly boundary notices appear only after unsuccessful edge scrolling,
+  clear when browsing back, and no longer appear on startup merely because ELF
+  mapping metadata is unverified.
+- Bracketed pastes remain in the original text field. Excess text is discarded
+  at the field limit; pasted controls cannot navigate, submit or quit.
+- Mixed disassembly source annotations align left without changing Source indentation.
+- Scrollbar tracks use consistent pane-relative insets, independent of source
+  gutters; popup tracks extend beside pinned footer controls.
+
 - Horizontal scrollbars leave a blank row before pane buttons; horizontal panning
   preserves source token colors and visible disassembly address colors.
 - Disassembly scrolling extends cached listings without bouncing between contained
   windows, preserves mixed-source mappings and stops at established code bounds.
+  Cached inspection rows obey the same ordinary-scroll bounds; reverse browsing
+  recovers known code across gaps after cache eviction.
 - Disassembly headers no longer retain fragments of superseded notices, and shorter
   instruction windows retain column widths.
 - Expanded lower panes share independently resizable column space with their

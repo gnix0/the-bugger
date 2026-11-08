@@ -2350,3 +2350,94 @@ target and adapter browsing retain their previous interaction flows.
    not a scrollbar target. Repeat in short panes and after terminal resizing.
 6. Repeat through tmux. Font appearance remains a visual check, distinct from
    the renderer's cell/color comparisons and native integration tests.
+
+
+## Scrollbar insets and Mixed annotation alignment
+
+1. Stop the native `code-fixture` and enable Mixed. Its source annotations should
+   begin at one shared left edge, including declarations, braces and comments.
+   Compare with Source: indentation there must remain intact. Pan horizontally
+   and toggle Mixed off/on; only the annotation presentation should change.
+2. Compare horizontal bars in Source, Disassembly, Registers and expanded lower
+   inspectors. Their tracks use the pane bounds rather than each row's formatting:
+   left and right insets match even though Source keeps a fixed line-number gutter.
+   Both ends, track paging and thumb dragging must reach the same content limits.
+3. Compare vertical bars in live panes, demo/preview panes, Theme/Variant,
+   Keybinds, installed-script browsing and contextual menus. Tracks retain the
+   shared side inset, never share a body mouse target, and fill their allocated
+   vertical region. In contextual menus the track continues beside the pinned
+   Back/section-switch row, ending just inside the bottom border.
+4. Resize while dragging or with a menu open, including minimum-sized panes.
+   Positions remain bounded; a zero-row body must not draw through controls.
+   Repeat through tmux and in monochrome. Thumb length represents the visible
+   content fraction even when the track has a different number of cells.
+
+Renderer checks cover unequal track/viewport lengths and both endpoints.
+Native popup checks assert equal horizontal insets, full-height popup tracks,
+source gutters, color preservation and direct/tmux input. Code-view checks retain
+an explicit left-aligned Mixed annotation assertion; source data is not rewritten.
+
+
+## Paste isolation
+
+1. In a text field, paste more than 255 characters, including tabs, newlines and
+   shortcut characters. Only that field changes; overflow produces a truncation
+   notice. No focus movement, submission, session action or exit should occur.
+2. Paste a short multiline value. Line breaks and tabs become spaces. Backspace
+   and Tab typed afterward retain ordinary editing and navigation behavior.
+3. Repeat in a floating input dialog, inline Memory/Command field and Vim Normal
+   and Insert modes. Pasting in a menu or button does nothing. Command drafts must
+   wait for explicit Enter/Send. Resize during a paste and verify normal input
+   resumes after completion. Repeat through tmux.
+
+The Keybinds TUI regression checks cover overflow, saved field values, control
+isolation, modal fields, Vim Normal mode, resize, fragmented paste delimiters and
+terminal-mode cleanup directly and through isolated tmux.
+
+
+## Disassembly classification and recovery
+
+1. Start the native Code fixture and stop at `main`. Scroll to both ends using
+   the wheel and keyboard. Ordinary expansion must stay within known code,
+   preserve the stopped PC, and label skipped address gaps. Repeat with Mixed on.
+2. Initial display and explicit **>** paging into an unclassified range must not
+   produce an unknown-code or boundary banner. `ELF:?` may remain in the footer.
+   Scroll to the end and attempt to continue: only that unsuccessful expansion
+   produces an End notice. One reverse scroll clears it immediately.
+3. Repeat at the beginning: an unsuccessful upward expansion produces a Start
+   notice; scrolling downward clears it. Return to Stop and scroll repeatedly.
+   Cached unknown inspection rows must not bypass ordinary-scroll bounds. Resize
+   with a notice visible: it clears without another stop or session restart.
+   Check Mixed mode, explicit inspection and remote sessions without verified
+   ELF mapping metadata as well as native mappings.
+4. Explicit paging and **Decode bytes** must still permit deliberate inspection.
+   Disable raw decoding before checking ordinary bounds. No browsing operation
+   may change target execution, the stopped PC or frame selection.
+
+Model regressions check that an unindexed listing cannot queue another ordinary
+unknown-range read. Real-GDB regressions cover explicit unknown paging, a gap over
+1 KiB, dropped listing/anchor caches, reverse reconstruction, visible-slice
+classification, cached re-entry prevention and retained raw inspection. The Code
+TUI check repeats warning recovery, ordinary edge scrolling and terminal resize.
+
+
+## Floating session reviews
+
+For Linux launch/attach, managed or external OpenOCD, and an existing GDB server:
+
+1. Enter a valid draft and activate Review session. Expect a centered bordered
+   dialog over the retained configuration, with the appropriate Start/Connect
+   action and Back. Configuration field labels must remain visibly exposed beside
+   the dialog; a retained page header alone does not establish this. Opening it
+   must not launch or connect tools.
+2. Use Back and Escape; both restore editing and focus to Review session. Values
+   and the configuration field viewport remain intact. Press Enter to reopen.
+3. Resize through 80×20 and larger sizes. Read every field or OpenOCD argv page;
+   Start/Connect and Back remain reachable. OpenOCD argument paging has a blank
+   row separating it from the acceptance controls; unavailable directions are
+   hidden. Click outside: it must not activate
+   the underlying form. Accept only when ready to start the reviewed session.
+
+The native popup test checks floating placement, retained parent header and exposed configuration labels, Escape
+and Enter restoration directly and through tmux. OpenOCD and real remote tests
+assert the same review containment and explicit acceptance controls.

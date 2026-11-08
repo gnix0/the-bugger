@@ -57,8 +57,13 @@ static void start(TestTerminal *term, const char *binary, const char *fixture, b
     if (retry) {
         test_terminal_expect(term, "cannot spawn debugger executable");
         test_terminal_expect(term, "/nonexistent/gdb");
-        test_terminal_click(term, "[ Back ]");
-        test_terminal_send(term, "\t\t\t\t\t\025gdb");
+        test_terminal_dialog_click(term, "Review native session", "[ Back ]");
+        test_terminal_expect(term, "Review session");
+        test_terminal_send(term, "\r");
+        test_terminal_expect(term, "Review native session");
+        test_terminal_dialog_click(term, "Review native session", "[ Back ]");
+        test_terminal_click(term, "/nonexistent/gdb");
+        test_terminal_send(term, "\025gdb");
         test_terminal_click(term, "Review session");
         test_terminal_click(term, "Start native");
     }
