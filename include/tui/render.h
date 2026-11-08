@@ -14,6 +14,10 @@ void tb_border(TbRect_t rect, TbStyle_e style, bool preserve_content);
 void tb_pane_frames(const TbRect_t *panes, size_t count, TbRect_t active);
 /* Position a bounded list against its actual trigger, inside usable screen bounds. */
 TbRect_t tb_dropdown_rect(TbRect_t trigger, TbRect_t bounds, int width, int count);
+/* One-cell inset on the scrollbar's cross-axis and both ends of its track. */
+TbRect_t tb_scrollbar_track(TbRect_t frame, bool horizontal);
+/* Track cells and visible content cells are independent measurements. */
+TbScroll_t tb_scrollbar_layout(TbScroll_t scroll, int length);
 void tb_render_scrollbar(TbRect_t rect, TbScroll_t scroll, bool horizontal);
 void tb_render_demo(const TbDemo_t *demo, int pane, TbRect_t rect);
 void tb_render_source_text(int y, int x, int width, const char *code, bool selected);

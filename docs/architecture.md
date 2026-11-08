@@ -68,6 +68,16 @@ Rendering uses the same field buffers and Unicode cell widths, with bounded
 horizontal viewports; nonfocused fields never mutate the focused cursor.
 File-filter edits still reset paging.
 
+Bracketed paste is handled before shortcut, mouse and modal-editor dispatch.
+Its payload is read literally with ncurses keypad decoding suspended until the
+closing delimiter, including across input chunks and resizes. All text fields
+share the existing bounded editor: tabs and line breaks become spaces, other
+control characters are ignored, and overflow is discarded without changing focus.
+Pastes outside a text field are discarded. The field identity must remain valid
+throughout the paste; no pasted key can submit a command or navigate controls.
+Ordinary input drawing resumes at paste completion, while debugger pumping remains
+active. Terminal cleanup disables bracketed-paste mode on normal and signal exits.
+
 Controls retain `(kind, value, pane)` identities across redraws; rectangles are
 rebuilt from the existing layout. Directional navigation scans at most 1,024
 rendered controls, excludes content/scrollbars/dividers, and prefers aligned
@@ -200,7 +210,15 @@ contrast. RGB roles map to direct color, nearest xterm 256-color entries, or
 existing 8-color/monochrome fallbacks. If quantization merges a foreground with
 its background, the text color supplies a contrasting fallback.
 
-All view and menu scrollbars share a renderer and the existing viewport geometry.
+All view and menu scrollbars share a renderer and a one-cell track-inset helper.
+Track length is independent of visible content length: thumb proportions use the
+actual content viewport, then scale to the drawn track. Drawing, track clicks and
+dragging use that same geometry. Horizontal pane tracks span the pane's inner
+width, including the area below Source's fixed line gutter. Vertical pane tracks
+reserve a right-side cell outside the body hit region; headers and toolbars remain
+separate. Popup tracks extend beside pinned footer controls without counting those
+controls as scrollable content. Keybind and script tracks use the same inset rule
+within their header-adjusted frames.
 Vertical tracks and proportional thumbs use background-filled cells. Horizontal
 bars draw lower-half blocks in a single-cell-width UTF-8 locale, with the same
 track/accent colors in the foreground and the panel surface behind them. Other
@@ -284,7 +302,14 @@ leave it open. Closing restores the original control/content focus. Underlying
 views continue to process model revisions with their existing access guards;
 no popup owns a second event loop or changes read/write authorization.
 
-Connection forms, persistent preferences and profile management retain dedicated
+Native, OpenOCD and existing-server session reviews use the same centered,
+bordered dialog over their configuration form. Start/Connect accepts the reviewed
+settings; Back or Escape returns to the invoking control and retained field
+viewport. The shared compositor paints the parent form with no active input
+controls beneath the modal. Review width leaves configuration labels visible
+beside the dialog, including at the minimum terminal size. No connection is
+started by opening or dismissing it.
+Connection editing, persistent preferences and profile management retain dedicated
 screens for their multi-step workflows. Board, target and adapter selectors keep
 their existing flows. Direct toggles, cycling controls and execution shortcuts
 remain available; overlays do not introduce floating debugging panes.
@@ -808,7 +833,9 @@ retains source mappings for identical instruction bytes/text in the same samplin
 context. Once mappings are cached, Mixed changes presentation without fetching
 or replacing the listing. Source text comes from the active Source file or bounded,
 lazily loaded cross-file annotations. File/line identity remains in the model;
-rows display only source text or an explicit unavailable-text message. Current
+rows display only source text or an explicit unavailable-text message. Leading
+spaces and tabs are stripped from Mixed annotations only; Source text and cached
+source identity remain unchanged. Current
 x86 targets reported by GDB as i386-family explicitly select AT&T syntax.
 
 Address navigation accepts hexadecimal addresses or simple identifiers/qualified
@@ -956,10 +983,23 @@ contained cached window. At an established code boundary it can reach another
 known code anchor, but stops before new unclassified decoding. Explicit address,
 page and raw inspection retain bounded access to unclassified ranges; missing
 metadata alone does not block those operations.
+Ordinary expansion checks both newly requested code and the newly added portion
+of a cached listing. A cache hit from explicit inspection cannot authorize
+unclassified ordinary scrolling. Eligibility comes from current mapping evidence,
+not the last window's indexed flag. Reverse recovery can use a trusted ELF anchor
+after listing/anchor eviction; the bounded code prefix is joined to retained rows
+across a labeled gap rather than decoding that gap. Gap length does not enlarge
+the decoding work budget. Mapping feedback classifies the instructions actually
+rendered in the current viewport, including mixed-row layouts. Missing verified
+mapping metadata appears as `ELF:?`, not an automatic header warning. A pane-local
+boundary notice is set only when an ordinary edge-scroll attempt cannot extend
+a fresh, settled listing. Reverse scrolling, a changed viewport, a new listing,
+page navigation or terminal resize clears it; initial display and explicit paging
+do not raise it.
 Trusted mapping feedback uses the compact pane footer rather than replacing
 selected-frame/file context. Manual headers use retained instruction source
 attribution or an address-window label, never a different selected frame's
-filename/caller label; unknown/data/error notices still take priority.
+filename/caller label; actual request errors and attempted boundary overflow take priority.
 
 `src/model/breakpoints.c` and `include/model/breakpoints.h`
 own a bounded 256-row MI snapshot, parent/child and

@@ -195,6 +195,15 @@ static void run(const char *peer, const char *mode)
     CHECK(tb_code_file_count(code) == 3 && view->line_count == 3 && view->selected_line == 2);
     CHECK(view->instruction_count == TB_CODE_INSNS && view->more);
     CHECK(view->instructions[4].numeric == 0x1234 && view->instructions[0].numeric == 0x1230);
+    unsigned scroll_replies = completions;
+    uint64_t scroll_revision = view->assembly_revision;
+    uint64_t scroll_anchor = view->anchor;
+    CHECK(strstr(tb_code_assembly_notice(code, 0, 0, view->instruction_count), "unknown"));
+    CHECK(!tb_code_assembly_scroll(code, 0, 1));
+    for (int i = 0; i < 10; ++i)
+        pump(gdb);
+    CHECK(completions == scroll_replies && view->assembly_revision == scroll_revision);
+    CHECK(view->anchor == scroll_anchor && !tb_gdb_pending(gdb));
     if (strcmp(mode, "context-code") == 0) { image_review(gdb, peer); }
     uint64_t earlier = view->assembly_revision;
     CHECK(tb_code_assembly_page(code, 0, -1)); ready(gdb, earlier);

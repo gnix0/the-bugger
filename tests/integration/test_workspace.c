@@ -335,7 +335,7 @@ int main(int argc, char *argv[])
     test_terminal_resize(&term, 20, 80);
     test_terminal_expect(&term, "main.c | Cortex-M4F sample");
     CHECK(test_terminal_find(&term, "...", &x, &y));
-    int scrollbar_x = x + 4;
+    int scrollbar_x = x + 3;
     for (int i = 0; i < 4 && !test_terminal_find(&term, "#include <stdint.h>", NULL, NULL); ++i) {
         click_at(&term, scrollbar_x, y + 2); /* Page above the thumb. */
     }

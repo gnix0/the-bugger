@@ -67,6 +67,26 @@ static void pane_frames(void)
     }
 }
 
+static void scrollbar_tracks(void)
+{
+    for (int width = 3; width < 100; ++width) {
+        TbRect_t frame = {3, 4, width, 17};
+        TbRect_t h = tb_scrollbar_track(frame, true), v = tb_scrollbar_track(frame, false);
+        CHECK(h.x - frame.x == frame.x + frame.w - h.x - h.w);
+        CHECK(v.y - frame.y == frame.y + frame.h - v.y - v.h);
+        CHECK(h.x == frame.x + 1 && h.w == width - 2 && h.y == frame.y + frame.h - 2);
+        CHECK(v.x == frame.x + frame.w - 2 && v.y == frame.y + 1 && v.h == 15);
+        TbScroll_t scroll = {.total = 200, .visible = 23, .offset = 177, .maximum = 177};
+        scroll = tb_scrollbar_layout(scroll, h.w);
+        CHECK(scroll.visible == 23 && scroll.offset == 177 && scroll.maximum == 177);
+        CHECK(scroll.thumb_size >= 1 && scroll.thumb_start + scroll.thumb_size == h.w);
+        scroll.offset = 0; scroll = tb_scrollbar_layout(scroll, h.w);
+        CHECK(scroll.thumb_start == 0);
+    }
+    CHECK(tb_scrollbar_track((TbRect_t){0, 0, 2, 10}, false).h == 0);
+}
+
+
 static void source_slices(void)
 {
     const char *const samples[] = {
@@ -186,6 +206,7 @@ int main(void)
     CHECK(tb_dropdown_rect((TbRect_t){0}, (TbRect_t){0}, 30, 5).h == 0);
     text_bounds();
     source_slices();
+    scrollbar_tracks();
     pane_frames();
     int default_fg, default_bg;
     CHECK(extended_pair_content(TB_PANEL, &default_fg, &default_bg) == OK);
@@ -263,15 +284,15 @@ int main(void)
     CHECK(pair_at(6, 8) == TB_CYAN);
     CHECK(pair_at(6, 12) == TB_GREEN);
     CHECK(pair_at(7, 3) == (int)tb_selected_style(TB_YELLOW));
-    CHECK(pair_at(7, 48) == TB_SELECTED); /* selection stops before the narrow bar */
+    CHECK(pair_at(7, 47) == TB_SELECTED); /* selection stops before the narrow bar */
     CHECK(pair_at(13, 2) == TB_FOOTER);
-    CHECK(pair_at(6, 49) == TB_SCROLL_TRACK); /* one-cell track matches horizontal styling */
-    CHECK(pair_at(11, 49) == TB_SCROLL_THUMB); /* thumb near the end of the source */
+    CHECK(pair_at(6, 48) == TB_SCROLL_TRACK); /* one-cell track matches horizontal styling */
+    CHECK(pair_at(11, 48) == TB_SCROLL_THUMB); /* thumb near the end of the source */
     tb_demo_action(&demo, TB_NEXT);
     tb_fill(rect, TB_PANEL);
     tb_render_demo(&demo, 0, rect);
-    CHECK(pair_at(7, 48) == TB_PANEL); /* previous PC is not a navigation highlight */
-    CHECK(pair_at(8, 48) == TB_SELECTED);
+    CHECK(pair_at(7, 47) == TB_PANEL); /* previous PC is not a navigation highlight */
+    CHECK(pair_at(8, 47) == TB_SELECTED);
     tb_demo_action(&demo, TB_RESET);
     demo.pane = 2;
     demo.panes[2].row[TB_REGISTERS] = 0;
@@ -317,6 +338,11 @@ int main(void)
     for (int row = 0; row < 10; ++row) {
         CHECK(pair_at(25 + row, 72) == (row >= 4 && row < 6 ? TB_SCROLL_THUMB : TB_SCROLL_TRACK));
     }
+    TbScroll_t scaled = {.total = 100, .visible = 10, .offset = 90, .maximum = 90};
+    tb_render_scrollbar((TbRect_t){60, 32, 20, 1}, scaled, true);
+    CHECK(pair_at(32, 77) == TB_SCROLL_H_TRACK && pair_at(32, 79) == TB_SCROLL_H_THUMB);
+    tb_render_scrollbar((TbRect_t){82, 20, 1, 12}, scaled, false);
+    CHECK(pair_at(30, 82) == TB_SCROLL_TRACK && pair_at(31, 82) == TB_SCROLL_THUMB);
     bar.maximum = 0;
     tb_fill(horizontal_bar, TB_PANEL);
     tb_render_scrollbar(horizontal_bar, bar, true);

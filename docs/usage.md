@@ -48,7 +48,10 @@ board, target and adapter selection retain their dedicated workflows.
 
 Choose **Linux application**, configure **Launch** or **Attach**, then choose
 **Review session** and **Start native**. Inputs remain available after errors.
-The launcher centers its session card horizontally and vertically, with readable
+For every session type, **Review session** opens a floating dialog over the
+configuration form. **Start native**, **Start session** or **Connect** accepts it;
+**Back** or Escape returns to editing with focus restored. Opening the review
+never starts a connection. The launcher centers its session card horizontally and vertically, with readable
 descriptions and whole-row click targets. Arrow/Tab/Enter navigation and a compact
 presentation keep all three choices accessible on smaller terminals. Theme colors,
 simple terminal icons and text indicators need no additional assets.
@@ -377,7 +380,9 @@ body and use Left/Right. Each view retains its own position; Source keeps its li
 numbers fixed. Vertical scrollbars are one terminal cell wide and match the
 horizontal bar's distinct track and thumb colors. Horizontal bars use lower-half
 blocks in compatible UTF-8 color terminals; other color terminals retain full cells.
-A blank row separates a horizontal bar from the pane buttons. Panning preserves
+A blank row separates a horizontal bar from the pane buttons. Tracks follow the
+pane's inner width rather than the text gutter; both ends use the same inset.
+Popup vertical tracks also extend beside pinned footer controls. Panning preserves
 text colors and selection highlights.
 Thumbs use a theme-specific interface accent consistently across views; they do
 not indicate the state or meaning of the displayed data.
@@ -401,14 +406,23 @@ there is no automatic retry. Closing a split clears its Code history before its
 pane slot can be reused.
 The **Mixed** toggle beside Actions enables source/assembly presentation; it is
 not repeated in the Actions menu. Source rows show only code, without repeating
-the path or original line number. The pane header identifies the current file.
+the path or original line number. Leading indentation is removed from these
+annotations so they align left; the Source view preserves its indentation.
+The pane header identifies the current file.
+
+Ordinary scrolling stops at known code boundaries, including when cached windows
+from earlier inspection are available. Explicit **< / >** paging and **Actions →
+Decode bytes** retain access to unclassified ranges. Missing verified ELF mapping metadata is shown as `ELF:?`;
+it does not raise a header warning, including on initial display. A Start/End
+notice appears only after an ordinary scroll attempt cannot extend the available
+instructions. Scrolling back clears it, as do a new listing and terminal resize. Scrolling back can reconstruct known code across a labeled gap even after
+its old listing has left the cache; the gap itself is not decoded.
 
 Mixed groups use bounded local source annotations across mapped files, loading at
-most one file per view per pump. Blank lines and braces remain verbatim; missing
+most one file per view per pump. Blank lines and braces remain present; missing
 or evicted source text shows an unavailable notice. Locations remain attached to
 instructions internally. Toggling cached source rows keeps the same instruction
-listing. Ordinary scrolling stops at the end of known code; use Go to, the explicit
-page controls or Decode bytes for deliberate inspection beyond that boundary.
+listing.
 See the [code checklist](testing.md#source-and-instruction-stepping)
 for optimized, stripped and relocated-source examples.
 
@@ -1007,6 +1021,16 @@ do not make those features operational. Register groups currently have an honest
 ungrouped fallback. Log export contains retained history only; native program input
 and a full terminal emulator are not implemented. Physical board support must be
 established by the [release validation matrix](testing.md#every-release-regression-matrix).
+
+## Pasting into text fields
+
+In terminals supporting bracketed paste, pasted text stays in the focused field,
+including with Vim-like input enabled. Tabs and line breaks become spaces; other
+control characters are ignored. Text beyond the 255-character field limit is
+discarded and a truncation notice appears. Pasting never submits the field or
+moves focus. Review the text, then press Enter or activate the appropriate button.
+Pastes outside text fields are ignored. Terminals that do not support bracketed
+paste cannot distinguish clipboard contents from ordinary keystrokes.
 
 ## Vim-like input
 

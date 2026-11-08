@@ -38,7 +38,8 @@ enum {
     CONTENT_DOWN,
     CONTENT_UP,
     CONTENT_RIGHT,
-    SGR_MOUSE
+    SGR_MOUSE,
+    PASTE_BEGIN
 };
 
 typedef enum {
@@ -275,6 +276,8 @@ typedef struct {
         bool        restore;
         bool        list;
         bool        stack_feedback;
+        Page_e      base;
+        int         form_scroll;
         Control_t   trigger;
         int         content;
         int         selected;
@@ -357,6 +360,12 @@ typedef struct {
     bool             field_tracking;
     Control_t        field_identity;
     Page_e           field_page;
+    bool             paste_active;
+    bool             paste_target;
+    bool             paste_truncated;
+    size_t           paste_end;
+    Page_e           paste_page;
+    Control_t        paste_control;
     char             status[160];
     TbSession_t     *debugger;
     bool             demo_mode;
@@ -378,6 +387,9 @@ typedef struct {
     char             rule_from[FIELD_SIZE * 4];
     uint64_t         source_revision[TB_MAX_PANES];
     uint64_t         assembly_revision[TB_MAX_PANES];
+    int              assembly_boundary[TB_MAX_PANES];
+    int              assembly_boundary_offset[TB_MAX_PANES];
+    int              assembly_boundary_maximum[TB_MAX_PANES];
     struct {
         int      scroll;
         int      row;
@@ -558,6 +570,7 @@ static bool dropdown_page(Page_e current)
 
 static void page(App_t *app, Page_e next)
 {
+    memset(app->assembly_boundary, 0, sizeof(app->assembly_boundary));
     if (app->page == REGISTER_EDIT && next != REGISTER_EDIT && app->debugger) {
         TbRegisters_t *registers = tb_session_registers(app->debugger);
         TbRegisterEditState_e state = tb_registers_edit(registers)->state;
@@ -567,11 +580,26 @@ static void page(App_t *app, Page_e next)
         }
     }
 
-    if (app->page == WORKSPACE && contextual_page(next))
+    if (next == REVIEW) {
+        if (app->page == CONFIGURE) {
+            app->popup.trigger = app->controls[app->focus];
+            app->popup.form_scroll = app->form_scroll;
+        } else if (!app->popup.active || app->popup.base != CONFIGURE) {
+            app->popup.trigger = (Control_t) {
+                .kind = SUBMIT
+            };
+            app->popup.form_scroll = 0;
+        }
+        app->popup.base = CONFIGURE;
         app->popup.active = true;
-    if (next == WORKSPACE && app->popup.active)
+    } else if (app->page == WORKSPACE && contextual_page(next)) {
+        app->popup.base = WORKSPACE;
+        app->popup.active = true;
+    }
+    bool restore_form = next == CONFIGURE && app->popup.active && app->popup.base == CONFIGURE;
+    if (next == app->popup.base && app->popup.active)
         app->popup.restore = true;
-    if (!contextual_page(next))
+    if (!contextual_page(next) && next != REVIEW)
         app->popup.active = false;
     app->popup.title[0] = 0;
     app->popup.list     = false;
@@ -592,7 +620,7 @@ static void page(App_t *app, Page_e next)
 
     app->focus            = 0;
     app->cursor           = 0;
-    app->form_scroll      = 0;
+    app->form_scroll      = restore_form ? app->popup.form_scroll : 0;
     app->menu             = -1;
     app->drag             = -1;
     app->scroll_drag_pane = -1;
@@ -781,8 +809,27 @@ static void workspace_message(const App_t *app, char text[256])
 }
 
 
+static int form_card_width(void)
+{
+    return COLS - 4 < 84 ? COLS - 4 : 84;
+}
+
+
+static int review_card_width(void)
+{
+    /* Reserve visible configuration labels on both sides of the review. */
+    return form_card_width() - 16;
+}
+
+
 static TbRect_t menu_card(App_t *app, int width, int height)
 {
+    if (app->popup.active && app->popup.base == CONFIGURE) {
+        int review_width = review_card_width();
+        if (width > review_width)
+            width = review_width;
+    }
+
     if (width > COLS - 4)
         width = COLS - 4;
     if (height > LINES - 7)
@@ -1515,12 +1562,7 @@ static void draw_theme_list(App_t *app)
     }
 
     if (bar.maximum > 0) {
-        TbRect_t track = {
-            card.x + card.w - 2,
-            card.y + 1,
-            1,
-            visible
-        };
+        TbRect_t track = tb_scrollbar_track(card, false);
         tb_render_scrollbar(track, bar, false);
         (void)add_control(app, track, THEME_SCROLLBAR, 0, 0);
     }
@@ -1828,20 +1870,12 @@ static void draw_keybinds(App_t *app)
 
     if (rows < total) {
         TbScroll_t bar = axis_scroll(total * 3, rows * 3, app->key_scroll * 3);
-        tb_render_scrollbar((TbRect_t) {
-            left + width - 2,
-            top + first_row - 1,
-            1,
-            bar.visible
-        }, bar, false);
-
-        (void)add_control(app, (TbRect_t) {
-            left + width - 2,
-            top + first_row - 1,
-            1,
-            bar.visible
-        },
-                          KEY_SCROLLBAR, 0, 0);
+        TbRect_t frame = card;
+        frame.y += first_row - 2;
+        frame.h -= first_row - 2;
+        TbRect_t track = tb_scrollbar_track(frame, false);
+        tb_render_scrollbar(track, bar, false);
+        (void)add_control(app, track, KEY_SCROLLBAR, 0, 0);
     }
 
     int buttons_y = top + height - (compact ? 4 : dense ? 2 : 3);
@@ -1973,12 +2007,14 @@ static void draw_form(App_t *app, bool review)
                        ? "Sample configuration only; no tool is launched."
                        : "Choose installed scripts or enter literal paths. Ordered scripts/search paths "
                           "are in Profile options."));
-    int form_width   = COLS - 4 < 84 ? COLS - 4 : 84;
+    int form_width   = form_card_width();
+    if (review && app->popup.active && app->popup.base == CONFIGURE)
+        form_width = review_card_width();
     int note_lines   = paragraph_rows(note, form_width - 4);
     int gap          = LINES >= 24 ? 1 : 0;
     int mode_gap     = list[0].toggle ? gap : 0;
     int last_gap     = n > 1 && list[n - 1].toggle ? gap : 0;
-    int profile_rows = app->demo_mode ? 0 : 1 + gap + (COLS < 64 ? 1 : 0);
+    int profile_rows = app->demo_mode || review ? 0 : 1 + gap + (COLS < 64 ? 1 : 0);
     int overhead =
         3 + mode_gap + last_gap + (scripts ? 1 + gap : 0) + gap + note_lines + gap + 1 + profile_rows + 1;
     int visible = LINES - 7 - overhead;
@@ -2003,7 +2039,7 @@ static void draw_form(App_t *app, bool review)
     int cursor_y = -1;
     int cursor_x = 0;
 
-    if (!review && app->focus < n) {
+    if (!review && app->focus >= 0 && app->focus < n) {
         if (app->focus < app->form_scroll) {
             app->form_scroll = app->focus;
         } else if (app->focus >= app->form_scroll + visible) {
@@ -2098,7 +2134,7 @@ static void draw_form(App_t *app, bool review)
     }
 
     button(app, action_y, card.x + card.w - 12, 10, "[ Back ]", BACK, 0, 0);
-    if (!app->demo_mode) {
+    if (!app->demo_mode && !review) {
         button(app, profile_y, left, 18, "[ Save profile ]", PROFILE_OPEN, 2, 0);
         button(app, profile_y, left + 20, 16, "[ Profile... ]", PROFILE_OPEN, 1, 0);
         button(app, profile_y + (COLS < 64 ? 1 : 0), card.x + card.w - 12, 10, "[ Delete ]", PROFILE_OPEN, 3,
@@ -2129,7 +2165,8 @@ static void mixed_summary(const App_t *app, int index, const TbInstruction_t *in
     bool available =
         tb_code_mixed_line(tb_session_code(app->debugger), index, instruction, text, sizeof(text));
 
-    (void)snprintf(summary, capacity, "  %s", available ? text : "<source text unavailable>");
+    const char *source = available ? text + strspn(text, " \t") : "<source text unavailable>";
+    (void)snprintf(summary, capacity, "%s", source);
 }
 
 
@@ -2163,7 +2200,8 @@ static TbScroll_t workspace_scroll(const App_t *app, const TbDemoPane_t *pane, i
         return tb_demo_scrollbar(&app->demo, pane, visible);
 
     int index = (int)(pane - app->demo.panes);
-    if (app->body_height[index] > 0)
+    /* A prepared zero-row viewport must not borrow the fallback pane height. */
+    if (app->body_width[index] > 0)
         visible = app->body_height[index];
 
     TbView_e view = pane->tabs[pane->active];
@@ -2315,7 +2353,7 @@ static int native_content_width(const App_t *app, int index)
             } else if (mapped->kind == TB_CODE_SOURCE) {
                 char summary[1600];
                 mixed_summary(app, index, &code->instructions[mapped->instruction], summary, sizeof(summary));
-                (void)snprintf(text, sizeof(text), "%s", summary + 2);
+                (void)snprintf(text, sizeof(text), "%s", summary);
             } else {
                 const TbInstruction_t *instruction = &code->instructions[mapped->instruction];
                 tb_format_assembly(text, sizeof(text), columns, instruction->address, instruction->opcodes,
@@ -2486,6 +2524,20 @@ static void resize_viewport(App_t *app, int index, int height)
 }
 
 
+static TbRect_t pane_scrollbar_track(const App_t *app, int index, bool horizontal)
+{
+    TbRect_t frame = app->panes[index];
+    if (horizontal) {
+        TbView_e view = app->demo.panes[index].tabs[app->demo.panes[index].active];
+        frame.h -= 1 + console_footer_rows(view, frame.h);
+    } else {
+        frame.y += body_top(app, index) - 1;
+        frame.h = app->body_height[index] + 2;
+    }
+    return tb_scrollbar_track(frame, horizontal);
+}
+
+
 static void prepare_scrollbars(App_t *app, int index, TbRect_t rect)
 {
     TbDemoPane_t        *pane     = &app->demo.panes[index];
@@ -2503,13 +2555,17 @@ static void prepare_scrollbars(App_t *app, int index, TbRect_t rect)
 
     int width   = native_content_width(app, index);
     int gutter  = code_gutter(view);
-    int visible = rect.w - 2 - gutter;
+    int visible = rect.w - 3 - gutter;
     int height =
         rect.h - body_top(app, index) - 1 - console_footer_rows(view, rect.h) - (width > visible ? 2 : 0);
 
+    if (height < 0)
+        height = 0;
     resize_viewport(app, index, height);
-    app->body_width[index]        = rect.w - 2;
-    app->horizontal_scroll[index] = axis_scroll(width, visible, app->horizontal[index][view]);
+    app->body_width[index]        = rect.w - 3;
+    TbRect_t track = pane_scrollbar_track(app, index, true);
+    app->horizontal_scroll[index] = tb_scrollbar_layout(
+        axis_scroll(width, visible, app->horizontal[index][view]), track.w);
     app->horizontal[index][view]  = app->horizontal_scroll[index].offset;
 }
 
@@ -2517,45 +2573,19 @@ static void prepare_scrollbars(App_t *app, int index, TbRect_t rect)
 static void draw_scrollbars(App_t *app, int index, TbRect_t rect)
 {
     TbDemoPane_t *pane     = &app->demo.panes[index];
-    TbView_e      view     = pane->tabs[pane->active];
     TbScroll_t    vertical = workspace_scroll(app, pane, rect.h - 3);
 
     if (vertical.maximum > 0) {
-        tb_render_scrollbar((TbRect_t) {
-            rect.x + rect.w - 1,
-            rect.y + body_top(app, index),
-            1,
-            vertical.visible
-        }, vertical, false);
-
-        (void)add_control(app,
-                          (TbRect_t) {
-                              rect.x + rect.w - 1,
-                              rect.y + body_top(app, index),
-                              1,
-                              vertical.visible
-                          },
-                          SCROLLBAR, 0, index);
+        TbRect_t track = pane_scrollbar_track(app, index, false);
+        tb_render_scrollbar(track, vertical, false);
+        (void)add_control(app, track, SCROLLBAR, 0, index);
     }
 
     TbScroll_t horizontal = app->horizontal_scroll[index];
     if (horizontal.maximum > 0) {
-        int x = rect.x + 1 + code_gutter(view);
-        int y = rect.y + rect.h - 3 - console_footer_rows(view, rect.h);
-
-        tb_render_scrollbar((TbRect_t) {
-            x,
-            y,
-            horizontal.visible,
-            1
-        }, horizontal, true);
-
-        (void)add_control(app, (TbRect_t) {
-            x,
-            y,
-            horizontal.visible,
-            1
-        }, HSCROLLBAR, 0, index);
+        TbRect_t track = pane_scrollbar_track(app, index, true);
+        tb_render_scrollbar(track, horizontal, true);
+        (void)add_control(app, track, HSCROLLBAR, 0, index);
     }
 }
 
@@ -2729,6 +2759,8 @@ static void draw_code_pane(App_t *app, int index, TbRect_t rect)
 
     if (*seen != revision) {
         *seen = revision;
+        if (!source)
+            app->assembly_boundary[index] = 0;
         if (source && view->source_follow && view->selected_line > 0) {
             pane->scroll[TB_SOURCE] = view->selected_line > 4 ? view->selected_line - 4 : 0;
             pane->row[TB_SOURCE]    = view->selected_line - 1;
@@ -2802,11 +2834,11 @@ static void draw_code_pane(App_t *app, int index, TbRect_t rect)
             mixed_summary(app, index, instruction, summary, sizeof(summary));
 
             size_t offset = (size_t)app->horizontal[index][TB_DISASSEMBLY];
-            if (offset > strlen(summary) - 2)
-                offset = strlen(summary) - 2;
+            if (offset > strlen(summary))
+                offset = strlen(summary);
 
             tb_text(content_y + output_row++, rect.x + 4, app->body_width[index] - 3, TB_CYAN, 0,
-                    summary + 2 + offset);
+                    summary + offset);
             continue;
         }
 
@@ -2902,21 +2934,22 @@ static void draw_code_pane(App_t *app, int index, TbRect_t rect)
                 *error ? error : "Stop a program to inspect live code.");
     }
 
-    const char *notice =
-        source ? ""
-            : tb_code_assembly_notice(code, index, visible_first,
-                                         visible_end > visible_first ? visible_end - visible_first : 0);
     TbImageTrust_e mapping =
         source ? TB_IMAGE_UNVERIFIED
             : tb_code_assembly_mapping(code, index, visible_first,
                                           visible_end > visible_first ? visible_end - visible_first : 0);
 
+    if (!source && (stale || loaded || scroll.offset != app->assembly_boundary_offset[index] ||
+                   scroll.maximum != app->assembly_boundary_maximum[index]))
+        app->assembly_boundary[index] = 0;
+
     TbStyle_e header_style = stale ? TB_ORANGE : TB_MUTED;
     if (!source && total && *view->assembly_error) {
         (void)snprintf(header, sizeof(header), "%s", view->assembly_error);
         header_style = TB_ORANGE;
-    } else if (*notice && mapping == TB_IMAGE_UNVERIFIED) {
-        (void)snprintf(header, sizeof(header), "%s", notice);
+    } else if (!source && app->assembly_boundary[index]) {
+        (void)snprintf(header, sizeof(header), "%s of available instructions; scroll back to continue.",
+                       app->assembly_boundary[index] < 0 ? "Start" : "End");
         header_style = TB_ORANGE;
     } else if (!source && view->mixed && !view->mixed_available && total) {
         (void)snprintf(header, sizeof(header), "Assembly only | mixed data unavailable");
@@ -3889,7 +3922,7 @@ static void draw_pane(App_t *app, int pane_index, TbRect_t rect)
                           (TbRect_t) {
                               rect.x + 1,
                               rect.y + body_top(app, pane_index),
-                              app->live ? app->body_width[pane_index] : rect.w - 2,
+                              app->live ? app->body_width[pane_index] : rect.w - 3,
                               app->live ? app->body_height[pane_index] : rect.h - 3
                           },
                           BODY, 0, pane_index);
@@ -3906,13 +3939,8 @@ static void draw_pane(App_t *app, int pane_index, TbRect_t rect)
 
         TbScroll_t scroll = workspace_scroll(app, pane, rect.h - 3);
         if (scroll.maximum > 0) {
-            (void)add_control(app, (TbRect_t) {
-                rect.x + rect.w - 1,
-                rect.y + 2,
-                1,
-                rect.h - 3
-            }, SCROLLBAR, 0,
-                              pane_index);
+            (void)add_control(app, pane_scrollbar_track(app, pane_index, false),
+                              SCROLLBAR, 0, pane_index);
         }
     }
 }
@@ -5427,12 +5455,7 @@ static void draw_context_list(App_t *app)
         }
     }
     if (bar.maximum > 0) {
-        TbRect_t track = {
-            .x = card.x + card.w - 2,
-            .y = card.y + 1,
-            .w = 1,
-            .h = visible
-        };
+        TbRect_t track = tb_scrollbar_track(card, false);
         tb_render_scrollbar(track, bar, false);
         (void)add_control(app, track, POPUP_SCROLLBAR, 0, 0);
     }
@@ -5519,10 +5542,21 @@ static void draw_page(App_t *app)
     if (app->popup.active && COLS >= 80 && LINES >= 20) {
         int focus = app->focus;
         Page_e overlay = app->page;
-        app->page = WORKSPACE;
+        app->page = app->popup.base;
         app->focus = -1;
-        draw_workspace(app);
-        frame_display_present(app);
+        if (app->popup.base == CONFIGURE) {
+            int scroll = app->form_scroll;
+            size_t cursor = app->cursor;
+            app->popup.active = false;
+            app->form_scroll = app->popup.form_scroll;
+            draw_form(app, false);
+            app->form_scroll = scroll;
+            app->cursor = cursor;
+            app->popup.active = true;
+        } else {
+            draw_workspace(app);
+            frame_display_present(app);
+        }
         app->page = overlay;
         for (int i = 0; i < app->count; ++i) {
             Control_t control = app->controls[i];
@@ -5665,9 +5699,10 @@ static void draw_page(App_t *app)
                         TB_STATUS_TEXT, TB_HINT_TEXT);
         if (app->popup.list)
             draw_context_summary(app);
-        if (app->popup.restore && app->page == WORKSPACE && app->menu < 0) {
+        if (app->popup.restore && app->page == app->popup.base && app->menu < 0) {
             app->popup.restore = false;
-            app->content_pane  = app->popup.content;
+            if (app->popup.base == WORKSPACE)
+                app->content_pane = app->popup.content;
             for (int i = 0; i < app->count; ++i) {
                 Control_t control = app->controls[i];
                 if (control.kind == app->popup.trigger.kind && control.value == app->popup.trigger.value &&
@@ -7851,13 +7886,22 @@ static void draw_server_review(App_t *app)
     tb_text(top, left, width, TB_CYAN, A_BOLD, summary);
     (void)snprintf(summary, sizeof(summary), "GDB: %s", app->review_paths->gdb);
     tb_text(top + 1, left, width, TB_MUTED, 0, summary);
-    (void)snprintf(summary, sizeof(summary), "Symbols: %s", app->review_paths->executable);
+    (void)snprintf(summary, sizeof(summary), "Symbols: %s", *app->review_paths->executable
+        ? app->review_paths->executable : "none (source stepping unavailable)");
     tb_text(top + 2, left, width, TB_MUTED, 0, summary);
     tb_text(top + 3, left, width, TB_PANEL, A_BOLD,
             "Literal argument vector (each indexed item is one argument)");
 
+    const char *warning = "No frontend flash/reset/resume commands are added. "
+                          "OpenOCD initialization and selected scripts can affect the target; "
+                          "review the actual configuration.";
+    int warning_rows   = paragraph_rows(warning, width);
+    int action_y       = top + card.h - 1;
+    int paging_y       = action_y - 2;
+    int warning_y      = paging_y - 1 - warning_rows;
+    int argument_y     = warning_y - (top + 5) >= 1 ? top + 5 : top + 4;
     int argument_width = width;
-    int visible        = card.h - 9;
+    int visible        = warning_y - argument_y;
     int logical        = 0;
 
     if (visible < 1)
@@ -7869,22 +7913,18 @@ static void draw_server_review(App_t *app)
         size_t n = strlen(summary);
         for (size_t at = 0; at < n; at += (size_t)argument_width, ++logical) {
             if (logical >= app->review_offset && logical < app->review_offset + visible)
-                tb_text(top + 5 + logical - app->review_offset, left, width, TB_PANEL, 0, summary + at);
+                tb_text(argument_y + logical - app->review_offset, left, width, TB_PANEL, 0, summary + at);
         }
     }
 
-    tb_text(top + card.h - 4, left, width, TB_ORANGE, 0,
-            "No frontend flash/reset/resume commands are added.");
-    tb_text(
-        top + card.h - 3, left, width, TB_ORANGE, 0,
-        "OpenOCD initialization and selected scripts can affect the target; "
-        "review the actual configuration.");
-    button(app, top + card.h - 2, left, 18, p->start_server ? "[ Start session ]" : "[ Connect ]", PREVIEW, 0,
-           0);
-    button(app, top + card.h - 2, left + 20, 12, "[ Back ]", BACK, 0, 0);
-    button(app, top + card.h - 1, left, 14, "Previous argv", REVIEW_PAGE, -visible, 0);
+    menu_paragraph(card, warning_y - top, warning_rows, warning, TB_ORANGE);
+    button(app, action_y, left, 18, p->start_server ? "[ Start session ]" : "[ Connect ]", PREVIEW, 0, 0);
+    button(app, action_y, left + 20, 12, "[ Back ]", BACK, 0, 0);
+
+    if (app->review_offset > 0)
+        button(app, paging_y, left, 14, "Previous argv", REVIEW_PAGE, -visible, 0);
     if (app->review_offset + visible < logical)
-        button(app, top + card.h - 1, left + 17, 14, "Next argv", REVIEW_PAGE, visible, 0);
+        button(app, paging_y, left + 17, 14, "Next argv", REVIEW_PAGE, visible, 0);
 }
 
 
@@ -8017,20 +8057,12 @@ static void draw_scripts(App_t *app)
 
     TbScroll_t bar = axis_scroll(found, visible, app->script_offset);
     if (bar.maximum > 0) {
-        tb_render_scrollbar((TbRect_t) {
-            card.x + card.w - 2,
-            top + 2,
-            1,
-            bar.visible
-        }, bar, false);
-
-        (void)add_control(app, (TbRect_t) {
-            card.x + card.w - 2,
-            top + 2,
-            1,
-            bar.visible
-        }, SCRIPT_SCROLLBAR, 0,
-                          0);
+        TbRect_t frame = card;
+        ++frame.y;
+        --frame.h;
+        TbRect_t track = tb_scrollbar_track(frame, false);
+        tb_render_scrollbar(track, bar, false);
+        (void)add_control(app, track, SCRIPT_SCROLLBAR, 0, 0);
     }
 
     button(app, top + card.h - 2, left, 12, "[ Filter ]", SCRIPT_ACTION, 0, 0);
@@ -10343,6 +10375,13 @@ static void scroll_body(App_t *app, Control_t control, int amount)
     TbView_e      view   = pane->tabs[pane->active];
     TbScroll_t    scroll = workspace_scroll(app, pane, app->panes[control.pane].h - 3);
 
+    if (app->live && view == TB_DISASSEMBLY && amount) {
+        int boundary = app->assembly_boundary[control.pane];
+        app->assembly_boundary[control.pane] = 0;
+        if (boundary && ((boundary < 0) != (amount < 0)) && !scroll.maximum)
+            return;
+    }
+
     if (view == TB_CALL_STACK && app->frame_details[control.pane].open) {
         int next = scroll.offset + amount;
         app->frame_details[control.pane].offset = next < 0 ? 0
@@ -10388,6 +10427,14 @@ static void scroll_body(App_t *app, Control_t control, int amount)
             pane->scroll[view]                    = 0;
             return;
         }
+        const TbCodeView_t *code = tb_code_view(tb_session_code(app->debugger), control.pane);
+        if (tb_session_state(app->debugger) == TB_SESSION_STOPPED &&
+            code->instruction_count && !code->stale &&
+            tb_code_settled(tb_session_code(app->debugger), control.pane)) {
+            app->assembly_boundary[control.pane] = amount < 0 ? -1 : 1;
+            app->assembly_boundary_offset[control.pane] = scroll.offset;
+            app->assembly_boundary_maximum[control.pane] = scroll.maximum;
+        }
     }
 
     int offset = scroll.offset + amount;
@@ -10406,15 +10453,16 @@ static void mouse_event(App_t *app, MEVENT event)
         TbRect_t card = app->popup.rect;
         int visible = card.h - 3;
         int scrolling = app->popup.count - 1;
-        TbScroll_t bar = axis_scroll(scrolling, visible, app->popup.offset);
+        TbRect_t track = tb_scrollbar_track(card, false);
+        TbScroll_t bar = tb_scrollbar_layout(axis_scroll(scrolling, visible, app->popup.offset), track.h);
         if (event.bstate & (BUTTON4_PRESSED | BUTTON5_PRESSED)) {
             app->popup.offset = axis_scroll(scrolling, visible, app->popup.offset +
                 (event.bstate & BUTTON4_PRESSED ? -3 : 3)).offset;
             return;
         }
-        int position = event.y - card.y - 1;
+        int position = event.y - track.y;
         if (app->popup.drag >= 0) {
-            int travel = visible - bar.thumb_size;
+            int travel = track.h - bar.thumb_size;
             int next = position - app->popup.drag;
             if (next < 0)
                 next = 0;
@@ -10432,7 +10480,7 @@ static void mouse_event(App_t *app, MEVENT event)
             popup_dismiss(app);
             return;
         }
-        if (event.x == card.x + card.w - 2 && bar.maximum > 0 && position >= 0 && position < visible) {
+        if (bar.maximum > 0 && tb_rect_contains(track, event.x, event.y)) {
             if (position >= bar.thumb_start && position < bar.thumb_start + bar.thumb_size) {
                 if (event.bstate & BUTTON1_PRESSED)
                     app->popup.drag = position - bar.thumb_start;
@@ -10529,11 +10577,12 @@ static void mouse_event(App_t *app, MEVENT event)
             if (bar.kind != SCRIPT_SCROLLBAR)
                 continue;
 
-            TbScroll_t scroll   = axis_scroll(script_count(app), script_visible(), app->script_offset);
-            int        position = event.y - bar.rect.y;
+            TbScroll_t scroll = tb_scrollbar_layout(
+                axis_scroll(script_count(app), script_visible(), app->script_offset), bar.rect.h);
+            int position = event.y - bar.rect.y;
 
             if (app->script_drag_grab >= 0) {
-                int travel = scroll.visible - scroll.thumb_size;
+                int travel = bar.rect.h - scroll.thumb_size;
                 int next   = position - app->script_drag_grab;
 
                 if (next < 0)
@@ -10572,12 +10621,13 @@ static void mouse_event(App_t *app, MEVENT event)
             if (bar.kind != KEY_SCROLLBAR)
                 continue;
 
-            TbScroll_t scroll =
-                axis_scroll((COLS >= 112 ? 15 : TB_BIND_COUNT) * 3, keybind_rows() * 3, app->key_scroll * 3);
+            TbScroll_t scroll = tb_scrollbar_layout(
+                axis_scroll((COLS >= 112 ? 15 : TB_BIND_COUNT) * 3,
+                            keybind_rows() * 3, app->key_scroll * 3), bar.rect.h);
             int position = event.y - bar.rect.y;
 
             if (app->key_drag_grab >= 0) {
-                int travel = scroll.visible - scroll.thumb_size;
+                int travel = bar.rect.h - scroll.thumb_size;
                 int next   = position - app->key_drag_grab;
 
                 if (next < 0)
@@ -10621,12 +10671,12 @@ static void mouse_event(App_t *app, MEVENT event)
         TbScroll_t scroll = app->scroll_drag_horizontal
             ? app->horizontal_scroll[pane_index]
             : workspace_scroll(app, pane, app->panes[pane_index].h - 3);
-        int travel = scroll.visible - scroll.thumb_size;
-        int position =
-            app->scroll_drag_horizontal
-                ? event.x - app->panes[pane_index].x - 1 - code_gutter(pane->tabs[pane->active]) -
-                      app->scroll_drag_grab
-                : event.y - app->panes[pane_index].y - body_top(app, pane_index) - app->scroll_drag_grab;
+        TbRect_t track = pane_scrollbar_track(app, pane_index, app->scroll_drag_horizontal);
+        int length = app->scroll_drag_horizontal ? track.w : track.h;
+        scroll = tb_scrollbar_layout(scroll, length);
+        int travel = length - scroll.thumb_size;
+        int position = (app->scroll_drag_horizontal ? event.x - track.x : event.y - track.y) -
+                       app->scroll_drag_grab;
 
         if (position < 0)
             position = 0;
@@ -10820,6 +10870,7 @@ static void mouse_event(App_t *app, MEVENT event)
             bool          horizontal = control.kind == HSCROLLBAR;
             TbScroll_t scroll = horizontal ? app->horizontal_scroll[control.pane]
                 : workspace_scroll(app, pane, control.rect.h);
+            scroll = tb_scrollbar_layout(scroll, horizontal ? control.rect.w : control.rect.h);
             int row = horizontal ? event.x - control.rect.x : event.y - control.rect.y;
 
             if (row >= scroll.thumb_start && row < scroll.thumb_start + scroll.thumb_size) {
@@ -10995,8 +11046,84 @@ static bool mouse_input(App_t *app, wint_t key, bool special)
 }
 
 
+static void paste_character(App_t *app, wint_t key)
+{
+    if (!app->paste_target || app->page != app->paste_page || app->focus >= app->count ||
+        !same_control(app->controls[app->focus], app->paste_control)) {
+        app->paste_target = false;
+        return;
+    }
+
+    /* All fields are single-line. Separators become text, never navigation. */
+    if (key == '\r' || key == '\n' || key == '\t')
+        key = ' ';
+    if (!iswprint(key) || wcwidth((wchar_t)key) <= 0)
+        return;
+
+    size_t  *cursor;
+    wchar_t *value = editable_value(app, app->paste_control, &cursor);
+    if (wcslen(value) >= FIELD_SIZE - 1U) {
+        app->paste_truncated = true;
+        return;
+    }
+    (void)edit_field(app, app->paste_control, key, false);
+}
+
+
+static bool paste_event(App_t *app, wint_t key, bool special)
+{
+    static const wchar_t end[] = L"\033[201~";
+    if (!app->paste_active) {
+        if (!special || key != PASTE_BEGIN)
+            return false;
+
+        app->paste_active    = true;
+        app->paste_end       = 0;
+        app->paste_truncated = false;
+        app->paste_page      = app->page;
+        app->paste_control   = app->controls[app->focus];
+        app->paste_target    = app->count > 0 && text_control(app, app->paste_control);
+        /* Read payload literally: escape sequences must not become UI events. */
+        (void)keypad(stdscr, FALSE);
+        return true;
+    }
+
+    if (special)
+        return key != KEY_RESIZE;
+
+    if (key == (wint_t)end[app->paste_end]) {
+        if (++app->paste_end == sizeof(end) / sizeof(*end) - 1) {
+            app->paste_active = false;
+            (void)keypad(stdscr, TRUE);
+            if (app->paste_truncated) {
+                char message[80];
+                (void)snprintf(message, sizeof(message),
+                               "Paste truncated: field limit is %u characters.", FIELD_SIZE - 1U);
+                status(app, message);
+            }
+            if (app->page == CODE_FILES)
+                app->file_page = 0;
+        }
+        return true;
+    }
+
+    /* An incomplete delimiter can also be ordinary clipboard text. */
+    for (size_t i = 0; i < app->paste_end; ++i)
+        paste_character(app, (wint_t)end[i]);
+    app->paste_end = 0;
+    if (key == (wint_t)end[0])
+        app->paste_end = 1;
+    else
+        paste_character(app, key);
+    return true;
+}
+
+
 static void key_event(App_t *app, wint_t key, bool special)
 {
+    if (paste_event(app, key, special))
+        return;
+
     if (mouse_input(app, key, special))
         return;
 
@@ -11022,6 +11149,7 @@ static void key_event(App_t *app, wint_t key, bool special)
     }
 
     if (special && key == KEY_RESIZE) {
+        memset(app->assembly_boundary, 0, sizeof(app->assembly_boundary));
         /* A new wrap width must not skip unread register-review text. */
         if (app->page == REGISTER_EDIT)
             app->register_offset = 0;
@@ -11766,6 +11894,11 @@ int tb_tui_run(bool demo)
         (void)define_key("\033[1;5B", CONTENT_DOWN);
         (void)define_key("\033[1;5A", CONTENT_UP);
         (void)define_key("\033[1;5C", CONTENT_RIGHT);
+        bool bracketed_paste = define_key("\033[200~", PASTE_BEGIN) != ERR;
+        if (bracketed_paste) {
+            (void)fputs("\033[?2004h", stdout);
+            (void)fflush(stdout);
+        }
         (void)set_escdelay(25);
         (void)mouseinterval(0);
 
@@ -11865,7 +11998,7 @@ int tb_tui_run(bool demo)
 
             if (type != ERR && interrupted == 0) {
                 key_event(&app, key, type == KEY_CODE_YES);
-                if (!app.quit && interrupted == 0)
+                if (!app.quit && interrupted == 0 && !app.paste_active)
                     draw(&app);
 
                 continue;
@@ -11900,6 +12033,8 @@ int tb_tui_run(bool demo)
             (void)tb_session_destroy(app.debugger);
         }
 
+        if (bracketed_paste)
+            (void)fputs("\033[?2004l", stdout);
         if (drag_reporting)
             (void)fputs("\033[?1002l\033[?1006l", stdout);
 

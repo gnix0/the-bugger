@@ -255,7 +255,10 @@ dedicated simulator integration is planned.
 ### Interaction conventions
 
 - Mouse-first **and** keyboard-accessible. The visible controls are authoritative; key bindings are accelerators, not the only mechanism.
-- Overflow scrollbars appear only when needed. Vertical bars are one terminal cell wide. Both axes
+- Overflow scrollbars appear only when needed. Tracks use consistent insets from
+  their allocated pane/menu frame, independent of row formatting or source gutters.
+  Track size and content viewport size are separate; thumb proportions and input
+  mapping use the actual drawn geometry. Vertical bars are one terminal cell wide. Both axes
   use distinct theme-colored tracks and proportional thumbs. Compatible UTF-8 color terminals
   use half-height horizontal blocks; other color terminals use full cells. Monochrome retains
   line-drawing tracks and reverse-video thumbs. Live Source/Disassembly, Console
@@ -399,7 +402,11 @@ future-work status are in [the roadmap](roadmap.md).
   and visible uncertainty. Ordinary edge scrolling stops before decoding beyond
   an established code boundary without another known code anchor; explicit Go to,
   paging and raw inspection remain available. Missing range metadata alone is not
-  a navigation wall for explicit inspection.
+  a navigation wall for explicit inspection. Cached inspection windows do not
+  bypass ordinary-scroll bounds. Reverse browsing uses available trusted code
+  anchors even after eviction. Mapping classification follows visible instructions;
+  a boundary warning requires an unsuccessful ordinary edge-scroll attempt and
+  clears when browsing back. Missing mapping metadata alone raises no header warning.
 - Reconstruct evicted rows by decoding forward from reliable anchors, never by
   guessing variable-length instruction boundaries. Historical rows/anchors may
   remain inspectable but establish fresh boundaries only when their validity for

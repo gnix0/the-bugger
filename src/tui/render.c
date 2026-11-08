@@ -264,14 +264,47 @@ TbRect_t tb_dropdown_rect(TbRect_t trigger, TbRect_t bounds, int width, int coun
 }
 
 
+TbRect_t tb_scrollbar_track(TbRect_t frame, bool horizontal)
+{
+    if (frame.w < 3 || frame.h < 3)
+        return (TbRect_t) {0};
+
+    return (TbRect_t) {
+        .x = horizontal ? frame.x + 1 : frame.x + frame.w - 2,
+        .y = horizontal ? frame.y + frame.h - 2 : frame.y + 1,
+        .w = horizontal ? frame.w - 2 : 1,
+        .h = horizontal ? 1 : frame.h - 2
+    };
+}
+
+
+TbScroll_t tb_scrollbar_layout(TbScroll_t scroll, int length)
+{
+    if (length <= 0 || scroll.visible <= 0 || scroll.total <= 0) {
+        scroll.thumb_size = scroll.thumb_start = 0;
+        return scroll;
+    }
+    scroll.thumb_size = (int)((int64_t)length * scroll.visible / scroll.total);
+    if (scroll.thumb_size < 1)
+        scroll.thumb_size = 1;
+    if (scroll.thumb_size > length)
+        scroll.thumb_size = length;
+    scroll.thumb_start = scroll.maximum > 0
+        ? (int)((int64_t)scroll.offset * (length - scroll.thumb_size) / scroll.maximum) : 0;
+    return scroll;
+}
+
+
 void tb_render_scrollbar(TbRect_t rect, TbScroll_t scroll, bool horizontal)
 {
     int length = horizontal ? rect.w : rect.h;
-    if (scroll.maximum <= 0 || length <= 0 || scroll.visible != length ||
+    if (scroll.maximum <= 0 || length <= 0 || scroll.visible <= 0 ||
         rect.x < 0 || rect.y < 0 || rect.w <= 0 || rect.h <= 0 ||
         rect.x > COLS - rect.w || rect.y > LINES - rect.h)
         return;
 
+    if (length != scroll.visible)
+        scroll = tb_scrollbar_layout(scroll, length);
     int start = scroll.thumb_start;
     int size  = scroll.thumb_size;
     if (start < 0)
@@ -603,7 +636,7 @@ void tb_render_demo(const TbDemo_t *demo, int pane_index, TbRect_t rect)
     TbView_e            view   = pane->tabs[pane->active];
     TbScroll_t          scroll = tb_demo_scrollbar(demo, pane, rect.h - 3);
     int                 x      = rect.x + 1;
-    int                 width  = rect.w - 2;
+    int                 width  = rect.w - 3;
 
     tb_fill((TbRect_t) {
         rect.x,
@@ -634,12 +667,10 @@ void tb_render_demo(const TbDemo_t *demo, int pane_index, TbRect_t rect)
     }
 
     if (scroll.maximum > 0) {
-        tb_render_scrollbar((TbRect_t) {
-            rect.x + rect.w - 1,
-            rect.y + 2,
-            1,
-            scroll.visible
-        }, scroll, false);
+        TbRect_t frame = rect;
+        ++frame.y;
+        --frame.h;
+        tb_render_scrollbar(tb_scrollbar_track(frame, false), scroll, false);
     }
 
     static const char *const footers[] = {

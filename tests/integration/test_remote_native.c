@@ -119,11 +119,40 @@ int main(int argc, char **argv)
         test_terminal_send(&term, "\t\025"); test_terminal_send(&term, endpoint);
         test_terminal_send(&term, "\t\025"); test_terminal_send(&term, argv[1]);
         test_terminal_send(&term, "\t\025gdb");
+        int form_x, form_y;
+        CHECK(test_terminal_find(&term, "Mode", &form_x, &form_y));
         test_terminal_click(&term, "Review session");
         test_terminal_expect(&term, "Review remote session");
+        int review_x, review_y;
+        CHECK(test_terminal_find(&term, "Review remote session", &review_x, &review_y));
+        CHECK(review_x > 0 && review_y > 0);
+        CHECK(test_terminal_find(&term, "Configure session", NULL, NULL));
+        CHECK(form_x < review_x - 1);
+        CHECK(memcmp(term.cells[form_y] + form_x, "Mode", 4) == 0);
+        CHECK(test_terminal_dialog_find(&term, "Review remote session", "Connect", NULL, NULL));
         test_terminal_click(&term, "[ Connect ]");
         test_terminal_expect(&term, "LIVE REMOTE");
         test_terminal_expect(&term, "LIVE | Stopped");
+        test_terminal_expect(&term, "assembly: selected frame");
+        CHECK(!test_terminal_find(&term, "Code range unknown", NULL, NULL));
+        CHECK(!test_terminal_find(&term, "of available instructions", NULL, NULL));
+        int code_x, code_y;
+        CHECK(test_terminal_find(&term, "Disassembly", &code_x, &code_y));
+        for (int i = 0; i < 100 && !test_terminal_find(&term, "End of available", NULL, NULL); ++i) {
+            char wheel[64];
+            (void)snprintf(wheel, sizeof(wheel), "\033[<65;%d;%dM", code_x + 4, code_y + 4);
+            test_terminal_send(&term, wheel);
+            test_terminal_pump(&term, 20);
+        }
+        test_terminal_expect(&term, "End of available");
+        char wheel[64];
+        (void)snprintf(wheel, sizeof(wheel), "\033[<64;%d;%dM", code_x + 4, code_y + 4);
+        test_terminal_send(&term, wheel);
+        uint64_t notice_deadline = tb_gdb_now_ms() + 3000;
+        while (test_terminal_find(&term, "End of available", NULL, NULL) &&
+               tb_gdb_now_ms() < notice_deadline)
+            test_terminal_pump(&term, 10);
+        CHECK(!test_terminal_find(&term, "End of available", NULL, NULL));
         test_terminal_expect(&term, "Memory");
         test_terminal_resize(&term, 28, 110);
         test_terminal_expect(&term, "LIVE REMOTE");

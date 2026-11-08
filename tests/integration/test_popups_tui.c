@@ -128,6 +128,30 @@ static void column_pairs(void)
 }
 
 
+static void pane_track_insets(void)
+{
+    const char *names[] = {"Source", "Disassembly", "Registers"};
+    int left[3], top[3];
+    for (int i = 0; i < 3; ++i) {
+        CHECK(test_terminal_find(&term, names[i], &left[i], &top[i])); left[i] -= 2;
+    }
+    for (int i = 0; i < 2; ++i) {
+        int right = left[i + 1] - 1, footer = -1;
+        for (int y = top[i] + 3; y < term.rows - 3; ++y) {
+            const char *label = strstr(term.cells[y] + left[i], "Actions");
+            if (label && label - term.cells[y] < right) { footer = y; break; }
+        }
+        CHECK(footer >= 0);
+        for (int x = left[i] + 1; x < right - 1; ++x) {
+            CHECK(test_terminal_scroll_cell(&term, footer - 2, x, true) ||
+                  test_terminal_scroll_cell(&term, footer - 2, x, false));
+        }
+        CHECK(!test_terminal_scroll_cell(&term, footer - 2, left[i], true));
+        CHECK(!test_terminal_scroll_cell(&term, footer - 2, right - 1, true));
+    }
+}
+
+
 static void horizontal_colors(void)
 {
     int x, y, right;
@@ -172,7 +196,56 @@ int main(int argc, char **argv)
     test_terminal_expect(&term, "Executable / ELF");
     test_terminal_send(&term, "\t\025");
     test_terminal_send(&term, argv[2]);
+    int form_x, form_y;
+    CHECK(test_terminal_find(&term, "Mode", &form_x, &form_y));
     test_terminal_click(&term, "Review session");
+    int review_x, review_y;
+    CHECK(test_terminal_find(&term, "Review native session", &review_x, &review_y));
+    CHECK(review_x > 0 && review_y > 0);
+    CHECK(test_terminal_find(&term, "Configure session", NULL, NULL));
+    CHECK(form_x < review_x - 1);
+    CHECK(memcmp(term.cells[form_y] + form_x, "Mode", 4) == 0);
+    CHECK(test_terminal_dialog_find(&term, "Review native session", "Start native", NULL, NULL));
+    click_at(1, 1);
+    test_terminal_expect(&term, "Review native session");
+    test_terminal_resize(&term, 20, 80);
+    test_terminal_expect(&term, "Review native session");
+    CHECK(test_terminal_dialog_find(&term, "Review native session", "Start native", NULL, NULL));
+    test_terminal_send(&term, "\033");
+    test_terminal_expect(&term, "Launch executable");
+    CHECK(test_terminal_find(&term, "Mode", &form_x, &form_y));
+    test_terminal_send(&term, "\r");
+    test_terminal_expect(&term, "Review native session");
+    CHECK(test_terminal_find(&term, "Review native session", &review_x, &review_y));
+    CHECK(form_x < review_x - 1);
+    CHECK(memcmp(term.cells[form_y] + form_x, "Mode", 4) == 0);
+    test_terminal_resize(&term, 44, 160);
+    test_terminal_expect(&term, "Review native session");
+    test_terminal_send(&term, "\033");
+    test_terminal_expect(&term, "Review session");
+    absent("Review native session");
+    test_terminal_send(&term, "\r");
+    test_terminal_expect(&term, "Review native session");
+    test_terminal_send(&term, "\033");
+    test_terminal_expect(&term, "Launch executable");
+    test_terminal_click(&term, "Launch executable");
+    test_terminal_expect(&term, "Attach to PID");
+    char attach_pid[32];
+    (void)snprintf(attach_pid, sizeof(attach_pid), "%ld", (long)getpid());
+    test_terminal_send(&term, "\t\025");
+    test_terminal_send(&term, attach_pid);
+    CHECK(test_terminal_find(&term, "Mode", &form_x, &form_y));
+    test_terminal_click(&term, "Review session");
+    test_terminal_expect(&term, "Will attach and halt");
+    CHECK(test_terminal_find(&term, "Review native session", &review_x, &review_y));
+    CHECK(form_x < review_x - 1);
+    CHECK(memcmp(term.cells[form_y] + form_x, "Mode", 4) == 0);
+    test_terminal_send(&term, "\033");
+    test_terminal_expect(&term, "Attach to PID");
+    test_terminal_click(&term, "Attach to PID");
+    test_terminal_expect(&term, "Launch executable");
+    test_terminal_click(&term, "Review session");
+    test_terminal_expect(&term, "Review native session");
     test_terminal_click(&term, "Start native");
     test_terminal_expect(&term, "LIVE | Loaded");
     test_terminal_lower(&term, 2, true);
@@ -180,6 +253,7 @@ int main(int argc, char **argv)
     test_terminal_send(&term, "start\r");
     test_terminal_expect(&term, "LIVE | assembly: selected frame");
     column_pairs();
+    pane_track_insets();
     horizontal_colors();
     settle();
     int source_x, source_y;
@@ -243,6 +317,17 @@ int main(int argc, char **argv)
     int list_x, list_y;
     CHECK(test_terminal_find(&term, "SHOW VIEW", &list_x, &list_y));
     CHECK(list_y < dock_y);
+    /* The track continues beside the pinned footer, one row inside the bottom border. */
+    bool full_track = false;
+    for (int x = list_x; x < list_x + 40 && x < term.cols; ++x) {
+        bool continuous = true;
+        for (int row = 1; row <= 8; ++row) {
+            if (!test_terminal_scroll_cell(&term, list_y + row, x, true) &&
+                !test_terminal_scroll_cell(&term, list_y + row, x, false)) { continuous = false; }
+        }
+        if (continuous) { full_track = true; break; }
+    }
+    CHECK(full_track);
     const char *included = strstr(term.cells[list_y + 6] + list_x - 1, "Console");
     CHECK(included && strchr(included, '*'));
     CHECK(strstr(term.cells[list_y + 1] + list_x - 1, "Source"));
