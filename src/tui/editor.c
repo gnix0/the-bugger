@@ -7,6 +7,61 @@ static int word_kind(wchar_t c)
 }
 
 
+void tb_editor_edit(wchar_t *text, size_t *cursor, TbEditAction_e action)
+{
+    size_t length = wcslen(text);
+    size_t at     = *cursor > length ? length : *cursor;
+
+    switch (action) {
+    case TB_EDIT_BEGIN:
+        at = 0;
+        break;
+    case TB_EDIT_END:
+        at = length;
+        break;
+    case TB_EDIT_LEFT:
+        if (at)
+            --at;
+        break;
+    case TB_EDIT_RIGHT:
+        if (at < length)
+            ++at;
+        break;
+    case TB_EDIT_WORD_BACK:
+        while (at && word_kind(text[at - 1]) != 1)
+            --at;
+        while (at && word_kind(text[at - 1]) == 1)
+            --at;
+        break;
+    case TB_EDIT_WORD_FORWARD:
+        while (at < length && word_kind(text[at]) != 1)
+            ++at;
+        while (at < length && word_kind(text[at]) == 1)
+            ++at;
+        break;
+    case TB_EDIT_BACKSPACE:
+        if (at) {
+            --at;
+            wmemmove(text + at, text + at + 1, length - at);
+        }
+        break;
+    case TB_EDIT_DELETE:
+        if (at < length)
+            wmemmove(text + at, text + at + 1, length - at);
+        break;
+    case TB_EDIT_CLEAR:
+        at = 0;
+        text[0] = L'\0';
+        break;
+    case TB_EDIT_DELETE_END:
+        text[at] = L'\0';
+        break;
+    }
+
+    *cursor = at;
+}
+
+
 bool tb_editor_normal(wchar_t *text, size_t *cursor, wint_t key)
 {
     size_t length = wcslen(text);
@@ -47,6 +102,10 @@ bool tb_editor_normal(wchar_t *text, size_t *cursor, wint_t key)
             wmemmove(text + at, text + at + 1, length - at);
             --length;
         }
+        break;
+    case 'D':
+        text[at] = L'\0';
+        length = at;
         break;
     case 'w':
         if (at < length) {

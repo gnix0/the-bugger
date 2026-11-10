@@ -4,10 +4,11 @@ Commands, results, revisions and acceptance records for The Bugger.
 
 ## Current evidence boundary
 
-Latest published release: **[v0.1.6](https://github.com/gnix0/the-bugger/releases/tag/v0.1.6)**,
-published November 4, 2026. It delivers the accepted F03–F05 editors. The uploaded
+Latest published release: **[v0.2.0](https://github.com/gnix0/the-bugger/releases/tag/v0.2.0)**,
+published November 10, 2026. It delivers the completed workflow/UI adjustments
+and numbered user guide. The uploaded
 binary archive, source archive and SHA256SUMS match the approved local artifacts;
-see [publication verification](#v016-publication).
+see [publication verification](#v020-publication--2026-11-10).
 
 F03/F04 physical validation across the supported architectures is maintainer-reported.
 Native and STM32 F05 results are recorded. ESP32-S3/Xtensa and ESP32-C6/RISC-V
@@ -17,11 +18,17 @@ supersedes earlier pending-acceptance statements. The maintainer has completed
 the v0.2.0 adjustment scope and reports all three physical architecture regressions
 completed on the final changes. That report is distinct from locally retained
 host logs; no new physical transcripts or tool versions were supplied. See the
-[v0.2.0 preparation record](#v020-release-preparation--2026-11-09) for the current
-release checks and publication boundary.
+[v0.2.0 preparation record](#v020-release-preparation--2026-11-09) and
+[publication closeout](#v020-publication--2026-11-10) for release evidence.
+F06's workspace organization review was accepted as complete by the maintainer
+on November 10; see its [decision closeout](#f06-workspace-organization-closeout--2026-11-10).
 
 Useful starting points:
 
+- [Exact black in direct-color terminals](#direct-color-black--2026-11-10).
+- [Terminal and Vim field bindings](#terminal-and-vim-field-bindings--2026-11-10).
+- [v0.2.0 publication and artifact verification](#v020-publication--2026-11-10).
+- [F06 workspace organization closeout](#f06-workspace-organization-closeout--2026-11-10).
 - [v0.2.0 release preparation](#v020-release-preparation--2026-11-09).
 - [v0.1.6 release preparation](#v016-release-preparation--2026-11-04).
 
@@ -71,6 +78,7 @@ and references below retain the results, including failures and unrun checks.
 | F02 | Stack inspection and inspection UX | accepted; shipped in v0.1.5 | [Published release verification](#v015-publication-verification--2026-11-04) |
 | F03–F04 | Variable and ordinary-RAM editing | accepted; shipped in v0.1.6 | [Owner acceptance](#f04-owner-acceptance) |
 | F05 | CPU-register editing | accepted; shipped in v0.1.6 | [Acceptance closeout](#f05-acceptance-closeout--2026-11-04) |
+| F06 | Workspace information organization | complete; maintainer accepted November 10, 2026 | [Decision closeout](#f06-workspace-organization-closeout--2026-11-10) |
 
 ### Full recorded commit identifiers
 
@@ -4927,3 +4935,139 @@ checksums must be verified after release publication.
 
 Hosted PR checks, maintainer release acceptance and upload/publication verification
 remain outstanding. No commit, tag or publication is implied by these local files.
+
+## v0.2.0 publication — 2026-11-10
+
+The maintainer reported publication of
+[v0.2.0](https://github.com/gnix0/the-bugger/releases/tag/v0.2.0).
+GitHub records publication at **2026-11-10 12:45:08 UTC**, with neither draft nor
+prerelease status. The tag resolves to release merge commit
+`53044302291673d2174169d83e52cc8f434b87b1`.
+Preparation commit `dfa7fef1bc6c52e1e3cd5ad6b1690d0f3a486982` contains the final
+tutorial and screenshot changes.
+
+[Release PR #49](https://github.com/gnix0/the-bugger/pull/49) merged `develop`
+into `main`. Its release commit has successful hosted
+[Tests](https://github.com/gnix0/the-bugger/actions/runs/42817944409/job/129835738901)
+and [Static analysis](https://github.com/gnix0/the-bugger/actions/runs/42817944409/job/129835739420)
+checks. [Synchronization PR #50](https://github.com/gnix0/the-bugger/pull/50)
+merged `main` back into `develop` with merge commit
+`58aad37f51dea33b95609161636464d8af232c11`.
+
+The three uploaded files were downloaded and compared with the final local
+artifacts. All matched byte-for-byte, and the published SHA256SUMS verified both
+archives:
+
+| Uploaded file | SHA-256 |
+|---|---|
+| `the-bugger-v0.2.0-linux-x86_64.tar.gz` | `416651972c5160e6ccf49fc57fbf38c6d7f89eb59fd2597634007d8c09ab43c1` |
+| `the-bugger-v0.2.0-source.tar.gz` | `7e5817aebc55b878df124782cf5ede3225c3ea9badaf5cc135f18bec1c8b5be8` |
+| `SHA256SUMS` | `136e0983f741e3c3ae01ed7b5b78419bc4b9b513ac356f6f53050d9eb7d03f1c` |
+
+GitHub also exposes its two automatic source downloads, making five release
+assets in total. Both uploaded archives contain all **21 tutorial pages** and
+**16 theme screenshots**. These are the final repackaged distributions after the
+editorial, C++ and screenshot updates; earlier preparation inventories describe
+their original candidates.
+
+Release metadata, downloaded files, checksum comparisons and documentation
+inventories are retained in `build/v020-publication-verification/`. The tag
+commit and hosted checks are in `release-commit-checks.json`; branch synchronization
+is recorded in `build/v020-closeout/synchronization.json`.
+This closes the earlier pending publication, hosted-check and synchronization
+states. The physical-check provenance and limitations in the preparation record
+remain unchanged.
+
+The current-status documentation was not updated in the published source tree:
+the roadmap and evidence summary still identified v0.1.6 as latest, and the
+changelog used the November 9 preparation date. This documentation follow-up
+corrects the working tree to the verified November 10 publication. It changes
+no published tag, archive or checksum and does not claim those artifacts contain
+the correction.
+
+## F06 workspace organization closeout — 2026-11-10
+
+The maintainer explicitly accepted F06, the workspace information-organization
+decision gate, as complete on November 10, 2026. The released tiled workspace
+remains the baseline: six root groups, pane-local tabs, splits, resizing,
+keyboard/mouse access and compact-terminal navigation. No separate workspace
+redesign or prototype is required to complete this gate.
+
+The original v0.2.1 planning target is retained as historical scheduling context;
+it does not identify a published v0.2.1 release. This acceptance introduces no
+application changes or new test/hardware results. Later inspector gates remain
+planned, with F06's organization prerequisite satisfied.
+
+## Terminal and Vim field bindings — 2026-11-10
+
+The unreleased changes add Ctrl+B/F/P/N arrow navigation, Ctrl+K deletion through
+the end and Meta+B/F word movement without requiring Vim mode, plus Normal
+`dd`/`D`. Saved Ctrl assignments retain precedence, directional assignments use
+the corresponding arrows, and content-transfer bindings keep their content-focus
+scope. Pending `d` cannot cross other input, focus/page changes, paste or resize.
+The user guide and current release/F06 records accompany the implementation.
+Maintainer acceptance is pending.
+
+Focused editor and real-terminal checks passed directly and through an isolated
+tmux server. Coverage includes persisted field contents, modal submission,
+custom Ctrl assignments in ordinary and Vim fields, Console execution shortcuts,
+inline Memory drafts, cancellation and terminal cleanup. The isolated server
+retains tmux's default prefix; forwarding Ctrl+B requires the normal double prefix.
+
+The complete fresh fortified host baseline passed with exit 0:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/bindings-ci-20261110T165107Z CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+The run includes existing Enter/Backspace, frame/thread selection, native GDB,
+tmux, localhost remote and offline OpenOCD coverage. Its log, command, exit status,
+tracked-tree hashes, patch and environment are retained in that build directory.
+The host used GCC 16.2.1, GDB/gdbserver 18.1, tmux 3.8 and glibc 2.44.
+These are local Linux results, not a new hosted Ubuntu result or physical-board
+validation.
+
+Earlier focused failures are retained in `build/bindings-native.log` and
+`build/bindings-tmux.log`: the extended harness needed to reload preferences after
+temporary saves and forward tmux's Ctrl+B prefix explicitly. Existing application
+assertions remain. The interrupted run in `build/bindings-ci-20261110T164744Z/`
+was superseded by the complete run above after correcting directional remapping
+inside fields and adding its regression check; it is not a passing baseline.
+
+## Direct-color black — 2026-11-10
+
+Reproduced Ashen high-contrast's gray background with the normal binary, saved
+high-contrast preferences, `TERM=alacritty`, `COLORTERM=truecolor` and NO_COLOR
+absent. The installed direct-color description maps RGB index zero to ANSI
+`ESC[40m`; the reported Alacritty configuration defines ANSI black as `#121212`.
+The palette's `#000000` values were correct, but checking color-pair numbers alone
+did not establish the emitted background.
+
+The normal-binary capture contained 88 ANSI-black background sequences and no
+explicit RGB-black sequence before the correction. The corrected capture contains
+88 explicit `48;2;0;0;0` background sequences and no ANSI-black sequence while
+rendering. Shutdown restores terminal settings and emits the default-color reset.
+Captures are retained in `build/ashen-diagnosis/`.
+
+Startup now loads a private copy of affected direct-color descriptions with
+explicit RGB foreground/background capabilities. Installed capabilities and
+terminal palette slots are preserved; temporary TERMINFO is restored before
+debugger/server startup. Capability tests cover standard/extended values,
+extended keys and absent/empty/existing TERMINFO. The TUI regression checks
+launcher and pane-content black, theme switching and compact resizing directly
+and through tmux, alongside RGB-disabled and NO_COLOR fallbacks. The same explicit
+black assertion fails against the earlier binary; see `regression-before.log`.
+An initial compact check sampled the selected tab surface; the final check locates
+Source content instead. The earlier focused logs remain in the diagnosis directory.
+
+The combined bindings/color tree passed the complete fresh fortified host baseline
+with exit 0:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/ashen-rgb-ci-20261110T172834Z CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+The full log, command, exit status, environment, tracked-file hashes and patch are
+retained in that directory. This covers local native GDB, tmux, localhost remote
+and offline OpenOCD integration; it is not new hosted Ubuntu or physical-board
+evidence. Maintainer visual review and acceptance remain pending.

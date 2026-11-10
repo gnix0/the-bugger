@@ -192,6 +192,92 @@ static void inactive(const char *label)
 }
 static void stop(void) { test_terminal_stop(&term, 0); active = false; }
 
+
+static void terminal_keys(const char *keys)
+{
+    char   forwarded[1024];
+    size_t count = 0;
+
+    for (; *keys; ++keys) {
+        CHECK(count + 2 < sizeof(forwarded));
+        forwarded[count++] = *keys;
+        /* The isolated server retains tmux's default Ctrl-B prefix. */
+        if (*keys == 2 && getenv("TB_KEYBINDS_TEST_TMUX"))
+            forwarded[count++] = *keys;
+    }
+    forwarded[count] = '\0';
+    test_terminal_send(&term, forwarded);
+}
+
+
+static void custom_terminal_bindings(const char *binary)
+{
+    TbPreferences_t prefs;
+    CHECK(tb_preferences_load(&prefs));
+    int saved[TB_BIND_COUNT];
+    int keys[TB_BIND_COUNT];
+    memcpy(saved, prefs.keys, sizeof(saved));
+    tb_keybind_defaults(keys);
+    keys[TB_BIND_CONTINUE]         = -1;
+    keys[TB_BIND_PAUSE]            = -5;
+    keys[TB_BIND_NEXT_CONTROL]     = -16;
+    keys[TB_BIND_PREVIOUS_CONTROL] = -14;
+    keys[TB_BIND_NEXT_PANE]        = -6;
+    keys[TB_BIND_PREVIOUS_PANE]    = -2;
+    keys[TB_BIND_BACK]             = -21;
+    keys[TB_BIND_LEFT]             = -20;
+    keys[TB_BIND_RIGHT]            = -18;
+    CHECK(tb_preferences_save_keys(&prefs, keys));
+
+    start(binary, "xterm-256color");
+    click("[ Config ]");
+    click("Profiles");
+    click("Shared connection");
+    if (!prefs.vim) {
+        test_terminal_send(&term, "\t\020marker\016\020\033OF-exec");
+        test_terminal_expect(&term, "marker-exec");
+        test_terminal_send(&term, "\024Y\022Z");
+        test_terminal_expect(&term, "marker-exeYcZ");
+        /* Reversed Ctrl-P/N traverse controls; neither inserts a control byte. */
+        test_terminal_send(&term, "\016\025");
+        test_terminal_expect(&term, "[ Config ]");
+        click("[ Config ]");
+        click("Profiles");
+        click("Shared connection");
+    }
+    click("Review session");
+    click("Start native");
+    test_terminal_expect(&term, "LIVE | Loaded");
+    test_terminal_lower(&term, 2, true);
+    click("Command");
+    test_terminal_send(&term, prefs.vim ? "istart\r" : "start\r");
+    test_terminal_expect(&term, "LIVE | Stopped");
+    test_terminal_send(&term, "echo unchanged_draft");
+    test_terminal_send(&term, "\001");
+    test_terminal_expect(&term, "LIVE | Running");
+    test_terminal_send(&term, "\005");
+    test_terminal_expect(&term, "LIVE | Stopped");
+    test_terminal_expect(&term, "echo unchanged_draft");
+    /* Ctrl-F/B now switch panes, rather than moving the draft's cursor. */
+    terminal_keys("\006\002");
+    settle();
+    click("Command");
+    test_terminal_send(&term, "\005");
+    test_terminal_expect(&term, "echo unchanged_draft");
+    test_terminal_send(&term, "\025");
+    test_terminal_expect(&term, "Close native session?");
+    click("Cancel");
+    test_terminal_send(&term, "\021");
+    test_terminal_expect(&term, "Quit application?");
+    click("Close session");
+    stop();
+
+    CHECK(tb_preferences_load(&prefs));
+    CHECK(tb_preferences_save_keys(&prefs, saved));
+    puts("PASS saved Ctrl bindings override field editing, navigation and session actions");
+}
+
+
 static void native_bindings(const char *binary, const char *fixture)
 {
     TbProfiles_t *store = tb_profiles_create(); TbProfile_t *profile = malloc(sizeof *profile); CHECK(store && profile);
@@ -207,6 +293,8 @@ static void native_bindings(const char *binary, const char *fixture)
     test_terminal_lower(&term, 2, true);
     click("Command"); test_terminal_send(&term, "echo wasdbnp\\n\r");
     test_terminal_expect(&term, "[gdb] wasdbnp");
+    test_terminal_send(&term, "echo wrong tail\005\033b\013right\\n\r");
+    test_terminal_expect(&term, "[gdb] wrong right");
     test_terminal_send(&term, "start\r"); test_terminal_expect(&term, "LIVE | Stopped");
     click("Source");
     test_terminal_send(&term, "\033[18~"); test_terminal_expect(&term, "LIVE | Running");
@@ -220,6 +308,7 @@ static void native_bindings(const char *binary, const char *fixture)
     test_terminal_send(&term, "\010"); test_terminal_expect(&term, "source stepping");
     test_terminal_send(&term, "\021"); test_terminal_expect(&term, "Quit application?");
     click("Close session"); stop();
+    custom_terminal_bindings(binary);
     puts("PASS global shortcuts after shared profile load, real Continue/Pause, content-pane transfer and protected Console input");
 }
 
@@ -232,6 +321,45 @@ static void leave_vim_field(void)
     CHECK(!test_terminal_find(&term, "VIM INSERT", NULL, NULL));
     test_terminal_expect(&term, "LIVE | Stopped");
 }
+
+
+static void terminal_fields(const char *binary)
+{
+    start(binary, "xterm-256color");
+    terminal_keys("\016\020\r\t\025alpha beta.gamma\001\006X\002\002Y");
+    test_terminal_expect(&term, "YaXlpha beta.gamma");
+    test_terminal_send(&term, "\005\033b\013delta");
+    test_terminal_expect(&term, "YaXlpha beta.delta");
+    test_terminal_send(&term, "\033b\033b\033f\013-tail");
+    test_terminal_expect(&term, "YaXlpha beta-tail");
+    test_terminal_send(&term, "\016\025args-marker\020\005-exec\016\005-args");
+    test_terminal_expect(&term, "YaXlpha beta-tail-exec");
+    test_terminal_expect(&term, "args-marker-args");
+    test_terminal_send(&term, "\t\025.\t\t\025gdb");
+    click("Save profile");
+    test_terminal_expect(&term, "Profile field");
+    test_terminal_send(&term, "\025terminal-old-tail\033b\013name\001\006\013-profile\r");
+    test_terminal_expect(&term, "Profile file saved atomically.");
+    stop();
+
+    TbProfiles_t *store = tb_profiles_create();
+    CHECK(store && tb_profiles_load(store));
+    const TbProfile_t *profile = tb_profiles_find(store, "t-profile");
+    CHECK(profile && strcmp(profile->executable, "YaXlpha beta-tail-exec") == 0);
+    CHECK(profile->arguments.count == 1);
+    CHECK(strcmp(profile->arguments.values[0], "args-marker-args") == 0);
+    CHECK(strcmp(profile->directory, ".") == 0 && strcmp(profile->gdb, "gdb") == 0);
+    char path[4096];
+    (void)snprintf(path, sizeof(path), "%s", tb_profiles_path(store));
+    tb_profiles_destroy(store);
+    CHECK(unlink(path) == 0);
+    char *slash = strrchr(path, '/');
+    CHECK(slash);
+    (void)snprintf(slash + 1, sizeof(path) - (size_t)(slash + 1 - path), ".lock");
+    CHECK(unlink(path) == 0);
+    puts("PASS non-Vim terminal editing, word motions, Ctrl-P/N field navigation and modal submission");
+}
+
 
 static void paste_fields(const char *binary)
 {
@@ -309,18 +437,46 @@ static void vim_input(const char *binary, const char *fixture)
     test_terminal_send(&term, "i\025alpha beta"); test_terminal_expect(&term, "VIM INSERT");
     test_terminal_expect(&term, "alpha beta");
     test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
+    test_terminal_send(&term, "d");
+    test_terminal_expect(&term, "d pending");
     test_terminal_send(&term, "\033[200~qhjkl\ttext\033[201~");
     test_terminal_expect(&term, "qhjkl text");
     test_terminal_expect(&term, "VIM NORMAL");
+    test_terminal_send(&term, "d");
+    test_terminal_expect(&term, "d pending");
+    test_terminal_expect(&term, "qhjkl text");
     test_terminal_send(&term, "i\025alpha beta\033");
     test_terminal_expect(&term, "alpha beta");
+    test_terminal_send(&term, "0wD");
+    settle();
+    CHECK(!test_terminal_find(&term, "beta", NULL, NULL));
+    test_terminal_send(&term, "Akept\033");
+    test_terminal_expect(&term, "alpha kept");
+    test_terminal_send(&term, "d");
+    test_terminal_expect(&term, "d pending");
+    test_terminal_expect(&term, "alpha kept");
+    test_terminal_send(&term, "d");
+    settle();
+    CHECK(!test_terminal_find(&term, "alpha kept", NULL, NULL));
+    test_terminal_send(&term, "ialpha beta\033d0d");
+    test_terminal_expect(&term, "d pending");
+    test_terminal_expect(&term, "alpha beta");
+    test_terminal_send(&term, "i\033");
     test_terminal_send(&term, "0wxiX"); test_terminal_expect(&term, "alpha Xeta");
     test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
     test_terminal_send(&term, "Aqhjkl"); test_terminal_expect(&term, "alpha Xetaqhjkl");
     test_terminal_send(&term, "\t"); test_terminal_expect(&term, "VIM NORMAL");
     test_terminal_send(&term, "i\025literal"); test_terminal_expect(&term, "literal");
     test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
+    test_terminal_send(&term, "d\033[Z");
+    test_terminal_expect(&term, "VIM NORMAL");
+    test_terminal_send(&term, "d");
+    test_terminal_expect(&term, "d pending");
+    test_terminal_expect(&term, "alpha Xetaqhjkl");
     test_terminal_resize(&term, 20, 80); test_terminal_expect(&term, "VIM NORMAL");
+    test_terminal_send(&term, "d");
+    test_terminal_expect(&term, "d pending");
+    test_terminal_expect(&term, "alpha Xetaqhjkl");
     test_terminal_resize(&term, 54, 166); test_terminal_expect(&term, "VIM NORMAL");
     test_terminal_send(&term, "\033"); test_terminal_expect(&term, "[ Config ]");
     stop();
@@ -341,7 +497,14 @@ static void vim_input(const char *binary, const char *fixture)
         CHECK(occurrences == 1); /* The draft must not also appear as executed Console output. */
         test_terminal_send(&term, "i\025echo modal_hjklq[]123\\n");
         test_terminal_expect(&term, "VIM INSERT");
+        test_terminal_send(&term, "\025echo alpha beta\005\033b\013gamma");
+        test_terminal_expect(&term, "echo alpha gamma");
+        test_terminal_send(&term, "\025echo modal_hjklq[]123\\n");
         test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
+        test_terminal_send(&term, "dd");
+        settle();
+        CHECK(!test_terminal_find(&term, "echo modal_hjklq[]123", NULL, NULL));
+        test_terminal_send(&term, "iecho modal_hjklq[]123\\n\033");
         test_terminal_send(&term, "\r"); test_terminal_expect(&term, "[gdb] modal_hjklq[]123");
         test_terminal_expect(&term, "VIM NORMAL");
         vim_stage = "native start command";
@@ -368,6 +531,10 @@ static void vim_input(const char *binary, const char *fixture)
         vim_stage = "Memory Escape to Normal";
         /* A mode change itself never dispatches the draft memory read. */
         test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
+        test_terminal_send(&term, "dd");
+        settle();
+        CHECK(!test_terminal_find(&term, "&fixture_counter", NULL, NULL));
+        test_terminal_send(&term, "i&fixture_counter\033");
         leave_vim_field();
         vim_stage = "Save Log focus";
         click("Save Log"); test_terminal_expect(&term, "VIM NORMAL");
@@ -393,6 +560,7 @@ int main(int argc, char **argv)
     char root[] = "/tmp/the-bugger-keybinds-tui-XXXXXX"; CHECK(mkdtemp(root));
     CHECK(setenv("XDG_CONFIG_HOME", root, 1) == 0);
     CHECK(setenv("TB_TEST_CONFIG_HOME", root, 1) == 0);
+    terminal_fields(argv[1]);
     paste_fields(argv[1]);
     start(argv[1], "xterm-256color"); test_terminal_resize(&term, 60, 140); open_keys();
     scrollbar_layout();
@@ -439,7 +607,10 @@ int main(int argc, char **argv)
     CHECK(prefs.keys[TB_BIND_CONTENT_RIGHT] == -6 && prefs.keys[TB_BIND_NEXT_PANE] == 256 + 'n');
     CHECK(prefs.keys[TB_BIND_PANE_1 + 2] == 256 + 'r' && prefs.keys[TB_BIND_BACK] == 256 + 'b');
     CHECK(prefs.keys[TB_BIND_NEXT_CONTROL] == -14);
-    if (argc == 3) { native_bindings(argv[1], argv[2]); }
+    if (argc == 3) {
+        native_bindings(argv[1], argv[2]);
+        CHECK(tb_preferences_load(&prefs));
+    }
     /* Saving a theme cannot reset personal bindings. */
     CHECK(tb_preferences_save(&prefs, tb_theme_find("rose-pine", "dawn")));
     start(argv[1], "mono"); test_terminal_resize(&term, 60, 140);
@@ -474,6 +645,8 @@ int main(int argc, char **argv)
     CHECK(tb_preferences_load(&prefs) && prefs.keys[TB_BIND_CONTINUE] == 5 && prefs.keys[TB_BIND_UP] == 0);
     CHECK(prefs.palette == tb_theme_find("rose-pine", "dawn"));
     vim_input(argv[1], argc == 3 ? argv[2] : NULL);
+    if (argc == 3)
+        custom_terminal_bindings(argv[1]);
     CHECK(tb_preferences_load(&prefs) && prefs.vim);
     char path[4096]; CHECK(unlink(prefs.path) == 0);
     if (argc == 3) {

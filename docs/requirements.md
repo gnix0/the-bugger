@@ -222,7 +222,7 @@ Other characteristics already accepted:
   workspace without resizing it.
 - When the terminal becomes too small, maintain a usable focused view with accessible tabs or a controlled compact mode. Never write outside the terminal, crash, or silently discard pane state.
 - The retired prototype used simulated example addresses, register contents, log entries and step behavior. The shipped debugger must clearly distinguish live data from demo/mock data.
-- A post-v0.1.0 workspace organization **decision gate** is planned for v0.2.1, before the v0.3.x view expansion. Evaluate pages and other navigation then; pages are an idea, not an approved layout or permission to redesign the current workspace now.
+- The F06 workspace organization **decision gate** is complete, accepted by the maintainer on November 10, 2026 against the released tiled workspace. Later views retain the six root groups, tabs, splits, resizing and compact-terminal navigation. Pages, presets and a separate workspace redesign are not part of this decision.
 
 - Source supports a temporary fullscreen rendering toggle while retaining the
   application toolbar/session header and status/help footer. Restore must retain
@@ -288,7 +288,13 @@ dedicated simulator integration is planned.
   in color and monochrome, and hidden fullscreen controls are excluded.
   While content is focused, Ctrl+arrows or optional Ctrl+h/j/k/l aliases transfer that focus to a
   spatially neighboring visible pane, preserving viewports and stopping at edges.
-- Config → Keybinds offers Vim-like input, disabled by default and independent of connection profiles. Enabling supplies unassigned h/j/k/l and Ctrl+h/j/k/l navigation aliases without overwriting custom keys; conflicts prevent the toggle. Fields enter Normal mode on focus; i/a/I/A enter Insert, Escape returns to Normal, and distinct field edges plus a footer identify the mode. Normal supports h/l, 0/$, w/b/e and x; j/k navigate controls. Insert retains literal typing, Backspace and ordinary field editing. Enter submits and Tab changes focus in either mode. Undo, confirmed Restore Defaults/discard and Save cover this preference as well as mappings. No counts, operators, macros or full editor emulation are required.
+- Config → Keybinds offers Vim-like input, disabled by default and independent of connection profiles. Enabling supplies unassigned h/j/k/l and Ctrl+h/j/k/l navigation aliases without overwriting custom keys; conflicts prevent the toggle. Fields enter Normal mode on focus; i/a/I/A enter Insert, Escape returns to Normal, and distinct field edges plus a footer identify the mode. Normal supports h/l, 0/$, w/b/e, x, dd to clear the field and D to delete through its end; j/k navigate controls. Pending d is canceled by other input, focus changes, paste and resize. Insert retains literal typing, Backspace and ordinary field editing. Enter submits and Tab changes focus in either mode. Undo, confirmed Restore Defaults/discard and Save cover this preference as well as mappings. No counts, general operators, macros or full editor emulation are required.
+- Ordinary and Vim Insert fields support Ctrl+A/E for line boundaries, Ctrl+K
+  for deletion through the end and Meta+B/F for word motion. Ctrl+B/F/P/N follow
+  Left/Right/Up/Down in fields, controls, lists and content without requiring Vim
+  mode. Applicable saved Ctrl assignments take precedence; content transfers
+  retain their content-focus scope. This does not add Console history, a yank
+  buffer or full Readline compatibility.
 - Terminal/multiplexer constraints are real: test mouse click, scroll, drag/resize and function keys in tmux with mouse enabled; avoid assuming a browser-level right click or perfect function-key support in every terminal. Use explicit `...` menus if context clicks aren't reliably conveyed.
 - Do not overwrite user bindings for tmux. If tmux requires `set -g mouse on`, document it as an opt-in prerequisite.
 - Source focus selects source F10/F11; Disassembly focus selects instruction F10/F11. Clicking toolbar/inspection panes preserves the last code-pane mode, visibly indicated. Both execution highlights use GDB PC/frame/source mappings; one source line can remain highlighted over several instructions. Browsing never moves PC. Optimized/inlined/tail-call behavior and unavailable values follow GDB; do not reconstruct missing semantics or fabricate precision.

@@ -6,18 +6,18 @@ implemented features or hardware support claims. See [architecture](architecture
 
 ## Current development sequence
 
-The latest published release is **v0.1.6**, delivering the accepted F03 variable,
-F04 ordinary-RAM and F05 CPU-register editors. Distribution checksums and uploaded
-assets are recorded in the [validation records](validation.md#v016-publication).
+The latest published release is **v0.2.0**, published November 10, 2026.
+The uploaded distributions and checksums are verified in the
+[publication record](validation.md#v020-publication--2026-11-10).
 
 The maintainer has completed the **v0.2.0 workflow and UX/UI adjustment scope**.
 The release consolidates connection reviews, contextual menus, independent column
 splits, scrolling and paste isolation, host-path handling, and the expanded
 seventeen-family/66-palette theme catalog. The [user guide](tutorial/README.md)
 replaces the monolithic usage reference with twenty numbered tutorials and
-references. Local release checks and distributions are prepared; results, maintainer-reported
-physical checks and outstanding publication checks are recorded in the
-[v0.2.0 preparation record](validation.md#v020-release-preparation--2026-11-09).
+references. Host checks, maintainer-reported physical checks, successful hosted
+checks, published artifacts and branch synchronization are recorded in the
+[validation records](validation.md#v020-publication--2026-11-10).
 
 F03/F04 physical validation across the supported architectures is owner-reported.
 STM32 F05 write/verify/restore results are recorded. ESP32-S3/Xtensa and
@@ -39,17 +39,27 @@ and limitations; read-only checks do not establish write behavior.
 | F05 | Deliberate CPU-register editing | Accepted and merged; host and three-architecture write validation recorded |
 | 2.4 | Release v0.1.4 | Published; hosted checks passed, uploaded artifacts verified and branch synchronization complete |
 | Release | v0.1.5 | Published October 30; [uploaded assets and checksums verified](validation.md#v015-publication-verification--2026-11-04) |
+| Release | v0.2.0 | Published November 10; hosted checks, uploaded artifacts/checksums and branch synchronization verified |
+| F06 | Workspace information organization | Complete; maintainer accepted the released workspace organization on November 10 |
 
 Current controls are in [user guide](tutorial/README.md); the accepted browsing scope is in
 [requirements](requirements.md#approved-v013-browsing-work).
 
 **v0.2.0** completes the existing-feature workflow review and task-oriented usage
-documentation. Final release checks and publication remain separate from scope
-completion; no later feature gate is opened by this preparation.
+documentation. **F06 is complete**: the maintainer accepted the existing tiled
+workspace organization on November 10. The six root groups, tab discovery,
+splits, resizing and compact-terminal behavior remain the baseline for later views.
+No separate workspace redesign remains under F06.
+
+The current follow-up extends terminal-style editing bindings and Vim-like
+`dd`/`D`, preserving custom assignments; acceptance is pending. F07 searchable
+symbols is next, followed by F08 globals/statics. Later gates include F09 Quick
+Watch, F11 register metadata/groups, F12 shareable setups, F34 peripheral/SVD
+inspection and F35 Cortex-M fault diagnosis, retaining their recorded dependencies.
 
 The broader maintainability, build-system and testing-strategy reviews remain
-planning work requiring their own scope decisions. F06 and later feature gates
-are separately scheduled; this evaluation does not authorize a workspace redesign.
+planning work requiring their own scope decisions. F07 and later feature gates
+remain separately scheduled.
 
 Physical RISC-V validation was deferred for v0.1.3. Task2.1 now records real
 RISC-V RV32 checks using ESP32-C6FH4 as the test device. Acceptance adds no new
@@ -97,7 +107,8 @@ F03–F05 in v0.1.6; later gates remain planned.
 | F02 | Stack inspection and inspection UX | accepted; shipped in v0.1.5 | [Release verification](validation.md#v015-publication-verification--2026-11-04) |
 | F03–F04 | Variable and ordinary-RAM editing | accepted; shipped in v0.1.6 | [Owner acceptance](validation.md#f04-owner-acceptance) |
 | F05 | CPU-register editing | accepted; shipped in v0.1.6 | [Acceptance closeout](validation.md#f05-acceptance-closeout--2026-11-04) |
-| F06–F18, F20–F47 | Independent versioned future gates below | planned | — |
+| F06 | Workspace information organization | complete; maintainer accepted November 10 | [Decision closeout](validation.md#f06-workspace-organization-closeout--2026-11-10) |
+| F07–F18, F20–F47 | Independent versioned future gates below | planned | — |
 
 ## Development priorities
 
@@ -216,9 +227,9 @@ remains available throughout development and after the flashing feature ships.
 |---|---|---|
 | v0.1.4 → v0.1.5 | F01 restore a known setup, then F02 stack contents/bounds where established. | Preserve early setup/inspection targets. |
 | v0.1.6 | F03/F04/F05 deliberate variable/RAM/CPU-register editing, completed C maintenance and documentation review. | Shipped; editing moved forward from v0.2.0. |
-| v0.2.0 | Real-workflow evaluation, UX/UI and bug corrections, followed by task-oriented usage documentation. | Scope complete; local release preparation verified, publication pending. |
-| v0.2.1 | F06 decides how to organize growing information. | F06 precedes new inspectors. Pages/presets are not approved here. |
-| v0.3.x | F11 register metadata/groups, F34 peripherals/SVD, F35 Cortex-M fault diagnosis; F07→F08 symbols/statics, F09 Quick Watch and F12 shareable setups as supporting gates. | Bring F34/F35 forward from v0.9.1; defer specialized STL F10. Supporting gates need not ship together. |
+| v0.2.0 | Real-workflow evaluation, UX/UI and bug corrections, followed by task-oriented usage documentation. | Published November 10; uploaded artifacts and checksums verified. |
+| v0.2.1 (original F06 target) | Workspace information-organization decision. | F06 complete: existing workspace accepted November 10; no separate redesign remains. This does not identify a published v0.2.1 release. |
+| v0.3.x | F07→F08 searchable symbols and globals/statics first; later F09 Quick Watch, F11 register metadata/groups, F12 shareable setups, F34 peripherals/SVD and F35 Cortex-M fault diagnosis. | Keep F34/F35 ahead of their original v0.9.1 target and preserve their prerequisites; defer specialized STL F10. Gates need not ship together. |
 | v0.4.0–v0.4.x | F22 deliberate firmware Load/Flash first; independent F13/F14/F15/F16 UART/RTT/semihosting/SWO text as backends become ready, then F18 shared log tools. | Flashing moves from v0.5.x ahead of text integrations; RTT/SWO readiness cannot delay it. Native PTY input F17 moves later. |
 | v0.5.x | F20/F21 memory search/export/comparison. F19 themes shipped early in v0.1.1; the catalogue expanded in v0.1.5. | Memory tools move from v0.6.x; themes do not block firmware correctness. |
 | v0.6.x | F31 version-specific RTOS inspection, F33 bootloader/application images, F23 task/thread stops where IDs are backend-usable; F24 supported event catchpoints and F26 logpoints. | RTOS moves from v0.8.x, images from v0.9.0; stopping tools serve these workflows. Images do not require RTOS. |
@@ -251,8 +262,8 @@ F34's gate plan must select and justify a bounded C XML parser/library, reject
 unsafe external resolution and retain provenance/device matching for descriptions;
 no XML dependency or universal SVD compatibility is selected by this revision.
 
-F06 must decide and, where approved, implement organization before F11/F34/F35
-or other new views. Preserve primary/group split tiling, the six root groups and no layout presets.
+F06's organization prerequisite is satisfied for F11/F34/F35 and other new views.
+Preserve primary/group split tiling, the six root groups and no layout presets.
 F01 migration precedes later persisted workspace settings; F12 shares reviewed
 definitions/paths rather than values, personal history or credentials. Necessary
 vendor integration belongs behind the relevant server/probe/target adapter,
@@ -283,7 +294,7 @@ the native/STM32/Xtensa/RISC-V regression gate.
 | F03 / v0.1.6 | Locals/Watches editing after M15 capability/read-policy validation; deliberate stopped writes with bounded footprint, no automatic writes or unsafe aggregate rereads. | Conversion/scope/optimized/read-only/error/refresh. | Deliberately edit a target value and verify it. |
 | F04 / v0.1.6 | Memory editing after M15/M16 lifecycle/capabilities; exact byte extents in eligible ordinary writable RAM. Display grouping does not establish bus width. No implicit Flash programming or peripheral writes. | Bounds/partial writes/encoding/failures/refresh. | Verify exact bytes and visible failed writes. |
 | F05 / v0.1.6 | CPU-register editing after M15 discovery/capabilities; stopped target only, no peripheral editor or guessed writable registers. | Writable/read-only/unavailable, generic IDs and refresh. | Change an appropriate fixture register and verify backend result. |
-| F06 / v0.2.1 | Workspace information-organization **decision gate**, before new views. Evaluate pages/tab discovery/mouse/keys/small terminals; existing workspace baseline, no production redesign yet. | Geometry/input/state-preservation prototypes as needed. | Design review approves organization and implementation stages; pages remain a candidate, not a preset or preapproved design. |
+| F06 / complete (original target v0.2.1) | Workspace information-organization decision completed against the released tiled workspace. Preserve tab discovery, mouse/keyboard access, resizing and compact-terminal behavior. | Existing geometry/input/state-preservation checks remain applicable; no new implementation is introduced by closeout. | Maintainer accepted completion November 10; no separate redesign remains. |
 | F07 / v0.3.x | Searchable Symbols after F06, with code/Watch/Memory actions and bounded GDB queries; preserve pre-dispatch value-read policy. | Filters/duplicate names/no debug info/result limits/capabilities. | Find and open intended symbol/code/data. |
 | F08 / v0.3.x | Globals/Statics selection after F07/F06; symbol discovery first, with the same pre-dispatch region/complete-footprint policy as Watches. | Qualified/duplicate statics/scope/unavailable. | Monitor selected static-storage variables. |
 | F09 / v0.3.x | Explicit Quick Watch after F06; tiled/inline, same read-authorization policy, no floating window. | Requested timing/errors/context/deliberate-side-effect policy. | Evaluate on request without unwanted persistent watch. |

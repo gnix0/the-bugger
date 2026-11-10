@@ -205,6 +205,20 @@ actual local OS/tool versions separately from hosted Ubuntu results. For input
 changes, preserve existing Enter, Backspace, field, frame/thread-selection and
 terminal-restoration assertions as well as tests of the new shortcut.
 
+The editor unit checks cover line/word boundaries, punctuation, empty fields,
+wide-character deletion and Normal `D`. The Keybinds TUI checks exercise the
+terminal-style defaults with Vim off, saved-profile results, modal submission,
+custom Ctrl precedence, Normal `dd`/`D`, canceled pending deletion and inline
+Console/Memory drafts. The same integration harness runs directly and through
+an isolated tmux server in `test-native`.
+
+Terminal-capability checks compare installed standard/extended capabilities with
+the private direct-color description and verify absent, empty and existing
+`TERMINFO` restoration. The color TUI check requires explicit RGB black in Ashen
+high-contrast launcher and pane content, including after resizing and through
+tmux; an ANSI-black index cannot satisfy it. RGB-disabled and NO_COLOR fallbacks
+retain their separate navigation and terminal-restoration checks.
+
 Triggers cover pull requests and manual dispatch. Automatic push runs are
 disabled, so each PR update schedules one Tests job and one Static analysis job.
 There are no path filters that would leave required checks absent on docs-only
@@ -1825,9 +1839,12 @@ QEMU run or successful native test substitutes for the named physical check.
 | F36–F40, v0.8.x–v0.9.5 | Decoder corpus, timestamps/synchronization/loss, attribution/statistics, coverage completeness and measurement units. | A proven trace/event/sampling source per consumer; F37 needs instruction-trace-capable hardware, F40 an actual measurement device. Current board ownership alone establishes none of these capabilities. |
 | F42/F43/F45/F46, late v0.9.x | Hook order/failure/cancel, bounded timers, per-core/inferior context/address-space/ownership isolation. | Supported script/lifecycle target; multicore needs a demonstrated multicore board/backend, multiple inferiors a justified real workflow. No general native process-feature expansion implied. |
 
-F06/F19/F44 remain shared TUI/persistence gates: automate geometry/input/parse
-and fallback tests, then manually inspect directly/in tmux with color and small
-terminals. They do not need special probes, but their releases still need the
+F06's organization review is complete and F19's built-in themes are shipped;
+their existing geometry/input/state-preservation and palette checks remain
+regression coverage. F44 custom themes remains planned. For shared TUI/persistence
+changes, automate geometry/input/parse and fallback tests, then manually inspect
+directly/in tmux with color and small terminals. These changes need no special
+probes, but their releases still need the
 every-release hardware regression matrix. F17/F25 are late scope-review native
 candidates; do not create new native suites for unapproved implementation.
 F47 requires actual supported-workflow evidence and critical-defect resolution,

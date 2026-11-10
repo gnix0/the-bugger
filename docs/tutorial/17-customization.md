@@ -80,6 +80,23 @@ Supported assignments are printable ASCII (case-sensitive), terminal-reported fu
 
 Physical arrows, Ctrl+arrows, Tab/Shift+Tab, Escape and Ctrl+Q remain available. Additional Quit and traversal assignments supplement those fixed keys. Reset and additional movement/quit/traversal slots begin unbound except when optional Vim aliases populate them. Toolbar hints follow saved execution assignments. A Reset binding still requires supported OpenOCD context and confirmation.
 
+Without a saved assignment, Ctrl+B/F/P/N act like Left/Right/Up/Down, including
+in menus and pane content. In ordinary text fields and Vim Insert, Ctrl+A/E move
+to the beginning/end, Ctrl+K deletes from the cursor through the end, and Meta+B/F
+move backward/forward by a word. Meta normally means Alt; your terminal must send
+the key through to the application. Word movement treats letters, digits and
+underscores as words and skips punctuation between them.
+
+Saved Ctrl assignments take precedence where that action is available. For
+example, assigning Ctrl+P to Next control makes it traverse controls rather than
+act as Up. Content-pane transfer assignments apply only during content focus;
+outside content focus, the ordinary field controls remain available. Ctrl+P/N
+follow arrows; they do not provide Console command history.
+
+With tmux's default prefix, press Ctrl+B twice to send one Ctrl+B to The Bugger,
+or choose a different tmux prefix. Terminal or desktop shortcuts that intercept
+Alt+B/F must likewise be changed before those word motions can reach the field.
+
 ### Save, undo and discard
 
 **Undo** reverses the last draft change, including a confirmed Restore Defaults, with up to 128 changes retained. **Restore Defaults** asks before replacing the draft. Only Save persists either operation. Disabled Undo/Save/Restore controls are dimmed, skipped by focus and inert on click.
@@ -100,13 +117,27 @@ Every newly focused text field begins in **VIM NORMAL**. Cyan side borders/block
 | 0 / $, Home / End | First / last character. |
 | w / b / e | Next word / previous word / word end. |
 | x, Delete | Delete the character under the cursor. |
+| dd | Clear the whole field; remain in Normal. |
+| D | Delete from the cursor through the field's end; remain in Normal. |
 | j / k, Down / Up | Move to another visible control. |
 
-In Insert, printable characters are literal. Backspace/Delete, arrows, Home/End and Ctrl+U retain ordinary editing. Escape returns to Normal without discarding the text; another Escape leaves the field/screen. Tab changes focus and the next field starts Normal. Enter still invokes the field's existing submission action in either mode.
+In Insert, printable characters are literal. Backspace/Delete, arrows, Home/End,
+Ctrl+U and the terminal-style field controls above retain ordinary editing.
+Escape returns to Normal without discarding the text; another Escape leaves the
+field/screen. Tab changes focus and the next field starts Normal. Enter still
+invokes the field's existing submission action in either mode.
+
+The first `d` displays a pending-command hint without changing the text. Press
+`d` again to clear that field. Any other key cancels the pending deletion and
+performs its usual action; changing focus, pasting, clicking or resizing also
+cancels it. These deletions change only the draft: they do not send a Console
+command or request a memory read. There is no Vim undo or yank register.
 
 Example: focus a Console draft, press `A`, append text, Escape to Normal, `0` to reach its start, then `w` to move by a word. Enter sends only when you deliberately submit; changing mode does not send commands or read memory.
 
-This is a single-line convenience set, not full Vim. Counts, operators such as `dd`/`D`, registers, macros and multiline editing are not implemented. Do not infer shell/Emacs features such as Ctrl+K, Ctrl+P/N/F/B or Meta+F/B from this mode. Consult [controls](20-controls_and_glossary.md) for the current supported editing set.
+This is a single-line convenience set, not full Vim or Readline. Counts, general
+operators, registers, macros and multiline editing are not implemented. Consult
+[controls](20-controls_and_glossary.md) for the supported editing set.
 
 ## Preference files and compatibility
 
