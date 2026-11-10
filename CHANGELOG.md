@@ -2,7 +2,21 @@
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-11-09
+### Added
+
+- Terminal-style Ctrl+B/F/P/N navigation, Ctrl+K deletion through the line's end
+  and Meta+B/F word movement without requiring Vim mode.
+- Vim Normal `dd` to clear a field and `D` to delete through its end, with pending
+  deletion canceled by other input, focus changes and terminal resizing.
+
+### Fixed
+
+- Pure black in truecolor themes uses explicit RGB output rather than the
+  terminal's configurable ANSI-black palette slot, including through tmux.
+- Saved Ctrl assignments take precedence over ordinary field editing and fallback
+  navigation, including execution and control-traversal shortcuts.
+
+## [0.2.0] - 2026-11-10
 
 ### Added
 

@@ -53,12 +53,58 @@ static void colors(void)
     CHECK(rgb(0x181926, true) && rgb(0x24273a, true) && rgb(0x363a4f, true));
     CHECK(rgb(0xcad3f5, false) && rgb(0xa6da95, false) && rgb(0xed8796, false));
 }
+
+
+static void black_background(void)
+{
+    test_terminal_click(&term, "[ Config ]");
+    test_terminal_click(&term, "Themes");
+    test_terminal_click(&term, "Theme       <");
+    test_terminal_click(&term, "Ashen");
+    test_terminal_click(&term, "Variant     <");
+    test_terminal_click(&term, "high-contrast");
+    test_terminal_click(&term, "[ Save ]");
+    test_terminal_click(&term, "[ Back ]");
+    test_terminal_expect(&term, "Start a debugging session");
+    settle();
+    CHECK(rgb(0, true));
+    CHECK(term.backgrounds[5][5] == 0);
+    CHECK(term.backgrounds[term.rows / 2][term.cols - 2] == 0);
+
+    /* Theme switching must leave no ANSI-black gray behind in pane content. */
+    preview();
+    CHECK(rgb(0, true));
+    int x, y;
+    CHECK(test_terminal_find(&term, "Source", &x, &y));
+    CHECK(term.backgrounds[y + 3][x + 8] == 0);
+    test_terminal_resize(&term, 20, 80);
+    test_terminal_expect(&term, "THEME PREVIEW");
+    settle();
+    CHECK(test_terminal_find(&term, "Source", &x, &y));
+    CHECK(term.backgrounds[y + 3][x + 8] == 0);
+
+    test_terminal_resize(&term, 44, 140);
+    test_terminal_click(&term, "[ Back ]");
+    test_terminal_click(&term, "Theme       <");
+    test_terminal_click(&term, "Catppuccin");
+    test_terminal_click(&term, "[ Save ]");
+    test_terminal_click(&term, "[ Back ]");
+}
+
+
 int main(int argc, char **argv)
 {
     CHECK(argc == 2 && atexit(cleanup) == 0);
+    char root[] = "/tmp/the-bugger-black-XXXXXX";
+    CHECK(mkdtemp(root) && setenv("TB_TEST_CONFIG_HOME", root, 1) == 0);
     CHECK(unsetenv("TMUX") == 0 && setenv("COLORTERM", "truecolor", 1) == 0);
     test_terminal_start(&term, argv[1], "alacritty", false); active = true;
-    preview(); colors(); test_terminal_stop(&term, 0); active = false;
+    preview(); colors();
+    test_terminal_click(&term, "[ Back ]");
+    test_terminal_click(&term, "[ Back ]");
+    test_terminal_click(&term, "[ Back ]");
+    black_background();
+    test_terminal_stop(&term, 0); active = false;
     (void)snprintf(socket_name, sizeof socket_name, "the-bugger-rgb-%ld", (long)getpid());
     int fd = mkstemp(configuration); CHECK(fd >= 0);
     /* Same RGB override as the reported setup; no changes to user configuration. */
@@ -76,6 +122,10 @@ int main(int argc, char **argv)
     test_terminal_click(&term, "dawn");
     test_terminal_click(&term, "[ Preview ]"); test_terminal_expect(&term, "Rose Pine / dawn"); settle();
     CHECK(rgb(0xf8f0e7, true) && rgb(0xfaf4ed, true) && rgb(0x464261, false));
+    test_terminal_click(&term, "[ Back ]");
+    test_terminal_click(&term, "[ Back ]");
+    test_terminal_click(&term, "[ Back ]");
+    black_background();
     test_terminal_stop(&term, 0); active = false;
     CHECK(unsetenv("COLORTERM") == 0);
     for (int mode = 0; mode < 2; ++mode) {
@@ -93,5 +143,14 @@ int main(int argc, char **argv)
     }
     puts("PASS real tmux RGB-disabled and NO_COLOR fallbacks retain navigation and terminal restoration");
     puts("PASS real tmux Tc forwarding: exact Macchiato foreground/background roles match standalone and theme switching updates backgrounds");
+    puts("PASS Ashen high-contrast emits RGB black in launcher and preview content, "
+         "directly and through tmux");
+    char path[512];
+    (void)snprintf(path, sizeof(path), "%s/the-bugger/preferences.json", root);
+    CHECK(unlink(path) == 0);
+    (void)snprintf(path, sizeof(path), "%s/the-bugger/.preferences.lock", root);
+    CHECK(unlink(path) == 0);
+    (void)snprintf(path, sizeof(path), "%s/the-bugger", root);
+    CHECK(rmdir(path) == 0 && rmdir(root) == 0);
     return EXIT_SUCCESS;
 }

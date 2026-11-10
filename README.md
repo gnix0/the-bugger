@@ -170,19 +170,19 @@ See [themes](docs/tutorial/17-customization.md#choose-and-preview-a-theme),
 [Vim-like input](docs/tutorial/17-customization.md#vim-like-input) for configuration.
 These theme previews use simulated data.
 
-| Ashen | Catppuccin Macchiato | Everforest (Dark Medium) |
+| Ashen | Catppuccin Macchiato | Dracula |
 |---|---|---|
-| ![Ashen](docs/assets/themes/theme_ashen.png) | ![Catppuccin Macchiato](docs/assets/themes/theme_catppuccin_macchiato.png) | ![Everforest Dark Medium](docs/assets/themes/theme_everforest_dark_medium.png) |
-| **Gruber Darker** | **Gruvbox Material (Dark Medium)** | **Kanagawa (Wave)** |
-| ![Gruber Darker](docs/assets/themes/theme_gruber_darker.png) | ![Gruvbox Material Dark Medium](docs/assets/themes/theme_gruvbox_material_dark_medium.png) | ![Kanagawa Wave](docs/assets/themes/theme_kanagawa_wave.png) |
-| **Modus (Vivendi)** | **Monokai Pro** | **Moonfly** |
-| ![Modus Vivendi](docs/assets/themes/theme_modus_vivendi.png) | ![Monokai Pro](docs/assets/themes/theme_monokai_pro.png) | ![Moonfly](docs/assets/themes/theme_moonfly.png) |
-| **Nightfox** | **Nord** | **One Dark** |
-| ![Nightfox](docs/assets/themes/theme_nightfox.png) | ![Nord](docs/assets/themes/theme_nord.png) | ![One Dark](docs/assets/themes/theme_one_dark.png) |
-| **Rosé Pine (Main)** | **Solarized (Dark)** | **Tokyo Night** |
-| ![Rosé Pine Main](docs/assets/themes/theme_rose_pine_main.png) | ![Solarized Dark](docs/assets/themes/theme_solarized_dark.png) | ![Tokyo Night](docs/assets/themes/theme_tokyo_night.png) |
-| **Zenburn** | | |
-| ![Zenburn](docs/assets/themes/theme_zenburn.png) | | |
+| ![Ashen](docs/assets/themes/theme_ashen.png) | ![Catppuccin Macchiato](docs/assets/themes/theme_catppuccin_macchiato.png) | ![Dracula](docs/assets/themes/theme_dracula.png) |
+| **Everforest (Dark Medium)** | **Gruber Darker** | **Gruvbox Material (Dark Medium)** |
+| ![Everforest Dark Medium](docs/assets/themes/theme_everforest_dark_medium.png) | ![Gruber Darker](docs/assets/themes/theme_gruber_darker.png) | ![Gruvbox Material Dark Medium](docs/assets/themes/theme_gruvbox_material_dark_medium.png) |
+| **Kanagawa (Wave)** | **Modus (Vivendi)** | **Monokai Pro** |
+| ![Kanagawa Wave](docs/assets/themes/theme_kanagawa_wave.png) | ![Modus Vivendi](docs/assets/themes/theme_modus_vivendi.png) | ![Monokai Pro](docs/assets/themes/theme_monokai_pro.png) |
+| **Moonfly** | **Nightfox** | **Nord** |
+| ![Moonfly](docs/assets/themes/theme_moonfly.png) | ![Nightfox](docs/assets/themes/theme_nightfox.png) | ![Nord](docs/assets/themes/theme_nord.png) |
+| **One Dark** | **Rosé Pine (Main)** | **Solarized (Dark)** |
+| ![One Dark](docs/assets/themes/theme_one_dark.png) | ![Rosé Pine Main](docs/assets/themes/theme_rose_pine_main.png) | ![Solarized Dark](docs/assets/themes/theme_solarized_dark.png) |
+| **Tokyo Night** | **Zenburn** |  |
+| ![Tokyo Night](docs/assets/themes/theme_tokyo_night.png) | ![Zenburn](docs/assets/themes/theme_zenburn.png) |  |
 
 ## Documentation and contributing
 

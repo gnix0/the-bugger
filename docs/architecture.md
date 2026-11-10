@@ -59,14 +59,29 @@ screen boundary.
 
 Focused text fields retain `(page, kind, value, pane)` identity. Newly acquired
 fields start Normal; Insert is retained only while that field remains focused.
-`src/tui/editor.c` implements bounded single-line Normal commands, with no target
-operations. Insert delegates to existing field editing. Capture precedes modal
+`src/tui/editor.c` implements bounded cursor/deletion actions shared by ordinary
+fields and Insert, plus single-line Normal commands, with no target operations.
+Normal `D` truncates at the cursor; the application tracks the first `d` by field
+identity and clears that field on the second. Other input, focus/page changes,
+paste and resize discard the pending deletion. Capture precedes modal
 handling; fixed quit/signal cleanup stays available. Enter submits through existing
 explicit actions in either mode. Field-edge colors, cursor shape where supported,
 and a textual footer communicate the mode, including monochrome terminals.
 Rendering uses the same field buffers and Unicode cell widths, with bounded
 horizontal viewports; nonfocused fields never mutate the focused cursor.
 File-filter edits still reset paging.
+
+Without an applicable saved Ctrl assignment, Ctrl+B/F/P/N are translated into
+the same arrow events used by fields, lists and pane content. Ordinary/Insert
+fields also support Ctrl+A/E/U, Ctrl+K truncation and Meta+B/F word movement.
+The latter uses ncurses definitions for Escape+b/f, so Escape alone retains its
+existing bounded disambiguation delay. Word motions use wide-character indices;
+alphanumeric/underscore runs are words, punctuation/whitespace are separators.
+Saved directional Ctrl assignments become the corresponding arrow events; other
+saved Ctrl actions bypass ordinary editing and the Vim editor. Printable aliases
+remain literal in ordinary/Insert fields. Content-transfer assignments retain
+their existing workspace content-focus scope. These changes add neither Console
+history nor a kill/yank buffer.
 
 Bracketed paste is handled before shortcut, mouse and modal-editor dispatch.
 Its payload is read literally with ncurses keypad decoding suspended until the
@@ -120,6 +135,15 @@ nonempty TMUX environment. Explicit direct-color TERM descriptions already work.
 Capability selection uses ncurses' terminfo reader before screen initialization. Missing direct entries
 fall back to the original TERM. NO_COLOR remains authoritative. The app never
 rewrites TERM, changes terminal palette slots or modifies tmux configuration.
+Some direct-color descriptions reserve values 0–7 for ANSI palette slots, making
+RGB zero depend on the terminal's configurable black. `tb_terminal_screen` copies
+such a description into ncurses' bounded extended-number format, preserving its
+standard and extended input capabilities while replacing `setaf`/`setab` with
+explicit RGB sequences. It loads this private description through ncurses'
+inline `TERMINFO` mechanism and restores the previous environment value before
+returning, before any debugger/server is started. Installed descriptions and
+terminal palette entries remain untouched. Other color modes retain their
+installed capabilities. See the [ncurses compiled-description format](https://invisible-island.net/ncurses/man/term.5.html).
 These capability signals follow the established conventions described by
 [Neovim](https://neovim.io/doc/user/tui/) and
 [Notcurses](https://github.com/dankamongmen/notcurses/blob/master/TERMINALS.md);
@@ -707,8 +731,9 @@ orphaned by a debugger crash.
 `--demo` is an explicit visual-reference path. Bare invocation uses the native
 launcher with implemented remote/OpenOCD choices. Live tabs/layout reuse
 presentation state only, not sample debugger values. The workspace has no presets,
-floating debugging panes or editor modes. Workspace organization remains F06; custom
-themes remain F44. F19's built-in themes affect presentation only.
+floating debugging panes or editor modes. F06's workspace organization review is
+complete against this tiled baseline; custom themes remain F44. F19's built-in
+themes affect presentation only.
 
 ## Selected context, Call Stack and Threads
 
@@ -1177,8 +1202,9 @@ these destinations; a repeated request during closure cannot reopen confirmation
 or downgrade a pending application exit.
 
 Configured debugger function keys dispatch before the Vim Normal editor and
-ordinary field editing. Vim Insert protects field input; printable aliases stay
-local to fields. Capture, modal confirmations and resize retain their own input
+ordinary field editing. Vim Insert protects function-key input; explicitly saved
+Ctrl assignments retain precedence there. Printable aliases stay local to fields.
+Capture, modal confirmations and resize retain their own input
 handling. Fixed Tab/Shift+Tab traverses controls without optional Next/Previous
 control bindings. Fresh defaults add F6 Pause/Halt independently of Continue.
 Saved key arrays retain every slot, including None, without migration or schema
@@ -1542,7 +1568,7 @@ Shared UI/models and fixes continue to benefit native debugging. These extension
 | Regions/peripherals | M15 region provenance and M11 pre-dispatch authorization feed F34 SVD and F03–F05 editing. Description readability is not side-effect proof or write permission. Reset/reconnect invalidates stale grants/snapshots. |
 | RTOS/images | F31 bounds version/port-specific kernel readers; F33 owns image identities/relocations. Task IDs, core IDs and GDB threads/inferiors are distinct unless a verified backend maps them. |
 | Acquisition/analysis | F13–F16/F29/F37/F40/F41 establish source capabilities and loss/time semantics before plots, timelines, profiling or coverage consume data. Reject unsupported paths honestly. |
-| Presentation/persistence | F06 approves organization before more inspectors; F01/F12 evolve schemas and reviewed configuration. No presets, floating views or auto-executed shared setup. |
+| Presentation/persistence | F06's organization review is complete; later inspectors retain the tiled baseline. F01/F12 evolve schemas and reviewed configuration. No presets, floating views or auto-executed shared setup. |
 
 F13's planned local serial transport owns its TTY descriptor, configuration and
 bounded RX/TX queues separately from GDB, inferior PTYs and application terminal

@@ -62,6 +62,10 @@ Execution function-key bindings work while an ordinary inline field or Vim Norma
 | Outside click on input/review modal | Does not dismiss or activate underlying controls. |
 | Field Left/Right, Home/End | Move cursor. |
 | Field Ctrl+A / Ctrl+E | Beginning/end in ordinary editing. |
+| Ctrl+B / Ctrl+F | Left/Right fallback: move the field cursor or navigate the focused view/control. |
+| Ctrl+P / Ctrl+N | Up/Down fallback: navigate controls, lists or focused content; not Console history. |
+| Field Meta+B / Meta+F | Previous word start / next word end in ordinary editing; usually Alt+B/F. |
+| Field Ctrl+K | Delete from cursor through end in ordinary editing. |
 | Field Backspace / Delete | Delete before/under cursor. |
 | Field Ctrl+U | Clear the line. |
 | Field Tab/Shift+Tab | Change focus, not literal indentation. |
@@ -70,7 +74,16 @@ Execution function-key bindings work while an ordinary inline field or Vim Norma
 | Bracketed paste | Stay in one field; normalize tabs/newlines to spaces; discard overflow beyond 255 characters; never submit. |
 | Keybind capture Escape / Delete | Cancel capture / clear binding to None. |
 
-Vim Normal field commands are `i/a/I/A`, `h/l`, `0/$`, `w/b/e`, `x` and `j/k` for control movement. Escape leaves Insert, then local input. Enter still submits the field operation. Counts/operators/`dd`/`D` and general Emacs/Readline compatibility are not implemented; see [Vim-like input](17-customization.md#vim-like-input).
+Ordinary field editing also applies in Vim Insert. Saved Ctrl assignments take
+precedence where the assigned action applies; content-transfer assignments retain
+their content-focus scope.
+
+Vim Normal field commands are `i/a/I/A`, `h/l`, `0/$`, `w/b/e`, `x`, `dd` (clear
+field), `D` (delete through end) and `j/k` for control movement. A pending `d` is
+canceled by other input, focus changes or resizing. Escape leaves Insert, then
+local input. Enter still submits the field operation. Counts, general operators,
+undo/yank and full Emacs/Readline compatibility are not implemented; see
+[Vim-like input](17-customization.md#vim-like-input).
 
 ## View actions at a glance
 

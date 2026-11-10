@@ -39,7 +39,9 @@ enum {
     CONTENT_UP,
     CONTENT_RIGHT,
     SGR_MOUSE,
-    PASTE_BEGIN
+    PASTE_BEGIN,
+    WORD_BACK,
+    WORD_FORWARD
 };
 
 typedef enum {
@@ -358,6 +360,7 @@ typedef struct {
     bool             vim_history[128];
     bool             field_insert;
     bool             field_tracking;
+    bool             field_delete_pending;
     Control_t        field_identity;
     Page_e           field_page;
     bool             paste_active;
@@ -607,9 +610,10 @@ static void page(App_t *app, Page_e next)
     app->popup.offset   = 0;
     app->popup.drag     = -1;
 
-    app->status[0]      = 0;
-    app->key_drag_grab  = app->script_drag_grab = -1;
-    app->field_tracking = app->field_insert = false;
+    app->status[0]            = 0;
+    app->key_drag_grab        = app->script_drag_grab = -1;
+    app->field_tracking       = app->field_insert = false;
+    app->field_delete_pending = false;
 
     app->theme_menu   = 0;
     app->page         = next;
@@ -5785,16 +5789,18 @@ static wchar_t *editable_value(App_t *app, Control_t control, size_t **cursor)
 static void sync_field(App_t *app)
 {
     if (!app->count || !app->preferences.vim || !text_control(app, app->controls[app->focus])) {
-        app->field_tracking = app->field_insert = false;
+        app->field_tracking       = app->field_insert = false;
+        app->field_delete_pending = false;
         return;
     }
 
     Control_t control = app->controls[app->focus];
     if (!app->field_tracking || app->field_page != app->page || !same_control(control, app->field_identity)) {
-        app->field_insert   = false;
-        app->field_identity = control;
-        app->field_page     = app->page;
-        app->field_tracking = true;
+        app->field_insert         = false;
+        app->field_delete_pending = false;
+        app->field_identity       = control;
+        app->field_page           = app->page;
+        app->field_tracking       = true;
     }
 }
 
@@ -5874,7 +5880,9 @@ static void draw_vim_fields(App_t *app)
         draw_footer_spaced(message,
                            app->field_insert
                                ? "VIM INSERT | Esc Normal | Enter submit | Tab next field"
-                               : "VIM NORMAL | i/a/I/A insert | h/l 0/$ w/b/e move | x delete | Esc back",
+                               : app->field_delete_pending
+                                   ? "VIM NORMAL | d pending: d clears line | other key cancels"
+                                   : "VIM NORMAL | i/a/I/A insert | h/l 0/$ w/b/e move | x/dd/D delete | Esc back",
                            app->page == WORKSPACE ? TB_HINT_TEXT : TB_STATUS_TEXT,
                            app->field_insert ? TB_INSERT_TEXT : TB_NORMAL_TEXT, app->page == WORKSPACE);
     }
@@ -10325,27 +10333,35 @@ static bool edit_field(App_t *app, Control_t control, wint_t key, bool special)
     if (app->cursor > length)
         app->cursor = length;
 
+    TbEditAction_e action;
+    bool           editing = true;
+
     if (special && key == KEY_LEFT) {
-        if (app->cursor > 0)
-            --app->cursor;
+        action = TB_EDIT_LEFT;
     } else if (special && key == KEY_RIGHT) {
-        if (app->cursor < length)
-            ++app->cursor;
+        action = TB_EDIT_RIGHT;
     } else if ((special && key == KEY_HOME) || (!special && key == 1)) {
-        app->cursor = 0;
+        action = TB_EDIT_BEGIN;
     } else if ((special && key == KEY_END) || (!special && key == 5)) {
-        app->cursor = length;
+        action = TB_EDIT_END;
+    } else if (special && key == WORD_BACK) {
+        action = TB_EDIT_WORD_BACK;
+    } else if (special && key == WORD_FORWARD) {
+        action = TB_EDIT_WORD_FORWARD;
     } else if ((special && key == KEY_BACKSPACE) || (!special && (key == 127 || key == 8))) {
-        if (app->cursor > 0) {
-            --app->cursor;
-            wmemmove(value + app->cursor, value + app->cursor + 1, length - app->cursor);
-        }
+        action = TB_EDIT_BACKSPACE;
     } else if (special && key == KEY_DC) {
-        if (app->cursor < length)
-            wmemmove(value + app->cursor, value + app->cursor + 1, length - app->cursor);
+        action = TB_EDIT_DELETE;
     } else if (!special && key == 21) {
-        value[0]    = L'\0';
-        app->cursor = 0;
+        action = TB_EDIT_CLEAR;
+    } else if (!special && key == 11) {
+        action = TB_EDIT_DELETE_END;
+    } else {
+        editing = false;
+    }
+
+    if (editing) {
+        tb_editor_edit(value, &app->cursor, action);
     } else if (!special && iswprint(key) && wcwidth((wchar_t)key) > 0) {
         if (length < FIELD_SIZE - 1U) {
             wmemmove(value + app->cursor + 1, value + app->cursor, length - app->cursor + 1);
@@ -11121,6 +11137,11 @@ static bool paste_event(App_t *app, wint_t key, bool special)
 
 static void key_event(App_t *app, wint_t key, bool special)
 {
+    bool delete_pending       = app->field_delete_pending;
+    app->field_delete_pending = false;
+    if (special || key != 'd')
+        delete_pending = false;
+
     if (paste_event(app, key, special))
         return;
 
@@ -11165,6 +11186,39 @@ static void key_event(App_t *app, wint_t key, bool special)
 
     if (COLS < 80 || LINES < 20)
         return;
+
+    /* Saved Ctrl assignments win over fallback navigation and field editing.
+     * Content-transfer aliases retain their existing content-focus scope. */
+    int bound_action = -1;
+    if (!special && key > 0 && key <= 26) {
+        for (int i = 0; i < TB_BIND_COUNT; ++i) {
+            if (tb_keybind_matches(app->preferences.keys[i], key, false)) {
+                bound_action = i;
+                break;
+            }
+        }
+    }
+
+    bool content_binding   = bound_action >= TB_BIND_CONTENT_LEFT && bound_action <= TB_BIND_CONTENT_RIGHT;
+    bool content_transfer  = content_binding && app->page == WORKSPACE && app->content_pane >= 0 &&
+                             app->menu < 0 && !app->resizing;
+    bool direction_binding = bound_action >= TB_BIND_LEFT && bound_action <= TB_BIND_RIGHT;
+    bool bound_control     = bound_action >= 0 && !content_binding && !direction_binding;
+    if (direction_binding) {
+        const int arrows[] = {KEY_LEFT, KEY_DOWN, KEY_UP, KEY_RIGHT};
+        key     = (wint_t)arrows[bound_action - TB_BIND_LEFT];
+        special = true;
+    } else if (!special && !bound_control && !content_transfer) {
+        int arrow = key == 2 ? KEY_LEFT
+            : key == 6 ? KEY_RIGHT
+            : key == 16 ? KEY_UP
+            : key == 14 ? KEY_DOWN
+            : 0;
+        if (arrow) {
+            key     = (wint_t)arrow;
+            special = true;
+        }
+    }
 
     if (app->theme_menu && !(special && key == KEY_MOUSE)) {
         size_t choices[64];
@@ -11265,7 +11319,7 @@ static void key_event(App_t *app, wint_t key, bool special)
 
     sync_field(app);
 
-    bool text_entry = text_control(app, control);
+    bool text_entry = text_control(app, control) && !bound_control;
     if (app->page == REVIEW &&
         ((special && (key == KEY_UP || key == KEY_DOWN)) ||
          (!special && app->preferences.vim && !app->field_insert && (key == 'j' || key == 'k')))) {
@@ -11281,12 +11335,13 @@ static void key_event(App_t *app, wint_t key, bool special)
     }
 
     /* Function keys are commands in ordinary fields and Vim Normal mode.
-     * Dispatch before the modal editor, which consumes unrecognized keys. */
+     * Explicit Ctrl assignments also precede editing, including Vim Insert. */
     if (app->page == WORKSPACE && app->menu < 0 && !app->resizing &&
         !(text_entry && app->preferences.vim && app->field_insert)) {
         for (int i = 0; i < TB_BIND_LEFT; ++i) {
             int binding = app->preferences.keys[i];
-            if (binding > 0 && binding <= 24 && tb_keybind_matches(binding, key, special)) {
+            if ((bound_control || (binding > 0 && binding <= 24)) &&
+                tb_keybind_matches(binding, key, special)) {
                 activate(app, (Control_t) {
                     .kind  = TOOL,
                     .value = i
@@ -11312,6 +11367,17 @@ static void key_event(App_t *app, wint_t key, bool special)
                       (special && (key == KEY_ENTER || key == KEY_BTAB));
 
         if (!app->field_insert && !submit) {
+            if (!special && key == 'd') {
+                if (delete_pending) {
+                    tb_editor_edit(value, cursor, TB_EDIT_CLEAR);
+                    if (app->page == CODE_FILES)
+                        app->file_page = 0;
+                } else {
+                    app->field_delete_pending = true;
+                }
+                return;
+            }
+
             if ((special && (key == KEY_UP || key == KEY_DOWN)) || (!special && (key == 'j' || key == 'k'))) {
                 app->focus = spatial_target(app, key == KEY_UP || key == 'k' ? KEY_UP : KEY_DOWN, false);
             } else {
@@ -11608,7 +11674,7 @@ static void key_event(App_t *app, wint_t key, bool special)
         return;
     }
 
-    if (edit_field(app, control, key, special)) {
+    if (!bound_control && edit_field(app, control, key, special)) {
         if (app->page == CODE_FILES)
             app->file_page = 0;
 
@@ -11869,10 +11935,10 @@ int tb_tui_run(bool demo)
 
     /* Keep matching key/mouse capabilities; use RGB only when confirmed. */
     const char *description = tb_terminal_description();
-    SCREEN     *screen      = newterm(description, stdout, stdin);
+    SCREEN     *screen      = tb_terminal_screen(description, stdout, stdin);
 
     if (screen == NULL && description)
-        screen = newterm(NULL, stdout, stdin);
+        screen = tb_terminal_screen(NULL, stdout, stdin);
 
     int result = EXIT_FAILURE;
     if (screen == NULL) {
@@ -11894,6 +11960,8 @@ int tb_tui_run(bool demo)
         (void)define_key("\033[1;5B", CONTENT_DOWN);
         (void)define_key("\033[1;5A", CONTENT_UP);
         (void)define_key("\033[1;5C", CONTENT_RIGHT);
+        (void)define_key("\033b", WORD_BACK);
+        (void)define_key("\033f", WORD_FORWARD);
         bool bracketed_paste = define_key("\033[200~", PASTE_BEGIN) != ERR;
         if (bracketed_paste) {
             (void)fputs("\033[?2004h", stdout);
