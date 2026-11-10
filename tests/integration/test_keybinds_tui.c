@@ -234,7 +234,9 @@ static void custom_terminal_bindings(const char *binary)
     click("Profiles");
     click("Shared connection");
     if (!prefs.vim) {
-        test_terminal_send(&term, "\t\020marker\016\020\033OF-exec");
+        test_terminal_send(&term, "\t\020marker\016\020");
+        /* tmux 3.6 passes SS3 End through; its advertised terminal uses CSI 4~. */
+        test_terminal_send(&term, getenv("TB_KEYBINDS_TEST_TMUX") ? "\033[4~-exec" : "\033OF-exec");
         test_terminal_expect(&term, "marker-exec");
         test_terminal_send(&term, "\024Y\022Z");
         test_terminal_expect(&term, "marker-exeYcZ");
