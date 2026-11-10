@@ -10,19 +10,14 @@ The latest published release is **v0.1.6**, delivering the accepted F03 variable
 F04 ordinary-RAM and F05 CPU-register editors. Distribution checksums and uploaded
 assets are recorded in the [validation records](validation.md#v016-publication).
 
-The **v0.2.0 workflow and UX/UI review is underway**. The first correction pass
-covers connection labels, profile context, host paths, independent menu scrolling
-and theme selection. The theme catalog now includes seventeen families and 66
-palettes, with alphabetical dropdown selection and an Ashen high-contrast variant.
-Continuous scrollbars and ncurses line drawing replace graphical character
-approximations. Contextual workspace menus and centered dialogs now preserve the
-underlying panes, with adaptive placement shared by theme selectors. Horizontal
-scrollbars use half-height blocks on compatible terminals. Independent lower
-panes share column space with their primary partners rather than covering them;
-frame junctions derive from the complete visible geometry.
-The workspace menu, layout, scrolling and toolbar corrections are accepted;
-see the [review closeout](validation.md#workspace-review-closeout--2026-11-06).
-The broader workflow review continues; this does not open a new feature gate.
+The maintainer has completed the **v0.2.0 workflow and UX/UI adjustment scope**.
+The release consolidates connection reviews, contextual menus, independent column
+splits, scrolling and paste isolation, host-path handling, and the expanded
+seventeen-family/66-palette theme catalog. The [user guide](tutorial/README.md)
+replaces the monolithic usage reference with twenty numbered tutorials and
+references. Local release checks and distributions are prepared; results, maintainer-reported
+physical checks and outstanding publication checks are recorded in the
+[v0.2.0 preparation record](validation.md#v020-release-preparation--2026-11-09).
 
 F03/F04 physical validation across the supported architectures is owner-reported.
 STM32 F05 write/verify/restore results are recorded. ESP32-S3/Xtensa and
@@ -45,13 +40,12 @@ and limitations; read-only checks do not establish write behavior.
 | 2.4 | Release v0.1.4 | Published; hosted checks passed, uploaded artifacts verified and branch synchronization complete |
 | Release | v0.1.5 | Published October 30; [uploaded assets and checksums verified](validation.md#v015-publication-verification--2026-11-04) |
 
-Current controls are in [usage](usage.md); the accepted browsing scope is in
+Current controls are in [user guide](tutorial/README.md); the accepted browsing scope is in
 [requirements](requirements.md#approved-v013-browsing-work).
 
-**v0.2.0** will exercise existing features in day-to-day combinations, review UX/UI
-and reported bugs, then validate the resulting corrections. The monolithic usage
-reference will be replaced with task-oriented tutorials after those interactions
-stabilize.
+**v0.2.0** completes the existing-feature workflow review and task-oriented usage
+documentation. Final release checks and publication remain separate from scope
+completion; no later feature gate is opened by this preparation.
 
 The broader maintainability, build-system and testing-strategy reviews remain
 planning work requiring their own scope decisions. F06 and later feature gates
@@ -71,8 +65,8 @@ Accepted post-release work includes themes, Source fullscreen, spatial navigatio
 (`53b1e5a`), multi-file Source tabs, inline Console, personal keybinds, Vim-like
 input, tmux RGB, rendering fixes, lower overlays and browsing history. Release
 contents are in [CHANGELOG](../CHANGELOG.md); results are in
-[validation records](validation.md). F01 shipped in v0.1.4 and F02 in v0.1.5. F03–F05 are accepted for
-v0.1.6; later gates remain planned.
+[validation records](validation.md). F01 shipped in v0.1.4, F02 in v0.1.5 and
+F03–F05 in v0.1.6; later gates remain planned.
 
 | Milestone | Deliverable | State | Commit / release reference |
 |---|---|---|---|
@@ -101,8 +95,8 @@ v0.1.6; later gates remain planned.
 | F19 | Config, built-in themes and variants | accepted; shipped in v0.1.1 | [Recorded checks](validation.md#f19--themes-and-configuration) |
 | F01 | Setup restoration | accepted; shipped in v0.1.4 | `a460648`; [release closeout](validation.md#v014-publication) |
 | F02 | Stack inspection and inspection UX | accepted; shipped in v0.1.5 | [Release verification](validation.md#v015-publication-verification--2026-11-04) |
-| F03–F04 | Variable and ordinary-RAM editing | accepted; pending v0.1.6 publication | [Owner acceptance](validation.md#f04-owner-acceptance) |
-| F05 | CPU-register editing | accepted; pending v0.1.6 publication | [Acceptance closeout](validation.md#f05-acceptance-closeout--2026-11-04) |
+| F03–F04 | Variable and ordinary-RAM editing | accepted; shipped in v0.1.6 | [Owner acceptance](validation.md#f04-owner-acceptance) |
+| F05 | CPU-register editing | accepted; shipped in v0.1.6 | [Acceptance closeout](validation.md#f05-acceptance-closeout--2026-11-04) |
 | F06–F18, F20–F47 | Independent versioned future gates below | planned | — |
 
 ## Development priorities
@@ -144,7 +138,7 @@ contract above supplies per-milestone NFRs, documentation and completion rules.
 All new v0.1.0 capabilities are release evidence requirements, not just visible UI.
 Completed rows describe their original bounded deliverables; they do not limit
 functionality added by later completed milestones. Current availability is
-summarized above and in the [usage guide](usage.md).
+summarized above and in the [user guide](tutorial/README.md).
 
 | Gate / prerequisite | Objective and bounded deliverable | Automated verification | Manual acceptance criterion |
 |---|---|---|---|
@@ -221,8 +215,8 @@ remains available throughout development and after the flashing feature ships.
 | Planning target | Useful workflow and execution order | Change from previous roadmap |
 |---|---|---|
 | v0.1.4 → v0.1.5 | F01 restore a known setup, then F02 stack contents/bounds where established. | Preserve early setup/inspection targets. |
-| v0.1.6 | F03/F04/F05 deliberate variable/RAM/CPU-register editing, completed C maintenance and documentation review. | Editing moves forward from v0.2.0; implementation is accepted, publication remains separate. |
-| v0.2.0 | Real-workflow evaluation, UX/UI and bug corrections, followed by task-oriented usage documentation. | Consolidate existing capabilities before adding new inspectors. |
+| v0.1.6 | F03/F04/F05 deliberate variable/RAM/CPU-register editing, completed C maintenance and documentation review. | Shipped; editing moved forward from v0.2.0. |
+| v0.2.0 | Real-workflow evaluation, UX/UI and bug corrections, followed by task-oriented usage documentation. | Scope complete; local release preparation verified, publication pending. |
 | v0.2.1 | F06 decides how to organize growing information. | F06 precedes new inspectors. Pages/presets are not approved here. |
 | v0.3.x | F11 register metadata/groups, F34 peripherals/SVD, F35 Cortex-M fault diagnosis; F07→F08 symbols/statics, F09 Quick Watch and F12 shareable setups as supporting gates. | Bring F34/F35 forward from v0.9.1; defer specialized STL F10. Supporting gates need not ship together. |
 | v0.4.0–v0.4.x | F22 deliberate firmware Load/Flash first; independent F13/F14/F15/F16 UART/RTT/semihosting/SWO text as backends become ready, then F18 shared log tools. | Flashing moves from v0.5.x ahead of text integrations; RTT/SWO readiness cannot delay it. Native PTY input F17 moves later. |

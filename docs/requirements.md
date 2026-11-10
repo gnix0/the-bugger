@@ -45,6 +45,13 @@ This is **a GDB frontend, not a replacement debugger engine**. Use structured **
 
 C17, Make, ncursesw, POSIX APIs and C test harnesses form the implementation
 foundation. C++ is permitted for debug-target fixtures, not the frontend.
+
+C++ targets use the same native/remote sessions with compatible GDB and symbols;
+this does not promise full C++ expression support. Current inspection covers
+supported ordinary objects/members and pointers, subject to the frontend's
+expression and read-access restrictions. Specialized STL presentation remains
+planned. See the [C++ object walkthrough](tutorial/10-locals_and_watches.md#inspect-a-c-object).
+
 No simulator, browser runtime, new macro language, mandatory IDE/build integration
 or public plugin SDK is part of the approved scope.
 
@@ -376,7 +383,7 @@ profiles retain them. Do not launch OpenOCD in this mode.
 ## Approved v0.1.3 browsing work
 
 This section specifies the implemented v0.1.3 browsing scope.
-Current controls and limits are described in [usage](usage.md); release and
+Current controls and limits are described in [user guide](tutorial/README.md); release and
 future-work status are in [the roadmap](roadmap.md).
 
 ### Shared browsing behavior

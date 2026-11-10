@@ -2,14 +2,23 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-09
+
 ### Added
 
+- A complete user guide in `docs/tutorial/`, with twenty numbered chapters,
+  a beginner learning path, native and embedded connection examples, debugging
+  workflows, feature and control references, and troubleshooting.
+- Offline user documentation and screenshots in the Linux binary distribution,
+  alongside the complete matching source distribution.
 - Ashen, including a high-contrast variant based on ashen-hc-theme with black
   panels and red borders; Dracula, Kanagawa, Moonfly, Nord and One Dark with
   their built-in variants.
 
 ### Changed
 
+- Replace the monolithic usage reference with linked, task-oriented tutorials
+  covering the current supported interface and deliberate inspection/editing workflows.
 - Native, OpenOCD and existing-server session reviews open floating dialogs over
   their configuration forms, with explicit Start/Connect and Back controls.
 - The workspace toolbar labels its closing control Close Session and separates
@@ -20,8 +29,7 @@
   scrolling, keyboard/mouse selection and resize support. Left/Right retains
   direct cycling.
 - Scrollbars use continuous tracks and family-specific interface accents throughout
-  the UI;
-  borders and split dividers use ncurses line drawing.
+  the UI; borders and split dividers use ncurses line drawing.
 - Pane Actions and view selectors open contextual dropdowns. Input, review and
   confirmation dialogs retain the debugging workspace behind them, with focus
   restored on dismissal and adaptive placement near screen edges.
@@ -39,7 +47,6 @@
 - Mixed disassembly source annotations align left without changing Source indentation.
 - Scrollbar tracks use consistent pane-relative insets, independent of source
   gutters; popup tracks extend beside pinned footer controls.
-
 - Horizontal scrollbars leave a blank row before pane buttons; horizontal panning
   preserves source token colors and visible disassembly address colors.
 - Disassembly scrolling extends cached listings without bouncing between contained
@@ -53,7 +60,6 @@
 - Workspace frames join shared boundaries without depending on paint order.
 - Mixed disassembly rows show source text without repeating paths or line numbers;
   the Mixed toolbar toggle replaces its duplicate Actions entry.
-
 - Ashen high-contrast frames occupy exterior gutters without reducing pane content
   capacity or causing theme-dependent overflow.
 - Profile options identify the session type and highlight the Save profile action.

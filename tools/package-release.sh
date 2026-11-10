@@ -33,6 +33,14 @@ git ls-files -z > "$work/files"
 printf '%s\0' tools/package-release.sh tests/integration/test_setup_board.c \
     tests/integration/test_setup_board_tui.c >> "$work/files"
 sort -zu "$work/files" -o "$work/files"
+# Keep the offline documentation tree intact, including its screenshots and CI reference.
+while IFS= read -r -d '' path; do
+    case "$path" in
+        *.md|docs/assets/*|.github/workflows/*.yml)
+            install -Dm644 -- "$path" "$work/$name/$path"
+            ;;
+    esac
+done < "$work/files"
 epoch=${SOURCE_DATE_EPOCH:-0}
 [[ $epoch =~ ^[0-9]+$ ]] || { echo 'SOURCE_DATE_EPOCH must be a nonnegative integer' >&2; exit 1; }
 tar --null --verbatim-files-from --files-from="$work/files" \
@@ -61,6 +69,11 @@ Install the runtime libraries listed in BUILD-INFO.txt, their dependencies, and
 terminfo for your terminal. This dynamically linked build is tested on the
 recorded build host; it does not promise compatibility with older distributions.
 In tmux, enable mouse forwarding with: set -g mouse on
+
+Open docs/tutorial/README.md for the complete user guide. The archive includes
+the numbered tutorials, screenshots and supporting project documentation.
+Build the tutorial fixtures from the matching source archive, not this runtime
+directory; the source archive supplies their code and Makefile.
 
 Keep the OpenOCD executable and script installation matched. An ESP-IDF shell
 may export OPENOCD_SCRIPTS for Espressif OpenOCD. When using the system OpenOCD,

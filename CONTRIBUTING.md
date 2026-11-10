@@ -98,7 +98,7 @@ Documentation responsibilities are:
 
 | Document | Purpose |
 |---|---|
-| [Usage](docs/usage.md) | Current controls, configuration and limitations |
+| [User guide](docs/tutorial/README.md) | Current controls, configuration and limitations |
 | [Requirements](docs/requirements.md) | Product scope, FR/NFR identifiers and release criteria |
 | [Architecture](docs/architecture.md) | Implemented modules, interfaces, invariants and extension boundaries |
 | [Roadmap](docs/roadmap.md) | Completion status, planned scope, dependencies and version targets |

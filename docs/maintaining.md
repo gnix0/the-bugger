@@ -101,7 +101,9 @@ make RELEASE_DIST_DIR=/path/to/output release
 Each version directory contains:
 
 - `the-bugger-v<version>-linux-x86_64.tar.gz`: one host binary, GPLv3 license,
-  runtime instructions, build/dependency information and `THIRD_PARTY_NOTICES`.
+  runtime instructions, build/dependency information, `THIRD_PARTY_NOTICES`,
+  the complete numbered user guide, screenshots and supporting public Markdown
+  documentation. Its relative documentation links retain their directory layout.
 - `the-bugger-v<version>-source.tar.gz`: corresponding working-tree source and build
   instructions, including packaging infrastructure.
 - `SHA256SUMS`: checksums for both archives. The binary archive also identifies
