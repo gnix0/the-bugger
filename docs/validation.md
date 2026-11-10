@@ -13,12 +13,16 @@ F03/F04 physical validation across the supported architectures is maintainer-rep
 Native and STM32 F05 results are recorded. ESP32-S3/Xtensa and ESP32-C6/RISC-V
 validation was reported by the maintainer; supporting evidence and limitations
 remain documented below. The [acceptance closeout](#f05-acceptance-closeout--2026-11-04)
-supersedes earlier pending-acceptance statements. Subsequent v0.2.0 menu/path
-corrections, theme additions and workspace refinements remain subject to review
-and do not extend the physical validation claims.
+supersedes earlier pending-acceptance statements. The maintainer has completed
+the v0.2.0 adjustment scope and reports all three physical architecture regressions
+completed on the final changes. That report is distinct from locally retained
+host logs; no new physical transcripts or tool versions were supplied. See the
+[v0.2.0 preparation record](#v020-release-preparation--2026-11-09) for the current
+release checks and publication boundary.
 
 Useful starting points:
 
+- [v0.2.0 release preparation](#v020-release-preparation--2026-11-09).
 - [v0.1.6 release preparation](#v016-release-preparation--2026-11-04).
 
 - [v0.1.4 publication](#v014-publication) and [RISC-V hardware validation](#v014-task-21--risc-v-hardware-validation).
@@ -65,8 +69,8 @@ and references below retain the results, including failures and unrun checks.
 | F19 | Themes, variants and Config | accepted; shipped in v0.1.1 | [Focused checks](#f19--themes-and-configuration); implementation committed per maintainer report |
 | F01 | Saved setup restoration | accepted; shipped in v0.1.4 | `a460648`; [publication and verification](#v014-publication) |
 | F02 | Stack inspection and inspection UX | accepted; shipped in v0.1.5 | [Published release verification](#v015-publication-verification--2026-11-04) |
-| F03–F04 | Variable and ordinary-RAM editing | accepted; pending v0.1.6 publication | [Owner acceptance](#f04-owner-acceptance) |
-| F05 | CPU-register editing | accepted; pending v0.1.6 publication | [Acceptance closeout](#f05-acceptance-closeout--2026-11-04) |
+| F03–F04 | Variable and ordinary-RAM editing | accepted; shipped in v0.1.6 | [Owner acceptance](#f04-owner-acceptance) |
+| F05 | CPU-register editing | accepted; shipped in v0.1.6 | [Acceptance closeout](#f05-acceptance-closeout--2026-11-04) |
 
 ### Full recorded commit identifiers
 
@@ -4817,3 +4821,109 @@ make -j1 BUILD_DIR=build/ui-review-final-20261108T161017Z \
 
 Documentation checks, `git diff --check` and normal `make -j1` passed. The failed
 baseline remains failed; a complete baseline rerun and acceptance remain pending.
+
+
+## v0.2.0 release preparation — 2026-11-09
+
+The maintainer reports the workflow/UI adjustments and the numbered user guide
+complete, and requests preparation of v0.2.0. The version header is now 0.2.0.
+Publication is not implied by local preparation.
+
+Preparation starts from `07bc45807ad2c8dd7953e96fb07fe746d5200b80`, with the
+user-guide migration and release metadata in the working tree. Relevant
+implementation revisions since v0.1.6 are:
+
+| Scope | Revision |
+|---|---|
+| Menus and host-local paths | `c3639439db49a1a382c7e39d226a109da9a4b5c0` |
+| Themes and controls | `30dca61f5954c083aa35506e6e967467363ed842` |
+| Workspace menus and scrolling | `60b8c69cd4e44cc8101fefa338901d6afaddf4c2` |
+| Session reviews, disassembly bounds and paste isolation | `07bc45807ad2c8dd7953e96fb07fe746d5200b80` |
+
+### Evidence carried into preparation
+
+The November 8 fortified host baseline in
+`build/ui-review-final-20261108T165810Z/test-ci.log` completed with exit 0,
+recorded in `test-ci.exit`, after the native review retry correction. It reaches
+the final real-OpenOCD host check without hardware initialization. This closes
+the earlier failed run at `build/ui-review-final-20261108T161017Z/`; that original
+failure and its diagnosis remain preserved above. It is not a run of the later
+0.2.0 version header or documentation.
+
+The maintainer reports completion of the final physical regression checks for
+STM32/ARM, ESP32-S3/Xtensa and ESP32-C6/RISC-V. No new raw logs, firmware hashes,
+probe identifiers, tool versions or capability-specific exclusions accompanied
+that report. Earlier board records retain their original provenance and limits;
+no hardware operations are performed as part of this local preparation.
+
+### Final local checks and distributions
+
+Environment: Linux 7.2.14-arch1-1 x86-64, glibc 2.44, GCC/G++ 16.2.1,
+GDB/gdbserver 18.1, tmux 3.8, clang-tidy 23.1.4 and OpenOCD
+0.12.0-01004-g9ea7f3d64-dirty. Exact outputs, commands, input hashes, logs and
+exit records are under `build/v020-release-evidence/`.
+
+The fresh complete fortified host baseline passed, exit 0:
+
+```sh
+TERM=xterm-256color make -j1 BUILD_DIR=build/v020-release-ci-20261110T003739Z CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+It covers the current CI Tests target list, including native, tmux, real localhost
+remote-server and offline OpenOCD checks. `test-ci-command.json`, `test-ci.log`
+and `test-ci.exit` retain the exact run. Frozen hashes in `tested-inputs.json`
+and `tested-input-comparison.json` confirm unchanged compiled application/test
+inputs; the later packaging-only documentation addition is checked separately.
+These are local host results, not hosted Ubuntu CI results.
+
+`make analyze` passed, exit 0, with no unsuppressed project diagnostics. All 86
+C test/support sources compiled with strict warnings and `_FORTIFY_SOURCE=3`
+in `build/v020-release-compile`, exit 0. The initial compilation command omitted
+its alternate BUILD_DIR and failed before compiling; its command/log/exit remain
+under `test-compilation-initial*`. The corrected command changed no source/tests.
+
+Documentation checks passed for the twenty numbered tutorial pages and index,
+relative links/anchors/images, Markdown fences, Mermaid syntax and shell-example
+syntax. The obsolete usage guide is removed; historical evidence retains its
+original filename mentions. Public references point to the permanent tutorial
+entry point. Checks and migration coverage are in `build/tutorial-doc-check/`.
+
+The hardened package build passed with a separate packaging index enumerating
+reviewed working-tree additions/deletion while preserving repository staging.
+This includes every tutorial page in the source archive. The Linux archive now
+also bundles all public Markdown documentation, screenshots and its linked CI
+reference, preserving relative paths for offline reading. Package commands and
+SOURCE_DATE_EPOCH are in `packaging-command.json`.
+
+Candidate checks passed for matching checksums, all 229 source files matching the
+working tree, all 21 tutorial files in both archives, offline documentation links,
+GPLv3/notices, source checksum in BUILD-INFO.txt and version/help execution outside
+the repository. An extracted source build passed independently. ELF inspection
+confirmed x86-64 PIE, non-executable stack and full RELRO; executable GLIBC symbol
+requirements reach 2.38 on this build host. Runtime shared libraries and terminfo
+remain external; older-distribution compatibility is not implied.
+Missing packaging arguments/executables and a mismatched executable version were
+rejected. Existing CLI, terminal, workspace and real-tmux harnesses passed against
+the extracted executable outside the repository, each exit 0. Commands/logs/exit
+records are `packaged-test-*`; `packaged-tests.json` identifies the tested binary.
+
+The final archives are rebuilt after this record and the documentation changes:
+
+- `build/dist/v0.2.0/the-bugger-v0.2.0-linux-x86_64.tar.gz`
+- `build/dist/v0.2.0/the-bugger-v0.2.0-source.tar.gz`
+- `build/dist/v0.2.0/SHA256SUMS`
+
+Final source-content, offline-documentation, checksum and independent-build checks
+are recorded in `sealed-package-verification.json` and `sealed-source-build*`.
+The sealed executable matches the binary used for the passing packaged tests.
+Archive checksums are retained in SHA256SUMS rather than embedded in this source
+record. The normal build is also updated to 0.2.0. Rebuild the archives if any
+packaged file changes after sealing.
+
+Upload all three files separately. GitHub's two automatic source snapshots do not
+replace the Linux binary archive, matching source archive or checksum file. Local
+files are not publication evidence; the actual five-asset inventory and uploaded
+checksums must be verified after release publication.
+
+Hosted PR checks, maintainer release acceptance and upload/publication verification
+remain outstanding. No commit, tag or publication is implied by these local files.

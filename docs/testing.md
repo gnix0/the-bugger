@@ -823,6 +823,14 @@ formats/baselines, malformed and obsolete replies, context cleanup and no hidden
 running or unknown-region automatic value reads. Native cases exercise C, C++
 and optimized fixtures. TUI coverage includes live launcher entry, add/read/format,
 selected-row actions, expansion/pages, rejected calls, resize and cleanup.
+
+C++ cases in `test_variables_native.c` inspect the `ClassValue` object and its
+access-group members in `variables-fixture-cpp`. `test_break_native.c` covers
+the overloaded `m08_overload` locations in `break-fixture-cpp`; code-location and
+Memory grammar cases separately accept simple `::` qualification. Those grammar
+checks do not establish every C++ name's runtime resolution. The embedded
+fixtures are C; native C++ results are not physical C++ firmware evidence.
+
 The generic tmux suite tests forwarding; live M11 tmux acceptance remains a
 separate manual procedure. Synthetic authorization tests are not board evidence.
 
@@ -1697,7 +1705,7 @@ contain the reproductions and results.
 
 ## Embedded startup debugging check
 
-Use the [startup walkthrough](usage.md#debugging-embedded-startup-code) with an
+Use the [startup walkthrough](tutorial/06-execution_control.md#debugging-embedded-startup-code) with an
 already-programmed disposable fixture and matching ELF. Record board/core, reset
 wiring, probe, GDB/OpenOCD versions, scripts/arguments and firmware identity.
 

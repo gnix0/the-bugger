@@ -1227,6 +1227,24 @@ retain their own selection and scroll, but do not create independent watch lists
 Local names come from `-stack-list-variables --no-values`; value inspection uses
 owned MI variable objects, not parsed CLI output or demo data.
 
+Target language is separate from the frontend's C17 implementation. Session
+startup accepts native and remote ELF symbols without a C-only target check.
+Context retains GDB's `func` text; Disassembly retains GDB's `inst` text, so
+readable C++ frame names do not imply demangled assembly operands. Breakpoints
+retains `original-location`, with parent-location fallback for child rows; it
+does not display each child's `func` signature. No frontend demangler rewrites
+these names.
+
+Root inspection expressions use `tb_memory_expression`, allowing simple names,
+`::` qualification, members, constant indices and a numeric offset. Variable
+creation explicitly uses `--language c`, even for C++ target debug types; basic
+class fields and access-group children are supported without promising arbitrary
+C++ evaluation. Calls, assignments, casts, template-id syntax and general
+operators are excluded. Grammar acceptance alone does not prove GDB can resolve
+a namespace-qualified expression. Code navigation accepts hexadecimal addresses
+or identifiers joined by `::`; breakpoint locations instead pass through GDB's
+location parser.
+
 Names and expression syntax are not evidence that a value is safe to read.
 Creation, evaluation/formatting and child expansion pass authorization before
 dispatch. The optional adapter callback must establish the complete operation's
