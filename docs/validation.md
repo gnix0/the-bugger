@@ -5071,3 +5071,36 @@ The full log, command, exit status, environment, tracked-file hashes and patch a
 retained in that directory. This covers local native GDB, tmux, localhost remote
 and offline OpenOCD integration; it is not new hosted Ubuntu or physical-board
 evidence. Maintainer visual review and acceptance remain pending.
+
+## CI portability follow-up — 2026-11-10
+
+The reported hosted LLVM 18 failure identified interchangeable value/width
+parameters in terminal-entry serialization. Separate 16-bit and 32-bit writers
+remove that ambiguity without suppressing the diagnostic. Local LLVM 23.1.4
+reproduced the original warning; the complete `make analyze` check passes after
+the correction. Fortified compilation of all C test sources also passes.
+
+The reported hosted GDB 17.1 run failed in the tmux keybinding test while expecting
+`marker-exec`. The same failure was reproduced locally with Ubuntu's packaged
+tmux 3.6, while the original test passed with local tmux 3.8. Input tracing showed
+that tmux 3.6 passed the harness's SS3 End sequence through unchanged; the inner
+terminal decoded Escape and left the form. The harness now sends CSI `4~` for End
+through tmux, matching its advertised terminal, and retains SS3 End directly.
+The field-content assertions and application input handling are unchanged.
+The complete keybinding test passes with Ubuntu's tmux binary after the correction.
+
+Failure reproductions, input traces and focused results are retained under
+`build/terminal-analysis-fix/`. Analysis, fortified compilation, source-tree
+hashes, command and environment records are under
+`build/terminal-analysis-ci-20261110T181531Z/`. The fresh full host regression
+baseline passed with exit 0, using the extracted Ubuntu tmux binary first in PATH:
+
+```sh
+PATH="$PWD/build/terminal-analysis-fix/ubuntu-tmux36/usr/bin:$PATH" TERM=xterm-256color make BUILD_DIR=build/terminal-analysis-ci-20261110T181531Z/regression CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+The run includes native GDB, direct and tmux keybindings, terminal restoration,
+color rendering, localhost remote sessions and offline OpenOCD. These checks use
+the local Linux host and GDB 18.1; using an Ubuntu-packaged tmux binary does not
+establish a passing hosted Ubuntu run. Hosted reruns and maintainer acceptance
+remain pending; no physical-target operations were performed.
