@@ -155,13 +155,13 @@ int main(int argc, char **argv)
     test_terminal_pump(&term, 300);
 
     prepared(&term);
-    test_terminal_resize(&term, 18, 48);
+    test_terminal_resize(&term, 20, 80);
     input(&term, "0x1", vim);
     CHECK(!test_terminal_find(&term, "[ Apply ]", NULL, NULL));
     test_terminal_click(&term, "[ Next ]");
-    test_terminal_resize(&term, 18, 60);
+    test_terminal_resize(&term, 20, 96);
     test_terminal_expect(&term, "Target architecture:");
-    test_terminal_resize(&term, 18, 48);
+    test_terminal_resize(&term, 20, 80);
     test_terminal_expect(&term, "Target architecture:");
     CHECK(!test_terminal_find(&term, "[ Apply ]", NULL, NULL));
     apply(&term);

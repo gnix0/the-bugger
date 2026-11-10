@@ -119,22 +119,30 @@ static void clean_key_borders(void)
 static void scrollbar_layout(void)
 {
     resize_keys(20, 160); clean_key_borders();
-    int x, y; CHECK(test_terminal_find(&term, "#", &x, &y));
+    int x, y; CHECK(test_terminal_find_scrollbar(&term, true, &x, &y));
     int top = y, bottom = y;
-    while (top > 0 && strchr("|#", term.cells[top - 1][x])) { --top; }
-    while (bottom + 1 < term.rows && strchr("|#", term.cells[bottom + 1][x])) { ++bottom; }
+    while (top > 0 && (test_terminal_scroll_cell(&term, top - 1, x, false) || test_terminal_scroll_cell(&term, top - 1, x, true))) { --top; }
+    while (bottom + 1 < term.rows && (test_terminal_scroll_cell(&term, bottom + 1, x, false) || test_terminal_scroll_cell(&term, bottom + 1, x, true))) { ++bottom; }
     CHECK(bottom > top && bottom < term.rows - 3);
     mouse_at(x, bottom); test_terminal_expect(&term, "Rows 3-4/15");
     test_terminal_send(&term, "\033OH"); test_terminal_expect(&term, "Rows 1-2/15"); settle();
-    CHECK(test_terminal_find(&term, "#", &x, &y));
+    CHECK(test_terminal_find_scrollbar(&term, true, &x, &y));
     char event[80];
     (void)snprintf(event, sizeof event, "\033[<0;%d;%dM", x + 1, y + 1); test_terminal_send(&term, event); settle();
     (void)snprintf(event, sizeof event, "\033[<32;%d;%dM", x + 1, bottom + 1); test_terminal_send(&term, event); settle();
     (void)snprintf(event, sizeof event, "\033[<0;%d;%dm", x + 1, bottom + 1); test_terminal_send(&term, event);
     test_terminal_expect(&term, "Rows 14-15/15"); clean_key_borders();
+    /* Scrolling away must retain Continue as the Enter target. */
+    test_terminal_send(&term, "\r"); test_terminal_expect(&term, "Press a key.");
+    test_terminal_expect(&term, "Continue");
+    test_terminal_send(&term, "\033"); test_terminal_expect(&term, "Capture cancelled.");
+    capture(15); test_terminal_send(&term, "\033"); test_terminal_expect(&term, "Capture cancelled.");
+    test_terminal_send(&term, "\033[<65;50;10M\r"); test_terminal_expect(&term, "Press a key.");
+    test_terminal_expect(&term, "Previous pane");
+    test_terminal_send(&term, "\033\033OH"); settle();
     test_terminal_send(&term, "\033[<64;50;10M"); settle(); clean_key_borders();
     test_terminal_send(&term, "\033[<65;50;10M"); settle(); clean_key_borders();
-    resize_keys(90, 160); CHECK(!test_terminal_find(&term, "#", NULL, NULL));
+    resize_keys(90, 160); CHECK(!test_terminal_find_scrollbar(&term, true, NULL, NULL));
     test_terminal_send(&term, "\033OH"); settle();
     resize_keys(60, 140); selected = 0;
 }
@@ -225,6 +233,68 @@ static void leave_vim_field(void)
     test_terminal_expect(&term, "LIVE | Stopped");
 }
 
+static void paste_fields(const char *binary)
+{
+    start(binary, "xterm-256color");
+    test_terminal_send(&term, "\033[200~\t\r\021q\033[201~");
+    settle();
+    test_terminal_expect(&term, "[ Config ]");
+    test_terminal_send(&term, "\r\t\025");
+    test_terminal_expect(&term, "Executable / ELF");
+    test_terminal_send(&term, "\t\t.\t\tgdb\033[Z\033[Z\033[Z\033[Z");
+    settle();
+    CHECK(strstr(term.output, "\033[?2004h"));
+
+    char overflow[800];
+    memset(overflow, 'x', sizeof(overflow));
+    memcpy(overflow, "\033[200~", 6);
+    const char tail[] = "\t\r\n\021\003\025\033[1;5Bspillover\033[201~";
+    memcpy(overflow + sizeof(overflow) - sizeof(tail), tail, sizeof(tail));
+    test_terminal_send(&term, overflow);
+    test_terminal_expect(&term, "Paste truncated: field limit is 255 characters.");
+    /* Input after the closing delimiter still edits the original field. */
+    test_terminal_send(&term, "\177Z\t");
+    test_terminal_send(&term, "\033[200~one\ttwo\nthree\r\021\003\010\177\025");
+    settle();
+    test_terminal_resize(&term, 28, 100);
+    /* Delimiter recognition survives separate writes and terminal resizing. */
+    test_terminal_send(&term, "\033[20");
+    settle();
+    test_terminal_send(&term, "1~");
+    test_terminal_expect(&term, "one two three");
+    click("Save profile");
+    test_terminal_expect(&term, "Profile field");
+    test_terminal_send(&term, "\025\033[200~paste-limit\033[201~");
+    test_terminal_expect(&term, "paste-limit");
+    test_terminal_send(&term, "\r");
+    test_terminal_expect(&term, "Profile file saved atomically.");
+    stop();
+    CHECK(strstr(term.output, "\033[?2004l"));
+
+    TbProfiles_t *store = tb_profiles_create();
+    CHECK(store && tb_profiles_load(store));
+    const TbProfile_t *profile = tb_profiles_find(store, "paste-limit");
+    CHECK(profile && strlen(profile->executable) == 255);
+    for (int i = 0; i < 254; ++i)
+        CHECK(profile->executable[i] == 'x');
+    CHECK(profile->executable[254] == 'Z');
+    CHECK(profile->arguments.count == 3);
+    CHECK(strcmp(profile->arguments.values[0], "one") == 0);
+    CHECK(strcmp(profile->arguments.values[1], "two") == 0);
+    CHECK(strcmp(profile->arguments.values[2], "three") == 0);
+    CHECK(strcmp(profile->directory, ".") == 0 && strcmp(profile->gdb, "gdb") == 0);
+    char path[4096];
+    (void)snprintf(path, sizeof(path), "%s", tb_profiles_path(store));
+    tb_profiles_destroy(store);
+    CHECK(unlink(path) == 0);
+    char *slash = strrchr(path, '/');
+    CHECK(slash);
+    (void)snprintf(slash + 1, sizeof(path) - (size_t)(slash + 1 - path), ".lock");
+    CHECK(unlink(path) == 0);
+    puts("PASS bounded bracketed paste, control isolation, resize, fragmented delimiter and terminal cleanup");
+}
+
+
 static void vim_input(const char *binary, const char *fixture)
 {
     start(binary, "xterm-256color"); open_keys();
@@ -239,13 +309,18 @@ static void vim_input(const char *binary, const char *fixture)
     test_terminal_send(&term, "i\025alpha beta"); test_terminal_expect(&term, "VIM INSERT");
     test_terminal_expect(&term, "alpha beta");
     test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
+    test_terminal_send(&term, "\033[200~qhjkl\ttext\033[201~");
+    test_terminal_expect(&term, "qhjkl text");
+    test_terminal_expect(&term, "VIM NORMAL");
+    test_terminal_send(&term, "i\025alpha beta\033");
+    test_terminal_expect(&term, "alpha beta");
     test_terminal_send(&term, "0wxiX"); test_terminal_expect(&term, "alpha Xeta");
     test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
     test_terminal_send(&term, "Aqhjkl"); test_terminal_expect(&term, "alpha Xetaqhjkl");
     test_terminal_send(&term, "\t"); test_terminal_expect(&term, "VIM NORMAL");
     test_terminal_send(&term, "i\025literal"); test_terminal_expect(&term, "literal");
     test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
-    test_terminal_resize(&term, 18, 48); test_terminal_expect(&term, "VIM NORMAL");
+    test_terminal_resize(&term, 20, 80); test_terminal_expect(&term, "VIM NORMAL");
     test_terminal_resize(&term, 54, 166); test_terminal_expect(&term, "VIM NORMAL");
     test_terminal_send(&term, "\033"); test_terminal_expect(&term, "[ Config ]");
     stop();
@@ -255,7 +330,17 @@ static void vim_input(const char *binary, const char *fixture)
         test_terminal_lower(&term, 2, true);
         vim_stage = "native Command focus";
         click("Command"); test_terminal_expect(&term, "VIM NORMAL");
-        test_terminal_send(&term, "iecho modal_hjklq[]123\\n"); test_terminal_expect(&term, "VIM INSERT");
+        test_terminal_send(&term, "\033[200~echo paste_pending\n\t\033[201~");
+        test_terminal_expect(&term, "echo paste_pending");
+        settle();
+        int occurrences = 0;
+        for (int row = 0; row < term.rows; ++row) {
+            if (strstr(term.cells[row], "paste_pending"))
+                ++occurrences;
+        }
+        CHECK(occurrences == 1); /* The draft must not also appear as executed Console output. */
+        test_terminal_send(&term, "i\025echo modal_hjklq[]123\\n");
+        test_terminal_expect(&term, "VIM INSERT");
         test_terminal_send(&term, "\033"); test_terminal_expect(&term, "VIM NORMAL");
         test_terminal_send(&term, "\r"); test_terminal_expect(&term, "[gdb] modal_hjklq[]123");
         test_terminal_expect(&term, "VIM NORMAL");
@@ -308,6 +393,7 @@ int main(int argc, char **argv)
     char root[] = "/tmp/the-bugger-keybinds-tui-XXXXXX"; CHECK(mkdtemp(root));
     CHECK(setenv("XDG_CONFIG_HOME", root, 1) == 0);
     CHECK(setenv("TB_TEST_CONFIG_HOME", root, 1) == 0);
+    paste_fields(argv[1]);
     start(argv[1], "xterm-256color"); test_terminal_resize(&term, 60, 140); open_keys();
     scrollbar_layout();
     int x, y; CHECK(test_terminal_find(&term, "Keybinds", &x, &y) && x > 0 && y > 0);
@@ -372,7 +458,7 @@ int main(int argc, char **argv)
     test_terminal_expect(&term, "Restore Defaults");
     choose(TB_BIND_COUNT - 1); test_terminal_send(&term, "\033[6~");
     bind_action(TB_BIND_COUNT - 1, "F8");
-    resize_keys(18, 48); CHECK(headers() == 1);
+    resize_keys(20, 80); CHECK(headers() == 1);
     test_terminal_expect(&term, "Restore Defaults");
     choose(TB_BIND_CONTINUE); edit("F7"); test_terminal_expect(&term, "Binding captured.");
     resize_keys(60, 112); CHECK(headers() == 2);

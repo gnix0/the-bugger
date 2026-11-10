@@ -98,6 +98,254 @@ void tb_fill(TbRect_t rect, TbStyle_e style)
 }
 
 
+#define BORDER_UP    1U
+#define BORDER_RIGHT 2U
+#define BORDER_DOWN  4U
+#define BORDER_LEFT  8U
+
+
+static void border_cell(int y, int x, unsigned edges, const chtype *glyphs,
+                        TbStyle_e style, bool preserve_content)
+{
+    chtype old   = mvinch(y, x);
+    chtype mask  = A_CHARTEXT | A_ALTCHARSET;
+    int    pair  = PAIR_NUMBER(old);
+    bool   clear = (old & A_CHARTEXT) == ' ' && !(old & (A_REVERSE | A_UNDERLINE)) &&
+                 (!tb_theme_has_color() || pair == 0 || pair == TB_WORKSPACE || pair == TB_CHROME);
+    bool   line  = false;
+
+    /* Adjacent exterior frames share one-cell gutters, including split junctions. */
+    if (PAIR_NUMBER(old) == (tb_theme_has_color() ? (int)style : 0)) {
+        for (unsigned i = 1; i < 16; ++i) {
+            if ((old & mask) == (glyphs[i] & mask)) {
+                line = true;
+                edges |= i == BORDER_UP || i == BORDER_DOWN ? BORDER_UP | BORDER_DOWN :
+                         i == BORDER_LEFT || i == BORDER_RIGHT ? BORDER_LEFT | BORDER_RIGHT : i;
+                break;
+            }
+        }
+    }
+
+    /* Exterior frames can share a row with status text or dock controls. */
+    if (!preserve_content || clear || line)
+        (void)mvaddch(y, x, glyphs[edges]);
+}
+
+
+void tb_border(TbRect_t rect, TbStyle_e style, bool preserve_content)
+{
+    if (rect.x < 0 || rect.y < 0 || rect.w < 2 || rect.h < 2 ||
+        rect.x > COLS - rect.w || rect.y > LINES - rect.h)
+        return;
+
+    const chtype glyphs[] = {
+        ' ', ACS_VLINE, ACS_HLINE, ACS_LLCORNER,
+        ACS_VLINE, ACS_VLINE, ACS_ULCORNER, ACS_LTEE,
+        ACS_HLINE, ACS_LRCORNER, ACS_HLINE, ACS_BTEE,
+        ACS_URCORNER, ACS_RTEE, ACS_TTEE, ACS_PLUS
+    };
+
+    tb_style(style, 0);
+    for (int col = 0; col < rect.w; ++col) {
+        unsigned edges = (col > 0 ? BORDER_LEFT : 0U) | (col + 1 < rect.w ? BORDER_RIGHT : 0U);
+        bool     corner = col == 0 || col + 1 == rect.w;
+        border_cell(rect.y, rect.x + col, edges | (corner ? BORDER_DOWN : 0U),
+                    glyphs, style, preserve_content);
+        border_cell(rect.y + rect.h - 1, rect.x + col, edges | (corner ? BORDER_UP : 0U),
+                    glyphs, style, preserve_content);
+    }
+    for (int row = 1; row + 1 < rect.h; ++row) {
+        border_cell(rect.y + row, rect.x, BORDER_UP | BORDER_DOWN, glyphs, style, preserve_content);
+        border_cell(rect.y + row, rect.x + rect.w - 1, BORDER_UP | BORDER_DOWN,
+                    glyphs, style, preserve_content);
+    }
+}
+
+
+/* Coordinates follow curses' row/column convention. */
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+static void pane_frame_cell(const TbRect_t *panes, size_t count, int y, int x, TbRect_t active)
+{
+    if (y < 0 || x < 0 || y >= LINES || x >= COLS)
+        return;
+
+    unsigned edges = 0;
+    for (size_t i = 0; i < count; ++i) {
+        TbRect_t rect = panes[i];
+        if (rect.w <= 0 || rect.h <= 0)
+            continue;
+        if (tb_rect_contains(rect, x, y))
+            return;
+
+        int left   = rect.x - 1;
+        int right  = rect.x + rect.w;
+        int top    = rect.y - 1;
+        int bottom = rect.y + rect.h;
+        if ((y == top || y == bottom) && x >= left && x <= right) {
+            edges |= (x > left ? BORDER_LEFT : 0U) | (x < right ? BORDER_RIGHT : 0U);
+            if (x == left || x == right)
+                edges |= y == top ? BORDER_DOWN : BORDER_UP;
+        }
+        if ((x == left || x == right) && y > top && y < bottom)
+            edges |= BORDER_UP | BORDER_DOWN;
+    }
+    if (!edges)
+        return;
+
+    const chtype glyphs[] = {
+        ' ', ACS_VLINE, ACS_HLINE, ACS_LLCORNER,
+        ACS_VLINE, ACS_VLINE, ACS_ULCORNER, ACS_LTEE,
+        ACS_HLINE, ACS_LRCORNER, ACS_HLINE, ACS_BTEE,
+        ACS_URCORNER, ACS_RTEE, ACS_TTEE, ACS_PLUS
+    };
+    bool selected = tb_rect_contains(active, x, y);
+    tb_style(selected ? TB_ACTIVE_TAB : TB_BORDER, selected ? A_BOLD : 0);
+    (void)mvaddch(y, x, glyphs[edges]);
+}
+
+
+void tb_pane_frames(const TbRect_t *panes, size_t count, TbRect_t active)
+{
+    for (size_t i = 0; i < count; ++i) {
+        TbRect_t rect = panes[i];
+        if (rect.w <= 0 || rect.h <= 0)
+            continue;
+        for (int x = rect.x - 1; x <= rect.x + rect.w; ++x) {
+            pane_frame_cell(panes, count, rect.y - 1, x, active);
+            pane_frame_cell(panes, count, rect.y + rect.h, x, active);
+        }
+        for (int y = rect.y; y < rect.y + rect.h; ++y) {
+            pane_frame_cell(panes, count, y, rect.x - 1, active);
+            pane_frame_cell(panes, count, y, rect.x + rect.w, active);
+        }
+    }
+}
+
+
+/* Desired cell width and item count are separate dimensions of the popup. */
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+TbRect_t tb_dropdown_rect(TbRect_t trigger, TbRect_t bounds, int width, int count)
+{
+    if (bounds.w < 4 || bounds.h < 3 || count <= 0)
+        return (TbRect_t) {0};
+
+    int below = bounds.y + bounds.h - trigger.y - trigger.h;
+    int above = trigger.y - bounds.y;
+    int rows  = count < 8 ? count : 8;
+    bool up   = below < rows + 2 && above >= below;
+    int space = up ? above : below;
+
+    if (rows + 2 > space)
+        rows = space - 2;
+    if (rows < 1)
+        rows = 1;
+    if (width > bounds.w)
+        width = bounds.w;
+    if (width < 4)
+        width = 4;
+
+    int x = trigger.x;
+    int y = up ? trigger.y - rows - 2 : trigger.y + trigger.h;
+    if (x > bounds.x + bounds.w - width)
+        x = bounds.x + bounds.w - width;
+    if (x < bounds.x)
+        x = bounds.x;
+    if (y > bounds.y + bounds.h - rows - 2)
+        y = bounds.y + bounds.h - rows - 2;
+    if (y < bounds.y)
+        y = bounds.y;
+
+    return (TbRect_t) {
+        .x = x,
+        .y = y,
+        .w = width,
+        .h = rows + 2
+    };
+}
+
+
+TbRect_t tb_scrollbar_track(TbRect_t frame, bool horizontal)
+{
+    if (frame.w < 3 || frame.h < 3)
+        return (TbRect_t) {0};
+
+    return (TbRect_t) {
+        .x = horizontal ? frame.x + 1 : frame.x + frame.w - 2,
+        .y = horizontal ? frame.y + frame.h - 2 : frame.y + 1,
+        .w = horizontal ? frame.w - 2 : 1,
+        .h = horizontal ? 1 : frame.h - 2
+    };
+}
+
+
+TbScroll_t tb_scrollbar_layout(TbScroll_t scroll, int length)
+{
+    if (length <= 0 || scroll.visible <= 0 || scroll.total <= 0) {
+        scroll.thumb_size = scroll.thumb_start = 0;
+        return scroll;
+    }
+    scroll.thumb_size = (int)((int64_t)length * scroll.visible / scroll.total);
+    if (scroll.thumb_size < 1)
+        scroll.thumb_size = 1;
+    if (scroll.thumb_size > length)
+        scroll.thumb_size = length;
+    scroll.thumb_start = scroll.maximum > 0
+        ? (int)((int64_t)scroll.offset * (length - scroll.thumb_size) / scroll.maximum) : 0;
+    return scroll;
+}
+
+
+void tb_render_scrollbar(TbRect_t rect, TbScroll_t scroll, bool horizontal)
+{
+    int length = horizontal ? rect.w : rect.h;
+    if (scroll.maximum <= 0 || length <= 0 || scroll.visible <= 0 ||
+        rect.x < 0 || rect.y < 0 || rect.w <= 0 || rect.h <= 0 ||
+        rect.x > COLS - rect.w || rect.y > LINES - rect.h)
+        return;
+
+    if (length != scroll.visible)
+        scroll = tb_scrollbar_layout(scroll, length);
+    int start = scroll.thumb_start;
+    int size  = scroll.thumb_size;
+    if (start < 0)
+        start = 0;
+    if (start >= length)
+        start = length - 1;
+    if (size < 1)
+        size = 1;
+    if (size > length - start)
+        size = length - start;
+
+    if (horizontal && tb_theme_has_color() && MB_CUR_MAX > 1 && wcwidth(L'\u2584') == 1) {
+        for (int col = 0; col < length; ++col) {
+            tb_style(col >= start && col < start + size ? TB_SCROLL_H_THUMB : TB_SCROLL_H_TRACK, 0);
+            (void)mvaddnwstr(rect.y, rect.x + col, L"\u2584", 1);
+        }
+        return;
+    }
+
+    if (tb_theme_has_color()) {
+        tb_fill(rect, TB_SCROLL_TRACK);
+    } else {
+        /* Line drawing retains a visible track without color; reverse cells mark the thumb. */
+        tb_style(TB_SCROLL_TRACK, A_DIM);
+        if (horizontal)
+            (void)mvhline(rect.y, rect.x, ACS_HLINE, rect.w);
+        else
+            (void)mvvline(rect.y, rect.x, ACS_VLINE, rect.h);
+    }
+
+    if (horizontal) {
+        rect.x += start;
+        rect.w  = size;
+    } else {
+        rect.y += start;
+        rect.h  = size;
+    }
+    tb_fill(rect, TB_SCROLL_THUMB);
+}
+
+
 static const char *heading(TbView_e view)
 {
     switch (view) {
@@ -243,10 +491,13 @@ static bool view_line(const TbDemo_t *demo, TbView_e view, int index, char *text
 /* Read-only lexical coloring; this does not parse or evaluate source code. */
 // follows curses y/x convention.
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-void tb_render_source_text(int y, int x, int width, const char *code, bool selected)
+void tb_render_source_slice(int y, int x, int width, const char *code, int scroll, bool selected)
 {
+    if (scroll < 0 || width <= 0)
+        return;
+
     int offset = 0;
-    while (code[offset] != '\0' && offset < width) {
+    while (code[offset] != '\0' && offset - scroll < width) {
         int           start = offset++;
         TbStyle_e     style = TB_PANEL;
         unsigned char c     = (unsigned char)code[start];
@@ -276,11 +527,22 @@ void tb_render_source_text(int y, int x, int width, const char *code, bool selec
                 style = TB_PINK;
             }
         }
-        int length = offset - start;
-        if (length > width - start)
-            length = width - start;
-        tb_text(y, x + start, length, selected ? tb_selected_style(style) : style, 0, code + start);
+        /* Classify the complete token before clipping its visible fragment. */
+        int left = start < scroll ? scroll : start;
+        int right = offset - scroll > width ? scroll + width : offset;
+        if (right > left) {
+            tb_text(y, x + left - scroll, right - left,
+                    selected ? tb_selected_style(style) : style, 0, code + left);
+        }
     }
+}
+
+
+// follows curses y/x convention.
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+void tb_render_source_text(int y, int x, int width, const char *code, bool selected)
+{
+    tb_render_source_slice(y, x, width, code, 0, selected);
 }
 
 
@@ -374,7 +636,7 @@ void tb_render_demo(const TbDemo_t *demo, int pane_index, TbRect_t rect)
     TbView_e            view   = pane->tabs[pane->active];
     TbScroll_t          scroll = tb_demo_scrollbar(demo, pane, rect.h - 3);
     int                 x      = rect.x + 1;
-    int                 width  = rect.w - 2;
+    int                 width  = rect.w - 3;
 
     tb_fill((TbRect_t) {
         rect.x,
@@ -405,11 +667,10 @@ void tb_render_demo(const TbDemo_t *demo, int pane_index, TbRect_t rect)
     }
 
     if (scroll.maximum > 0) {
-        for (int row = 0; row < scroll.visible; ++row) {
-            bool thumb = row >= scroll.thumb_start && row < scroll.thumb_start + scroll.thumb_size;
-            tb_text(rect.y + 2 + row, rect.x + rect.w - 1, 1, thumb ? TB_CYAN : TB_MUTED, 0,
-                    thumb ? "#" : "|");
-        }
+        TbRect_t frame = rect;
+        ++frame.y;
+        --frame.h;
+        tb_render_scrollbar(tb_scrollbar_track(frame, false), scroll, false);
     }
 
     static const char *const footers[] = {

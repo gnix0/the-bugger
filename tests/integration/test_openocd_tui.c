@@ -46,9 +46,10 @@ static void mouse_event_at(int button, int x, int y, bool release)
 }
 static void scrollbar(int *x, int *top, int *bottom)
 {
-    test_terminal_expect(&term, "#"); CHECK(test_terminal_find(&term, "#", x, top)); *bottom = *top;
-    while (*top > 0 && strchr("|#", term.cells[*top - 1][*x])) { --*top; }
-    while (*bottom + 1 < term.rows && strchr("|#", term.cells[*bottom + 1][*x])) { ++*bottom; }
+    test_terminal_expect_scrollbar(&term, true);
+    CHECK(test_terminal_find_scrollbar(&term, true, x, top)); *bottom = *top;
+    while (*top > 0 && (test_terminal_scroll_cell(&term, *top - 1, *x, false) || test_terminal_scroll_cell(&term, *top - 1, *x, true))) { --*top; }
+    while (*bottom + 1 < term.rows && (test_terminal_scroll_cell(&term, *bottom + 1, *x, false) || test_terminal_scroll_cell(&term, *bottom + 1, *x, true))) { ++*bottom; }
 }
 static int panel_geometry(bool keys)
 {
@@ -75,7 +76,7 @@ static int panel_geometry(bool keys)
 }
 static void centered_menus(const char *binary)
 {
-    static const int sizes[][2] = {{60, 256}, {44, 160}, {90, 160}, {28, 110}, {18, 48}, {60, 256}};
+    static const int sizes[][2] = {{60, 256}, {44, 160}, {90, 160}, {28, 110}, {20, 80}, {60, 256}};
     int heights[sizeof sizes / sizeof *sizes];
     start(&term, binary); test_terminal_click(&term, "[ Config ]"); test_terminal_click(&term, "Keybinds");
     for (size_t i = 0; i < sizeof sizes / sizeof *sizes; ++i) {
@@ -100,24 +101,28 @@ static void script_navigation(const char *binary, const char *root)
     int x, top, bottom; scrollbar(&x, &top, &bottom);
     mouse_event_at(0, x, bottom, false); mouse_event_at(0, x, bottom, true);
     CHECK(!test_terminal_find(&term, "scroll-000.cfg", NULL, NULL));
-    int thumb; CHECK(test_terminal_find(&term, "#", &x, &thumb));
+    int thumb; CHECK(test_terminal_find_scrollbar(&term, true, &x, &thumb));
     mouse_event_at(0, x, thumb, false); mouse_event_at(32, x + 3, bottom, false); mouse_event_at(0, x + 3, bottom, true);
     test_terminal_expect(&term, "selected-m16.cfg");
-    CHECK(test_terminal_find(&term, "#", &x, &thumb));
+    CHECK(test_terminal_find_scrollbar(&term, true, &x, &thumb));
     mouse_event_at(0, x, thumb, false); mouse_event_at(32, x, top, false); mouse_event_at(0, x, top, true);
     test_terminal_expect(&term, "scroll-000.cfg");
     mouse_event_at(65, x - 2, top + 1, false); mouse_event_at(64, x - 2, top + 1, false);
     /* The first row stays selected through redraw; page movement reveals later scripts. */
     test_terminal_send(&term, "\033[6~\033[6~\033[6~\033[6~");
     test_terminal_expect(&term, "scroll-059.cfg");
-    test_terminal_send(&term, "\033[5~"); test_terminal_resize(&term, 18, 48);
+    /* Enter activates the original first script, not the newly visible page. */
+    test_terminal_send(&term, "\r"); test_terminal_expect(&term, "Configure session");
+    test_terminal_expect(&term, "scroll-000.cfg");
+    test_terminal_click(&term, "Browse boards"); test_terminal_expect(&term, "Installed OpenOCD");
+    test_terminal_send(&term, "\033[5~"); test_terminal_resize(&term, 20, 80);
     test_terminal_expect(&term, "Installed OpenOCD");
     /* Reverse Tab from a list row eventually reaches Back. Enter must not be stolen by redraw. */
     test_terminal_click(&term, "[ Filter ]");
     test_terminal_send(&term, "\t\r"); test_terminal_expect(&term, "Installed OpenOCD");
     test_terminal_click(&term, "[ Filter ]"); test_terminal_expect(&term, "Filter installed");
     test_terminal_send(&term, "\025selected-m16.cfg\r");
-    CHECK(!test_terminal_find(&term, "#", NULL, NULL)); test_terminal_expect(&term, "/board/selected-m16.cfg");
+    CHECK(!test_terminal_find_scrollbar(&term, true, NULL, NULL)); test_terminal_expect(&term, "/board/selected-m16.cfg");
     test_terminal_send(&term, "\t\r"); test_terminal_expect(&term, "Filter installed");
     test_terminal_send(&term, "\033"); test_terminal_expect(&term, "Installed OpenOCD");
     test_terminal_click(&term, "[ Back ]"); test_terminal_expect(&term, "Configure session");
@@ -142,8 +147,17 @@ static void configure(const char *binary, const char *helper, const char *peer)
     char endpoint[64]; (void)snprintf(endpoint, sizeof endpoint, "127.0.0.1:%u", ntohs(addr.sin_port));
     test_terminal_send(&term, "\t\025"); test_terminal_send(&term, endpoint);
     test_terminal_send(&term, "\t\025"); test_terminal_send(&term, helper);
+    int form_x, form_y;
+    CHECK(test_terminal_find(&term, "OpenOCD setup", &form_x, &form_y));
     test_terminal_click(&term, "Review session"); test_terminal_expect(&term, "Review OpenOCD session");
     test_terminal_expect(&term, "Start owned OpenOCD"); test_terminal_expect(&term, "argv[0]");
+    int review_x, review_y;
+    CHECK(test_terminal_find(&term, "Review OpenOCD session", &review_x, &review_y));
+    CHECK(review_x > 0 && review_y > 0);
+    CHECK(test_terminal_find(&term, "Configure session", NULL, NULL));
+    CHECK(form_x < review_x - 1);
+    CHECK(memcmp(term.cells[form_y] + form_x, "Open", 4) == 0);
+    CHECK(test_terminal_dialog_find(&term, "Review OpenOCD session", "Start session", NULL, NULL));
     test_terminal_expect(&term, "selected-m16.cfg");
 }
 int main(int argc, char **argv)
@@ -171,8 +185,18 @@ int main(int argc, char **argv)
         return 0;
     }
     configure(argv[1], argv[2], argv[3]);
-    test_terminal_resize(&term, 18, 80); test_terminal_expect(&term, "Review OpenOCD session");
-    test_terminal_click(&term, "Next argv"); test_terminal_click(&term, "Previous argv");
+    test_terminal_resize(&term, 20, 80); test_terminal_expect(&term, "Review OpenOCD session");
+    int paging_y, action_y, action_x;
+    CHECK(test_terminal_find(&term, "Next argv", NULL, &paging_y));
+    CHECK(test_terminal_dialog_find(&term, "Review OpenOCD session", "Start session", &action_x, &action_y));
+    CHECK(action_y - paging_y == 2);
+    for (int x = action_x; x < action_x + 28; ++x)
+        CHECK(term.cells[action_y - 1][x] == ' ');
+    CHECK(!test_terminal_find(&term, "Previous argv", NULL, NULL));
+    test_terminal_click(&term, "Next argv");
+    CHECK(test_terminal_find(&term, "Previous argv", NULL, &paging_y));
+    CHECK(action_y - paging_y == 2);
+    test_terminal_click(&term, "Previous argv");
     test_terminal_resize(&term, 44, 160);
     test_terminal_click(&term, "Start session"); test_terminal_expect(&term, "LIVE OPENOCD");
     test_terminal_expect(&term, "LIVE | Stopped"); test_terminal_expect(&term, "Halt");

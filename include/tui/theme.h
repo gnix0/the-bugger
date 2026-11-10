@@ -49,11 +49,16 @@ typedef enum {
     TB_HINT_TEXT,
     TB_NORMAL_TEXT,
     TB_INSERT_TEXT,
+    TB_SCROLL_TRACK,
+    TB_SCROLL_THUMB,
+    TB_SCROLL_H_TRACK,
+    TB_SCROLL_H_THUMB,
     TB_COLOR_COUNT
 } TbStyle_e;
 
 /* Uses curses capabilities, without redefining the terminal's palette. */
 const char *tb_theme_init(void);
+bool tb_theme_has_color(void);
 void tb_style(TbStyle_e style, attr_t attributes);
 TbStyle_e tb_selected_style(TbStyle_e style);
 

@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- Standard POSIX interfaces. */
 #include "model/code.h"
 #include "model/images.h"
+#include "session/host_paths.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -85,6 +86,8 @@ typedef struct {
     bool               merge_tail;
     uint64_t           range_end;
     uint64_t           scan_target;
+    uint64_t           mixed_end;
+    size_t             mixed_rows;
     TbInstruction_t   *scan_prefix;
     bool               mixed_checked[TB_CODE_INSNS];
     size_t             scan_count;
@@ -129,15 +132,21 @@ struct tb_code {
     uint64_t           stop;
     char               message[192];
     char               directories[TB_CODE_RULES][TB_CODE_PATH];
+    char               effective_directories[TB_CODE_RULES][TB_CODE_PATH];
+    char               pending_effective_directory[TB_CODE_PATH];
     size_t             directory_count;
     TbSourceRule_t     rules[TB_CODE_RULES];
     TbSourceRule_t     pending_rule;
+    TbSourceRule_t     effective_rules[TB_CODE_RULES];
+    TbSourceRule_t     pending_effective_rule;
     size_t             rule_count;
     char               pending_directory[TB_CODE_PATH];
     char               restore_directories[TB_CODE_RULES][TB_CODE_PATH];
+    char               restore_effective_directories[TB_CODE_RULES][TB_CODE_PATH];
     size_t             restore_dirs;
     size_t             restore_dir;
     TbSourceRule_t     restore_rules[TB_CODE_RULES];
+    TbSourceRule_t     restore_effective_rules[TB_CODE_RULES];
     size_t             restore_count;
     size_t             restore_rule;
     bool               restoring;
@@ -1551,6 +1560,8 @@ static void cancel_precontext(View_t *view)
     view->scan_count  = 0;
     view->scan_target = 0;
     view->scan_rows   = 0;
+    view->mixed_end   = 0;
+    view->mixed_rows  = 0;
 }
 
 
@@ -1576,12 +1587,19 @@ static void append_forward(View_t *view)
                 (a < view->forward_count && view->forward[a].numeric < view->data.instructions[b].numeric)) {
                 merged[count++] = view->forward[a++];
             } else {
-                if (a < view->forward_count &&
-                    view->forward[a].numeric == view->data.instructions[b].numeric) {
-                    ++a;
+                TbInstruction_t instruction = view->data.instructions[b++];
+                if (a < view->forward_count && view->forward[a].numeric == instruction.numeric) {
+                    const TbInstruction_t *previous = &view->forward[a++];
+                    if (!instruction.line && previous->line &&
+                        strcmp(previous->opcodes, instruction.opcodes) == 0 &&
+                        strcmp(previous->text, instruction.text) == 0) {
+                        instruction.line = previous->line;
+                        (void)snprintf(instruction.source, sizeof(instruction.source), "%s",
+                                       previous->source);
+                    }
                 }
 
-                merged[count++] = view->data.instructions[b++];
+                merged[count++] = instruction;
             }
         }
 
@@ -1597,6 +1615,11 @@ static void append_forward(View_t *view)
 
         memcpy(view->data.instructions, merged + start, keep * sizeof(*merged));
         view->data.instruction_count = keep;
+        view->data.mixed_available   = false;
+        for (size_t i = 0; i < keep; ++i) {
+            if (view->data.instructions[i].line > 0 && *view->data.instructions[i].source)
+                view->data.mixed_available = true;
+        }
 
         free(merged);
     }
@@ -1745,6 +1768,15 @@ bool tb_code_event(TbCode_t *code, const TbGdbEvent_t *event)
             return true;
         }
 
+        if (view->mixed_end && decoded > TB_CODE_INSNS - view->mixed_rows) {
+            cancel_precontext(view);
+            (void)snprintf(view->data.assembly_error, sizeof(view->data.assembly_error),
+                           "Mixed source refresh reached its instruction limit; listing retained.");
+            ++view->data.assembly_revision;
+            ++code->revision;
+            return true;
+        }
+
         if (view->scan_target && decoded > TB_CODE_INSNS - view->scan_rows) {
             cancel_precontext(view);
 
@@ -1794,7 +1826,9 @@ bool tb_code_event(TbCode_t *code, const TbGdbEvent_t *event)
                         range.anchor <= view->scan_target) {
                         next = range.anchor;
                     } else {
-                        next = 0;
+                        /* The retained window may start beyond known code.
+                         * Join it across a labeled gap instead of decoding the gap. */
+                        next = view->scan_target;
                     }
                 }
             }
@@ -1849,8 +1883,22 @@ bool tb_code_event(TbCode_t *code, const TbGdbEvent_t *event)
             view->scan_count  = 0;
         }
 
+        uint64_t mixed_next = view->data.next_address;
         append_forward(view);
         memset(view->mixed_checked, 0, sizeof(view->mixed_checked));
+        if (view->mixed_end) {
+            view->mixed_rows += decoded;
+            if (mixed_next > view->data.anchor && mixed_next < view->mixed_end &&
+                view->mixed_rows < TB_CODE_INSNS && preserve_forward(view)) {
+                view->data.anchor    = mixed_next;
+                view->assembly_dirty = true;
+                view->data.stale     = true;
+                ++code->revision;
+                return true;
+            }
+            view->mixed_end  = 0;
+            view->mixed_rows = 0;
+        }
 
         if (view->data.assembly_follow && !view->origin_tried && code->pid <= 1) {
             view->origin_tried = true;
@@ -1959,6 +2007,8 @@ void tb_code_pump(TbCode_t *code)
                     memmove(code->directories[i], code->directories[i + 1],
                             (code->directory_count - i - 1) * sizeof(code->directories[0]));
 
+                    memmove(code->effective_directories[i], code->effective_directories[i + 1],
+                            (code->directory_count - i - 1) * sizeof(code->effective_directories[0]));
                     --code->directory_count;
                     break;
                 }
@@ -1971,6 +2021,10 @@ void tb_code_pump(TbCode_t *code)
                 (void)snprintf(code->directories[0], sizeof(code->directories[0]), "%s",
                                code->pending_directory);
 
+                memmove(code->effective_directories[1], code->effective_directories[0],
+                        code->directory_count * sizeof(code->effective_directories[0]));
+                memcpy(code->effective_directories[0], code->pending_effective_directory,
+                       sizeof(code->effective_directories[0]));
                 ++code->directory_count;
             }
         } else if (job == CODE_RULE) {
@@ -1979,13 +2033,17 @@ void tb_code_pump(TbCode_t *code)
                     memmove(&code->rules[i], &code->rules[i + 1],
                             (code->rule_count - i - 1) * sizeof(code->rules[0]));
 
+                    memmove(&code->effective_rules[i], &code->effective_rules[i + 1],
+                            (code->rule_count - i - 1) * sizeof(code->effective_rules[0]));
                     --code->rule_count;
                     break;
                 }
             }
 
-            if (code->rule_count < TB_CODE_RULES)
+            if (code->rule_count < TB_CODE_RULES) {
+                code->effective_rules[code->rule_count] = code->pending_effective_rule;
                 code->rules[code->rule_count++] = code->pending_rule;
+            }
         } else if (job == CODE_CLEAR_RULES) {
             code->rule_count = 0;
 
@@ -2010,16 +2068,24 @@ void tb_code_pump(TbCode_t *code)
 
         if (code->restore_dir < code->restore_dirs) {
             size_t index = (code->restore_dirs - 1) - (code->restore_dir++);
-            if (!tb_code_add_directory(code, code->restore_directories[index]))
+            if (!tb_code_add_directory(code, code->restore_effective_directories[index])) {
                 code->restoring = false;
+            } else {
+                memcpy(code->pending_directory, code->restore_directories[index],
+                       sizeof(code->pending_directory));
+            }
 
             return;
         }
 
         if (code->restore_rule < code->restore_count) {
-            const TbSourceRule_t *rule = &code->restore_rules[code->restore_rule++];
-            if (!tb_code_add_rule(code, rule->from, rule->to))
+            size_t                index = code->restore_rule++;
+            const TbSourceRule_t *rule  = &code->restore_effective_rules[index];
+            if (!tb_code_add_rule(code, rule->from, rule->to)) {
                 code->restoring = false;
+            } else {
+                code->pending_rule = code->restore_rules[index];
+            }
 
             return;
         }
@@ -2314,6 +2380,18 @@ void tb_code_pump(TbCode_t *code)
         if (end > view->range_end)
             end = view->range_end;
 
+        if (view->mixed_end && end > view->mixed_end)
+            end = view->mixed_end;
+
+        /* GDB can omit all source wrappers when a request starts in a function
+         * without line information. Keep mixed requests within known functions. */
+        TbImageRange_t next_function;
+        if (view->data.mixed && !view->fallback &&
+            tb_images_trusted_neighbor(code->images, view->data.anchor + 1, 1, &next_function) &&
+            next_function.anchor < end) {
+            end = next_function.anchor;
+        }
+
         (void)snprintf(high, sizeof(high), "0x%" PRIx64, end);
 
         const char *const args[] = {"-s", low,  "-e",
@@ -2433,7 +2511,26 @@ void tb_code_mixed(TbCode_t *code, int id, bool mixed)
         return;
 
     listing_store(code, id);
-    cancel_precontext(&code->views[id]);
+    View_t *view = &code->views[id];
+    /* Source rows are a presentation choice once their mappings are cached.
+     * Toggling must not replace a browsed window with its first function. */
+    if (!mixed || view->data.mixed_available) {
+        view->data.mixed = mixed;
+        ++view->data.assembly_revision;
+        ++code->revision;
+        return;
+    }
+
+    cancel_precontext(view);
+    if (view->data.instruction_count) {
+        if (!preserve_forward(view)) {
+            message(code, "Cannot preserve the instruction window; mixed mode unchanged.");
+            return;
+        }
+        view->mixed_end  = view->data.next_address;
+        view->mixed_rows = 0;
+        view->merge_tail = false;
+    }
 
     code->views[id].data.mixed     = mixed;
     code->views[id].assembly_dirty = true;
@@ -2619,18 +2716,55 @@ static void listing_store(TbCode_t *code, int id)
 }
 
 
-static bool listing_cached(TbCode_t *code, int id, int direction)
+// View identity and signed navigation direction are separate dimensions.
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+static bool listing_cached(TbCode_t *code, int id, int direction, bool extend)
 {
     View_t           *view = &code->views[id];
     TbBrowseSample_t  sample;
 
-    if (!tb_browse_neighbor(code->cache, listing_key(view, id), direction, &sample) ||
-        sample.size != sizeof(TbCodeView_t)) {
+    if (extend && !view->data.instruction_count)
         return false;
+
+    TbBrowseKey_t key = listing_key(view, id);
+    TbCodeView_t  saved;
+
+    for (;;) {
+        if (!tb_browse_neighbor(code->cache, key, direction, &sample) ||
+            sample.size != sizeof(saved)) {
+            return false;
+        }
+        memcpy(&saved, sample.data, sizeof(saved));
+        bool classified = true;
+        if (extend && !view->raw) {
+            uint64_t edge = view->data.instructions[
+                direction < 0 ? 0 : view->data.instruction_count - 1].numeric;
+            for (size_t i = 0; i < saved.instruction_count && classified; ++i) {
+                const TbInstruction_t *instruction = &saved.instructions[i];
+                if (direction < 0 ? instruction->numeric >= edge : instruction->numeric <= edge)
+                    continue;
+                TbImageRange_t range;
+                classified = image_lookup(code, instruction->numeric, &range) &&
+                             range.kind == TB_IMAGE_CODE && instruction->bytes > 0 &&
+                             instruction->bytes <= range.end - instruction->numeric;
+            }
+        }
+        if (!extend || (classified && saved.instruction_count &&
+            generation_equal(sample.key.generation, view->data.assembly_generation) &&
+            sample.key.epoch == view->data.assembly_epoch &&
+            (direction < 0 ? saved.instructions[0].numeric < view->data.instructions[0].numeric
+                : saved.instructions[saved.instruction_count - 1].numeric >
+                  view->data.instructions[view->data.instruction_count - 1].numeric))) {
+            break;
+        }
+        /* Neither contained windows nor unclassified inspection history may
+         * extend an ordinary viewport's edge. Explicit paging retains access. */
+        key.begin = sample.key.begin;
     }
 
-    TbCodeView_t saved;
-    memcpy(&saved, sample.data, sizeof(saved));
+    if (extend && !preserve_forward(view))
+        return false;
+
     memcpy(view->data.instructions, saved.instructions, sizeof(view->data.instructions));
 
     view->data.instruction_count = saved.instruction_count;
@@ -2638,6 +2772,10 @@ static bool listing_cached(TbCode_t *code, int id, int direction)
     view->data.anchor            = sample.key.begin;
     view->data.more              = saved.more;
     view->data.mixed_available   = saved.mixed_available;
+    if (extend) {
+        view->merge_tail = direction > 0;
+        append_forward(view);
+    }
 
     memset(view->mixed_checked, 0, sizeof(view->mixed_checked));
 
@@ -2669,7 +2807,10 @@ static bool listing_cached(TbCode_t *code, int id, int direction)
 static bool reconstruct(TbCode_t *code, View_t *view, uint64_t anchor)
 {
     uint64_t target = view->data.instructions[0].numeric;
-    if (anchor >= target || target - anchor > 1024) {
+    TbImageRange_t range;
+    bool gap = !view->raw && image_lookup(code, anchor, &range) && range.kind == TB_IMAGE_CODE &&
+               range.end <= target && range.end - anchor <= 1024;
+    if (anchor >= target || (target - anchor > 1024 && !gap)) {
         message(code, "No reliable anchor within the bounded reconstruction window; prior listing retained.");
         return false;
     }
@@ -2706,7 +2847,7 @@ static bool reconstruct(TbCode_t *code, View_t *view, uint64_t anchor)
 
 // view index precedes signed paging direction.
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-bool tb_code_assembly_page(TbCode_t *code, int id, int direction)
+static bool assembly_page(TbCode_t *code, int id, int direction, bool scroll)
 {
     if (!valid_view(id) || !direction || code->waiting || code->settings_job != CODE_NONE)
         return false;
@@ -2714,7 +2855,7 @@ bool tb_code_assembly_page(TbCode_t *code, int id, int direction)
     View_t *view = &code->views[id];
     listing_store(code, id);
 
-    if (listing_cached(code, id, direction))
+    if (listing_cached(code, id, direction, scroll))
         return true;
 
     if (!view->data.instruction_count)
@@ -2733,12 +2874,17 @@ bool tb_code_assembly_page(TbCode_t *code, int id, int direction)
     uint64_t retained_anchor = 0;
     bool     retained        = (direction < 0) && (anchor_before(code, id, &retained_anchor));
 
-    if (view->indexed) {
+    if (view->indexed || (scroll && !view->raw)) {
         TbImageRange_t range;
         uint64_t       anchor;
 
         if (direction < 0) {
             bool mapped = tb_images_trusted_neighbor(code->images, view->data.anchor, -1, &range);
+
+            if (scroll && !view->raw && retained) {
+                TbImageRange_t previous;
+                retained = image_lookup(code, retained_anchor, &previous) && previous.kind == TB_IMAGE_CODE;
+            }
 
             if (!mapped && !retained) {
                 message(code, "No reliable earlier boundary; historical rows remain available.");
@@ -2760,6 +2906,9 @@ bool tb_code_assembly_page(TbCode_t *code, int id, int direction)
                     message(
                         code,
                         "Address gap to the next known instruction boundary; skipped bytes stay labeled.");
+                } else if (scroll && !view->raw) {
+                    message(code, "End of known code; use Go to or Decode bytes for explicit inspection.");
+                    return false;
                 } else {
                     message(
                         code,
@@ -2831,6 +2980,22 @@ bool tb_code_assembly_page(TbCode_t *code, int id, int direction)
 }
 
 
+// view index precedes signed paging direction.
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+bool tb_code_assembly_page(TbCode_t *code, int id, int direction)
+{
+    return assembly_page(code, id, direction, false);
+}
+
+
+// view index precedes signed scrolling direction.
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+bool tb_code_assembly_scroll(TbCode_t *code, int id, int direction)
+{
+    return assembly_page(code, id, direction, true);
+}
+
+
 void tb_code_raw(TbCode_t *code, int id)
 {
     if (!valid_view(id) || code->waiting || tb_gdb_state(code->gdb) != TB_GDB_STOPPED)
@@ -2874,14 +3039,28 @@ bool tb_code_add_directory(TbCode_t *code, const char *path)
         return false;
     }
 
+    char effective[TB_CODE_PATH];
+    char error[160];
+    if (!tb_path_expand(effective, sizeof(effective), path, error, sizeof(error))) {
+        message(code, error);
+        return false;
+    }
+
+    if (!path_valid(effective)) {
+        message(code, "Expanded source directory contains unsupported line breaks.");
+        return false;
+    }
+
     struct stat info;
-    if (stat(path, &info) != 0 || !S_ISDIR(info.st_mode)) {
+    /* Relative entries, . and GDB tokens retain GDB's resolution semantics. */
+    if (effective[0] == '/' && (stat(effective, &info) != 0 || !S_ISDIR(info.st_mode))) {
         message(code, "Source directory does not exist or is inaccessible.");
         return false;
     }
 
     (void)snprintf(code->pending_directory, sizeof(code->pending_directory), "%s", path);
-    const char *const args[] = {path};
+    memcpy(code->pending_effective_directory, effective, strlen(effective) + 1);
+    const char *const args[] = {effective};
 
     return request(code, CODE_DIRECTORY, "-environment-directory", args, 1, TB_GDB_SESSION);
 }
@@ -2910,6 +3089,35 @@ bool tb_code_restore_settings(TbCode_t *code, const char *const dirs[], size_t c
         if (!path_valid(rules[i].from) || !path_valid(rules[i].to))
             return false;
     }
+
+    char           expanded_directories[TB_CODE_RULES][TB_CODE_PATH];
+    TbSourceRule_t expanded_rules[TB_CODE_RULES];
+    char           error[160];
+    for (size_t i = 0; i < count; ++i) {
+        if (!tb_path_expand(expanded_directories[i], TB_CODE_PATH, dirs[i], error, sizeof(error))) {
+            message(code, error);
+            return false;
+        }
+        if (!path_valid(expanded_directories[i])) {
+            message(code, "Expanded source directory contains unsupported line breaks.");
+            return false;
+        }
+    }
+
+    for (size_t i = 0; i < rule_count; ++i) {
+        expanded_rules[i] = rules[i];
+        if (!tb_path_expand(expanded_rules[i].to, TB_CODE_PATH, rules[i].to, error, sizeof(error))) {
+            message(code, error);
+            return false;
+        }
+        if (!path_valid(expanded_rules[i].to)) {
+            message(code, "Expanded source mapping contains unsupported line breaks.");
+            return false;
+        }
+    }
+
+    memcpy(code->restore_effective_directories, expanded_directories, count * TB_CODE_PATH);
+    memcpy(code->restore_effective_rules, expanded_rules, rule_count * sizeof(*expanded_rules));
 
     for (size_t i = 0; i < count; ++i)
         (void)snprintf(code->restore_directories[i], TB_CODE_PATH, "%s", dirs[i]);
@@ -2967,15 +3175,31 @@ bool tb_code_add_rule(TbCode_t *code, const char *from, const char *to)
         return false;
     }
 
+    char effective[TB_CODE_PATH];
+    char error[160];
+    if (!tb_path_expand(effective, sizeof(effective), to, error, sizeof(error))) {
+        message(code, error);
+        return false;
+    }
+
+    if (!path_valid(effective)) {
+        message(code, "Expanded source mapping contains unsupported line breaks.");
+        return false;
+    }
+
     char quoted_from[TB_CODE_PATH * 2 + 3], quoted_to[TB_CODE_PATH * 2 + 3], command[TB_CODE_PATH * 4 + 32];
 
-    if (!cli_quote(quoted_from, sizeof(quoted_from), from) || !cli_quote(quoted_to, sizeof(quoted_to), to))
+    if (!cli_quote(quoted_from, sizeof(quoted_from), from) ||
+        !cli_quote(quoted_to, sizeof(quoted_to), effective)) {
         return false;
+    }
 
     (void)snprintf(command, sizeof(command), "set substitute-path %s %s", quoted_from, quoted_to);
     (void)snprintf(code->pending_rule.from, sizeof(code->pending_rule.from), "%s", from);
     (void)snprintf(code->pending_rule.to, sizeof(code->pending_rule.to), "%s", to);
 
+    code->pending_effective_rule = code->pending_rule;
+    memcpy(code->pending_effective_rule.to, effective, strlen(effective) + 1);
     const char *const args[] = {"console", command};
 
     return request(code, CODE_RULE, "-interpreter-exec", args, 2, TB_GDB_SESSION);
@@ -3017,4 +3241,16 @@ size_t tb_code_rule_count(const TbCode_t *code)
 const TbSourceRule_t *tb_code_rule(const TbCode_t *code, size_t index)
 {
     return index < code->rule_count ? &code->rules[index] : NULL;
+}
+
+
+const char *tb_code_effective_directory(const TbCode_t *code, size_t index)
+{
+    return index < code->directory_count ? code->effective_directories[index] : "";
+}
+
+
+const TbSourceRule_t *tb_code_effective_rule(const TbCode_t *code, size_t index)
+{
+    return index < code->rule_count ? &code->effective_rules[index] : NULL;
 }

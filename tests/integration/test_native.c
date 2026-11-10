@@ -51,9 +51,13 @@ static void launch(const char *fixture, const char *cpp)
     TbNativeWords arguments, environment; char error[128];
     CHECK(tb_native_words("'hello world' '' '$HOME;$(false)' 'quote\"and\\slash' --control-bytes", &arguments, error, sizeof error));
     CHECK(tb_native_words("'THE_BUGGER_TEST=env with spaces;$(false)'", &environment, error, sizeof error));
-    TbNativeConfig config = {.gdb = "gdb", .executable = fixture, .directory = directory,
+    char fixture_link[512]; (void)snprintf(fixture_link, sizeof fixture_link, "%s/fixture", directory); CHECK(symlink(fixture, fixture_link) == 0);
+    char *launch_home = getenv("HOME") ? strdup(getenv("HOME")) : NULL; CHECK(setenv("HOME", directory, 1) == 0);
+    TbNativeConfig config = {.gdb = "gdb", .executable = "~/fixture", .directory = "~",
                              .arguments = &arguments, .environment = &environment};
     CHECK(tb_native_start(native, &config)); state(native, TB_NATIVE_READY);
+    if (launch_home) { CHECK(setenv("HOME", launch_home, 1) == 0); free(launch_home); } else { CHECK(unsetenv("HOME") == 0); }
+    CHECK(unlink(fixture_link) == 0); config.executable = fixture;
     CHECK(tb_native_continue(native)); state(native, TB_NATIVE_RUNNING);
     output(native, "arg[1]=<hello world>"); output(native, "arg[2]=<>");
     output(native, "arg[3]=<$HOME;$(false)>"); output(native, "arg[4]=<quote\"and\\slash>");
@@ -75,6 +79,12 @@ static void launch(const char *fixture, const char *cpp)
     off_t original_size = info.st_size;
     CHECK(!tb_native_save_log(native, path)); CHECK(stat(path, &info) == 0 && info.st_size == original_size);
     CHECK(!tb_native_save_log(native, "/nonexistent/the-bugger/log.txt"));
+    char *home = getenv("HOME") ? strdup(getenv("HOME")) : NULL; CHECK(setenv("HOME", directory, 1) == 0);
+    CHECK(tb_native_save_log(native, "~/home-log.txt")); CHECK(!tb_native_save_log(native, "~/home-log.txt"));
+    char home_log[512]; (void)snprintf(home_log, sizeof home_log, "%s/home-log.txt", directory); CHECK(unlink(home_log) == 0);
+    CHECK(symlink(path, home_log) == 0); CHECK(!tb_native_save_log(native, "~/home-log.txt")); CHECK(unlink(home_log) == 0);
+    CHECK(setenv("HOME", "relative", 1) == 0); CHECK(!tb_native_save_log(native, "~/home-log.txt"));
+    if (home) { CHECK(setenv("HOME", home, 1) == 0); free(home); } else { CHECK(unsetenv("HOME") == 0); }
     struct rlimit original; CHECK(getrlimit(RLIMIT_FSIZE, &original) == 0);
     struct rlimit limit = original; limit.rlim_cur = 1;
     struct sigaction ignore = {.sa_handler = SIG_IGN}, saved;

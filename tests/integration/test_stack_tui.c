@@ -47,11 +47,12 @@ static void click(TestTerminal *t, const char *label)
 static void back(TestTerminal *t) { test_terminal_send(t, "\033"); settle_ui(t); }
 static void option(TestTerminal *t, const char *label)
 {
-    for (int page = 0; page < 8; ++page) {
-        if (test_terminal_find(t, label, NULL, NULL)) { click(t, label); return; }
-        click(t, "Next");
+    if (!test_terminal_find(t, "Stack options", NULL, NULL)) {
+        click(t, "Options");
+        test_terminal_expect(t, "Stack options");
     }
-    test_terminal_expect(t, label);
+    test_terminal_menu_click(t, "Stack options", label);
+    settle_ui(t);
 }
 int main(int argc, char **argv)
 {
@@ -79,8 +80,8 @@ int main(int argc, char **argv)
     (void)snprintf(scroll_event, sizeof scroll_event, "\033[<65;%d;%dM", stack_x + 4, stack_y + 4);
     test_terminal_send(&t, scroll_event); settle_ui(&t);
     const char *menu = strstr(t.cells[stack_y], "..."); CHECK(menu);
-    int gutter = (int)(menu - t.cells[stack_y]) + 4, thumb = stack_y + 2;
-    while (thumb < t.rows - 3 && t.cells[thumb][gutter] != '#') { ++thumb; }
+    int gutter = (int)(menu - t.cells[stack_y]) + 3, thumb = stack_y + 2;
+    while (thumb < t.rows - 3 && !test_terminal_scroll_cell(&t, thumb, gutter, true)) { ++thumb; }
     CHECK(thumb < t.rows - 3);
     (void)snprintf(scroll_event, sizeof scroll_event, "\033[<0;%d;%dM", gutter + 1, thumb + 1);
     test_terminal_send(&t, scroll_event); settle_ui(&t);
@@ -101,8 +102,9 @@ int main(int argc, char **argv)
     click(&t, "object (query address)"); test_terminal_expect(&t, "may-call-functions is ON");
     int review_y, back_y;
     CHECK(test_terminal_find(&t, "Review session-wide no-call change", NULL, &review_y));
-    CHECK(test_terminal_find(&t, "[ Back ]", NULL, &back_y));
-    CHECK(back_y >= review_y + 2); /* A blank row separates the action and navigation. */
+    int menu_y;
+    CHECK(test_terminal_find(&t, "Stack options", NULL, &menu_y));
+    CHECK(review_y == menu_y + 1); /* The pending safety review stays immediately visible. */
     click(&t, "Review session-wide no-call change"); test_terminal_expect(&t, "Disable inferior calls session-wide?");
     int explanation_y, confirm_y;
     CHECK(test_terminal_find(&t, "The variable-address query is blocked", NULL, &explanation_y));
@@ -120,7 +122,7 @@ int main(int argc, char **argv)
     test_terminal_send(&t, "\025+0\r"); test_terminal_expect(&t, "Stack options"); back(&t);
     test_terminal_expect(&t, "UNREAD | Manual");
     click(&t, "Options"); option(&t, "Follow frame-0 SP"); back(&t); test_terminal_expect(&t, "SAMPLED | Follow SP");
-    const int widths[] = {48, 80, 123, 124, 160};
+    const int widths[] = {80, 123, 124, 160};
     for (size_t i = 0; i < sizeof widths / sizeof widths[0]; ++i) {
         test_terminal_resize(&t, 24, widths[i]); test_terminal_expect(&t, "Stack");
         click(&t, "Options"); option(&t, "Selected row: complete details"); test_terminal_expect(&t, "Stack row details");
@@ -165,6 +167,6 @@ int main(int argc, char **argv)
     CHECK(t.cells[narrow_y + 2][2] == '<');
     test_terminal_send(&t, "\r"); test_terminal_expect(&t, "Stack row details"); back(&t); back(&t);
     test_terminal_send(&t, "\021"); test_terminal_expect(&t, "Terminate the launched program"); click(&t, "Close session"); test_terminal_stop(&t, 0);
-    puts("PASS F02 native PTY Stack read/navigation/follow, exact size errors, complete paginated details, declared bounds, minimum pane and widths 48/80/123/124/160 with cleanup");
+    puts("PASS F02 native PTY Stack read/navigation/follow, exact size errors, complete paginated details, declared bounds, minimum pane and widths 80/123/124/160 with cleanup");
     return 0;
 }

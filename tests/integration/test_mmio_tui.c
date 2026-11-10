@@ -42,7 +42,7 @@ static void ram_review(const char *binary, const char *peer)
     test_terminal_expect(&t, "USER-CONFIRMED device identity");
     test_terminal_send(&t, "\r"); test_terminal_expect(&t, "Review STM32F446RE RAM evidence"); /* Back is default. */
     test_terminal_click(&t, "Review STM32F446RE RAM evidence");
-    test_terminal_resize(&t, 18, 48);
+    test_terminal_resize(&t, 20, 80);
     for (unsigned i = 0; i < 30 && !test_terminal_find(&t, "Confirm user-described", NULL, NULL); ++i) { test_terminal_click(&t, "Next"); }
     test_terminal_expect(&t, "Confirm user-described");
     test_terminal_resize(&t, 50, 180); test_terminal_expect(&t, "USER-CONFIRMED device identity");
@@ -73,14 +73,14 @@ int main(int argc, char **argv)
     test_terminal_expect(&t, "LIVE REMOTE"); test_terminal_expect(&t, "LIVE | Stopped");
     test_terminal_lower(&t, 0, true);
     test_terminal_click(&t, "Options"); test_terminal_expect(&t, "Memory inspection options");
-    test_terminal_click(&t, "Temporary ranges"); test_terminal_click(&t, "[ Add ]");
+    test_terminal_menu_click(&t, "Memory inspection options", "Temporary ranges"); test_terminal_click(&t, "[ Add ]");
     test_terminal_click(&t, "End (excluded)"); test_terminal_send(&t, "\0250x40020020\r");
     test_terminal_click(&t, "Begin:"); test_terminal_send(&t, "\0250x40020010\r");
     test_terminal_click(&t, "Policy: ordinary"); test_terminal_expect(&t, "Policy: MMIO");
     test_terminal_click(&t, "Setup: NOT CONFIRMED");
     test_terminal_expect(&t, "USER CONFIRMATION, not automatic verification");
     test_terminal_expect(&t, "V2J48M35"); test_terminal_expect(&t, "localhost:3333");
-    test_terminal_resize(&t, 18, 48);
+    test_terminal_resize(&t, 20, 80);
     for (unsigned i = 0; i < 16 && !test_terminal_find(&t, "I confirm every setup", NULL, NULL); ++i) {
         test_terminal_click(&t, "Next");
     }
@@ -99,7 +99,7 @@ int main(int argc, char **argv)
     test_terminal_send(&t, "echo harmless\r");
     /* Open Memory Options by minimizing Console again, removing ambiguity. */
     test_terminal_lower(&t, 2, false); test_terminal_click(&t, "Options");
-    test_terminal_click(&t, "Temporary ranges"); test_terminal_click(&t, "1: 0x40020010");
+    test_terminal_menu_click(&t, "Memory inspection options", "Temporary ranges"); test_terminal_click(&t, "1: 0x40020010");
     test_terminal_expect(&t, "NOT AUTHORIZED"); test_terminal_expect(&t, "Setup: NOT CONFIRMED");
     test_terminal_send(&t, "\021"); test_terminal_click(&t, "Close session"); test_terminal_stop(&t, 0);
     CHECK(rmdir(root) == 0);

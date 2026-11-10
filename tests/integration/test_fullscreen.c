@@ -70,7 +70,7 @@ static void demo(const char *binary)
     mouse(0, original_x + 5, original_y + 2, false); mouse(0, original_x + 5, original_y + 2, true);
     CHECK(!test_terminal_find(&term, "Dragging divider", NULL, NULL));
     keys("23456789[]hljk"); only_source();
-    test_terminal_resize(&term, 18, 48); settle(); test_terminal_expect(&term, "[ Restore ]");
+    test_terminal_resize(&term, 20, 80); settle(); test_terminal_expect(&term, "[ Restore ]");
     CHECK(!test_terminal_find(&term, "2 Asm", NULL, NULL));
     test_terminal_resize(&term, 44, 160); settle(); only_source();
     click("[ Restore ]"); test_terminal_expect(&term, "Disassembly"); CHECK(menus() == 7);

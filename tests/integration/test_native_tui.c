@@ -27,6 +27,7 @@ static void tmux_cleanup(void)
 static void start(TestTerminal *term, const char *binary, const char *fixture, bool retry)
 {
     char *const args[] = {(char *)binary, NULL};
+    char *home = getenv("HOME") ? strdup(getenv("HOME")) : NULL; CHECK(setenv("HOME", "/", 1) == 0);
     if (getenv("TB_CONSOLE_TEST_TMUX")) {
         (void)snprintf(tmux_socket, sizeof tmux_socket, "the-bugger-console-%ld", (long)getpid());
         int fd = mkstemp(tmux_config); CHECK(fd >= 0);
@@ -37,23 +38,32 @@ static void start(TestTerminal *term, const char *binary, const char *fixture, b
                                   "new-session", "-s", "console", (char *)binary, NULL};
         test_terminal_start_argv(term, tmux_args, "xterm-256color", false);
     } else { test_terminal_start_argv(term, args, "xterm-256color", false); }
+    if (home) { CHECK(setenv("HOME", home, 1) == 0); free(home); } else { CHECK(unsetenv("HOME") == 0); }
     test_terminal_expect(term, "Native Linux");
     test_terminal_send(term, "q");
     test_terminal_expect(term, "Already at the launcher");
     test_terminal_send(term, "\r");
     test_terminal_expect(term, "Executable / ELF");
     test_terminal_send(term, "\t\025");
-    test_terminal_send(term, fixture);
+    CHECK(fixture[0] == '/'); test_terminal_send(term, "~"); test_terminal_send(term, fixture);
     if (getenv("TB_RENDER_STRESS_SECONDS")) { test_terminal_send(term, "\t\025--render-stress"); }
     if (retry) { test_terminal_send(term, "\t\t\t\t\025/nonexistent/gdb"); }
     test_terminal_click(term, "Review session");
     test_terminal_expect(term, "Review native session");
+    CHECK(!test_terminal_find(term, "~/", NULL, NULL));
+    test_terminal_click(term, "[ Back ]"); test_terminal_expect(term, "~/");
+    test_terminal_click(term, "Review session"); test_terminal_expect(term, "Review native session");
     test_terminal_click(term, "Start native");
     if (retry) {
         test_terminal_expect(term, "cannot spawn debugger executable");
         test_terminal_expect(term, "/nonexistent/gdb");
-        test_terminal_click(term, "[ Back ]");
-        test_terminal_send(term, "\t\t\t\t\t\025gdb");
+        test_terminal_dialog_click(term, "Review native session", "[ Back ]");
+        test_terminal_expect(term, "Review session");
+        test_terminal_send(term, "\r");
+        test_terminal_expect(term, "Review native session");
+        test_terminal_dialog_click(term, "Review native session", "[ Back ]");
+        test_terminal_click(term, "/nonexistent/gdb");
+        test_terminal_send(term, "\025gdb");
         test_terminal_click(term, "Review session");
         test_terminal_click(term, "Start native");
     }
@@ -231,7 +241,7 @@ int main(int argc, char *argv[])
     if (stress) { render_stress(argv[1], argv[2], stress); return 0; }
     TestTerminal term;
     start(&term, argv[1], argv[2], true);
-    const int toggle_widths[] = {48, 80, 123, 124, 160, 224, 240, 280, 320};
+    const int toggle_widths[] = {80, 123, 124, 160, 224, 240, 280, 320};
     for (size_t i = 0; i < sizeof toggle_widths / sizeof toggle_widths[0]; ++i) {
         test_terminal_resize(&term, 24, toggle_widths[i]);
         test_terminal_lower(&term, 2, false);

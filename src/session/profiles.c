@@ -1,6 +1,7 @@
 /* Standard POSIX feature selection. */
 #define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) */
 #include "session/profiles.h"
+#include "session/host_paths.h"
 
 #include <json-c/json.h>
 #include <ctype.h>
@@ -243,9 +244,16 @@ void tb_profile_image_stamp(const TbProfile_t *p, const char *directory, char st
         return;
     }
 
+    char executable[TB_PROFILE_PATH];
+    char error[160];
+    if (!tb_path_expand(executable, sizeof(executable), p->executable, error, sizeof(error))) {
+        (void)snprintf(stamp, 256, "unavailable");
+        return;
+    }
+
     char path[TB_SETUP_PATH + TB_PROFILE_PATH];
-    int n = snprintf(path, sizeof(path), "%s%s%s", p->executable[0] == '/' ? "" : directory,
-                             p->executable[0] == '/' ? "" : "/", p->executable);
+    int n = snprintf(path, sizeof(path), "%s%s%s", executable[0] == '/' ? "" : directory,
+                             executable[0] == '/' ? "" : "/", executable);
     struct stat st;
 
     if (n < 0 || (size_t)n >= sizeof(path) || stat(path, &st) != 0 || !S_ISREG(st.st_mode)) {

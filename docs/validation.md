@@ -4,25 +4,25 @@ Commands, results, revisions and acceptance records for The Bugger.
 
 ## Current evidence boundary
 
-Latest published release: **[v0.1.5](https://github.com/gnix0/the-bugger/releases/tag/v0.1.5)**,
-published October 30, 2026. It includes F02 Stack inspection and the accepted
-inspection UX corrections. The release's Tests and Static analysis jobs succeeded;
-its three uploaded distribution files and archive checksums were independently
-checked on November 4. See the [publication verification](#v015-publication-verification--2026-11-04).
+Latest published release: **[v0.1.6](https://github.com/gnix0/the-bugger/releases/tag/v0.1.6)**,
+published November 4, 2026. It delivers the accepted F03–F05 editors. The uploaded
+binary archive, source archive and SHA256SUMS match the approved local artifacts;
+see [publication verification](#v016-publication).
 
-**F03–F05 are accepted and merged for v0.1.6.** F03/F04 physical validation across
-the supported architectures is owner-reported. Native and STM32 F05 results are
-recorded. ESP32-S3/Xtensa and ESP32-C6/RISC-V validation was reported by the
-maintainer; supporting evidence and limitations are documented separately below.
-The [acceptance closeout](#f05-acceptance-closeout--2026-11-04) supersedes the
-historical pending-acceptance statements. The C style standardization is also
-accepted and merged. **v0.1.6 is prepared locally**, with a fresh fortified host
-baseline and release archives checked below. It is not yet published. Hosted
-checks for the release-preparation commit and final release acceptance remain
-pending; the preceding documentation commit passed both hosted jobs.
+F03/F04 physical validation across the supported architectures is maintainer-reported.
+Native and STM32 F05 results are recorded. ESP32-S3/Xtensa and ESP32-C6/RISC-V
+validation was reported by the maintainer; supporting evidence and limitations
+remain documented below. The [acceptance closeout](#f05-acceptance-closeout--2026-11-04)
+supersedes earlier pending-acceptance statements. The maintainer has completed
+the v0.2.0 adjustment scope and reports all three physical architecture regressions
+completed on the final changes. That report is distinct from locally retained
+host logs; no new physical transcripts or tool versions were supplied. See the
+[v0.2.0 preparation record](#v020-release-preparation--2026-11-09) for the current
+release checks and publication boundary.
 
 Useful starting points:
 
+- [v0.2.0 release preparation](#v020-release-preparation--2026-11-09).
 - [v0.1.6 release preparation](#v016-release-preparation--2026-11-04).
 
 - [v0.1.4 publication](#v014-publication) and [RISC-V hardware validation](#v014-task-21--risc-v-hardware-validation).
@@ -69,8 +69,8 @@ and references below retain the results, including failures and unrun checks.
 | F19 | Themes, variants and Config | accepted; shipped in v0.1.1 | [Focused checks](#f19--themes-and-configuration); implementation committed per maintainer report |
 | F01 | Saved setup restoration | accepted; shipped in v0.1.4 | `a460648`; [publication and verification](#v014-publication) |
 | F02 | Stack inspection and inspection UX | accepted; shipped in v0.1.5 | [Published release verification](#v015-publication-verification--2026-11-04) |
-| F03–F04 | Variable and ordinary-RAM editing | accepted; pending v0.1.6 publication | [Owner acceptance](#f04-owner-acceptance) |
-| F05 | CPU-register editing | accepted; pending v0.1.6 publication | [Acceptance closeout](#f05-acceptance-closeout--2026-11-04) |
+| F03–F04 | Variable and ordinary-RAM editing | accepted; shipped in v0.1.6 | [Owner acceptance](#f04-owner-acceptance) |
+| F05 | CPU-register editing | accepted; shipped in v0.1.6 | [Acceptance closeout](#f05-acceptance-closeout--2026-11-04) |
 
 ### Full recorded commit identifiers
 
@@ -2334,7 +2334,7 @@ terminal so the 22-line fixture still overflows the enlarged primary viewport.
 Physical STM32 and direct-Alacritty human UX checks were not performed. Native,
 local gdbserver, simulated MI/OpenOCD fixtures and isolated tmux do not establish
 hardware behavior or hosted Ubuntu success. Task 1.3 MMIO remains unimplemented.
-Manual review procedure: [lower overlays](testing.md#lower-dock-and-independent-overlays).
+Manual review procedure: [lower overlays](testing.md#lower-dock-and-independent-column-splits).
 
 ## v0.1.3 Task 1.3 — documentation consolidation
 
@@ -4220,3 +4220,710 @@ content changes. These local checks do not establish upload or publication.
 Upload both archives and `SHA256SUMS` separately; GitHub's two automatic source
 snapshots do not replace them. Published asset inventory/checksums and the final
 release revision remain to be verified after publication.
+
+## v0.1.6 publication
+
+The release was published November 4, 2026. The maintainer reported completed
+branch synchronization. The publication check in
+`build/v016-publication-verification/verification.json` records these three uploaded
+assets matching their approved local counterparts:
+
+- `the-bugger-v0.1.6-linux-x86_64.tar.gz`
+- `the-bugger-v0.1.6-source.tar.gz`
+- `SHA256SUMS`
+
+Archive checksums passed. GitHub's automatic source ZIP/tar links are separate
+from these uploaded assets. This closes the publication state described as
+pending in the earlier release-preparation record.
+
+## Menu and host-path corrections — November 5, 2026
+
+The working tree based on `7c672a1d711b1fbcd6e39c0b5aa37793dc32ae23`
+passed the fresh fortified host baseline:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/menu-ux-20261105 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+The checks cover the 80×20 minimum, readable connection labels, profile context,
+Theme/Variant choice lists, independent menu scrolling and activation of retained
+focus. Path checks cover literal saved values, effective home expansion,
+absolute HOME validation, account-home fallback, native launch/log destinations,
+OpenOCD arguments and GDB source-directory resolution. Real GDB checks preserve
+the different meanings of relative directories, `.`, `$cwd` and `$cdir`.
+
+The complete baseline returned 0, including direct-terminal and isolated tmux
+checks. Static analysis returned 0, and all 85 existing test source files compiled
+with the fortified configuration. `build/menu-ux-20261105/` contains the commands,
+environment, input hashes, `test-ci.log`, `analysis.log`, `test-compilation.log`
+and their exit records. `verification.json` confirms that tested source, header,
+test and build inputs remained unchanged during the final run. The normal
+`build/the-bugger` build also passed.
+
+Earlier runs exposed stale theme click-cycling and collapsed resize sequences in
+the tmux harnesses. The updated sequences exercise dropdown selection and an
+actual 80→96→80-column resize; the RGB and state-preservation assertions remain.
+Those failures are retained in `build/refine-menu-20261105/`,
+`build/refine-menu-final-20261105/` and
+`build/refine-menu-verified-20261105/`.
+
+These are local Linux results, not a hosted Ubuntu CI result. No physical target
+operations were performed. Maintainer review of the menu and path changes remains
+pending; passing tests do not establish acceptance of this review slice.
+
+## Theme catalog expansion — November 5, 2026
+
+The development catalog adds seventeen palettes across Ashen, Dracula, Kanagawa,
+Moonfly, Nord and One Dark, for 66 palettes across seventeen families. Ashen's
+high-contrast variant follows ashen-hc-theme with black workspace and panel
+backgrounds. All seven Monokai Pro variants were already present and remain
+available. The 49 existing palettes, preference identifiers and Macchiato default
+are unchanged. Family selection lists and Left/Right cycling now use A–Z order.
+
+Upstream revisions, palette source files, licenses and adaptation notes are in
+`THIRD_PARTY_NOTICES`. Nord's colors come directly from the original MIT-licensed
+Nord palette; no implementation from the GPLv2 Neovim port is included.
+
+Focused fortified `test-themes` passed in `build/theme-expansion-focused/`.
+Coverage includes all 66 previews, preference round-trips, family order, Ashen
+high-contrast surfaces, contrast, direct/256/8-color/monochrome rendering,
+keyboard/mouse selection, cancel/save/reload and compact rendering. Static
+analysis also passed. Logs and exit records are under `build/theme-expansion/`.
+
+The fresh fortified host baseline also passed, exit 0:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/theme-expansion-ci-20261105 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+This includes native GDB, direct-terminal/tmux, localhost remote and offline
+OpenOCD checks. The host was Linux x86-64, kernel 7.2.14-arch1-1, GCC 16.2.1,
+GDB 18.1 and tmux 3.8. The command, environment, full log, exit record and frozen
+input hashes are under `build/theme-expansion-ci-20261105/`. `verification.json`
+confirms unchanged tested inputs and preservation of the original 49 palettes.
+These are local results, not a hosted Ubuntu CI result.
+
+These checks do not establish visual acceptance on the maintainer's terminal.
+No physical target operations were performed; theme review remains pending.
+
+### Ashen high-contrast panel frames
+
+High-contrast adds red panel frames using the same ncurses line-drawing
+characters as menu rules, with connected corners. Other themes retain their
+existing presentation. Frames reserve space inside the tile; content, controls
+and scrollbars use that inset. Small tiles omit frames to retain usable content,
+including the preview's additional title row.
+
+The updated focused theme checks passed (`build/ashen-borders/solid-focused-final.log`
+and `.exit`). They check frame edges in Preview and the saved demo workspace,
+tab switching, compact/large resizing and the small-preview boundary. The harness
+accepts its normalized UTF-8 box glyphs or the equivalent DEC ACS bytes.
+
+A focused native PTY probe passed directly and through an isolated tmux server:
+Console input, Continue/Pause, compact/large resizing and owned-session cleanup.
+Its source, configuration and logs are under `build/ashen-borders/`, including
+`live-probe.c`, `live-probe.log` and `live-probe-tmux.log` with exit records.
+An exploratory invocation of the unchanged general native TUI harness with this
+palette stopped at its fixed unframed lower-title column assumption; that log is
+retained as `live-native.log`. No assertions in that harness were changed.
+The initial probe input synchronization and ASCII glyph expectations were also
+corrected; their earlier logs are retained in the same directory.
+
+The baselines under `build/ashen-borders-ci-20261105/` and
+`build/ashen-borders-final-20261105/` were interrupted, exit 130, while the preview
+boundary and solid line drawing were being corrected. They are not passing
+baseline evidence. No physical target operations were performed.
+
+
+### Solid scrollbars and anchored dropdowns
+
+Scrollbar rendering now uses background-filled tracks and proportional thumbs
+throughout workspace views, previews, Keybinds, installed scripts and theme
+selection. Monochrome retains line-drawing tracks and reverse-video thumbs.
+Theme and Variant dropdowns are attached to their fields, show at most eight
+choices and open upward when needed. Existing selection, Preview/Save and
+independent scrolling semantics remain intact.
+
+The complete fresh fortified host baseline passed, exit 0:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/tui-controls-ci-20261105 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+This includes native GDB, direct-terminal and isolated tmux coverage, local
+remote-server sessions and offline OpenOCD checks. The host/toolchain matches the
+theme-expansion run above. The command, environment, full log and exit record are
+in `build/tui-controls-ci-20261105/`; `verification.json` confirms that all 187
+tested inputs remained unchanged during the run. These are local results, not a
+hosted Ubuntu CI result.
+
+Focused checks passed for all 66 previews, ACS edges/corners, both scrollbar
+axes, overflow removal, track paging, thumb dragging, anchored placement,
+current-item highlighting, upward opening, outside-click dismissal and resize.
+Additional PTY probes passed directly and through tmux for dropdown dragging,
+undersize recovery and Preview, plus live native Console input, Continue/Pause,
+Ashen high-contrast resizing and cleanup. Their sources, configuration, logs and
+exit records are under `build/tui-controls/` and `build/ashen-borders/`.
+
+`make analyze` passed, all 85 test sources compiled with fortification, and the
+normal build passed. Documentation checks found no broken relative links or
+heading anchors. Upstream notice checks matched the added license texts and
+confirmed preservation of the original 49 palettes.
+
+Earlier focused failures exposed obsolete glyph assumptions and terminal-harness
+synchronization errors; their logs remain under `build/tui-controls/`. The
+frame-only baseline in `build/ashen-solid-ci-20261105/` was interrupted, exit 130,
+when the rendering review expanded. It is not passing baseline evidence.
+No physical target operations were performed. Visual acceptance remains pending.
+
+
+### Exterior frames and theme-specific scrollbar accents
+
+Ashen high-contrast frames now sit outside the original pane bounds, joining
+shared gutters while preserving occupied controls and status text. Switching
+themes therefore preserves content capacity and overflow thresholds. Scrollbar
+thumbs use family-specific interface accents consistently across views; target
+value and status colors are unchanged.
+
+Regression checks compare Source geometry and visible text across all 66 palettes,
+and compare both Ashen variants at five terminal sizes. Border checks cover shared
+junctions and preservation of control padding. The existing workspace and native
+TUI checks also passed with Ashen high-contrast. Focused logs and exit records are
+under `build/scrollbar-refinement/`; `make analyze` passed, exit 0, with its result
+in `analysis-final.log` and `analysis-final.exit`.
+
+The maintainer completed the fresh fortified host baseline, exit 0:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/scrollbar-final-20261106T100552Z CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+The full log and exit record are in that build directory. This is local host
+evidence, not a hosted CI result. Earlier focused failures and interrupted
+baselines remain recorded under `build/scrollbar-refinement/` and
+`build/scrollbar-refinement-verified-ci-20261105/`; they are not passing evidence.
+No physical target operations were performed. Visual acceptance remains pending.
+
+
+## Independent column splits and contextual interactions — 2026-11-06
+
+Expanded lower inspectors now share a vertical split with their primary partners.
+Each column retains its own preferred height; persistent pane rectangles no longer
+overlap. Shared frame junctions derive from visible geometry, and reserved rows
+separate pane borders from status and dock controls. Mixed disassembly retains
+source text without the repeated path/line prefix; its toolbar owns the Mixed toggle.
+
+Focused layout checks passed, including independent heights, nested trees,
+minimum-size clamping, retained preferences, hit testing and non-overlap across
+terminal sizes. Renderer checks passed for all eight lower-group combinations,
+shared junctions, content preservation and reversed drawing order. Native terminal
+checks passed for workspace navigation, both partners' mouse/keyboard focus,
+independent height grips, fullscreen restoration, contextual dialogs, backend
+updates and mixed-source rendering. Popup and navigation checks also passed
+through an isolated tmux server. Logs are under `build/column-splits/`:
+`layout-final.log`, `unit.log`, `interaction-0.log`, `interaction-1.log`,
+`navigation-tmux.log` and `code-native.log`.
+
+Focused static analysis of `src/layout/layout.c`, `src/tui/render.c` and
+`src/tui/app.c` passed; `analysis.log` retains its output. A subsequent layout-only
+analysis passed after the narrow-column fallback correction; see
+`layout-analysis-final.log` and its exit record.
+
+Earlier full-baseline attempts remain recorded in
+`build/column-splits-ci-20261106T160022Z/test-ci.log` and `final-test-ci.log`, both
+exit 2. They exposed test assumptions about the former shared status/border row
+and startup output remaining visible in the Console tail. The checks now assert
+separate frame/status rows and explicitly browse retained Console output; the
+original status and process-ID assertions remain. A separate profile check also
+exposed the old pane-header offset; its geometry assertions include the reserved
+frame row. The interrupted `profiles-final.log` has no completion result and is
+not passing evidence.
+
+The final complete fortified host baseline passed, exit 0:
+
+```sh
+TERM=xterm-256color make -j1 BUILD_DIR=build/column-splits-ci-20261106T160022Z CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+This task-specific build directory began empty; subsequent attempts reused the
+same fortified flags. The successful run is recorded in `verified-test-ci.log`
+and `verified-test-ci.exit` in that directory. `verified-environment.txt` records
+Linux x86-64, GCC 16.2.1, GDB 18.1 and tmux 3.8. The input hashes and
+`verified-verification.json` confirm that no source, header, test or build inputs
+changed during the successful run. It includes native GDB, independent column
+interaction, real tmux, local gdbserver and OpenOCD host checks.
+
+These are local host results, not hosted Ubuntu CI or physical-target evidence.
+No physical target operations were performed. Visual review with the actual
+terminal/font and maintainer acceptance remain pending; see the
+[independent column review procedure](testing.md#lower-dock-and-independent-column-splits).
+
+
+## Mixed disassembly and scrollbar follow-up — 2026-11-06
+
+Terminal reproductions captured a mixed listing losing its source rows after
+upward expansion, then decoding zero-filled padding after downward expansion.
+A direct GDB comparison also returned a flat instruction list for a mixed request
+beginning in `_start`, while a request beginning in `main` returned source wrappers.
+The reproduction logs are in `build/disassembly-review/`: `ui-probe.log`,
+`gdb-wide-mode5.log` and `gdb-mixed.log`.
+
+Continuous wheel/keyboard scrolling now merges useful cached extensions and
+rejects contained windows that cannot extend the requested edge. It stops new
+unclassified decoding after an established code boundary unless raw inspection
+was explicitly selected; explicit address/page inspection remains available.
+Mixed refresh retains the original listing, segments requests at known function
+anchors and limits work to 128 decoded instructions. Identical retained
+instructions keep their source mappings. Cached Mixed toggles change presentation
+without replacing the listing. Header composition and retained column widths
+remove stale suffixes and shrinking-field shifts.
+
+Horizontal bars now reserve one blank row before pane controls, with viewport
+sizes and mouse hit regions adjusted together. Source coloring classifies whole
+tokens before clipping; visible address fragments in Disassembly retain their
+color. Rendering paths for Registers, Memory, Stack, Locals/Watches, Call Stack,
+Threads, Breakpoints and Console were inspected: uniform row state colors are
+independent of horizontal offset, and Memory clips its address/ASCII spans.
+This inspection is distinct from visual acceptance of every view.
+
+Focused checks passed under `build/disassembly-review/`:
+
+- `render-verified.log`: source fragments retain exact cell colors, including
+  selected rows, keywords, comments, strings and numbers; existing palette,
+  scrollbar and frame checks also passed.
+- `model-verified.log`: authored MI code-model checks passed.
+- `native-verified.log`: real GDB mixed refresh from `_start`, continuous edge
+  scrolling, known-code termination and retained instruction identity on toggles;
+  existing optimized, stripped, C++ and relocated-source checks also passed.
+- `code-tui-verified.log`: real source/disassembly/Console navigation, track
+  paging/dragging, blank scrollbar gap, stepping and mixed rows passed.
+- `inspectors-final.log`: Memory, Locals/Watches, Stack, context through tmux,
+  register editing, and contextual popup checks through tmux passed. Popup checks
+  include the color of a partially clipped disassembly address; direct checks
+  also passed in `popups-final.log`.
+
+Each final check above has a matching exit record of 0. The earlier
+`code-tui-focused.log` failure remains: adding the gap shortened its source
+viewport enough to hide the marker the test intended to pan to. Its test terminal
+height was increased by one row, preserving the original overflow and marker
+assertions; the later complete code-view check passed.
+
+Focused static analysis processed the Code model, renderer and TUI. Its initial
+run reported one warning about the adjacent pane-ID and signed-direction
+parameters; their distinct roles are now documented at the helper. The corrected
+Code-model check passed, exit 0, in `analysis-model-final.log` and its exit record;
+`analysis.log` preserves the original diagnostic and the renderer/TUI analysis.
+
+The earlier column-split full baseline applies to the preceding tree. The later
+fresh fortified result and maintainer acceptance are recorded in the
+[workspace review closeout](#workspace-review-closeout--2026-11-06). No physical
+hardware operations were performed by these host checks.
+
+
+## Workspace closing controls — 2026-11-06
+
+The toolbar now separates Setup, Close Session and Quit with one-cell gaps.
+Close Session is the former Session control: its close/confirmation behavior is
+unchanged, and Quit remains application-wide. Execution-key hints shorten where
+needed to preserve the toolbar row budget. Usage and testing references use the
+new label.
+
+Native profile checks passed directly and through isolated tmux, including exact
+button coordinates, gap backgrounds and retained pane geometry at widths
+80/123/124/152/160 with custom bindings. Navigation and fullscreen checks also
+passed. Logs are in `build/toolbar-spacing/focused.log` (direct profile pass,
+then an incomplete-redraw timing failure in the new tmux assertion) and
+`verified.log` (corrected tmux wait, navigation and fullscreen, exit 0).
+The wait now includes the asserted toolbar coordinates and gap colors, preserving
+the checks instead of accepting a partially redrawn resized screen.
+See the [workspace review closeout](#workspace-review-closeout--2026-11-06) for
+the full-baseline result, subsequent toolbar checks and acceptance.
+
+
+## Workspace review closeout — 2026-11-06
+
+The maintainer accepted the workspace and toolbar corrections. The broader
+v0.2.0 workflow review continues; this acceptance does not authorize publication
+or extend physical-target validation.
+
+The fresh fortified host baseline passed, exit 0:
+
+```sh
+TERM=xterm-256color make -j1 BUILD_DIR=build/ui-final-20261106T202713Z CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+The complete log and exit record are `test-ci.log` and `test-ci.exit` in that
+build directory. The log reaches the final real-OpenOCD host check without
+hardware access. This covers the contextual menus, independent column layout,
+mixed-disassembly and scrollbar corrections preceding the toolbar follow-up.
+
+The Close Session label and toolbar gaps were changed afterward. Their later
+native profile, tmux resize, navigation and fullscreen checks passed as recorded
+above. The earlier full baseline is not presented as a rerun of that later tree.
+These are local host results, not hosted Ubuntu CI results.
+
+
+## Scrollbar insets and Mixed annotations — 2026-11-08
+
+Mixed source annotations now omit leading spaces and tabs at presentation time;
+Source indentation and stored source text remain unchanged. Pane and menu tracks
+use a shared one-cell inset. Horizontal track length is independent of the Source
+gutter, and popup tracks extend beside pinned footer controls. Thumb geometry and
+mouse input use physical track length while paging retains the content viewport.
+
+Focused host checks passed sequentially. Logs and matching `.exit` records are
+in `build/scrollbar-insets/`:
+
+- `render-checked.log`: renderer geometry, unequal track/viewport lengths,
+  endpoint positions, palette and clipping assertions.
+- `code-final.log`: native Code TUI, left-aligned Mixed annotations, source
+  navigation, horizontal dragging, colors and resize behavior.
+- `pane-menus.log` and `pane-menus-tmux.log`: equal pane-relative horizontal
+  insets, popup footer tracks, anchored controls and focus, directly and through
+  isolated tmux.
+- `workspace-fixed.log`: workspace mouse paging, dragging and layout behavior.
+- `other-controls.log`: `test-keybinds`, `test-script-tmux` and `test-stack-tui`.
+- `memory.log`: `test-m10-native`, including native Memory TUI behavior.
+- `analysis.log`: `make SOURCES='src/tui/app.c src/tui/render.c' analyze`, exit 0.
+
+`workspace.log` preserves an initial failed mouse assertion: after the track
+moved inward, the demo body hit region still included its column. Reducing that
+region to the actual content width corrected the overlap; the rerun passed.
+A prepared zero-row native body also retains its actual height instead of borrowing
+a fallback viewport that could draw across controls in a tiny pane.
+
+The complete fresh fortified `test-ci` baseline is left for the maintainer to run.
+These focused results do not establish that baseline or hosted Ubuntu CI success.
+No hardware operations were performed. Font appearance, final visual review and
+acceptance remain pending.
+
+
+## Shared text-field paste isolation — 2026-11-08
+
+Tabs and newlines in clipboard input previously reached ordinary navigation and
+submission handlers. Field capacity was bounded, but the paste could continue in
+other fields. Shared bracketed-paste handling now retains the original text-field
+identity, converts tabs/line breaks to spaces, ignores other control characters
+and discards overflow at the existing field limit. Menu/button pastes are ignored.
+Payload decoding bypasses shortcuts and Vim commands; completion restores normal
+input. Resize and debugger pumping remain active without per-character redraws.
+
+Focused checks passed, exit 0, with logs and matching exit records under
+`build/paste-isolation/`:
+
+- `focused-fixed.log`: `make -j1 test-keybinds`, including the first overflow,
+  saved-value, split-delimiter, modal-field and Vim regression checks.
+- `tmux.log`: those checks through isolated real tmux.
+- `native-final.log`: `./build/test-keybinds-tui` with the normal application and
+  `debug-fixture` absolute paths, including the later menu-paste assertion and
+  a live Console draft that remains unsubmitted after pasted newlines.
+- `native-tmux-final.log`: the same native checks with `TB_KEYBINDS_TEST_TMUX=1`,
+  including existing shortcut, context-transfer, editing and terminal cleanup checks.
+
+`focused.log` preserves an initial test-setup failure: the saved-profile assertion
+ran with an empty GDB field. The regression now explicitly supplies the required
+configuration before testing paste isolation; profile validation was not relaxed.
+
+Focused TUI static analysis passed, exit 0, in `analysis.log`. Documentation
+link/anchor checks and the normal build passed in `document-checks-final.log`
+and `normal-build.log`.
+
+The complete fortified host baseline remains for the maintainer to run on the
+combined scrollbar and paste corrections. No hardware operations were performed;
+these local results do not claim hosted CI success or maintainer acceptance.
+
+
+## Disassembly cache bounds and warning recovery — 2026-11-08
+
+The earlier known-code edge restriction did not cover the complete navigation
+lifecycle. Ordinary forward expansion could fall through when the last listing
+was unindexed, and cached unknown rows from explicit inspection could bypass the
+new-read guard. Reverse recovery also depended on retained listing/anchor state.
+After eviction, an unindexed window did not consult available trusted ELF anchors;
+reconstruction treated the gap before the retained window as an unfinished scan.
+The viewport could therefore remain in unknown rows when navigating upward.
+
+Ordinary expansion now checks current mapping evidence independently of the last
+window's indexed flag. Cached extensions must classify their added instructions
+as code, including the instruction footprint. Reverse recovery can reconstruct a
+bounded known-code prefix from trusted metadata after eviction and join retained
+rows across a labeled gap. A long gap does not increase decoding work. Explicit
+paging and raw inspection retain their separate behavior.
+
+Classification remains based on the rendered instruction slice. The warning is
+not hidden to mask unknown rows: it clears once known instructions fill the
+viewport and remains valid where unknown instructions are actually visible.
+
+Regression failures were reproduced before the corresponding corrections:
+`regression-before.log` records the unindexed forward-scroll bypass;
+`native-recovery-before.log` records failed reverse recovery after dropping cached
+listings and anchors; `cached-reentry-before.log` records ordinary expansion
+merging unclassified inspection history after returning to known code.
+These logs and subsequent results are under `build/code-range-recovery/`.
+
+Final focused checks passed, each with exit 0 and a matching `.exit` record:
+
+- `checked-model.log`: `./build/test-code` with the absolute `fake-mi` path;
+  rejected ordinary unknown-range expansion queues no additional request.
+- `checked-native.log`: `./build/test-code-native` with the five Code fixtures
+  and relocated-source directory. This includes explicit unknown paging, a gap
+  exceeding 1 KiB, dropped listing/anchor caches, reverse recovery, visible-slice
+  classification, ordinary cached re-entry prevention, raw inspection and an
+  unchanged stopped PC, alongside the existing native Code checks.
+- `checked-tui.log`: `./build/test-code-tui` with the application, Code and debug
+  fixture absolute paths. Both assembly-only and Mixed sequences cover explicit
+  unknown paging, ordinary reverse scrolling, warning recovery, repeated edge
+  scrolling, return-to-stop and smaller/larger terminal dimensions. Existing
+  source, stepping, navigation, colors and popup roundtrip checks also passed.
+- `checked-tmux.log`: that complete TUI check through an isolated real tmux
+  server, using the recorded `tmux-app` wrapper and `tmux.conf`.
+- `analysis.log`: `make SOURCES=src/model/code.c analyze`.
+
+Intermediate TUI setup failures remain in the earlier logs: a narrow pane hid
+the expected ELF footer; overlapping cached windows could retain the same first
+row; and placing manual browsing before the stepping check changed its starting
+state. The final check uses visible headers, preserves classification assertions
+and runs the new browsing sequence after the existing stepping check.
+
+The final complete fortified baseline remains for the maintainer to run on this
+combined working tree. Earlier full-baseline runs do not cover these corrections.
+No hardware operations were performed; local focused results do not establish
+hosted CI success, manual acceptance or release authorization.
+
+
+## Boundary notices and floating session reviews — 2026-11-08
+
+This supersedes the header-warning expectations in the preceding disassembly
+entry. Missing verified ELF mapping metadata is not an unsuccessful navigation
+attempt. The frontend no longer promotes that classification to an automatic
+unknown-code banner on initial display, explicit paging or ordinary browsing.
+Mapping evidence remains represented by the existing `ELF:?`/native/user footer.
+
+Start/End notices are now pane-local results of unsuccessful ordinary edge-scroll
+attempts on fresh, settled stopped instructions. Reverse scrolling, a changed
+viewport, new listing, stale context, page navigation or terminal resize clears
+the notice. Mapping classification and its model API remain separate; no mapping
+is upgraded, and the earlier cache/reconstruction safeguards remain in place.
+
+Native launch/attach, OpenOCD and existing-server reviews now share centered
+floating dialogs over their configuration forms. The compositor retains the
+parent field viewport and restores the Review control on Back/Escape. Only the
+review's controls receive input. Start/Connect remains explicit; profile editing
+stays in configuration. Saved-profile entry receives the same return target.
+OpenOCD review warnings wrap at narrow widths, and an empty Symbols field now
+explicitly states that source stepping is unavailable.
+
+Focused host checks passed, exit 0, with logs and matching exit records under
+`build/session-review-boundaries/`:
+
+- `boundaries-rechecked.log`: complete direct Code TUI, including assembly and
+  Mixed notice transitions, explicit paging without an automatic banner, reverse
+  dismissal, source navigation and existing stepping checks.
+- `boundary-tmux.log`: complete Code TUI through isolated real tmux, including
+  both boundary notices, reverse dismissal and resizing with a notice visible.
+- `remote-rechecked.log`: `make -j1 test-m15-native`; real gdbserver connection
+  review containment, quiet initial display without verified mapping metadata,
+  notice after overscroll, reverse dismissal and existing remote lifecycle tests.
+- `openocd.log`: `make -j1 test-m16-tui`; floating review, argv paging at 80×20,
+  explicit startup and existing host fixture lifecycle/reset-confirmation tests.
+  The OpenOCD/MI peers in this check are fixtures, not physical hardware.
+- `final-popups.log` and `final-popups-tmux.log`: native review containment,
+  outside-click isolation, minimum-size rendering, Escape/Enter focus restoration
+  and existing workspace popup behavior directly and through isolated tmux.
+- `profile-reviews.log`: `make -j1 test-m13-native`, including actual GDB source
+  settings, saved-profile reopening, setup restoration and review workflows.
+- `input.log`: `make -j1 test-keybinds`, including paste isolation, Enter/Backspace,
+  Vim fields, capture and terminal cleanup.
+- `analysis.log`: `make SOURCES=src/tui/app.c analyze`.
+
+Earlier failures remain in the logs. The first new Code TUI setup assumed a
+particular opcode prefix after paging; the final test asserts navigation outcomes
+instead. The remote notice-dismissal assertion initially used a fixed short pump
+interval; it now waits up to a bounded deadline for the same single reverse event
+to be rendered, retaining the dismissal assertion. An initial command used a
+nonexistent Make target; the recorded passing OpenOCD check uses `test-m16-tui`.
+
+No physical board operations were performed. Final manual acceptance and a fresh
+complete fortified host baseline on the combined working tree remain pending;
+these focused results do not claim hosted CI success or release authorization.
+
+
+### Exposed configuration beneath session reviews — 2026-11-08
+
+The previous review compositor retained and painted the configuration, but the
+opaque review rectangle completely covered its centered form. The retained page
+header and bounded-dialog checks did not detect this presentation failure.
+Review width now reserves visible form labels beside the modal through one
+shared sizing rule for native launch/attach, OpenOCD and existing-server reviews.
+The configuration keeps its position and field viewport; only the review is
+constrained. Its paragraphs and OpenOCD arguments wrap to the resulting width.
+
+Focused host evidence is in `build/review-composition/`. The new native exposed-label
+assertion fails against the previous implementation (`before.log`). After the fix,
+`native.log` and `tmux.log` pass native launch/attach review, retained-label checks,
+80×20 resizing, dismissal and the existing workspace popup suite. `openocd.log`
+passes `test-m16-tui` with authored offline peers; `remote.log` passes
+`test-m15-native` with real GDB/gdbserver. Both assert configuration labels remain
+visible outside the review. Builds use `BUILD_DIR=build/session-review-boundaries`
+and `CPPFLAGS=-D_FORTIFY_SOURCE=3`, with targets run sequentially using `make -j1`.
+Each final test log has a matching zero `.exit` record. No physical target was
+exercised. Documentation links/render checks and the normal `make -j1` build
+passed. The complete fresh fortified baseline and manual presentation acceptance
+remain pending; these focused results do not replace them.
+
+
+### Session review action spacing — 2026-11-08
+
+OpenOCD review placed its argument paging directly below Start/Back and always
+showed Previous on the first page. Paging now occupies a separate row above the
+acceptance controls with a blank row between them, and only available directions
+are shown. Warning text also has a blank row before paging. Argument capacity is
+calculated from these footer positions, retaining at least one readable argument
+row at 80×20. Native/remote review action rows retain their horizontal gaps.
+
+Sequential focused host checks passed in `build/review-button-spacing/`:
+`test-m16-tui`, `test-popups`, `test-popups-tmux` and `test-m15-native`, using
+`make -j1 BUILD_DIR=build/session-review-boundaries CPPFLAGS=-D_FORTIFY_SOURCE=3`.
+The OpenOCD check asserts the two-row distance and blank separating cells at
+80×20, hides Previous on the first page, and exercises both paging directions.
+Its initial test compilation failure from an out-of-scope assertion variable is
+retained in `assertion-build-before.log`; the corrected complete check passes.
+Final test logs have zero `.exit` records. No hardware was exercised. Normal build
+and documentation checks passed. Full fresh baseline and manual acceptance remain
+pending.
+
+
+### Native launch retry after review focus restoration — 2026-11-08
+
+The maintainer-run fortified baseline stopped with exit 2 in `test-native-tui`;
+its unchanged full log is
+`build/ui-review-final-20261108T161017Z/test-ci.log`. The captured review shows
+GDB still set to the deliberately invalid `/nonexistent/gdb` after the retry.
+The test used five Tabs after Back, assuming focus returned to Mode. Review
+restoration now returns to the invoking Review control, so that sequence never
+replaced the GDB field. This was a stale test-navigation assumption, not evidence
+that the installed GDB executable was missing.
+
+The retry now selects the invalid GDB field explicitly before replacing its
+contents, and additionally asserts that Enter after Back reopens the review.
+The spawn-error, retained invalid path, successful real-GDB retry, Console and
+terminal-restoration assertions remain intact. No production behavior changed.
+The complete `test-native-tui` executable passed directly and with
+`TB_CONSOLE_TEST_TMUX=1`, using the fortified baseline binary and fixtures.
+Commands, full focused logs and zero exit records are in
+`build/native-review-retry/`. The test executable was rebuilt with:
+
+```sh
+make -j1 BUILD_DIR=build/ui-review-final-20261108T161017Z \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  build/ui-review-final-20261108T161017Z/test-native-tui
+```
+
+Documentation checks, `git diff --check` and normal `make -j1` passed. The failed
+baseline remains failed; a complete baseline rerun and acceptance remain pending.
+
+
+## v0.2.0 release preparation — 2026-11-09
+
+The maintainer reports the workflow/UI adjustments and the numbered user guide
+complete, and requests preparation of v0.2.0. The version header is now 0.2.0.
+Publication is not implied by local preparation.
+
+Preparation starts from `07bc45807ad2c8dd7953e96fb07fe746d5200b80`, with the
+user-guide migration and release metadata in the working tree. Relevant
+implementation revisions since v0.1.6 are:
+
+| Scope | Revision |
+|---|---|
+| Menus and host-local paths | `c3639439db49a1a382c7e39d226a109da9a4b5c0` |
+| Themes and controls | `30dca61f5954c083aa35506e6e967467363ed842` |
+| Workspace menus and scrolling | `60b8c69cd4e44cc8101fefa338901d6afaddf4c2` |
+| Session reviews, disassembly bounds and paste isolation | `07bc45807ad2c8dd7953e96fb07fe746d5200b80` |
+
+### Evidence carried into preparation
+
+The November 8 fortified host baseline in
+`build/ui-review-final-20261108T165810Z/test-ci.log` completed with exit 0,
+recorded in `test-ci.exit`, after the native review retry correction. It reaches
+the final real-OpenOCD host check without hardware initialization. This closes
+the earlier failed run at `build/ui-review-final-20261108T161017Z/`; that original
+failure and its diagnosis remain preserved above. It is not a run of the later
+0.2.0 version header or documentation.
+
+The maintainer reports completion of the final physical regression checks for
+STM32/ARM, ESP32-S3/Xtensa and ESP32-C6/RISC-V. No new raw logs, firmware hashes,
+probe identifiers, tool versions or capability-specific exclusions accompanied
+that report. Earlier board records retain their original provenance and limits;
+no hardware operations are performed as part of this local preparation.
+
+### Final local checks and distributions
+
+Environment: Linux 7.2.14-arch1-1 x86-64, glibc 2.44, GCC/G++ 16.2.1,
+GDB/gdbserver 18.1, tmux 3.8, clang-tidy 23.1.4 and OpenOCD
+0.12.0-01004-g9ea7f3d64-dirty. Exact outputs, commands, input hashes, logs and
+exit records are under `build/v020-release-evidence/`.
+
+The fresh complete fortified host baseline passed, exit 0:
+
+```sh
+TERM=xterm-256color make -j1 BUILD_DIR=build/v020-release-ci-20261110T003739Z CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+It covers the current CI Tests target list, including native, tmux, real localhost
+remote-server and offline OpenOCD checks. `test-ci-command.json`, `test-ci.log`
+and `test-ci.exit` retain the exact run. Frozen hashes in `tested-inputs.json`
+and `tested-input-comparison.json` confirm unchanged compiled application/test
+inputs; the later packaging-only documentation addition is checked separately.
+These are local host results, not hosted Ubuntu CI results.
+
+`make analyze` passed, exit 0, with no unsuppressed project diagnostics. All 86
+C test/support sources compiled with strict warnings and `_FORTIFY_SOURCE=3`
+in `build/v020-release-compile`, exit 0. The initial compilation command omitted
+its alternate BUILD_DIR and failed before compiling; its command/log/exit remain
+under `test-compilation-initial*`. The corrected command changed no source/tests.
+
+Documentation checks passed for the twenty numbered tutorial pages and index,
+relative links/anchors/images, Markdown fences, Mermaid syntax and shell-example
+syntax. The obsolete usage guide is removed; historical evidence retains its
+original filename mentions. Public references point to the permanent tutorial
+entry point. Checks and migration coverage are in `build/tutorial-doc-check/`.
+
+The hardened package build passed with a separate packaging index enumerating
+reviewed working-tree additions/deletion while preserving repository staging.
+This includes every tutorial page in the source archive. The Linux archive now
+also bundles all public Markdown documentation, screenshots and its linked CI
+reference, preserving relative paths for offline reading. Package commands and
+SOURCE_DATE_EPOCH are in `packaging-command.json`.
+
+Candidate checks passed for matching checksums, all 229 source files matching the
+working tree, all 21 tutorial files in both archives, offline documentation links,
+GPLv3/notices, source checksum in BUILD-INFO.txt and version/help execution outside
+the repository. An extracted source build passed independently. ELF inspection
+confirmed x86-64 PIE, non-executable stack and full RELRO; executable GLIBC symbol
+requirements reach 2.38 on this build host. Runtime shared libraries and terminfo
+remain external; older-distribution compatibility is not implied.
+Missing packaging arguments/executables and a mismatched executable version were
+rejected. Existing CLI, terminal, workspace and real-tmux harnesses passed against
+the extracted executable outside the repository, each exit 0. Commands/logs/exit
+records are `packaged-test-*`; `packaged-tests.json` identifies the tested binary.
+
+The final archives are rebuilt after this record and the documentation changes:
+
+- `build/dist/v0.2.0/the-bugger-v0.2.0-linux-x86_64.tar.gz`
+- `build/dist/v0.2.0/the-bugger-v0.2.0-source.tar.gz`
+- `build/dist/v0.2.0/SHA256SUMS`
+
+Final source-content, offline-documentation, checksum and independent-build checks
+are recorded in `sealed-package-verification.json` and `sealed-source-build*`.
+The sealed executable matches the binary used for the passing packaged tests.
+Archive checksums are retained in SHA256SUMS rather than embedded in this source
+record. The normal build is also updated to 0.2.0. Rebuild the archives if any
+packaged file changes after sealing.
+
+Upload all three files separately. GitHub's two automatic source snapshots do not
+replace the Linux binary archive, matching source archive or checksum file. Local
+files are not publication evidence; the actual five-asset inventory and uploaded
+checksums must be verified after release publication.
+
+Hosted PR checks, maintainer release acceptance and upload/publication verification
+remain outstanding. No commit, tag or publication is implied by these local files.

@@ -37,15 +37,8 @@ static void toggle_view_at(TestTerminal *term, int menu_x, int menu_y, const cha
 {
     click_at(term, menu_x, menu_y);
     test_terminal_expect(term, "SHOW VIEW (DEMO)");
-    /* The same label can be a header tab. Select only this pane's menu body. */
-    for (int row = menu_y + 2; row < term->rows - 2; ++row) {
-        const char *at = strstr(term->cells[row], name);
-        if (at && at - term->cells[row] < menu_x) {
-            click_at(term, (int)(at - term->cells[row]), row);
-            return;
-        }
-    }
-    CHECK(false);
+    /* Retain the tab-label ambiguity check while using the popup's own bounds. */
+    test_terminal_menu_click(term, "SHOW VIEW (DEMO)", name);
 }
 
 static void start(TestTerminal *term, const char *binary, const char *type, bool monochrome)
@@ -61,14 +54,14 @@ static void start(TestTerminal *term, const char *binary, const char *type, bool
 static int count_text(const TestTerminal *term, const char *text)
 {
     int count = 0;
-    for (int y = 0; y < term->rows - 3; ++y) {
+    for (int y = 0; y < term->rows - 4; ++y) {
         const char *p = term->cells[y];
         while ((p = strstr(p, text)) != NULL) { ++count; p += strlen(text); }
     }
     return count;
 }
 
-static void lower_overlays(const char *binary)
+static void lower_columns(const char *binary)
 {
     TestTerminal term;
     start(&term, binary, "xterm-256color", false);
@@ -110,6 +103,8 @@ static void lower_overlays(const char *binary)
     test_terminal_expect(&term, "HEX bytes / ASCII");
     CHECK(!test_terminal_find(&term, "Sample log / no commands executed", NULL, NULL));
     test_terminal_lower(&term, 0, false);
+    test_terminal_expect(&term, "main.c | Cortex-M4F sample");
+    test_terminal_send(&term, "6");
     test_terminal_expect(&term, "Sample log / no commands executed");
     test_terminal_lower(&term, 1, false);
     test_terminal_lower(&term, 2, false);
@@ -118,7 +113,7 @@ static void lower_overlays(const char *binary)
     test_terminal_resize(&term, 44, 140);
     test_terminal_expect(&term, "main.c | Cortex-M4F sample");
     CHECK(test_terminal_find(&term, "Memory", &x, &y) && y == memory_y - 3);
-    test_terminal_click(&term, "Session");
+    test_terminal_click(&term, "Close Session");
     test_terminal_expect(&term, "Start a debugging session");
     test_terminal_send(&term, "\r\t\t\t\t\t\r");
     test_terminal_expect(&term, "Review session preview");
@@ -134,9 +129,9 @@ static void lower_overlays(const char *binary)
     test_terminal_expect(&term, "Disassembly");
     test_terminal_lower(&term, 0, true);
     test_terminal_lower(&term, 0, false);
-    test_terminal_expect(&term, "Disassembly"); /* Return to the actual underlay. */
+    test_terminal_expect(&term, "main.c | Cortex-M4F sample"); /* Return to the corresponding upper root. */
     test_terminal_stop(&term, 0);
-    puts("PASS minimized lower groups, independent height, retained geometry, compact stacking and keyboard restore");
+    puts("PASS minimized lower groups, independent height, retained geometry, compact fallback and keyboard restore");
 }
 
 static void tab_focus(const char *binary, const char *type, bool monochrome)
@@ -173,7 +168,7 @@ static void tab_focus(const char *binary, const char *type, bool monochrome)
 int main(int argc, char *argv[])
 {
     CHECK(argc == 2);
-    lower_overlays(argv[1]);
+    lower_columns(argv[1]);
     tab_focus(argv[1], "xterm-direct", false);
     tab_focus(argv[1], "xterm-256color", false);
     tab_focus(argv[1], "xterm-256color", true);
@@ -310,7 +305,7 @@ int main(int argc, char *argv[])
     /* A ninth-row click must survive resize and drive scrolling past row four. */
     start(&term, argv[1], "xterm-256color", false);
     test_terminal_click(&term, "0800043A");
-    test_terminal_resize(&term, 18, 80);
+    test_terminal_resize(&term, 20, 80);
     test_terminal_expect(&term, "2 Asm");
     test_terminal_click(&term, "Disassembly");
     test_terminal_click(&term, "08000434"); /* Last visible row with the top margin. */
@@ -320,7 +315,7 @@ int main(int argc, char *argv[])
     test_terminal_stop(&term, 0);
 
     start(&term, argv[1], "xterm-256color", false);
-    test_terminal_resize(&term, 18, 80);
+    test_terminal_resize(&term, 20, 80);
     test_terminal_send(&term, "2");
     test_terminal_expect(&term, "0800042A  B5 10");
     test_terminal_click(&term, "0800042A  B5 10");
@@ -337,10 +332,10 @@ int main(int argc, char *argv[])
     puts("PASS disassembly selection: ninth-row click, keyboard and wheel reach all instructions");
 
     start(&term, argv[1], "xterm-256color", false);
-    test_terminal_resize(&term, 18, 80);
+    test_terminal_resize(&term, 20, 80);
     test_terminal_expect(&term, "main.c | Cortex-M4F sample");
     CHECK(test_terminal_find(&term, "...", &x, &y));
-    int scrollbar_x = x + 4;
+    int scrollbar_x = x + 3;
     for (int i = 0; i < 4 && !test_terminal_find(&term, "#include <stdint.h>", NULL, NULL); ++i) {
         click_at(&term, scrollbar_x, y + 2); /* Page above the thumb. */
     }

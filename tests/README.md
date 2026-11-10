@@ -16,18 +16,25 @@ records remain in the [validation records](../docs/validation.md).
   stepping and owned-session cleanup, and is included in `make test-native`.
   See [fullscreen procedures](../docs/testing.md#source-fullscreen).
 
+- `make test-popups` and `make test-popups-tmux`: native contextual menus,
+  workspace-preserving dialogs, focus/dismissal, backend events, minimized-dock
+  placement and resize. Both are included in `test-ci`.
+
 - `make test-navigation`: verifies spatial controls, deliberate content focus,
   fullscreen/resize focus retention and arrow-key versus opt-in h/j/k/l aliases
   through real demo PTYs, including menus, tabs/bodies, resize, confirmations,
   compact rendering and literal field editing. Included in `make test`; no
   debugger required. See [navigation procedures](../docs/testing.md#letter-key-navigation).
 
-- `make test-themes`: global appearance preferences, all 49 theme palettes and
+- `make test-themes`: global appearance preferences, all 66 theme palettes and
   a Config/Themes PTY flow; included in `make test`. `test-preferences` checks
   defaults, private atomic saves, stale writers and invalid-file preservation.
-  `test-render` checks contrast and direct/256/8-color/monochrome fallbacks.
+  `test-render` checks contrast, direct/256/8-color/monochrome fallbacks and
+  scrollbar geometry and family-specific accents on both axes, half-height UTF-8
+  horizontal blocks and non-UTF-8/monochrome fallbacks.
   `test-themes-tui` checks every preview, dependent variants, Back/Save/restart,
-  keyboard/mouse and compact rendering. See the [theme procedure](../docs/testing.md#themes-and-configuration).
+  keyboard/mouse, anchored dropdowns, upward placement, dismissal, resize and
+  compact rendering and identical Source capacity across palettes. See the [theme procedure](../docs/testing.md#themes-and-configuration).
 
 - `make test-stack`: bounded authored-MI Stack model, explicit reads, policies,
   cache/provenance, lifetimes, annotations, declarations and asynchronous failure
@@ -225,7 +232,7 @@ records remain in the [validation records](../docs/validation.md).
 - `test-unit`: demo state transitions, bounded logs, tab closing and per-view
   state preservation.
 - `test-layout`: tree ownership, unique pane IDs, geometry bounds/non-overlap,
-  gutter coverage, recursive minimum sizes, split/collapse, compact restoration,
+  gutter coverage, independent upper/lower columns, recursive minimum sizes, split/collapse, compact restoration,
   76,800 size/focus cases, 12,000 seeded operations, capacity and pool reuse.
 - `test-render`: exact palette, semantic colors, selected rows and monochrome tabs.
 - `test-cli`: help/version, non-TTY diagnostics and invalid/literal arguments.
@@ -235,7 +242,7 @@ records remain in the [validation records](../docs/validation.md).
   confirmation, tabs/view selection, compact/tiny resize, direct/256-color and
   monochrome rendering, and normal/SIGINT/SIGTERM/SIGHUP terminal restoration.
   Launcher regressions check both-axis centering at 140x44 and 200x60, whole-row
-  description clicks, suffix-free version and all three choices at 48x18.
+  description clicks, suffix-free version and all three choices at 80x20.
 - `test-workspace`: real PTY mouse press/move/release, global column/row and
   internal dividers, nested seventh/eighth views, tab/split closing, compact
   pane access, keyboard resizing and monochrome keyboard-only splitting.
@@ -377,7 +384,7 @@ for native milestone acceptance. ptrace/pidfd/LeakSanitizer restrictions are
 reported as failures, not silently skipped or disabled. The fixture's optional
 per-process attach permission does not modify Yama or system configuration.
 
-`unit/test_render.c` checks all 49 adapted palettes, contrast, direct/256/8-color
+`unit/test_render.c` checks all 66 adapted palettes, contrast, direct/256/8-color
 and monochrome pairs, semantic source/register colors, selected rows and the
 monochrome active-tab indicator using temporary-file ncurses screens. It needs
 `xterm-direct`, `xterm-256color`, `xterm` and `vt100` terminfo,

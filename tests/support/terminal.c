@@ -22,10 +22,19 @@ static long long milliseconds(void)
     return (long long)now.tv_sec * 1000 + now.tv_nsec / 1000000;
 }
 
+static void paint_background(TestTerminal *term, int y, int x, int count)
+{
+    for (int i = 0; i < count; ++i) {
+        term->backgrounds[y][x + i] = term->background;
+        term->foregrounds[y][x + i] = term->foreground;
+    }
+}
+
 static void clear_screen(TestTerminal *term)
 {
     for (int y = 0; y < TEST_ROWS; ++y) {
         memset(term->cells[y], ' ', TEST_COLS);
+        paint_background(term, y, 0, TEST_COLS);
         memset(term->inverse[y], term->reverse, sizeof term->inverse[y]);
         memset(term->underline[y], term->underlined, sizeof term->underline[y]);
         term->cells[y][term->cols] = '\0';
@@ -41,10 +50,15 @@ static void scroll_lines(TestTerminal *term, int top, int bottom, int distance)
         if (size > 0) { memmove(term->cells[top], term->cells[top + count], size); }
         memmove(term->inverse[top], term->inverse[top + count],
                 (size_t)(bottom - top + 1 - count) * sizeof term->inverse[0]);
+        memmove(term->backgrounds[top], term->backgrounds[top + count],
+                (size_t)(bottom - top + 1 - count) * sizeof term->backgrounds[0]);
+        memmove(term->foregrounds[top], term->foregrounds[top + count],
+                (size_t)(bottom - top + 1 - count) * sizeof term->foregrounds[0]);
         memmove(term->underline[top], term->underline[top + count],
                 (size_t)(bottom - top + 1 - count) * sizeof term->underline[0]);
         for (int y = bottom - count + 1; y <= bottom; ++y) {
             memset(term->cells[y], ' ', (size_t)term->cols);
+            paint_background(term, y, 0, term->cols);
             memset(term->inverse[y], term->reverse, (size_t)term->cols * sizeof(bool));
             memset(term->underline[y], term->underlined, (size_t)term->cols * sizeof(bool));
         }
@@ -52,10 +66,15 @@ static void scroll_lines(TestTerminal *term, int top, int bottom, int distance)
         if (size > 0) { memmove(term->cells[top + count], term->cells[top], size); }
         memmove(term->inverse[top + count], term->inverse[top],
                 (size_t)(bottom - top + 1 - count) * sizeof term->inverse[0]);
+        memmove(term->backgrounds[top + count], term->backgrounds[top],
+                (size_t)(bottom - top + 1 - count) * sizeof term->backgrounds[0]);
+        memmove(term->foregrounds[top + count], term->foregrounds[top],
+                (size_t)(bottom - top + 1 - count) * sizeof term->foregrounds[0]);
         memmove(term->underline[top + count], term->underline[top],
                 (size_t)(bottom - top + 1 - count) * sizeof term->underline[0]);
         for (int y = top; y < top + count; ++y) {
             memset(term->cells[y], ' ', (size_t)term->cols);
+            paint_background(term, y, 0, term->cols);
             memset(term->inverse[y], term->reverse, (size_t)term->cols * sizeof(bool));
             memset(term->underline[y], term->underlined, (size_t)term->cols * sizeof(bool));
         }
@@ -64,27 +83,41 @@ static void scroll_lines(TestTerminal *term, int top, int bottom, int distance)
 
 static void sgr(TestTerminal *term)
 {
+    int values[64], count = 0;
     const char *next = term->sequence;
-    if (*next == '\0') { term->reverse = false; term->underlined = false; }
-    while (*next != '\0') {
+    if (!*next) { term->reverse = false; term->underlined = false; term->background = term->foreground = -1; }
+    while (*next && count < 64) {
         char *end;
-        long code = strtol(next, &end, 10);
-        if (end == next) { return; }
-        next = *end == ';' ? end + 1 : end;
+        long value = strtol(next, &end, 10);
+        values[count++] = end == next ? -1 : (int)value;
+        next = (*end == ';' || *end == ':') ? end + 1 : end;
+        if (end == next) { break; }
+    }
+    for (int i = 0; i < count; ++i) {
+        int code = values[i];
         if (code == 0 || code == 24) { term->underlined = false; }
         else if (code == 4) { term->underlined = true; }
         if (code == 0 || code == 27) { term->reverse = false; }
         else if (code == 7) { term->reverse = true; }
-        else if (code == 38 || code == 48 || code == 58) {
-            /* A palette index/RGB component of 7 is not an inverse attribute. */
-            long mode = strtol(next, &end, 10);
-            if (end == next) { return; }
-            next = *end == ';' ? end + 1 : end;
-            int components = mode == 2 ? 3 : mode == 5 ? 1 : 0;
-            for (int i = 0; i < components && *next != '\0'; ++i) {
-                (void)strtol(next, &end, 10);
-                if (end == next) { return; }
-                next = *end == ';' ? end + 1 : end;
+        if (code == 0 || code == 39) { term->foreground = -1; }
+        else if (code >= 30 && code <= 37) { term->foreground = 0x1000000 | (code - 30); }
+        else if (code >= 90 && code <= 97) { term->foreground = 0x1000000 | (code - 90 + 8); }
+        if (code == 0 || code == 49) { term->background = -1; }
+        else if (code >= 40 && code <= 47) { term->background = 0x1000000 | (code - 40); }
+        else if (code >= 100 && code <= 107) { term->background = 0x1000000 | (code - 100 + 8); }
+        else if ((code == 38 || code == 48 || code == 58) && i + 1 < count) {
+            int mode = values[++i];
+            if (mode == 5 && i + 1 < count) {
+                int color = values[++i];
+                if (code == 48) { term->background = 0x1000000 | color; }
+                if (code == 38) { term->foreground = 0x1000000 | color; }
+            } else if (mode == 2) {
+                if (i + 1 < count && values[i + 1] < 0) { ++i; }
+                if (i + 3 >= count) { return; }
+                int red = values[i + 1], green = values[i + 2], blue = values[i + 3];
+                if (code == 48) { term->background = (red << 16) | (green << 8) | blue; }
+                if (code == 38) { term->foreground = (red << 16) | (green << 8) | blue; }
+                i += 3;
             }
         }
     }
@@ -133,12 +166,14 @@ static void csi(TestTerminal *term, char command)
         if (first == 2 || first == 3) { ++term->full_clears; clear_screen(term); }
         else {
             memset(term->cells[term->y] + term->x, ' ', (size_t)(term->cols - term->x));
+            paint_background(term, term->y, term->x, term->cols - term->x);
             memset(term->inverse[term->y] + term->x, term->reverse,
                     (size_t)(term->cols - term->x) * sizeof(bool));
             memset(term->underline[term->y] + term->x, term->underlined,
                     (size_t)(term->cols - term->x) * sizeof(bool));
             for (int y = term->y + 1; y < term->rows; ++y) {
                 memset(term->cells[y], ' ', (size_t)term->cols);
+                paint_background(term, y, 0, term->cols);
                 memset(term->inverse[y], term->reverse, (size_t)term->cols * sizeof(bool));
                 memset(term->underline[y], term->underlined, (size_t)term->cols * sizeof(bool));
             }
@@ -151,6 +186,7 @@ static void csi(TestTerminal *term, char command)
         {
             int start = first == 1 || first == 2 ? 0 : term->x;
             int count = first == 1 ? term->x + 1 : term->cols - start;
+            paint_background(term, term->y, start, count);
             memset(term->inverse[term->y] + start, term->reverse, (size_t)count * sizeof(bool));
             memset(term->underline[term->y] + start, term->underlined, (size_t)count * sizeof(bool));
         }
@@ -160,9 +196,14 @@ static void csi(TestTerminal *term, char command)
         char *line = term->cells[term->y] + term->x;
         bool *inverse = term->inverse[term->y] + term->x;
         bool *underline = term->underline[term->y] + term->x;
+        int *background = term->backgrounds[term->y] + term->x;
+        int *foreground = term->foregrounds[term->y] + term->x;
         size_t tail = (size_t)(term->cols - term->x - count);
         if (command == 'P') {
             memmove(line, line + count, tail);
+            memmove(background, background + count, tail * sizeof(int));
+            memmove(foreground, foreground + count, tail * sizeof(int));
+            paint_background(term, term->y, term->x + (int)tail, count);
             memset(line + tail, ' ', (size_t)count);
             memmove(inverse, inverse + count, tail * sizeof(bool));
             memmove(underline, underline + count, tail * sizeof(bool));
@@ -170,6 +211,9 @@ static void csi(TestTerminal *term, char command)
             memset(underline + tail, term->underlined, (size_t)count * sizeof(bool));
         } else {
             memmove(line + count, line, tail);
+            memmove(background + count, background, tail * sizeof(int));
+            memmove(foreground + count, foreground, tail * sizeof(int));
+            paint_background(term, term->y, term->x, count);
             memset(line, ' ', (size_t)count);
             memmove(inverse + count, inverse, tail * sizeof(bool));
             memmove(underline + count, underline, tail * sizeof(bool));
@@ -181,6 +225,7 @@ static void csi(TestTerminal *term, char command)
     case 'X': {
         int count = distance < term->cols - term->x ? distance : term->cols - term->x;
         memset(term->cells[term->y] + term->x, ' ', (size_t)count);
+        paint_background(term, term->y, term->x, count);
         memset(term->inverse[term->y] + term->x, term->reverse, (size_t)count * sizeof(bool));
         memset(term->underline[term->y] + term->x, term->underlined, (size_t)count * sizeof(bool));
         break;
@@ -239,8 +284,12 @@ static void consume(TestTerminal *term, unsigned char character)
             term->utf8_value = (term->utf8_value << 6) | (character & 0x3fU);
             if (--term->utf8_remaining) { return; }
             unsigned value = term->utf8_value;
-            if (value < 0x2500U || value > 0x257fU) { return; }
-            character = value == 0x2500U ? '-' : value == 0x2502U ? '|' : '+';
+            if (value == 0x2584U) { character = '_'; }
+            else if (value == 0x25cfU) { character = '*'; }
+            else {
+                if (value < 0x2500U || value > 0x257fU) { return; }
+                character = value == 0x2500U ? '-' : value == 0x2502U ? '|' : '+';
+            }
         } else { term->utf8_remaining = 0; }
     } else if (character >= 0xc2U && character <= 0xf4U) {
         term->utf8_remaining = character < 0xe0U ? 1U : character < 0xf0U ? 2U : 3U;
@@ -253,6 +302,8 @@ static void consume(TestTerminal *term, unsigned char character)
         term->x = 0;
         if (term->y < term->rows - 1) { ++term->y; }
     }
+    term->foregrounds[term->y][term->x] = term->foreground;
+    term->backgrounds[term->y][term->x] = term->background;
     term->inverse[term->y][term->x] = term->reverse;
     term->underline[term->y][term->x] = term->underlined;
     term->cells[term->y][term->x++] = (char)character;
@@ -269,6 +320,7 @@ void test_terminal_start_argv(TestTerminal *term, char *const arguments[], const
         config = isolated_config;
     }
     memset(term, 0, sizeof *term);
+    term->background = term->foreground = -1;
     term->rows = 44;
     term->cols = 140;
     term->scroll_bottom = term->rows - 1;
@@ -354,6 +406,45 @@ bool test_terminal_find(const TestTerminal *term, const char *text, int *x, int 
     return false;
 }
 
+bool test_terminal_scroll_cell(const TestTerminal *term, int y, int x, bool thumb)
+{
+    if (x < 0 || y < 0 || x >= term->cols || y >= term->rows) { return false; }
+    int color = term->cells[y][x] == '_' ? term->foregrounds[y][x] : term->backgrounds[y][x];
+    /* Exact reference palette and its nearest xterm/8-color fallbacks. */
+    return (term->cells[y][x] == ' ' || term->cells[y][x] == '_') &&
+           (thumb ? color == 0xc6a0f6 || color == (0x1000000 | 183) || color == (0x1000000 | 5)
+                  : color == 0x363a4f || color == (0x1000000 | 238) || color == (0x1000000 | 7));
+}
+
+bool test_terminal_find_scrollbar(const TestTerminal *term, bool thumb, int *x, int *y)
+{
+    for (int row = 0; row < term->rows; ++row) {
+        for (int col = 0; col < term->cols; ++col) {
+            if (test_terminal_scroll_cell(term, row, col, thumb)) {
+                if (x) { *x = col; }
+                if (y) { *y = row; }
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void test_terminal_expect_scrollbar(TestTerminal *term, bool thumb)
+{
+    long long deadline = milliseconds() + 5000;
+    while (milliseconds() < deadline) {
+        if (test_terminal_find_scrollbar(term, thumb, NULL, NULL)) {
+            long long settle = milliseconds() + 40;
+            while (milliseconds() < settle) { test_terminal_pump(term, 5); }
+            if (test_terminal_find_scrollbar(term, thumb, NULL, NULL)) { return; }
+        }
+        test_terminal_pump(term, 20);
+    }
+    fprintf(stderr, "Expected scrollbar %s fill\n", thumb ? "thumb" : "track");
+    CHECK(false);
+}
+
 void test_terminal_expect(TestTerminal *term, const char *text)
 {
     /* Bounded wait even when no output is produced. */
@@ -398,12 +489,76 @@ void test_terminal_click(TestTerminal *term, const char *text)
     while (milliseconds() < settle) { test_terminal_pump(term, 5); }
 }
 
+bool test_terminal_dialog_find(const TestTerminal *term, const char *title, const char *label, int *x, int *y)
+{
+    int title_x, title_y;
+    if (!test_terminal_find(term, title, &title_x, &title_y)) { return false; }
+    int left = title_x - 2, top = title_y - 1, right = left + 1;
+    if (left < 0 || top < 0) { return false; }
+    while (right < term->cols && (term->cells[top][right] == 'q' || term->cells[top][right] == '-')) { ++right; }
+    if (right >= term->cols || right <= left + 4) { return false; }
+    for (int row = title_y + 1; row < term->rows - 2; ++row) {
+        if (term->cells[row][left] != 'x' && term->cells[row][left] != '|') { break; }
+        const char *at = strstr(term->cells[row] + left + 1, label);
+        if (at && at + strlen(label) <= term->cells[row] + right) {
+            if (x) { *x = (int)(at - term->cells[row]); }
+            if (y) { *y = row; }
+            return true;
+        }
+    }
+    return false;
+}
+
+void test_terminal_dialog_click(TestTerminal *term, const char *title, const char *label)
+{
+    test_terminal_expect(term, title);
+    int x, y;
+    CHECK(test_terminal_dialog_find(term, title, label, &x, &y));
+    char input[80];
+    (void)snprintf(input, sizeof input, "\033[<0;%d;%dM\033[<0;%d;%dm", x + 1, y + 1, x + 1, y + 1);
+    test_terminal_send(term, input);
+    long long until = milliseconds() + 120;
+    while (milliseconds() < until) { test_terminal_pump(term, 5); }
+}
+
+void test_terminal_menu_click(TestTerminal *term, const char *title, const char *label)
+{
+    test_terminal_expect(term, title);
+    for (int attempt = 0; attempt < 48; ++attempt) {
+        int x, y;
+        CHECK(test_terminal_find(term, title, &x, &y));
+        int left = x - 2;
+        for (int row = y + 1; row < term->rows - 2; ++row) {
+            char edge = term->cells[row][left];
+            if (edge != 'x' && edge != '|') { break; }
+            const char *at = strstr(term->cells[row] + left + 1, label);
+            if (at) {
+                int col = (int)(at - term->cells[row]);
+                char input[80];
+                (void)snprintf(input, sizeof input, "\033[<0;%d;%dM\033[<0;%d;%dm",
+                               col + 1, row + 1, col + 1, row + 1);
+                test_terminal_send(term, input);
+                long long settle = milliseconds() + 120;
+                while (milliseconds() < settle) { test_terminal_pump(term, 5); }
+                return;
+            }
+        }
+        char wheel[64];
+        (void)snprintf(wheel, sizeof wheel, "\033[<65;%d;%dM", left + 3, y + 2);
+        test_terminal_send(term, wheel);
+        long long settle = milliseconds() + 60;
+        while (milliseconds() < settle) { test_terminal_pump(term, 5); }
+    }
+    fprintf(stderr, "Missing popup item %s in %s\n", label, title);
+    CHECK(false);
+}
+
 void test_terminal_lower(TestTerminal *term, int lower, bool open)
 {
     CHECK(lower >= 0 && lower < 3);
     long long ready = milliseconds() + 100;
     while (milliseconds() < ready) { test_terminal_pump(term, 5); }
-    int dock = term->rows - 3;
+    int dock = term->rows - 4;
     if (term->lower_column_width != term->cols) {
         int available = term->cols - 4;
         int first = available * 36 / 100, second = available * 34 / 100;

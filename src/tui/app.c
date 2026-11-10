@@ -8,6 +8,7 @@
 #include "tui/preferences.h"
 #include "session/session.h"
 #include "session/profiles.h"
+#include "session/host_paths.h"
 #include "tui/setup_capture.h"
 #include "tui/setup_restore.h"
 #include "model/images.h"
@@ -37,7 +38,8 @@ enum {
     CONTENT_DOWN,
     CONTENT_UP,
     CONTENT_RIGHT,
-    SGR_MOUSE
+    SGR_MOUSE,
+    PASTE_BEGIN
 };
 
 typedef enum {
@@ -159,6 +161,9 @@ typedef enum {
     SCROLLBAR,
     KEY_SCROLLBAR,
     SCRIPT_SCROLLBAR,
+    THEME_PICK,
+    THEME_SCROLLBAR,
+    POPUP_SCROLLBAR,
     COMMAND_FIELD,
     COMMAND_SEND,
     SAVE_OPEN,
@@ -243,6 +248,14 @@ typedef struct {
 } Control_t;
 
 typedef struct {
+    char          label[160];
+    ControlKind_e kind;
+    int           value;
+    int           pane;
+} PopupItem_t;
+
+
+typedef struct {
     wchar_t values[FORM_FIELDS][FIELD_SIZE];
     bool    alternate;
     bool    start_server;
@@ -258,6 +271,24 @@ typedef struct {
 // NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding)
 typedef struct {
     Page_e     page;
+    struct {
+        bool        active;
+        bool        restore;
+        bool        list;
+        bool        stack_feedback;
+        Page_e      base;
+        int         form_scroll;
+        Control_t   trigger;
+        int         content;
+        int         selected;
+        int         offset;
+        int         count;
+        int         drag;
+        TbRect_t    rect;
+        TbRect_t    card;
+        char        title[96];
+        PopupItem_t items[128];
+    } popup;
     TbDemo_t   demo;
     TbLayout_t layout;
     Form_t     forms[3];
@@ -301,6 +332,8 @@ typedef struct {
     int              scroll_drag_grab;
     bool             scroll_drag_horizontal;
     Control_t        last_control;
+    Control_t        viewport_focus;
+    bool             viewport_refocus;
     Control_t        controls[MAX_CONTROLS];
     TbRect_t         panes[TB_MAX_PANES];
     int              content_pane; /* -1 navigates controls; a pane ID navigates its content. */
@@ -308,6 +341,11 @@ typedef struct {
     const char      *colors;
     TbPreferences_t  preferences;
     size_t           theme_draft;
+    int              theme_menu;
+    int              theme_selected;
+    int              theme_offset;
+    int              theme_drag_grab;
+    TbRect_t         theme_list_rect;
     int              key_draft[TB_BIND_COUNT];
     int              key_selected;
     int              key_capture;
@@ -322,6 +360,12 @@ typedef struct {
     bool             field_tracking;
     Control_t        field_identity;
     Page_e           field_page;
+    bool             paste_active;
+    bool             paste_target;
+    bool             paste_truncated;
+    size_t           paste_end;
+    Page_e           paste_page;
+    Control_t        paste_control;
     char             status[160];
     TbSession_t     *debugger;
     bool             demo_mode;
@@ -334,14 +378,18 @@ typedef struct {
     int              code_pane;
     int              file_page;
     int              file_rows;
-    int              horizontal[TB_MAX_PANES][TB_VIEW_COUNT];
-    int              body_width[TB_MAX_PANES];
-    int              body_height[TB_MAX_PANES];
-    TbScroll_t       horizontal_scroll[TB_MAX_PANES];
+    int                 horizontal[TB_MAX_PANES][TB_VIEW_COUNT];
+    int                 body_width[TB_MAX_PANES];
+    int                 body_height[TB_MAX_PANES];
+    TbScroll_t          horizontal_scroll[TB_MAX_PANES];
+    TbAssemblyColumns_t assembly_columns[TB_MAX_PANES];
     CodeAction_e     code_action;
     char             rule_from[FIELD_SIZE * 4];
     uint64_t         source_revision[TB_MAX_PANES];
     uint64_t         assembly_revision[TB_MAX_PANES];
+    int              assembly_boundary[TB_MAX_PANES];
+    int              assembly_boundary_offset[TB_MAX_PANES];
+    int              assembly_boundary_maximum[TB_MAX_PANES];
     struct {
         int      scroll;
         int      row;
@@ -428,6 +476,10 @@ typedef struct {
     char                  profile_original_name[TB_PROFILE_NAME];
     TbSetupCapture_t     *setup;
     TbProfile_t          *session_profile;
+    TbProfile_t          *review_paths;
+    char                  review_directory[TB_SETUP_PATH];
+    char                  review_stamp[256];
+    bool                  review_ready;
     TbProfile_t          *setup_review_connection;
     TbSetup_t            *setup_review;
     char                  setup_profile[TB_PROFILE_NAME];
@@ -460,6 +512,8 @@ static void profile_activate(App_t *app, Control_t control);
 static void draw_server_review(App_t *app);
 static void draw_scripts(App_t *app);
 static bool prepare_server(App_t *app);
+static bool prepare_paths(App_t *app);
+static TbScroll_t axis_scroll(int total, int visible, int offset);
 static void draw_setup(App_t *app);
 static bool setup_capture(App_t *app);
 // action code and entry index come from separate control fields.
@@ -497,8 +551,26 @@ static void status(App_t *app, const char *message)
 }
 
 
+/* Connection setup and persistent preferences remain independent workflows. */
+static bool contextual_page(Page_e current)
+{
+    return current == RESET_CONFIRM || current == SAVE_INPUT || current == CLOSE_CONFIRM ||
+           (current >= CODE_MENU && current <= DATA_WATCH_INPUT) ||
+           (current >= MEMORY_RANGES && current <= STACK_GUARD_PAGE);
+}
+
+
+static bool dropdown_page(Page_e current)
+{
+    return current == CODE_MENU || current == MEMORY_MENU || current == VARIABLE_MENU ||
+           current == BREAK_MENU || current == STACK_MENU || current == STACK_NAMES_PAGE ||
+           current == STACK_POINTS_PAGE;
+}
+
+
 static void page(App_t *app, Page_e next)
 {
+    memset(app->assembly_boundary, 0, sizeof(app->assembly_boundary));
     if (app->page == REGISTER_EDIT && next != REGISTER_EDIT && app->debugger) {
         TbRegisters_t *registers = tb_session_registers(app->debugger);
         TbRegisterEditState_e state = tb_registers_edit(registers)->state;
@@ -508,10 +580,38 @@ static void page(App_t *app, Page_e next)
         }
     }
 
+    if (next == REVIEW) {
+        if (app->page == CONFIGURE) {
+            app->popup.trigger = app->controls[app->focus];
+            app->popup.form_scroll = app->form_scroll;
+        } else if (!app->popup.active || app->popup.base != CONFIGURE) {
+            app->popup.trigger = (Control_t) {
+                .kind = SUBMIT
+            };
+            app->popup.form_scroll = 0;
+        }
+        app->popup.base = CONFIGURE;
+        app->popup.active = true;
+    } else if (app->page == WORKSPACE && contextual_page(next)) {
+        app->popup.base = WORKSPACE;
+        app->popup.active = true;
+    }
+    bool restore_form = next == CONFIGURE && app->popup.active && app->popup.base == CONFIGURE;
+    if (next == app->popup.base && app->popup.active)
+        app->popup.restore = true;
+    if (!contextual_page(next) && next != REVIEW)
+        app->popup.active = false;
+    app->popup.title[0] = 0;
+    app->popup.list     = false;
+    app->popup.selected = 0;
+    app->popup.offset   = 0;
+    app->popup.drag     = -1;
+
     app->status[0]      = 0;
     app->key_drag_grab  = app->script_drag_grab = -1;
     app->field_tracking = app->field_insert = false;
 
+    app->theme_menu   = 0;
     app->page         = next;
     app->count        = 0;
     app->content_pane = -1;
@@ -520,7 +620,7 @@ static void page(App_t *app, Page_e next)
 
     app->focus            = 0;
     app->cursor           = 0;
-    app->form_scroll      = 0;
+    app->form_scroll      = restore_form ? app->popup.form_scroll : 0;
     app->menu             = -1;
     app->drag             = -1;
     app->scroll_drag_pane = -1;
@@ -539,10 +639,25 @@ static void page_result(App_t *app, Page_e next)
 }
 
 
+static const char *operation_message(const App_t *app)
+{
+    if (app->live && app->popup.stack_feedback) {
+        const TbStackView_t *view = tb_stack_view(tb_session_stack(app->debugger), app->stack_pane);
+        if (view) {
+            if (*view->annotation_error)
+                return view->annotation_error;
+            if (*view->message)
+                return view->message;
+        }
+    }
+    return app->status;
+}
+
+
 static const char *footer_message(const App_t *app)
 {
-    if (*app->status)
-        return app->status;
+    if (*operation_message(app))
+        return operation_message(app);
 
     switch (app->page) {
     case LAUNCHER:
@@ -685,17 +800,36 @@ static void workspace_message(const App_t *app, char text[256])
         }
         (void)snprintf(text, 256,
                        app->session ? "LIVE | %s | target %s | %.159s" : "LIVE | %s | PID %s | %.159s",
-                       tb_session_state_name(app->debugger), target, app->status);
+                       tb_session_state_name(app->debugger), target, operation_message(app));
     } else {
         (void)snprintf(text, 256, "DEMO | %s | PC 0x%08X | %.16s | %.159s",
                        app->demo.running ? "Running / stale" : "Paused",
-                       0x0800042aU + (unsigned)app->demo.step * 2U, app->colors, app->status);
+                       0x0800042aU + (unsigned)app->demo.step * 2U, app->colors, operation_message(app));
     }
 }
 
 
-static TbRect_t menu_card(int width, int height)
+static int form_card_width(void)
 {
+    return COLS - 4 < 84 ? COLS - 4 : 84;
+}
+
+
+static int review_card_width(void)
+{
+    /* Reserve visible configuration labels on both sides of the review. */
+    return form_card_width() - 16;
+}
+
+
+static TbRect_t menu_card(App_t *app, int width, int height)
+{
+    if (app->popup.active && app->popup.base == CONFIGURE) {
+        int review_width = review_card_width();
+        if (width > review_width)
+            width = review_width;
+    }
+
     if (width > COLS - 4)
         width = COLS - 4;
     if (height > LINES - 7)
@@ -708,6 +842,16 @@ static TbRect_t menu_card(int width, int height)
         height
     };
 
+    if (app->popup.active) {
+        card.y = (LINES - height - 3) / 2 + 2;
+        app->popup.card = (TbRect_t) {
+            .x = card.x - 1,
+            .y = card.y - 2,
+            .w = card.w + 2,
+            .h = card.h + 3
+        };
+        tb_fill(app->popup.card, TB_PANEL);
+    }
     tb_fill(card, TB_PANEL);
 
     return card;
@@ -853,6 +997,10 @@ static int add_control(App_t *app, TbRect_t rect, ControlKind_e kind, int value,
 
     int index = app->count++;
 
+    if (app->viewport_refocus && app->viewport_focus.kind == kind &&
+        app->viewport_focus.value == value && app->viewport_focus.pane == pane)
+        app->focus = index;
+
     app->controls[index] = (Control_t) {
         rect,
         kind,
@@ -884,7 +1032,9 @@ static void button(App_t *app, int y, int x, int width, const char *label, Contr
     }, index == app->focus ? TB_SELECTED : TB_SURFACE);
 
     /* Action labels have centered padding; full-row choices stay left aligned. */
-    if (label[0] == '[' || label[0] == ' ') {
+    bool choice = dropdown_page(app->page) || kind == SHOW_VIEW || kind == PANE_ACTION ||
+                  kind == MENU_SECTION;
+    if (!choice && (label[0] == '[' || label[0] == ' ')) {
         while (*label == ' ')
             ++label;
         int length = (int)strlen(label);
@@ -1082,8 +1232,13 @@ static void wide_text(int y, int x, int width, const wchar_t *text, size_t start
 }
 
 
-static void draw_header(const App_t *app, const char *subtitle)
+static void draw_header(App_t *app, const char *subtitle)
 {
+    if (app->popup.active) {
+        (void)snprintf(app->popup.title, sizeof(app->popup.title), "%s", subtitle);
+        return;
+    }
+
     char text[160];
 
     tb_fill((TbRect_t) {
@@ -1261,6 +1416,162 @@ static void theme_cycle(App_t *app, bool family, int direction)
 }
 
 
+static int theme_choices(const App_t *app, size_t choices[64])
+{
+    int         count  = 0;
+    const char *family = tb_theme_palette(app->theme_draft)->family;
+    if (app->theme_menu == 1) {
+        for (size_t f = 0; f < tb_theme_family_count() && count < 64; ++f) {
+            for (size_t i = 0; i < tb_theme_count(); ++i) {
+                if (strcmp(tb_theme_palette(i)->family, tb_theme_family(f)) == 0) {
+                    choices[count++] = i;
+                    break;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    for (size_t i = 0; i < tb_theme_count() && count < 64; ++i) {
+        const TbPalette_t *palette = tb_theme_palette(i);
+        if (strcmp(palette->family, family) != 0)
+            continue;
+
+        choices[count++] = i;
+    }
+
+    return count;
+}
+
+
+static void theme_list_close(App_t *app, bool choose)
+{
+    size_t choices[64];
+    int    count = theme_choices(app, choices);
+    if (choose && app->theme_selected >= 0 && app->theme_selected < count) {
+        size_t selected = choices[app->theme_selected];
+        if (app->theme_menu == 2 || strcmp(tb_theme_palette(selected)->family,
+                                          tb_theme_palette(app->theme_draft)->family) != 0) {
+            app->theme_draft = selected;
+            if (app->theme_menu == 1 &&
+                strcmp(tb_theme_palette(selected)->family, "catppuccin") == 0)
+                app->theme_draft = tb_theme_find("catppuccin", "macchiato");
+        }
+    }
+
+    app->focus      = app->theme_menu - 1;
+    app->theme_menu = 0;
+    app->count      = 0;
+}
+
+
+static TbRect_t theme_dropdown_rect(const App_t *app, int count)
+{
+    int    width      = 24;
+    TbRect_t trigger = app->popup.trigger.rect;
+    for (int i = 0; i < app->count; ++i) {
+        if (app->controls[i].kind == THEME_ACTION && app->controls[i].value == app->theme_menu) {
+            trigger = app->controls[i].rect;
+            trigger.x += 12;
+            trigger.w -= 12;
+            break;
+        }
+    }
+    size_t choices[64];
+
+    (void)theme_choices(app, choices);
+    for (int i = 0; i < count; ++i) {
+        size_t      index  = choices[i];
+        const char *label  = app->theme_menu == 1 ? tb_theme_name(theme_family(index))
+                                                 : tb_theme_palette(index)->variant;
+        int         needed = (int)strlen(label) + 4;
+        if (needed > width)
+            width = needed;
+    }
+
+    TbRect_t bounds = {
+        .x = 1,
+        .y = 1,
+        .w = COLS - 2,
+        .h = LINES - 3
+    };
+    return tb_dropdown_rect(trigger, bounds, width, count);
+}
+
+
+static void theme_list_open(App_t *app, int menu)
+{
+    if (app->focus >= 0 && app->focus < app->count) {
+        app->popup.trigger = app->controls[app->focus];
+        app->popup.trigger.rect.x += 12;
+        app->popup.trigger.rect.w -= 12;
+    }
+    app->theme_menu      = menu;
+    app->theme_selected  = 0;
+    app->theme_offset    = 0;
+    app->theme_drag_grab = -1;
+
+    size_t choices[64];
+    int    count = theme_choices(app, choices);
+    for (int i = 0; i < count; ++i) {
+        if ((menu == 1 && strcmp(tb_theme_palette(choices[i])->family,
+                                tb_theme_palette(app->theme_draft)->family) == 0) ||
+            (menu == 2 && choices[i] == app->theme_draft))
+            app->theme_selected = i;
+    }
+
+    int visible = theme_dropdown_rect(app, count).h - 2;
+    if (app->theme_selected >= visible)
+        app->theme_offset = app->theme_selected - visible + 1;
+}
+
+
+static void draw_theme_list(App_t *app)
+{
+    size_t     choices[64];
+    int        count   = theme_choices(app, choices);
+    TbRect_t   card    = theme_dropdown_rect(app, count);
+    int        visible = card.h - 2;
+
+    /* Geometry changes reveal the retained choice; ordinary scrolling stays independent. */
+    if (card.x != app->theme_list_rect.x || card.y != app->theme_list_rect.y ||
+        card.w != app->theme_list_rect.w || card.h != app->theme_list_rect.h) {
+        if (app->theme_selected < app->theme_offset)
+            app->theme_offset = app->theme_selected;
+        if (app->theme_selected >= app->theme_offset + visible)
+            app->theme_offset = app->theme_selected - visible + 1;
+    }
+
+    TbScroll_t bar = axis_scroll(count, visible, app->theme_offset);
+    app->theme_offset    = bar.offset;
+    app->theme_list_rect = card;
+    app->count          = 0;
+    app->focus          = app->theme_selected - app->theme_offset;
+
+    tb_fill(card, TB_PANEL);
+    tb_border(card, TB_BORDER, false);
+    tb_text(card.y, card.x + 2, card.w - 4, TB_PINK, A_BOLD,
+            app->theme_menu == 1 ? "Choose theme" : "Choose variant");
+    for (int row = 0; row < visible; ++row) {
+        size_t      index = choices[app->theme_offset + row];
+        const char *label = app->theme_menu == 1 ? tb_theme_name(theme_family(index))
+                                                : tb_theme_palette(index)->variant;
+        button(app, card.y + 1 + row, card.x + 1, card.w - 3, label,
+               THEME_PICK, app->theme_offset + row, 0);
+    }
+
+    if (bar.maximum > 0) {
+        TbRect_t track = tb_scrollbar_track(card, false);
+        tb_render_scrollbar(track, bar, false);
+        (void)add_control(app, track, THEME_SCROLLBAR, 0, 0);
+    }
+
+    if (app->focus < 0 || app->focus >= visible)
+        app->focus = add_control(app, (TbRect_t) {0}, THEME_PICK, app->theme_selected, 0);
+}
+
+
 static void draw_config(App_t *app)
 {
     bool themes = app->page == THEMES;
@@ -1287,7 +1598,7 @@ static void draw_config(App_t *app)
                        tb_theme_palette(app->theme_draft)->variant);
         button(app, top + 7, left + 2, width - 4, label, THEME_ACTION, 2, 0);
         tb_text(top + 9, left + 2, width - 4, TB_MUTED, 0,
-                "Left/Right or Enter changes selection. Preview before saving.");
+                "Enter opens a dropdown; Left/Right cycles. Preview before saving.");
         button(app, top + 12, left + 2, 10, "[ Back ]", BACK, 0, 0);
         button(app, top + 12, left + 14, 13, "[ Preview ]", THEME_ACTION, 3, 0);
         button(app, top + 12, left + width - 11, 9, "[ Save ]", THEME_ACTION, 4, 0);
@@ -1302,6 +1613,9 @@ static void draw_config(App_t *app)
 
     draw_footer(footer_message(app), "Tab / arrows / Enter or click | Esc back | Ctrl+Q quit app",
                 TB_STATUS_TEXT, TB_HINT_TEXT);
+    if (app->theme_menu)
+        draw_theme_list(app);
+
 }
 
 
@@ -1334,7 +1648,6 @@ static void keybind_remember(App_t *app)
 }
 
 
-static TbScroll_t axis_scroll(int total, int visible, int offset);
 
 /* Leave breathing room on large screens, retaining compact access on small ones. */
 static int selection_menu_limit(void)
@@ -1393,17 +1706,6 @@ static void keybind_scroll(App_t *app, int offset)
     int maximum = total - rows;
 
     app->key_scroll = offset < 0 ? 0 : offset > maximum ? maximum : offset;
-
-    int column = COLS >= 112 ? app->key_selected / 15 : 0;
-    int local  = app->key_selected - column * 15;
-
-    if (local < app->key_scroll)
-        local = app->key_scroll;
-
-    if (local >= app->key_scroll + rows)
-        local = app->key_scroll + rows - 1;
-
-    keybind_select(app, column * 15 + local);
 }
 
 
@@ -1473,7 +1775,7 @@ static void draw_keybinds(App_t *app)
     if (app->key_confirm) {
         int      width  = COLS > 76 ? 72 : COLS - 4;
         int      height = 10;
-        TbRect_t card   = menu_card(width, height);
+        TbRect_t card   = menu_card(app, width, height);
         int      left   = card.x;
         int      top    = card.y;
 
@@ -1507,16 +1809,9 @@ static void draw_keybinds(App_t *app)
     if (app->key_selected < 0 || app->key_selected >= TB_BIND_COUNT)
         app->key_selected = 0;
 
-    int local = dual ? app->key_selected % 15 : app->key_selected;
-    if (local < app->key_scroll)
-        app->key_scroll = local;
-
-    if (local >= app->key_scroll + rows)
-        app->key_scroll = local - rows + 1;
-
     int      width     = dual ? 80 : (COLS > 60 ? 56 : COLS - 4);
     int      height    = selection_menu_height();
-    TbRect_t card      = menu_card(width, height);
+    TbRect_t card      = menu_card(app, width, height);
     int      left      = card.x;
     int      top       = card.y;
     int      first_row = dense ? 5 : 7;
@@ -1575,19 +1870,12 @@ static void draw_keybinds(App_t *app)
 
     if (rows < total) {
         TbScroll_t bar = axis_scroll(total * 3, rows * 3, app->key_scroll * 3);
-        for (int row = 0; row < bar.visible; ++row) {
-            bool thumb = row >= bar.thumb_start && row < bar.thumb_start + bar.thumb_size;
-            tb_text(top + first_row - 1 + row, left + width - 2, 1, thumb ? TB_CYAN : TB_MUTED, 0,
-                    thumb ? "#" : "|");
-        }
-
-        (void)add_control(app, (TbRect_t) {
-            left + width - 2,
-            top + first_row - 1,
-            1,
-            bar.visible
-        },
-                          KEY_SCROLLBAR, 0, 0);
+        TbRect_t frame = card;
+        frame.y += first_row - 2;
+        frame.h -= first_row - 2;
+        TbRect_t track = tb_scrollbar_track(frame, false);
+        tb_render_scrollbar(track, bar, false);
+        (void)add_control(app, track, KEY_SCROLLBAR, 0, 0);
     }
 
     int buttons_y = top + height - (compact ? 4 : dense ? 2 : 3);
@@ -1630,6 +1918,14 @@ static void draw_keybinds(App_t *app)
 }
 
 
+static void draw_panel_borders(const TbRect_t *panes, size_t count, TbRect_t active)
+{
+    const TbPalette_t *palette = tb_theme_palette(tb_theme_current());
+    if (strcmp(palette->family, "ashen") == 0 && strcmp(palette->variant, "high-contrast") == 0)
+        tb_pane_frames(panes, count, active);
+}
+
+
 static void draw_theme_preview(App_t *app)
 {
     TbDemo_t   sample;
@@ -1667,6 +1963,8 @@ static void draw_theme_preview(App_t *app)
         }
     }
 
+    draw_panel_borders(layout.panes, TB_MAX_PANES, (TbRect_t) {0});
+
     button(app, LINES - 2, 1, 12, "[ Back ]", BACK, 0, 0);
 }
 
@@ -1701,7 +1999,7 @@ static void draw_form(App_t *app, bool review)
                 ? "Connect may halt the target. Server stays externally owned; symbol loading does not "
                    "flash."
                 : "Preview only. Nothing will be launched, connected or saved.")
-            : (native ? "Quotes group arguments/NAME=value entries. No shell expansion. Paths are literal."
+            : (native ? "Quotes group arguments/NAME=value entries. Paths accept ~/; no shell expansion."
                 : remote
                 ? "TCP host:port (IPv6 in brackets). Optional ELF supplies symbols. Protocol is in "
                    "profile options."
@@ -1709,12 +2007,14 @@ static void draw_form(App_t *app, bool review)
                        ? "Sample configuration only; no tool is launched."
                        : "Choose installed scripts or enter literal paths. Ordered scripts/search paths "
                           "are in Profile options."));
-    int form_width   = COLS - 4 < 84 ? COLS - 4 : 84;
+    int form_width   = form_card_width();
+    if (review && app->popup.active && app->popup.base == CONFIGURE)
+        form_width = review_card_width();
     int note_lines   = paragraph_rows(note, form_width - 4);
     int gap          = LINES >= 24 ? 1 : 0;
     int mode_gap     = list[0].toggle ? gap : 0;
     int last_gap     = n > 1 && list[n - 1].toggle ? gap : 0;
-    int profile_rows = app->demo_mode ? 0 : 1 + gap + (COLS < 64 ? 1 : 0);
+    int profile_rows = app->demo_mode || review ? 0 : 1 + gap + (COLS < 64 ? 1 : 0);
     int overhead =
         3 + mode_gap + last_gap + (scripts ? 1 + gap : 0) + gap + note_lines + gap + 1 + profile_rows + 1;
     int visible = LINES - 7 - overhead;
@@ -1725,7 +2025,7 @@ static void draw_form(App_t *app, bool review)
     if (visible > n)
         visible = n;
 
-    TbRect_t card      = menu_card(form_width, visible + overhead);
+    TbRect_t card      = menu_card(app, form_width, visible + overhead);
     int      left      = card.x + 2;
     int      width     = card.w - 4;
     int      first     = card.y + 3;
@@ -1739,7 +2039,7 @@ static void draw_form(App_t *app, bool review)
     int cursor_y = -1;
     int cursor_x = 0;
 
-    if (!review && app->focus < n) {
+    if (!review && app->focus >= 0 && app->focus < n) {
         if (app->focus < app->form_scroll) {
             app->form_scroll = app->focus;
         } else if (app->focus >= app->form_scroll + visible) {
@@ -1750,7 +2050,7 @@ static void draw_form(App_t *app, bool review)
     for (int i = 0; i < n; ++i) {
         int  y       = first + i - app->form_scroll + (i > 0 ? mode_gap : 0) + (i == n - 1 ? last_gap : 0);
         bool shown   = i >= app->form_scroll && i < app->form_scroll + visible;
-        int  input_x = left + (COLS >= 64 ? 24 : 21);
+        int  input_x = left + 25;
         TbRect_t rect = shown ? (TbRect_t) {
             input_x,
             y,
@@ -1764,7 +2064,30 @@ static void draw_form(App_t *app, bool review)
 
         tb_text(y, left, input_x - left - 1, TB_MUTED, 0, list[i].label);
 
-        const wchar_t *value    = field_value(app, list[i]);
+        const wchar_t *value = field_value(app, list[i]);
+        wchar_t        effective_value[TB_PROFILE_PATH];
+        if (review && !app->demo_mode && app->review_ready && !list[i].toggle) {
+            const TbProfile_t *paths     = app->review_paths;
+            const char        *effective = NULL;
+            int                field     = list[i].index;
+            if (app->session == 0) {
+                if (field == 1 || field == 4)
+                    effective = paths->executable;
+                else if (field == 3)
+                    effective = paths->directory;
+                else if (field == 5)
+                    effective = paths->gdb;
+            } else if (app->session == 2) {
+                if (field == 1)
+                    effective = paths->executable;
+                else if (field == 2)
+                    effective = paths->gdb;
+            }
+
+            if (effective && mbstowcs(effective_value, effective, TB_PROFILE_PATH) < TB_PROFILE_PATH)
+                value = effective_value;
+        }
+
         size_t         length   = wcslen(value);
         size_t         start    = 0;
         bool           selected = index == app->focus && !review;
@@ -1811,7 +2134,7 @@ static void draw_form(App_t *app, bool review)
     }
 
     button(app, action_y, card.x + card.w - 12, 10, "[ Back ]", BACK, 0, 0);
-    if (!app->demo_mode) {
+    if (!app->demo_mode && !review) {
         button(app, profile_y, left, 18, "[ Save profile ]", PROFILE_OPEN, 2, 0);
         button(app, profile_y, left + 20, 16, "[ Profile... ]", PROFILE_OPEN, 1, 0);
         button(app, profile_y + (COLS < 64 ? 1 : 0), card.x + card.w - 12, 10, "[ Delete ]", PROFILE_OPEN, 3,
@@ -1832,73 +2155,6 @@ static void draw_form(App_t *app, bool review)
 }
 
 
-static void draw_menu(App_t *app, int pane, TbRect_t rect)
-{
-    tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_YELLOW, A_BOLD,
-            app->menu_actions ? "PANE ACTIONS"
-                : app->live ? "SHOW VIEW"
-                : "SHOW VIEW (DEMO)");
-
-    int start_control = app->count;
-    if (app->menu_focus) {
-        app->focus      = start_control;
-        app->menu_focus = false;
-    }
-
-    int height = rect.h - 4;
-    if (height < 1)
-        return;
-
-    const char *const actions[] = {
-        "Split right",
-        "Split below",
-        "Close selected tab",
-        "Close split pane",
-        "Resize dividers",
-        "Fullscreen Source"
-    };
-    int count = app->menu_actions
-        ? (app->demo.panes[pane].tabs[app->demo.panes[pane].active] == TB_SOURCE ? 6 : 5)
-        : TB_VIEW_COUNT;
-    int selected = app->focus - start_control;
-    int scroll   = selected >= 0 && selected < count ? selected / height * height : 0;
-
-    for (int i = 0; i < count; ++i) {
-        int  y       = rect.y + 2 + i - scroll;
-        bool visible = i >= scroll && i < scroll + height;
-        char text[96];
-
-        (void)snprintf(text, sizeof(text), "%s%s", app->menu_actions ? actions[i] : tb_view_names[i],
-                       !app->menu_actions && i >= TB_SYMBOLS ? " [not implemented]" : "");
-
-        ControlKind_e kind = app->menu_actions ? PANE_ACTION : SHOW_VIEW;
-        if (visible) {
-            int label_width = rect.w - (app->menu_actions ? 2 : 4);
-            if ((size_t)label_width < strlen(text))
-                text[label_width] = 0;
-
-            bool focused = app->count == app->focus;
-            button(app, y, rect.x + 1, rect.w - 2, text, kind, i, pane);
-            if (!app->menu_actions && tb_demo_has_view(&app->demo.panes[pane], (TbView_e)i)) {
-                TbStyle_e style = focused ? TB_SELECTED : TB_SURFACE;
-                tb_style(style, A_BOLD);
-                if (MB_CUR_MAX > 1 && wcwidth(L'\u25cf') == 1) {
-                    (void)mvaddnwstr(y, rect.x + rect.w - 3, L"\u25cf", 1);
-                } else {
-                    tb_text(y, rect.x + rect.w - 3, 1, style, A_BOLD, "*");
-                }
-            }
-        } else {
-            (void)add_control(app, (TbRect_t) {0}, kind, i, pane);
-        }
-    }
-
-    tb_text(rect.y + rect.h - 2, rect.x + 1, rect.w - 2, TB_MUTED, 0, "Wheel/Up/Down | Esc close");
-    button(app, rect.y + rect.h - 1, rect.x + 1, rect.w - 2,
-           app->menu_actions ? "< Show views" : "Pane actions >", MENU_SECTION, 0, pane);
-}
-
-
 static int assembly_rows(const TbCodeView_t *view);
 static void context_row(const TbContextSnapshot_t *snapshot, TbView_e view, int item, char *text,
                         size_t capacity, bool *selected);
@@ -1909,15 +2165,8 @@ static void mixed_summary(const App_t *app, int index, const TbInstruction_t *in
     bool available =
         tb_code_mixed_line(tb_session_code(app->debugger), index, instruction, text, sizeof(text));
 
-    if (available) {
-        char file[512];
-        tb_code_safe(file, sizeof(file), instruction->source, strlen(instruction->source));
-        (void)snprintf(summary, capacity, "  %.511s:L%d %.1023s", file, instruction->line, text);
-    } else {
-        char file[512];
-        tb_code_safe(file, sizeof(file), instruction->source, strlen(instruction->source));
-        (void)snprintf(summary, capacity, "  L%d %.511s <source text unavailable>", instruction->line, file);
-    }
+    const char *source = available ? text + strspn(text, " \t") : "<source text unavailable>";
+    (void)snprintf(summary, capacity, "%s", source);
 }
 
 
@@ -1951,7 +2200,8 @@ static TbScroll_t workspace_scroll(const App_t *app, const TbDemoPane_t *pane, i
         return tb_demo_scrollbar(&app->demo, pane, visible);
 
     int index = (int)(pane - app->demo.panes);
-    if (app->body_height[index] > 0)
+    /* A prepared zero-row viewport must not borrow the fallback pane height. */
+    if (app->body_width[index] > 0)
         visible = app->body_height[index];
 
     TbView_e view = pane->tabs[pane->active];
@@ -2062,7 +2312,7 @@ static int native_content_width(const App_t *app, int index)
         return 0;
 
     const TbCodeView_t        *code    = tb_code_view(tb_session_code(app->debugger), index);
-    TbAssemblyColumns_t        columns = assembly_columns(code);
+    TbAssemblyColumns_t        columns = app->assembly_columns[index];
     const TbContextSnapshot_t *context = tb_context_snapshot(tb_session_context(app->debugger));
     TbCodeRow_t                assembly[TB_CODE_ROWS];
     size_t rows = view == TB_LOCALS || view == TB_WATCHES
@@ -2103,7 +2353,7 @@ static int native_content_width(const App_t *app, int index)
             } else if (mapped->kind == TB_CODE_SOURCE) {
                 char summary[1600];
                 mixed_summary(app, index, &code->instructions[mapped->instruction], summary, sizeof(summary));
-                (void)snprintf(text, sizeof(text), "%s", summary + 2);
+                (void)snprintf(text, sizeof(text), "%s", summary);
             } else {
                 const TbInstruction_t *instruction = &code->instructions[mapped->instruction];
                 tb_format_assembly(text, sizeof(text), columns, instruction->address, instruction->opcodes,
@@ -2255,19 +2505,67 @@ static void source_tab_strip(App_t *app, TbCode_t *code, int pane, TbRect_t rect
 }
 
 
+/* Pane identity and its new visible row count are separate dimensions. */
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+static void resize_viewport(App_t *app, int index, int height)
+{
+    TbDemoPane_t *pane = &app->demo.panes[index];
+    TbView_e view = pane->tabs[pane->active];
+    int previous_height = app->body_height[index];
+    if (height > 0 && height < previous_height) {
+        TbScroll_t previous = workspace_scroll(app, pane, previous_height);
+        int selected = pane->row[view];
+        if (selected >= previous.offset && selected < previous.offset + previous.visible &&
+            selected >= previous.offset + height) {
+            pane->scroll[view] = selected - height + 1;
+        }
+    }
+    app->body_height[index] = height;
+}
+
+
+static TbRect_t pane_scrollbar_track(const App_t *app, int index, bool horizontal)
+{
+    TbRect_t frame = app->panes[index];
+    if (horizontal) {
+        TbView_e view = app->demo.panes[index].tabs[app->demo.panes[index].active];
+        frame.h -= 1 + console_footer_rows(view, frame.h);
+    } else {
+        frame.y += body_top(app, index) - 1;
+        frame.h = app->body_height[index] + 2;
+    }
+    return tb_scrollbar_track(frame, horizontal);
+}
+
+
 static void prepare_scrollbars(App_t *app, int index, TbRect_t rect)
 {
-    TbDemoPane_t *pane    = &app->demo.panes[index];
-    TbView_e      view    = pane->tabs[pane->active];
-    int           width   = native_content_width(app, index);
-    int           gutter  = code_gutter(view);
-    int           visible = rect.w - 2 - gutter;
-    int height =
-        rect.h - body_top(app, index) - 1 - console_footer_rows(view, rect.h) - (width > visible ? 1 : 0);
+    TbDemoPane_t        *pane     = &app->demo.panes[index];
+    TbView_e             view     = pane->tabs[pane->active];
+    TbAssemblyColumns_t  columns  = assembly_columns(tb_code_view(tb_session_code(app->debugger), index));
+    TbAssemblyColumns_t *retained = &app->assembly_columns[index];
 
-    app->body_width[index]        = rect.w - 2;
-    app->body_height[index]       = height;
-    app->horizontal_scroll[index] = axis_scroll(width, visible, app->horizontal[index][view]);
+    /* Browsing a shorter window must not move the opcode/mnemonic columns left. */
+    if (columns.address > retained->address)
+        retained->address = columns.address;
+    if (columns.bytes > retained->bytes)
+        retained->bytes = columns.bytes;
+    if (columns.mnemonic > retained->mnemonic)
+        retained->mnemonic = columns.mnemonic;
+
+    int width   = native_content_width(app, index);
+    int gutter  = code_gutter(view);
+    int visible = rect.w - 3 - gutter;
+    int height =
+        rect.h - body_top(app, index) - 1 - console_footer_rows(view, rect.h) - (width > visible ? 2 : 0);
+
+    if (height < 0)
+        height = 0;
+    resize_viewport(app, index, height);
+    app->body_width[index]        = rect.w - 3;
+    TbRect_t track = pane_scrollbar_track(app, index, true);
+    app->horizontal_scroll[index] = tb_scrollbar_layout(
+        axis_scroll(width, visible, app->horizontal[index][view]), track.w);
     app->horizontal[index][view]  = app->horizontal_scroll[index].offset;
 }
 
@@ -2275,44 +2573,19 @@ static void prepare_scrollbars(App_t *app, int index, TbRect_t rect)
 static void draw_scrollbars(App_t *app, int index, TbRect_t rect)
 {
     TbDemoPane_t *pane     = &app->demo.panes[index];
-    TbView_e      view     = pane->tabs[pane->active];
     TbScroll_t    vertical = workspace_scroll(app, pane, rect.h - 3);
 
     if (vertical.maximum > 0) {
-        for (int row = 0; row < vertical.visible; ++row) {
-            bool thumb = row >= vertical.thumb_start && row < vertical.thumb_start + vertical.thumb_size;
-            tb_text(rect.y + body_top(app, index) + row, rect.x + rect.w - 1, 1, thumb ? TB_CYAN : TB_MUTED,
-                    0, thumb ? "#" : "|");
-        }
-
-        (void)add_control(app,
-                          (TbRect_t) {
-                              rect.x + rect.w - 1,
-                              rect.y + body_top(app, index),
-                              1,
-                              vertical.visible
-                          },
-                          SCROLLBAR, 0, index);
+        TbRect_t track = pane_scrollbar_track(app, index, false);
+        tb_render_scrollbar(track, vertical, false);
+        (void)add_control(app, track, SCROLLBAR, 0, index);
     }
 
     TbScroll_t horizontal = app->horizontal_scroll[index];
     if (horizontal.maximum > 0) {
-        int x = rect.x + 1 + code_gutter(view);
-        int y = rect.y + rect.h - 2 - console_footer_rows(view, rect.h);
-
-        for (int col = 0; col < horizontal.visible; ++col) {
-            bool thumb =
-                col >= horizontal.thumb_start && col < horizontal.thumb_start + horizontal.thumb_size;
-
-            tb_text(y, x + col, 1, thumb ? TB_CYAN : TB_MUTED, 0, thumb ? "=" : "-");
-        }
-
-        (void)add_control(app, (TbRect_t) {
-            x,
-            y,
-            horizontal.visible,
-            1
-        }, HSCROLLBAR, 0, index);
+        TbRect_t track = pane_scrollbar_track(app, index, true);
+        tb_render_scrollbar(track, horizontal, true);
+        (void)add_control(app, track, HSCROLLBAR, 0, index);
     }
 }
 
@@ -2352,6 +2625,7 @@ static void select_pane(App_t *app, int pane)
 
 static void reset_lower(App_t *app)
 {
+    memset(app->assembly_columns, 0, sizeof(app->assembly_columns));
     memset(app->layout.lower_open, 0, sizeof(app->layout.lower_open));
     memset(app->layout.lower_height, 0, sizeof(app->layout.lower_height));
     for (int i = 0; i < 3; ++i)
@@ -2476,7 +2750,6 @@ static void draw_code_pane(App_t *app, int index, TbRect_t rect)
                        : view->mixed && view->mixed_available ? "mixed: browsing"
                        : "assembly: browsing",
                    label);
-    tb_text(rect.y + 1, rect.x + 1, rect.w - 2, stale ? TB_ORANGE : TB_MUTED, 0, header);
     if (source)
         source_tab_strip(app, code, index, rect);
 
@@ -2486,6 +2759,8 @@ static void draw_code_pane(App_t *app, int index, TbRect_t rect)
 
     if (*seen != revision) {
         *seen = revision;
+        if (!source)
+            app->assembly_boundary[index] = 0;
         if (source && view->source_follow && view->selected_line > 0) {
             pane->scroll[TB_SOURCE] = view->selected_line > 4 ? view->selected_line - 4 : 0;
             pane->row[TB_SOURCE]    = view->selected_line - 1;
@@ -2534,7 +2809,7 @@ static void draw_code_pane(App_t *app, int index, TbRect_t rect)
     size_t              total          = source ? view->line_count : tb_code_rows(view, rows);
     size_t              visible_first  = view->instruction_count;
     size_t              visible_end    = 0;
-    TbAssemblyColumns_t columns        = assembly_columns(view);
+    TbAssemblyColumns_t columns        = app->assembly_columns[index];
 
     for (size_t flat = (size_t)scroll.offset; flat < total && output_row < scroll.visible; ++flat) {
         size_t i = source ? flat : rows[flat].instruction;
@@ -2559,11 +2834,11 @@ static void draw_code_pane(App_t *app, int index, TbRect_t rect)
             mixed_summary(app, index, instruction, summary, sizeof(summary));
 
             size_t offset = (size_t)app->horizontal[index][TB_DISASSEMBLY];
-            if (offset > strlen(summary) - 2)
-                offset = strlen(summary) - 2;
+            if (offset > strlen(summary))
+                offset = strlen(summary);
 
             tb_text(content_y + output_row++, rect.x + 4, app->body_width[index] - 3, TB_CYAN, 0,
-                    summary + 2 + offset);
+                    summary + offset);
             continue;
         }
 
@@ -2635,13 +2910,18 @@ static void draw_code_pane(App_t *app, int index, TbRect_t rect)
             offset = strlen(text);
 
         if (source) {
-            tb_render_source_text(content_y + output_row, rect.x + 1 + gutter_width,
-                                  app->body_width[index] - gutter_width, text + offset, highlighted);
+            tb_render_source_slice(content_y + output_row, rect.x + 1 + gutter_width,
+                                   app->body_width[index] - gutter_width, text, (int)offset, highlighted);
         } else {
             tb_text(content_y + output_row, rect.x + 4, app->body_width[index] - 3, style, 0, text + offset);
-            if (!offset) {
-                tb_text(content_y + output_row, rect.x + 4, 18,
-                        highlighted ? tb_selected_style(TB_PURPLE) : TB_PURPLE, 0, instruction->address);
+            size_t address_length = strlen(instruction->address);
+            if (offset < address_length) {
+                int length = (int)(address_length - offset);
+                if (length > app->body_width[index] - 3)
+                    length = app->body_width[index] - 3;
+                tb_text(content_y + output_row, rect.x + 4, length,
+                        highlighted ? tb_selected_style(TB_PURPLE) : TB_PURPLE, 0,
+                        instruction->address + offset);
             }
         }
 
@@ -2654,20 +2934,27 @@ static void draw_code_pane(App_t *app, int index, TbRect_t rect)
                 *error ? error : "Stop a program to inspect live code.");
     }
 
-    const char *notice =
-        source ? ""
-            : tb_code_assembly_notice(code, index, visible_first,
-                                         visible_end > visible_first ? visible_end - visible_first : 0);
     TbImageTrust_e mapping =
         source ? TB_IMAGE_UNVERIFIED
             : tb_code_assembly_mapping(code, index, visible_first,
                                           visible_end > visible_first ? visible_end - visible_first : 0);
 
-    if (*notice && mapping == TB_IMAGE_UNVERIFIED)
-        tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_ORANGE, 0, notice);
+    if (!source && (stale || loaded || scroll.offset != app->assembly_boundary_offset[index] ||
+                   scroll.maximum != app->assembly_boundary_maximum[index]))
+        app->assembly_boundary[index] = 0;
 
-    if (!source && total && *view->assembly_error)
-        tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_ORANGE, 0, view->assembly_error);
+    TbStyle_e header_style = stale ? TB_ORANGE : TB_MUTED;
+    if (!source && total && *view->assembly_error) {
+        (void)snprintf(header, sizeof(header), "%s", view->assembly_error);
+        header_style = TB_ORANGE;
+    } else if (!source && app->assembly_boundary[index]) {
+        (void)snprintf(header, sizeof(header), "%s of available instructions; scroll back to continue.",
+                       app->assembly_boundary[index] < 0 ? "Start" : "End");
+        header_style = TB_ORANGE;
+    } else if (!source && view->mixed && !view->mixed_available && total) {
+        (void)snprintf(header, sizeof(header), "Assembly only | mixed data unavailable");
+    }
+    tb_text(rect.y + 1, rect.x + 1, rect.w - 2, header_style, 0, header);
 
     button(app, rect.y + rect.h - 1, rect.x + 1, 9, " Actions ", CODE_ACTIONS, 0, index);
     if (source) {
@@ -2691,10 +2978,7 @@ static void draw_code_pane(App_t *app, int index, TbRect_t rect)
                 mapping == TB_IMAGE_BACKEND_VERIFIED ? "ELF:native"
                     : mapping == TB_IMAGE_USER_CONFIRMED ? "ELF:user"
                     : "ELF:?");
-        if (view->mixed && !view->mixed_available && total) {
-            tb_text(rect.y + 1, rect.x + 1, rect.w - 2, TB_MUTED, 0,
-                    "Assembly only | mixed data unavailable");
-        }
+
     }
 }
 
@@ -3456,18 +3740,12 @@ static bool exposed_rect(const App_t *app, TbRect_t rect, int pane)
 {
     if (rect.w <= 0 || rect.h <= 0)
         return false;
-
     if (!app->layout.overlays || app->fullscreen_source >= 0)
         return true;
 
-    /* All overlays are bottom-anchored: if this row is wholly covered, the
-     * rectangle below it is covered too. Do not forward input through it. */
-    for (int x = rect.x; x < rect.x + rect.w; ++x) {
-        if (tb_layout_pane_at(&app->layout, x, rect.y) == pane)
-            return true;
-    }
-
-    return false;
+    TbRect_t visible = app->panes[pane];
+    return rect.x >= visible.x && rect.y >= visible.y &&
+           rect.x + rect.w <= visible.x + visible.w && rect.y + rect.h <= visible.y + visible.h;
 }
 
 
@@ -3492,9 +3770,11 @@ static bool exposed_control(const App_t *app, Control_t control)
         return true;
     }
 
-    if (control.rect.y == app->layout.lower_bars[0].y) {
+    if (control.rect.h == 1) {
         int root = tb_layout_root(&app->layout, control.pane);
-        if (root >= 3 && !app->layout.lower_open[root - 3]) {
+        if (root >= 3 && !exposed_pane(app, control.pane) &&
+            tb_rect_contains(app->layout.lower_bars[root - 3],
+                                         control.rect.x, control.rect.y)) {
             for (int x = control.rect.x; x < control.rect.x + control.rect.w; ++x) {
                 if (tb_layout_pane_at(&app->layout, x, control.rect.y) < 0)
                     return true;
@@ -3515,38 +3795,19 @@ static void toggle_lower(App_t *app, int lower)
 
     bool open = app->layout.lower_open[lower];
     app->layout.lower_open[lower] = !open;
-
-    int pane = open && !app->layout.tiled ? app->layout.primary_focus
-        : app->layout.root_focus[open ? lower : lower + 3];
+    int pane = app->layout.root_focus[open ? lower : lower + 3];
 
     select_pane(app, pane);
     app->menu         = -1;
     app->content_pane = pane;
     app->focus        = 0;
-    if (open) {
-        (void)tb_layout_arrange(&app->layout, app->layout.area, pane);
-        memcpy(app->panes, app->layout.panes, sizeof(app->panes));
-        if (!exposed_pane(app, pane)) {
-            for (int i = 2; i >= 0; --i) {
-                int other = app->layout.lower_order[i];
-                if (app->layout.lower_open[other]) {
-                    pane = app->layout.root_focus[other + 3];
-                    if (exposed_pane(app, pane)) {
-                        select_pane(app, pane);
-                        app->content_pane = pane;
-                        break;
-                    }
-                }
-            }
-        }
-    }
 }
 
 
 static void draw_lower_bars(App_t *app)
 {
     for (int lower = 0; lower < 3; ++lower) {
-        if (app->layout.lower_open[lower])
+        if (exposed_pane(app, app->layout.root_focus[lower + 3]))
             continue;
 
         TbRect_t bar     = app->layout.lower_bars[lower];
@@ -3648,34 +3909,20 @@ static void draw_pane(App_t *app, int pane_index, TbRect_t rect)
         button(app, rect.y, rect.x + rect.w - 5, 4, "...", MENU, 0, pane_index);
     }
 
-    if (app->menu == pane_index) {
-        /* Keep menu paging/actions within the exposed part of a covered pane. */
-        if (app->layout.overlays && app->fullscreen_source < 0) {
-            for (int i = 0; i < 3; ++i) {
-                TbRect_t cover = app->layout.lower_areas[i];
-                if (tb_layout_root(&app->layout, pane_index) == i + 3 || cover.h <= 0 ||
-                    cover.x >= rect.x + rect.w || cover.x + cover.w <= rect.x || cover.y <= rect.y) {
-                    continue;
-                }
-
-                if (cover.y < rect.y + rect.h)
-                    rect.h = cover.y - rect.y;
-            }
-        }
-
-        draw_menu(app, pane_index, rect);
-    } else {
+    {
         if (!exposed_pane(app, pane_index))
             return;
 
         if (app->live)
             prepare_scrollbars(app, pane_index, rect);
+        else
+            resize_viewport(app, pane_index, rect.h - 3);
 
         (void)add_control(app,
                           (TbRect_t) {
                               rect.x + 1,
                               rect.y + body_top(app, pane_index),
-                              app->live ? app->body_width[pane_index] : rect.w - 2,
+                              app->live ? app->body_width[pane_index] : rect.w - 3,
                               app->live ? app->body_height[pane_index] : rect.h - 3
                           },
                           BODY, 0, pane_index);
@@ -3692,13 +3939,8 @@ static void draw_pane(App_t *app, int pane_index, TbRect_t rect)
 
         TbScroll_t scroll = workspace_scroll(app, pane, rect.h - 3);
         if (scroll.maximum > 0) {
-            (void)add_control(app, (TbRect_t) {
-                rect.x + rect.w - 1,
-                rect.y + 2,
-                1,
-                rect.h - 3
-            }, SCROLLBAR, 0,
-                              pane_index);
+            (void)add_control(app, pane_scrollbar_track(app, pane_index, false),
+                              SCROLLBAR, 0, pane_index);
         }
     }
 }
@@ -3780,8 +4022,10 @@ static void draw_workspace(App_t *app)
                        short_names[i], app->preferences.keys[i] ? key : "");
     }
 
-    int baseline_row = toolbar_last_row(actions, 18);
-    for (int i = 6; app->live && i >= 0 && toolbar_last_row(actions, 25) > baseline_row; --i)
+    /* Keep the toolbar's row budget while making room for the closing controls. */
+    int baseline_row   = toolbar_last_row(actions, 18);
+    int trailing_width = app->live ? 32 : 24;
+    for (int i = 6; i >= 0 && toolbar_last_row(actions, trailing_width) > baseline_row; --i)
         (void)snprintf(actions[i], sizeof(actions[i]), " %s ", short_names[i]);
 
     int y = COLS >= 124 ? toolbar_top : toolbar_top + 1;
@@ -3789,7 +4033,7 @@ static void draw_workspace(App_t *app)
 
     for (int i = 0; i < 7; ++i) {
         int width = (int)strlen(actions[i]);
-        if (x + width > COLS - (y == toolbar_top ? (app->live ? 25 : 18) : 1)) {
+        if (x + width > COLS - (y == toolbar_top ? trailing_width : 1)) {
             ++y;
             x = 1;
         }
@@ -3806,9 +4050,9 @@ static void draw_workspace(App_t *app)
     }
 
     if (app->live)
-        button(app, toolbar_top, COLS - 24, 7, " Setup ", SETUP_ACTION, 0, 0);
+        button(app, toolbar_top, COLS - 31, 7, " Setup ", SETUP_ACTION, 0, 0);
 
-    button(app, toolbar_top, COLS - 17, 9, " Session ", SESSION_MENU, 0, 0);
+    button(app, toolbar_top, COLS - 23, 15, " Close Session ", SESSION_MENU, 0, 0);
     button(app, toolbar_top, COLS - 7, 6, " Quit ", QUIT, 0, 0);
 
     int notice_y = ++y;
@@ -3818,9 +4062,9 @@ static void draw_workspace(App_t *app)
 
     TbRect_t area = {
         1,
-        y + 1,
+        y + 2,
         COLS - 2,
-        LINES - y - 3
+        LINES - y - 5
     };
 
     if (app->fullscreen_source >= 0 &&
@@ -3853,7 +4097,7 @@ static void draw_workspace(App_t *app)
             int      pane = app->layout.order[i];
             TbView_e view = app->demo.panes[pane].tabs[app->demo.panes[pane].active];
 
-            if (!exposed_pane(app, pane) || app->menu == pane)
+            if (!exposed_pane(app, pane))
                 continue;
 
             threads   = threads || view == TB_THREADS;
@@ -3869,7 +4113,7 @@ static void draw_workspace(App_t *app)
         tb_variables_begin(tb_session_variables(app->debugger));
         tb_context_visible(tb_session_context(app->debugger), threads, frames);
         for (int pane = 0; pane < TB_MAX_PANES; ++pane) {
-            bool     visible = exposed_pane(app, pane) && app->menu != pane;
+            bool     visible = exposed_pane(app, pane);
             TbView_e view    = app->demo.panes[pane].tabs[app->demo.panes[pane].active];
 
             tb_code_visible(tb_session_code(app->debugger), pane, visible && view == TB_SOURCE,
@@ -3910,8 +4154,9 @@ static void draw_workspace(App_t *app)
         int root = layer < 3 || !app->layout.overlays ? layer : app->layout.lower_order[layer - 3] + 3;
         for (int i = 0; i < app->layout.count; ++i) {
             int pane = app->layout.order[i];
-            if (tb_layout_root(&app->layout, pane) == root)
+            if (tb_layout_root(&app->layout, pane) == root) {
                 draw_pane(app, pane, app->panes[pane]);
+            }
         }
     }
 
@@ -3922,6 +4167,10 @@ static void draw_workspace(App_t *app)
         if (app->resizing && app->layout.dividers[i].node == app->resize_node)
             app->resize_divider = i;
     }
+
+    const TbPalette_t *palette = tb_theme_palette(tb_theme_current());
+    bool frames = strcmp(palette->family, "ashen") == 0 &&
+                  strcmp(palette->variant, "high-contrast") == 0;
 
     for (int i = 0; !fullscreen && i < app->layout.divider_count; ++i) {
         TbDivider_t divider = app->layout.dividers[i];
@@ -3953,8 +4202,9 @@ static void draw_workspace(App_t *app)
                     if (tb_layout_divider_at(&app->layout, draw_x, draw_y) != i)
                         continue;
 
-                    tb_text(draw_y, draw_x, 1, active ? TB_ACTIVE_TAB : TB_MUTED, active ? A_BOLD : 0,
-                            divider.direction == TB_SPLIT_RIGHT ? "|" : "-");
+                    tb_style(active ? TB_ACTIVE_TAB : frames ? TB_BORDER : TB_MUTED, active ? A_BOLD : 0);
+                    (void)mvaddch(draw_y, draw_x,
+                                  divider.direction == TB_SPLIT_RIGHT ? ACS_VLINE : ACS_HLINE);
                 }
             }
         }
@@ -3975,6 +4225,22 @@ static void draw_workspace(App_t *app)
             : app->live ? "Console: Command + Enter / Send | Save Log | Ctrl+Q quit app"
             : "DEMO | ... pane actions | drag dividers | q launcher | Ctrl+Q quit app",
         TB_HINT_TEXT, TB_HINT_TEXT, true);
+
+    TbRect_t frame_panes[TB_MAX_PANES + 3];
+    memcpy(frame_panes, app->panes, sizeof(app->panes));
+    size_t frame_count = TB_MAX_PANES;
+    for (int i = 0; !fullscreen && i < 3; ++i) {
+        TbRect_t bar = app->layout.lower_bars[i];
+        if (bar.w > 0 && tb_layout_pane_at(&app->layout, bar.x, bar.y) < 0)
+            frame_panes[frame_count++] = bar;
+    }
+    TbRect_t active = {0};
+    if (!fullscreen && app->drag >= 0 && app->drag < app->layout.divider_count)
+        active = app->layout.dividers[app->drag].rect;
+    else if (!fullscreen && app->resizing && app->resize_divider >= 0 &&
+             app->resize_divider < app->layout.divider_count)
+        active = app->layout.dividers[app->resize_divider].rect;
+    draw_panel_borders(frame_panes, frame_count, active);
 }
 
 
@@ -3999,41 +4265,6 @@ static const char *const code_labels[] = {
     "Follow selected frame (this view)",
     "Review ELF/load address mapping"
 };
-
-static void draw_code_menu(App_t *app)
-{
-    bool source =
-        app->demo.panes[app->code_pane].tabs[app->demo.panes[app->code_pane].active] == TB_SOURCE;
-    int      count  = source || tb_session_kind(app->debugger) == TB_SESSION_LOCAL ? 7 : 8;
-    TbRect_t card   = menu_card(80, count + 5);
-    int      left   = card.x + 2;
-    int      top    = card.y;
-    int      width  = card.w - 4;
-
-    draw_header(app, "Code view actions");
-
-    const CodeAction_e source_actions[] = {CODE_CHOOSE_FILE,     CODE_FIND,   CODE_LINE,      CODE_STOPPED,
-                                           CODE_SOURCE_SETTINGS, CODE_RUN_TO, CODE_FULLSCREEN};
-    const CodeAction_e asm_actions[] = {CODE_ADDRESS, CODE_ASSEMBLY_STOP,   CODE_FOLLOW_FRAME,
-                                           CODE_MIXED,   CODE_SOURCE_SETTINGS, CODE_RAW,
-                                           CODE_RUN_TO,  CODE_IMAGE_MAP};
-
-    for (int i = 0; i < count; ++i) {
-        CodeAction_e action = source ? source_actions[i] : asm_actions[i];
-        button(app, top + 1 + i, left, width,
-               action == CODE_FULLSCREEN && app->fullscreen_source >= 0 ? "Restore tiled workspace"
-                   : code_labels[action],
-               CODE_ACTION, action, app->code_pane);
-    }
-
-    if (card.h >= count + 5) {
-        tb_text(top + card.h - 3, left, width, TB_MUTED, 0,
-                "Browsing never moves execution. Left/Right scroll long code lines.");
-    }
-
-    button(app, top + card.h - 2, left, 12, "[ Back ]", BACK, 0, 0);
-}
-
 
 static void image_review_text(const char *text, TbRect_t card, int offset, int *row)
 {
@@ -4061,7 +4292,7 @@ static void image_review_text(const char *text, TbRect_t card, int offset, int *
 
 static void draw_ram_review(App_t *app)
 {
-    TbRect_t card = menu_card(100, 21);
+    TbRect_t card = menu_card(app, 100, 21);
     TbRect_t body = card;
 
     body.y += 2;
@@ -4125,7 +4356,7 @@ static void draw_ram_review(App_t *app)
 
 static void draw_image_review(App_t *app)
 {
-    TbRect_t  card = menu_card(100, 20);
+    TbRect_t  card = menu_card(app, 100, 20);
     TbCode_t *code = tb_session_code(app->debugger);
 
     draw_header(app, "Confirm remote ELF mapping?");
@@ -4191,7 +4422,7 @@ static void draw_image_review(App_t *app)
 
 static void draw_source_settings(App_t *app)
 {
-    TbRect_t card = menu_card(88, (int)(tb_code_directory_count(tb_session_code(app->debugger)) +
+    TbRect_t card = menu_card(app, 88, (int)(tb_code_directory_count(tb_session_code(app->debugger)) +
                                          tb_code_rule_count(tb_session_code(app->debugger))) +
                                        10);
     int left  = card.x + 2;
@@ -4251,7 +4482,7 @@ static void draw_source_settings(App_t *app)
 
 static void draw_code_files(App_t *app)
 {
-    TbRect_t card  = menu_card(96, (int)tb_code_file_count(tb_session_code(app->debugger)) + 10);
+    TbRect_t card  = menu_card(app, 96, (int)tb_code_file_count(tb_session_code(app->debugger)) + 10);
     int      left  = card.x + 2;
     int      top   = card.y;
     int      width = card.w - 4;
@@ -4344,7 +4575,7 @@ static void data_watch_open(App_t *app, const char *expression, bool address, un
 
 static void draw_input(App_t *app)
 {
-    TbRect_t card          = menu_card(88, app->page == DATA_WATCH_INPUT ? 14 : 11);
+    TbRect_t card          = menu_card(app, 88, app->page == DATA_WATCH_INPUT ? 14 : 11);
     int      left          = card.x + 2;
     int      top           = card.y;
     int      width         = card.w - 4;
@@ -4533,84 +4764,10 @@ static void draw_input(App_t *app)
 }
 
 
-static void draw_memory_menu(App_t *app)
-{
-    TbRect_t card  = menu_card(88, 17);
-    int      left  = card.x + 2;
-    int      top   = card.y;
-    int      width = card.w - 4;
-
-    draw_header(app, "Memory inspection options");
-
-    const TbMemoryView_t *v         = tb_memory_view(tb_session_memory(app->debugger), app->memory_pane);
-    bool                  compact   = card.h < 15;
-    int                   actions_y = top + (compact ? 2 : 5);
-    char                  text[512];
-
-    (void)snprintf(text, sizeof(text), "Pane %d | %s%+lld | requested range %u bytes | grouping %uB",
-                   app->memory_pane + 1, v->configured ? v->expression : "No address", (long long)v->offset,
-                   v->length, v->grouping);
-    if (v->mmio) {
-        (void)snprintf(text, sizeof(text), "Pane %d | MMIO %u-bit units | from 0x%llx", app->memory_pane + 1,
-                       v->unit_width, (unsigned long long)v->unit_address);
-    }
-
-    tb_text(top + (compact ? 0 : 1), left, width, TB_CYAN, 0, text);
-    tb_text(
-        top + (compact ? 1 : 3), left, width, TB_MUTED, 0,
-        v->mmio
-            ? "Navigation never reads. Rows are declared width-sized units, not verified registers."
-            : "Reads are explicit and bounded. Grouping changes cached display only. Range changes require "
-            "Read/Refresh.");
-
-    const char *labels[] = {
-        "Address / Read",
-        "Refresh this range",
-        "Cycle grouping: 1/2/4/8 bytes",
-        "Byte count: 1 to 1024",
-        "Previous range (read)",
-        "Next range (read)"
-    };
-    const char *units[] = {
-        "Navigate address (no read)",
-        "Refresh selected sample (hardware read)",
-        "Return to byte memory (no read)",
-        "32 width-sized address units per window",
-        "Previous units (no read)",
-        "Next units (no read)"
-    };
-
-    for (int i = 0; i < 6; ++i) {
-        if (v->mmio && i == 3) {
-            tb_text(actions_y + i, left, width, TB_MUTED, 0, units[i]);
-        } else {
-            button(app, actions_y + i, left, width, v->mmio ? units[i] : labels[i], MEMORY_ACTION, i,
-                   app->memory_pane);
-        }
-    }
-
-    button(app, actions_y + 6, left, width, "Hardware watchpoint at selected row (first group)",
-           MEMORY_ACTION, 7, app->memory_pane);
-    button(app, actions_y + 7, left, width, "Temporary ranges: Add / Inspect / Authorize / Revoke",
-           MEMORY_ACTION, 8, app->memory_pane);
-    if (!v->mmio) {
-        button(app, actions_y + 8, left, width, "Edit selected row (ordinary writable RAM only)",
-               MEMORY_ACTION, 9, app->memory_pane);
-    }
-
-    if (tb_memory_edit_state(tb_session_memory(app->debugger)) == TB_MEMORY_EDIT_UNCERTAIN) {
-        button(app, actions_y + 9, left, width, "Reconcile uncertain write after explicit Refresh",
-               MEMORY_ACTION, 11, app->memory_pane);
-    }
-
-    button(app, top + card.h - 1, left, 12, "[ Back ]", BACK, 0, 0);
-}
-
-
 static void draw_memory_ranges(App_t *app)
 {
     TbMemory_t *m     = tb_session_memory(app->debugger);
-    TbRect_t    card  = menu_card(100, app->page == MEMORY_RANGES ? 22 : 17);
+    TbRect_t    card  = menu_card(app, 100, app->page == MEMORY_RANGES ? 22 : 17);
     int         left  = card.x + 2;
     int         width = card.w - 4;
     int         top   = card.y;
@@ -4789,75 +4946,9 @@ static void draw_memory_ranges(App_t *app)
 }
 
 
-static void draw_variable_menu(App_t *app)
-{
-    TbRect_t card  = menu_card(96, 16);
-    int      left  = card.x + 2;
-    int      top   = card.y;
-    int      width = card.w - 4;
-
-    draw_header(app, "Locals / Watches inspection");
-
-    bool                compact   = card.h < 16;
-    int                 actions_y = top + (compact ? 2 : 4);
-    TbDemoPane_t       *pane      = &app->demo.panes[app->variable_pane];
-    TbView_e            view      = pane->tabs[pane->active];
-    TbVariableView_e    kind      = view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
-    TbVariables_t      *v         = tb_session_variables(app->debugger);
-    const TbVariable_t *row       = tb_variables_row(v, kind, (size_t)pane->row[view]);
-    char                summary[1000];
-
-    if (row) {
-        (void)snprintf(summary, sizeof(summary), "%.255s | %.191s | %s | children %u, page %u | %s",
-                       row->name, row->type, tb_variables_format_name(row->format), row->children,
-                       row->first / TB_VARIABLE_CHILDREN + 1,
-                       row->format_pending ? "format read required; value below is natural"
-                           : row->fresh ? "sampled"
-                           : "read required");
-    } else {
-        (void)snprintf(summary, sizeof(summary), "No selected variable.");
-    }
-
-    tb_text(top + (compact ? 0 : 1), left, width, TB_CYAN, 0, summary);
-    tb_text(top + (compact ? 1 : 2), left, width, TB_ORANGE, 0,
-            "Read/Expand requests may access MMIO. Unknown storage is never polled automatically.");
-    if (row && !compact)
-        tb_text(top + 3, left, width, row->fresh ? TB_GREEN : TB_MUTED, 0, row->value);
-
-    const char *const labels[] = {"Read selected root (discard previous child page)",
-                                  "Expand / collapse selected row (up to 32 children)",
-                                  "Cycle selected value format",
-                                  "Previous child page",
-                                  "Next child page",
-                                  "Add watch expression",
-                                  view == TB_LOCALS ? "Refresh local names (no value read)"
-                                      : "Remove selected watch"};
-
-    for (int i = 0; i < 7; ++i)
-        button(app, actions_y + i, left, width, labels[i], VARIABLE_ACTION, i, app->variable_pane);
-
-    if (actions_y + 7 < top + card.h - 1) {
-        button(app, actions_y + 7, left, width, "Hardware data watchpoint...", VARIABLE_ACTION, 7,
-               app->variable_pane);
-    }
-
-    if (row && actions_y + 8 < top + card.h - 1) {
-        button(app, actions_y + 8, left, width, "Edit selected integer/bool", VARIABLE_ACTION, 10,
-               app->variable_pane);
-    }
-
-    if (tb_variables_edit_state(v) == TB_VARIABLE_EDIT_UNCERTAIN) {
-        button(app, actions_y + 9, left, width, "Reconcile uncertain write after explicit Read",
-               VARIABLE_ACTION, 11, app->variable_pane);
-    }
-
-    button(app, top + card.h - 1, left, 12, "[ Back ]", BACK, 0, 0);
-}
-
-
 static void draw_variable_edit(App_t *app)
 {
-    TbRect_t            card  = menu_card(88, 14);
+    TbRect_t            card  = menu_card(app, 88, 14);
     int                 left  = card.x + 2;
     int                 top   = card.y;
     int                 width = card.w - 4;
@@ -4909,7 +5000,7 @@ static void draw_register_edit(App_t *app)
 {
     TbRegisters_t          *registers = tb_session_registers(app->debugger);
     const TbRegisterEdit_t *edit      = tb_registers_edit(registers);
-    TbRect_t                card      = menu_card(100, 22);
+    TbRect_t                card      = menu_card(app, 100, 22);
     int                     left      = card.x + 2;
     int                     width     = card.w - 4;
     bool                    ready     = edit->state == TB_REGISTER_EDIT_READY;
@@ -5008,53 +5099,6 @@ static void draw_register_edit(App_t *app)
 }
 
 
-static void draw_break_menu(App_t *app)
-{
-    TbRect_t card  = menu_card(88, 15);
-    int      left  = card.x + 2;
-    int      top   = card.y;
-    int      width = card.w - 4;
-
-    draw_header(app, "Breakpoint / data-watchpoint management");
-
-    bool          compact   = card.h < 15;
-    int           actions_y = top + (compact ? 1 : 2);
-    TbDemoPane_t *pane      = &app->demo.panes[app->break_pane];
-    const TbBreakpoint_t *bp =
-        tb_break_row(tb_session_breakpoints(app->debugger), (size_t)pane->row[TB_BREAKPOINTS]);
-    char text[1024];
-    char safe[1200];
-
-    if (bp) {
-        (void)snprintf(text, sizeof(text), "Selected %s | %.400s | %.400s", bp->id, bp->location,
-                       bp->condition);
-    } else {
-        (void)snprintf(text, sizeof(text), "Select an existing row in the Breakpoints pane to edit it.");
-    }
-
-    tb_code_safe(safe, sizeof(safe), text, strlen(text));
-    tb_text(top, left, width, TB_CYAN, 0, safe);
-
-    const char *labels[] = {"Add code breakpoint",
-                            bp && bp->enabled ? "Disable selected" : "Enable selected",
-                            "Remove selected",
-                            "Edit condition",
-                            "Set ignore count",
-                            app->break_hardware ? "New breakpoint: Require hardware"
-                                : "New breakpoint: Default",
-                            "Refresh"};
-
-    for (int i = 0; i < 7; ++i)
-        button(app, actions_y + i, left, width, labels[i], BREAK_ACTION, i, app->break_pane);
-
-    button(app, actions_y + 7, left, width, "Add hardware data watchpoint...", BREAK_ACTION, 7,
-           app->break_pane);
-    tb_text(top + card.h - (compact ? 2 : 3), left, width, TB_MUTED, 0,
-            "Pending and multiple locations follow GDB. Hardware errors never fall back silently.");
-    button(app, top + card.h - (compact ? 1 : 2), left, 12, "[ Back ]", BACK, 0, 0);
-}
-
-
 static bool stack_page(Page_e current)
 {
     return current >= STACK_MENU && current <= STACK_GUARD_PAGE;
@@ -5066,15 +5110,12 @@ static void draw_stack_pages(App_t *app)
     TbStack_t           *stack   = tb_session_stack(app->debugger);
     int                  id      = app->stack_pane;
     const TbStackView_t *v       = tb_stack_view(stack, id);
-    TbRect_t             card    = menu_card(100, 24);
+    TbRect_t             card    = menu_card(app, 100, 24);
     int                  left    = card.x + 2;
     int                  width   = card.w - 4;
     int                  visible = card.h - 6;
-    const char *title = app->page == STACK_MENU ? "Stack options"
-        : app->page == STACK_INPUT ? "Stack literal setting"
+    const char *title = app->page == STACK_INPUT ? "Stack literal setting"
         : app->page == STACK_DETAILS ? "Stack row details"
-        : app->page == STACK_NAMES_PAGE ? "Stack local/argument names"
-        : app->page == STACK_POINTS_PAGE ? "Remove Stack point annotations"
         : app->page == STACK_BOUNDS ? "Declared Stack bounds"
         : "Disable inferior calls session-wide?";
 
@@ -5185,85 +5226,290 @@ static void draw_stack_pages(App_t *app)
                ST_DECLARE, id);
         button(app, card.y + card.h - (card.h >= 15 ? 4 : 3), left, 22, "[ Remove declaration ]",
                STACK_ACTION, ST_UNDECLARE, id);
-    } else {
-        const char *error = *v->annotation_error ? v->annotation_error
-            : *v->message ? v->message
-            : v->anchor_error;
-
-        tb_text(card.y, left, width, TB_ORANGE, 0, error);
-
-        int rows = card.h - (app->page == STACK_MENU && v->guard_confirmation ? 8 : 6);
-        if (rows < 1)
-            rows = 1;
-
-        static const char *const labels[] = {
-            "Read / Refresh exact window (explicit bytes)",
-            "Follow frame-0 SP (no byte read)",
-            "Navigate literal address / signed SP offset",
-            "Cycle 1/2/4/8-byte grouping (no read)",
-            "Set requested byte count (1-1024; no read)",
-            "Selected row: complete details / provenance",
-            "Query selected-frame SP point (may be reconstructed)",
-            "Query local/argument names, then select one address",
-            "Declare bounds / growth direction (no permission)",
-            "Inspect previous cached sample (no read)",
-            "Inspect next cached sample (no read)",
-            "Cancel active Stack operation",
-            "Remove point annotations",
-            "Temporary read ranges (separate from Memory)",
-            "Previous address window (no read)",
-            "Next address window (no read)"
-        };
-        int count = app->page == STACK_MENU ? (int)(sizeof(labels) / sizeof(labels[0]))
-            : app->page == STACK_NAMES_PAGE ? (int)v->name_count
-            : (int)v->point_count;
-
-        if (app->stack_page * rows >= count && count)
-            app->stack_page = (count - 1) / rows;
-
-        for (int row = 0; row < rows && app->stack_page * rows + row < count; ++row) {
-            int  item = app->stack_page * rows + row;
-            char label[256];
-
-            if (app->page == STACK_MENU) {
-                button(app, card.y + 2 + row, left, width, labels[item], STACK_ACTION, item, id);
-            } else if (app->page == STACK_NAMES_PAGE) {
-                (void)snprintf(label, sizeof(label), "%s%s", v->names[item].name,
-                               v->names[item].eligible ? " (query address)" : " (unsupported/ambiguous)");
-                button(app, card.y + 2 + row, left, width, label, STACK_ACTION, ST_NAME_PICK, item);
-            } else {
-                (void)snprintf(label, sizeof(label), "Remove @%d: 0x%llx %s", item + 1,
-                               (unsigned long long)v->points[item].address, v->points[item].label);
-                button(app, card.y + 2 + row, left, width, label, STACK_ACTION, ST_POINT_REMOVE, item);
-            }
-        }
-
-        if (!count) {
-            tb_text(card.y + 2, left, width, TB_MUTED, 0,
-                    app->page == STACK_NAMES_PAGE ? v->names_ready ? "No local/argument names reported."
-                        : "Awaiting explicit names-only query."
-                        : "No point annotations retained.");
-        }
-
-        if (app->stack_page > 0)
-            button(app, card.y + card.h - 2, left + 15, 12, "Previous", STACK_ACTION, ST_PREVIOUS_PAGE, id);
-
-        if ((app->stack_page + 1) * rows < count)
-            button(app, card.y + card.h - 2, left + 30, 10, "Next", STACK_ACTION, ST_NEXT_PAGE, id);
-
-        if (app->page == STACK_MENU && v->guard_confirmation) {
-            button(app, card.y + card.h - 4, left, width, "[ Review session-wide no-call change ]",
-                   STACK_ACTION, ST_GUARD, id);
-        }
     }
 
     button(app, card.y + card.h - 2, left, 12, "[ Back ]", BACK, 0, id);
 }
 
 
+/* Action fields follow the same kind/value/pane contract as button(). */
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+static void popup_item(App_t *app, const char *label, ControlKind_e kind, int value, int pane)
+{
+    if (app->popup.count >= (int)(sizeof(app->popup.items) / sizeof(app->popup.items[0])))
+        return;
+
+    PopupItem_t *item = &app->popup.items[app->popup.count++];
+    (void)snprintf(item->label, sizeof(item->label), "%s", label);
+    item->kind  = kind;
+    item->value = value;
+    item->pane  = pane;
+}
+
+
+static void context_choices(App_t *app)
+{
+    app->popup.count = 0;
+    if (app->menu >= 0) {
+        int pane = app->menu;
+        const char *const actions[] = {
+            "Split right", "Split below", "Close selected tab", "Close split pane",
+            "Resize dividers", "Fullscreen Source"
+        };
+        (void)snprintf(app->popup.title, sizeof(app->popup.title), "%s",
+                       app->menu_actions ? "PANE ACTIONS" : app->live ? "SHOW VIEW" : "SHOW VIEW (DEMO)");
+        int count = app->menu_actions
+            ? (app->demo.panes[pane].tabs[app->demo.panes[pane].active] == TB_SOURCE ? 6 : 5)
+            : TB_VIEW_COUNT;
+        for (int i = 0; i < count; ++i) {
+            char label[160];
+            (void)snprintf(label, sizeof(label), "%s%s",
+                           app->menu_actions ? actions[i] : tb_view_names[i],
+                           !app->menu_actions && (i == TB_SYMBOLS || i == TB_PERIPHERALS)
+                               ? " [not implemented]" : "");
+            popup_item(app, label, app->menu_actions ? PANE_ACTION : SHOW_VIEW, i, pane);
+        }
+        popup_item(app, app->menu_actions ? "< Show views" : "Pane actions >", MENU_SECTION, 0, pane);
+    } else if (app->page == CODE_MENU) {
+        const TbDemoPane_t *tile = &app->demo.panes[app->code_pane];
+        bool source = tile->tabs[tile->active] == TB_SOURCE;
+        const CodeAction_e source_actions[] = {
+            CODE_CHOOSE_FILE, CODE_FIND, CODE_LINE, CODE_STOPPED,
+            CODE_SOURCE_SETTINGS, CODE_RUN_TO, CODE_FULLSCREEN
+        };
+        const CodeAction_e asm_actions[] = {
+            CODE_ADDRESS, CODE_ASSEMBLY_STOP, CODE_FOLLOW_FRAME,
+            CODE_SOURCE_SETTINGS, CODE_RAW, CODE_RUN_TO, CODE_IMAGE_MAP
+        };
+        int count = source ? 7 : tb_session_kind(app->debugger) == TB_SESSION_LOCAL ? 6 : 7;
+        (void)snprintf(app->popup.title, sizeof(app->popup.title), "Code view actions");
+        for (int i = 0; i < count; ++i) {
+            CodeAction_e action = source ? source_actions[i] : asm_actions[i];
+            char label[160];
+            (void)snprintf(label, sizeof(label), "%s%s",
+                           action == CODE_MIXED ? tb_code_view(tb_session_code(app->debugger),
+                                                               app->code_pane)->mixed ? "[x] " : "[ ] " : "",
+                           action == CODE_FULLSCREEN && app->fullscreen_source >= 0
+                               ? "Restore tiled workspace" : code_labels[action]);
+            popup_item(app, label, CODE_ACTION, action, app->code_pane);
+        }
+    } else if (app->page == MEMORY_MENU) {
+        int                   pane = app->memory_pane;
+        const TbMemoryView_t *view = tb_memory_view(tb_session_memory(app->debugger), pane);
+        const char *const labels[] = {
+            "Address / Read", "Refresh this range", "Cycle grouping: 1/2/4/8 bytes",
+            "Byte count: 1 to 1024", "Previous range (read)", "Next range (read)"
+        };
+        const char *const units[] = {
+            "Navigate address (no read)", "Refresh selected sample (hardware read)",
+            "Return to byte memory (no read)", "", "Previous units (no read)", "Next units (no read)"
+        };
+        (void)snprintf(app->popup.title, sizeof(app->popup.title), "Memory inspection options");
+        for (int i = 0; i < 6; ++i) {
+            if (!view->mmio || i != 3)
+                popup_item(app, view->mmio ? units[i] : labels[i], MEMORY_ACTION, i, pane);
+        }
+        popup_item(app, "Hardware watchpoint at selected row (first group)", MEMORY_ACTION, 7, pane);
+        popup_item(app, "Temporary ranges: Add / Inspect / Authorize / Revoke", MEMORY_ACTION, 8, pane);
+        if (!view->mmio)
+            popup_item(app, "Edit selected row (ordinary writable RAM only)", MEMORY_ACTION, 9, pane);
+        if (tb_memory_edit_state(tb_session_memory(app->debugger)) == TB_MEMORY_EDIT_UNCERTAIN)
+            popup_item(app, "Reconcile uncertain write after explicit Refresh", MEMORY_ACTION, 11, pane);
+    } else if (app->page == VARIABLE_MENU) {
+        int           pane = app->variable_pane;
+        TbDemoPane_t *tile = &app->demo.panes[pane];
+        TbVariableView_e kind = tile->tabs[tile->active] == TB_LOCALS
+            ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES;
+        TbVariables_t *variables = tb_session_variables(app->debugger);
+        const char *const labels[] = {
+            "Read selected root (discard previous child page)",
+            "Expand / collapse selected row (up to 32 children)", "Cycle selected value format",
+            "Previous child page", "Next child page", "Add watch expression",
+            kind == TB_VARIABLE_LOCALS ? "Refresh local names (no value read)" : "Remove selected watch",
+            "Hardware data watchpoint..."
+        };
+        (void)snprintf(app->popup.title, sizeof(app->popup.title), "Locals / Watches inspection");
+        for (int i = 0; i < 8; ++i)
+            popup_item(app, labels[i], VARIABLE_ACTION, i, pane);
+        if (tb_variables_row(variables, kind, (size_t)tile->row[tile->tabs[tile->active]]))
+            popup_item(app, "Edit selected integer/bool", VARIABLE_ACTION, 10, pane);
+        if (tb_variables_edit_state(variables) == TB_VARIABLE_EDIT_UNCERTAIN)
+            popup_item(app, "Reconcile uncertain write after explicit Read", VARIABLE_ACTION, 11, pane);
+    } else if (app->page == BREAK_MENU) {
+        int pane = app->break_pane;
+        const TbBreakpoint_t *bp = tb_break_row(tb_session_breakpoints(app->debugger),
+                                               (size_t)app->demo.panes[pane].row[TB_BREAKPOINTS]);
+        const char *const labels[] = {
+            "Add code breakpoint", bp && bp->enabled ? "Disable selected" : "Enable selected",
+            "Remove selected", "Edit condition", "Set ignore count",
+            app->break_hardware ? "[x] New breakpoint: Require hardware" : "[ ] New breakpoint: Default",
+            "Refresh", "Add hardware data watchpoint..."
+        };
+        (void)snprintf(app->popup.title, sizeof(app->popup.title), "Breakpoint / data-watchpoint management");
+        for (int i = 0; i < 8; ++i)
+            popup_item(app, labels[i], BREAK_ACTION, i, pane);
+    } else {
+        int                  pane = app->stack_pane;
+        const TbStackView_t *view = tb_stack_view(tb_session_stack(app->debugger), pane);
+        const char *const labels[] = {
+            "Read / Refresh exact window (explicit bytes)", "Follow frame-0 SP (no byte read)",
+            "Navigate literal address / signed SP offset", "Cycle 1/2/4/8-byte grouping (no read)",
+            "Set requested byte count (1-1024; no read)", "Selected row: complete details / provenance",
+            "Query selected-frame SP point (may be reconstructed)",
+            "Query local/argument names, then select one address",
+            "Declare bounds / growth direction (no permission)",
+            "Inspect previous cached sample (no read)", "Inspect next cached sample (no read)",
+            "Cancel active Stack operation", "Remove point annotations",
+            "Temporary read ranges (separate from Memory)", "Previous address window (no read)",
+            "Next address window (no read)"
+        };
+        (void)snprintf(app->popup.title, sizeof(app->popup.title), "%s", app->page == STACK_MENU
+                       ? "Stack options" : app->page == STACK_NAMES_PAGE ? "Stack local/argument names"
+                       : "Remove Stack point annotations");
+        if (app->page == STACK_MENU) {
+            if (view->guard_confirmation)
+                popup_item(app, "[ Review session-wide no-call change ]", STACK_ACTION, ST_GUARD, pane);
+            for (int i = 0; i < (int)(sizeof(labels) / sizeof(labels[0])); ++i)
+                popup_item(app, labels[i], STACK_ACTION, i, pane);
+        } else {
+            size_t count = app->page == STACK_NAMES_PAGE ? view->name_count : view->point_count;
+            for (size_t i = 0; i < count; ++i) {
+                char label[160];
+                if (app->page == STACK_NAMES_PAGE) {
+                    (void)snprintf(label, sizeof(label), "%.100s%s", view->names[i].name,
+                                   view->names[i].eligible ? " (query address)" : " (unsupported/ambiguous)");
+                } else {
+                    (void)snprintf(label, sizeof(label), "Remove @%zu: 0x%llx %.90s", i + 1,
+                                   (unsigned long long)view->points[i].address, view->points[i].label);
+                }
+                popup_item(app, label, STACK_ACTION,
+                           app->page == STACK_NAMES_PAGE ? ST_NAME_PICK : ST_POINT_REMOVE, (int)i);
+            }
+        }
+    }
+    if (app->menu < 0)
+        popup_item(app, "[ Back ]", BACK, 0, 0);
+}
+
+
+static void draw_context_list(App_t *app)
+{
+    context_choices(app);
+    int count = app->popup.count;
+    int width = (int)strlen(app->popup.title) + 4;
+    for (int i = 0; i < count; ++i) {
+        int needed = (int)strlen(app->popup.items[i].label) +
+                     (app->popup.items[i].kind == SHOW_VIEW ? 6 : 4);
+        if (needed > width)
+            width = needed;
+    }
+    TbRect_t bounds = {
+        .x = 1,
+        .y = 1,
+        .w = COLS - 2,
+        .h = LINES - 3
+    };
+    TbRect_t card = tb_dropdown_rect(app->popup.trigger.rect, bounds, width, count < 2 ? 2 : count);
+    int visible   = card.h - 3;
+    int scrolling = count - 1;
+    if (app->popup.selected >= count)
+        app->popup.selected = count - 1;
+    if (app->popup.selected < 0)
+        app->popup.selected = 0;
+    if (app->popup.rect.w != card.w || app->popup.rect.h != card.h) {
+        if (app->popup.selected < app->popup.offset)
+            app->popup.offset = app->popup.selected;
+        if (app->popup.selected >= app->popup.offset + visible)
+            app->popup.offset = app->popup.selected - visible + 1;
+    }
+    TbScroll_t bar = axis_scroll(scrolling, visible, app->popup.offset);
+    app->popup.offset = bar.offset;
+    app->popup.rect   = card;
+    app->popup.list   = true;
+    app->count        = 0;
+    app->focus        = app->popup.selected;
+    tb_fill(card, TB_PANEL);
+    tb_border(card, TB_BORDER, false);
+    tb_text(card.y, card.x + 2, card.w - 4, TB_PINK, A_BOLD, app->popup.title);
+    for (int i = 0; i < count; ++i) {
+        PopupItem_t *item = &app->popup.items[i];
+        if (i == count - 1) {
+            button(app, card.y + card.h - 2, card.x + 1, card.w - 3,
+                   item->label, item->kind, item->value, item->pane);
+        } else if (i >= bar.offset && i < bar.offset + visible) {
+            button(app, card.y + 1 + i - bar.offset, card.x + 1, card.w - 3,
+                   item->label, item->kind, item->value, item->pane);
+            if (item->kind == SHOW_VIEW &&
+                tb_demo_has_view(&app->demo.panes[item->pane], (TbView_e)item->value)) {
+                TbStyle_e style = i == app->focus ? TB_SELECTED : TB_SURFACE;
+                int y = card.y + 1 + i - bar.offset;
+                tb_style(style, A_BOLD);
+                if (MB_CUR_MAX > 1 && wcwidth(L'\u25cf') == 1) {
+                    (void)mvaddnwstr(y, card.x + card.w - 4, L"\u25cf", 1);
+                } else {
+                    tb_text(y, card.x + card.w - 4, 1, style, A_BOLD, "*");
+                }
+            }
+        } else {
+            (void)add_control(app, (TbRect_t) {0}, item->kind, item->value, item->pane);
+        }
+    }
+    if (bar.maximum > 0) {
+        TbRect_t track = tb_scrollbar_track(card, false);
+        tb_render_scrollbar(track, bar, false);
+        (void)add_control(app, track, POPUP_SCROLLBAR, 0, 0);
+    }
+}
+
+
+static void draw_context_summary(const App_t *app)
+{
+    char summary[1000];
+    if (app->page == MEMORY_MENU) {
+        const TbMemoryView_t *view = tb_memory_view(tb_session_memory(app->debugger), app->memory_pane);
+        (void)snprintf(summary, sizeof(summary), "Pane %d | requested range %u bytes | grouping %uB | %s",
+                       app->memory_pane + 1, view->length, view->grouping,
+                       view->mmio ? "MMIO: explicit hardware reads only" : "Reads and edits are explicit");
+        tb_text(LINES - 2, 1, COLS - 2, TB_CYAN, 0, summary);
+    } else if (app->page == BREAK_MENU) {
+        const TbBreakpoint_t *row = tb_break_row(tb_session_breakpoints(app->debugger),
+            (size_t)app->demo.panes[app->break_pane].row[TB_BREAKPOINTS]);
+        if (row) {
+            char safe[1200];
+            (void)snprintf(summary, sizeof(summary), "Selected %s | %.400s | %.400s",
+                           row->id, row->location, row->condition);
+            tb_code_safe(safe, sizeof(safe), summary, strlen(summary));
+            tb_text(LINES - 2, 1, COLS - 2, TB_CYAN, 0, safe);
+        }
+    } else if (app->page == VARIABLE_MENU) {
+        const TbDemoPane_t *pane = &app->demo.panes[app->variable_pane];
+        TbView_e view = pane->tabs[pane->active];
+        TbVariables_t *variables = tb_session_variables(app->debugger);
+        const TbVariable_t *row = tb_variables_row(variables,
+            view == TB_LOCALS ? TB_VARIABLE_LOCALS : TB_VARIABLE_WATCHES, (size_t)pane->row[view]);
+        if (row) {
+            (void)snprintf(summary, sizeof(summary), "%.255s | %.191s | %s | children %u, page %u | %s",
+                           row->name, row->type, tb_variables_format_name(row->format), row->children,
+                           row->first / TB_VARIABLE_CHILDREN + 1,
+                           row->format_pending ? "format read required; value is natural"
+                               : row->fresh ? "sampled" : "read required");
+            tb_fill((TbRect_t) {
+                .x = 0,
+                .y = LINES - 2,
+                .w = COLS,
+                .h = 2
+            }, TB_WORKSPACE);
+            tb_text(LINES - 2, 1, COLS - 2, TB_CYAN, 0, summary);
+            (void)snprintf(summary, sizeof(summary), "Value: %.800s", row->value);
+            tb_text(LINES - 1, 1, COLS - 2, row->fresh ? TB_GREEN : TB_MUTED, 0, summary);
+        }
+    }
+}
+
+
 static void draw_page(App_t *app)
 {
-    if (app->live && app->page != WORKSPACE) {
+    if (app->live && app->page != WORKSPACE && !app->popup.active) {
         for (int id = 0; id < TB_MAX_PANES; ++id) {
             bool inspecting = (stack_page(app->page) && id == app->stack_pane) ||
                               ((app->page == MEMORY_RANGES || app->page == MEMORY_RANGE ||
@@ -5272,6 +5518,14 @@ static void draw_page(App_t *app)
 
             tb_stack_visible(tb_session_stack(app->debugger), id, inspecting);
         }
+    }
+
+    app->viewport_refocus = app->count > 0 &&
+        ((app->page == KEYBINDS && !app->key_confirm) ||
+         (app->page == SCRIPT_LIST && !app->script_refocus));
+    if (app->viewport_refocus) {
+        app->viewport_focus = app->controls[app->focus];
+        app->focus = -1;
     }
 
     app->count           = 0;
@@ -5284,12 +5538,44 @@ static void draw_page(App_t *app)
         COLS,
         LINES
     }, TB_WORKSPACE);
-    if (COLS < 48 || LINES < 18) {
+    app->popup.card = (TbRect_t) {0};
+    if (app->popup.active && COLS >= 80 && LINES >= 20) {
+        int focus = app->focus;
+        Page_e overlay = app->page;
+        app->page = app->popup.base;
+        app->focus = -1;
+        if (app->popup.base == CONFIGURE) {
+            int scroll = app->form_scroll;
+            size_t cursor = app->cursor;
+            app->popup.active = false;
+            app->form_scroll = app->popup.form_scroll;
+            draw_form(app, false);
+            app->form_scroll = scroll;
+            app->cursor = cursor;
+            app->popup.active = true;
+        } else {
+            draw_workspace(app);
+            frame_display_present(app);
+        }
+        app->page = overlay;
+        for (int i = 0; i < app->count; ++i) {
+            Control_t control = app->controls[i];
+            if (control.kind == app->popup.trigger.kind && control.value == app->popup.trigger.value &&
+                control.pane == app->popup.trigger.pane) {
+                app->popup.trigger.rect = control.rect;
+                break;
+            }
+        }
+        app->count = 0;
+        app->focus = focus;
+        app->command_caret_y = -1;
+    }
+    if (COLS < 80 || LINES < 20) {
         char dimensions[64];
         (void)snprintf(dimensions, sizeof(dimensions), "Current: %dx%d", COLS, LINES);
         tb_text(0, 0, COLS, TB_ORANGE, A_BOLD, "Terminal too small");
         tb_text(1, 0, COLS, TB_PANEL, 0, dimensions);
-        tb_text(2, 0, COLS, TB_PANEL, 0, "Resize to at least 48x18.");
+        tb_text(2, 0, COLS, TB_PANEL, 0, "Resize to at least 80x20.");
         tb_text(4, 0, COLS, TB_PANEL, 0, "State retained. Ctrl+Q quits.");
     } else if (app->page == LAUNCHER) {
         draw_launcher(app);
@@ -5306,23 +5592,20 @@ static void draw_page(App_t *app)
     } else if (app->page == SETUP_MENU || app->page == SETUP_SAVE || app->page == SETUP_INFO ||
                app->page == SETUP_RESTORE_REVIEW) {
         draw_setup(app);
-    } else if (app->page == CODE_MENU) {
-        draw_code_menu(app);
+    } else if (dropdown_page(app->page)) {
+        draw_context_list(app);
     } else if (app->page == RAM_REVIEW) {
         draw_ram_review(app);
     } else if (app->page == IMAGE_REVIEW) {
         draw_image_review(app);
-    } else if (app->page == BREAK_MENU) {
-        draw_break_menu(app);
+
     } else if (stack_page(app->page)) {
         draw_stack_pages(app);
-    } else if (app->page == MEMORY_MENU) {
-        draw_memory_menu(app);
+
     } else if (app->page == MEMORY_RANGES || app->page == MEMORY_RANGE || app->page == MEMORY_CONSENT ||
                app->page == MMIO_SETUP) {
         draw_memory_ranges(app);
-    } else if (app->page == VARIABLE_MENU) {
-        draw_variable_menu(app);
+
     } else if (app->page == VARIABLE_EDIT) {
         draw_variable_edit(app);
     } else if (app->page == REGISTER_EDIT) {
@@ -5344,7 +5627,7 @@ static void draw_page(App_t *app)
             : app->live ? "Reset and halt target?"
             : "Reset DEMO state?");
 
-        TbRect_t card = menu_card(88, closing && app->session == 1 ? 12 : 10);
+        TbRect_t card = menu_card(app, 88, closing && app->session == 1 ? 12 : 10);
         const char *question =
             closing
                 ? (app->session
@@ -5384,10 +5667,61 @@ static void draw_page(App_t *app)
                    : "[ Reset DEMO state ]",
                closing ? CLOSE_ACCEPT : CONFIRM_RESET, 0, 0);
     } else {
+        if (app->menu >= 0)
+            app->focus = -1;
         draw_workspace(app);
     }
 
-    if (app->focus >= app->count)
+    if (COLS >= 80 && LINES >= 20) {
+        if (app->page == WORKSPACE && app->menu >= 0) {
+            for (int i = 0; i < app->count; ++i) {
+                Control_t control = app->controls[i];
+                if (control.kind == MENU && control.pane == app->menu) {
+                    app->popup.trigger.rect = control.rect;
+                    break;
+                }
+            }
+            if (app->menu_focus) {
+                app->popup.selected = 0;
+                app->popup.offset   = 0;
+                app->popup.drag     = -1;
+                app->menu_focus     = false;
+            }
+            app->command_caret_y = -1;
+            draw_context_list(app);
+        } else if (app->popup.active && !dropdown_page(app->page) && app->popup.card.w > 0) {
+            tb_border(app->popup.card, TB_BORDER, false);
+            tb_text(app->popup.card.y + 1, app->popup.card.x + 2, app->popup.card.w - 4,
+                    TB_PINK, A_BOLD, app->popup.title);
+        }
+        if (app->popup.active || app->popup.list)
+            draw_footer(footer_message(app), "Tab / arrows / Enter | Esc back | Ctrl+Q quit app",
+                        TB_STATUS_TEXT, TB_HINT_TEXT);
+        if (app->popup.list)
+            draw_context_summary(app);
+        if (app->popup.restore && app->page == app->popup.base && app->menu < 0) {
+            app->popup.restore = false;
+            if (app->popup.base == WORKSPACE)
+                app->content_pane = app->popup.content;
+            for (int i = 0; i < app->count; ++i) {
+                Control_t control = app->controls[i];
+                if (control.kind == app->popup.trigger.kind && control.value == app->popup.trigger.value &&
+                    control.pane == app->popup.trigger.pane) {
+                    app->focus = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    /* An offscreen selection keeps its identity without a mouse hit region. */
+    if (app->viewport_refocus && app->focus < 0 && app->count > 0) {
+        Control_t selected = app->viewport_focus;
+        app->focus = add_control(app, (TbRect_t) {0}, selected.kind, selected.value, selected.pane);
+    }
+
+    app->viewport_refocus = false;
+    if (app->focus < 0 || app->focus >= app->count)
         app->focus = app->count > 0 ? app->count - 1 : 0;
 }
 
@@ -5403,7 +5737,8 @@ static bool navigable(const App_t *app, Control_t control)
 {
     return exposed_control(app, control) && control.rect.w > 0 && control.rect.h > 0 &&
            control.kind != BODY && control.kind != SCROLLBAR && control.kind != HSCROLLBAR &&
-           control.kind != KEY_SCROLLBAR && control.kind != SCRIPT_SCROLLBAR && control.kind != DIVIDER;
+           control.kind != KEY_SCROLLBAR && control.kind != SCRIPT_SCROLLBAR &&
+           control.kind != THEME_SCROLLBAR && control.kind != POPUP_SCROLLBAR && control.kind != DIVIDER;
 }
 
 
@@ -5514,8 +5849,9 @@ static void draw_vim_fields(App_t *app)
         tb_fill(rect, TB_SURFACE);
 
         TbStyle_e edge = !focused ? TB_BORDER : app->field_insert ? TB_GREEN : TB_CYAN;
-        tb_text(rect.y, rect.x, 1, edge, focused ? A_BOLD : 0, "|");
-        tb_text(rect.y, rect.x + rect.w - 1, 1, edge, focused ? A_BOLD : 0, "|");
+        tb_style(edge, focused ? A_BOLD : 0);
+        (void)mvaddch(rect.y, rect.x, ACS_VLINE);
+        (void)mvaddch(rect.y, rect.x + rect.w - 1, ACS_VLINE);
         wide_text(rect.y, rect.x + 1, rect.w - 2, value, start, false);
         if (focused) {
             app->command_caret_x = rect.x + 1;
@@ -5552,7 +5888,9 @@ static void draw(App_t *app)
         (void)fflush(stdout); /* ncurses may write directly to the descriptor. */
     }
 
-    bool      retain   = app->count > 0 && !app->menu_focus && !app->resizing && app->page != SCRIPT_LIST;
+    bool      viewport = app->page == SCRIPT_LIST || (app->page == KEYBINDS && !app->key_confirm);
+    bool      retain   = app->count > 0 && !app->menu_focus && !app->resizing && !viewport &&
+                         !app->popup.list && !app->popup.restore;
     Control_t previous = retain ? app->controls[app->focus] : (Control_t) {0};
 
     draw_page(app);
@@ -5571,7 +5909,7 @@ static void draw(App_t *app)
         }
     }
 
-    if (app->count && !app->resizing) {
+    if (app->count && !app->resizing && !viewport) {
         if (next < 0) {
             app->content_pane = -1;
             next              = navigable(app, app->controls[app->focus]) ? app->focus : 0;
@@ -5594,7 +5932,8 @@ static void draw(App_t *app)
             app->last_control = app->controls[app->focus];
     }
 
-    frame_display_present(app);
+    if (!app->popup.active && !app->popup.list)
+        frame_display_present(app);
     sync_field(app);
     draw_vim_fields(app);
     if (app->command_caret_y >= 0) {
@@ -5616,28 +5955,7 @@ static void draw(App_t *app)
 
 static TbRect_t navigation_rect(const App_t *app, int pane)
 {
-    TbRect_t rect = app->panes[pane];
-    if (!app->layout.overlays || app->fullscreen_source >= 0)
-        return rect;
-
-    int  root  = tb_layout_root(&app->layout, pane);
-    bool above = root < 3;
-
-    for (int i = 0; i < 3; ++i) {
-        int lower = app->layout.lower_order[i];
-        if (root == lower + 3) {
-            above = true;
-            continue;
-        }
-
-        TbRect_t cover = app->layout.lower_areas[lower];
-        if (above && cover.h > 0 && cover.x < rect.x + rect.w && rect.x < cover.x + cover.w &&
-            cover.y > rect.y && cover.y < rect.y + rect.h) {
-            rect.h = cover.y - rect.y;
-        }
-    }
-
-    return rect;
+    return app->panes[pane];
 }
 
 
@@ -5988,13 +6306,13 @@ static bool profile_load(App_t *app, const TbProfile_t *p)
 }
 
 
-static bool profile_sources(App_t *app, TbProfile_t *next)
+static bool profile_sources(App_t *app, TbProfile_t *next, bool effective)
 {
     TbCode_t *code = tb_session_code(app->debugger);
     next->directory_count = tb_code_directory_count(code);
     next->rule_count      = tb_code_rule_count(code);
     for (size_t i = 0; i < next->directory_count; ++i) {
-        const char *path = tb_code_directory(code, i);
+        const char *path = effective ? tb_code_effective_directory(code, i) : tb_code_directory(code, i);
         if (strlen(path) >= TB_PROFILE_PATH) {
             status(app, "Applied source path exceeds profile field limit.");
             return false;
@@ -6004,7 +6322,7 @@ static bool profile_sources(App_t *app, TbProfile_t *next)
     }
 
     for (size_t i = 0; i < next->rule_count; ++i) {
-        const TbSourceRule_t *rule = tb_code_rule(code, i);
+        const TbSourceRule_t *rule = effective ? tb_code_effective_rule(code, i) : tb_code_rule(code, i);
         if (strlen(rule->from) >= TB_PROFILE_PATH || strlen(rule->to) >= TB_PROFILE_PATH) {
             status(app, "Applied source mapping exceeds profile field limit.");
             return false;
@@ -6078,7 +6396,7 @@ static bool profile_capture(App_t *app)
         (void)snprintf(next.gdb, sizeof(next.gdb), "%s", values[2]);
     }
 
-    if (app->live && !profile_sources(app, &next))
+    if (app->live && !profile_sources(app, &next, false))
         return false;
 
     *app->profile = next;
@@ -6331,8 +6649,11 @@ static bool setup_prepare_restore(App_t *app)
         return false;
     }
 
-    *app->setup_review_connection = *app->profile;
-    tb_profile_image_stamp(app->profile, app->restore_directory, app->restore_stamp);
+    if (!prepare_paths(app))
+        return false;
+
+    *app->setup_review_connection = *app->review_paths;
+    tb_profile_image_stamp(app->review_paths, app->restore_directory, app->restore_stamp);
     (void)tb_profiles_setup_stamp(app->profiles, app->profile->name, app->restore_saved_stamp);
     app->restore_selected = true;
     app->setup_offset     = 0;
@@ -6366,7 +6687,7 @@ static void draw_setup(App_t *app)
         : app->page == SETUP_SAVE ? "Save setup review"
         : "Setup information");
 
-    TbRect_t card  = menu_card(100, app->page == SETUP_MENU ? 12 : 25);
+    TbRect_t card  = menu_card(app, 100, app->page == SETUP_MENU ? 12 : 25);
     int      left  = card.x + 2;
     int      width = card.w - 4;
     const TbSetup_t *s =
@@ -6439,7 +6760,8 @@ static void draw_setup(App_t *app)
             setup_differences(&text, app->setup_review_connection, app->restore_connection);
 
         if (strcmp(app->restore_directory, app->restore_saved_directory) != 0 &&
-            (tb_profile_relative_paths(app->profile) || tb_profile_relative_paths(app->restore_connection))) {
+            (tb_profile_relative_paths(app->setup_review_connection) ||
+             tb_profile_relative_paths(app->restore_connection))) {
             setup_text(&text, "Relative-path launch context changed. Renew consent before restoring.");
             setup_pair(&text, "Launch context", app->restore_directory, app->restore_saved_directory);
         }
@@ -6744,8 +7066,15 @@ static void setup_activate(App_t *app, int action, int entry)
         if (!profile_capture(app) || !getcwd(directory, sizeof(directory)))
             return;
 
-        tb_profile_image_stamp(app->profile, directory, stamp);
-        if (tb_profile_differences(app->profile, app->setup_review_connection) ||
+        TbProfile_t effective;
+        char        error[160];
+        if (!tb_profile_paths(app->profile, &effective, error, sizeof(error))) {
+            status(app, error);
+            return;
+        }
+
+        tb_profile_image_stamp(&effective, directory, stamp);
+        if (tb_profile_differences(&effective, app->setup_review_connection) ||
             strcmp(directory, app->restore_directory) != 0 || strcmp(stamp, app->restore_stamp) != 0) {
             if (setup_prepare_restore(app))
                 status(app, "Connection or ELF changed during review. Review again before starting.");
@@ -6798,7 +7127,7 @@ static void setup_activate(App_t *app, int action, int entry)
 
         *app->setup_review            = *tb_setup_capture_current(app->setup);
         *app->setup_review_connection = *app->session_profile;
-        if (!profile_sources(app, app->setup_review_connection))
+        if (!profile_sources(app, app->setup_review_connection, true))
             return;
 
         page(app, SETUP_SAVE);
@@ -7020,7 +7349,7 @@ static void setup_activate(App_t *app, int action, int entry)
         }
 
         TbProfile_t snapshot = *app->session_profile;
-        if (!profile_sources(app, &snapshot))
+        if (!profile_sources(app, &snapshot, true))
             return;
 
         if (!app->setup_review || !app->setup_review_connection ||
@@ -7137,7 +7466,7 @@ static void draw_profiles(App_t *app)
     size_t count =
         app->page == PROFILE_LIST ? tb_profiles_count(app->profiles) : profile_item_count(app);
     int    options_height = app->profile->kind == 1 ? 16 : app->profile->kind ? 14 : 11;
-    TbRect_t card = menu_card(96, app->page == PROFILE_CONFIRM ? 9
+    TbRect_t card = menu_card(app, 96, app->page == PROFILE_CONFIRM ? 9
         : app->page == PROFILE_OPTIONS
         ? options_height
         : 10 + (wrap_actions ? 1 : 0) + (int)(count > 8 ? 8 : count));
@@ -7148,16 +7477,22 @@ static void draw_profiles(App_t *app)
     const char *title =
         app->page == PROFILE_LIST
             ? (tb_profiles_read_only(app->profiles) ? "READ ONLY: profiles (repair and Reload)" : "Profiles")
-            : app->page == PROFILE_OPTIONS ? "Profile options"
+            : app->page == PROFILE_OPTIONS ? (app->profile->kind == 0 ? "Profile options | Linux application"
+                : app->profile->kind == 1 ? "Profile options | Embedded target"
+                : "Profile options | GDB server")
             : app->page == PROFILE_CONFIRM ? "Confirm profile change"
             : app->profile_group >= 0 && app->profile_group < 4 ? groups[app->profile_group]
             : "Profile entries";
 
     tb_text(top + (compact_options ? 0 : 1), left, width, TB_PINK, A_BOLD, title);
-    tb_text(top + (compact_options ? 1 : 2), left, width, TB_MUTED, 0,
-            app->page == PROFILE_LIST ? "Saved profiles / recent sessions"
-                : app->page == PROFILE_CONFIRM ? "Review before confirming"
-                : "Unsaved until Save profile");
+    int subtitle = top + (compact_options ? 1 : 2);
+    if (app->page == PROFILE_LIST || app->page == PROFILE_CONFIRM) {
+        tb_text(subtitle, left, width, TB_MUTED, 0,
+                app->page == PROFILE_LIST ? "Saved profiles / recent sessions" : "Review before confirming");
+    } else {
+        tb_text(subtitle, left, width, TB_MUTED, 0, "Unsaved until ");
+        tb_text(subtitle, left + 14, width - 14, TB_CYAN, A_BOLD, "Save profile");
+    }
     draw_footer(footer_message(app), "Tab / arrows / Enter | Esc back | Ctrl+Q quit app", TB_STATUS_TEXT,
                 TB_HINT_TEXT);
     if (app->page == PROFILE_CONFIRM) {
@@ -7479,6 +7814,33 @@ static void profile_text_submit(App_t *app, const char *input)
 }
 
 
+static bool prepare_paths(App_t *app)
+{
+    app->review_ready = false;
+    if (!profile_capture(app))
+        return false;
+
+    if (!app->review_paths)
+        app->review_paths = malloc(sizeof(*app->review_paths));
+
+    char error[160];
+    if (!app->review_paths || !getcwd(app->review_directory, sizeof(app->review_directory))) {
+        status(app, "Cannot record effective connection paths.");
+        return false;
+    }
+
+    if (!tb_profile_paths(app->profile, app->review_paths, error, sizeof(error))) {
+        status(app, error);
+        return false;
+    }
+
+    tb_profile_image_stamp(app->review_paths, app->review_directory, app->review_stamp);
+    app->review_ready = true;
+
+    return true;
+}
+
+
 static bool prepare_server(App_t *app)
 {
     if (!profile_capture(app))
@@ -7504,7 +7866,7 @@ static bool prepare_server(App_t *app)
 
 static void draw_server_review(App_t *app)
 {
-    TbRect_t card  = menu_card(100, 24);
+    TbRect_t card  = menu_card(app, 100, 24);
     int      left  = card.x + 2;
     int      top   = card.y;
     int      width = card.w - 4;
@@ -7522,15 +7884,24 @@ static void draw_server_review(App_t *app)
     (void)snprintf(summary, sizeof(summary), "Endpoint: %s | %s", p->endpoint,
                    p->start_server ? "Start owned OpenOCD" : "Connect to existing server (never owned)");
     tb_text(top, left, width, TB_CYAN, A_BOLD, summary);
-    (void)snprintf(summary, sizeof(summary), "GDB: %s", app->profile->gdb);
+    (void)snprintf(summary, sizeof(summary), "GDB: %s", app->review_paths->gdb);
     tb_text(top + 1, left, width, TB_MUTED, 0, summary);
-    (void)snprintf(summary, sizeof(summary), "Symbols: %s", app->profile->executable);
+    (void)snprintf(summary, sizeof(summary), "Symbols: %s", *app->review_paths->executable
+        ? app->review_paths->executable : "none (source stepping unavailable)");
     tb_text(top + 2, left, width, TB_MUTED, 0, summary);
     tb_text(top + 3, left, width, TB_PANEL, A_BOLD,
             "Literal argument vector (each indexed item is one argument)");
 
+    const char *warning = "No frontend flash/reset/resume commands are added. "
+                          "OpenOCD initialization and selected scripts can affect the target; "
+                          "review the actual configuration.";
+    int warning_rows   = paragraph_rows(warning, width);
+    int action_y       = top + card.h - 1;
+    int paging_y       = action_y - 2;
+    int warning_y      = paging_y - 1 - warning_rows;
+    int argument_y     = warning_y - (top + 5) >= 1 ? top + 5 : top + 4;
     int argument_width = width;
-    int visible        = card.h - 9;
+    int visible        = warning_y - argument_y;
     int logical        = 0;
 
     if (visible < 1)
@@ -7542,22 +7913,18 @@ static void draw_server_review(App_t *app)
         size_t n = strlen(summary);
         for (size_t at = 0; at < n; at += (size_t)argument_width, ++logical) {
             if (logical >= app->review_offset && logical < app->review_offset + visible)
-                tb_text(top + 5 + logical - app->review_offset, left, width, TB_PANEL, 0, summary + at);
+                tb_text(argument_y + logical - app->review_offset, left, width, TB_PANEL, 0, summary + at);
         }
     }
 
-    tb_text(top + card.h - 4, left, width, TB_ORANGE, 0,
-            "No frontend flash/reset/resume commands are added.");
-    tb_text(
-        top + card.h - 3, left, width, TB_ORANGE, 0,
-        "OpenOCD initialization and selected scripts can affect the target; "
-        "review the actual configuration.");
-    button(app, top + card.h - 2, left, 18, p->start_server ? "[ Start session ]" : "[ Connect ]", PREVIEW, 0,
-           0);
-    button(app, top + card.h - 2, left + 20, 12, "[ Back ]", BACK, 0, 0);
-    button(app, top + card.h - 1, left, 14, "Previous argv", REVIEW_PAGE, -visible, 0);
+    menu_paragraph(card, warning_y - top, warning_rows, warning, TB_ORANGE);
+    button(app, action_y, left, 18, p->start_server ? "[ Start session ]" : "[ Connect ]", PREVIEW, 0, 0);
+    button(app, action_y, left + 20, 12, "[ Back ]", BACK, 0, 0);
+
+    if (app->review_offset > 0)
+        button(app, paging_y, left, 14, "Previous argv", REVIEW_PAGE, -visible, 0);
     if (app->review_offset + visible < logical)
-        button(app, top + card.h - 1, left + 17, 14, "Next argv", REVIEW_PAGE, visible, 0);
+        button(app, paging_y, left + 17, 14, "Next argv", REVIEW_PAGE, visible, 0);
 }
 
 
@@ -7596,13 +7963,6 @@ static void script_scroll(App_t *app, int offset)
 {
     TbScroll_t bar = axis_scroll(script_count(app), script_visible(), offset);
     app->script_offset = bar.offset;
-    if (app->script_selected < bar.offset)
-        app->script_selected = bar.offset;
-
-    if (app->script_selected >= bar.offset + bar.visible)
-        app->script_selected = bar.offset + bar.visible - 1;
-
-    app->script_refocus = true;
 }
 
 
@@ -7634,17 +7994,24 @@ static void script_move(App_t *app, int delta)
 
 static void draw_scripts(App_t *app)
 {
-    Control_t previous = app->controls[app->focus];
-    if (!app->script_refocus && previous.kind == SCRIPT_PICK)
-        app->script_selected = app->script_offset + app->focus;
+    script_scroll(app, app->script_offset);
+    if (app->viewport_refocus && app->viewport_focus.kind == SCRIPT_PICK) {
+        int ordinal = 0;
+        for (size_t i = 0; app->catalog && i < app->catalog->count; ++i) {
+            if (!script_matches(app, &app->catalog->scripts[i]))
+                continue;
+            if ((int)i == app->viewport_focus.value)
+                app->script_selected = ordinal;
+            ++ordinal;
+        }
+    }
 
-    bool toolbar = !app->script_refocus && (previous.kind == SCRIPT_ACTION || previous.kind == BACK);
-    script_move(app, 0);
-    app->script_refocus = false;
-    if (!toolbar)
+    if (app->script_refocus)
         app->focus = app->script_selected - app->script_offset;
 
-    TbRect_t card  = menu_card(96, selection_menu_height());
+    app->script_refocus = false;
+
+    TbRect_t card  = menu_card(app, 96, selection_menu_height());
     int      left  = card.x + 2;
     int      top   = card.y;
     int      width = card.w - 5;
@@ -7690,22 +8057,13 @@ static void draw_scripts(App_t *app)
 
     TbScroll_t bar = axis_scroll(found, visible, app->script_offset);
     if (bar.maximum > 0) {
-        for (int row = 0; row < bar.visible; ++row) {
-            bool thumb = row >= bar.thumb_start && row < bar.thumb_start + bar.thumb_size;
-            tb_text(top + 2 + row, card.x + card.w - 2, 1, thumb ? TB_CYAN : TB_MUTED, 0, thumb ? "#" : "|");
-        }
-
-        (void)add_control(app, (TbRect_t) {
-            card.x + card.w - 2,
-            top + 2,
-            1,
-            bar.visible
-        }, SCRIPT_SCROLLBAR, 0,
-                          0);
+        TbRect_t frame = card;
+        ++frame.y;
+        --frame.h;
+        TbRect_t track = tb_scrollbar_track(frame, false);
+        tb_render_scrollbar(track, bar, false);
+        (void)add_control(app, track, SCRIPT_SCROLLBAR, 0, 0);
     }
-
-    if (toolbar)
-        app->focus = app->count + (previous.kind == BACK ? 1 : 0);
 
     button(app, top + card.h - 2, left, 12, "[ Filter ]", SCRIPT_ACTION, 0, 0);
     button(app, top + card.h - 2, left + 14, 12, "[ Back ]", BACK, 0, 0);
@@ -7718,6 +8076,27 @@ static bool start_session(App_t *app)
         if (!*app->status)
             status(app, "Cannot record the session launch directory.");
 
+        return false;
+    }
+
+    TbProfile_t effective;
+    char        path_error[160];
+    char        stamp[256];
+    if (!tb_profile_paths(app->profile, &effective, path_error, sizeof(path_error))) {
+        status(app, path_error);
+        return false;
+    }
+
+    tb_profile_image_stamp(&effective, app->launch_directory, stamp);
+    if (!app->review_ready || tb_profile_differences(&effective, app->review_paths) ||
+        strcmp(app->launch_directory, app->review_directory) != 0 ||
+        strcmp(stamp, app->review_stamp) != 0) {
+        if (prepare_paths(app)) {
+            if (app->session == 1 && !prepare_server(app))
+                return false;
+            page(app, REVIEW);
+            status(app, "Connection paths or ELF changed. Review again before starting.");
+        }
         return false;
     }
 
@@ -7759,9 +8138,9 @@ static bool start_session(App_t *app)
     TbSessionConfig_t config = {
         .attach      = app->forms[0].alternate,
         .pid         = pid,
-        .gdb         = values[5],
-        .executable  = app->forms[0].alternate ? values[4] : values[1],
-        .directory   = app->forms[0].alternate ? "" : values[3],
+        .gdb         = effective.gdb,
+        .executable  = effective.executable,
+        .directory   = app->forms[0].alternate ? "" : effective.directory,
         .arguments   = &arguments,
         .environment = &environment
     };
@@ -7772,8 +8151,8 @@ static bool start_session(App_t *app)
                 ? TB_SESSION_EXTENDED_REMOTE
                 : TB_SESSION_REMOTE,
             .endpoint   = values[0],
-            .executable = values[1],
-            .gdb        = values[2]
+            .executable = effective.executable,
+            .gdb        = effective.gdb
         };
     }
 
@@ -7786,8 +8165,8 @@ static bool start_session(App_t *app)
                 ? TB_SESSION_EXTENDED_REMOTE
                 : TB_SESSION_REMOTE,
             .endpoint   = app->server_plan->endpoint,
-            .executable = app->profile->executable,
-            .gdb        = app->profile->gdb,
+            .executable = effective.executable,
+            .gdb        = effective.gdb,
             .openocd    = app->server_plan
         };
     }
@@ -7797,7 +8176,7 @@ static bool start_session(App_t *app)
         return false;
     }
 
-    *app->session_profile = *app->profile;
+    *app->session_profile = effective;
     if (!*app->session_profile->gdb)
         (void)snprintf(app->session_profile->gdb, sizeof(app->session_profile->gdb), "gdb");
 
@@ -8060,7 +8439,7 @@ static void stack_activate(App_t *app, Control_t control)
     case ST_PREVIOUS_PAGE:
     case ST_NEXT_PAGE:
         if (app->page == STACK_DETAILS || app->page == STACK_GUARD_PAGE) {
-            app->stack_offset += (action == ST_NEXT_PAGE ? 1 : -1) * (menu_card(100, 24).h - 6);
+            app->stack_offset += (action == ST_NEXT_PAGE ? 1 : -1) * (menu_card(app, 100, 24).h - 6);
             if (app->stack_offset < 0)
                 app->stack_offset = 0;
         } else {
@@ -8081,8 +8460,16 @@ static void stack_activate(App_t *app, Control_t control)
 
 static void activate(App_t *app, Control_t control)
 {
+    if (control.kind != STACK_ACTION)
+        app->popup.stack_feedback = false;
+
     /* Only pane-local controls interpret pane as a workspace array index.
      * Other controls reuse it for action indices and must retain that meaning. */
+    if (app->page == WORKSPACE && app->menu < 0) {
+        app->popup.trigger = control;
+        app->popup.content = app->content_pane;
+    }
+
     switch (control.kind) {
     case TAB:
     case MENU:
@@ -8146,7 +8533,7 @@ static void activate(App_t *app, Control_t control)
             status(app, okay ? "SRAM eligibility USER-CONFIRMED; each edit still requires Review/Apply."
                 : "Connection or evidence changed; open a new review. No target access.");
         } else {
-            app->ram_offset += control.value * (menu_card(100, 21).h - 6);
+            app->ram_offset += control.value * (menu_card(app, 100, 21).h - 6);
             if (app->ram_offset < 0)
                 app->ram_offset = 0;
         }
@@ -8231,7 +8618,7 @@ static void activate(App_t *app, Control_t control)
             app->theme_draft = app->preferences.palette;
             page(app, THEMES);
         } else if (control.value == 1 || control.value == 2) {
-            theme_cycle(app, control.value == 1, 1);
+            theme_list_open(app, control.value);
         } else if (control.value == 3) {
             apply_theme(app, app->theme_draft);
             page(app, THEME_PREVIEW);
@@ -8259,7 +8646,19 @@ static void activate(App_t *app, Control_t control)
             break;
         }
 
-        tb_openocd_catalog(app->catalog, &app->profile->search);
+        TbProfileWords_t search = app->profile->search;
+        char             error[160];
+        bool             valid = true;
+        for (size_t i = 0; i < search.count && valid; ++i) {
+            valid = tb_path_expand(search.values[i], sizeof(search.values[i]),
+                                   app->profile->search.values[i], error, sizeof(error));
+        }
+        if (!valid) {
+            status(app, error);
+            break;
+        }
+
+        tb_openocd_catalog(app->catalog, &search);
         app->script_kind    = control.value;
         app->script_offset  = app->script_selected = 0;
         app->script_refocus = true;
@@ -8315,6 +8714,8 @@ static void activate(App_t *app, Control_t control)
         request_leave(app, false);
         break;
     case SUBMIT:
+        if (!app->demo_mode && !prepare_paths(app))
+            break;
         if (!app->demo_mode && app->session == 1 && !prepare_server(app))
             break;
         app->review_offset = 0;
@@ -8339,6 +8740,11 @@ static void activate(App_t *app, Control_t control)
         page_result(app, WORKSPACE);
         break;
     case BACK:
+        if (app->page == RESET_CONFIRM || app->page == CLOSE_CONFIRM) {
+            page(app, WORKSPACE);
+            break;
+        }
+
         if (app->page == SCRIPT_LIST || app->page == SCRIPT_FILTER) {
             page(app, app->page == SCRIPT_FILTER ? SCRIPT_LIST : CONFIGURE);
             break;
@@ -8563,6 +8969,7 @@ static void activate(App_t *app, Control_t control)
 
         break;
     case MENU:
+        app->popup.list = false;
         select_pane(app, control.pane);
         app->menu         = app->menu == control.pane ? -1 : control.pane;
         app->menu_focus   = app->menu >= 0;
@@ -8579,6 +8986,9 @@ static void activate(App_t *app, Control_t control)
         break;
     case KEY_SCROLLBAR:
     case SCRIPT_SCROLLBAR:
+    case THEME_PICK:
+    case THEME_SCROLLBAR:
+    case POPUP_SCROLLBAR:
         break;
     case SCROLLBAR:
     case HSCROLLBAR:
@@ -8903,8 +9313,8 @@ static void activate(App_t *app, Control_t control)
             okay = tb_memory_page(m, id, control.value == 4 ? -1 : 1);
         }
 
-        if (okay && control.value != 2 && control.value != 3) {
-            if (control.value != 1)
+        if (okay && control.value != 3) {
+            if (control.value != 1 && control.value != 2)
                 app->demo.panes[id].scroll[TB_MEMORY] = app->demo.panes[id].row[TB_MEMORY] = 0;
 
             page(app, WORKSPACE);
@@ -9022,7 +9432,7 @@ static void activate(App_t *app, Control_t control)
         }
 
         if (action == RANGE_REVIEW_PREVIOUS || action == RANGE_REVIEW_NEXT) {
-            int step = menu_card(100, 17).h - 4;
+            int step = menu_card(app, 100, 17).h - 4;
             app->memory_range_review += action == RANGE_REVIEW_NEXT ? step : -step;
             if (app->memory_range_review < 0)
                 app->memory_range_review = 0;
@@ -9261,6 +9671,7 @@ static void activate(App_t *app, Control_t control)
 
         if (control.value == 5) {
             app->break_hardware = !app->break_hardware;
+            page(app, WORKSPACE);
             break;
         }
 
@@ -9299,7 +9710,7 @@ static void activate(App_t *app, Control_t control)
         break;
     case CODE_IMAGE_CONTROL:
         if (control.value) {
-            app->image_review_row += control.value * (menu_card(100, 20).h - 4);
+            app->image_review_row += control.value * (menu_card(app, 100, 20).h - 4);
             if (app->image_review_row < 0)
                 app->image_review_row = 0;
         } else {
@@ -9825,6 +10236,59 @@ static void activate(App_t *app, Control_t control)
 }
 
 
+static void popup_dismiss(App_t *app)
+{
+    app->popup.list = false;
+    app->popup.drag = -1;
+    if (app->menu >= 0) {
+        app->menu = -1;
+        app->popup.restore = true;
+    } else {
+        activate(app, (Control_t) {.kind = BACK});
+    }
+}
+
+
+static void popup_choose(App_t *app)
+{
+    int index = app->popup.selected;
+    if (index < 0 || index >= app->popup.count)
+        return;
+
+    PopupItem_t item = app->popup.items[index];
+    if (item.kind == BACK) {
+        popup_dismiss(app);
+        return;
+    }
+    Page_e previous = app->page;
+    int menu = app->menu;
+    app->popup.list = false;
+    activate(app, (Control_t) {
+        .kind  = item.kind,
+        .value = item.value,
+        .pane  = item.pane
+    });
+    if (app->page == previous && app->menu == menu && item.kind != MENU_SECTION)
+        page_result(app, WORKSPACE);
+    app->popup.stack_feedback = item.kind == STACK_ACTION;
+}
+
+
+static void popup_move(App_t *app, int selected)
+{
+    int visible = app->popup.rect.h - 3;
+    if (selected < 0)
+        selected = 0;
+    if (selected >= app->popup.count)
+        selected = app->popup.count - 1;
+    app->popup.selected = selected;
+    if (selected < app->popup.offset)
+        app->popup.offset = selected;
+    if (selected >= app->popup.offset + visible)
+        app->popup.offset = selected - visible + 1;
+}
+
+
 static bool edit_field(App_t *app, Control_t control, wint_t key, bool special)
 {
     bool input_page    = editing_page(app);
@@ -9911,6 +10375,13 @@ static void scroll_body(App_t *app, Control_t control, int amount)
     TbView_e      view   = pane->tabs[pane->active];
     TbScroll_t    scroll = workspace_scroll(app, pane, app->panes[control.pane].h - 3);
 
+    if (app->live && view == TB_DISASSEMBLY && amount) {
+        int boundary = app->assembly_boundary[control.pane];
+        app->assembly_boundary[control.pane] = 0;
+        if (boundary && ((boundary < 0) != (amount < 0)) && !scroll.maximum)
+            return;
+    }
+
     if (view == TB_CALL_STACK && app->frame_details[control.pane].open) {
         int next = scroll.offset + amount;
         app->frame_details[control.pane].offset = next < 0 ? 0
@@ -9949,12 +10420,20 @@ static void scroll_body(App_t *app, Control_t control, int amount)
             (void)snprintf(previous, sizeof(previous), "%s",
                            code->instruction_count ? code->instructions[visible].address : "");
         }
-        if (tb_code_assembly_page(tb_session_code(app->debugger), control.pane, amount < 0 ? -1 : 1)) {
+        if (tb_code_assembly_scroll(tb_session_code(app->debugger), control.pane, amount < 0 ? -1 : 1)) {
             app->assembly_tail[control.pane] = true;
             memcpy(app->assembly_previous[control.pane], previous, sizeof(previous));
             app->assembly_scroll_up[control.pane] = -amount;
             pane->scroll[view]                    = 0;
             return;
+        }
+        const TbCodeView_t *code = tb_code_view(tb_session_code(app->debugger), control.pane);
+        if (tb_session_state(app->debugger) == TB_SESSION_STOPPED &&
+            code->instruction_count && !code->stale &&
+            tb_code_settled(tb_session_code(app->debugger), control.pane)) {
+            app->assembly_boundary[control.pane] = amount < 0 ? -1 : 1;
+            app->assembly_boundary_offset[control.pane] = scroll.offset;
+            app->assembly_boundary_maximum[control.pane] = scroll.maximum;
         }
     }
 
@@ -9967,8 +10446,115 @@ static void scroll_body(App_t *app, Control_t control, int amount)
 
 static void mouse_event(App_t *app, MEVENT event)
 {
-    if (event.x < 0 || event.x >= COLS || event.y < 0 || event.y >= LINES)
+    if (COLS < 80 || LINES < 20 || event.x < 0 || event.x >= COLS || event.y < 0 || event.y >= LINES)
         return;
+
+    if (app->popup.list) {
+        TbRect_t card = app->popup.rect;
+        int visible = card.h - 3;
+        int scrolling = app->popup.count - 1;
+        TbRect_t track = tb_scrollbar_track(card, false);
+        TbScroll_t bar = tb_scrollbar_layout(axis_scroll(scrolling, visible, app->popup.offset), track.h);
+        if (event.bstate & (BUTTON4_PRESSED | BUTTON5_PRESSED)) {
+            app->popup.offset = axis_scroll(scrolling, visible, app->popup.offset +
+                (event.bstate & BUTTON4_PRESSED ? -3 : 3)).offset;
+            return;
+        }
+        int position = event.y - track.y;
+        if (app->popup.drag >= 0) {
+            int travel = track.h - bar.thumb_size;
+            int next = position - app->popup.drag;
+            if (next < 0)
+                next = 0;
+            if (next > travel)
+                next = travel;
+            if (travel > 0)
+                app->popup.offset = next * bar.maximum / travel;
+            if (event.bstate & BUTTON1_RELEASED)
+                app->popup.drag = -1;
+            return;
+        }
+        if (!(event.bstate & (BUTTON1_PRESSED | BUTTON1_CLICKED)))
+            return;
+        if (!tb_rect_contains(card, event.x, event.y)) {
+            popup_dismiss(app);
+            return;
+        }
+        if (bar.maximum > 0 && tb_rect_contains(track, event.x, event.y)) {
+            if (position >= bar.thumb_start && position < bar.thumb_start + bar.thumb_size) {
+                if (event.bstate & BUTTON1_PRESSED)
+                    app->popup.drag = position - bar.thumb_start;
+            } else {
+                app->popup.offset = axis_scroll(scrolling, visible, bar.offset +
+                    (position < bar.thumb_start ? -visible : visible)).offset;
+            }
+        } else if (event.y == card.y + card.h - 2 && event.x > card.x &&
+                   event.x < card.x + card.w - 2) {
+            app->popup.selected = app->popup.count - 1;
+            popup_choose(app);
+        } else if (position >= 0 && position < visible && event.x > card.x && event.x < card.x + card.w - 2) {
+            app->popup.selected = bar.offset + position;
+            popup_choose(app);
+        }
+        return;
+    }
+    if (app->popup.active && app->popup.card.w > 0 &&
+        !tb_rect_contains(app->popup.card, event.x, event.y))
+        return;
+
+    if (app->theme_menu) {
+        size_t     choices[64];
+        int        count   = theme_choices(app, choices);
+        int        visible = app->theme_list_rect.h - 2;
+        TbScroll_t bar     = axis_scroll(count, visible, app->theme_offset);
+        if (event.bstate & (BUTTON4_PRESSED | BUTTON5_PRESSED)) {
+            app->theme_offset = axis_scroll(count, visible, app->theme_offset +
+                                 (event.bstate & BUTTON4_PRESSED ? -3 : 3)).offset;
+            return;
+        }
+
+        for (int i = 0; i < app->count; ++i) {
+            Control_t item = app->controls[i];
+            if (item.kind == THEME_SCROLLBAR &&
+                (app->theme_drag_grab >= 0 || tb_rect_contains(item.rect, event.x, event.y))) {
+                int position = event.y - item.rect.y;
+                if (app->theme_drag_grab >= 0) {
+                    int travel = bar.visible - bar.thumb_size;
+                    int next   = position - app->theme_drag_grab;
+                    if (next < 0)
+                        next = 0;
+                    if (next > travel)
+                        next = travel;
+                    if (travel > 0)
+                        app->theme_offset = next * bar.maximum / travel;
+                    if (event.bstate & BUTTON1_RELEASED)
+                        app->theme_drag_grab = -1;
+                } else if (event.bstate & (BUTTON1_PRESSED | BUTTON1_CLICKED)) {
+                    if (position >= bar.thumb_start && position < bar.thumb_start + bar.thumb_size) {
+                        if (event.bstate & BUTTON1_PRESSED)
+                            app->theme_drag_grab = position - bar.thumb_start;
+                    } else {
+                        app->theme_offset = axis_scroll(count, visible, app->theme_offset +
+                            (position < bar.thumb_start ? -visible : visible)).offset;
+                    }
+                }
+                return;
+            }
+
+            if (item.kind == THEME_PICK && tb_rect_contains(item.rect, event.x, event.y) &&
+                (event.bstate & (BUTTON1_CLICKED | BUTTON1_PRESSED))) {
+                app->theme_selected = item.value;
+                theme_list_close(app, true);
+                return;
+            }
+        }
+
+        if (!tb_rect_contains(app->theme_list_rect, event.x, event.y) &&
+            (event.bstate & (BUTTON1_CLICKED | BUTTON1_PRESSED)))
+            theme_list_close(app, false);
+
+        return;
+    }
 
     if (app->frame_display.active) {
         for (int i = 0; i < TB_MAX_PANES; ++i) {
@@ -9981,7 +10567,7 @@ static void mouse_event(App_t *app, MEVENT event)
 
     app->keyboard_focus = false;
     if (app->page == SCRIPT_LIST && (event.bstate & (BUTTON4_PRESSED | BUTTON5_PRESSED))) {
-        script_move(app, event.bstate & BUTTON4_PRESSED ? -3 : 3);
+        script_scroll(app, app->script_offset + (event.bstate & BUTTON4_PRESSED ? -3 : 3));
         return;
     }
 
@@ -9991,11 +10577,12 @@ static void mouse_event(App_t *app, MEVENT event)
             if (bar.kind != SCRIPT_SCROLLBAR)
                 continue;
 
-            TbScroll_t scroll   = axis_scroll(script_count(app), script_visible(), app->script_offset);
-            int        position = event.y - bar.rect.y;
+            TbScroll_t scroll = tb_scrollbar_layout(
+                axis_scroll(script_count(app), script_visible(), app->script_offset), bar.rect.h);
+            int position = event.y - bar.rect.y;
 
             if (app->script_drag_grab >= 0) {
-                int travel = scroll.visible - scroll.thumb_size;
+                int travel = bar.rect.h - scroll.thumb_size;
                 int next   = position - app->script_drag_grab;
 
                 if (next < 0)
@@ -10034,12 +10621,13 @@ static void mouse_event(App_t *app, MEVENT event)
             if (bar.kind != KEY_SCROLLBAR)
                 continue;
 
-            TbScroll_t scroll =
-                axis_scroll((COLS >= 112 ? 15 : TB_BIND_COUNT) * 3, keybind_rows() * 3, app->key_scroll * 3);
+            TbScroll_t scroll = tb_scrollbar_layout(
+                axis_scroll((COLS >= 112 ? 15 : TB_BIND_COUNT) * 3,
+                            keybind_rows() * 3, app->key_scroll * 3), bar.rect.h);
             int position = event.y - bar.rect.y;
 
             if (app->key_drag_grab >= 0) {
-                int travel = scroll.visible - scroll.thumb_size;
+                int travel = bar.rect.h - scroll.thumb_size;
                 int next   = position - app->key_drag_grab;
 
                 if (next < 0)
@@ -10083,12 +10671,12 @@ static void mouse_event(App_t *app, MEVENT event)
         TbScroll_t scroll = app->scroll_drag_horizontal
             ? app->horizontal_scroll[pane_index]
             : workspace_scroll(app, pane, app->panes[pane_index].h - 3);
-        int travel = scroll.visible - scroll.thumb_size;
-        int position =
-            app->scroll_drag_horizontal
-                ? event.x - app->panes[pane_index].x - 1 - code_gutter(pane->tabs[pane->active]) -
-                      app->scroll_drag_grab
-                : event.y - app->panes[pane_index].y - body_top(app, pane_index) - app->scroll_drag_grab;
+        TbRect_t track = pane_scrollbar_track(app, pane_index, app->scroll_drag_horizontal);
+        int length = app->scroll_drag_horizontal ? track.w : track.h;
+        scroll = tb_scrollbar_layout(scroll, length);
+        int travel = length - scroll.thumb_size;
+        int position = (app->scroll_drag_horizontal ? event.x - track.x : event.y - track.y) -
+                       app->scroll_drag_grab;
 
         if (position < 0)
             position = 0;
@@ -10160,14 +10748,7 @@ static void mouse_event(App_t *app, MEVENT event)
     if (event.bstate & (BUTTON4_PRESSED | BUTTON5_PRESSED)) {
         int direction = event.bstate & BUTTON4_PRESSED ? -1 : 1;
         if (app->page == KEYBINDS && !app->key_confirm && app->key_capture < 0) {
-            int target = app->key_selected + direction * 3;
-            if (target < 0)
-                target = 0;
-
-            if (target >= TB_BIND_COUNT)
-                target = TB_BIND_COUNT - 1;
-
-            keybind_select(app, target);
+            keybind_scroll(app, app->key_scroll + direction * 3);
             return;
         }
 
@@ -10209,7 +10790,7 @@ static void mouse_event(App_t *app, MEVENT event)
     if (layered) {
         hit_pane = tb_layout_pane_at(&app->layout, event.x, event.y);
         for (int lower = 0; lower < 3; ++lower) {
-            if (hit_pane < 0 && !app->layout.lower_open[lower] &&
+            if (hit_pane < 0 &&
                 tb_rect_contains(app->layout.lower_bars[lower], event.x, event.y)) {
                 hit_pane = app->layout.root_focus[lower + 3];
             }
@@ -10272,12 +10853,6 @@ static void mouse_event(App_t *app, MEVENT event)
             control.kind == FIELD && (input_page || !((app->session < 2 && control.value == 0) ||
                                                       (app->session == 1 && control.value == 8)));
 
-        if (app->page == THEMES && control.kind == THEME_ACTION &&
-            (control.value == 1 || control.value == 2) && event.x == control.rect.x + 12) {
-            theme_cycle(app, control.value == 1, -1);
-            return;
-        }
-
         if (control.kind == COMMAND_FIELD) {
             app->demo.pane                    = control.pane;
             app->command_cursor[control.pane] = wcslen(app->command_input[control.pane]);
@@ -10295,6 +10870,7 @@ static void mouse_event(App_t *app, MEVENT event)
             bool          horizontal = control.kind == HSCROLLBAR;
             TbScroll_t scroll = horizontal ? app->horizontal_scroll[control.pane]
                 : workspace_scroll(app, pane, control.rect.h);
+            scroll = tb_scrollbar_layout(scroll, horizontal ? control.rect.w : control.rect.h);
             int row = horizontal ? event.x - control.rect.x : event.y - control.rect.y;
 
             if (row >= scroll.thumb_start && row < scroll.thumb_start + scroll.thumb_size) {
@@ -10470,8 +11046,84 @@ static bool mouse_input(App_t *app, wint_t key, bool special)
 }
 
 
+static void paste_character(App_t *app, wint_t key)
+{
+    if (!app->paste_target || app->page != app->paste_page || app->focus >= app->count ||
+        !same_control(app->controls[app->focus], app->paste_control)) {
+        app->paste_target = false;
+        return;
+    }
+
+    /* All fields are single-line. Separators become text, never navigation. */
+    if (key == '\r' || key == '\n' || key == '\t')
+        key = ' ';
+    if (!iswprint(key) || wcwidth((wchar_t)key) <= 0)
+        return;
+
+    size_t  *cursor;
+    wchar_t *value = editable_value(app, app->paste_control, &cursor);
+    if (wcslen(value) >= FIELD_SIZE - 1U) {
+        app->paste_truncated = true;
+        return;
+    }
+    (void)edit_field(app, app->paste_control, key, false);
+}
+
+
+static bool paste_event(App_t *app, wint_t key, bool special)
+{
+    static const wchar_t end[] = L"\033[201~";
+    if (!app->paste_active) {
+        if (!special || key != PASTE_BEGIN)
+            return false;
+
+        app->paste_active    = true;
+        app->paste_end       = 0;
+        app->paste_truncated = false;
+        app->paste_page      = app->page;
+        app->paste_control   = app->controls[app->focus];
+        app->paste_target    = app->count > 0 && text_control(app, app->paste_control);
+        /* Read payload literally: escape sequences must not become UI events. */
+        (void)keypad(stdscr, FALSE);
+        return true;
+    }
+
+    if (special)
+        return key != KEY_RESIZE;
+
+    if (key == (wint_t)end[app->paste_end]) {
+        if (++app->paste_end == sizeof(end) / sizeof(*end) - 1) {
+            app->paste_active = false;
+            (void)keypad(stdscr, TRUE);
+            if (app->paste_truncated) {
+                char message[80];
+                (void)snprintf(message, sizeof(message),
+                               "Paste truncated: field limit is %u characters.", FIELD_SIZE - 1U);
+                status(app, message);
+            }
+            if (app->page == CODE_FILES)
+                app->file_page = 0;
+        }
+        return true;
+    }
+
+    /* An incomplete delimiter can also be ordinary clipboard text. */
+    for (size_t i = 0; i < app->paste_end; ++i)
+        paste_character(app, (wint_t)end[i]);
+    app->paste_end = 0;
+    if (key == (wint_t)end[0])
+        app->paste_end = 1;
+    else
+        paste_character(app, key);
+    return true;
+}
+
+
 static void key_event(App_t *app, wint_t key, bool special)
 {
+    if (paste_event(app, key, special))
+        return;
+
     if (mouse_input(app, key, special))
         return;
 
@@ -10497,16 +11149,93 @@ static void key_event(App_t *app, wint_t key, bool special)
     }
 
     if (special && key == KEY_RESIZE) {
+        memset(app->assembly_boundary, 0, sizeof(app->assembly_boundary));
         /* A new wrap width must not skip unread register-review text. */
         if (app->page == REGISTER_EDIT)
             app->register_offset = 0;
 
-        app->key_drag_grab    = app->script_drag_grab = -1;
+        app->key_drag_grab    = app->script_drag_grab = app->theme_drag_grab = app->popup.drag = -1;
         app->drag             = -1;
         app->scroll_drag_pane = -1;
         app->resizing         = false;
 
         (void)clearok(stdscr, TRUE);
+        return;
+    }
+
+    if (COLS < 80 || LINES < 20)
+        return;
+
+    if (app->theme_menu && !(special && key == KEY_MOUSE)) {
+        size_t choices[64];
+        int    count   = theme_choices(app, choices);
+        int    visible = theme_dropdown_rect(app, count).h - 2;
+        if (!special && key == 27) {
+            theme_list_close(app, false);
+        } else if ((!special && (key == '\n' || key == '\r' || key == ' ')) ||
+                   (special && key == KEY_ENTER)) {
+            theme_list_close(app, true);
+        } else if (special && (key == KEY_PPAGE || key == KEY_NPAGE)) {
+            app->theme_offset = axis_scroll(count, visible, app->theme_offset +
+                                (key == KEY_PPAGE ? -visible : visible)).offset;
+        } else {
+            if ((special && key == KEY_UP) || (!special && app->preferences.vim && key == 'k'))
+                --app->theme_selected;
+            else if ((special && key == KEY_DOWN) || (!special && app->preferences.vim && key == 'j'))
+                ++app->theme_selected;
+            else if (special && key == KEY_HOME)
+                app->theme_selected = 0;
+            else if (special && key == KEY_END)
+                app->theme_selected = count - 1;
+
+            if (app->theme_selected < 0)
+                app->theme_selected = 0;
+            if (app->theme_selected >= count)
+                app->theme_selected = count - 1;
+            if (app->theme_selected < app->theme_offset)
+                app->theme_offset = app->theme_selected;
+            if (app->theme_selected >= app->theme_offset + visible)
+                app->theme_offset = app->theme_selected - visible + 1;
+        }
+        return;
+    }
+
+    if (app->popup.list && !(special && key == KEY_MOUSE)) {
+        for (int action = 0; action < TB_BIND_LEFT; ++action) {
+            if (tb_keybind_matches(app->preferences.keys[action], key, special)) {
+                activate(app, (Control_t) {
+                    .kind  = TOOL,
+                    .value = action
+                });
+                return;
+            }
+        }
+        int visible = app->popup.rect.h - 3;
+        if ((!special && key == 27) ||
+            tb_keybind_matches(app->preferences.keys[TB_BIND_BACK], key, special)) {
+            popup_dismiss(app);
+        } else if ((!special && (key == '\n' || key == '\r' || key == ' ')) ||
+                   (special && key == KEY_ENTER)) {
+            popup_choose(app);
+        } else if ((special && (key == KEY_UP || key == KEY_DOWN || key == KEY_PPAGE || key == KEY_NPAGE ||
+                                key == KEY_HOME || key == KEY_END || key == KEY_BTAB)) ||
+                   (!special && key == '\t') ||
+                   tb_keybind_matches(app->preferences.keys[TB_BIND_UP], key, special) ||
+                   tb_keybind_matches(app->preferences.keys[TB_BIND_DOWN], key, special)) {
+            int next = app->popup.selected;
+            if (special && key == KEY_HOME)
+                next = 0;
+            else if (special && key == KEY_END)
+                next = app->popup.count - 1;
+            else if (special && (key == KEY_PPAGE || key == KEY_NPAGE))
+                next = app->popup.offset + (key == KEY_PPAGE ? -visible : visible);
+            else if ((special && (key == KEY_UP || key == KEY_BTAB)) ||
+                     tb_keybind_matches(app->preferences.keys[TB_BIND_UP], key, special))
+                --next;
+            else
+                ++next;
+            popup_move(app, next);
+        }
         return;
     }
 
@@ -10605,6 +11334,16 @@ static void key_event(App_t *app, wint_t key, bool special)
         }
     }
 
+    if (special && (key == KEY_PPAGE || key == KEY_NPAGE) &&
+        (app->page == SCRIPT_LIST || (app->page == KEYBINDS && !app->key_confirm))) {
+        int direction = key == KEY_PPAGE ? -1 : 1;
+        if (app->page == SCRIPT_LIST)
+            script_scroll(app, app->script_offset + direction * script_visible());
+        else
+            keybind_scroll(app, app->key_scroll + direction * keybind_rows());
+        return;
+    }
+
     if (app->page == SCRIPT_LIST && control.kind == SCRIPT_PICK &&
         ((special && (key == KEY_UP || key == KEY_DOWN || key == KEY_PPAGE || key == KEY_NPAGE)) ||
          (!special && app->preferences.vim && !app->field_insert && (key == 'j' || key == 'k')))) {
@@ -10613,7 +11352,11 @@ static void key_event(App_t *app, wint_t key, bool special)
             : (key == KEY_PPAGE ? -script_visible() : script_visible())
             : (key == 'k' ? -1 : 1);
 
-        script_move(app, delta);
+        if (special && (key == KEY_PPAGE || key == KEY_NPAGE))
+            script_scroll(app, app->script_offset + delta);
+        else
+            script_move(app, delta);
+
         return;
     }
 
@@ -10715,16 +11458,14 @@ static void key_event(App_t *app, wint_t key, bool special)
                 } else if (key == KEY_END) {
                     target = TB_BIND_COUNT - 1;
                 } else if (key == KEY_PPAGE || key == KEY_NPAGE) {
-                    target = action + (key == KEY_PPAGE ? -keybind_rows() : keybind_rows());
-                    if (target < 0)
-                        target = 0;
-
-                    if (target >= TB_BIND_COUNT)
-                        target = TB_BIND_COUNT - 1;
+                    keybind_scroll(app, app->key_scroll +
+                                   (key == KEY_PPAGE ? -keybind_rows() : keybind_rows()));
+                    return;
                 }
             }
 
-            if (target != action) {
+            if (target != action || (special && (key == KEY_HOME || key == KEY_END ||
+                key == KEY_UP || key == KEY_DOWN || key == KEY_LEFT || key == KEY_RIGHT))) {
                 keybind_select(app, target);
                 return;
             }
@@ -10737,7 +11478,21 @@ static void key_event(App_t *app, wint_t key, bool special)
         return;
     }
 
+    if ((!special && (key == '\n' || key == '\r' || key == ' ')) ||
+        (special && key == KEY_ENTER)) {
+        if (app->page == KEYBINDS && control.kind == KEY_ACTION && control.value == 1) {
+            keybind_select(app, control.pane);
+        } else if (app->page == SCRIPT_LIST && control.kind == SCRIPT_PICK) {
+            script_move(app, 0);
+        }
+    }
+
     if (!special && key == 27) {
+        if (app->popup.active && !(text_entry && app->field_insert)) {
+            activate(app, (Control_t) {.kind = BACK});
+            return;
+        }
+
         int focused_pane = app->content_pane >= 0 ? app->content_pane : app->demo.pane;
         if (app->page == WORKSPACE && focused_pane >= 0 && focused_pane < TB_MAX_PANES &&
             app->demo.panes[focused_pane].tabs[app->demo.panes[focused_pane].active] == TB_CALL_STACK &&
@@ -11139,6 +11894,11 @@ int tb_tui_run(bool demo)
         (void)define_key("\033[1;5B", CONTENT_DOWN);
         (void)define_key("\033[1;5A", CONTENT_UP);
         (void)define_key("\033[1;5C", CONTENT_RIGHT);
+        bool bracketed_paste = define_key("\033[200~", PASTE_BEGIN) != ERR;
+        if (bracketed_paste) {
+            (void)fputs("\033[?2004h", stdout);
+            (void)fflush(stdout);
+        }
         (void)set_escdelay(25);
         (void)mouseinterval(0);
 
@@ -11238,7 +11998,7 @@ int tb_tui_run(bool demo)
 
             if (type != ERR && interrupted == 0) {
                 key_event(&app, key, type == KEY_CODE_YES);
-                if (!app.quit && interrupted == 0)
+                if (!app.quit && interrupted == 0 && !app.paste_active)
                     draw(&app);
 
                 continue;
@@ -11273,6 +12033,8 @@ int tb_tui_run(bool demo)
             (void)tb_session_destroy(app.debugger);
         }
 
+        if (bracketed_paste)
+            (void)fputs("\033[?2004l", stdout);
         if (drag_reporting)
             (void)fputs("\033[?1002l\033[?1006l", stdout);
 
@@ -11288,6 +12050,7 @@ int tb_tui_run(bool demo)
         tb_profiles_destroy(app.profiles);
         free(app.profile);
         free(app.session_profile);
+        free(app.review_paths);
         tb_setup_capture_destroy(app.setup);
         free(app.setup_review);
         free(app.setup_review_connection);

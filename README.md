@@ -27,14 +27,19 @@ the integrated Console.
 and save connection profiles, workspace arrangements and inspection definitions
 for later sessions. Saved setups restore definitions, not sampled values or access permissions.
 
+Each primary column has an independently expandable lower inspector. Expanded
+panes share the column's space, keeping both views and their controls accessible.
+Contextual menus and input dialogs keep the debugging workspace visible while
+you navigate or adjust an inspector. See [workspace menus](docs/tutorial/02-interface_and_navigation.md#menus-and-dialogs).
+
 Deliberate stopped-target edits support integer/bool variables, eligible ordinary
 RAM and CPU registers, with Review/Apply and separate explicit verification.
-See [deliberate editing](docs/usage.md#deliberate-editing) for limits.
+See [deliberate editing](docs/tutorial/14-editing_values.md) for limits.
 
 Peripheral reads can have side effects: MMIO sampling requires explicit access
 decisions and is available for the validated STM32/OpenOCD configuration; navigation never samples MMIO.
-See [Memory access controls](docs/usage.md#memory-inspection) and
-[Stack inspection](docs/usage.md#stack-inspection). Console commands and debugger
+See [Memory access controls](docs/tutorial/11-memory.md) and
+[Stack inspection](docs/tutorial/12-stack.md). Console commands and debugger
 scripts can change target state. Firmware programming remains external.
 
 ## Targets and platforms
@@ -53,6 +58,11 @@ Embedded sessions use a target-compatible GDB and debug server. The OpenOCD flow
 can start a local server or connect to an existing one; a separate connection
 flow supports existing remote GDB servers.
 
+C++ executables and firmware use those same connection flows with compatible GDB
+and matching debug symbols. Basic object/member inspection is available, within
+the [Locals/Watches expression restrictions](docs/tutorial/10-locals_and_watches.md#inspect-a-c-object).
+This does not imply full C++ expression or specialized STL-container support.
+
 Architecture support is distinct from validation of a particular board, probe
 and backend. Other GDB targets are not automatically supported, and features
 depend on the capabilities reported by the target and server. Consult the
@@ -62,10 +72,13 @@ Current scope and planned features are documented in the
 
 ## Build and first session
 
+Use a terminal of at least **80×20 cells**.
+
 Build on Linux with a **C17 compiler**, **GNU Make**, **pkg-config**, and development
 files for **ncursesw**, **libelf** and **json-c**. Native launch needs **GDB 17+** and
 ptrace permission. Embedded debugging needs the appropriate GDB, probe and server.
-A C++ compiler is needed only for C++ test fixtures.
+The frontend is written in C and needs no C++ compiler. A C++ compiler is needed
+when building C++ target programs or the supplied C++ fixtures.
 
 ```sh
 make
@@ -89,10 +102,10 @@ For a workspace preview without connecting a debugger:
 4. Halt the target, set a breakpoint in your code, then continue and inspect the
    stopped state. Use the visible toolbar or shortcuts below to step.
 
-The [OpenOCD guide](docs/usage.md#openocd-sessions) covers script selection and
-server ownership; the [remote connection guide](docs/usage.md#existing-remote-gdb-servers)
+The [OpenOCD guide](docs/tutorial/04-openocd_sessions.md) covers script selection and
+server ownership; the [remote connection guide](docs/tutorial/05-remote_sessions.md)
 explains existing servers and protocols. See
-[embedded startup debugging](docs/usage.md#debugging-embedded-startup-code) for
+[embedded startup debugging](docs/tutorial/06-execution_control.md#debugging-embedded-startup-code) for
 reset handlers and early boot, or the
 [embedded fixture guide](tests/fixtures/embedded/README.md) for sample firmware.
 
@@ -123,7 +136,7 @@ in its **Command** field and press Enter to stop at `main`.
 
 Focus Source for source stepping or Disassembly for instruction stepping. Saved
 keybindings may differ from these defaults. In tmux, enable mouse forwarding
-with `set -g mouse on`. The [usage guide](docs/usage.md) covers the remaining
+with `set -g mouse on`. The [user guide](docs/tutorial/README.md) covers the remaining
 controls, saved setups and troubleshooting.
 
 <details>
@@ -133,6 +146,8 @@ Prefer a prebuilt executable? Get the Linux x86-64 archive and `SHA256SUMS` from
 [Releases](https://github.com/gnix0/the-bugger/releases), extract the archive, and
 run `./the-bugger`. GDB, OpenOCD and shared libraries remain external dependencies;
 the included `BUILD-INFO.txt` lists host and runtime requirements.
+The complete user guide and screenshots are included at `docs/tutorial/README.md`
+for offline reference; build its fixtures from the matching source archive.
 
 Release changes are in the [changelog](CHANGELOG.md). Distribution contents and
 build instructions are in the
@@ -147,21 +162,33 @@ Choose **Config → Themes** for appearance and **Config → Keybinds** for cont
 Optional Vim-like navigation and field editing are available alongside the
 standard keyboard and mouse controls.
 
-Themes include Everforest, Rosé Pine, Tokyo Night, Catppuccin, Modus, Gruber Darker,
-Gruvbox Material, Solarized, Nightfox, Zenburn and Monokai Pro, with dark and light
-variants across the catalogue. See [themes](docs/usage.md#configuration-and-themes),
-[keybindings](docs/usage.md#personal-keybinds) and
-[Vim-like input](docs/usage.md#vim-like-input) for configuration. Examples:
+Themes include Ashen (with black panels and red borders in high-contrast), Catppuccin, Dracula,
+Everforest, Gruber Darker, Gruvbox Material, Kanagawa, Modus, Monokai Pro, Moonfly,
+Nightfox, Nord, One Dark, Rosé Pine, Solarized, Tokyo Night and Zenburn.
+See [themes](docs/tutorial/17-customization.md#choose-and-preview-a-theme),
+[keybindings](docs/tutorial/17-customization.md#assign-personal-keys) and
+[Vim-like input](docs/tutorial/17-customization.md#vim-like-input) for configuration.
+These theme previews use simulated data.
 
-| Catppuccin Macchiato | Everforest (Dark Medium) | Rosé Pine (Main) |
+| Ashen | Catppuccin Macchiato | Everforest (Dark Medium) |
 |---|---|---|
-| ![Catppuccin Macchiato](docs/assets/themes/theme_catppuccin_macchiato.png) | ![Everforest Dark Medium](docs/assets/themes/theme_everforest_dark_medium.png) | ![Rosé Pine Main](docs/assets/themes/theme_rose_pine_main.png) |
+| ![Ashen](docs/assets/themes/theme_ashen.png) | ![Catppuccin Macchiato](docs/assets/themes/theme_catppuccin_macchiato.png) | ![Everforest Dark Medium](docs/assets/themes/theme_everforest_dark_medium.png) |
+| **Gruber Darker** | **Gruvbox Material (Dark Medium)** | **Kanagawa (Wave)** |
+| ![Gruber Darker](docs/assets/themes/theme_gruber_darker.png) | ![Gruvbox Material Dark Medium](docs/assets/themes/theme_gruvbox_material_dark_medium.png) | ![Kanagawa Wave](docs/assets/themes/theme_kanagawa_wave.png) |
+| **Modus (Vivendi)** | **Monokai Pro** | **Moonfly** |
+| ![Modus Vivendi](docs/assets/themes/theme_modus_vivendi.png) | ![Monokai Pro](docs/assets/themes/theme_monokai_pro.png) | ![Moonfly](docs/assets/themes/theme_moonfly.png) |
+| **Nightfox** | **Nord** | **One Dark** |
+| ![Nightfox](docs/assets/themes/theme_nightfox.png) | ![Nord](docs/assets/themes/theme_nord.png) | ![One Dark](docs/assets/themes/theme_one_dark.png) |
+| **Rosé Pine (Main)** | **Solarized (Dark)** | **Tokyo Night** |
+| ![Rosé Pine Main](docs/assets/themes/theme_rose_pine_main.png) | ![Solarized Dark](docs/assets/themes/theme_solarized_dark.png) | ![Tokyo Night](docs/assets/themes/theme_tokyo_night.png) |
+| **Zenburn** | | |
+| ![Zenburn](docs/assets/themes/theme_zenburn.png) | | |
 
 ## Documentation and contributing
 
 | Find out more | Reference |
 |---|---|
-| Controls, connections and saved setups | [Usage](docs/usage.md) |
+| Controls, connections and saved setups | [User guide](docs/tutorial/README.md) |
 | Current scope and future work | [Requirements](docs/requirements.md), [roadmap](docs/roadmap.md) |
 | Tested targets and results | [Validation records](docs/validation.md) |
 | Development and implementation | [Contributing](CONTRIBUTING.md), [architecture](docs/architecture.md) |

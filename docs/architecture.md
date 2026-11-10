@@ -68,6 +68,16 @@ Rendering uses the same field buffers and Unicode cell widths, with bounded
 horizontal viewports; nonfocused fields never mutate the focused cursor.
 File-filter edits still reset paging.
 
+Bracketed paste is handled before shortcut, mouse and modal-editor dispatch.
+Its payload is read literally with ncurses keypad decoding suspended until the
+closing delimiter, including across input chunks and resizes. All text fields
+share the existing bounded editor: tabs and line breaks become spaces, other
+control characters are ignored, and overflow is discarded without changing focus.
+Pastes outside a text field are discarded. The field identity must remain valid
+throughout the paste; no pasted key can submit a command or navigate controls.
+Ordinary input drawing resumes at paste completion, while debugger pumping remains
+active. Terminal cleanup disables bracketed-paste mode on normal and signal exits.
+
 Controls retain `(kind, value, pane)` identities across redraws; rectangles are
 rebuilt from the existing layout. Directional navigation scans at most 1,024
 rendered controls, excludes content/scrollbars/dividers, and prefers aligned
@@ -192,17 +202,50 @@ paths. No saved layout, new session backend or target-access policy is introduce
 
 `src/tui/theme.c` and `include/tui/theme.h`
 define the built-in palette catalog, stable family/variant
-identifiers and semantic curses pairs. Catppuccin Macchiato is the default;
-All eleven families remain selectable. The
-49 palettes use shared workspace/panel/raised/selection surfaces and semantic
+identifiers and semantic curses pairs. Catppuccin Macchiato is the default.
+The seventeen families appear alphabetically in dropdowns and cycling. The
+66 palettes use shared workspace/panel/raised/selection surfaces and semantic
 foregrounds. Muted/accent colors are adjusted toward text where required for
 contrast. RGB roles map to direct color, nearest xterm 256-color entries, or
 existing 8-color/monochrome fallbacks. If quantization merges a foreground with
 its background, the text color supplies a contrasting fallback.
 
+All view and menu scrollbars share a renderer and a one-cell track-inset helper.
+Track length is independent of visible content length: thumb proportions use the
+actual content viewport, then scale to the drawn track. Drawing, track clicks and
+dragging use that same geometry. Horizontal pane tracks span the pane's inner
+width, including the area below Source's fixed line gutter. Vertical pane tracks
+reserve a right-side cell outside the body hit region; headers and toolbars remain
+separate. Popup tracks extend beside pinned footer controls without counting those
+controls as scrollable content. Keybind and script tracks use the same inset rule
+within their header-adjusted frames.
+Vertical tracks and proportional thumbs use background-filled cells. Horizontal
+bars draw lower-half blocks in a single-cell-width UTF-8 locale, with the same
+track/accent colors in the foreground and the panel surface behind them. Other
+locales retain full-cell horizontal bars. Both use theme roles derived from the
+raised surface and a family-specific interface accent.
+That accent is consistent across views and independent of value/status colors. Monochrome uses an
+ACS line track and reverse-video thumb. Bars appear only on overflow; their
+existing paging, dragging and keyboard behavior is unchanged. Borders and split
+dividers use ncurses line-drawing characters. Drawing remains batched through
+`wnoutrefresh()` and `doupdate()` in the ordinary event loop.
+
+Ashen/high-contrast draws red frames outside the existing pane bounds, using
+margins and shared gutters. Shared edges form line-drawing junctions. Pane
+content, controls, viewport capacity and divider hit regions retain the same
+geometry as other themes. Reserved frame rows separate status, dock and
+navigation chrome from pane borders.
+
 `app.c` owns Config, Themes and theme-preview page state. A draft palette is
-separate from the saved choice. Changing a family chooses a valid variant;
-preview reinitializes curses pairs and requests a full repaint. Preview renders
+separate from the saved choice. Theme/variant fields open anchored dropdowns
+with at most eight visible choices, or cycle directly with Left/Right. Dropdowns
+open above the field when space below is insufficient. Resizing preserves the
+selection and brings it into view; scrolling alone does not select. Escape or an
+outside click dismisses the dropdown without activating an obscured control.
+These bounded overlays use the existing control routing and screen compositor,
+with no separate event loop or window allocation.
+
+Changing a family chooses a valid variant. Preview reinitializes curses pairs and requests a full repaint. It renders
 an independent `TbDemo_t`/`TbLayout_t`, never the live session or inspection models.
 Back restores the saved palette; Save returns to Config only after persistence
 succeeds. Theme operations do not modify workspace geometry or session profiles.
@@ -238,6 +281,38 @@ execute Lua. [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES) retains exact upstrea
 revisions, authors and MIT, Apache-2.0 and GPL notices and accompanies the binary distribution
 with the GPLv3 text in LICENSE. Modus color-deficiency variants preserve upstream
 semantic substitutions; terminal adaptations carry no accessibility certification.
+
+## Contextual workspace menus and dialogs
+
+Workspace Actions, inspector option lists and pane view/action selectors use the
+same dropdown placement function as Theme/Variant. The current rendered trigger
+is the anchor; usable terminal bounds exclude the status rows. Lists prefer
+space below, open upward when needed, and scroll within a bounded viewport.
+Their Back or section-switch entry stays reachable. Resizing recomputes the
+anchor from the workspace controls without changing the split tree or opening a
+collapsed pane. Pointer input is confined to the popup; existing execution
+shortcuts remain available in contextual lists. Modal forms retain their text
+entry and validation rules.
+
+Subordinate input, source lookup, inspection permissions, editing reviews and
+session confirmations draw centered, bordered dialogs over the workspace.
+A dialog replaces its invoking menu; the two are not stacked. Mouse clicks
+outside a dropdown dismiss it and are consumed; outside a modal dialog they
+leave it open. Closing restores the original control/content focus. Underlying
+views continue to process model revisions with their existing access guards;
+no popup owns a second event loop or changes read/write authorization.
+
+Native, OpenOCD and existing-server session reviews use the same centered,
+bordered dialog over their configuration form. Start/Connect accepts the reviewed
+settings; Back or Escape returns to the invoking control and retained field
+viewport. The shared compositor paints the parent form with no active input
+controls beneath the modal. Review width leaves configuration labels visible
+beside the dialog, including at the minimum terminal size. No connection is
+started by opening or dismissing it.
+Connection editing, persistent preferences and profile management retain dedicated
+screens for their multi-step workflows. Board, target and adapter selectors keep
+their existing flows. Direct toggles, cycling controls and execution shortcuts
+remain available; overlays do not introduce floating debugging panes.
 
 ## Data flow and invariants
 
@@ -370,13 +445,13 @@ References: [OpenOCD startup and script search](https://openocd.org/doc/html/Run
 
 `src/layout/layout.c` is independent of curses and debugger data. The workspace
 uses 36/34/30 primary column proportions. Three lower roots start minimized in
-a one-row dock above the footer. Open roots overlay their columns without
-changing primary rectangles; compact/oversized split groups span the workspace.
-Each root retains its own preferred height, initially 38% of the primary area,
-clamped to at least seven rows and at most the primary height minus its grip.
-Temporary terminal clamping does not overwrite that preference. Session startup
-resets heights and minimizes all three. The legacy 62/38 arrangement remains
-only for the simulated theme reference. Each root contains
+a one-row dock above the footer. Each expanded lower root shares a vertical split
+with its corresponding primary root. Heights are independent across columns;
+opening Memory does not change Disassembly or Registers. Preferred lower heights
+start at 38% of the column and are clamped between both subtree minimums. Temporary
+terminal clamping does not overwrite that preference. Session startup resets
+heights and minimizes all three. The legacy 62/38 arrangement remains only for
+the simulated theme reference. Each root contains
 a binary split tree. A leaf names a stable pane slot; an internal node stores
 its direction, child indices and fixed-point ratio. The workspace owns a bounded
 pool of 32 pane slots and 64 tree nodes, avoiding heap ownership complexity.
@@ -384,27 +459,35 @@ Closed nodes/slots are reused. There is no preset catalog or layout selector.
 
 Geometry uses half-open rectangles and one-cell gutters. Recursive subtree
 minimums constrain resizing (each leaf needs 20 columns and 7 rows); globally
-column dividers respect primary subtrees; lower grips adjust only their own root. New splits require
+column dividers respect primary subtree widths; vertical grips respect both
+partners' minimum heights. A retained lower tree that is too wide shows its
+selected leaf without widening neighboring columns. Lower grips adjust only their own root. New splits require
 currently available space. Closing a nested leaf promotes its sibling into
 the parent; a root leaf cannot close. Tabs retain per-view selection/scroll,
 and each pane retains at least one tab. Lower roots preserve the same nested split/close invariants.
 
-Lower roots paint in most-recent-focus order. Layer-aware pane/divider hit tests
-reject covered controls. Keyboard navigation skips covered controls and bodies;
-numbered/cycle navigation restores minimized groups. Dock controls stay reachable
-even when a group is covered. Inspector visibility uses exposed body geometry,
-so a wholly covered inspector cannot request values merely because its root is
-open. Each group has a separate resize grip above its tabs; `_` immediately left
-of `...` minimizes it. Focus returns to its corresponding primary group when
-tiled, or the retained underlying primary pane in compact mode; an exposed
-remaining overlay receives focus when that primary is covered. Source fullscreen hides
+Persistent pane rectangles never overlap. Pane and divider hit tests use those
+same rectangles; keyboard navigation uses the visible bodies without subtracting
+occluded areas. Each lower group has a separate height grip above its tabs;
+`_` immediately left of `...` minimizes it and restores focus to its primary
+partner. Both partners remain navigable while they fit. Source fullscreen hides
 the dock temporarily and restores the retained workspace afterward.
 
-Geometry is recomputed after input, without changing requested ratios on
-terminal resize. If the grid or its subtrees cannot fit, only the focused leaf
-is painted; compact Prev/Next controls and `[`/`]` reach every retained pane.
-Returning to sufficient dimensions restores the tree. Resizing a terminal during
-a drag cancels that drag to avoid applying obsolete coordinates.
+Geometry is recomputed after input without changing preferred heights or split
+ratios on terminal resize. Compact terminals retain the selected column's pair
+when both trees fit. Otherwise the selected root's retained leaf is shown alone;
+other groups remain reachable through the dock, numbered selectors and cycling.
+Returning to sufficient dimensions restores the trees and expansion preferences.
+A shrinking viewport keeps an already-visible selection accessible without
+changing the selected item or debugger context. Manual browsing is not forced
+back to an offscreen selection. Resizing cancels active drags.
+
+Pane content owns its assigned half-open rectangle. Exterior frames occupy only
+reserved margins and gutters, including a separator above minimized docks. A
+single frame pass combines directional edges from the complete visible geometry,
+so shared corners and T/cross junctions do not depend on drawing order or existing
+screen glyphs. It never paints inside a pane or dock. Toolbar/status rows and the
+bottom footer have reserved space; contextual overlays compose after the workspace.
 
 The UI maps gutter hit tests to layout operations. For terminals advertising an
 xterm-compatible `kmous`, it enables SGR coordinates (1006) and held-button motion
@@ -416,6 +499,17 @@ or keyboard capabilities. Keyboard resize mode
 selects the same dividers and uses the same constrained coordinate updates.
 Physical mouse appearance/usability requires manual validation, even
 when the PTY and real tmux forwarding tests pass.
+
+Host path expansion is shared by session startup, OpenOCD planning, source
+settings and log export. Only leading current-user home shorthand is expanded;
+relative paths, bare tool names and GDB source tokens retain their existing
+resolution rules. Profiles keep raw fields. Review snapshots hold effective
+connection paths, frontend working directory and the existing ELF metadata stamp;
+startup rechecks these before spawning. Queued source restoration captures
+effective command paths separately from its raw display/profile values. Saved
+setup snapshots use paths actually applied, rather than expanding them again
+under a potentially different HOME. This does not change the profile schema.
+
 
 ## Owned MI parser
 
@@ -613,7 +707,7 @@ orphaned by a debugger crash.
 `--demo` is an explicit visual-reference path. Bare invocation uses the native
 launcher with implemented remote/OpenOCD choices. Live tabs/layout reuse
 presentation state only, not sample debugger values. The workspace has no presets,
-floating windows or editor modes. Workspace organization remains F06; custom
+floating debugging panes or editor modes. Workspace organization remains F06; custom
 themes remain F44. F19's built-in themes affect presentation only.
 
 ## Selected context, Call Stack and Threads
@@ -731,10 +825,17 @@ view-navigation changes, reset and destruction. The TUI preserves the old first
 row's position, adjusted by the requested upward scroll, when it appears in the
 combined result. A full older window uses its end instead. This avoids a one-row
 result collapsing the display or jumping it to the far end of the retained data.
-Mixed failures fall back independently per pane to assembly. Source text is
-interleaved from the active Source file or bounded, lazily loaded cross-file
-annotations. Missing/evicted text retains file/line attribution and an explicit
-unavailable-text message. Current
+Mixed failures fall back independently per pane to assembly. Mixed refreshes
+retain the browsed listing and divide requests at known function anchors: GDB
+can omit source wrappers for a whole range when its first function has no line
+information. Refresh work remains bounded to 128 decoded instructions. A merge
+retains source mappings for identical instruction bytes/text in the same sampling
+context. Once mappings are cached, Mixed changes presentation without fetching
+or replacing the listing. Source text comes from the active Source file or bounded,
+lazily loaded cross-file annotations. File/line identity remains in the model;
+rows display only source text or an explicit unavailable-text message. Leading
+spaces and tabs are stripped from Mixed annotations only; Source text and cached
+source identity remain unchanged. Current
 x86 targets reported by GDB as i386-family explicitly select AT&T syntax.
 
 Address navigation accepts hexadecimal addresses or simple identifiers/qualified
@@ -796,17 +897,17 @@ settings. Clear resets both overrides. Profile persistence is described below.
 The native module issues MI next/step/next-instruction/step-instruction/finish
 against the selected thread's execution frame zero. Clicking Source/Disassembly
 chooses the corresponding F10/F11 mode; toolbar and inspector clicks retain it.
-Step Out remains finish. Full-page tiled Actions, file filtering and source
+Step Out remains finish. Contextual Actions, file filtering and source
 settings screens share normal mouse/Tab/arrows/Enter/Escape editing. Source/ASM
 scroll and horizontal pan change only the viewport; `>` denotes actual stopped
 execution and `~` an inspected frame. No secondary execution-like cursor is added.
 Breakpoints/gutter/F9/Run to Selected use the breakpoint model below.
 
 Live pane scrolling uses shared bounded content/viewport measurements. Optional
-horizontal tracks reserve a row above the action footer; optional vertical
-tracks have one-cell hit regions, vertical `|`/`#` glyphs and the horizontal
-bar's colors/weight. Width/height calculations account for both
-bars before painting and hit testing. Source keeps its line gutter fixed while
+horizontal tracks reserve their row and one blank row before the action footer.
+Optional vertical tracks have one-cell hit regions, with theme-colored fills or
+monochrome line drawing. Width/height calculations account for both bars and the
+gap before painting and hit testing. Source keeps its line gutter fixed while
 code text pans. Source, Disassembly, Console, Call Stack and Threads retain
 horizontal offsets per pane/view, clamp to content bounds, and expose thumb
 dragging, track paging and Left/Right navigation. A fitting axis renders no bar.
@@ -870,10 +971,35 @@ Visibility changes do not invalidate a cached code view; stop/context/settings
 changes do. Opening/closing a selector therefore preserves cache and viewport.
 One assembly formatter supplies both rendered rows and horizontal extent,
 aligning address, byte, mnemonic and operand columns without discarding bytes.
+Per-pane widths retain the largest observed fields for the session, so a shorter
+cached window does not pull columns left. Horizontal clipping preserves address
+color; Source classifies complete lexical tokens before clipping their fragments.
+Other inspectors retain row-level state colors, and Memory clips its address and
+ASCII spans independently. Each code header is composed once, preventing shorter
+notices from leaving suffixes from another message.
+
+Wheel/keyboard edge scrolling extends rather than replaces a listing with a
+contained cached window. At an established code boundary it can reach another
+known code anchor, but stops before new unclassified decoding. Explicit address,
+page and raw inspection retain bounded access to unclassified ranges; missing
+metadata alone does not block those operations.
+Ordinary expansion checks both newly requested code and the newly added portion
+of a cached listing. A cache hit from explicit inspection cannot authorize
+unclassified ordinary scrolling. Eligibility comes from current mapping evidence,
+not the last window's indexed flag. Reverse recovery can use a trusted ELF anchor
+after listing/anchor eviction; the bounded code prefix is joined to retained rows
+across a labeled gap rather than decoding that gap. Gap length does not enlarge
+the decoding work budget. Mapping feedback classifies the instructions actually
+rendered in the current viewport, including mixed-row layouts. Missing verified
+mapping metadata appears as `ELF:?`, not an automatic header warning. A pane-local
+boundary notice is set only when an ordinary edge-scroll attempt cannot extend
+a fresh, settled listing. Reverse scrolling, a changed viewport, a new listing,
+page navigation or terminal resize clears it; initial display and explicit paging
+do not raise it.
 Trusted mapping feedback uses the compact pane footer rather than replacing
 selected-frame/file context. Manual headers use retained instruction source
 attribution or an address-window label, never a different selected frame's
-filename/caller label; unknown/data/error notices still take priority.
+filename/caller label; actual request errors and attempted boundary overflow take priority.
 
 `src/model/breakpoints.c` and `include/model/breakpoints.h`
 own a bounded 256-row MI snapshot, parent/child and
@@ -1068,15 +1194,11 @@ Compatible terminals lacking that mode retain the curses fallback. Protocol
 references: [Alacritty escape support](https://alacritty.org/misc-alacritty-escapes.html)
 and [tmux changes](https://github.com/tmux/tmux/blob/master/CHANGES).
 
-Expanded lower overlays include their former dock row; their top tab row owns
-minimize/menu controls. Collapsed docks remain, with hit tests respecting any
-full-width overlay covering them. The workspace toolbar starts one row below
-the terminal top. The debugging area starts one row lower and loses exactly that
-row of height; horizontal geometry and saved definitions are unchanged. Wide
-tiled/fullscreen chrome retains its toolbar/status gap; compact selectors retain
-their own row.
-Single-line workspace footers leave the last row blank, without shrinking pane
-geometry further. Launcher/configuration/dialog footers keep their established placement.
+Expanded lower panes retain their top minimize/menu controls and their own
+bottom action row. Collapsed or temporarily hidden groups remain accessible from
+the dock. Workspace margins reserve frame cells independently of theme, keeping
+content geometry and overflow thresholds identical when switching palettes.
+Launcher/configuration/dialog footers retain their established placement.
 
 Selecting the already-current fresh frame/thread is a no-op: context generations,
 retained argument values and inspector freshness remain unchanged. Real context
@@ -1104,6 +1226,24 @@ retain their own selection and scroll, but do not create independent watch lists
 `session/session.c` routes events and drives the model without blocking the TUI.
 Local names come from `-stack-list-variables --no-values`; value inspection uses
 owned MI variable objects, not parsed CLI output or demo data.
+
+Target language is separate from the frontend's C17 implementation. Session
+startup accepts native and remote ELF symbols without a C-only target check.
+Context retains GDB's `func` text; Disassembly retains GDB's `inst` text, so
+readable C++ frame names do not imply demangled assembly operands. Breakpoints
+retains `original-location`, with parent-location fallback for child rows; it
+does not display each child's `func` signature. No frontend demangler rewrites
+these names.
+
+Root inspection expressions use `tb_memory_expression`, allowing simple names,
+`::` qualification, members, constant indices and a numeric offset. Variable
+creation explicitly uses `--language c`, even for C++ target debug types; basic
+class fields and access-group children are supported without promising arbitrary
+C++ evaluation. Calls, assignments, casts, template-id syntax and general
+operators are excluded. Grammar acceptance alone does not prove GDB can resolve
+a namespace-qualified expression. Code navigation accepts hexadecimal addresses
+or identifiers joined by `::`; breakpoint locations instead pass through GDB's
+location parser.
 
 Names and expression syntax are not evidence that a value is safe to read.
 Creation, evaluation/formatting and child expansion pass authorization before
@@ -1239,7 +1379,7 @@ Nonzero setup-local identities are unique across panes and retained entries;
 zero Source selection denotes the stopped-context role. Validation rejects
 cycles, shared nodes/leaves, unreachable used nodes, invalid selections, duplicate
 identities and overflowing limits. No sampled data, permissions, debugger IDs,
-hardware allocations, temporary breakpoints or lower-overlay state are present.
+hardware allocations, temporary breakpoints or lower-pane expansion state are present.
 
 Schema 3 adds a separate `setups` array. Each record contains `profile` (the
 associated saved name), `connection` (a connection snapshot), `launch_directory`
@@ -1265,7 +1405,7 @@ Schema-1/2 builds cannot read schema 3; there is no downgrade operation.
 capture metadata only. Pane lifecycle identities and
 model-local Watch/breakpoint identities map to stable setup-local entries; Source
 selection uses the context role or a pinned identity. Resize, samples, permissions,
-fullscreen and lower-overlay geometry do not change the definition. Memory saves
+fullscreen and lower-pane geometry do not change the definition. Memory saves
 the visible expression draft, byte count and grouping without reading it.
 
 The live Setup menu reviews the current definition and the effective session
