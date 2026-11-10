@@ -30,31 +30,45 @@ static void entry_bytes(TermEntry_t *entry, const void *data, size_t length)
 }
 
 
-static void entry_number(TermEntry_t *entry, uint32_t value, unsigned width)
+static void entry_u16(TermEntry_t *entry, uint32_t value)
 {
-    unsigned char bytes[4];
-    for (unsigned i = 0; i < width; ++i)
-        bytes[i] = (unsigned char)(value >> (i * 8U));
+    unsigned char bytes[] = {
+        (unsigned char)value,
+        (unsigned char)(value >> 8U)
+    };
 
-    entry_bytes(entry, bytes, width);
+    entry_bytes(entry, bytes, sizeof(bytes));
+}
+
+
+static void entry_u32(TermEntry_t *entry, uint32_t value)
+{
+    unsigned char bytes[] = {
+        (unsigned char)value,
+        (unsigned char)(value >> 8U),
+        (unsigned char)(value >> 16U),
+        (unsigned char)(value >> 24U)
+    };
+
+    entry_bytes(entry, bytes, sizeof(bytes));
 }
 
 
 static void entry_align(TermEntry_t *entry)
 {
     if (entry->size % 2)
-        entry_number(entry, 0, 1);
+        entry_bytes(entry, "\0", 1);
 }
 
 
 static void entry_string(TermEntry_t *entry, TermEntry_t *strings, const char *value, size_t base)
 {
     if (!value || value == (char *)-1) {
-        entry_number(entry, value ? 0xfffeU : 0xffffU, 2);
+        entry_u16(entry, value ? 0xfffeU : 0xffffU);
         return;
     }
 
-    entry_number(entry, (uint32_t)(strings->size - base), 2);
+    entry_u16(entry, (uint32_t)(strings->size - base));
     entry_bytes(strings, value, strlen(value) + 1);
 }
 
@@ -95,17 +109,17 @@ static char *direct_entry(void)
     if (names > 128)
         return NULL;
 
-    entry_number(&entry, 01036, 2);
-    entry_number(&entry, (uint32_t)names, 2);
-    entry_number(&entry, BOOLCOUNT, 2);
-    entry_number(&entry, NUMCOUNT, 2);
-    entry_number(&entry, STRCOUNT, 2);
-    entry_number(&entry, 0, 2);
+    entry_u16(&entry, 01036);
+    entry_u16(&entry, (uint32_t)names);
+    entry_u16(&entry, BOOLCOUNT);
+    entry_u16(&entry, NUMCOUNT);
+    entry_u16(&entry, STRCOUNT);
+    entry_u16(&entry, 0);
     entry_bytes(&entry, type->term_names, names);
     entry_bytes(&entry, type->Booleans, BOOLCOUNT);
     entry_align(&entry);
     for (size_t i = 0; i < NUMCOUNT; ++i)
-        entry_number(&entry, (uint32_t)tigetnum(numnames[i]), 4);
+        entry_u32(&entry, (uint32_t)tigetnum(numnames[i]));
     for (size_t i = 0; i < STRCOUNT; ++i) {
         const char *value = strcmp(strnames[i], "setaf") == 0 ? rgb_foreground
             : strcmp(strnames[i], "setab") == 0 ? rgb_background
@@ -123,16 +137,16 @@ static char *direct_entry(void)
     size_t count    = booleans + numbers + values;
     if (count) {
         entry_align(&entry);
-        entry_number(&entry, (uint32_t)booleans, 2);
-        entry_number(&entry, (uint32_t)numbers, 2);
-        entry_number(&entry, (uint32_t)values, 2);
-        entry_number(&entry, (uint32_t)(count + values), 2);
+        entry_u16(&entry, (uint32_t)booleans);
+        entry_u16(&entry, (uint32_t)numbers);
+        entry_u16(&entry, (uint32_t)values);
+        entry_u16(&entry, (uint32_t)(count + values));
         size_t size_offset = entry.size;
-        entry_number(&entry, 0, 2);
+        entry_u16(&entry, 0);
         entry_bytes(&entry, type->Booleans + BOOLCOUNT, booleans);
         entry_align(&entry);
         for (size_t i = 0; i < numbers; ++i)
-            entry_number(&entry, (uint32_t)tigetnum(type->ext_Names[booleans + i]), 4);
+            entry_u32(&entry, (uint32_t)tigetnum(type->ext_Names[booleans + i]));
         strings.size = 0;
         for (size_t i = 0; i < values; ++i)
             entry_string(&entry, &strings, type->Strings[STRCOUNT + i], 0);
