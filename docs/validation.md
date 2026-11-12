@@ -5104,3 +5104,293 @@ color rendering, localhost remote sessions and offline OpenOCD. These checks use
 the local Linux host and GDB 18.1; using an Ubuntu-packaged tmux binary does not
 establish a passing hosted Ubuntu run. Hosted reruns and maintainer acceptance
 remain pending; no physical-target operations were performed.
+
+## Native Symbol Engine research and design — 2026-11-12
+
+### Evidence boundary and retained material
+
+The accepted planning direction is **1A / 2A / 3A / 4A / 5A / 6B / 7A**,
+including cancellable Console review, centralized command provenance, safe
+retirement while running and close-on-exec for received descriptors. The
+[design ledger](native-symbol-engine.md#decision-ledger) and detailed contracts
+record architectural acceptance. Production implementation, verification,
+physical validation and F07 acceptance remain pending. Acceptance of the current
+documentation delivery is a separate review gate.
+
+The studies below were retained before this documentation work under ignored
+`build/f07-research-20261111T110301Z/`. They were inspected, not rerun for this
+planning delivery. Paths below are relative to that evidence directory. They
+identify local raw evidence, not distributed fixtures or available test targets.
+These durable summaries preserve the conclusions if local build artifacts are
+later removed. Missing raw artifacts would prevent exact reproduction from this
+summary alone; no production result may be inferred from that gap.
+
+The execution study records Linux 7.2.14-arch1-1 x86-64, Intel i5-8265U, GCC
+16.2.1 (20260810), libdw 0.197 and heaptrack 1.5.0. The native Console/DSO studies
+record GDB 18.1. Acquisition probes record Python 3.14.9 on that kernel. Tool
+versions and limits belong to their individual studies, not every production
+configuration. Research use of Python/libdw/reference utilities adds no runtime
+dependency to the accepted project-native C17 design.
+
+### Discovery identity and MI bounds
+
+Duplicate-name studies include header statics, duplicate basenames, relocated
+sources, C++ and distinct/repeated DSO loads. In the retained native header-static
+case, GDB's symbol discovery returned one `counter` record at the header's source
+location, while explicit left/right CU expressions resolved different storage
+addresses (`0x404010` and `0x404020`). The duplicate-basename case returned separate
+file entries. A name/source summary therefore did not reliably enumerate every
+physical definition. Matching a linkage name or descriptive signature likewise
+cannot establish exact expression selection.
+
+`duplicates/native-header-statics.summary.json`,
+`native-minimal-duplicates.summary.json`, `native-dso-twice.summary.json` and
+corresponding `*.commands.mi`/output files preserve these cases. Cross-GDB
+ELF-backed studies are offline metadata evidence, not physical target access or
+universal GDB-version behavior.
+
+The parser probes retain `parser/bytes.log`, `nodes.log`, `depth.log`,
+`standalone-framing.log`, `controller-probe.c` and `peer.py`. The nodes probe
+reported a value-count limit error, closed the session, cancelled token 3 and
+rejected a subsequent request. This is evidence of current fail-closed behavior,
+not implementation of recoverable rejection. The separately accepted
+[D04 envelope](native-symbol-engine.md#d04-bounded-mi-rejection-recovery) requires
+complete non-tree validation and trustworthy correlation; its future tests must
+preserve fatal handling outside that envelope.
+
+### Execution and helper feasibility
+
+`execution-benchmark/run.py` records command vectors of the form
+`taskset -c 2,3 <bench> <inproc|helper> <artifact> <scenario> <rounds> <quantum>`.
+Benchmark processes used RLIMIT_AS 1 GiB, RLIMIT_CPU 30 seconds, core dumps
+disabled and seed 7107; both modes inherited the same two-core affinity.
+Corpora included native, STM32, Xtensa, RISC-V, larger native debug files and
+malformed variants. Fresh handles/processes were process-cold, not filesystem-cold;
+no global cache manipulation was performed.
+
+`execution-benchmark/environment.json`, `corpus.json`, `runs.jsonl`, `raw/` and
+`summary.json` retain versions, exact inputs, commands and observations. The
+summary records 200 zero exits and five signal-11 in-process crash runs; five
+synthetic worker-crash records show the helper parent survived, with five
+restart/no-op successes. Helper spawn measurements over 105 samples had median
+0.796123 ms and p95 1.083194 ms. Five hard-cancel/reap samples had median
+0.200808 ms and p95 0.220487 ms. These are prototype observations, not service
+guarantees or production supervision acceptance. Malformed-unit-length decoding
+also produced explicit first-scan errors; opening alone did not validate units.
+
+The experiment used reference decoding, simplified transport and bounded scan
+scenarios. It did not measure the final native decoder, production protocol,
+all acquisition stalls, index reconstruction, multi-pane contention or actual
+TUI responsiveness. These limitations motivate the helper boundary and later
+production measurement rather than selecting benchmark assumptions as limits.
+
+### Acquisition and transport primitives
+
+`acquisition-research/primitive-results.json` records an open descriptor retaining
+old bytes after path replacement while still allowing mutation of its inode.
+A controlled source transition `AA → BA → BB` produced copied bytes `AB`, which
+never existed as a whole source state. Stat checks detected this controlled
+mutation; this does not prove all concurrent mutations detectable. An unlinked
+private file remained reopenable writable through same-UID `/proc` access.
+Read-only transfer alone therefore does not prove all writers relinquished.
+
+Full-file reflink returned ENOTSUP on the examined ext4/tmpfs configurations;
+no reflink-capable filesystem was available. Sealed memfd rejected tested writes,
+resize and writable shared mapping, but memfd remains deferred. Lease probes
+observed break signaling and writer blocking until release, and rejected an
+existing writer/writable mapping or foreign ownership in the examined cases.
+Filesystem exhaustion and forced lease expiration were not tested. An initial
+redundant lease-removal cleanup error was corrected in the probe and preserved
+as `pilot_correction`; it is not production validation.
+
+`acquisition-research/copy-reference-results.json` retains complete copy/hash
+comparisons against input manifests for private ext4 and memfd. Reported hashes
+matched and source stats were unchanged; neither observation proves atomic
+source coherence. The accepted design distinguishes frozen bytes from coherent
+acquisition and requires project-owned streaming SHA-256 plus byte equality for
+backing sharing. No production hash implementation was tested here.
+
+`resource-research/ipc-primitive-results.json` records nonblocking socket probes:
+a 262,144-byte stream send transferred only 219,264 bytes with the examined
+212,992-byte send buffer; seqpacket rejected that size with EMSGSIZE. Short
+seqpacket receive truncated while stream receive did not. Descriptor transfer
+with close-on-exec succeeded in the probe. `ancillary-framing-probes.json` retains
+additional framing observations. These OS probes did not implement the accepted
+header/payload/descriptor-trailer state machine or establish its timing/cleanup
+correctness. Fragmentation, strict association and all received-FD hygiene remain
+production obligations.
+
+### Bounded representation study
+
+`representation-benchmark/validated-summary.json` records **2,709 validated
+cases**, with independent size/peak formula checks across three runs. The
+retained `validate-results.py` checks `results-1.jsonl` through `results-3.jsonl`
+and SHA-256-identified `inputs.json`/name streams. Allocation-site fault matrices
+reported clean failure, unchanged old windows, exact-peak success and rejection
+at peak-minus-one/zero budgets.
+
+The experiment assumed **128 opaque metadata bytes per row**; this is not an
+accepted production identity/evidence schema. It counted requested payload
+allocations but excluded instrumentation headers, allocator internals, retained
+fixture inputs and RSS. ELF reference names were raw names; source relationships
+and multiple-name/path scenarios were synthetic. Timing covered warm allocation,
+materialization, encoding, copying and decoding, not socket latency or the TUI
+loop. Whole sender/receiver payloads, helper staging and candidate overlap were
+included conservatively. The study supports bounded summaries and transactional
+publication; actual decoder/index/cache/evidence/schema sizing remains SE10.
+
+### Scalar metadata and bounded native traffic
+
+`metadata-contract-research/scalar-fixtures/build-results.json` records compiler
+argv, versions, input hashes and reference commands such as `readelf -h -A -SW`,
+`readelf -sW` and `readelf --debug-dump=info`. `build_study.py` used debug C17/C++17
+freestanding fixtures, DWARF 5, ordinary and short enums, and a big-endian ARM
+variant. `study-summary.json` records 16 ELF artifacts totaling 175,412 bytes,
+1,171 checks and zero failed checks. Profiles include native, ARM, STM32, Xtensa
+and RISC-V toolchains; cross-GDB projections were offline ELF-backed only.
+
+Native RSP traces compared explicit `-data-read-memory-bytes` requests with
+varobject projection. For example, the retained native-C command stream includes
+`-data-read-memory-bytes 0x403064 4` and a typed `-var-create` projection at that
+address. These are historical research requests, not an approved native Watch
+implementation path. The native-C operation trace counted 96 read packets/
+574 requested bytes and zero outside-object requests; baseline traffic was
+85 packets/13,082 bytes. Native C++ and short-enum operation traces likewise
+reported no outside-object requests. Baseline and operation traffic are distinct.
+
+Known initialized values were examined without runtime floating arithmetic or
+broad NaN-payload/signaling coverage. Arbitrary boolean patterns were unsigned
+char objects, never read as bool. Float layout evidence combined macros, emitted
+bytes and references, not size alone. There is no complete production native
+formatter, universal target representation proof, write-envelope validation,
+physical embedded access or real-loaded-image correspondence proof. MI/RSP
+request envelopes prove no bus width, transaction count or MMIO safety. Direct
+local scalar decoding, precision-specific edits and explicit verification still
+require their own implementation and acceptance.
+
+### DSO breakpoint lifecycle
+
+`dso-breakpoint-lifecycle-20261111T222941Z/final-summary.json` retains GDB 18.1,
+GCC 16.2.1, three compiled ELF artifacts, 56 completed fixture runs, 32
+production-configuration research cases and one pilot fixture run. The term
+“production configuration” identifies the examined debugger settings, not
+production subsystem acceptance. Default observations were async off, non-stop
+off, stop-on-solib-events zero and always-inserted off; the matrix also explicitly
+set async/all-stop and relevant insertion/event settings.
+
+`*.commands.mi`, `*.mi`, inferior output and `run*.py` preserve reload/address-reuse,
+symbolic/numeric and software/hardware cases. At reused addresses an original
+numeric hardware breakpoint could hit a replacement DSO. Some numeric software
+cases produced insertion warnings without a stop. Explicit event-stop retirement
+avoided the examined replacement hits; an unload catchpoint sufficed in examined
+hardware cases but not software cases. Ordinary symbolic behavior does not
+establish exact-address lifetime safety.
+
+Research retirement deliberately issued Disable then Continue. It does not
+select automatic production resume/reinstallation. Global library-event barriers
+introduce additional stops and need qualified supported-profile behavior. The
+pilot timeout and explicit thread-state query used to interpret warning/prompt
+behavior remain limitations. Only native Linux ptrace, a single-threaded loader,
+controlled DSOs and GDB 18.1 were tested. CPU debug-register tests prove no
+embedded probe/bus behavior. Other GDB versions, multithreaded loaders and remote
+profiles remain unverified.
+
+### Console requalification study and subsequent decision
+
+The original `console-requalification-20261112/summary.json` status is
+**“bounded research completed; fallback not approved”**. It records 12 bounded
+native Linux x86-64 GDB 18.1 MI3 async-on/all-stop sessions with owned,
+single-threaded fixture processes and no new ELF artifacts. All recorded GDB
+children reaped with zero status and owned inferiors exited without forced kill.
+`study.py`, `run_cli_hooks.py`, `results.json`, `cli-hook-extension/results.json`
+and command/output streams retain configuration and observations. Session bounds
+included 512 KiB captured output and 15 seconds per peer.
+
+The command stream set `-gdb-set mi-async on`, `-gdb-set non-stop off`,
+`-gdb-set auto-load off` and `-gdb-set stop-on-solib-events 1` before relevant
+operations. Retained callbacks could turn library-stop protection off during
+Continue and restore it at stops; preflight setting checks still reported one
+without `cmd-param-changed`. Examined software cases reproduced unloaded-address
+insertion failure and hardware cases hit replacement DSOs. Explicit Python
+callbacks were not listed as auto-loaded scripts; the examined registry exposed
+connect/disconnect without complete callback enumeration. Plain CLI hooks could
+resume past frontend stop barriers, including without a Python requirement.
+
+Present settings, auto-load checks, breakpoint listings and notification-only
+monitoring therefore did not establish generic same-process requalification.
+Clearing known hooks cannot prove absence of arbitrary retained execution and
+must not damage unrelated user state. Deferred Python threads/post-event behavior
+and breakpoint command lists were examined in documentation, not executed in this
+study. The hook fixture's auto-continue/hit counts differ from explicit wrong-hit
+stops in callback runs. A hook-stop program-not-running error at exit remains
+recorded. These are counterexamples to examined mechanisms, not a proof that
+every future GDB mechanism is impossible.
+
+Subsequent architectural approval selected **5A**: explicit cancellable review,
+proven-owned retirement before transmission, irreversible disqualification for
+arbitrary Console authorization even with zero installations, and a fresh
+frontend-configured GDB process for renewed eligibility. The final clarifications
+require shared provenance-aware command dispatch and confirmed safe running-state
+retirement or refusal without implicit target control. This later approval does
+not rewrite the study status or establish production implementation/qualification.
+Other GDB versions, cross-GDB live sessions, remote and physical targets were not
+tested by this Console study.
+
+### Remaining acceptance work
+
+The [implementation gates](native-symbol-engine.md#implementation-gates-and-dependencies)
+and [consumer/safety matrix](native-symbol-engine.md#acceptance-matrix) remain
+unrun for production code. Actual decoder/index/cache/schema measurements must
+set outstanding numeric limits, including replacement/construction peaks.
+Supported remote profiles and physical STM32/ARM, ESP32/Xtensa and
+ESP32/RISC-V evidence remain separate. No research result changes UNVERIFIED to
+PASS for those boundaries or completes F07.
+
+### Documentation delivery checks
+
+On `chore/subsystems_planning`, the planning working tree changes only
+`docs/native-symbol-engine.md`, `docs/native-subsystems.md`, `docs/roadmap.md`,
+`docs/requirements.md`, `docs/architecture.md`, `docs/testing.md` and this record.
+No production code, tracked tests, build configuration, dependency or prototype
+was added or changed.
+
+- `python3 build/native-symbol-planning-20261112/check_docs.py`: PASS. All 38
+  new/changed local links and anchors resolve; the seven-file scope, preserved
+  F IDs, D04/SE01–SE16/F07 gates, key accepted limits and existing Make targets
+  were checked. Research counts/status agree with retained JSON summaries.
+  Log: `build/native-symbol-planning-20261112/checks.log`.
+- `git diff --check`: PASS. New document whitespace was checked separately as
+  part of the documentation review because the documents are initially untracked.
+- `make`: PASS, exit 0; normal `build/the-bugger` rebuilt with the existing C17
+  strict-warning configuration. Log: `build/native-symbol-planning-20261112/make.log`.
+
+Contract review covered identity/ownership, cancellation, failure/invalidation,
+configurable policy units/enforcement/exhaustion, gate dependencies and the four
+final clarifications. Future subsystem candidates remain research/design tasks.
+No application test matrix, research rerun, hosted CI or physical check was
+performed for this documentation-only delivery. Production gates remain planned;
+documentation acceptance is pending maintainer review.
+
+### Resource-policy clarification and research retention — 2026-11-12
+
+Maintainer review accepted the architectural baseline without reopening the
+design, requesting a resource-configuration clarification and preservation of
+the raw research for future fixture work. The resource policy now distinguishes
+startup-configurable operational budgets, fixed representation maxima, per-pane
+operation invariants and limits awaiting SE10. Existing backing-admission
+configurability is retained; operational configuration cannot raise fixed
+representation maxima. No numerical limit or implementation scope changed.
+
+The original research remains under `build/f07-research-20261111T110301Z/`.
+A separate ignored local archive now preserves it outside normal build cleanup:
+`.research-archive/f07-research-20261111T110301Z.tar.gz`, with sibling
+`.manifest.json` and `.SHA256SUMS` files. All 2,219 regular files were verified
+against the source by length and SHA-256 while reading the completed archive.
+The archive is 15,981,139 bytes; its SHA-256 is
+`0b059e69feee664d679543bd5604f001ac19e0e91cb68f7d197add6899cd6ce5`.
+It is neither a distributed test fixture nor an off-device backup. Future
+implementation gates still require maintained fixtures and fresh evidence.
+
+The documentation checker and `git diff --check` passed again after clarification;
+normal `make` also passed. The seven-document delivery scope is unchanged. No
+research, application regression matrix or physical validation was rerun.

@@ -52,8 +52,8 @@ splits, resizing and compact-terminal behavior remain the baseline for later vie
 No separate workspace redesign remains under F06.
 
 The current follow-up extends terminal-style editing bindings and Vim-like
-`dd`/`D`, preserving custom assignments; acceptance is pending. F07 searchable
-symbols is next, followed by F08 globals/statics. Later gates include F09 Quick
+`dd`/`D`, preserving custom assignments; acceptance is pending. F07 follows the accepted [Native Symbol Engine foundations](#native-symbol-engine-foundations),
+then F08 globals/statics. Later gates include F09 Quick
 Watch, F11 register metadata/groups, F12 shareable setups, F34 peripheral/SVD
 inspection and F35 Cortex-M fault diagnosis, retaining their recorded dependencies.
 
@@ -194,6 +194,36 @@ No additional feature family or milestone renumbering is introduced.
 | M17 | Validate target metadata/actions on NUCLEO-F446RE and ESP32-S3. | Real source/assembly/registers/RAM/Flash/locals/break/watch evidence, reset/disconnect choices and no speculative peripheral reads; native regression preserved. |
 | M18 | Audit actual capability matrix and host-vs-target limits. | All release-blocking evidence and release acceptance; no unrun board marked supported. |
 
+## Native Symbol Engine foundations
+
+The [accepted Symbol Engine design](native-symbol-engine.md) replaces F07's
+planned GDB-query discovery direction with bounded project-native ELF/DWARF
+metadata discovery. GDB/MI retains supported live operations. This is planned
+work: no implementation, production verification, physical validation or F07
+acceptance is established by the design decision.
+
+| Foundation group | Capability and consumer dependency | Status |
+|---|---|---|
+| D04 | Bounded MI rejection recovery before live integration acceptance | Planned |
+| SE01–SE03 | Checked readers/SHA-256, supervised helper and retained-artifact ownership | Planned |
+| SE04–SE08 | ELF/DWARF definitions, names, native line tables/ranges and explicit companions | Planned |
+| SE09–SE10 | Complete bounded discovery/publication and actual production sizing | Planned |
+| SE11 | Offline artifact/Symbols/Source UI; may be accepted before runtime resolution | Planned |
+| SE12–SE15 | Runtime preparation, native Watches, Memory drafts, exact Source actions and guarded Console/DSO integration | Planned |
+| SE16 | Inert native-intent setup compatibility | Planned |
+| F07 | Consumer and safety acceptance after applicable foundations | Planned; separate feature gate |
+
+The [detailed gate table](native-symbol-engine.md#implementation-gates-and-dependencies)
+defines objectives, prerequisites and failure/verification boundaries. Foundations
+retain independent identities rather than replacing F IDs. Companion attachment
+never implies indexing; deferred format/ABI compatibility stays outside initial
+F07. F08 consumes accepted discovery and value-authorization contracts but remains
+an independent globals/statics gate. F09/F12 and later consumers retain their own
+scope and acceptance. No new version target overrides the v0.3.x feature sequence.
+
+The [broader native-subsystem roadmap](native-subsystems.md) lists future research,
+design and acceptance tasks without selecting those candidates' architectures.
+
 ## Release validation
 
 Except for the explicit [version-specific RISC-V deferrals](requirements.md#release-acceptance),
@@ -295,7 +325,7 @@ the native/STM32/Xtensa/RISC-V regression gate.
 | F04 / v0.1.6 | Memory editing after M15/M16 lifecycle/capabilities; exact byte extents in eligible ordinary writable RAM. Display grouping does not establish bus width. No implicit Flash programming or peripheral writes. | Bounds/partial writes/encoding/failures/refresh. | Verify exact bytes and visible failed writes. |
 | F05 / v0.1.6 | CPU-register editing after M15 discovery/capabilities; stopped target only, no peripheral editor or guessed writable registers. | Writable/read-only/unavailable, generic IDs and refresh. | Change an appropriate fixture register and verify backend result. |
 | F06 / complete (original target v0.2.1) | Workspace information-organization decision completed against the released tiled workspace. Preserve tab discovery, mouse/keyboard access, resizing and compact-terminal behavior. | Existing geometry/input/state-preservation checks remain applicable; no new implementation is introduced by closeout. | Maintainer accepted completion November 10; no separate redesign remains. |
-| F07 / v0.3.x | Searchable Symbols after F06, with code/Watch/Memory actions and bounded GDB queries; preserve pre-dispatch value-read policy. | Filters/duplicate names/no debug info/result limits/capabilities. | Find and open intended symbol/code/data. |
+| F07 / v0.3.x | [Native symbol discovery](native-symbol-engine.md) after F06 and accepted D04/SE01–SE16 foundations; exact Source/Disassembly actions, inert Watch/Memory transfer and authorized live operations. | Complete native discovery, consumer and safety acceptance matrix; foundation acceptance alone does not complete F07. | Explicitly search, traverse all matches and act on the intended physical definition without unsolicited target access. |
 | F08 / v0.3.x | Globals/Statics selection after F07/F06; symbol discovery first, with the same pre-dispatch region/complete-footprint policy as Watches. | Qualified/duplicate statics/scope/unavailable. | Monitor selected static-storage variables. |
 | F09 / v0.3.x | Explicit Quick Watch after F06; tiled/inline, same read-authorization policy, no floating window. | Requested timing/errors/context/deliberate-side-effect policy. | Evaluate on request without unwanted persistent watch. |
 | F10 / v0.8.x | Specialized STL using GDB facilities after F06 and core embedded inspectors; no frontend Python dependency or unconditional printer/child reads. | Printers available/absent, limits/errors/toolchains. | Inspect containers with usable raw fallback. |

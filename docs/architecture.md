@@ -31,6 +31,32 @@ For backend work, start with [data flow](#data-flow-and-invariants),
 also need the [request audit](#value-producing-request-audit) and
 [shared mutation lifecycle](#stopped-inspector-mutations-f03f05).
 
+### Planned Native Symbol Engine
+
+The [Native Symbol Engine](native-symbol-engine.md) is an accepted design for
+bounded project-owned ELF/DWARF metadata discovery supporting F07. It is not
+implemented by this planning work. The module inventory above describes the
+existing frontend; existing libelf image consumers remain in place. GDB retains
+instruction decoding and supported live target operations, with explicit
+consumer integration rather than implicit symbol-file reloads.
+
+The design separates retained artifact backing/open contexts, exact physical
+records, scoped validation evidence, discovery indexes, immutable publications,
+prepared action facts and runtime bindings. These are distinct ownership and
+authority boundaries; metadata alone grants no target access. A supervised helper
+isolates acquisition/decoding from the responsive TUI; disposable worker/cache
+state does not own independently retained frontend guarantees.
+
+The detailed [ownership/interface contracts](native-symbol-engine.md#layers-ownership-and-identity),
+[resource policy](native-symbol-engine.md#resource-policy),
+[consumer integration](native-symbol-engine.md#consumer-integration-and-live-actions),
+[Console provenance and retirement rules](native-symbol-engine.md#guarded-dso-breakpoints-and-console-5a)
+and [D04 prerequisite](native-symbol-engine.md#d04-bounded-mi-rejection-recovery)
+are authoritative planned contracts. They do not describe behavior already
+available in the current parser, Console, Watch or Memory transfer paths.
+The [subsystem roadmap](native-subsystems.md) keeps other candidates at future
+research/design scope; it selects no additional architecture or dependencies.
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
