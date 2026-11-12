@@ -650,3 +650,48 @@ a completed backend error reply, but cannot clear an unresolved transport.
   completion rule and require the original destination for reconciliation.
 - Record native and physical ARM/Xtensa/RISC-V write/verify/restore evidence
   separately. Existing inspection results do not establish write behavior.
+
+
+## Planned native symbol discovery (F07)
+
+The accepted [Native Symbol Engine design](native-symbol-engine.md) establishes
+planned requirements for F07, not current capabilities. “Native” means
+project-owned C17 artifact decoding across supported target formats. GDB/MI
+continues supported live debugger operations; no replacement debugger, new
+runtime dependency or public SDK is introduced by this planning work.
+
+F07 shall discover supported functions and nonlocal data from explicitly admitted
+ELF/DWARF artifacts, preserving exact physical identities, provenance,
+relationships and unsupported coverage. DWARF is the default; ELF symbol-table
+search and declaration inclusion are explicit. Native line-table support and
+exact Source-action parity are required. The authoritative format envelope,
+semantic limits and deferred capabilities are in the
+[format contract](native-symbol-engine.md#formats-and-semantic-coverage).
+
+Opening Symbols or editing controls shall perform no discovery. Search/Enter
+commits a captured scope, including explicitly empty browse queries. Bounded
+windows shall preserve complete reachability and deterministic order; failure,
+cancellation or stale completion shall not publish unchecked partial results.
+Artifact admission, evidence and memory limits are governed by the engine's
+[resource policy](native-symbol-engine.md#resource-policy).
+
+Source, Disassembly, Watches, Memory and breakpoints shall retain exact selected
+identity. Transfer to Watches or Memory shall be inert. Target reads, writes and
+execution require current context, sufficient location/representation evidence,
+complete-footprint authorization and a separate explicit operation. Saved native
+intent shall require explicit reassociation without restoring live addresses,
+values or authority. See [consumer contracts](native-symbol-engine.md#consumer-integration-and-live-actions).
+
+Guarded native DSO breakpoints shall use proven installation ownership and the
+[Console 5A transition](native-symbol-engine.md#guarded-dso-breakpoints-and-console-5a).
+Review alone shall preserve qualification and pending work. Arbitrary Console
+transmission requires confirmed safe retirement and permanently disqualifies
+that GDB process, including when no guarded installation exists. Running-state
+retirement that cannot be proven safe shall refuse transmission without implicit
+interrupt or resume. Typed frontend-owned operations retain their distinct
+contracts at the centralized dispatch boundary.
+
+F07 completion requires its [acceptance matrix](native-symbol-engine.md#acceptance-matrix)
+and independently accepted foundations. Design approval or foundation success
+alone does not complete F07/F08 or establish a supported backend/physical profile.
+Existing FR/NFR obligations, access policies and release matrices remain in force.

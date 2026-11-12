@@ -2466,3 +2466,42 @@ For Linux launch/attach, managed or external OpenOCD, and an existing GDB server
 The native popup test checks floating placement, retained parent header and exposed configuration labels, Escape
 and Enter restoration directly and through tmux. OpenOCD and real remote tests
 assert the same review containment and explicit acceptance controls.
+
+
+## Planned Native Symbol Engine verification
+
+The [Symbol Engine acceptance matrix](native-symbol-engine.md#acceptance-matrix)
+and [implementation gates](native-symbol-engine.md#implementation-gates-and-dependencies)
+define proposed verification. No Symbol Engine suite, fixture or command is
+introduced by the planning documentation. Existing commands remain those listed
+above and in the [suite catalog](../tests/README.md).
+
+D04 will extend the existing `test-mi`/allocation and `test-controller` harnesses.
+Consumer gates will extend code, variables, memory, breakpoint, profile/setup
+and TUI harnesses, including their native/tmux checks where relevant. Independent
+decoder, helper, acquisition, schema/resource and fault-injection coverage must
+be implemented in their own gates. Test success for existing models does not
+establish these future contracts.
+
+Required observations include physical identity/provenance, complete reachability,
+atomic publication, reconstruction, ownership/cleanup, resource peaks, scheduling,
+FD framing/close-on-exec, stale generations, no-unsolicited-access MI traces,
+Console retirement and inert persistence. The linked matrix owns those details
+and the reproducible manual F07 acceptance sequence.
+
+For separately authorized implementation/test/build gates, run focused checks,
+then the complete baseline in an unused directory:
+
+```sh
+TERM=xterm-256color make \
+  BUILD_DIR=build/<fresh-gate-directory> \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+Replace the directory placeholder before execution. Record exact tree,
+environment, command and full log. Local success is not hosted Ubuntu success.
+The documentation-only planning delivery uses link, command and consistency
+checks. Actual production sizing and supported remote/physical profiles remain
+future evidence; research timing and MI/RSP envelopes prove no bus transaction
+width/count or MMIO safety. The every-release native/physical matrix remains
+required independently of subsystem acceptance.
