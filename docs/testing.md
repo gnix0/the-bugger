@@ -2602,7 +2602,10 @@ pidfd and `close_range`; no fallback signals a numeric PID after losing ownershi
 Helper checks cover independent/shared interests, replacement of a creator's
 query, dispatch order differing from admission order, saturation, deferred
 publication and allocation rollback. Small control frames are tested with no
-remaining allocation capacity. Nested account tests enforce both subsidiary
+remaining allocation capacity. Cleanup notifications retain job capacity until
+accepted, follow result delivery, and cannot be replaced by premature or wrongly
+identified acknowledgements. Missing acknowledgements preserve the completed
+result and require confirmed reap before worker-ownership release. Nested account tests enforce both subsidiary
 and aggregate ceilings before mutation. Backpressure in one consumer must not
 prevent another completed consumer from receiving its result.
 
@@ -2693,23 +2696,6 @@ release all component allocations. These checks establish a comparison primitive
 not integrated content deduplication or acquisition coherence.
 
 
-## Frozen backing comparison (SE03, partial)
-
-```sh
-make BUILD_DIR=build/se03-equal-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
-  test-symbol-equal
-```
-
-Included in `test` and `test-ci`. Actual frozen local files cover empty inputs,
-complete equal inputs, first/final-byte differences, buffer boundaries, short and
-interrupted reads, shrinking service slices and cancellation at every stage.
-Instrumented reads and comparisons enforce the per-step inspection allowance;
-positive equality must inspect all bytes of both backings. Borrowed descriptors
-remain open after comparison destruction. Allocation failure and ancestor-budget
-exhaustion preserve accounting.
-
 `O_PATH`, writable descriptors, mismatched extents and per-input I/O failures
-cannot produce equality proof. A deliberately changed backing after both ranges
-have been read is rejected by the final dependency check. The suite checks failure
-input masks and unchanged output on failure. This proves the comparison component,
-not content identity assignment or integrated backing deduplication.
+cannot produce equality proof. The suite checks input-specific failure masks,
+unchanged output on failure and ancestor-budget exhaustion.

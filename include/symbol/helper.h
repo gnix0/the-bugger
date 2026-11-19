@@ -71,6 +71,13 @@ typedef struct {
  * consumer's responsibility. No reentry or mutation from this callback. */
 typedef bool (*tb_symbol_helper_emit_fn)(void *context, const TbSymbolWorkIdentity_t *identity,
                                        TbSymbolHelperResult_t result);
+/* Exact root interest and process generation whose worker-owned operation state
+ * and outgoing frame descriptors have been released. Called after completion
+ * acceptance and helper result cleanup. False retains bounded notification
+ * ownership. Staged/retained filesystem objects and frontend-owned backing need
+ * separate cleanup; this notification alone cannot release their byte charge. No reentry. */
+typedef bool (*tb_symbol_helper_released_fn)(void *context, const TbSymbolWorkIdentity_t *identity,
+                                           uint64_t process_generation);
 typedef struct tb_symbol_helper TbSymbolHelper_t;
 
 void tb_symbol_helper_defaults(TbSymbolHelperConfig_t *config);
@@ -90,6 +97,10 @@ TbSymbolAdmission_e tb_symbol_helper_submit(TbSymbolHelper_t *helper, const TbSy
 bool tb_symbol_helper_attach(TbSymbolHelper_t *helper, uint64_t request, TbSymbolWorkIdentity_t identity);
 bool tb_symbol_helper_cancel(TbSymbolHelper_t *helper, TbSymbolWorkIdentity_t identity);
 void tb_symbol_helper_pump(TbSymbolHelper_t *helper, tb_symbol_helper_emit_fn emit, void *context);
+/* Acquisition requires a release consumer, including on cancellation/failure.
+ * The ordinary pump retains those notifications until a consumer is supplied. */
+void tb_symbol_helper_pump_with_release(TbSymbolHelper_t *helper, tb_symbol_helper_emit_fn emit,
+                                       tb_symbol_helper_released_fn released, void *context);
 /* At most two descriptors. Caller supplies that capacity. */
 size_t tb_symbol_helper_pollfds(const TbSymbolHelper_t *helper, struct pollfd *fds);
 int tb_symbol_helper_timeout(const TbSymbolHelper_t *helper, int maximum_ms);

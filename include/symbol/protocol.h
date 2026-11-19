@@ -12,8 +12,13 @@ enum {
     TB_SYMBOL_PROGRESS_BYTES   = 32,
     TB_SYMBOL_RESULT_BYTES     = 16,
     TB_SYMBOL_CANCEL_BYTES     = 8,
+    TB_SYMBOL_SETTLED_BYTES    = 8,
     TB_SYMBOL_PROGRESS_START   = 1,
     TB_SYMBOL_PROGRESS_ADVANCE = 2
+};
+
+enum {
+    TB_SYMBOL_OPERATION_ACQUIRE = 65536
 };
 
 static inline void tb_symbol_protocol_put(unsigned char *bytes, uint64_t value, unsigned width)

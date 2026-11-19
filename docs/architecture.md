@@ -130,7 +130,17 @@ admission and receipt; buffered progress cannot extend a stalled operation.
 Repeated counters do not refresh the watchdog. Parent-enforced queue, absolute
 operation, progress and cancellation deadlines remain distinct. Failure explicitly
 completes unfinished interests, while callers retain independently accepted
-results. There is no automatic retry, rescan or restart. The supervisor exposes separate
+results. Acquisition operations have a separate cleanup notification. The worker sends it
+only after destroying operation state and finishing the outgoing result frame;
+the parent delivers it after completion acceptance and releasing its borrowed
+result resources. Backpressure retains the underlying job slot. Cancellation
+before dispatch can prove that no worker ownership was acquired. Missing cleanup
+acknowledgements use the cancellation deadline and supervised termination; a
+confirmed reap can retire worker ownership, while uncertain reap cannot. Staged
+or retained filesystem objects remain independently owned and charged until
+their cleanup is confirmed. This control path does not implement acquisition yet.
+
+There is no automatic retry, rescan or restart. The supervisor exposes separate
 current-process and last-confirmed-reap generations. Acquisition owners can retain
 failed-operation reservations until worker ownership has ended; EOF, cancellation
 and lost/uncertain reap do not advance that evidence. Independently retained

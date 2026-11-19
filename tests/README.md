@@ -44,15 +44,6 @@ records remain in the [validation records](../docs/validation.md).
   `test`; integrated deduplication remains pending. See
   [equality coverage](../docs/testing.md#frozen-backing-equality-se03-partial).
 
-- `make test-symbol-equal`: complete frozen-backing equality, bounded comparison
-  work, input failures and borrowed-descriptor ownership. Included in `test`; see
-  [comparison coverage](../docs/testing.md#frozen-backing-equality-se03-partial).
-
-- `make test-symbol-equal`: complete byte-equality proof for frozen backings,
-  shrinking service slices, descriptor contracts, faults and cancellation.
-  Included in `test`; backing deduplication integration is pending. See
-  [comparison coverage](../docs/testing.md#frozen-backing-comparison-se03-partial).
-
 - `make test-fullscreen`: Source-only fullscreen PTY checks, retained header/footer,
   split/resize restoration, hidden input regions and compact/keyboard behavior;
   included in `make test`. `make test-fullscreen-native` adds actual GDB source

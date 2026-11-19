@@ -5814,6 +5814,8 @@ not cover this later component. Content ownership, actual deduplication, helper
 cleanup and F07 acceptance remain separate work.
 
 
+## Symbol Engine ownership integration — 2026-11-19
+
 ### Helper ownership evidence for acquisition
 
 Separate process-generation and confirmed-reap markers now support pending
@@ -5831,3 +5833,33 @@ The same helper suite passed with Clang AddressSanitizer/UndefinedBehaviorSaniti
 above, with `test-symbol-helper`. Healthy-worker cleanup acknowledgements and
 integrated artifact admission remain pending; these markers alone do not complete
 SE03 or authorize a charge release while frontend backing remains owned.
+
+
+### Bounded helper cleanup notifications
+
+A private cleanup acknowledgement now separates operation results from retirement
+of worker-owned state and frame descriptors. Notifications retain their job slots
+until consumed. Focused checks cover all job slots held by backpressured cleanup,
+unsent cancellation, result-before-cleanup delivery, missing acknowledgements and
+premature/wrong-context/wrong-revision acknowledgements. Completed result data
+survives later channel failure. Invalid or missing acknowledgements require owned
+reap before retirement; staged/retained filesystem objects still need their own
+cleanup proof and charge release.
+
+`helper-release-focused-final`, `helper-release-sanitize` and
+`helper-release-analysis` logs/exit records under `build/se03-evidence-20261119/`
+record PASS, exit 0. The focused target is `test-symbol-helper test-symbol-wire`
+in `build/se03-release-focused-20261119`; the sanitizer variant uses
+`build/se03-release-sanitize-20261119` and the fortified Clang ASan/UBSan flags
+above. Component analysis covers helper, worker and wire sources. Actual-GDB
+isolation passed, exit 0 (`helper-release-native`, target
+`test-symbol-helper-native`), with GDB remaining independently responsive.
+
+The reserved acquisition operation still returns Unsupported; it exercises this
+ownership protocol without producing synthetic artifact metadata. Actual helper
+acquisition, filesystem-object ownership, deduplication and the complete SE03
+regression gate remain pending.
+
+Normal `make` passed and updated `build/the-bugger`
+(`helper-release-normal-make`, exit 0). Local documentation references and
+whitespace checks passed. Full SE03 regression remains pending integration.

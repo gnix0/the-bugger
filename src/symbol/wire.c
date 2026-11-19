@@ -85,7 +85,7 @@ static bool backing_valid(int descriptor)
 
 static bool kind_valid(TbSymbolMessageKind_e kind)
 {
-    return kind >= TB_SYMBOL_MESSAGE_HELLO && kind <= TB_SYMBOL_MESSAGE_SHUTDOWN;
+    return kind >= TB_SYMBOL_MESSAGE_HELLO && kind <= TB_SYMBOL_MESSAGE_SETTLED;
 }
 
 

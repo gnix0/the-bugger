@@ -334,6 +334,143 @@ static void reap_evidence(void)
 }
 
 
+typedef struct {
+    Observer_t observer;
+    size_t     attempts;
+    size_t     released;
+    bool       blocked;
+    bool       seen[TB_SYMBOL_MAX_JOBS];
+} ReleaseObserver_t;
+
+static bool emit_owned(void *context, const TbSymbolWorkIdentity_t *captured, TbSymbolHelperResult_t result)
+{
+    ReleaseObserver_t *observer = context;
+    return emit(&observer->observer, captured, result);
+}
+
+
+static bool released(void *context, const TbSymbolWorkIdentity_t *captured, uint64_t generation)
+{
+    ReleaseObserver_t *observer = context;
+    bool delivered = false;
+    for (size_t i = 0; i < observer->observer.count; ++i)
+        delivered |= observer->observer.identities[i].request == captured->request;
+    CHECK(delivered && captured->request && captured->request <= TB_SYMBOL_MAX_JOBS);
+    CHECK(captured->consumer == captured->request);
+    CHECK(captured->generation == 19 && captured->revision == 47 && generation == 1);
+    ++observer->attempts;
+    if (observer->blocked)
+        return false;
+    CHECK(!observer->seen[captured->request - 1]);
+    observer->seen[captured->request - 1] = true;
+    ++observer->released;
+    return true;
+}
+
+
+static void pump_owned(TbSymbolHelper_t *helper, ReleaseObserver_t *observer)
+{
+    tb_symbol_helper_pump_with_release(helper, emit_owned, released, observer);
+    struct pollfd fds[2];
+    size_t count = tb_symbol_helper_pollfds(helper, fds);
+    CHECK(count <= 2 && poll(fds, (nfds_t)count, tb_symbol_helper_timeout(helper, 2)) >= 0);
+}
+
+
+static void release_interests(void)
+{
+    TbSymbolHelperConfig_t config;
+    tb_symbol_helper_defaults(&config);
+    TbSymbolBudget_t storage;
+    CHECK(tb_symbol_budget_init(&storage, config.frontend_bytes));
+    ReleaseObserver_t observer = {
+        .blocked = true
+    };
+    TbSymbolHelper_t *helper = tb_symbol_helper_create(&config, &storage);
+    CHECK(helper && tb_symbol_helper_start(helper, production_binary));
+    ready(helper, &observer.observer);
+    for (uint64_t i = 1; i <= TB_SYMBOL_MAX_JOBS; ++i) {
+        CHECK(submit(helper, identity(i, i), TB_SYMBOL_OPERATION_ACQUIRE,
+                     TB_SYMBOL_CONSTRUCTION, true, NULL, 0) == TB_SYMBOL_ADMITTED);
+    }
+    CHECK(!tb_symbol_helper_attach(helper, 1, identity(1000, 1000)));
+    for (unsigned i = 0; i < 4000 && observer.observer.count < TB_SYMBOL_MAX_JOBS; ++i)
+        pump_owned(helper, &observer);
+    CHECK(observer.observer.count == TB_SYMBOL_MAX_JOBS && observer.attempts && !observer.released);
+    CHECK(tb_symbol_helper_jobs(helper) == TB_SYMBOL_MAX_JOBS);
+    CHECK(submit(helper, identity(65, 65), 990, TB_SYMBOL_INTERACTIVE, false, NULL, 0) == TB_SYMBOL_BUSY);
+    observer.blocked = false;
+    for (unsigned i = 0; i < 4000 && observer.released < TB_SYMBOL_MAX_JOBS; ++i)
+        pump_owned(helper, &observer);
+    CHECK(observer.released == TB_SYMBOL_MAX_JOBS && !tb_symbol_helper_jobs(helper));
+    CHECK(tb_symbol_helper_state(helper) == TB_SYMBOL_HELPER_READY);
+    close_helper(helper, &observer.observer);
+    CHECK(!storage.used);
+
+    observer = (ReleaseObserver_t){0};
+    helper = tb_symbol_helper_create(&config, NULL);
+    CHECK(helper && tb_symbol_helper_start(helper, production_binary));
+    ready(helper, &observer.observer);
+    CHECK(submit(helper, identity(1, 1), TB_SYMBOL_OPERATION_ACQUIRE,
+                 TB_SYMBOL_CONSTRUCTION, true, NULL, 0) == TB_SYMBOL_ADMITTED);
+    CHECK(tb_symbol_helper_cancel(helper, identity(1, 1)));
+    for (unsigned i = 0; i < 2000 && !observer.released; ++i)
+        pump_owned(helper, &observer);
+    CHECK(observer.released == 1 && observer.observer.outcomes[0] == TB_SYMBOL_CANCELLED);
+    CHECK(!tb_symbol_helper_jobs(helper) && !tb_symbol_helper_reaped_generation(helper));
+    close_helper(helper, &observer.observer);
+
+    observer = (ReleaseObserver_t){0};
+    observer.observer.blocked = true;
+    helper = tb_symbol_helper_create(&config, NULL);
+    CHECK(helper && tb_symbol_helper_start(helper, production_binary));
+    ready(helper, &observer.observer);
+    CHECK(submit(helper, identity(1, 1), TB_SYMBOL_OPERATION_ACQUIRE,
+                 TB_SYMBOL_CONSTRUCTION, true, NULL, 0) == TB_SYMBOL_ADMITTED);
+    for (unsigned i = 0; i < 100; ++i)
+        pump_owned(helper, &observer);
+    CHECK(observer.observer.blocked_attempts && !observer.attempts);
+    observer.observer.blocked = false;
+    for (unsigned i = 0; i < 2000 && !observer.released; ++i)
+        pump_owned(helper, &observer);
+    CHECK(observer.released == 1 && observer.observer.count == 1);
+    close_helper(helper, &observer.observer);
+
+    observer = (ReleaseObserver_t){0};
+    helper = fake_helper("success", &config, &observer.observer);
+    CHECK(submit(helper, identity(1, 1), TB_SYMBOL_OPERATION_ACQUIRE,
+                 TB_SYMBOL_CONSTRUCTION, true, NULL, 0) == TB_SYMBOL_ADMITTED);
+    for (unsigned i = 0; i < 2000 && !observer.released; ++i)
+        pump_owned(helper, &observer);
+    CHECK(observer.released == 1 && observer.observer.count == 1);
+    CHECK(observer.observer.outcomes[0] == TB_SYMBOL_SUCCESS);
+    CHECK(tb_symbol_helper_state(helper) == TB_SYMBOL_HELPER_UNAVAILABLE);
+    CHECK(strstr(tb_symbol_helper_error(helper), "cleanup acknowledgement"));
+    CHECK(tb_symbol_helper_reaped_generation(helper) == 1);
+    close_helper(helper, &observer.observer);
+    CHECK(!unsetenv("TB_TEST_SYMBOL_HELPER"));
+
+    const char *modes[] = {"settled-early", "settled-context", "settled-revision"};
+    for (size_t i = 0; i < sizeof(modes) / sizeof(modes[0]); ++i) {
+        observer = (ReleaseObserver_t){0};
+        helper = fake_helper(modes[i], &config, &observer.observer);
+        CHECK(submit(helper, identity(1, 1), TB_SYMBOL_OPERATION_ACQUIRE,
+                     TB_SYMBOL_CONSTRUCTION, true, NULL, 0) == TB_SYMBOL_ADMITTED);
+        for (unsigned turn = 0; turn < 2000 && !observer.released; ++turn)
+            pump_owned(helper, &observer);
+        CHECK(observer.released == 1 && observer.observer.count == 1);
+        CHECK(observer.observer.outcomes[0] == (i ? TB_SYMBOL_SUCCESS : TB_SYMBOL_MALFORMED));
+        if (i)
+            CHECK(strcmp(observer.observer.values[0], "kept") == 0);
+        CHECK(tb_symbol_helper_state(helper) == TB_SYMBOL_HELPER_UNAVAILABLE);
+        CHECK(strstr(tb_symbol_helper_error(helper), "protocol"));
+        CHECK(tb_symbol_helper_reaped_generation(helper) == 1);
+        close_helper(helper, &observer.observer);
+        CHECK(!unsetenv("TB_TEST_SYMBOL_HELPER"));
+    }
+}
+
+
 static void deadline_failures(void)
 {
     fake_clock = true;
@@ -729,7 +866,8 @@ static int fake_peer(const char *mode)
                 TbSymbolWorkIdentity_t captured = job->identity;
                 if (job->phase == 1) {
                     tb_symbol_protocol_put(bytes, TB_SYMBOL_PROGRESS_START, 4);
-                    job->phase = strcmp(mode, "crash") == 0 || strcmp(mode, "success") == 0 ? 2 : 3;
+                    job->phase = strcmp(mode, "crash") == 0 || strcmp(mode, "success") == 0 ||
+                                 strncmp(mode, "settled-", 8) == 0 ? 2 : 3;
                     if (strcmp(mode, "revision") == 0)
                         ++captured.revision;
                 } else if (job->phase == 2 || job->phase == 4) {
@@ -741,7 +879,21 @@ static int fake_peer(const char *mode)
                         memcpy(bytes + TB_SYMBOL_RESULT_BYTES, "kept", 4);
                         length += 4;
                     }
+                    if (strcmp(mode, "settled-early") == 0) {
+                        kind = TB_SYMBOL_MESSAGE_SETTLED;
+                        length = TB_SYMBOL_SETTLED_BYTES;
+                        job->used = false;
+                    } else if (strncmp(mode, "settled-", 8) == 0) {
+                        job->phase = 5;
+                    } else {
+                        job->used = false;
+                    }
+                } else if (job->phase == 5) {
+                    kind = TB_SYMBOL_MESSAGE_SETTLED;
+                    length = TB_SYMBOL_SETTLED_BYTES;
                     job->used = false;
+                    if (strcmp(mode, "settled-revision") == 0)
+                        ++captured.revision;
                 } else if (strcmp(mode, "heartbeat") == 0 || strcmp(mode, "progress") == 0 ||
                            strcmp(mode, "old-progress") == 0) {
                     tb_symbol_protocol_put(bytes, TB_SYMBOL_PROGRESS_ADVANCE, 4);
@@ -751,7 +903,12 @@ static int fake_peer(const char *mode)
                 } else {
                     continue;
                 }
-                tb_symbol_protocol_put(bytes + 8, captured.generation, 8);
+                if (kind == TB_SYMBOL_MESSAGE_SETTLED) {
+                    tb_symbol_protocol_put(bytes, captured.generation +
+                                           (strcmp(mode, "settled-context") == 0 ? 1U : 0U), 8);
+                } else {
+                    tb_symbol_protocol_put(bytes + 8, captured.generation, 8);
+                }
                 if (kind == TB_SYMBOL_MESSAGE_PROGRESS) {
                     uint64_t event_ns;
                     if (clock_fd >= 0) {
@@ -807,6 +964,7 @@ int main(int argc, char *argv[])
     production_binary = argc == 2 ? argv[1] : NULL;
     configuration();
     reap_evidence();
+    release_interests();
     real_worker();
     saturation();
     allocation_failures();

@@ -23,6 +23,7 @@ typedef struct {
     bool                   used;
     bool                   started;
     bool                   emitted;
+    bool                   cleanup_pending;
 } WorkerJob_t;
 
 struct worker {
@@ -68,8 +69,12 @@ static void job_destroy(void *context)
         (void)tb_symbol_budget_release(&job->owner->ipc, job->length);
     }
     job->arguments = NULL;
-    if (job->emitted)
-        *job = (WorkerJob_t){0};
+    if (job->emitted) {
+        if (job->operation == TB_SYMBOL_OPERATION_ACQUIRE)
+            job->cleanup_pending = true;
+        else
+            *job = (WorkerJob_t){0};
+    }
 }
 
 
@@ -135,9 +140,42 @@ static bool emit(void *context, const TbSymbolWorkIdentity_t *identity, TbSymbol
     if (!tb_symbol_wire_send(worker->wire, &message))
         return false;
     job->emitted = true;
-    if (!work_context)
-        *job = (WorkerJob_t){0};
+    if (!work_context) {
+        if (job->operation == TB_SYMBOL_OPERATION_ACQUIRE)
+            job->cleanup_pending = true;
+        else
+            *job = (WorkerJob_t){0};
+    }
     return true;
+}
+
+
+static void release_operation(Worker_t *worker)
+{
+    if (tb_symbol_wire_sending(worker->wire))
+        return;
+    for (size_t i = 0; i < TB_SYMBOL_MAX_JOBS; ++i) {
+        WorkerJob_t *job = &worker->jobs[i];
+        if (!job->used || !job->cleanup_pending)
+            continue;
+        unsigned char bytes[TB_SYMBOL_SETTLED_BYTES];
+        tb_symbol_protocol_put(bytes, job->identity.generation, 8);
+        TbSymbolMessage_t message = tb_symbol_protocol_message(TB_SYMBOL_MESSAGE_SETTLED, job->identity,
+                                                               worker->generation, bytes, sizeof(bytes));
+        if (tb_symbol_wire_send(worker->wire, &message))
+            *job = (WorkerJob_t){0};
+        return;
+    }
+}
+
+
+static bool operation_pending(const Worker_t *worker)
+{
+    for (size_t i = 0; i < TB_SYMBOL_MAX_JOBS; ++i) {
+        if (worker->jobs[i].used)
+            return true;
+    }
+    return false;
 }
 
 
@@ -326,10 +364,11 @@ int tb_symbol_worker_main(int socket_fd)
         uint64_t now;
         if (!now_ns(&now))
             break;
+        release_operation(&worker);
         if (worker.schedule)
             (void)tb_symbol_schedule_pump(worker.schedule, now, worker.slice_ns, emit, &worker);
         if (worker.stopping && !tb_symbol_schedule_jobs(worker.schedule) &&
-            !tb_symbol_wire_sending(worker.wire)) {
+            !operation_pending(&worker) && !tb_symbol_wire_sending(worker.wire)) {
             result = EXIT_SUCCESS;
             break;
         }

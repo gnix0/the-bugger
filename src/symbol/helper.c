@@ -31,6 +31,9 @@ typedef struct {
     bool                   heavy;
     bool                   complete;
     bool                   cancel_pending;
+    bool                   release_required;
+    bool                   remote_released;
+    bool                   completion_delivered;
 } HelperJob_t;
 
 struct tb_symbol_helper {
@@ -230,7 +233,14 @@ static void job_destroy(void *context)
 {
     HelperJob_t *job = context;
     job->scheduler_owned = false;
-    if (!job->sent || job->complete) {
+    if (job->release_required) {
+        if (!job->sent)
+            job->remote_released = true;
+        if (!job->cancel_deadline_ns)
+            job->cancel_deadline_ns = after(job->owner->now_ns, job->owner->config.cancel_ns);
+        if (job->sent && !job->complete)
+            job->cancel_pending = true;
+    } else if (!job->sent || job->complete) {
         job_free(job);
     } else {
         job->cancel_pending = true;
@@ -257,8 +267,10 @@ static void fail(TbSymbolHelper_t *helper, TbSymbolOutcome_e outcome, const char
         job->complete = true;
         job->cancel_pending = false;
         /* A cancelled remote job remains counted until actual reap. */
-        if (!job->scheduler_owned && tb_symbol_process_released(&helper->process))
+        if (!job->scheduler_owned && !job->release_required &&
+            tb_symbol_process_released(&helper->process)) {
             job_free(job);
+        }
     }
 }
 
@@ -426,7 +438,8 @@ TbSymbolAdmission_e tb_symbol_helper_submit(TbSymbolHelper_t *helper, const TbSy
         .descriptor      = -1,
         .used            = true,
         .scheduler_owned = true,
-        .heavy           = heavy
+        .heavy           = heavy,
+        .release_required = operation == TB_SYMBOL_OPERATION_ACQUIRE
     };
     TbSymbolWork_t work = {
         .identity = identity,
@@ -450,6 +463,12 @@ bool tb_symbol_helper_attach(TbSymbolHelper_t *helper, uint64_t request, TbSymbo
                     helper->state != TB_SYMBOL_HELPER_STARTING) ||
         identity.request <= helper->last_request) {
         return false;
+    }
+    for (size_t i = 0; i < helper->config.max_jobs; ++i) {
+        if (helper->jobs[i].used && helper->jobs[i].identity.request == request &&
+            helper->jobs[i].release_required) {
+            return false;
+        }
     }
     if (!tb_symbol_schedule_attach(helper->schedule, request, identity))
         return false;
@@ -478,8 +497,14 @@ static bool receive(TbSymbolHelper_t *helper, const TbSymbolMessage_t *message)
             helper->state = TB_SYMBOL_HELPER_READY;
         return true;
     }
-    if (message->kind != TB_SYMBOL_MESSAGE_PROGRESS && message->kind != TB_SYMBOL_MESSAGE_RESULT)
+    if (message->kind != TB_SYMBOL_MESSAGE_PROGRESS && message->kind != TB_SYMBOL_MESSAGE_RESULT &&
+        message->kind != TB_SYMBOL_MESSAGE_SETTLED) {
         return false;
+    }
+    if (message->kind == TB_SYMBOL_MESSAGE_SETTLED &&
+        (message->length != TB_SYMBOL_SETTLED_BYTES || message->descriptor >= 0)) {
+        return false;
+    }
     HelperJob_t *job = NULL;
     for (size_t i = 0; i < helper->config.max_jobs; ++i) {
         if (helper->jobs[i].used && helper->jobs[i].identity.request == message->request) {
@@ -489,10 +514,20 @@ static bool receive(TbSymbolHelper_t *helper, const TbSymbolMessage_t *message)
     }
     if (!job)
         return message->request && message->request <= helper->last_request;
-    if (!job->sent || job->complete || message->consumer != job->identity.consumer ||
+    if (!job->sent || message->consumer != job->identity.consumer ||
         message->revision != job->identity.revision || job->generation != message->generation) {
         return false;
     }
+    if (message->kind == TB_SYMBOL_MESSAGE_SETTLED) {
+        if (!job->release_required || !job->complete || job->remote_released ||
+            tb_symbol_protocol_get(message->payload, 8) != job->identity.generation) {
+            return false;
+        }
+        job->remote_released = true;
+        return true;
+    }
+    if (job->complete)
+        return false;
     if (message->kind == TB_SYMBOL_MESSAGE_PROGRESS) {
         if (message->length != TB_SYMBOL_PROGRESS_BYTES || message->descriptor >= 0 ||
             tb_symbol_protocol_get(message->payload + 4, 4) ||
@@ -553,13 +588,16 @@ static bool receive(TbSymbolHelper_t *helper, const TbSymbolMessage_t *message)
     job->outcome = (TbSymbolOutcome_e)outcome;
     job->complete = true;
     job->cancel_pending = false;
-    if (!job->scheduler_owned)
+    if (job->release_required && !job->cancel_deadline_ns)
+        job->cancel_deadline_ns = after(helper->now_ns, helper->config.cancel_ns);
+    if (!job->scheduler_owned && !job->release_required)
         job_free(job);
     return true;
 }
 
 
 typedef struct {
+    TbSymbolHelper_t        *helper;
     tb_symbol_helper_emit_fn emit;
     void                    *context;
 } Emit_t;
@@ -578,7 +616,20 @@ static bool emit_result(void *context, const TbSymbolWorkIdentity_t *identity,
         completion.length = job->length;
         completion.descriptor = job->descriptor;
     }
-    return observer->emit && observer->emit(observer->context, identity, completion);
+    bool accepted = observer->emit && observer->emit(observer->context, identity, completion);
+    if (accepted) {
+        for (size_t i = 0; i < observer->helper->config.max_jobs; ++i) {
+            HelperJob_t *owned = &observer->helper->jobs[i];
+            if (owned->used && owned->release_required && owned->identity.request == identity->request &&
+                owned->identity.consumer == identity->consumer &&
+                owned->identity.revision == identity->revision &&
+                owned->identity.generation == identity->generation) {
+                owned->completion_delivered = true;
+                break;
+            }
+        }
+    }
+    return accepted;
 }
 
 
@@ -633,7 +684,17 @@ static void deadlines(TbSymbolHelper_t *helper)
         return;
     for (size_t i = 0; i < helper->config.max_jobs; ++i) {
         HelperJob_t *job = &helper->jobs[i];
-        if (!job->used || job->complete)
+        if (!job->used)
+            continue;
+        if (job->release_required && !job->remote_released && job->cancel_deadline_ns &&
+            helper->now_ns >= job->cancel_deadline_ns) {
+            fail(helper, TB_SYMBOL_OPERATIONAL_FAILURE,
+                 "Symbol helper cleanup acknowledgement deadline exceeded");
+            if (helper->process.state == TB_SYMBOL_PROCESS_STOPPING)
+                helper->process.deadline_ns = helper->now_ns;
+            return;
+        }
+        if (job->complete)
             continue;
         const char *reason = NULL;
         if (!job->scheduler_owned && helper->now_ns >= job->cancel_deadline_ns)
@@ -657,7 +718,8 @@ static void deadlines(TbSymbolHelper_t *helper)
 }
 
 
-void tb_symbol_helper_pump(TbSymbolHelper_t *helper, tb_symbol_helper_emit_fn emit, void *context)
+void tb_symbol_helper_pump_with_release(TbSymbolHelper_t *helper, tb_symbol_helper_emit_fn emit,
+                                       tb_symbol_helper_released_fn released, void *context)
 {
     if (!helper)
         return;
@@ -697,6 +759,7 @@ void tb_symbol_helper_pump(TbSymbolHelper_t *helper, tb_symbol_helper_emit_fn em
     deadlines(helper);
     control(helper);
     Emit_t observer = {
+        .helper  = helper,
         .emit    = emit,
         .context = context
     };
@@ -704,12 +767,35 @@ void tb_symbol_helper_pump(TbSymbolHelper_t *helper, tb_symbol_helper_emit_fn em
                                  emit_result, &observer);
     if (tb_symbol_process_released(&helper->process)) {
         for (size_t i = 0; i < helper->config.max_jobs; ++i) {
-            if (helper->jobs[i].used && !helper->jobs[i].scheduler_owned)
-                job_free(&helper->jobs[i]);
+            HelperJob_t *job = &helper->jobs[i];
+            if (job->used && job->release_required && job->generation <= helper->reaped_generation)
+                job->remote_released = true;
+            if (job->used && !job->scheduler_owned && !job->release_required)
+                job_free(job);
         }
         if (helper->state == TB_SYMBOL_HELPER_STOPPING)
             helper->state = TB_SYMBOL_HELPER_IDLE;
     }
+    for (size_t i = 0; i < helper->config.max_jobs; ++i) {
+        HelperJob_t *job = &helper->jobs[i];
+        if (!job->used || !job->release_required || !job->remote_released ||
+            !job->completion_delivered || job->scheduler_owned) {
+            continue;
+        }
+        buffer_free(job);
+        if (job->descriptor >= 0) {
+            (void)close(job->descriptor);
+            job->descriptor = -1;
+        }
+        if (released && released(context, &job->identity, job->generation))
+            job_free(job);
+    }
+}
+
+
+void tb_symbol_helper_pump(TbSymbolHelper_t *helper, tb_symbol_helper_emit_fn emit, void *context)
+{
+    tb_symbol_helper_pump_with_release(helper, emit, NULL, context);
 }
 
 
@@ -719,6 +805,10 @@ bool tb_symbol_helper_destroy(TbSymbolHelper_t *helper)
         return true;
     if (!tb_symbol_process_released(&helper->process) || tb_symbol_schedule_jobs(helper->schedule))
         return false;
+    for (size_t i = 0; i < helper->config.max_jobs; ++i) {
+        if (helper->jobs[i].used && helper->jobs[i].release_required)
+            return false;
+    }
     for (size_t i = 0; i < helper->config.max_jobs; ++i) {
         if (helper->jobs[i].used)
             job_free(&helper->jobs[i]);
