@@ -21,6 +21,7 @@ struct tb_symbol_reservation {
     TbSymbolBackingCharge_t   *backing;
     uint64_t                   bytes;
     TbSymbolChargeState_e      state;
+    bool                       needs_size;
 };
 
 static bool reserve_allocation(TbSymbolBudget_t *frontend, size_t bytes)
@@ -106,6 +107,30 @@ TbSymbolReservation_t *tb_symbol_admission_reserve(TbSymbolAdmissionLedger_t *le
 }
 
 
+TbSymbolReservation_t *tb_symbol_admission_prepare(TbSymbolAdmissionLedger_t *ledger)
+{
+    TbSymbolReservation_t *reservation = tb_symbol_admission_reserve(ledger, 0);
+    if (reservation)
+        reservation->needs_size = true;
+    return reservation;
+}
+
+
+bool tb_symbol_admission_assign(TbSymbolReservation_t *reservation, uint64_t bytes)
+{
+    if (!reservation || reservation->state != TB_SYMBOL_CHARGE_RESERVED || !reservation->needs_size)
+        return false;
+    TbSymbolAdmissionLedger_t *ledger = reservation->owner;
+    if (bytes > ledger->file_bytes || bytes > ledger->aggregate_bytes - ledger->usage.bytes)
+        return false;
+    ledger->usage.bytes += bytes;
+    reservation->bytes = bytes;
+    reservation->backing->bytes = bytes;
+    reservation->needs_size = false;
+    return true;
+}
+
+
 TbSymbolChargeState_e tb_symbol_admission_state(const TbSymbolReservation_t *reservation)
 {
     return reservation->state;
@@ -121,7 +146,7 @@ uint64_t tb_symbol_admission_size(const TbSymbolReservation_t *reservation)
 TbSymbolBackingCharge_t *tb_symbol_admission_commit(TbSymbolReservation_t *reservation,
                                                    TbSymbolBackingCharge_t *shared)
 {
-    if (!reservation || reservation->state != TB_SYMBOL_CHARGE_RESERVED)
+    if (!reservation || reservation->state != TB_SYMBOL_CHARGE_RESERVED || reservation->needs_size)
         return NULL;
     TbSymbolAdmissionLedger_t *ledger = reservation->owner;
     if (ledger->usage.open_contexts == UINT64_MAX ||

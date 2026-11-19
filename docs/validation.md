@@ -5892,3 +5892,34 @@ and `build/se03-storage-sanitize-20261119` with the flags above and targets
 These are actual local filesystem observations, not source-coherence, universal
 filesystem, supervised admission or production-performance qualification. Full
 SE03 host regression and F07 acceptance remain pending integration.
+
+
+### Named acquisition and size commitment
+
+The copier now uses an owned named slot instead of anonymous staging. This
+integration keeps final potentially blocking deletion in the helper after
+frontend descriptors close. Earlier anonymous-file observations above remain
+historical component evidence. Acquisition destruction closes only its own
+descriptors; the caller retains named-slot ownership and cleanup obligations.
+
+Admission can preallocate unsized ownership before discovery. Such a ticket
+cannot commit until assigned the exact offer, including explicit zero. Assignment
+reserves the full logical charge without allocating; per-file or aggregate
+failure leaves the placeholder unchanged. The helper identifies an empty staging
+file before offering its size and writes no data before an exact grant. Reader
+identity is checked against that original file before complete frozen-byte hashing.
+
+Focused acquisition/admission/storage/equality checks passed, exit 0
+(`retained-acquire-focused` in `build/se03-evidence-20261119/`). They verify empty
+staging at the offer, storage identity in the completed result, explicit size
+assignment, unchanged quota failures, and unsized/cancelled commitment refusal.
+Existing binary-byte, mutation, short/EINTR, failure and descriptor checks remain.
+The storage filesystem-profile rejection is now checked at namespace qualification.
+Fortified Clang ASan/UBSan passed for acquisition/admission/storage
+(`retained-acquire-sanitize`, 0); component analysis passed
+(`retained-acquire-analysis`, 0). Build directories are
+`build/se03-retain-focused-20261119` and `build/se03-retain-sanitize-20261119`,
+using the flags and targets above.
+
+Supervised producer dispatch and the frontend ownership registry remain pending.
+This is locally verified component integration, not completed SE03 or F07 acceptance.

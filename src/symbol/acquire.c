@@ -8,7 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <sys/vfs.h>
 #include <unistd.h>
 
 enum {
@@ -21,10 +20,8 @@ typedef enum {
     ACQUIRE_READER,
     ACQUIRE_READER_INSPECT,
     ACQUIRE_OFFER,
-    ACQUIRE_STORAGE_DIRECTORY,
-    ACQUIRE_STORAGE_PROFILE,
     ACQUIRE_STORAGE,
-    ACQUIRE_DIRECTORY_CLOSE,
+    ACQUIRE_STORAGE_INSPECT,
     ACQUIRE_READ,
     ACQUIRE_WRITE,
     ACQUIRE_SOURCE_CHECK,
@@ -43,7 +40,10 @@ typedef enum {
 struct tb_symbol_acquire {
     TbSymbolBudget_t        *construction;
     const char              *origin;
-    const char              *storage_directory;
+    TbSymbolStorage_t       *storage;
+    uint64_t                 slot;
+    TbSymbolStorageKey_t     backing_key;
+    bool                     backing_identified;
     struct stat              source;
     TbSha256_t               hash;
     uint64_t                 file_limit;
@@ -56,7 +56,6 @@ struct tb_symbol_acquire {
     int                      origin_fd;
     int                      source_fd;
     int                      writer_fd;
-    int                      directory_fd;
     int                      readonly_fd;
     int                      system_error;
     AcquirePhase_e           phase;
@@ -66,10 +65,10 @@ struct tb_symbol_acquire {
     unsigned char            buffer[ACQUIRE_BUFFER_BYTES];
 };
 
-TbSymbolAcquire_t *tb_symbol_acquire_create(const char *origin, const char *storage_directory,
+TbSymbolAcquire_t *tb_symbol_acquire_create(const char *origin, TbSymbolStorage_t *storage, uint64_t slot,
                                            uint64_t file_limit, TbSymbolBudget_t *construction)
 {
-    if (!origin || !*origin || !storage_directory || !*storage_directory || !file_limit ||
+    if (!origin || !*origin || !storage || !slot || !file_limit ||
         (construction && !tb_symbol_budget_reserve(construction, sizeof(TbSymbolAcquire_t)))) {
         return NULL;
     }
@@ -81,12 +80,12 @@ TbSymbolAcquire_t *tb_symbol_acquire_create(const char *origin, const char *stor
     }
     acquisition->construction      = construction;
     acquisition->origin            = origin;
-    acquisition->storage_directory = storage_directory;
+    acquisition->storage           = storage;
+    acquisition->slot              = slot;
     acquisition->file_limit        = file_limit;
     acquisition->origin_fd         = -1;
     acquisition->source_fd         = -1;
     acquisition->writer_fd         = -1;
-    acquisition->directory_fd      = -1;
     acquisition->readonly_fd       = -1;
     (void)tb_sha256_init(&acquisition->hash);
     return acquisition;
@@ -149,7 +148,7 @@ static void inspect_source(TbSymbolAcquire_t *acquisition, bool reader)
         if (!source_matches(&acquisition->source, &info))
             fail(acquisition, TB_SYMBOL_ACQUIRE_CHANGED, 0);
         else
-            acquisition->phase = ACQUIRE_OFFER;
+            acquisition->phase = ACQUIRE_STORAGE;
         return;
     }
     if ((uint64_t)info.st_size > acquisition->file_limit) {
@@ -240,7 +239,9 @@ static void check_backing(TbSymbolAcquire_t *acquisition)
         if (errno != EINTR)
             fail(acquisition, TB_SYMBOL_ACQUIRE_STORAGE, errno);
     } else if (!S_ISREG(info.st_mode) || info.st_size < 0 || (uint64_t)info.st_size != acquisition->bytes ||
-               info.st_nlink || info.st_uid != geteuid() || (info.st_mode & 0777U) != 0400U) {
+               info.st_nlink != 1 || info.st_uid != geteuid() || (info.st_mode & 0777U) != 0400U ||
+               (uint64_t)info.st_dev != acquisition->backing_key.device ||
+               (uint64_t)info.st_ino != acquisition->backing_key.inode) {
         fail(acquisition, TB_SYMBOL_ACQUIRE_INTEGRITY, 0);
     } else {
         acquisition->phase = ACQUIRE_WRITER_CLOSE;
@@ -309,36 +310,31 @@ TbSymbolOutcome_e tb_symbol_acquire_step(TbSymbolAcquire_t *acquisition, size_t 
         break;
     case ACQUIRE_OFFER:
         break;
-    case ACQUIRE_STORAGE_DIRECTORY:
-        acquisition->directory_fd = open(acquisition->storage_directory, O_PATH | O_DIRECTORY | O_CLOEXEC);
-        if (acquisition->directory_fd >= 0)
-            acquisition->phase = ACQUIRE_STORAGE_PROFILE;
+    case ACQUIRE_STORAGE:
+        acquisition->writer_fd = tb_symbol_storage_writer(acquisition->storage, acquisition->slot);
+        if (acquisition->writer_fd >= 0)
+            acquisition->phase = ACQUIRE_STORAGE_INSPECT;
         else if (errno != EINTR)
             fail(acquisition, TB_SYMBOL_ACQUIRE_STORAGE, errno);
         break;
-    case ACQUIRE_STORAGE_PROFILE: {
-        struct statfs filesystem;
-        if (fstatfs(acquisition->directory_fd, &filesystem)) {
+    case ACQUIRE_STORAGE_INSPECT: {
+        struct stat info;
+        if (fstat(acquisition->writer_fd, &info)) {
             if (errno != EINTR)
                 fail(acquisition, TB_SYMBOL_ACQUIRE_STORAGE, errno);
-        } else if (!tb_symbol_storage_local_type((unsigned long)filesystem.f_type)) {
-            fail(acquisition, TB_SYMBOL_ACQUIRE_STORAGE, EOPNOTSUPP);
+        } else if (!S_ISREG(info.st_mode) || info.st_size || info.st_nlink != 1 ||
+                   info.st_uid != geteuid()) {
+            fail(acquisition, TB_SYMBOL_ACQUIRE_INTEGRITY, 0);
         } else {
-            acquisition->phase = ACQUIRE_STORAGE;
+            acquisition->backing_key = (TbSymbolStorageKey_t){
+                .device = (uint64_t)info.st_dev,
+                .inode  = (uint64_t)info.st_ino
+            };
+            acquisition->backing_identified = true;
+            acquisition->phase = ACQUIRE_OFFER;
         }
         break;
     }
-    case ACQUIRE_STORAGE:
-        acquisition->writer_fd = openat(acquisition->directory_fd, ".",
-                                         O_TMPFILE | O_EXCL | O_RDWR | O_CLOEXEC, 0400);
-        if (acquisition->writer_fd >= 0)
-            acquisition->phase = ACQUIRE_DIRECTORY_CLOSE;
-        else if (errno != EINTR)
-            fail(acquisition, TB_SYMBOL_ACQUIRE_STORAGE, errno);
-        break;
-    case ACQUIRE_DIRECTORY_CLOSE:
-        close_owned(acquisition, &acquisition->directory_fd, ACQUIRE_READ);
-        break;
     case ACQUIRE_READ:
         copy_read(acquisition, max_bytes);
         break;
@@ -406,7 +402,16 @@ bool tb_symbol_acquire_grant(TbSymbolAcquire_t *acquisition, uint64_t bytes)
 {
     if (!acquisition || acquisition->phase != ACQUIRE_OFFER || bytes != acquisition->bytes)
         return false;
-    acquisition->phase = ACQUIRE_STORAGE_DIRECTORY;
+    acquisition->phase = ACQUIRE_READ;
+    return true;
+}
+
+
+bool tb_symbol_acquire_storage_key(const TbSymbolAcquire_t *acquisition, TbSymbolStorageKey_t *key)
+{
+    if (!acquisition || !key || !acquisition->backing_identified)
+        return false;
+    *key = acquisition->backing_key;
     return true;
 }
 
@@ -431,7 +436,8 @@ bool tb_symbol_acquire_take(TbSymbolAcquire_t *acquisition, TbSymbolAcquiredByte
         return false;
     TbSymbolAcquiredBytes_t result = {
         .bytes      = acquisition->bytes,
-        .descriptor = acquisition->readonly_fd
+        .descriptor = acquisition->readonly_fd,
+        .key        = acquisition->backing_key
     };
     memcpy(result.digest, acquisition->digest, sizeof(result.digest));
     *bytes = result;
@@ -445,7 +451,7 @@ void tb_symbol_acquire_destroy(TbSymbolAcquire_t *acquisition)
     if (!acquisition)
         return;
     int fds[] = {acquisition->origin_fd, acquisition->source_fd,
-                 acquisition->writer_fd, acquisition->readonly_fd, acquisition->directory_fd};
+                 acquisition->writer_fd, acquisition->readonly_fd};
     for (size_t i = 0; i < sizeof(fds) / sizeof(fds[0]); ++i) {
         if (fds[i] >= 0)
             (void)close(fds[i]);

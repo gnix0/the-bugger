@@ -41,6 +41,11 @@ TbSymbolAdmissionUsage_t tb_symbol_admission_usage(const TbSymbolAdmissionLedger
  * ticket, even if the eventual bytes are shared. A failed call changes nothing.
  * The returned opaque ticket is an internal owner handle, not artifact identity. */
 TbSymbolReservation_t *tb_symbol_admission_reserve(TbSymbolAdmissionLedger_t *ledger, uint64_t bytes);
+/* Preallocate ownership before size discovery. This zero-byte ticket cannot
+ * commit until assigned the exact offer, including an explicitly empty file.
+ * Assignment allocates nothing and must precede any grant to grow storage. */
+TbSymbolReservation_t *tb_symbol_admission_prepare(TbSymbolAdmissionLedger_t *ledger);
+bool tb_symbol_admission_assign(TbSymbolReservation_t *reservation, uint64_t bytes);
 TbSymbolChargeState_e tb_symbol_admission_state(const TbSymbolReservation_t *reservation);
 uint64_t tb_symbol_admission_size(const TbSymbolReservation_t *reservation);
 

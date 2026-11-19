@@ -189,34 +189,39 @@ it cannot grant admission by itself.
 ### Private byte acquisition (SE03, partial)
 
 `src/symbol/acquire.c` implements the helper-side filesystem state machine,
-independently testable without transport. It inspects a regular origin through
-an owned descriptor and offers its size before creating storage. Copying starts
-only after an exact explicit grant; reads and writes remain within that extent
-when the source grows. Each service step performs at most one filesystem operation
-and bounds file-data inspection to its supplied checkpoint allowance. Blocking
-filesystem calls still require independent parent supervision.
+independently testable without transport. The caller first owns a fresh slot in a
+protected namespace and preallocates an unsized admission ticket. The helper
+inspects the regular origin, creates an empty staging file and captures its exact
+storage identity. Its size offer is available before any file-data write. The
+parent assigns the full logical size and grants copying explicitly; source growth
+cannot grow backing beyond that extent. Unknown size is distinct from a validated
+empty file and cannot be committed as one.
 
-Storage uses an unnamed `O_TMPFILE | O_EXCL` inode on a recognized local filesystem
-(ext4, XFS, Btrfs or tmpfs). Other backing filesystems are unavailable in this
-profile; they cannot silently select remote storage or a named-file fallback.
-The file is protected to owner-read mode, reopened read-only with close-on-exec,
-and checked before the sole staging writer closes. There are no writable mappings.
-Only then does complete-file SHA-256 run. Success transfers one read-only descriptor;
-failure/cancellation releases owned descriptors and never exposes a partial digest.
-See Linux [unnamed temporary files](https://man7.org/linux/man-pages/man2/open.2.html)
-and [descriptor release](https://man7.org/linux/man-pages/man2/close.2.html).
+Each service step performs at most one filesystem operation and bounds file-data
+inspection to its supplied checkpoint allowance. Blocking calls require
+independent parent supervision. Namespace qualification is shared with retained
+storage. The file is protected to owner-read mode, reopened read-only with
+close-on-exec, and checked against its original storage identity before the sole
+staging writer closes. No writable mappings are created. Only then does
+complete-file SHA-256 run. Success transfers one read-only descriptor and complete
+identity/digest facts; no unfinished digest is exposed.
 
 Size, inode and modification/change-time comparisons, plus an origin-path check,
-reject detected mutations. Unchanged checks establish no atomic source coherence.
-The result is raw frozen bytes with coherence unproven; required ELF/DWARF
-validation, content identity and deduplication remain separate. This copy path
-provides no reflink qualification or coherent-snapshot claim.
+reject detected mutations. Unchanged checks prove no atomic source coherence.
+Required ELF/DWARF validation, content identity and deduplication remain separate.
+The copier provides no reflink qualification or coherent-snapshot claim.
 
-The component takes an explicit storage directory and file ceiling. It has no
-frontend entry point, automatic acquisition or new startup setting yet. Helper
-offer/grant framing, cleanup confirmation, retained-context integration and
-qualified full-file reflink support remain SE03 work. Component success does not
-complete SE03 or make Symbols functional.
+Destroying acquisition state closes its local descriptors and releases its
+construction account. The named slot remains owned by the caller, including on
+failure; its charge cannot disappear with helper metadata. This permits frontend
+read-only descriptors to close while the file is still linked, with final
+filesystem deletion under helper supervision. Linux [descriptor release](https://man7.org/linux/man-pages/man2/close.2.html)
+is distinct from persistence and namespace cleanup.
+
+The component takes a ready owned namespace, fresh slot and explicit file ceiling.
+There is no automatic acquisition, new startup setting or frontend entry point
+yet. Helper offer/grant framing, registry integration and qualified full-file
+reflink support remain SE03 work; this does not make Symbols functional.
 
 `src/symbol/equal.c` compares two pinned frozen backings independently of their
 fingerprints. Positive equality requires every byte of both inputs; differing
@@ -247,9 +252,9 @@ closes its descriptor and releases bookkeeping, without claiming filesystem
 cleanup. Storage coordinates establish ownership, not native record identity or
 byte equality.
 
-This component is not yet connected to artifact admission. Integrating its named
-retention with the anonymous helper-local copy component and the frontend ledger
-remains SE03 work. No artifact, discovery or live-action UI is introduced.
+Named retention is connected to the copier and the ledger can preallocate
+unsized ownership. Supervised acquisition and the frontend registry remain SE03
+work. No artifact, discovery or live-action UI is introduced.
 
 ### Event loop and text rendering
 

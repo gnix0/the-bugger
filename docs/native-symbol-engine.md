@@ -153,6 +153,13 @@ capacity are independent. Every independently opened artifact and attached
 companion context retains its full logical charge even if backing is physically
 shared. Deduplication saves physical storage, not logical admission capacity.
 
+Ownership may be preallocated before its file size is known. An unsized ticket
+cannot commit as an empty artifact: the full offered size, including explicit
+zero, must be assigned before a grant permits file-data growth. Empty staging
+creation does not establish admitted content. Retained storage stays named while
+frontend descriptors close; final filesystem deletion runs in the helper.
+Operation retirement and process reaping do not prove namespace cleanup.
+
 When final active ownership ends, cached backing receives one full-size cache
 charge. Capacity is released only after confirmed cleanup; delayed cleanup stays
 accounted. Admission failure preserves existing GDB workflows.

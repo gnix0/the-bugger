@@ -1,7 +1,7 @@
 #ifndef THE_BUGGER_SYMBOL_ACQUIRE_H
 #define THE_BUGGER_SYMBOL_ACQUIRE_H
 
-#include "symbol/schedule.h"
+#include "symbol/storage.h"
 #include "symbol/sha256.h"
 
 typedef struct tb_symbol_acquire TbSymbolAcquire_t;
@@ -17,24 +17,27 @@ typedef enum {
 } TbSymbolAcquireFailure_e;
 
 typedef struct {
-    uint64_t      bytes;
-    unsigned char digest[TB_SHA256_DIGEST_BYTES];
-    int           descriptor;
+    uint64_t             bytes;
+    unsigned char        digest[TB_SHA256_DIGEST_BYTES];
+    int                  descriptor;
+    TbSymbolStorageKey_t key;
 } TbSymbolAcquiredBytes_t;
 
 /* Helper-only filesystem work. Creation allocates accounted state but performs
- * no I/O; borrowed NUL-terminated paths must outlive the operation. Each step
+ * no I/O; borrowed origin/ready namespace must outlive the operation. Each step
  * performs at most one filesystem operation and inspects at most max_bytes of
  * file data (1..65536). Filesystem calls can block: the parent supervises them.
  * This component establishes frozen retained bytes, never source coherence,
  * ELF/DWARF validity, physical content identity or permission to access a target. */
-TbSymbolAcquire_t *tb_symbol_acquire_create(const char *origin, const char *storage_directory,
+TbSymbolAcquire_t *tb_symbol_acquire_create(const char *origin, TbSymbolStorage_t *storage, uint64_t slot,
                                            uint64_t file_limit, TbSymbolBudget_t *construction);
 TbSymbolOutcome_e tb_symbol_acquire_step(TbSymbolAcquire_t *acquisition, size_t max_bytes);
-/* No storage is created or grown until the exact offered size is reserved by
- * the parent and explicitly granted. Granting never changes the offered size. */
+/* The caller preallocates namespace/slot ownership and an unsized ticket before
+ * discovery. The offer includes an identified empty staging file. No file data
+ * is written until the exact size is reserved and explicitly granted. */
 bool tb_symbol_acquire_offer(const TbSymbolAcquire_t *acquisition, uint64_t *bytes);
 bool tb_symbol_acquire_grant(TbSymbolAcquire_t *acquisition, uint64_t bytes);
+bool tb_symbol_acquire_storage_key(const TbSymbolAcquire_t *acquisition, TbSymbolStorageKey_t *key);
 uint64_t tb_symbol_acquire_progress(const TbSymbolAcquire_t *acquisition);
 TbSymbolAcquireFailure_e tb_symbol_acquire_failure(const TbSymbolAcquire_t *acquisition, int *system_error);
 /* Success transfers the read-only close-on-exec descriptor once. Hashing starts
@@ -44,7 +47,8 @@ TbSymbolAcquireFailure_e tb_symbol_acquire_failure(const TbSymbolAcquire_t *acqu
  * point-in-time coherence. Required structural validation belongs to the decoder. */
 bool tb_symbol_acquire_take(TbSymbolAcquire_t *acquisition, TbSymbolAcquiredBytes_t *bytes);
 /* Run in helper context: closes all still-owned descriptors before releasing
- * construction accounting. Cancellation does not publish a partial candidate. */
+ * construction accounting. Named slot ownership and cleanup remain with the
+ * caller even on failure; cancellation never publishes a partial candidate. */
 void tb_symbol_acquire_destroy(TbSymbolAcquire_t *acquisition);
 
 #endif // THE_BUGGER_SYMBOL_ACQUIRE_H

@@ -236,6 +236,51 @@ static void zero_length_ownership(void)
 }
 
 
+static void discovered_size(void)
+{
+    TbSymbolBudget_t root;
+    CHECK(tb_symbol_budget_init(&root, 4096));
+    TbSymbolAdmissionLedger_t *ledger = tb_symbol_admission_create(100, 150, &root);
+    CHECK(ledger);
+    TbSymbolReservation_t *known = tb_symbol_admission_reserve(ledger, 100);
+    TbSymbolReservation_t *pending = tb_symbol_admission_prepare(ledger);
+    CHECK(known && pending && !tb_symbol_admission_size(pending));
+    usage_is(ledger, 100, 2, 0, 0, 0);
+    CHECK(!tb_symbol_admission_commit(pending, NULL));
+    CHECK(!tb_symbol_admission_assign(pending, 101));
+    CHECK(!tb_symbol_admission_assign(pending, 51));
+    usage_is(ledger, 100, 2, 0, 0, 0);
+    CHECK(!tb_symbol_admission_assign(known, 100));
+    fail_after = 1;
+    CHECK(tb_symbol_admission_assign(pending, 50) && fail_after == 1);
+    CHECK(!tb_symbol_admission_assign(pending, 0));
+    usage_is(ledger, 150, 2, 0, 0, 0);
+    TbSymbolBackingCharge_t *backing = tb_symbol_admission_commit(pending, NULL);
+    CHECK(backing && fail_after == 1);
+    CHECK(!tb_symbol_admission_assign(pending, 50));
+    CHECK(tb_symbol_admission_close(pending));
+    CHECK(tb_symbol_admission_evict(backing));
+    CHECK(tb_symbol_admission_backing_cleaned(backing));
+    CHECK(tb_symbol_admission_abort(known));
+    CHECK(tb_symbol_admission_cleaned(known));
+    fail_after = 0;
+
+    pending = tb_symbol_admission_prepare(ledger);
+    CHECK(pending && !tb_symbol_admission_commit(pending, NULL));
+    CHECK(tb_symbol_admission_assign(pending, 0));
+    backing = tb_symbol_admission_commit(pending, NULL);
+    CHECK(backing);
+    CHECK(tb_symbol_admission_close(pending));
+    CHECK(tb_symbol_admission_evict(backing));
+    CHECK(tb_symbol_admission_backing_cleaned(backing));
+    pending = tb_symbol_admission_prepare(ledger);
+    CHECK(pending && tb_symbol_admission_abort(pending));
+    CHECK(!tb_symbol_admission_assign(pending, 1));
+    CHECK(tb_symbol_admission_cleaned(pending));
+    CHECK(tb_symbol_admission_destroy(ledger) && !root.used);
+}
+
+
 int main(void)
 {
     delayed_cleanup();
@@ -243,5 +288,6 @@ int main(void)
     allocation_rollback();
     boundaries();
     zero_length_ownership();
+    discovered_size();
     return 0;
 }

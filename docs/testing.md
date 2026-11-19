@@ -2647,7 +2647,9 @@ failed ancestor-budget reservations roll back without mutation. Commit and
 cleanup are tested with allocation disabled. Zero-byte tickets still consume
 bounded metadata ownership and prevent premature destruction. Arithmetic covers
 the full `UINT64_MAX` logical boundary without allocating corresponding storage.
-These checks qualify ledger transitions, not source coherence, byte equality,
+Unsized ownership cannot commit until the exact offer is assigned, including
+zero. Assignment allocates nothing; quota failure leaves the placeholder unchanged
+and never permits file growth. These checks qualify ledger transitions, not source coherence, byte equality,
 physical cleanup or acquisition behavior; those require the remaining SE03 work.
 
 
@@ -2664,7 +2666,7 @@ source growth/truncation, path replacement, allocation/storage/read failures and
 cancellation at every stage. Per-step instrumentation bounds file data inspected;
 source growth cannot grow staging beyond its reservation. During frozen-byte
 hashing, descriptor inspection verifies that the supported staging writer has
-closed. Returned descriptors are read-only, close-on-exec, unlinked and protected;
+closed. Returned descriptors are read-only, close-on-exec, linked in owned storage and protected;
 subsequent source writes leave retained bytes unchanged.
 
 Allocation accounts and descriptor counts return to baseline on failure and
