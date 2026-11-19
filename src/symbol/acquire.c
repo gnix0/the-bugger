@@ -4,9 +4,11 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <linux/fs.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -22,6 +24,9 @@ typedef enum {
     ACQUIRE_OFFER,
     ACQUIRE_STORAGE,
     ACQUIRE_STORAGE_INSPECT,
+    ACQUIRE_CLONE,
+    ACQUIRE_CLONE_CHECK,
+    ACQUIRE_RESET,
     ACQUIRE_READ,
     ACQUIRE_WRITE,
     ACQUIRE_SOURCE_CHECK,
@@ -44,6 +49,8 @@ struct tb_symbol_acquire {
     uint64_t                 slot;
     TbSymbolStorageKey_t     backing_key;
     bool                     backing_identified;
+    bool                     reflinked;
+    TbSymbolCopyPolicy_e     copy_policy;
     struct stat              source;
     TbSha256_t               hash;
     uint64_t                 file_limit;
@@ -158,6 +165,48 @@ static void inspect_source(TbSymbolAcquire_t *acquisition, bool reader)
     acquisition->source = info;
     acquisition->bytes = (uint64_t)info.st_size;
     acquisition->phase = ACQUIRE_READER;
+}
+
+
+static void clone_bytes(TbSymbolAcquire_t *acquisition)
+{
+    /* A zero length means EOF to this ioctl. Always constrain growth to the
+     * exact granted nonempty extent, even if the source grows concurrently.
+     * Atomic range cloning alone does not prove that this extent was the whole
+     * source file at one point in time. Keep the source-coherence grade unchanged. */
+    struct file_clone_range range = {
+        .src_fd      = acquisition->source_fd,
+        .src_offset  = 0,
+        .src_length  = acquisition->bytes,
+        .dest_offset = 0
+    };
+    if (!ioctl(acquisition->writer_fd, FICLONERANGE, &range)) {
+        acquisition->phase = ACQUIRE_CLONE_CHECK;
+    } else if (errno == EOPNOTSUPP || errno == ENOTTY || errno == ENOSYS || errno == EXDEV ||
+               errno == EINVAL || errno == ETXTBSY) {
+        acquisition->phase = ACQUIRE_RESET;
+    } else if (errno != EINTR) {
+        fail(acquisition, TB_SYMBOL_ACQUIRE_STORAGE, errno);
+    }
+}
+
+
+static void check_clone(TbSymbolAcquire_t *acquisition)
+{
+    struct stat info;
+    if (fstat(acquisition->writer_fd, &info)) {
+        if (errno != EINTR)
+            fail(acquisition, TB_SYMBOL_ACQUIRE_STORAGE, errno);
+    } else if (!S_ISREG(info.st_mode) || info.st_size < 0 ||
+               (uint64_t)info.st_size != acquisition->bytes || info.st_nlink != 1 ||
+               info.st_uid != geteuid() || (uint64_t)info.st_dev != acquisition->backing_key.device ||
+               (uint64_t)info.st_ino != acquisition->backing_key.inode) {
+        fail(acquisition, TB_SYMBOL_ACQUIRE_INTEGRITY, 0);
+    } else {
+        acquisition->copied    = acquisition->bytes;
+        acquisition->reflinked = true;
+        acquisition->phase     = ACQUIRE_SOURCE_CHECK;
+    }
 }
 
 
@@ -335,6 +384,20 @@ TbSymbolOutcome_e tb_symbol_acquire_step(TbSymbolAcquire_t *acquisition, size_t 
         }
         break;
     }
+    case ACQUIRE_CLONE:
+        clone_bytes(acquisition);
+        break;
+    case ACQUIRE_CLONE_CHECK:
+        check_clone(acquisition);
+        break;
+    case ACQUIRE_RESET:
+        /* Unsupported cloning may not leave unchecked data behind. Reclaim and
+         * reset the owned slot before the complete bounded streaming copy. */
+        if (!ftruncate(acquisition->writer_fd, 0))
+            acquisition->phase = ACQUIRE_READ;
+        else if (errno != EINTR)
+            fail(acquisition, TB_SYMBOL_ACQUIRE_STORAGE, errno);
+        break;
     case ACQUIRE_READ:
         copy_read(acquisition, max_bytes);
         break;
@@ -402,8 +465,28 @@ bool tb_symbol_acquire_grant(TbSymbolAcquire_t *acquisition, uint64_t bytes)
 {
     if (!acquisition || acquisition->phase != ACQUIRE_OFFER || bytes != acquisition->bytes)
         return false;
-    acquisition->phase = ACQUIRE_READ;
+    acquisition->phase = bytes && acquisition->copy_policy == TB_SYMBOL_COPY_PREFER_REFLINK
+                           ? ACQUIRE_CLONE : ACQUIRE_READ;
     return true;
+}
+
+
+bool tb_symbol_acquire_copy_policy(TbSymbolAcquire_t *acquisition, TbSymbolCopyPolicy_e policy)
+{
+    if (!acquisition || acquisition->phase != ACQUIRE_ORIGIN ||
+        (policy != TB_SYMBOL_COPY_PREFER_REFLINK && policy != TB_SYMBOL_COPY_STREAM_ONLY)) {
+        return false;
+    }
+    acquisition->copy_policy = policy;
+    return true;
+}
+
+
+TbSymbolAcquisitionMethod_e tb_symbol_acquire_method(const TbSymbolAcquire_t *acquisition)
+{
+    if (!acquisition || acquisition->outcome != TB_SYMBOL_SUCCESS)
+        return TB_SYMBOL_ACQUIRED_NONE;
+    return acquisition->reflinked ? TB_SYMBOL_ACQUIRED_REFLINK : TB_SYMBOL_ACQUIRED_STREAM;
 }
 
 

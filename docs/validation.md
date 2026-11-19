@@ -6033,3 +6033,39 @@ only. Link and whitespace checks passed. These results are local host evidence,
 not hosted Ubuntu CI, physical validation, coherent acquisition qualification or
 F07 acceptance. Qualified reflink/coherence profiles, explicit Open workflow,
 decoders, sizing and consumers remain unfinished.
+
+
+### Bounded reflink acquisition — 2026-11-19
+
+Acquisition now attempts a nonzero `FICLONERANGE` covering exactly the granted
+extent. Zero-length files bypass cloning. Unsupported cloning resets the owned
+staging file before a complete streaming copy; storage exhaustion and other
+operational errors fail explicitly. Clone success still requires exact-size and
+identity checks, source mutation checks, staging-writer closure and complete
+frozen-byte hashing. The retained bytes carry no stronger source-coherence claim.
+
+Local checks passed, exit 0. Logs and exit records are under
+`build/se03-evidence-20261119/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused components/integration | `make BUILD_DIR=build/se03-clone-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-acquire test-symbol-reflink test-symbol-operation test-symbol-artifact test-symbol-resource`; `clone-focused-final`. Helper scheduling and actual GDB isolation also passed in `clone-focused`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se03-clone-ci-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `clone-test-ci`. |
+| Sanitizers | `make BUILD_DIR=build/se03-clone-sanitize-20261119 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-acquire test-symbol-reflink test-symbol-operation test-symbol-artifact test-symbol-resource`; `clone-sanitize-final`. The resource binary also passed with its own absolute path as its worker argument, instrumenting the separate harness worker; `clone-sanitize-resource-final`. |
+| Analysis/build | `make analyze` and normal `make`; `clone-analysis` and `clone-normal-make`. |
+
+The maintained reflink fixture injects successful, short, interrupted and failed
+kernel outcomes, source growth, fallback-reset failure and cancellation. These
+emulations test control flow and ownership, not filesystem atomicity. The separate
+native probe reported cloning unavailable on this host; complete streaming bytes,
+hash and isolation from subsequent source writes passed. No positive reflink
+filesystem profile or coherent-source acquisition is qualified by this result.
+
+`clone-final-tested-files.json`, `clone-final-tested.patch` and the captured new
+test identify the checked tree; `clone-environment.txt` records tool versions.
+Documentation-only changes followed the final snapshot. Link checks covered 229
+local references without errors; whitespace checks passed. The preserved original
+F07 research archive still matched its recorded SHA-256 checksum.
+These are local host results, not hosted CI, physical target validation, SE03
+completion or F07 acceptance. Explicit Open workflow, acquisition-profile
+qualification, decoders, production sizing and consumers remain outstanding.

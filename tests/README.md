@@ -34,9 +34,10 @@ records remain in the [validation records](../docs/validation.md).
   Included in `test`; no acquisition or target access. See
   [ledger coverage](../docs/testing.md#artifact-admission-ledger-se03-partial).
 
-- `make test-symbol-acquire`: bounded private-file copying, explicit size grants,
-  complete frozen-byte hashing, mutation detection, descriptor cleanup and failures.
-  Included in `test`; helper acquisition integration is pending. See
+- `make test-symbol-acquire test-symbol-reflink`: bounded private-file acquisition,
+  fixed-extent clone/fallback, explicit grants, frozen-byte hashing, mutation
+  detection and cleanup failures. Clone fault injection is distinct from the
+  separately reported native probe. Included in `test`; see
   [acquisition coverage](../docs/testing.md#artifact-byte-acquisition-se03-partial).
 
 - `make test-symbol-equal`: complete frozen-backing comparison, changing work

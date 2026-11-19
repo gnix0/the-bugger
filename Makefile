@@ -989,6 +989,18 @@ test: test-symbol-acquire
 -include $(BUILD_DIR)/tests/unit/test_symbol_acquire.d
 
 
+$(BUILD_DIR)/test-symbol-reflink: $(BUILD_DIR)/tests/unit/test_symbol_reflink.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=ioctl,--wrap=ftruncate -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-reflink
+test-symbol-reflink: $(BUILD_DIR)/test-symbol-reflink
+	$(BUILD_DIR)/test-symbol-reflink
+
+test: test-symbol-reflink
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_reflink.d
+
+
 $(BUILD_DIR)/test-symbol-equal: $(BUILD_DIR)/tests/unit/test_symbol_equal.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/budget.o
 	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=pread,--wrap=memcmp,--wrap=bcmp -o $@ $^ $(LDLIBS)
 

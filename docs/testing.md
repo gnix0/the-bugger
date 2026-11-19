@@ -2657,7 +2657,7 @@ physical cleanup or acquisition behavior; those require the remaining SE03 work.
 
 ```sh
 make BUILD_DIR=build/se03-acquire-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
-  test-symbol-acquire
+  test-symbol-acquire test-symbol-reflink
 ```
 
 Included in `test` and `test-ci`. Controlled local filesystem fixtures exercise
@@ -2675,8 +2675,18 @@ unsafe retries. Unsupported storage filesystems fail explicitly. Hash-read
 failure leaves result storage untouched and never publishes a prefix digest.
 The suite rejects nonregular origins, including FIFOs without waiting for a writer.
 
+The streaming suite explicitly selects streaming so its checkpoint and failure
+assertions also run on reflink-capable hosts. The reflink suite emulates kernel
+outcomes to exercise fixed nonzero grant extents, short output, source growth,
+unsupported fallback/reset, interruptions, resource failures and cancellation.
+Those emulations are fault injection, not filesystem qualification. A separate
+native `ioctl` probe reports whether the local filesystem supplied an actual
+clone; either path verifies complete bytes/hash and isolation from later source
+writes. Unsupported native cloning is reported as unavailable, not a positive
+reflink result. An empty acquisition never issues the clone ioctl.
+
 These are component checks on actual local files, without GDB or target access.
-They do not establish atomic acquisition coherence, qualify reflink, validate
+They do not establish atomic acquisition coherence, qualify other filesystems, validate
 ELF/DWARF, or alone qualify the integrated helper offer/grant and cleanup protocol.
 
 

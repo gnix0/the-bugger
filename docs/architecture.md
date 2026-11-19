@@ -201,7 +201,8 @@ cannot grow backing beyond that extent. Unknown size is distinct from a validate
 empty file and cannot be committed as one.
 
 Each service step performs at most one filesystem operation and bounds file-data
-inspection to its supplied checkpoint allowance. Blocking calls require
+inspection in userspace to its supplied checkpoint allowance. A clone may process
+the full reserved extent inside one kernel call. Blocking calls require
 independent parent supervision. Namespace qualification is shared with retained
 storage. The file is protected to owner-read mode, reopened read-only with
 close-on-exec, and checked against its original storage identity before the sole
@@ -212,7 +213,19 @@ identity/digest facts; no unfinished digest is exposed.
 Size, inode and modification/change-time comparisons, plus an origin-path check,
 reject detected mutations. Unchanged checks prove no atomic source coherence.
 Required ELF/DWARF validation, content identity and deduplication remain separate.
-The copier provides no reflink qualification or coherent-snapshot claim.
+For a nonempty grant, acquisition first attempts Linux `FICLONERANGE` with exact
+source length and zero source/destination offsets. It never uses a zero-length
+clone request, which means through EOF, or unbounded `FICLONE`. Unsupported range
+cloning resets the owned staging file before the complete streaming fallback.
+Resource and other operational errors fail explicitly. Successful cloning still
+passes exact-size/identity checks, source mutation checks, writer closure and
+complete frozen-byte hashing. The internal method diagnostic appears only after
+success and does not upgrade source-coherence evidence.
+
+Linux documents [range-clone atomicity](https://man7.org/linux/man-pages/man2/FICLONERANGE.2const.html),
+but a captured range does not establish that source file size remained constant.
+The bounded clone path therefore makes no coherent-source snapshot claim.
+Filesystem-specific positive qualification remains separate from branch tests.
 
 Destroying acquisition state closes its local descriptors and releases its
 construction account. The named slot remains owned by the caller, including on
@@ -223,7 +236,7 @@ is distinct from persistence and namespace cleanup.
 
 The component takes a ready owned namespace, fresh slot and explicit file ceiling.
 Helper offer/grant framing and the frontend registry now connect its ownership
-contracts. Explicit Open workflow and qualified full-file reflink support remain
+contracts. Explicit Open workflow and positive reflink/coherence profile qualification remain
 separate work; this does not make Symbols functional.
 
 `src/symbol/equal.c` compares two pinned frozen backings independently of their

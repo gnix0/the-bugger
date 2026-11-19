@@ -7,6 +7,17 @@
 typedef struct tb_symbol_acquire TbSymbolAcquire_t;
 
 typedef enum {
+    TB_SYMBOL_COPY_PREFER_REFLINK,
+    TB_SYMBOL_COPY_STREAM_ONLY
+} TbSymbolCopyPolicy_e;
+
+typedef enum {
+    TB_SYMBOL_ACQUIRED_NONE,
+    TB_SYMBOL_ACQUIRED_STREAM,
+    TB_SYMBOL_ACQUIRED_REFLINK
+} TbSymbolAcquisitionMethod_e;
+
+typedef enum {
     TB_SYMBOL_ACQUIRE_NONE,
     TB_SYMBOL_ACQUIRE_CHANGED,
     TB_SYMBOL_ACQUIRE_FILE_LIMIT,
@@ -31,11 +42,17 @@ typedef struct {
 /* Helper-only filesystem work. Creation allocates accounted state but performs
  * no I/O; borrowed origin/ready namespace must outlive the operation. Each step
  * performs at most one filesystem operation and inspects at most max_bytes of
- * file data (1..65536). Filesystem calls can block: the parent supervises them.
+ * file data in userspace (1..65536). A clone may process the full reserved extent
+ * in the kernel. Filesystem calls can block: the parent supervises them.
  * This component establishes frozen retained bytes, never source coherence,
  * ELF/DWARF validity, physical content identity or permission to access a target. */
 TbSymbolAcquire_t *tb_symbol_acquire_create(const char *origin, TbSymbolStorage_t *storage, uint64_t slot,
                                            uint64_t file_limit, TbSymbolBudget_t *construction);
+/* Before opening the origin only. Default prefers a bounded clone where supported;
+ * the streaming profile remains independently testable. Neither proves atomic
+ * source-file coherence. A zero-length clone request is never issued. */
+bool tb_symbol_acquire_copy_policy(TbSymbolAcquire_t *acquisition, TbSymbolCopyPolicy_e policy);
+TbSymbolAcquisitionMethod_e tb_symbol_acquire_method(const TbSymbolAcquire_t *acquisition);
 TbSymbolOutcome_e tb_symbol_acquire_step(TbSymbolAcquire_t *acquisition, size_t max_bytes);
 /* The caller preallocates namespace/slot ownership and an unsized ticket before
  * discovery. The offer includes an identified empty staging file. No file data

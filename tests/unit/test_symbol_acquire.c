@@ -159,6 +159,16 @@ int __wrap_fstatfs(int fd, struct statfs *filesystem)
 }
 
 
+static TbSymbolAcquire_t *stream_acquisition(const char *origin, TbSymbolStorage_t *namespace, uint64_t slot,
+                                            uint64_t file_limit, TbSymbolBudget_t *construction)
+{
+    TbSymbolAcquire_t *acquisition = tb_symbol_acquire_create(origin, namespace, slot, file_limit, construction);
+    if (acquisition)
+        CHECK(tb_symbol_acquire_copy_policy(acquisition, TB_SYMBOL_COPY_STREAM_ONLY));
+    return acquisition;
+}
+
+
 static TbSymbolOutcome_e step(TbSymbolAcquire_t *acquisition, size_t limit)
 {
     step_limit = limit;
@@ -221,7 +231,7 @@ static void retained_bytes(const char *path, size_t length, size_t limit)
     write_fixture(length);
     TbSymbolBudget_t budget;
     CHECK(tb_symbol_budget_init(&budget, 128 * 1024));
-    TbSymbolAcquire_t *acquisition = tb_symbol_acquire_create(path, storage, ++next_slot,
+    TbSymbolAcquire_t *acquisition = stream_acquisition(path, storage, ++next_slot,
                                                              256 * 1024, &budget);
     CHECK(acquisition && budget.used);
     TbSymbolAcquiredBytes_t result = {
@@ -296,25 +306,25 @@ static void faults(const char *path, const char *directory)
     CHECK(tb_symbol_budget_init(&budget, 128 * 1024));
     write_fixture(100);
     fail_allocation = true;
-    CHECK(!tb_symbol_acquire_create(path, storage, ++next_slot, 100, &budget));
+    CHECK(!stream_acquisition(path, storage, ++next_slot, 100, &budget));
     fail_allocation = false;
     CHECK(!budget.used);
     budget.limit = 1;
-    CHECK(!tb_symbol_acquire_create(path, storage, ++next_slot, 100, &budget));
+    CHECK(!stream_acquisition(path, storage, ++next_slot, 100, &budget));
     CHECK(!budget.used);
     budget.limit = 128 * 1024;
-    TbSymbolAcquire_t *acquisition = tb_symbol_acquire_create(path, storage, ++next_slot, 99, &budget);
+    TbSymbolAcquire_t *acquisition = stream_acquisition(path, storage, ++next_slot, 99, &budget);
     CHECK(acquisition);
     failed(acquisition, TB_SYMBOL_RESOURCE_FAILURE, TB_SYMBOL_ACQUIRE_FILE_LIMIT);
     CHECK(!budget.used);
     TbSymbolStorage_t *unready = tb_symbol_storage_create("/does-not-exist/tb-symbol-storage", NULL, NULL);
     CHECK(unready);
-    acquisition = tb_symbol_acquire_create(path, unready, ++next_slot, 100, &budget);
+    acquisition = stream_acquisition(path, unready, ++next_slot, 100, &budget);
     CHECK(acquisition);
     failed(acquisition, TB_SYMBOL_OPERATIONAL_FAILURE, TB_SYMBOL_ACQUIRE_STORAGE);
     tb_symbol_storage_destroy(unready);
     CHECK(!budget.used);
-    acquisition = tb_symbol_acquire_create(path, storage, ++next_slot, 100, &budget);
+    acquisition = stream_acquisition(path, storage, ++next_slot, 100, &budget);
     CHECK(acquisition);
     offer(acquisition, 100);
     CHECK(tb_symbol_acquire_grant(acquisition, 100));
@@ -322,21 +332,21 @@ static void faults(const char *path, const char *directory)
     failed(acquisition, TB_SYMBOL_OPERATIONAL_FAILURE, TB_SYMBOL_ACQUIRE_CHANGED);
     CHECK(!budget.used);
     write_fixture(100);
-    acquisition = tb_symbol_acquire_create(path, storage, ++next_slot, 100, &budget);
+    acquisition = stream_acquisition(path, storage, ++next_slot, 100, &budget);
     CHECK(acquisition);
     offer(acquisition, 100);
     CHECK(tb_symbol_acquire_grant(acquisition, 100));
     read_error = EIO;
     failed(acquisition, TB_SYMBOL_OPERATIONAL_FAILURE, TB_SYMBOL_ACQUIRE_IO);
     CHECK(!budget.used);
-    acquisition = tb_symbol_acquire_create(path, storage, ++next_slot, 100, &budget);
+    acquisition = stream_acquisition(path, storage, ++next_slot, 100, &budget);
     CHECK(acquisition);
     offer(acquisition, 100);
     CHECK(tb_symbol_acquire_grant(acquisition, 100));
     write_error = ENOSPC;
     failed(acquisition, TB_SYMBOL_RESOURCE_FAILURE, TB_SYMBOL_ACQUIRE_STORAGE);
     CHECK(!budget.used);
-    acquisition = tb_symbol_acquire_create(path, storage, ++next_slot, 100, &budget);
+    acquisition = stream_acquisition(path, storage, ++next_slot, 100, &budget);
     CHECK(acquisition);
     offer(acquisition, 100);
     CHECK(tb_symbol_acquire_grant(acquisition, 100));
@@ -345,7 +355,7 @@ static void faults(const char *path, const char *directory)
     CHECK(finish(acquisition, 64) == TB_SYMBOL_SUCCESS);
     tb_symbol_acquire_destroy(acquisition);
     CHECK(!budget.used);
-    acquisition = tb_symbol_acquire_create(path, storage, ++next_slot, 100, &budget);
+    acquisition = stream_acquisition(path, storage, ++next_slot, 100, &budget);
     CHECK(acquisition);
     offer(acquisition, 100);
     CHECK(tb_symbol_acquire_grant(acquisition, 100));
@@ -374,7 +384,7 @@ static void faults(const char *path, const char *directory)
 static void rejected_changes(const char *path, const char *directory)
 {
     write_fixture(100);
-    TbSymbolAcquire_t *acquisition = tb_symbol_acquire_create(path, storage, ++next_slot, 100, NULL);
+    TbSymbolAcquire_t *acquisition = stream_acquisition(path, storage, ++next_slot, 100, NULL);
     CHECK(acquisition);
     offer(acquisition, 100);
     CHECK(!ftruncate(fixture_fd, 131073));
@@ -384,7 +394,7 @@ static void rejected_changes(const char *path, const char *directory)
     storage_max = UINT64_MAX;
 
     write_fixture(100);
-    acquisition = tb_symbol_acquire_create(path, storage, ++next_slot, 100, NULL);
+    acquisition = stream_acquisition(path, storage, ++next_slot, 100, NULL);
     CHECK(acquisition);
     offer(acquisition, 100);
     CHECK(!ftruncate(fixture_fd, 0));
@@ -392,7 +402,7 @@ static void rejected_changes(const char *path, const char *directory)
     failed(acquisition, TB_SYMBOL_OPERATIONAL_FAILURE, TB_SYMBOL_ACQUIRE_CHANGED);
 
     write_fixture(100);
-    acquisition = tb_symbol_acquire_create(path, storage, ++next_slot, 100, NULL);
+    acquisition = stream_acquisition(path, storage, ++next_slot, 100, NULL);
     CHECK(acquisition);
     offer(acquisition, 100);
     char moved[256];
@@ -406,7 +416,7 @@ static void rejected_changes(const char *path, const char *directory)
     CHECK(!rename(moved, path));
 
     write_fixture(100);
-    acquisition = tb_symbol_acquire_create(path, storage, ++next_slot, 100, NULL);
+    acquisition = stream_acquisition(path, storage, ++next_slot, 100, NULL);
     CHECK(acquisition);
     offer(acquisition, 100);
     CHECK(tb_symbol_acquire_grant(acquisition, 100));
@@ -414,7 +424,7 @@ static void rejected_changes(const char *path, const char *directory)
     failed(acquisition, TB_SYMBOL_OPERATIONAL_FAILURE, TB_SYMBOL_ACQUIRE_IO);
     CHECK(!hash_error);
 
-    acquisition = tb_symbol_acquire_create(path, storage, ++next_slot, 100, NULL);
+    acquisition = stream_acquisition(path, storage, ++next_slot, 100, NULL);
     CHECK(acquisition);
     CHECK(tb_symbol_acquire_step(acquisition, 0) == TB_SYMBOL_OPERATIONAL_FAILURE);
     failed(acquisition, TB_SYMBOL_OPERATIONAL_FAILURE, TB_SYMBOL_ACQUIRE_IO);
@@ -422,7 +432,7 @@ static void rejected_changes(const char *path, const char *directory)
     char fifo[256];
     CHECK(snprintf(fifo, sizeof(fifo), "%s/fifo", directory) > 0);
     CHECK(!mkfifo(fifo, 0600));
-    acquisition = tb_symbol_acquire_create(fifo, storage, ++next_slot, 100, NULL);
+    acquisition = stream_acquisition(fifo, storage, ++next_slot, 100, NULL);
     CHECK(acquisition);
     failed(acquisition, TB_SYMBOL_UNSUPPORTED, TB_SYMBOL_ACQUIRE_NOT_REGULAR);
     CHECK(!unlink(fifo));
@@ -437,7 +447,7 @@ static void cancellation(const char *path)
     for (unsigned cancel_at = 0; cancel_at < 100; ++cancel_at) {
         TbSymbolBudget_t budget;
         CHECK(tb_symbol_budget_init(&budget, 128 * 1024));
-        TbSymbolAcquire_t *acquisition = tb_symbol_acquire_create(path, storage, ++next_slot, 100, &budget);
+        TbSymbolAcquire_t *acquisition = stream_acquisition(path, storage, ++next_slot, 100, &budget);
         CHECK(acquisition);
         for (unsigned tick = 0; tick < cancel_at; ++tick) {
             uint64_t size;
@@ -483,14 +493,14 @@ int main(void)
     faults(path, directory);
     rejected_changes(path, directory);
     cancellation(path);
-    TbSymbolAcquire_t *acquisition = tb_symbol_acquire_create(directory, storage, ++next_slot, 100, NULL);
+    TbSymbolAcquire_t *acquisition = stream_acquisition(directory, storage, ++next_slot, 100, NULL);
     CHECK(acquisition);
     failed(acquisition, TB_SYMBOL_UNSUPPORTED, TB_SYMBOL_ACQUIRE_NOT_REGULAR);
-    acquisition = tb_symbol_acquire_create("/dev/null", storage, ++next_slot, 100, NULL);
+    acquisition = stream_acquisition("/dev/null", storage, ++next_slot, 100, NULL);
     CHECK(acquisition);
     failed(acquisition, TB_SYMBOL_UNSUPPORTED, TB_SYMBOL_ACQUIRE_NOT_REGULAR);
-    CHECK(!tb_symbol_acquire_create(NULL, storage, ++next_slot, 100, NULL));
-    CHECK(!tb_symbol_acquire_create(path, NULL, ++next_slot, 100, NULL));
+    CHECK(!stream_acquisition(NULL, storage, ++next_slot, 100, NULL));
+    CHECK(!stream_acquisition(path, NULL, ++next_slot, 100, NULL));
     CHECK(descriptor_count() == baseline);
     CHECK(!close(fixture_fd));
     for (uint64_t slot = 1; slot <= next_slot; ++slot) {
