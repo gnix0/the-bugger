@@ -2670,3 +2670,43 @@ The suite rejects nonregular origins, including FIFOs without waiting for a writ
 These are component checks on actual local files, without GDB or target access.
 They do not establish atomic acquisition coherence, qualify reflink, validate
 ELF/DWARF, or exercise the pending helper offer/grant and cleanup protocol.
+
+
+## Frozen backing equality (SE03, partial)
+
+```sh
+make BUILD_DIR=build/se03-equal-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-equal
+```
+
+Included in `test` and `test-ci`. Actual unnamed read-only file fixtures cover
+empty/equal backings, first/final-byte differences, buffer boundaries, short and
+interrupted reads, changing service slices, allocation failure and per-input
+read errors. Instrumented reads and comparisons bound inspection of both inputs;
+positive equality requires complete coverage. A controlled length change after
+both byte ranges arrive must fail the final evidence check. Unsupported descriptor
+modes, wrong lengths and cancellation preserve borrowed descriptor ownership and
+release all component allocations. These checks establish a comparison primitive,
+not integrated content deduplication or acquisition coherence.
+
+
+## Frozen backing comparison (SE03, partial)
+
+```sh
+make BUILD_DIR=build/se03-equal-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-equal
+```
+
+Included in `test` and `test-ci`. Actual frozen local files cover empty inputs,
+complete equal inputs, first/final-byte differences, buffer boundaries, short and
+interrupted reads, shrinking service slices and cancellation at every stage.
+Instrumented reads and comparisons enforce the per-step inspection allowance;
+positive equality must inspect all bytes of both backings. Borrowed descriptors
+remain open after comparison destruction. Allocation failure and ancestor-budget
+exhaustion preserve accounting.
+
+`O_PATH`, writable descriptors, mismatched extents and per-input I/O failures
+cannot produce equality proof. A deliberately changed backing after both ranges
+have been read is rejected by the final dependency check. The suite checks failure
+input masks and unchanged output on failure. This proves the comparison component,
+not content identity assignment or integrated backing deduplication.

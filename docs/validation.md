@@ -5783,3 +5783,32 @@ and whitespace checks passed.
 This is local host component/regression evidence, not hosted CI, XFS/Btrfs
 qualification, source-coherence proof, supervised acquisition acceptance,
 production sizing, physical validation, SE03 completion or F07 acceptance.
+
+
+## Symbol Engine backing equality component — 2026-11-19
+
+`test-symbol-equal` uses actual unnamed read-only backings to verify complete
+positive byte equality, distinct negative results, final-byte differences,
+changing service allowances, interrupted/short reads, scoped input failures and
+allocation rollback. Instrumentation covers both file reads and comparison work.
+A controlled backing-length change after both ranges arrive prevents equality
+publication. Cancellation retains the caller's descriptors and releases the
+component account. No digest or inode shortcut establishes positive equality.
+
+```sh
+make BUILD_DIR=build/se03-equal-focused-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-equal test-symbol-acquire test-symbol-admission
+make CC=clang BUILD_DIR=build/se03-equal-sanitize-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' test-symbol-equal
+```
+
+Focused and sanitizer checks passed, exit 0 (`equal-focused-final` and
+`equal-sanitize-final` logs/exit records under `build/se03-evidence-20261119/`).
+Initial component analysis diagnosed swappable parameters and comparison/flag
+expressions; final component analysis passed after correction. Full SE03 host
+regression remains pending integration; the preceding acquisition baseline does
+not cover this later component. Content ownership, actual deduplication, helper
+cleanup and F07 acceptance remain separate work.

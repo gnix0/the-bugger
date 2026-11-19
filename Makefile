@@ -19,7 +19,7 @@ PROJECT_CPPFLAGS := -Iinclude -Iinclude/tui -Iinclude/layout -Iinclude/gdb -Iinc
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
 SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/tui/editor.c src/tui/terminal.c src/tui/setup_capture.c src/tui/setup_restore.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/paths.c src/session/session.c src/session/openocd.c src/session/profiles.c src/session/setup.c src/model/context.c src/model/code.c src/model/browse.c src/model/monitor.c src/model/mmio.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/stack.c src/model/variables.c
-SOURCES += src/symbol/reader.c src/symbol/identity.c src/symbol/sha256.c src/symbol/wire.c src/symbol/schedule.c src/symbol/budget.c src/symbol/process.c src/symbol/worker.c src/symbol/helper.c src/symbol/admission.c src/symbol/acquire.c
+SOURCES += src/symbol/reader.c src/symbol/identity.c src/symbol/sha256.c src/symbol/wire.c src/symbol/schedule.c src/symbol/budget.c src/symbol/process.c src/symbol/worker.c src/symbol/helper.c src/symbol/admission.c src/symbol/acquire.c src/symbol/equal.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -987,3 +987,15 @@ test-symbol-acquire: $(BUILD_DIR)/test-symbol-acquire
 test: test-symbol-acquire
 
 -include $(BUILD_DIR)/tests/unit/test_symbol_acquire.d
+
+
+$(BUILD_DIR)/test-symbol-equal: $(BUILD_DIR)/tests/unit/test_symbol_equal.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=pread,--wrap=memcmp,--wrap=bcmp -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-equal
+test-symbol-equal: $(BUILD_DIR)/test-symbol-equal
+	$(BUILD_DIR)/test-symbol-equal
+
+test: test-symbol-equal
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_equal.d

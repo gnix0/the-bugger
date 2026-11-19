@@ -375,6 +375,16 @@ offer/grant framing, cleanup confirmation, retained-context integration and
 qualified full-file reflink support remain SE03 work. Component success does not
 complete SE03 or make Symbols functional.
 
+`src/symbol/equal.c` compares two pinned frozen backings independently of their
+fingerprints. Positive equality requires every byte of both inputs; differing
+bytes give a distinct, successful negative result. Checkpoints bound both reads
+and comparison work, including when later service slices shrink. Descriptor
+properties and expected lengths are checked, then inode/length/time evidence is
+rechecked before reporting either result. Failure identifies affected input
+relationships, never treats an unread suffix as equal, and preserves caller-owned
+descriptors. This primitive does not perform artifact deduplication or merge
+open-context identities.
+
 ## Source fullscreen rendering
 
 `App_t.fullscreen_source` is a temporary pane identifier, or -1 for ordinary tiled
