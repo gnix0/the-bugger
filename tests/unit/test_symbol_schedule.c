@@ -27,6 +27,7 @@ typedef struct {
     TbSymbolWorkResult_t   results[TB_SYMBOL_MAX_INTERESTS];
     size_t                 count;
     bool                   blocked;
+    uint64_t               blocked_consumer;
 } Observer_t;
 
 static TbSymbolWorkResult_t step(void *context, uint64_t deadline, size_t max_bytes, unsigned max_steps)
@@ -73,7 +74,7 @@ static bool emit(void *context, const TbSymbolWorkIdentity_t *identity, TbSymbol
     if (result.outcome != TB_SYMBOL_CANCELLED)
         CHECK(work_context);
     Observer_t *observer = context;
-    if (observer->blocked)
+    if (observer->blocked || observer->blocked_consumer == identity->consumer)
         return false;
     CHECK(observer->count < TB_SYMBOL_MAX_INTERESTS);
     observer->identities[observer->count] = *identity;
@@ -292,8 +293,41 @@ static void shared_budget(void)
 }
 
 
+static void independent_publication(void)
+{
+    TbSymbolSchedule_t *schedule = tb_symbol_schedule_create(2, 2, NULL);
+    CHECK(schedule);
+    WorkState_t states[2] = {
+        {
+            .finish = 1
+        },
+        {
+            .finish = 1
+        }
+    };
+    TbSymbolWork_t first = work_for(&states[0], 1, 1, TB_SYMBOL_CONSTRUCTION);
+    TbSymbolWork_t second = work_for(&states[1], 2, 2, TB_SYMBOL_CONSTRUCTION);
+    CHECK(tb_symbol_schedule_add(schedule, &first));
+    CHECK(tb_symbol_schedule_add(schedule, &second));
+    Observer_t observer = {
+        .blocked_consumer = 1
+    };
+    pump(schedule, &observer);
+    pump(schedule, &observer);
+    pump(schedule, &observer);
+    CHECK(observer.count == 1 && observer.identities[0].consumer == 2);
+    CHECK(!states[0].destroyed && states[1].destroyed == 1);
+    observer.blocked_consumer = 0;
+    pump(schedule, &observer);
+    CHECK(observer.count == 2 && observer.identities[1].consumer == 1);
+    CHECK(states[0].destroyed == 1);
+    tb_symbol_schedule_destroy(schedule);
+}
+
+
 int main(void)
 {
+    independent_publication();
     shared_budget();
     shared_lifetime();
     fairness();

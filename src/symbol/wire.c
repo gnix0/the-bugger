@@ -20,9 +20,11 @@ static const unsigned char wire_magic[4] = {'T', 'B', 'S', 'E'};
 typedef struct {
     unsigned char     header[TB_SYMBOL_WIRE_HEADER_BYTES];
     unsigned char    *payload;
+    unsigned char     control[TB_SYMBOL_WIRE_CONTROL_BYTES];
     size_t            offset;
     int               descriptor;
     TbSymbolMessage_t message;
+    bool              inline_payload;
     bool              active;
     bool              complete;
 } Frame_t;
@@ -48,7 +50,7 @@ static void close_fd(int *descriptor)
 
 static void frame_clear(TbSymbolWire_t *wire, Frame_t *frame)
 {
-    if (frame->payload) {
+    if (frame->payload && !frame->inline_payload) {
         wire->allocated -= frame->message.length;
         free(frame->payload);
         if (wire->aggregate)
@@ -131,6 +133,12 @@ static bool reserve_payload(TbSymbolWire_t *wire, Frame_t *frame)
     size_t length = frame->message.length;
     if (!length)
         return true;
+    if (frame->message.kind != TB_SYMBOL_MESSAGE_REQUEST && length <= sizeof(frame->control)) {
+        frame->payload = frame->control;
+        frame->message.payload = frame->payload;
+        frame->inline_payload = true;
+        return true;
+    }
     if (length > wire->max_bytes - wire->allocated)
         return false;
 
@@ -251,6 +259,10 @@ bool tb_symbol_wire_send(TbSymbolWire_t *wire, const TbSymbolMessage_t *message)
     }
     encode_header(&frame);
     wire->tx = frame;
+    if (wire->tx.inline_payload) {
+        wire->tx.payload = wire->tx.control;
+        wire->tx.message.payload = wire->tx.payload;
+    }
     return true;
 }
 
@@ -462,6 +474,12 @@ void tb_symbol_wire_consume(TbSymbolWire_t *wire)
 {
     if (wire && wire->rx.complete)
         frame_clear(wire, &wire->rx);
+}
+
+
+size_t tb_symbol_wire_overhead(void)
+{
+    return sizeof(TbSymbolWire_t);
 }
 
 

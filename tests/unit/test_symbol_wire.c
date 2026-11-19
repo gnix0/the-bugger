@@ -207,7 +207,8 @@ static void round_trips(void)
         successful_trailers  = 0;
         CHECK(tb_symbol_wire_send(left, &message));
         CHECK(!tb_symbol_wire_send(left, &message));
-        CHECK(tb_symbol_wire_allocated(left) == empty + lengths[i]);
+        size_t retained = lengths[i] > TB_SYMBOL_WIRE_CONTROL_BYTES ? lengths[i] : 0;
+        CHECK(tb_symbol_wire_allocated(left) == empty + retained);
         transfer(left, right);
         CHECK(successful_trailers == 1);
         const TbSymbolMessage_t *received = tb_symbol_wire_message(right);
@@ -220,7 +221,7 @@ static void round_trips(void)
         CHECK(pread(received->descriptor, content, sizeof(content), 0) == 8);
         CHECK(memcmp(content, "retained", 8) == 0);
         CHECK(tb_symbol_wire_pump(right) == TB_SYMBOL_WIRE_MESSAGE);
-        CHECK(tb_symbol_wire_allocated(right) == empty + lengths[i]);
+        CHECK(tb_symbol_wire_allocated(right) == empty + retained);
         CHECK(tb_symbol_wire_allocated(left) == empty);
         int owned = tb_symbol_wire_take_descriptor(right);
         CHECK(owned >= 0 && tb_symbol_wire_take_descriptor(right) == -1);
@@ -376,6 +377,7 @@ static void failures_and_budgets(void)
     CHECK(!tb_symbol_wire_send(wire, &message));
     unsigned char header[TB_SYMBOL_WIRE_HEADER_BYTES];
     header_bytes(header, 4, false);
+    header[7] = TB_SYMBOL_MESSAGE_REQUEST;
     raw_send(sockets[1], header, sizeof(header));
     CHECK(tb_symbol_wire_pump(wire) == TB_SYMBOL_WIRE_RESOURCE);
     CHECK(tb_symbol_wire_allocated(wire) == empty);
@@ -441,15 +443,60 @@ static void shared_budget(void)
     CHECK(aggregate.used == fixed + 3);
     tb_symbol_wire_consume(right);
     CHECK(aggregate.used == fixed);
+    aggregate.limit = fixed;
+    message.kind = TB_SYMBOL_MESSAGE_CANCEL;
+    fail_allocation = true;
+    CHECK(tb_symbol_wire_send(left, &message));
+    transfer(left, right);
+    CHECK(tb_symbol_wire_message(right)->length == message.length);
+    CHECK(memcmp(tb_symbol_wire_message(right)->payload, "abc", message.length) == 0);
+    CHECK(aggregate.used == fixed);
+    fail_allocation = false;
+    tb_symbol_wire_consume(right);
     tb_symbol_wire_destroy(left);
     tb_symbol_wire_destroy(right);
     CHECK(!aggregate.used);
 }
 
 
+static void nested_accounts(void)
+{
+    TbSymbolBudget_t root;
+    TbSymbolBudget_t child;
+    TbSymbolBudget_t sibling;
+    TbSymbolBudget_t grandchild;
+    TbSymbolBudget_t fourth;
+    TbSymbolBudget_t fifth;
+    CHECK(tb_symbol_budget_init(&root, 10));
+    CHECK(tb_symbol_budget_init_child(&child, 8, &root));
+    CHECK(tb_symbol_budget_init_child(&sibling, 8, &root));
+    CHECK(tb_symbol_budget_init_child(&grandchild, 6, &child));
+    CHECK(tb_symbol_budget_init_child(&fourth, 4, &grandchild));
+    CHECK(!tb_symbol_budget_init_child(&fifth, 2, &fourth));
+    CHECK(!tb_symbol_budget_init_child(&root, 10, &child));
+    CHECK(!tb_symbol_budget_init_child(&fifth, 2, NULL));
+    CHECK(tb_symbol_budget_reserve(&grandchild, 6));
+    CHECK(root.used == 6 && child.used == 6 && grandchild.used == 6);
+    CHECK(tb_symbol_budget_reserve(&sibling, 4));
+    CHECK(root.used == 10 && sibling.used == 4);
+    CHECK(!tb_symbol_budget_reserve(&child, 1));
+    CHECK(root.used == 10 && child.used == 6);
+    CHECK(!tb_symbol_budget_release(&grandchild, 7));
+    CHECK(root.used == 10 && child.used == 6 && grandchild.used == 6);
+    CHECK(tb_symbol_budget_release(&sibling, 1));
+    CHECK(tb_symbol_budget_reserve(&child, 1));
+    CHECK(root.used == 10 && child.used == 7);
+    CHECK(tb_symbol_budget_release(&grandchild, 6));
+    CHECK(tb_symbol_budget_release(&child, 1));
+    CHECK(tb_symbol_budget_release(&sibling, 3));
+    CHECK(!root.used && !child.used && !sibling.used && !grandchild.used);
+}
+
+
 int main(void)
 {
     size_t descriptors = fd_count();
+    nested_accounts();
     shared_budget();
     round_trips();
     adjacent_frames();

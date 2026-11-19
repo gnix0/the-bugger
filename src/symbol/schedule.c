@@ -29,6 +29,7 @@ struct tb_symbol_schedule {
     size_t            max_interests;
     size_t            job_count;
     size_t            interest_count;
+    size_t            next_publication;
     uint64_t          turn;
     uint64_t          last_request;
     TbSymbolBudget_t *aggregate;
@@ -199,10 +200,31 @@ bool tb_symbol_schedule_cancel(TbSymbolSchedule_t *schedule, TbSymbolWorkIdentit
 }
 
 
-static bool publish(TbSymbolSchedule_t *schedule, tb_symbol_work_emit_fn emit, void *context)
+void tb_symbol_schedule_cancel_all(TbSymbolSchedule_t *schedule)
 {
+    if (!schedule)
+        return;
     for (size_t i = 0; i < schedule->max_interests; ++i) {
         Interest_t *interest = &schedule->interests[i];
+        if (!interest->used || interest->cancelled)
+            continue;
+        interest->cancelled = true;
+        Job_t *job = &schedule->jobs[interest->job];
+        --job->active_interests;
+        if (!job->active_interests && !job->done) {
+            job->done = true;
+            job->result.outcome = TB_SYMBOL_CANCELLED;
+            destroy_work(job);
+        }
+    }
+}
+
+
+static bool publish(TbSymbolSchedule_t *schedule, tb_symbol_work_emit_fn emit, void *context)
+{
+    for (size_t offset = 0; offset < schedule->max_interests; ++offset) {
+        size_t index = (schedule->next_publication + offset) % schedule->max_interests;
+        Interest_t *interest = &schedule->interests[index];
         if (!interest->used)
             continue;
         Job_t *job = &schedule->jobs[interest->job];
@@ -212,6 +234,7 @@ static bool publish(TbSymbolSchedule_t *schedule, tb_symbol_work_emit_fn emit, v
         TbSymbolWorkResult_t result = job->result;
         if (interest->cancelled)
             result.outcome = TB_SYMBOL_CANCELLED;
+        schedule->next_publication = (index + 1) % schedule->max_interests;
         if (!emit(context, &interest->identity, result, job->work.context))
             return false;
 
@@ -289,6 +312,12 @@ size_t tb_symbol_schedule_jobs(const TbSymbolSchedule_t *schedule)
 size_t tb_symbol_schedule_interests(const TbSymbolSchedule_t *schedule)
 {
     return schedule ? schedule->interest_count : 0;
+}
+
+
+size_t tb_symbol_schedule_overhead(void)
+{
+    return sizeof(TbSymbolSchedule_t);
 }
 
 

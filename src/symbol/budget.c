@@ -12,21 +12,51 @@ bool tb_symbol_budget_init(TbSymbolBudget_t *budget, size_t limit)
 }
 
 
-bool tb_symbol_budget_reserve(TbSymbolBudget_t *budget, size_t bytes)
+bool tb_symbol_budget_init_child(TbSymbolBudget_t *budget, size_t limit, TbSymbolBudget_t *parent)
 {
-    if (!budget || budget->used > budget->limit || bytes > budget->limit - budget->used)
+    if (!budget || !parent || !limit)
         return false;
 
-    budget->used += bytes;
+    unsigned depth = 1;
+    for (TbSymbolBudget_t *account = parent; account; account = account->parent) {
+        if (account == budget || ++depth > 4)
+            return false;
+    }
+    *budget = (TbSymbolBudget_t){
+        .limit  = limit,
+        .parent = parent
+    };
+    return true;
+}
+
+
+bool tb_symbol_budget_reserve(TbSymbolBudget_t *budget, size_t bytes)
+{
+    if (!budget)
+        return false;
+
+    unsigned depth = 0;
+    for (TbSymbolBudget_t *account = budget; account; account = account->parent) {
+        if (++depth > 4 || account->used > account->limit || bytes > account->limit - account->used)
+            return false;
+    }
+    for (TbSymbolBudget_t *account = budget; account; account = account->parent)
+        account->used += bytes;
     return true;
 }
 
 
 bool tb_symbol_budget_release(TbSymbolBudget_t *budget, size_t bytes)
 {
-    if (!budget || bytes > budget->used)
+    if (!budget)
         return false;
 
-    budget->used -= bytes;
+    unsigned depth = 0;
+    for (TbSymbolBudget_t *account = budget; account; account = account->parent) {
+        if (++depth > 4 || bytes > account->used)
+            return false;
+    }
+    for (TbSymbolBudget_t *account = budget; account; account = account->parent)
+        account->used -= bytes;
     return true;
 }

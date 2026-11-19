@@ -5559,3 +5559,110 @@ supervisor, parent-enforced startup/queue/operation/progress deadlines,
 cancellation escalation, confirmed reaping and frontend event-loop integration.
 The standalone process work begun next is not covered by this baseline.
 No worker-failure, artifact or consumer acceptance is inferred from these tests.
+
+## SE02 supervised helper integration — 2026-11-19
+
+The execution foundation now connects the bounded transport and scheduler to a
+lazy frontend-owned supervisor and private early worker entry. It adds no artifact
+acquisition or native discovery; artifact/decoder operation IDs currently produce
+Unsupported. D04, acquisition, semantic validation, publication, live actions and
+F07 acceptance retain their independent gates.
+
+The local Linux x86-64 host used kernel 7.3.4, glibc 2.44, GCC 16.2.1 and GDB 18.1;
+exact compiler/debugger versions are in
+`build/se02-evidence-20261119/runtime-environment.txt`. The initial process profile
+requires Linux pidfd and `close_range` support, default SIGCHLD disposition and
+exclusive child reaping. Unsupported conditions disable helper eligibility while
+preserving ordinary GDB workflows. This evidence does not qualify other kernels,
+filesystems, remote servers or physical targets.
+
+### Focused process and protocol observations
+
+```sh
+make BUILD_DIR=build/se02-runtime-focused-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-wire test-symbol-schedule \
+  test-symbol-process test-symbol-helper test-symbol-helper-native
+```
+
+PASS, exit 0 (`runtime-focused-final.log`, `runtime-focused-final.exit`).
+Maintained [helper coverage](testing.md#supervised-symbol-engine-helper-se02)
+includes:
+
+- Descriptor isolation with inherited and closed standard descriptors;
+  asynchronous exec failure; parent ownership while exec is deliberately blocked.
+- Read-only/close-on-exec descriptor framing and complete cleanup; allocation-free
+  small control messages when the shared account has no free capacity.
+- Shared interests surviving creator cancellation, replacement queries, dispatch
+  order differing from admission order, saturation and independent publication.
+- Nested-account ceilings and rollback across frontend/IPC ownership; retained
+  capacities and worker/scheduler bookkeeping remain charged.
+- Deterministic startup, queue, ready/heavy absolute, no-progress and cancellation
+  boundaries. Heartbeats and buffered old progress cannot extend deadlines;
+  future timestamps and mismatched context/process generations are rejected.
+- TERM/KILL escalation, delayed acknowledgement/reap, unavailable ownership and
+  explicit restart; no replacement before confirmed reap.
+- Completed payload retention across helper death and allocation failure without
+  exposing a partial candidate.
+
+The worker is started through the actual application executable in the focused
+suite. Fault peers and the harness clock file exercise failure contracts; they
+are neither ELF/DWARF producers nor target emulators. No metadata semantics or
+artifact coherence is inferred from their payloads.
+
+The native isolation suite started actual GDB without an inferior, crashed a
+separately supervised helper, and confirmed that the same GDB process still
+answered `-list-features` through structured MI. Both processes were closed and
+reaped. This establishes the tested process boundary, not live symbol binding,
+remote traffic envelopes or physical bus behavior.
+
+### Analysis and failure-injection follow-up
+
+```sh
+make CC=clang BUILD_DIR=build/se02-runtime-sanitize-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' \
+  test-symbol-wire test-symbol-schedule test-symbol-process test-symbol-helper
+make analyze
+```
+
+Focused AddressSanitizer/UndefinedBehaviorSanitizer checks passed, exit 0
+(`runtime-sanitize-final.log`, `runtime-sanitize-final.exit`). Final configured
+production static analysis passed, exit 0 (`runtime-full-analysis-final.log`,
+`runtime-full-analysis-final.exit`).
+
+Initial full analysis diagnosed intentional pointer-size bookkeeping expressions;
+frontend ownership was grouped into one explicitly accounted struct instead
+(`runtime-full-analysis-initial.log`, exit 2). A transient identifier substitution
+error during that grouping was caught by compilation and corrected before the
+final focused run (`runtime-grouping-initial.log`, exit 2). Existing application
+assertions and fixtures were preserved.
+
+The transport quota fixture now uses a Request frame to keep its ordinary
+allocation-exhaustion assertion. Small Result/control payloads instead use their
+already-accounted inline capacity; separate tests prove those control messages
+remain available at exhaustion. No quota assertion was waived.
+
+The complete regression command, environment and source hashes are retained in
+`runtime-baseline-command.json` and `runtime-tested-files.json`. Final regression
+results and the normal build are recorded after completion below.
+
+### Complete host regression
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/se02-runtime-ci-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+PASS, exit 0 (`runtime-test-ci.log`, `runtime-test-ci.exit`). This fresh build
+included existing native/attach, input/terminal/tmux, localhost remote and offline
+OpenOCD suites, plus the new helper/process and actual-GDB isolation checks.
+`runtime-tested-files.json` was checked after completion: no implementation,
+header, test or Makefile differed from the frozen manifest. This is local host
+success, not hosted Ubuntu CI or physical ARM/Xtensa/RISC-V evidence.
+
+Normal `make` passed and updated `build/the-bugger` (`runtime-normal-make.log`,
+`runtime-normal-make.exit`). Documentation links and source whitespace/width
+checks passed. The helper execution foundation is implemented and locally
+verified. Actual artifact operations, decoder behavior, production sizing,
+consumer workflows and F07 acceptance remain separate work.

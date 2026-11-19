@@ -9,7 +9,9 @@ Console review, centralized command provenance, safe retirement while running
 and close-on-exec for received descriptors. Planning approval establishes no
 implementation completion, production verification, physical validation or F07
 acceptance. SE01 now provides the [independent bounded primitives](architecture.md#symbol-engine-primitives-se01);
-the helper, artifact manager, decoders and consumers remain unimplemented.
+SE02 adds the [supervised helper foundation](architecture.md#symbol-engine-helper-se02).
+The artifact manager, decoders and consumers remain planned; the current worker
+returns Unsupported for artifact/decoder operations.
 Verification evidence is recorded separately from integration acceptance.
 
 The engine owns bounded project-native C17 ELF/DWARF decoding, metadata
@@ -337,6 +339,7 @@ Configuration does not alter the fixed representation constraints below.
 | Frontend temporary construction | 16 MiB | Construction owner; contained in aggregate; candidate discarded on failure. |
 | IPC storage | 4 MiB/process | Transport owner in each process; frontend portion included in aggregate; fail operation/channel safely. |
 | Admitted underlying helper jobs, active included | 64 jobs | Parent scheduler returns Busy at saturation; separate reserved control capacity. |
+| Consumer interests, including retained completions | 128 interests | Parent scheduler bounds interests independently; Busy preserves other consumers. |
 
 ### Fixed representation constraints
 
@@ -395,6 +398,41 @@ stand in for total helper memory.
 All timing settings are startup-configurable and parent-enforced with monotonic
 time; cooperative targets also require helper checkpoints. Raising a setting
 never makes progress heartbeats sufficient or permits replacement before reap.
+
+### Available startup configuration
+
+SE02 reads the following environment settings once during frontend initialization.
+Values are positive decimal integers with no sign or whitespace. MiB uses binary
+units; time settings use milliseconds and are converted with checked arithmetic.
+Invalid settings leave the Symbol Engine unavailable with a diagnostic; ordinary
+GDB workflows remain available. Configuration neither starts the helper nor
+changes the fixed representation constraints.
+
+| Setting | Policy and supported range |
+|---|---|
+| `TB_SYMBOL_FRONTEND_MIB` | Combined frontend storage ceiling above; must fit `size_t` and the initial bookkeeping. |
+| `TB_SYMBOL_IPC_MIB` | IPC ceiling above; must accommodate worker/transport bookkeeping and not exceed frontend storage. |
+| `TB_SYMBOL_JOBS` | Underlying-job ceiling above; 1–64. |
+| `TB_SYMBOL_INTERESTS` | Consumer-interest ceiling above; 1–128. |
+| `TB_SYMBOL_CHECKPOINT_BYTES` | Work-byte allowance; 64 bytes through the checkpoint maximum above. The minimum accommodates a fixed ELF header/hash block. |
+| `TB_SYMBOL_CHECKPOINT_STEPS` | Work-step allowance; 1 through the checkpoint maximum above. The scheduler can supply a smaller allowance to reserve bounded control work. |
+| `TB_SYMBOL_SLICE_MS` | Cooperative service slice above. |
+| `TB_SYMBOL_STARTUP_MS` | Helper startup deadline above. |
+| `TB_SYMBOL_QUEUE_MS` | Queue wait before first service above. |
+| `TB_SYMBOL_READY_MS` | Ready-index window/details deadline above. |
+| `TB_SYMBOL_HEAVY_MS` | Acquisition/index/query/reconstruction deadline above. |
+| `TB_SYMBOL_PROGRESS_MS` | No-meaningful-progress deadline above. |
+| `TB_SYMBOL_CANCEL_MS` | Cancellation grace before TERM above. |
+| `TB_SYMBOL_TERM_MS` | TERM grace before KILL above. |
+
+These are ceilings/allowances, not reservations. The frontend root also contains
+helper IPC, scheduler/job metadata and frontend ownership bookkeeping. The worker
+IPC account includes its job/scheduler bookkeeping, request copies and transport
+storage. Small protocol-control buffers are owned and charged at channel creation,
+so cancellation and failure acknowledgements need no later allocation. Decoder,
+index/cache, evidence, prepared-fact and publication budgets receive their own
+integration and sizing work; this configuration does not establish their
+implementation or acceptance.
 
 ## Consumer integration and live actions
 

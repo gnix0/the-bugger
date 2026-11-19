@@ -75,6 +75,7 @@ bool tb_symbol_schedule_add(TbSymbolSchedule_t *schedule, const TbSymbolWork_t *
 bool tb_symbol_schedule_attach(TbSymbolSchedule_t *schedule, uint64_t job,
                                 TbSymbolWorkIdentity_t identity);
 bool tb_symbol_schedule_cancel(TbSymbolSchedule_t *schedule, TbSymbolWorkIdentity_t identity);
+void tb_symbol_schedule_cancel_all(TbSymbolSchedule_t *schedule);
 /* One bounded publication attempt and service turn. Four interactive turns at most before
  * a runnable construction turn; oldest turn first within each class. New work
  * enters behind previously admitted runnable work of its class. */
@@ -82,6 +83,7 @@ bool tb_symbol_schedule_pump(TbSymbolSchedule_t *schedule, uint64_t now_ns, uint
                             tb_symbol_work_emit_fn emit, void *context);
 size_t tb_symbol_schedule_jobs(const TbSymbolSchedule_t *schedule);
 size_t tb_symbol_schedule_interests(const TbSymbolSchedule_t *schedule);
+size_t tb_symbol_schedule_overhead(void);
 size_t tb_symbol_schedule_allocated(const TbSymbolSchedule_t *schedule);
 
 #endif // THE_BUGGER_SYMBOL_SCHEDULE_H

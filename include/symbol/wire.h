@@ -13,7 +13,8 @@ enum {
     TB_SYMBOL_WIRE_MAX_PAYLOAD  = 1024 * 1024,
     TB_SYMBOL_WIRE_DEFAULT_MAX  = 4 * 1024 * 1024,
     TB_SYMBOL_WIRE_IO_BYTES     = 64 * 1024,
-    TB_SYMBOL_WIRE_IO_STEPS     = 256
+    TB_SYMBOL_WIRE_IO_STEPS     = 256,
+    TB_SYMBOL_WIRE_CONTROL_BYTES = 32
 };
 
 typedef enum {
@@ -76,6 +77,7 @@ const TbSymbolMessage_t *tb_symbol_wire_message(const TbSymbolWire_t *wire);
 /* Transfers the completed message's received descriptor, or returns -1. */
 int tb_symbol_wire_take_descriptor(TbSymbolWire_t *wire);
 void tb_symbol_wire_consume(TbSymbolWire_t *wire);
+size_t tb_symbol_wire_overhead(void);
 size_t tb_symbol_wire_allocated(const TbSymbolWire_t *wire);
 struct pollfd tb_symbol_wire_pollfd(const TbSymbolWire_t *wire);
 

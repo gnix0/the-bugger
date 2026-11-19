@@ -2473,9 +2473,9 @@ assert the same review containment and explicit acceptance controls.
 The [Symbol Engine acceptance matrix](native-symbol-engine.md#acceptance-matrix)
 and [implementation gates](native-symbol-engine.md#implementation-gates-and-dependencies)
 define verification for the complete subsystem. The original planning delivery
-introduced no suites or commands. SE01 adds primitive checks, and partial SE02
-adds transport/scheduler checks below. Supervised-process, acquisition, decoder
-and consumer tests remain future work. Existing
+introduced no suites or commands. SE01 adds primitive checks; SE02 adds
+transport, scheduler, process and helper checks below. Acquisition, decoder and
+consumer tests remain future work. Existing
 commands remain in the [suite catalog](../tests/README.md).
 
 D04 will extend the existing `test-mi`/allocation and `test-controller` harnesses.
@@ -2574,3 +2574,49 @@ checks the `SIZE_MAX` boundary and rejected underflow.
 The wire harness uses GNU linker wrappers for deterministic allocation/transfer
 faults. A caller still validates operation schemas, context generations and
 metadata before publication; frame acceptance grants no runtime authority.
+
+
+## Supervised Symbol Engine helper (SE02)
+
+```sh
+make BUILD_DIR=build/se02-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-process test-symbol-helper test-symbol-helper-native
+```
+
+`test-symbol-process` and `test-symbol-helper` are included in `test`;
+`test-symbol-helper-native` is included in `test-native`. All therefore run under
+`test-ci`. The helper suite builds the application and exercises its actual
+private worker entry, as well as controlled fault peers. The native isolation
+suite starts real GDB without loading an inferior or accessing hardware.
+
+Process checks cover isolated inherited descriptors, close-on-exec, closed
+standard descriptors, asynchronous exec failure, supervision while exec is
+blocked, cooperative shutdown, TERM/KILL and verified reap before restart.
+Injected pidfd/isolation failures and interrupted/external reaping exercise the
+unavailable-owner boundary. The initial supported helper profile requires Linux
+pidfd and `close_range`; no fallback signals a numeric PID after losing ownership.
+
+Helper checks cover independent/shared interests, replacement of a creator's
+query, dispatch order differing from admission order, saturation, deferred
+publication and allocation rollback. Small control frames are tested with no
+remaining allocation capacity. Nested account tests enforce both subsidiary
+and aggregate ceilings before mutation. Backpressure in one consumer must not
+prevent another completed consumer from receiving its result.
+
+Controlled monotonic clocks and fault peers exercise startup, queue, ready/heavy
+absolute deadlines, repeated heartbeat counters, buffered old progress, future
+work timestamps, cancellation escalation, failed/stale identities, helper death,
+retained completed payloads and explicit restart. The clock fixture is a private
+harness file opened after isolated exec, not part of the production protocol.
+A process handshake proves that the parent owns and can terminate a child before
+exec completes. Native isolation then verifies that helper failure leaves the
+same actual GDB process alive and able to answer structured MI.
+
+These checks qualify the execution foundation under the recorded host
+configuration. They do not measure actual artifact acquisition, decoder/index
+latency, production schema ownership, physical access or live-action consumers.
+The current production worker returns Unsupported for artifact/decoder operation
+IDs. Startup settings and their supported ranges are in the
+[authoritative resource policy](native-symbol-engine.md#available-startup-configuration).
+A kernel operation that cannot yet be reaped prevents replacement; tests do not
+establish a universal filesystem or kernel scheduling guarantee.

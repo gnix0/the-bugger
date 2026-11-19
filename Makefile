@@ -19,7 +19,7 @@ PROJECT_CPPFLAGS := -Iinclude -Iinclude/tui -Iinclude/layout -Iinclude/gdb -Iinc
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
 SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/tui/editor.c src/tui/terminal.c src/tui/setup_capture.c src/tui/setup_restore.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/paths.c src/session/session.c src/session/openocd.c src/session/profiles.c src/session/setup.c src/model/context.c src/model/code.c src/model/browse.c src/model/monitor.c src/model/mmio.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/stack.c src/model/variables.c
-SOURCES += src/symbol/reader.c src/symbol/identity.c src/symbol/sha256.c src/symbol/wire.c src/symbol/schedule.c src/symbol/budget.c
+SOURCES += src/symbol/reader.c src/symbol/identity.c src/symbol/sha256.c src/symbol/wire.c src/symbol/schedule.c src/symbol/budget.c src/symbol/process.c src/symbol/worker.c src/symbol/helper.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -933,3 +933,33 @@ test-symbol-schedule: $(BUILD_DIR)/test-symbol-schedule
 
 test: test-symbol-schedule
 -include $(BUILD_DIR)/tests/unit/test_symbol_schedule.d
+
+$(BUILD_DIR)/test-symbol-process: $(BUILD_DIR)/tests/unit/test_symbol_process.o $(BUILD_DIR)/src/symbol/process.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=syscall -Wl,--wrap=waitpid -Wl,--wrap=execve -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-process
+test-symbol-process: $(BUILD_DIR)/test-symbol-process
+	$(BUILD_DIR)/test-symbol-process
+
+test: test-symbol-process
+-include $(BUILD_DIR)/tests/unit/test_symbol_process.d
+
+$(BUILD_DIR)/test-symbol-helper: $(BUILD_DIR)/tests/unit/test_symbol_helper.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=clock_gettime -Wl,--wrap=malloc -Wl,--wrap=calloc -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-helper
+test-symbol-helper: all $(BUILD_DIR)/test-symbol-helper
+	$(BUILD_DIR)/test-symbol-helper $(abspath $(BINARY))
+
+test: test-symbol-helper
+-include $(BUILD_DIR)/tests/unit/test_symbol_helper.d
+
+$(BUILD_DIR)/test-symbol-helper-native: $(BUILD_DIR)/tests/integration/test_symbol_helper_native.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-helper-native
+test-symbol-helper-native: all $(BUILD_DIR)/test-symbol-helper-native $(BUILD_DIR)/test-symbol-helper
+	$(BUILD_DIR)/test-symbol-helper-native gdb $(abspath $(BUILD_DIR)/test-symbol-helper)
+
+test-native: test-symbol-helper-native
+-include $(BUILD_DIR)/tests/integration/test_symbol_helper_native.d

@@ -21,6 +21,14 @@ records remain in the [validation records](../docs/validation.md).
   These component tests do not start or qualify the supervised helper; see
   [coverage and limits](../docs/testing.md#symbol-engine-transport-and-scheduling-se02-partial).
 
+- `make test-symbol-process test-symbol-helper`: isolated worker entry, owned
+  process supervision/reaping, startup settings, deadlines, shared cancellation,
+  resource faults and completed-result retention. Included in `test`.
+- `make test-symbol-helper-native`: actual GDB remains alive and answers MI
+  after an independently supervised helper crashes; no inferior or hardware.
+  Included in `test-native`. See
+  [helper verification](../docs/testing.md#supervised-symbol-engine-helper-se02).
+
 - `make test-fullscreen`: Source-only fullscreen PTY checks, retained header/footer,
   split/resize restoration, hidden input regions and compact/keyboard behavior;
   included in `make test`. `make test-fullscreen-native` adds actual GDB source

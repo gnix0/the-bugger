@@ -85,45 +85,65 @@ candidate for later byte-equality comparison, never coherence or access evidence
 These primitives allocate no heap storage and perform no file/debugger I/O.
 Callers remain responsible for input lifetime and bounded update/scan allowances.
 
-### Symbol Engine transport and scheduling (SE02, partial)
+### Symbol Engine helper (SE02)
 
-`src/symbol/wire.c` implements the private stream protocol independently of
-process supervision. Each frame has a 48-byte versioned, big-endian header,
-a bounded payload and a one-byte descriptor trailer. Header, payload and trailer
-are received separately with `recvmsg()`; a completed message remains borrowed
-until explicitly consumed. Received backing descriptors must be close-on-exec,
-read-only regular files. Descriptor checks do not establish that all writers
-were relinquished or that artifact contents are coherent.
+`src/symbol/helper.c` owns the lazy helper lifecycle and operation interests;
+`worker.c` provides the private early executable entry. The frontend event loop
+pumps the helper and polls its channel/process descriptor independently of GDB.
+Initialization and opening/editing Symbols start no process or acquisition.
+Artifact Open will explicitly start work when its own foundation is implemented.
+The current worker returns Unsupported for artifact/decoder operations.
 
-The transport owns at most one outgoing and one incoming frame. A pump inspects
-at most 64 KiB through at most 256 syscall attempts, including interrupted calls;
-transmission uses at most half of each allowance so reception can advance.
-Protocol, resource and I/O failures close the channel and release incomplete
-frames/descriptors. Transport success establishes framing only, not metadata
-validity or publication eligibility.
+`src/symbol/process.c` uses `fork()` followed by isolated `execve()` of the running
+executable. Child setup uses async-signal-safe operations, installs null standard
+descriptors and the private channel, resets signal state and closes inherited
+endpoints. The parent can supervise a child blocked before exec. The initial
+Linux profile requires pidfd and `close_range` support, default SIGCHLD disposition
+and exclusive child reaping. Unsupported ownership/isolation conditions disable
+the engine without changing the debugger connection. Signals use the verified
+owned process descriptor; there is no numeric-PID signalling fallback. A previous
+helper must be reaped before explicit restart; uncertain ownership prevents it.
+See the Linux [pidfd ownership](https://man7.org/linux/man-pages/man2/pidfd_open.2.html),
+[signalling](https://man7.org/linux/man-pages/man2/pidfd_send_signal.2.html) and
+[descriptor isolation](https://man7.org/linux/man-pages/man2/close_range.2.html)
+interfaces.
+
+`src/symbol/wire.c` implements versioned big-endian frames with separate header,
+payload and descriptor-trailer receive boundaries. Every receive uses `recvmsg()`
+with atomic close-on-exec. Read-only regular backing descriptors are checked;
+these properties alone establish neither acquisition coherence nor writer
+relinquishment. One outgoing and one incoming frame remain owned until completed
+or consumed. Protocol/resource/I/O failure closes the channel and releases its
+incomplete storage and descriptors. Framing success grants no metadata authority.
 
 `src/symbol/schedule.c` separates underlying jobs from consumer interests.
-Explicitly shared construction retains each consumer's captured identity;
-cancelling one interest does not cancel another. Completed work remains owned
-until publication accepts it. Admission is bounded by 64 jobs and 128 interests,
-including retained completions; cancellation requires no additional slot.
-Runnable construction receives a service turn after at most four interactive
-turns. New admissions enter behind older runnable work in their priority class.
-Callbacks must yield within the supplied byte, step and monotonic-time bounds;
-this component alone cannot interrupt a blocked syscall.
+Explicit sharing preserves each captured identity. Cancellation detaches only
+that interest; a sent job retains its underlying slot until acknowledgement or
+helper reaping. Completed work remains owned until its consumer accepts delivery.
+Publication attempts rotate so one backpressured consumer cannot obstruct others.
+Finite interactive-first rounds preserve service for admitted construction jobs.
+Control metadata and small control-frame storage remain available at saturation.
 
-`src/symbol/budget.c` supplies checked allocation reservations shared by the
-transport and scheduler. Reservation precedes allocation, allocation failure
-rolls it back, and release follows reclamation. Per-component limits and the
-optional enclosing account apply concurrently; shared allocations receive one
-charge. Accounts describe owned allocations, not process RSS or backing storage.
-The authoritative [resource policy](native-symbol-engine.md#resource-policy)
-retains its separate fixed representation constraints and sizing gate.
+Requests carry separate frontend-context and helper-process generations. Worker
+service/progress reports include monotonic work timestamps, checked against
+admission and receipt; buffered progress cannot extend a stalled operation.
+Repeated counters do not refresh the watchdog. Parent-enforced queue, absolute
+operation, progress and cancellation deadlines remain distinct. Failure explicitly
+completes unfinished interests, while callers retain independently accepted
+results. There is no automatic retry, rescan or restart.
 
-These components are built but have no frontend runtime consumers yet. Helper
-startup, watchdogs, signal/reap ownership, wire-message semantics and event-loop
-integration remain SE02 work. No new process, acquisition, search or target
-operation is started by this partial foundation.
+`src/symbol/budget.c` checks nested reservation chains before mutation. IPC and
+frontend limits apply concurrently, with each allocation charged once to its
+owner and all containing accounts. Failed allocation rolls reservations back;
+reclamation precedes release. Fixed bookkeeping and retained capacity count too.
+These are owned-storage limits, not RSS guarantees. Defaults, units, supported
+startup settings and failure policy are authoritative in the
+[resource policy](native-symbol-engine.md#resource-policy).
+
+The [helper tests](testing.md#supervised-symbol-engine-helper-se02) distinguish
+component, real-process and real-GDB isolation evidence. Actual artifact/decoder
+workloads, search publication and live consumers remain later foundations; this
+execution boundary does not complete F07 or qualify physical targets.
 
 ### Event loop and text rendering
 
