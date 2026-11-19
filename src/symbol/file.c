@@ -8,10 +8,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-enum {
-    FILE_WINDOW_BYTES = 65536
-};
-
 typedef enum {
     FILE_IDLE,
     FILE_FLAGS,
@@ -35,7 +31,7 @@ struct tb_symbol_file {
     FilePhase_e           phase;
     TbSymbolOutcome_e     outcome;
     TbSymbolFileFailure_t failure;
-    unsigned char         buffer[FILE_WINDOW_BYTES];
+    unsigned char         buffer[TB_SYMBOL_FILE_WINDOW_BYTES];
 };
 
 TbSymbolFile_t *tb_symbol_file_create(TbSymbolStorageInfo_t expected, int descriptor,
@@ -60,7 +56,7 @@ TbSymbolFile_t *tb_symbol_file_create(TbSymbolStorageInfo_t expected, int descri
 bool tb_symbol_file_request(TbSymbolFile_t *file, TbSymbolFileRange_t range)
 {
     if (!file || (file->phase != FILE_IDLE && file->phase != FILE_DONE) || !range.bytes ||
-        range.bytes > FILE_WINDOW_BYTES ||
+        range.bytes > TB_SYMBOL_FILE_WINDOW_BYTES ||
         !tb_symbol_range(range.offset, range.bytes, file->expected.bytes)) {
         return false;
     }
@@ -161,7 +157,7 @@ TbSymbolOutcome_e tb_symbol_file_step(TbSymbolFile_t *file, size_t max_bytes)
         return TB_SYMBOL_OPERATIONAL_FAILURE;
     if (file->phase == FILE_DONE || file->phase == FILE_FAILED)
         return file->outcome;
-    if (!max_bytes || max_bytes > FILE_WINDOW_BYTES || file->phase == FILE_IDLE) {
+    if (!max_bytes || max_bytes > TB_SYMBOL_FILE_WINDOW_BYTES || file->phase == FILE_IDLE) {
         fail(file, TB_SYMBOL_FILE_REQUEST, EINVAL);
         return file->outcome;
     }

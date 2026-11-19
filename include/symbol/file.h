@@ -3,6 +3,10 @@
 
 #include "symbol/storage.h"
 
+enum {
+    TB_SYMBOL_FILE_WINDOW_BYTES = 65536
+};
+
 typedef struct tb_symbol_file TbSymbolFile_t;
 
 typedef struct {

@@ -397,9 +397,42 @@ and its [section](https://gabi.xinuos.com/elf/03-sheader.html),
 [program-header](https://gabi.xinuos.com/elf/07-pheader.html) and
 [symbol-table](https://gabi.xinuos.com/elf/05-symtab.html) definitions.
 These allocation-free components introduce no helper request, catalog, search,
-Source navigation or runtime binding. Inventory validation, section/string/symbol
-dependencies and helper integration remain later SE04 steps. Existing
+Source navigation or runtime binding. Section-directory validation follows below; symbol-table dependencies and helper
+integration remain later SE04 steps. Existing
 `src/model/images.c` libelf consumers are unchanged.
+
+
+### ELF section directories (SE04, partial)
+
+`src/symbol/sections.c` constructs a complete helper-local section directory over
+frozen backing, using the bounded reader and fixed-record decoders. It reserves
+all entries and an auxiliary ordering array against a caller budget before
+allocation. Individual entries remain in physical section order. Incremental
+heap operations sort only the auxiliary array, yielding after each bounded
+action; file-backed section ranges must neither overlap each other nor consume
+structural header/table bytes. NULL, NOBITS and empty payloads retain their
+distinct meanings.
+
+Section-name validation checks the declared string table and supported references.
+Names retain exact full byte lengths and backing coordinates, including duplicate
+names, substring references and names longer than one scratch span. No full-name
+copy or truncated-name identity is introduced. Nonempty tables require their first
+and last bytes to be NUL; empty tables permit only index zero, following the
+[ELF string-table contract](https://gabi.xinuos.com/elf/04-strtab.html).
+
+The complete directory becomes visible only after its requested checks succeed.
+Compressed name tables produce explicit unavailable-name coverage, without
+interpreting their payload or pretending nonzero name indexes are empty names.
+An absent section-name table does not prove that the artifact contains no DWARF.
+Malformed supported dependencies and allocation/read failures expose no candidate
+prefix. Reader/storage errors remain distinct from malformed encoded metadata.
+
+The directory and its views are reconstructible helper cache, borrowed until
+destruction. They do not own frontend publication guarantees or grant code/storage
+meaning to raw section attributes. Program entry semantics, symbol-table links,
+extended symbol indexes, other cross-section relationships and processor/OS
+semantics remain separate validation scopes. Production cache sizing still belongs
+to SE10; no runtime helper request or UI consumer is added by this component.
 
 
 ### Event loop and text rendering

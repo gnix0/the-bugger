@@ -6156,3 +6156,47 @@ helper integration, coherent-source qualification, hardware validation or F07
 acceptance. Section/string/symbol dependency validation, DWARF, sizing and
 consumers remain pending. No new startup setting or production cache limit was
 introduced; the scratch span is separate from a Symbols result window.
+
+
+### Complete section directories and names — 2026-11-19
+
+Section-directory construction now validates the implemented section/name scope
+before exposing a view. Auxiliary heap sorting yields between bounded actions and
+preserves original section order. File-backed overlaps and supported malformed
+name dependencies fail explicitly; compressed-name coverage remains unavailable
+without interpreting payload bytes. Full name coordinates/lengths survive
+scratch boundaries, duplicate strings and substring references.
+
+Local checks passed, exit 0. Logs and exit records are under
+`build/se04-evidence-20261119/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused directory/reader/native composition | `make BUILD_DIR=build/se04-sections-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-sections test-symbol-file test-symbol-elf-native`; `sections-focused-final`. Fixed-record checks also passed in `sections-integrated`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se04-sections-ci-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `sections-test-ci`. |
+| Sanitizers | `make BUILD_DIR=build/se04-sections-sanitize-20261119 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-sections test-symbol-file test-symbol-elf test-symbol-elf-native`; `sections-sanitize`. |
+| Analysis/build | `make analyze` across 49 production source files and normal `make`; `sections-analysis` and `sections-normal-make`. |
+
+Authored fixtures cover both classes and byte orders, long names over 64 KiB,
+empty/absent/unsupported/malformed name tables, shuffled offsets, overlaps,
+allocation failures, interrupted/short/failed reads and cancellation. A sparse
+70,000-section file validates extended counts and complete traversal; a smaller
+caller budget refuses construction without a candidate prefix. The fixture's
+16 MiB allowance is test configuration, not a production index/cache default.
+Read and NUL-scan instrumentation checks each service allowance. Owned allocations
+return to baseline, and borrowed descriptors remain valid until owner cleanup.
+
+The admitted native-file comparison now also checks complete directory fields
+and full section-name bytes against libelf. Its three generated files contained
+39/37/31 sections, 15/15/11 program headers and 244/69/31 symbols; all comparisons
+passed. The sanitizer executable's 9,579-symbol table passed as well.
+`sections-tested-files.json`, `sections-tested.patch`, captured new source/header/
+test inputs and `sections-environment.txt` identify the tested tree. Only
+documentation changed after the snapshot. Link checks covered 232 local references
+without errors; whitespace checks passed.
+
+These are local host and harness-composition results, not hosted CI, physical
+architecture/producer qualification, production helper integration or F07
+acceptance. Program semantics, symbol/string dependencies, extended symbol indexes,
+other cross-section relationships, DWARF, sizing and consumers remain separate
+work. The helper directory owns no independent frontend publication guarantee.

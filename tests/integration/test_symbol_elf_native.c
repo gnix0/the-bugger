@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- Native file fixture reads. */
 #include "symbol/elf.h"
 #include "symbol/file.h"
+#include "symbol/sections.h"
 #include "symbol/acquire.h"
 #include "symbol/admission.h"
 #include "../support/check.h"
@@ -72,6 +73,18 @@ static void check_file(const char *path)
         .bytes = acquired.bytes
     }, fd, &budget);
     CHECK(input);
+    TbSymbolSections_t *directory = tb_symbol_sections_create((TbSymbolStorageInfo_t){
+        .key   = acquired.key,
+        .bytes = acquired.bytes
+    }, fd, &budget);
+    CHECK(directory);
+    outcome = TB_SYMBOL_PENDING;
+    for (unsigned i = 0; i < 1000000 && outcome == TB_SYMBOL_PENDING; ++i)
+        outcome = tb_symbol_sections_step(directory, 257);
+    CHECK(outcome == TB_SYMBOL_SUCCESS);
+    TbSymbolSectionsView_t directory_view;
+    CHECK(tb_symbol_sections_view(directory, &directory_view));
+    CHECK(directory_view.names == TB_SYMBOL_SECTION_NAMES_AVAILABLE);
     unsigned char bytes[64];
     read_record(input, 0, sizeof(bytes), bytes);
     TbSymbolElfHeader_t header;
@@ -103,6 +116,9 @@ static void check_file(const char *path)
     CHECK(!elf_getshdrstrndx(reference, &names));
     CHECK(layout.sections.count == sections && layout.programs.count == programs &&
           layout.section_names == names);
+    CHECK(directory_view.count == sections && directory_view.layout->section_names == names);
+    CHECK(directory_view.header->address_bytes == header.address_bytes);
+    CHECK(directory_view.header->byte_order == header.byte_order);
     size_t symbols = 0;
     for (size_t i = 0; i < sections; ++i) {
         uint64_t offset;
@@ -115,6 +131,23 @@ static void check_file(const char *path)
         GElf_Shdr expected;
         CHECK(section && gelf_getshdr(section, &expected));
         compare_section(actual, expected);
+        const TbSymbolSectionEntry_t *validated = &directory_view.entries[i];
+        compare_section(validated->header, expected);
+        if (actual.type != SHT_NULL && actual.name_offset) {
+            const char *expected_name = elf_strptr(reference, names, actual.name_offset);
+            CHECK(expected_name && validated->has_name);
+            CHECK(validated->name_bytes == strlen(expected_name));
+            uint64_t compared = 0;
+            while (compared < validated->name_bytes) {
+                uint64_t remaining = validated->name_bytes - compared;
+                size_t length = remaining < sizeof(bytes) ? (size_t)remaining : sizeof(bytes);
+                read_record(input, validated->name_offset + compared, length, bytes);
+                CHECK(!memcmp(bytes, expected_name + compared, length));
+                compared += length;
+            }
+        } else {
+            CHECK(!validated->has_name);
+        }
         if (actual.type != SHT_SYMTAB && actual.type != SHT_DYNSYM)
             continue;
         CHECK(actual.entry_bytes == (header.address_bytes == 4 ? 16U : 24U));
@@ -156,6 +189,7 @@ static void check_file(const char *path)
     }
     CHECK(symbols && sections && programs);
     CHECK(!elf_end(reference));
+    tb_symbol_sections_destroy(directory);
     tb_symbol_file_destroy(input);
     CHECK(!close(fd));
     CHECK(tb_symbol_admission_close(ticket) && tb_symbol_admission_evict(backing));
