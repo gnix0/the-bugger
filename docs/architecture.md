@@ -85,6 +85,46 @@ candidate for later byte-equality comparison, never coherence or access evidence
 These primitives allocate no heap storage and perform no file/debugger I/O.
 Callers remain responsible for input lifetime and bounded update/scan allowances.
 
+### Symbol Engine transport and scheduling (SE02, partial)
+
+`src/symbol/wire.c` implements the private stream protocol independently of
+process supervision. Each frame has a 48-byte versioned, big-endian header,
+a bounded payload and a one-byte descriptor trailer. Header, payload and trailer
+are received separately with `recvmsg()`; a completed message remains borrowed
+until explicitly consumed. Received backing descriptors must be close-on-exec,
+read-only regular files. Descriptor checks do not establish that all writers
+were relinquished or that artifact contents are coherent.
+
+The transport owns at most one outgoing and one incoming frame. A pump inspects
+at most 64 KiB through at most 256 syscall attempts, including interrupted calls;
+transmission uses at most half of each allowance so reception can advance.
+Protocol, resource and I/O failures close the channel and release incomplete
+frames/descriptors. Transport success establishes framing only, not metadata
+validity or publication eligibility.
+
+`src/symbol/schedule.c` separates underlying jobs from consumer interests.
+Explicitly shared construction retains each consumer's captured identity;
+cancelling one interest does not cancel another. Completed work remains owned
+until publication accepts it. Admission is bounded by 64 jobs and 128 interests,
+including retained completions; cancellation requires no additional slot.
+Runnable construction receives a service turn after at most four interactive
+turns. New admissions enter behind older runnable work in their priority class.
+Callbacks must yield within the supplied byte, step and monotonic-time bounds;
+this component alone cannot interrupt a blocked syscall.
+
+`src/symbol/budget.c` supplies checked allocation reservations shared by the
+transport and scheduler. Reservation precedes allocation, allocation failure
+rolls it back, and release follows reclamation. Per-component limits and the
+optional enclosing account apply concurrently; shared allocations receive one
+charge. Accounts describe owned allocations, not process RSS or backing storage.
+The authoritative [resource policy](native-symbol-engine.md#resource-policy)
+retains its separate fixed representation constraints and sizing gate.
+
+These components are built but have no frontend runtime consumers yet. Helper
+startup, watchdogs, signal/reap ownership, wire-message semantics and event-loop
+integration remain SE02 work. No new process, acquisition, search or target
+operation is started by this partial foundation.
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

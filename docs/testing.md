@@ -2473,8 +2473,9 @@ assert the same review containment and explicit acceptance controls.
 The [Symbol Engine acceptance matrix](native-symbol-engine.md#acceptance-matrix)
 and [implementation gates](native-symbol-engine.md#implementation-gates-and-dependencies)
 define verification for the complete subsystem. The original planning delivery
-introduced no suites or commands. SE01 now adds the primitive checks below;
-helper, acquisition, decoder and consumer tests remain future work. Existing
+introduced no suites or commands. SE01 adds primitive checks, and partial SE02
+adds transport/scheduler checks below. Supervised-process, acquisition, decoder
+and consumer tests remain future work. Existing
 commands remain in the [suite catalog](../tests/README.md).
 
 D04 will extend the existing `test-mi`/allocation and `test-controller` harnesses.
@@ -2538,3 +2539,38 @@ uninitialized or finalized streams cannot publish a digest. These components
 have no allocation sites to fail. They validate neither artifact coherence nor
 metadata semantics, admission identity, runtime correspondence or target access.
 Fresh fortified host regression remains required for their integration.
+
+
+## Symbol Engine transport and scheduling (SE02, partial)
+
+```sh
+make BUILD_DIR=build/se02-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-wire test-symbol-schedule
+```
+
+Both targets are included in `test` and therefore `test-ci`. These standalone
+component checks require no debugger or helper process. They do not qualify
+startup, blocked-syscall deadlines, cancellation escalation, safe signalling,
+reaping or frontend responsiveness; those require subsequent process integration.
+
+The wire suite fragments transfers down to one byte, checks adjacent
+descriptor-bearing frames, retains completed messages until consumption and
+verifies descriptor ownership/close-on-exec. Rejected cases include malformed
+headers/trailers, oversized payloads, descriptors on the wrong receive boundary,
+missing/extra descriptors, ancillary truncation, writable files, `O_PATH`, pipes
+and nonregular files. Descriptor counts before/after rejection check cleanup.
+Every partial EOF prefix, interrupted calls, allocation failure and local/shared
+budget exhaustion are exercised. Shared accounts include frame
+ownership and roll back failed allocations without changing accepted frames.
+
+The scheduler suite checks independent shared interests, exact cancellation
+identity, stale attachment rejection, nonreused request IDs, completion
+backpressure, once-only destruction, job/interest saturation and control at full
+capacity. Sustained arriving interactive work and retained completions must not
+starve construction. Invalid/regressing progress fails the affected operation.
+Shared allocation tests cover exact ceilings and release; budget arithmetic
+checks the `SIZE_MAX` boundary and rejected underflow.
+
+The wire harness uses GNU linker wrappers for deterministic allocation/transfer
+faults. A caller still validates operation schemas, context generations and
+metadata before publication; frame acceptance grants no runtime authority.

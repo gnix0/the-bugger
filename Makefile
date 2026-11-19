@@ -19,7 +19,7 @@ PROJECT_CPPFLAGS := -Iinclude -Iinclude/tui -Iinclude/layout -Iinclude/gdb -Iinc
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
 SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/tui/editor.c src/tui/terminal.c src/tui/setup_capture.c src/tui/setup_restore.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/paths.c src/session/session.c src/session/openocd.c src/session/profiles.c src/session/setup.c src/model/context.c src/model/code.c src/model/browse.c src/model/monitor.c src/model/mmio.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/stack.c src/model/variables.c
-SOURCES += src/symbol/reader.c src/symbol/identity.c src/symbol/sha256.c
+SOURCES += src/symbol/reader.c src/symbol/identity.c src/symbol/sha256.c src/symbol/wire.c src/symbol/schedule.c src/symbol/budget.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -913,3 +913,23 @@ test-sha256: $(BUILD_DIR)/test-sha256
 
 test: test-symbol-primitives test-sha256
 -include $(BUILD_DIR)/tests/unit/test_symbol_primitives.d $(BUILD_DIR)/tests/unit/test_sha256.d
+
+$(BUILD_DIR)/test-symbol-wire: $(BUILD_DIR)/tests/unit/test_symbol_wire.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=malloc,--wrap=calloc,--wrap=recvmsg,--wrap=sendmsg,--wrap=send -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-wire
+test-symbol-wire: $(BUILD_DIR)/test-symbol-wire
+	$(BUILD_DIR)/test-symbol-wire
+
+test: test-symbol-wire
+-include $(BUILD_DIR)/tests/unit/test_symbol_wire.d
+
+$(BUILD_DIR)/test-symbol-schedule: $(BUILD_DIR)/tests/unit/test_symbol_schedule.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-schedule
+test-symbol-schedule: $(BUILD_DIR)/test-symbol-schedule
+	$(BUILD_DIR)/test-symbol-schedule
+
+test: test-symbol-schedule
+-include $(BUILD_DIR)/tests/unit/test_symbol_schedule.d

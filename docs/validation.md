@@ -5481,3 +5481,81 @@ passed. Normal `make` also passed and updated `build/the-bugger`
 (`normal-make.log`). SE01 is implemented and locally verified; integration review
 remains pending. Hosted checks and later subsystem/consumer/physical acceptance
 remain separate gates.
+
+## SE02 transport and scheduling components — 2026-11-19
+
+This partial SE02 implementation adds standalone IPC, allocation-accounting and
+cooperative-scheduling components. It does not yet connect them to the frontend,
+start a production helper, acquire artifacts or issue debugger operations.
+Supervision and integration remain pending; these observations do not establish
+SE02 completion or F07 acceptance.
+
+The local Linux x86-64 configuration used GCC 16, GDB 18.1, the installed ncurses,
+libelf and json-c development libraries, and `TERM=xterm-256color` for terminal
+regressions. Exact compiler/debugger versions and the kernel are retained in
+`build/se02-evidence-20261119/environment.txt`. Evidence artifacts remain ignored
+local files; maintained tests and reproduction commands are in the repository.
+
+### Component observations
+
+```sh
+make BUILD_DIR=build/se02-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-wire test-symbol-schedule
+```
+
+PASS, exit 0 (`components-focused.log`). Wire tests exercised one-byte transfer
+fragmentation, empty and maximum payloads, adjacent descriptor-bearing frames,
+borrowed/completed ownership, exact receive boundaries, close-on-exec, malformed
+ancillary data, descriptor rejection/cleanup, partial EOF, interrupted calls,
+allocation faults and aggregate exhaustion. Scheduler tests exercised separate
+consumer interests, stale attachments, cancellation at saturation, retained
+completions/backpressure, monotonic progress and construction service during
+sustained interactive arrivals. Exact/one-over account limits, `SIZE_MAX`,
+underflow and failed-allocation rollback passed. See
+[maintained coverage](testing.md#symbol-engine-transport-and-scheduling-se02-partial)
+for the boundary of these checks.
+
+```sh
+make CC=clang BUILD_DIR=build/se02-sanitize-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' test-symbol-wire test-symbol-schedule
+make analyze
+```
+
+Focused Clang AddressSanitizer/UndefinedBehaviorSanitizer checks passed, exit 0
+(`components-sanitize.log`). The full configured production static-analysis
+command passed, exit 0 (`full-analysis.log`, `full-analysis.exit`); focused
+analysis also passed (`components-analysis.log`). No existing test assertions or
+fixtures were changed.
+
+The earlier baseline log `full-ci.log` records an intentionally interrupted run
+(exit 143), stopped while finalizing allocation-failure coverage. It is not a
+passing baseline. The final source manifest is `tested-files.json`; process
+supervision developed subsequently is outside this component evidence.
+
+### Host regression and remaining integration
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/se02-ci-final-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+PASS, exit 0 (`full-ci-final.log`, `full-ci-final.exit`). This included the new
+component suites, existing native GDB and attach checks, terminal/tmux tests,
+localhost remote integration and actual offline OpenOCD script/cleanup checks.
+It exercised no physical target. This is local host success, not hosted Ubuntu
+CI or ARM/Xtensa/RISC-V qualification.
+
+Final review changed only declaration alignment in the scheduler source/header;
+`final-alignment.json` records those differences against the tested source
+hashes. Focused fortified checks rebuilt those files and passed afterward.
+Normal `make` passed and updated `build/the-bugger` (`normal-make.log`).
+Documentation checks found 215 local references with no missing targets/anchors
+(`document-links.log`); new-source width/whitespace and `git diff --check` passed.
+
+Remaining SE02 work includes the production helper entry point, process
+supervisor, parent-enforced startup/queue/operation/progress deadlines,
+cancellation escalation, confirmed reaping and frontend event-loop integration.
+The standalone process work begun next is not covered by this baseline.
+No worker-failure, artifact or consumer acceptance is inferred from these tests.

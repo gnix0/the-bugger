@@ -15,6 +15,12 @@ records remain in the [validation records](../docs/validation.md).
   Included in `test`/`test-ci`; no debugger or target needed. See
   [primitive coverage](../docs/testing.md#symbol-engine-primitives-se01).
 
+- `make test-symbol-wire test-symbol-schedule`: bounded private IPC framing,
+  descriptor association/cleanup/close-on-exec, shared allocation accounting,
+  scheduling fairness, independent interests and retained completion ownership.
+  These component tests do not start or qualify the supervised helper; see
+  [coverage and limits](../docs/testing.md#symbol-engine-transport-and-scheduling-se02-partial).
+
 - `make test-fullscreen`: Source-only fullscreen PTY checks, retained header/footer,
   split/resize restoration, hidden input regions and compact/keyboard behavior;
   included in `make test`. `make test-fullscreen-native` adds actual GDB source
