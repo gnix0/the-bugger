@@ -1,27 +1,36 @@
 #define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- Native file fixture reads. */
 #include "symbol/elf.h"
+#include "symbol/file.h"
+#include "symbol/acquire.h"
+#include "symbol/admission.h"
 #include "../support/check.h"
 
-#include <errno.h>
-#include <fcntl.h>
 #include <gelf.h>
 #include <libelf.h>
 #include <limits.h>
 #include <stdio.h>
-#include <sys/stat.h>
+#include <string.h>
 #include <unistd.h>
 
-static void read_record(int fd, uint64_t offset, size_t length, unsigned char *bytes)
+static TbSymbolBudget_t budget;
+static TbSymbolAdmissionLedger_t *ledger;
+static TbSymbolStorage_t *storage;
+static uint64_t next_slot;
+
+static void read_record(TbSymbolFile_t *file, uint64_t offset, size_t length, unsigned char *bytes)
 {
-    CHECK(length <= 64 && offset <= (uint64_t)INT64_MAX - length);
-    size_t received = 0;
-    while (received < length) {
-        ssize_t count = pread(fd, bytes + received, length - received, (off_t)(offset + received));
-        if (count < 0 && errno == EINTR)
-            continue;
-        CHECK(count > 0);
-        received += (size_t)count;
-    }
+    CHECK(length <= 64);
+    CHECK(tb_symbol_file_request(file, (TbSymbolFileRange_t){
+        .offset = offset,
+        .bytes  = length
+    }));
+    TbSymbolOutcome_e outcome = TB_SYMBOL_PENDING;
+    for (unsigned i = 0; i < 128 && outcome == TB_SYMBOL_PENDING; ++i)
+        outcome = tb_symbol_file_step(file, 31);
+    CHECK(outcome == TB_SYMBOL_SUCCESS);
+    TbSymbolFileView_t view;
+    CHECK(tb_symbol_file_view(file, &view) && view.offset == offset && view.bytes == length);
+    memcpy(bytes, view.data, length);
 }
 
 
@@ -37,14 +46,36 @@ static void compare_section(TbSymbolElfSection_t actual, GElf_Shdr expected)
 
 static void check_file(const char *path)
 {
-    int fd = open(path, O_RDONLY | O_CLOEXEC);
-    CHECK(fd >= 0);
-    struct stat info;
-    CHECK(!fstat(fd, &info) && info.st_size >= 64);
+    TbSymbolReservation_t *ticket = tb_symbol_admission_prepare(ledger);
+    CHECK(ticket);
+    TbSymbolAcquire_t *acquisition = tb_symbol_acquire_create(path, storage, ++next_slot,
+                                                             TB_SYMBOL_FILE_BYTES_DEFAULT, &budget);
+    CHECK(acquisition);
+    TbSymbolOutcome_e outcome = TB_SYMBOL_PENDING;
+    for (unsigned i = 0; i < 100000 && outcome == TB_SYMBOL_PENDING; ++i) {
+        uint64_t offered;
+        if (tb_symbol_acquire_offer(acquisition, &offered)) {
+            CHECK(tb_symbol_admission_assign(ticket, offered));
+            CHECK(tb_symbol_acquire_grant(acquisition, offered));
+        }
+        outcome = tb_symbol_acquire_step(acquisition, 65536);
+    }
+    CHECK(outcome == TB_SYMBOL_SUCCESS);
+    TbSymbolAcquiredBytes_t acquired;
+    CHECK(tb_symbol_acquire_take(acquisition, &acquired));
+    tb_symbol_acquire_destroy(acquisition);
+    TbSymbolBackingCharge_t *backing = tb_symbol_admission_commit(ticket, NULL);
+    CHECK(backing);
+    int fd = acquired.descriptor;
+    TbSymbolFile_t *input = tb_symbol_file_create((TbSymbolStorageInfo_t){
+        .key   = acquired.key,
+        .bytes = acquired.bytes
+    }, fd, &budget);
+    CHECK(input);
     unsigned char bytes[64];
-    read_record(fd, 0, sizeof(bytes), bytes);
+    read_record(input, 0, sizeof(bytes), bytes);
     TbSymbolElfHeader_t header;
-    CHECK(tb_symbol_elf_header((uint64_t)info.st_size, bytes, sizeof(bytes), &header) == TB_SYMBOL_ELF_OK);
+    CHECK(tb_symbol_elf_header(acquired.bytes, bytes, sizeof(bytes), &header) == TB_SYMBOL_ELF_OK);
     Elf *reference = elf_begin(fd, ELF_C_READ, NULL);
     CHECK(reference);
     GElf_Ehdr expected_header;
@@ -61,7 +92,7 @@ static void check_file(const char *path)
     CHECK(header.section_stride == expected_header.e_shentsize);
     TbSymbolElfSection_t zero;
     CHECK(tb_symbol_range(header.section_offset, header.section_stride, header.file_bytes));
-    read_record(fd, header.section_offset, header.section_stride, bytes);
+    read_record(input, header.section_offset, header.section_stride, bytes);
     CHECK(tb_symbol_elf_section(&header, bytes, header.section_stride, &zero) == TB_SYMBOL_ELF_OK);
     TbSymbolElfLayout_t layout;
     CHECK(tb_symbol_elf_layout(&header, &zero, &layout) == TB_SYMBOL_ELF_OK);
@@ -76,7 +107,7 @@ static void check_file(const char *path)
     for (size_t i = 0; i < sections; ++i) {
         uint64_t offset;
         CHECK(tb_symbol_elf_entry(&layout.sections, i, &offset));
-        read_record(fd, offset, (size_t)layout.sections.stride, bytes);
+        read_record(input, offset, (size_t)layout.sections.stride, bytes);
         TbSymbolElfSection_t actual;
         CHECK(tb_symbol_elf_section(&header, bytes, (size_t)layout.sections.stride, &actual) ==
               TB_SYMBOL_ELF_OK);
@@ -97,7 +128,7 @@ static void check_file(const char *path)
         CHECK(data);
         for (uint64_t entry = 0; entry < table.count; ++entry) {
             CHECK(entry <= INT_MAX && tb_symbol_elf_entry(&table, entry, &offset));
-            read_record(fd, offset, (size_t)table.stride, bytes);
+            read_record(input, offset, (size_t)table.stride, bytes);
             TbSymbolElfSymbol_t symbol;
             CHECK(tb_symbol_elf_symbol(&header, bytes, (size_t)table.stride, &symbol) == TB_SYMBOL_ELF_OK);
             GElf_Sym expected_symbol;
@@ -112,7 +143,7 @@ static void check_file(const char *path)
     for (size_t i = 0; i < programs; ++i) {
         uint64_t offset;
         CHECK(i <= INT_MAX && tb_symbol_elf_entry(&layout.programs, i, &offset));
-        read_record(fd, offset, (size_t)layout.programs.stride, bytes);
+        read_record(input, offset, (size_t)layout.programs.stride, bytes);
         TbSymbolElfProgram_t actual;
         CHECK(tb_symbol_elf_program(&header, bytes, (size_t)layout.programs.stride, &actual) ==
               TB_SYMBOL_ELF_OK);
@@ -124,7 +155,13 @@ static void check_file(const char *path)
         CHECK(actual.memory_bytes == expected.p_memsz && actual.alignment == expected.p_align);
     }
     CHECK(symbols && sections && programs);
-    CHECK(!elf_end(reference) && !close(fd));
+    CHECK(!elf_end(reference));
+    tb_symbol_file_destroy(input);
+    CHECK(!close(fd));
+    CHECK(tb_symbol_admission_close(ticket) && tb_symbol_admission_evict(backing));
+    CHECK(tb_symbol_storage_unlink(storage, next_slot, &acquired.key));
+    CHECK(tb_symbol_admission_backing_cleaned(backing));
+    CHECK(!tb_symbol_admission_usage(ledger).bytes);
     printf("PASS native ELF record agreement with libelf: %zu sections, %zu programs, %zu symbols\n",
            sections, programs, symbols);
 }
@@ -133,7 +170,24 @@ static void check_file(const char *path)
 int main(int argc, char **argv)
 {
     CHECK(argc >= 2 && elf_version(EV_CURRENT) != EV_NONE);
+    char directory[] = "/tmp/tb-symbol-elf-native-XXXXXX";
+    CHECK(mkdtemp(directory));
+    char pool[256];
+    CHECK(snprintf(pool, sizeof(pool), "%s/pool", directory) > 0);
+    CHECK(tb_symbol_budget_init(&budget, 256 * 1024));
+    ledger = tb_symbol_admission_create(TB_SYMBOL_FILE_BYTES_DEFAULT, TB_SYMBOL_ADMISSION_BYTES_DEFAULT,
+                                         &budget);
+    storage = tb_symbol_storage_create(pool, NULL, &budget);
+    CHECK(ledger && storage);
+    TbSymbolOutcome_e outcome = TB_SYMBOL_PENDING;
+    for (unsigned i = 0; i < 16 && outcome == TB_SYMBOL_PENDING; ++i)
+        outcome = tb_symbol_storage_step(storage);
+    CHECK(outcome == TB_SYMBOL_SUCCESS);
     for (int i = 1; i < argc; ++i)
         check_file(argv[i]);
+    CHECK(tb_symbol_storage_remove(storage));
+    tb_symbol_storage_destroy(storage);
+    CHECK(tb_symbol_admission_destroy(ledger) && !budget.used);
+    CHECK(!rmdir(directory));
     return 0;
 }

@@ -6112,3 +6112,47 @@ SE04 completion or F07 acceptance. Complete inventories, string/section/symbol
 dependencies, extended symbol section-index resolution, helper integration,
 DWARF, sizing and consumer acceptance remain outstanding. Existing libelf image
 consumers and debugger operations are unchanged.
+
+
+### Retained-file reads and ELF composition — 2026-11-19
+
+A helper-side scratch reader now borrows exact frozen backing and reserves its
+complete owned state against a caller budget. Each step performs one bounded
+filesystem operation; partial/interrupted reads cannot expose a prefix. Descriptor
+and metadata checks bracket every complete view, retaining the original observed
+timestamps across later requests. Destruction releases only scratch ownership;
+the descriptor, content lease and physical cleanup remain with their owners.
+
+Local checks passed, exit 0, with logs and exit records under
+`build/se04-evidence-20261119/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused reader/ELF composition | `make BUILD_DIR=build/se04-file-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-file test-symbol-elf test-symbol-elf-native`; `file-focused-final`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se04-file-ci-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `file-test-ci`. |
+| Sanitizers | `make BUILD_DIR=build/se04-file-sanitize-20261119 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-file test-symbol-elf test-symbol-elf-native`; `file-sanitize`. |
+| Analysis/build | `make analyze` across 48 production source files and normal `make`; `file-analysis` and `file-normal-make`. |
+
+The reader tests cover exact/out-of-range requests, changing read allowances,
+allocation failure, partial/EINTR/EOF/error paths, descriptor protection, changed
+backing and cancellation. Mutation injection deliberately retains a writer;
+these checks do not prove coherence against arbitrary external writers.
+The native ELF comparison now obtains each input through logical admission and
+private acquisition, then decodes through the retained-file reader. All fields
+agreed with libelf for 39/37/31 sections, 15/15/11 program headers and 223/69/31
+symbols respectively. The sanitizer executable's 9,554-symbol table also passed.
+Reader retirement precedes descriptor close; exact unlink precedes logical
+capacity release. Construction accounting returns to baseline after cleanup.
+
+The original signed-bitwise diagnostics remain in `file-component-analysis`;
+explicit unsigned flag tests passed in `file-component-analysis-final` before
+the complete baseline. `file-tested-files.json`, `file-tested.patch`, captured
+new source/header/test inputs and `file-environment.txt` identify the tested tree.
+Only documentation changed after that snapshot. Checks covered 231 local links
+without errors, and whitespace checks passed.
+
+This is local host and harness-composition evidence, not hosted CI, production
+helper integration, coherent-source qualification, hardware validation or F07
+acceptance. Section/string/symbol dependency validation, DWARF, sizing and
+consumers remain pending. No new startup setting or production cache limit was
+introduced; the scratch span is separate from a Symbols result window.

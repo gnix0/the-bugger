@@ -336,6 +336,36 @@ validation evidence, source correspondence and live-action consumers remain
 separate foundations.
 
 
+### Retained-file scratch reads (SE04, partial)
+
+`src/symbol/file.c` supplies bounded byte spans from already frozen, pinned
+backing. Construction reserves its complete owned state against a required
+caller budget and performs no I/O. The descriptor remains borrowed: its owner
+keeps the file and content lease alive until reader retirement. Destroying the
+reader releases scratch storage, never the descriptor or filesystem charge.
+
+Each request covers 1–65,536 bytes within the captured file extent. Each service
+step performs at most one filesystem syscall and limits byte inspection to the
+supplied checkpoint allowance. Descriptor checks require read-only, close-on-exec,
+non-`O_PATH` regular protected backing with the expected storage identity/extent.
+Pre/post-read metadata checks retain the first observed timestamps across later
+requests, rather than silently accepting a changed file as a new baseline.
+Blocked syscalls still require independent parent supervision.
+
+A view becomes available only after every requested byte and the final metadata
+check succeed. An invalid request preserves the previous valid view; an accepted
+replacement invalidates that borrowed view immediately. Interrupted/partial reads
+remain pending; failure publishes no prefix and cannot be silently retried on the
+same reader. Reconstructible scratch owns no published metadata guarantee.
+
+This scratch span is distinct from a Symbols result window or decoded-cache
+allowance. There is no new production cache budget or startup setting. Descriptor
+inspection does not prove writer closure or source coherence; acquisition retains
+those ownership/evidence obligations. Request generations and consumer interest
+belong to the outer operation. No frontend helper request or UI consumer uses this
+component yet.
+
+
 ### ELF record decoding (SE04, partial)
 
 `src/symbol/elf.c` decodes fixed ELF headers, section headers, program headers and

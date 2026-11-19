@@ -2814,6 +2814,27 @@ and late comparison evidence while retaining memory and cleanup charges. Startup
 budget parsing covers units, overflow, invalid syntax and consistent per-file/aggregate ceilings.
 
 
+## Retained-file scratch reads (SE04, partial)
+
+```sh
+make BUILD_DIR=build/se04-file CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-file test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Local-file checks cover exact range boundaries,
+changing per-step allowances, partial/interrupted reads, EOF/error injection,
+allocation failure, unsupported descriptors, backing protection/identity and
+mutation during or between reads. Pending and failed reads expose no prefix;
+invalid requests preserve the previous complete view. Cancellation at each stage
+releases construction accounting while leaving the borrowed descriptor open.
+
+The fixture deliberately retains a writable descriptor for mutation injection;
+this tests detection, not a production ownership profile or proof against all
+external writers. The native ELF suite instead uses admitted private backing
+with its supported staging writer closed, as described below. These component
+checks introduce neither a production helper request nor target access.
+
+
 ## ELF records (SE04, partial)
 
 ```sh
@@ -2831,9 +2852,13 @@ architecture or producer-compatibility qualification.
 
 The native-file suite compares decoded header, section, program and symbol fields
 with the existing libelf library for its own executable, the native debug fixture
-and the breakpoint shared library. It reads local file bytes only; no debugger,
-inferior or target access is involved. Agreement on those generated host files
-does not establish arbitrary-file validity or acquisition coherence.
+and the breakpoint shared library. Each file first passes the admission ledger's
+explicit size grant and private acquisition, then uses the bounded retained-file
+reader. File/reader/ledger ownership is retired and exact backing cleanup confirmed
+after comparison; construction accounting returns to baseline. This harness
+composition reads local file bytes only; no debugger, inferior or target access
+is involved. Agreement on those generated host files does not establish
+arbitrary-file validity, source coherence or production helper integration.
 
 Record decoding is not inventory validation: string/section dependencies,
 compressed payloads, extended symbol section-index resolution, physical record
