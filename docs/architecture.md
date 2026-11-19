@@ -130,7 +130,11 @@ admission and receipt; buffered progress cannot extend a stalled operation.
 Repeated counters do not refresh the watchdog. Parent-enforced queue, absolute
 operation, progress and cancellation deadlines remain distinct. Failure explicitly
 completes unfinished interests, while callers retain independently accepted
-results. There is no automatic retry, rescan or restart.
+results. There is no automatic retry, rescan or restart. The supervisor exposes separate
+current-process and last-confirmed-reap generations. Acquisition owners can retain
+failed-operation reservations until worker ownership has ended; EOF, cancellation
+and lost/uncertain reap do not advance that evidence. Independently retained
+frontend descriptors and results still require their own cleanup.
 
 `src/symbol/budget.c` checks nested reservation chains before mutation. IPC and
 frontend limits apply concurrently, with each allocation charged once to its

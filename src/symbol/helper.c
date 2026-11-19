@@ -43,6 +43,7 @@ struct tb_symbol_helper {
     HelperJob_t            jobs[TB_SYMBOL_MAX_JOBS];
     TbSymbolHelperState_e  state;
     uint64_t               generation;
+    uint64_t               reaped_generation;
     uint64_t               last_request;
     uint64_t               sequence;
     uint64_t               now_ns;
@@ -665,6 +666,8 @@ void tb_symbol_helper_pump(TbSymbolHelper_t *helper, tb_symbol_helper_emit_fn em
         return;
     }
     tb_symbol_process_pump(&helper->process, helper->now_ns);
+    if (helper->process.state == TB_SYMBOL_PROCESS_REAPED)
+        helper->reaped_generation = helper->generation;
     if (!helper->process.wait_owned && helper->wire) {
         if (helper->state == TB_SYMBOL_HELPER_STOPPING) {
             tb_symbol_wire_destroy(helper->wire);
@@ -804,4 +807,16 @@ bool tb_symbol_helper_timing(const TbSymbolHelper_t *helper, uint64_t request, T
         return true;
     }
     return false;
+}
+
+
+uint64_t tb_symbol_helper_process_generation(const TbSymbolHelper_t *helper)
+{
+    return helper ? helper->generation : 0;
+}
+
+
+uint64_t tb_symbol_helper_reaped_generation(const TbSymbolHelper_t *helper)
+{
+    return helper ? helper->reaped_generation : 0;
 }

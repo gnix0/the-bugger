@@ -2593,7 +2593,10 @@ Process checks cover isolated inherited descriptors, close-on-exec, closed
 standard descriptors, asynchronous exec failure, supervision while exec is
 blocked, cooperative shutdown, TERM/KILL and verified reap before restart.
 Injected pidfd/isolation failures and interrupted/external reaping exercise the
-unavailable-owner boundary. The initial supported helper profile requires Linux
+unavailable-owner boundary. Reap-generation checks distinguish cooperative
+shutdown and explicit restart from lost ownership: a controlled SIGCHLD disposition
+change causes automatic child reaping and must leave confirmed-reap evidence
+unchanged, with restart unavailable. The initial supported helper profile requires Linux
 pidfd and `close_range`; no fallback signals a numeric PID after losing ownership.
 
 Helper checks cover independent/shared interests, replacement of a creator's

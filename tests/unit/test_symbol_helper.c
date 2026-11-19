@@ -288,6 +288,52 @@ static TbSymbolHelperTiming_t serviced(TbSymbolHelper_t *helper, Observer_t *obs
 }
 
 
+static void reap_evidence(void)
+{
+    TbSymbolHelperConfig_t config;
+    tb_symbol_helper_defaults(&config);
+    Observer_t observer = {0};
+    TbSymbolHelper_t *helper = tb_symbol_helper_create(&config, NULL);
+    CHECK(helper && !tb_symbol_helper_process_generation(helper));
+    CHECK(!tb_symbol_helper_reaped_generation(helper));
+    for (uint64_t generation = 1; generation <= 2; ++generation) {
+        CHECK(tb_symbol_helper_start(helper, production_binary));
+        CHECK(tb_symbol_helper_process_generation(helper) == generation);
+        CHECK(tb_symbol_helper_reaped_generation(helper) == generation - 1);
+        ready(helper, &observer);
+        tb_symbol_helper_close(helper);
+        CHECK(tb_symbol_helper_reaped_generation(helper) == generation - 1);
+        for (unsigned i = 0; i < 2000 && tb_symbol_helper_state(helper) != TB_SYMBOL_HELPER_IDLE; ++i)
+            pump(helper, &observer);
+        CHECK(tb_symbol_helper_state(helper) == TB_SYMBOL_HELPER_IDLE);
+        CHECK(tb_symbol_helper_reaped_generation(helper) == generation);
+    }
+    CHECK(tb_symbol_helper_destroy(helper));
+
+    helper = fake_helper("crash", &config, &observer);
+    struct sigaction ignored = {0};
+    struct sigaction previous;
+    ignored.sa_handler = SIG_IGN;
+    CHECK(!sigemptyset(&ignored.sa_mask));
+    CHECK(!sigaction(SIGCHLD, &ignored, &previous));
+    CHECK(previous.sa_handler == SIG_DFL);
+    CHECK(submit(helper, identity(2, 2), 990, TB_SYMBOL_INTERACTIVE, false, NULL, 0) == TB_SYMBOL_ADMITTED);
+    results(helper, &observer, 1);
+    CHECK(observer.outcomes[0] == TB_SYMBOL_OPERATIONAL_FAILURE);
+    struct pollfd fds[2];
+    for (unsigned i = 0; i < 2000 && tb_symbol_helper_pollfds(helper, fds); ++i)
+        pump(helper, &observer);
+    CHECK(!tb_symbol_helper_pollfds(helper, fds));
+    CHECK(tb_symbol_helper_process_generation(helper) == 1);
+    CHECK(!tb_symbol_helper_reaped_generation(helper));
+    CHECK(!sigaction(SIGCHLD, &previous, NULL));
+    CHECK(!tb_symbol_helper_start(helper, production_binary));
+    CHECK(tb_symbol_helper_destroy(helper));
+    CHECK(!unsetenv("TB_TEST_SYMBOL_HELPER"));
+    CHECK(!tb_symbol_helper_process_generation(NULL) && !tb_symbol_helper_reaped_generation(NULL));
+}
+
+
 static void deadline_failures(void)
 {
     fake_clock = true;
@@ -760,6 +806,7 @@ int main(int argc, char *argv[])
     CHECK(argc == 1 || argc == 2);
     production_binary = argc == 2 ? argv[1] : NULL;
     configuration();
+    reap_evidence();
     real_worker();
     saturation();
     allocation_failures();

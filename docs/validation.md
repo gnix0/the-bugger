@@ -5812,3 +5812,22 @@ expressions; final component analysis passed after correction. Full SE03 host
 regression remains pending integration; the preceding acquisition baseline does
 not cover this later component. Content ownership, actual deduplication, helper
 cleanup and F07 acceptance remain separate work.
+
+
+### Helper ownership evidence for acquisition
+
+Separate process-generation and confirmed-reap markers now support pending
+acquisition cleanup. Focused helper tests passed, exit 0
+(`helper-reap-focused.log`, `helper-reap-focused.exit`), including cooperative
+shutdown/restart and a controlled loss of reap ownership after startup. The latter
+leaves confirmed-reap evidence unchanged and prevents another start. EOF and
+operation failure cannot substitute for owned reap. Frontend result/descriptor
+ownership remains independent of this evidence.
+
+The same helper suite passed with Clang AddressSanitizer/UndefinedBehaviorSanitizer
+(`helper-reap-sanitize` log/exit, 0); configured component analysis passed
+(`helper-reap-analysis`, 0). Commands use `build/se03-helper-focused-20261119` and
+`build/se03-helper-sanitize-20261119`, the fortified flags and sanitizer settings
+above, with `test-symbol-helper`. Healthy-worker cleanup acknowledgements and
+integrated artifact admission remain pending; these markers alone do not complete
+SE03 or authorize a charge release while frontend backing remains owned.

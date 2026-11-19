@@ -96,6 +96,13 @@ int tb_symbol_helper_timeout(const TbSymbolHelper_t *helper, int maximum_ms);
 TbSymbolHelperState_e tb_symbol_helper_state(const TbSymbolHelper_t *helper);
 const char *tb_symbol_helper_error(const TbSymbolHelper_t *helper);
 size_t tb_symbol_helper_jobs(const TbSymbolHelper_t *helper);
+/* Capture the process generation when admitting work. These are distinct from
+ * the caller's frontend-context generation. Zero means no such evidence.
+ * Confirmed reap proves release of worker ownership only: independently retained
+ * frontend results, received descriptors and backing owners still need cleanup.
+ * EOF, cancellation, a failed operation or uncertain/lost reap is insufficient. */
+uint64_t tb_symbol_helper_process_generation(const TbSymbolHelper_t *helper);
+uint64_t tb_symbol_helper_reaped_generation(const TbSymbolHelper_t *helper);
 bool tb_symbol_helper_timing(const TbSymbolHelper_t *helper, uint64_t request,
                              TbSymbolHelperTiming_t *timing);
 
