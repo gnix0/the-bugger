@@ -6,7 +6,8 @@ Project-owned metadata and analysis can give embedded debugging workflows precis
 identities, explicit evidence and reusable offline capabilities without moving
 live-debugger responsibilities out of GDB/MI. The first concrete subsystem is
 the [Native Symbol Engine](native-symbol-engine.md), supporting F07 and later
-consumers. Its design is accepted; implementation and acceptance remain planned.
+consumers. Its design is accepted and SE01 primitives are implemented; subsystem
+integration and acceptance remain planned.
 This initiative introduces no runtime dependency, prototype or public SDK.
 
 The Symbol Engine separates retained artifacts, physical records, discovery,

@@ -5394,3 +5394,90 @@ implementation gates still require maintained fixtures and fresh evidence.
 The documentation checker and `git diff --check` passed again after clarification;
 normal `make` also passed. The seven-document delivery scope is unchanged. No
 research, application regression matrix or physical validation was rerun.
+
+## SE01 — bounded symbol primitives — 2026-11-19
+
+Implemented independent C17 checked readers, physical record coordinates and
+streaming SHA-256 under `src/symbol/`, with matching internal headers. The readers
+borrow immutable bounded input, decode explicit byte order and preserve cursor/
+outputs on failure. Record equality compares admitted content handles and exact
+kind/section/unit/record coordinates; shape validity is not metadata evidence.
+SHA-256 requires the expected complete byte count at finalization and prevents
+publication after input/length failure. These components allocate no heap storage
+and perform no file, helper or debugger I/O.
+
+`test-symbol-primitives` and `test-sha256` are included in `test`/`test-ci`.
+There is no artifact manager, helper, ELF/DWARF decoder, Symbols UI, runtime
+binding or live-action implementation in this gate. D04 and SE02 onward remain
+separate work; SE01 does not complete F07 or establish physical acceptance.
+
+### Configuration and focused evidence
+
+Host: Linux 7.3.4-arch1-2 x86-64, glibc 2.44, GCC 16.2.1 (20260810),
+Clang/clang-tidy 23.1.5, GDB/gdbserver 18.1, tmux 3.8 and OpenOCD
+0.12.0-01004-g9ea7f3d64-dirty. Library versions: ncursesw 6.6.20251230,
+libelf 0.197 and json-c 0.19. Logs, environment, source hashes and command
+records are under `build/se01-evidence-20261119/`.
+
+- `make BUILD_DIR=build/se01-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3
+  test-symbol-primitives test-sha256`: PASS, exit 0 (`focused-final.log`).
+  Covers checked arithmetic, integer widths/endianness/signed bounds, truncated
+  LEB128 prefixes, overflow, nonminimal values, bounded strings/slices, distinct
+  coordinates, SHA-256 vectors/fragmentation/padding and poisoned-stream failures.
+- `clang-tidy src/symbol/reader.c src/symbol/identity.c src/symbol/sha256.c
+  --checks='-*,clang-analyzer-*,bugprone-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling'
+  --warnings-as-errors='*' -- -Iinclude -std=c17 -Wall -Wextra -Wpedantic -Werror`:
+  PASS, exit 0 (`analysis-final.log`). The initial `analysis.log` retains unsigned
+  operand and multiplication-width diagnostics; explicit unsigned shifts/masks
+  and widened multiplication resolved them without suppressing checks.
+- `make CC=clang BUILD_DIR=build/se01-sanitize-20261119
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer'
+  LDFLAGS='-fsanitize=address,undefined' test-symbol-primitives test-sha256`:
+  PASS outside the sandbox, exit 0 (`sanitize-final.log`). The earlier sandbox
+  attempt stopped at LeakSanitizer's process-inspection restriction
+  (`sanitize.log`); that failure is preserved, not counted as success.
+
+Object-reference inspection found only compiler stack protection and libc copying,
+with no allocator, file or debugger dependencies (`symbol-undefined-references.log`).
+Algorithm/vector references and reproducible focused commands are in
+[primitive testing](testing.md#symbol-engine-primitives-se01). The vectors are
+correctness evidence, not cryptographic certification. Source input lifetime,
+semantic validation, acquisition coherence, admitted handle allocation and
+runtime authority remain responsibilities of later layers.
+
+### Host regression and integration boundary
+
+The initial sandboxed fortified baseline in `build/se01-ci-20261119` stopped
+at `test-registers-native`: GDB reported fixture startup exit 127. Its full log
+and exit 2 are preserved as `test-ci.log` and `test-ci.exit`. The fresh unrestricted
+baseline in `build/se01-ci-unrestricted-20261119` then passed, exit 0
+(`test-ci-unrestricted.log`). It included actual native/attach, terminal/tmux,
+localhost remote and offline OpenOCD checks, without physical target access.
+
+Supplementary deterministic cross-checks (`check_reference.py`, `reference.log`,
+seed 7107) compared 20,512 signed/unsigned LEB128 decodes with an independent
+arbitrary-precision reference, and 1,025 binary SHA-256 messages with random
+fragmentation against Python `hashlib`: PASS. This local cross-check is additional
+evidence; the maintained C vectors and failure tests remain in the host baseline.
+
+The final reviewed source tree passed the complete baseline in another unused
+build directory:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/se01-ci-final-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+Result: PASS, exit 0 (`test-ci-final.log`, `test-ci-final.exit`).
+`final-tested-files.json` records source hashes and `baseline-final-command.json`
+records the invocation/environment. Production sources, test sources and Makefile
+were checked unchanged against that manifest after completion. This is local
+Linux host success, not hosted Ubuntu CI or physical ARM/Xtensa/RISC-V evidence.
+The earlier successful unrestricted run preceded final formatting/comment review;
+the final run covers the reviewed tree. Existing assertions remained intact.
+
+Documentation links, new-source whitespace/line limits and `git diff --check`
+passed. Normal `make` also passed and updated `build/the-bugger`
+(`normal-make.log`). SE01 is implemented and locally verified; integration review
+remains pending. Hosted checks and later subsystem/consumer/physical acceptance
+remain separate gates.

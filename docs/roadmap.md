@@ -200,12 +200,14 @@ The [accepted Symbol Engine design](native-symbol-engine.md) replaces F07's
 planned GDB-query discovery direction with bounded project-native ELF/DWARF
 metadata discovery. GDB/MI retains supported live operations. This is planned
 work: no implementation, production verification, physical validation or F07
-acceptance is established by the design decision.
+acceptance is established by the design decision. SE01 implementation is now
+recorded independently below; it introduces no discovery or live operations.
 
 | Foundation group | Capability and consumer dependency | Status |
 |---|---|---|
 | D04 | Bounded MI rejection recovery before live integration acceptance | Planned |
-| SE01–SE03 | Checked readers/SHA-256, supervised helper and retained-artifact ownership | Planned |
+| SE01 | Checked readers, physical record coordinates and streaming SHA-256 | Implemented; local verification recorded; integration review pending |
+| SE02–SE03 | Supervised helper and retained-artifact ownership | Planned |
 | SE04–SE08 | ELF/DWARF definitions, names, native line tables/ranges and explicit companions | Planned |
 | SE09–SE10 | Complete bounded discovery/publication and actual production sizing | Planned |
 | SE11 | Offline artifact/Symbols/Source UI; may be accepted before runtime resolution | Planned |

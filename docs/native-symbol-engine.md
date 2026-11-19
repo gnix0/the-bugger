@@ -8,7 +8,9 @@ decision set is **1A / 2A / 3A / 4A / 5A / 6B / 7A**, including cancellable
 Console review, centralized command provenance, safe retirement while running
 and close-on-exec for received descriptors. Planning approval establishes no
 implementation completion, production verification, physical validation or F07
-acceptance.
+acceptance. SE01 now provides the [independent bounded primitives](architecture.md#symbol-engine-primitives-se01);
+the helper, artifact manager, decoders and consumers remain unimplemented.
+Verification evidence is recorded separately from integration acceptance.
 
 The engine owns bounded project-native C17 ELF/DWARF decoding, metadata
 interpretation, identity and discovery. “Native” describes the implementation,

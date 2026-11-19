@@ -57,6 +57,34 @@ available in the current parser, Console, Watch or Memory transfer paths.
 The [subsystem roadmap](native-subsystems.md) keeps other candidates at future
 research/design scope; it selects no additional architecture or dependencies.
 
+### Symbol Engine primitives (SE01)
+
+`src/symbol/reader.c`, `identity.c` and `sha256.c` provide the first independent
+foundation. They are built into the frontend but have no runtime consumers yet.
+They introduce no helper process, artifact acquisition, symbol discovery or live
+debugger operation. The [overall design](native-symbol-engine.md) remains the
+contract for later integration.
+
+The checked reader borrows immutable byte spans. Fixed integers decode explicit
+target byte order and width, independently of host representation; bounded
+LEB128 and string operations retain the cursor and outputs on failure. Subreaders
+cannot cross their declared span. Checked arithmetic uses subtraction/division
+bounds before addition or multiplication.
+
+Physical record IDs distinguish content, section, unit and record coordinates
+and DWARF/ELF record kinds. Their validity check establishes shape only. Content
+handles must later come from admitted, nonreused identities; paths, truncated
+hashes and runtime addresses cannot substitute. Open-context identity remains
+separate. No artifact manager or handle allocator is implemented in SE01.
+
+Streaming SHA-256 owns fixed caller-provided state and publishes a digest only
+on explicit finalization with the exact expected complete byte count. Invalid
+input, length overflow or a final length mismatch poisons the active stream;
+failed or repeated finalization leaves output unchanged. A digest is only a
+candidate for later byte-equality comparison, never coherence or access evidence.
+These primitives allocate no heap storage and perform no file/debugger I/O.
+Callers remain responsible for input lifetime and bounded update/scan allowances.
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

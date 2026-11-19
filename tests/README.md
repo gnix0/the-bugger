@@ -10,6 +10,11 @@ target cases establish architecture coverage, not physical-board support.
 See [testing](../docs/testing.md) for procedures and prerequisites; execution
 records remain in the [validation records](../docs/validation.md).
 
+- `make test-symbol-primitives test-sha256`: independent Symbol Engine checked
+  readers, physical record coordinates and streaming hash vectors/failure paths.
+  Included in `test`/`test-ci`; no debugger or target needed. See
+  [primitive coverage](../docs/testing.md#symbol-engine-primitives-se01).
+
 - `make test-fullscreen`: Source-only fullscreen PTY checks, retained header/footer,
   split/resize restoration, hidden input regions and compact/keyboard behavior;
   included in `make test`. `make test-fullscreen-native` adds actual GDB source

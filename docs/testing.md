@@ -2472,9 +2472,10 @@ assert the same review containment and explicit acceptance controls.
 
 The [Symbol Engine acceptance matrix](native-symbol-engine.md#acceptance-matrix)
 and [implementation gates](native-symbol-engine.md#implementation-gates-and-dependencies)
-define proposed verification. No Symbol Engine suite, fixture or command is
-introduced by the planning documentation. Existing commands remain those listed
-above and in the [suite catalog](../tests/README.md).
+define verification for the complete subsystem. The original planning delivery
+introduced no suites or commands. SE01 now adds the primitive checks below;
+helper, acquisition, decoder and consumer tests remain future work. Existing
+commands remain in the [suite catalog](../tests/README.md).
 
 D04 will extend the existing `test-mi`/allocation and `test-controller` harnesses.
 Consumer gates will extend code, variables, memory, breakpoint, profile/setup
@@ -2505,3 +2506,35 @@ checks. Actual production sizing and supported remote/physical profiles remain
 future evidence; research timing and MI/RSP envelopes prove no bus transaction
 width/count or MMIO safety. The every-release native/physical matrix remains
 required independently of subsystem acceptance.
+
+
+## Symbol Engine primitives (SE01)
+
+```sh
+make BUILD_DIR=build/se01-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-primitives test-sha256
+```
+
+Both targets are included in `test`, and therefore `test-ci`. The standalone
+binaries link only their C primitives and libc, without GDB, libelf, curses or
+IPC. Reader checks cover integer widths/byte orders, signed boundaries, each
+truncated LEB128 prefix, representable nonminimal encodings, overflow, scan
+allowances, subreader limits and unchanged failure outputs. Identity checks
+separate record kinds, contents, sections, units and record offsets; invalid
+shapes cannot compare equal.
+
+SHA-256 checks include the empty message, `abc`, the standard 56-byte message,
+a million `a` bytes, and binary padding/block boundaries. Each short/binary vector
+runs with chunk sizes 1–129. Boundary expectations were generated independently
+with Python `hashlib.sha256(bytes(range(256))[:length]).hexdigest()`; Python is
+not a test or runtime dependency. Algorithm reference:
+[NIST FIPS 180-4](https://doi.org/10.6028/NIST.FIPS.180-4);
+published example digests: [NIST NSRL test data](https://www.nist.gov/itl/ai/ai-standards-and-guidelines-group/nsrl-test-data).
+Passing these vectors is not cryptographic module certification.
+
+Failure checks inject invalid input and the maximum length counter without
+allocating that input, reject mismatched final lengths and verify that poisoned,
+uninitialized or finalized streams cannot publish a digest. These components
+have no allocation sites to fail. They validate neither artifact coherence nor
+metadata semantics, admission identity, runtime correspondence or target access.
+Fresh fortified host regression remains required for their integration.
