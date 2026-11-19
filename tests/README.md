@@ -59,6 +59,11 @@ records remain in the [validation records](../docs/validation.md).
   Included in `test`; see
   [storage coverage](../docs/testing.md#retained-storage-namespaces-se03-partial).
 
+- `make test-symbol-elf test-symbol-elf-native`: fixed ELF32/64 records in both
+  byte orders, checked extended table layout, malformed boundaries and native
+  file agreement with libelf. Included in `test`; no debugger or target access.
+  See [coverage and limits](../docs/testing.md#elf-records-se04-partial).
+
 - `make test-fullscreen`: Source-only fullscreen PTY checks, retained header/footer,
   split/resize restoration, hidden input regions and compact/keyboard behavior;
   included in `make test`. `make test-fullscreen-native` adds actual GDB source

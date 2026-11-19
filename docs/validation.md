@@ -6069,3 +6069,46 @@ F07 research archive still matched its recorded SHA-256 checksum.
 These are local host results, not hosted CI, physical target validation, SE03
 completion or F07 acceptance. Explicit Open workflow, acquisition-profile
 qualification, decoders, production sizing and consumers remain outstanding.
+
+
+### ELF fixed records and table layout — 2026-11-19
+
+The first SE04 component decodes fixed ELF32/64 header, section, program and
+symbol records independently of filesystem I/O and IPC. Layout checks resolve
+extended counts and section-name indexes without allocating an inventory.
+Malformed supported structure and unavailable formats remain distinct; failed
+calls leave output unchanged. Raw special-symbol fields confer no storage,
+code-location or runtime authority.
+
+Local checks passed, exit 0; logs and exit records are under
+`build/se04-evidence-20261119/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused records and native comparison | `make BUILD_DIR=build/se04-record-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-elf test-symbol-elf-native`; `records-focused-final-tree`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se04-record-ci-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `records-test-ci`. |
+| Sanitizers | `make BUILD_DIR=build/se04-record-sanitize-20261119 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-elf test-symbol-elf-native`; `records-sanitize`. |
+| Analysis/build | `make analyze` across 47 production source files and normal `make`; `records-analysis` and `records-normal-make`. |
+
+Authored fixtures cover both classes in both byte orders, every truncated record
+prefix, extended counts/indexes, overflow, stride changes, NOBITS/NULL behavior
+and address-width boundaries. The native comparison agreed with libelf on all
+decoded fields in three generated files: 39/37/31 sections, 15/15/11 program
+headers and 112/69/31 symbols respectively. The sanitizer executable's larger
+symbol table also passed comparison. These are host-file and format observations,
+not physical architecture or general compiler/ABI qualification.
+
+Initial strict-compilation and component-analysis diagnostics remain in
+`records-focused` and `records-component-analysis`. Test expectation signedness
+and extent-argument placement were corrected before the complete baseline;
+`records-component-analysis-final` passed as well.
+`records-tested-files.json`, `records-tested.patch`, captured new source/header/
+test inputs and `records-environment.txt` identify the tested tree and toolchain.
+Only documentation changed after that snapshot. Link checks covered 230 local
+references without errors; whitespace checks passed.
+
+These results are local host evidence, not hosted CI, physical target validation,
+SE04 completion or F07 acceptance. Complete inventories, string/section/symbol
+dependencies, extended symbol section-index resolution, helper integration,
+DWARF, sizing and consumer acceptance remain outstanding. Existing libelf image
+consumers and debugger operations are unchanged.

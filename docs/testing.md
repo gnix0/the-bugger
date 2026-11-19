@@ -2812,3 +2812,30 @@ bytes, not ELF/DWARF validation, coherent acquisition, UI discovery or runtime
 access authorization. Content withdrawal invalidates existing lease eligibility
 and late comparison evidence while retaining memory and cleanup charges. Startup
 budget parsing covers units, overflow, invalid syntax and consistent per-file/aggregate ceilings.
+
+
+## ELF records (SE04, partial)
+
+```sh
+make BUILD_DIR=build/se04-records CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-elf test-symbol-elf-native
+```
+
+Both targets are included in `test` and `test-ci`. Fixed-record fixtures cover
+ELF32 and ELF64 in both byte orders, all truncated prefixes, invalid/unsupported
+identification and versions, extended section/program counts, section-name
+indexes, table bounds/overflow, stride changes, NOBITS and NULL sections,
+address-width boundaries and raw special-symbol preservation. Failure leaves
+candidate outputs unchanged. These are authored format fixtures, not physical
+architecture or producer-compatibility qualification.
+
+The native-file suite compares decoded header, section, program and symbol fields
+with the existing libelf library for its own executable, the native debug fixture
+and the breakpoint shared library. It reads local file bytes only; no debugger,
+inferior or target access is involved. Agreement on those generated host files
+does not establish arbitrary-file validity or acquisition coherence.
+
+Record decoding is not inventory validation: string/section dependencies,
+compressed payloads, extended symbol section-index resolution, physical record
+binding and helper requests remain separate work. These checks do not complete
+SE04 or F07 acceptance.

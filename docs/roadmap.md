@@ -200,8 +200,8 @@ The [accepted Symbol Engine design](native-symbol-engine.md) replaces F07's
 planned GDB-query discovery direction with bounded project-native ELF/DWARF
 metadata discovery. GDB/MI retains supported live operations. This is planned
 work: no implementation, production verification, physical validation or F07
-acceptance is established by the design decision. SE01–SE02 implementation is
-recorded independently below; neither introduces symbol discovery or live actions.
+acceptance is established by the design decision. Foundation progress is recorded
+independently below; symbol discovery and live native actions remain unavailable.
 
 | Foundation group | Capability and consumer dependency | Status |
 |---|---|---|
@@ -209,7 +209,8 @@ recorded independently below; neither introduces symbol discovery or live action
 | SE01 | Checked readers, physical record coordinates and streaming SHA-256 | Implemented; local verification recorded; integration review pending |
 | SE02 | Supervised helper | Transport, scheduling, process supervision and lazy event-loop integration implemented; artifact/decoder operations follow in their own gates |
 | SE03 | Retained-artifact ownership | In progress: supervised acquisition, bounded reflink fallback and frontend ownership/lease/sharing components integrated; explicit Open workflow and acquisition-profile qualification remain |
-| SE04–SE08 | ELF/DWARF definitions, names, native line tables/ranges and explicit companions | Planned |
+| SE04 | ELF foundation | In progress: bounded fixed-record decoding and extended table layout; inventory validation and helper integration remain |
+| SE05–SE08 | DWARF definitions, names, native line tables/ranges and explicit companions | Planned |
 | SE09–SE10 | Complete bounded discovery/publication and actual production sizing | Planned |
 | SE11 | Offline artifact/Symbols/Source UI; may be accepted before runtime resolution | Planned |
 | SE12–SE15 | Runtime preparation, native Watches, Memory drafts, exact Source actions and guarded Console/DSO integration | Planned |

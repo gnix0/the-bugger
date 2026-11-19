@@ -18,6 +18,7 @@ preferences. GDB performs instruction decoding and target operations.
 | `src/gdb/` | Owned MI parsing, nonblocking transport, request correlation and debugger lifecycle |
 | `src/session/` | Session setup, ownership, capability/region evidence, profiles and OpenOCD lifecycle |
 | `src/model/` | Context, code, breakpoints and bounded inspection/editing state |
+| `src/symbol/` | Native metadata primitives, supervised helper and artifact/decoder foundations |
 
 Module headers live in the matching `include/<module>/` directories.
 `include/the_bugger/tui.h` and `version.h` retain the application-facing namespace.
@@ -34,9 +35,10 @@ also need the [request audit](#value-producing-request-audit) and
 ### Planned Native Symbol Engine
 
 The [Native Symbol Engine](native-symbol-engine.md) is an accepted design for
-bounded project-owned ELF/DWARF metadata discovery supporting F07. It is not
-implemented by this planning work. The module inventory above describes the
-existing frontend; existing libelf image consumers remain in place. GDB retains
+bounded project-owned ELF/DWARF metadata discovery supporting F07. Foundations
+are progressing below; symbol discovery and live native actions remain unavailable.
+The module inventory above describes the existing frontend; existing libelf image
+consumers remain in place. GDB retains
 instruction decoding and supported live target operations, with explicit
 consumer integration rather than implicit symbol-file reloads.
 
@@ -332,6 +334,43 @@ The explicit Open workflow and artifact browser remain SE11 work; initialization
 Symbols navigation and editing controls still perform no acquisition. Decoding,
 validation evidence, source correspondence and live-action consumers remain
 separate foundations.
+
+
+### ELF record decoding (SE04, partial)
+
+`src/symbol/elf.c` decodes fixed ELF headers, section headers, program headers and
+symbol records through the checked reader. Class and target byte order are
+independent of the host; no input is cast to a native C ELF structure. Each call
+examines at most 64 bytes, allocates nothing and leaves outputs unchanged on
+failure. Linked executables and shared objects are supported; other file types
+and unknown format versions remain explicit unsupported cases.
+
+Header decoding provides raw fields. Layout validation separately resolves
+escaped section/program counts and section-name indexes through section zero,
+then checks complete table extents with checked arithmetic. Before fetching
+section zero, its prefix must also be checked against retained file bounds.
+Larger record schemas are unsupported rather than guessed. A successful layout
+does not validate individual records, section overlaps, names or cross-section
+relationships.
+
+`SHT_NULL` fields do not describe file payload; section zero may hold extended
+counts. `SHT_NOBITS` describes memory extent without requiring stored file bytes.
+Supported structural checks include file bounds, alignment and target-width
+address ranges. Raw machine/ABI flags, symbol bindings/types, visibility bits and
+special section indexes remain intact. In particular, TLS, undefined, absolute,
+common, extended-index and processor-specific symbols gain no ordinary-storage
+or code-location meaning from decoding success. Compressed payloads are not
+decoded by this layer.
+
+The layouts follow the [ELF generic ABI](https://gabi.xinuos.com/elf/02-eheader.html)
+and its [section](https://gabi.xinuos.com/elf/03-sheader.html),
+[program-header](https://gabi.xinuos.com/elf/07-pheader.html) and
+[symbol-table](https://gabi.xinuos.com/elf/05-symtab.html) definitions.
+These allocation-free components introduce no helper request, catalog, search,
+Source navigation or runtime binding. Inventory validation, section/string/symbol
+dependencies and helper integration remain later SE04 steps. Existing
+`src/model/images.c` libelf consumers are unchanged.
+
 
 ### Event loop and text rendering
 
