@@ -13,6 +13,7 @@
 #include "tui/setup_restore.h"
 #include "model/images.h"
 #include "symbol/helper.h"
+#include "symbol/artifact.h"
 
 #include <curses.h>
 #include <errno.h>
@@ -271,8 +272,10 @@ typedef struct {
 } Field_t;
 
 typedef struct {
-    TbSymbolBudget_t  storage;
-    TbSymbolHelper_t *helper;
+    TbSymbolBudget_t      storage;
+    TbSymbolHelper_t     *helper;
+    TbSymbolArtifacts_t  *artifacts;
+    TbSymbolArtifactIds_t identities;
 } SymbolFrontend_t;
 
 // one heap-owned application object; field grouping follows subsystem ownership.
@@ -11876,15 +11879,21 @@ static void key_event(App_t *app, wint_t key, bool special)
 
 static void initialize_symbols(App_t *app)
 {
-    TbSymbolHelperConfig_t config;
+    TbSymbolHelperConfig_t   config;
+    TbSymbolArtifactConfig_t artifact_config;
     tb_symbol_helper_defaults(&config);
-    if (!tb_symbol_helper_environment(&config)) {
+    tb_symbol_artifact_defaults(&artifact_config);
+    if (!tb_symbol_helper_environment(&config) || !tb_symbol_artifact_environment(&artifact_config)) {
         status(app, "Symbol Engine unavailable: invalid startup resource configuration.");
         return;
     }
     if (tb_symbol_budget_init(&app->symbols.storage, config.frontend_bytes) &&
         tb_symbol_budget_reserve(&app->symbols.storage, sizeof(app->symbols))) {
-        app->symbols.helper = tb_symbol_helper_create(&config, &app->symbols.storage);
+        app->symbols.artifacts = tb_symbol_artifacts_create(artifact_config.file_bytes,
+                                                           artifact_config.aggregate_bytes,
+                                                           &app->symbols.identities, &app->symbols.storage);
+        if (app->symbols.artifacts)
+            app->symbols.helper = tb_symbol_helper_create(&config, &app->symbols.storage);
     }
     if (!app->symbols.helper)
         status(app, "Symbol Engine unavailable: frontend allocation budget exhausted.");
@@ -12153,6 +12162,7 @@ int tb_tui_run(bool demo)
             size_t count = tb_symbol_helper_pollfds(app.symbols.helper, fds);
             (void)poll(fds, (nfds_t)count, tb_symbol_helper_timeout(app.symbols.helper, 20));
         }
+        (void)tb_symbol_artifacts_destroy(app.symbols.artifacts);
         if (app.symbols.storage.limit) {
             (void)tb_symbol_budget_release(&app.symbols.storage, sizeof(app.symbols));
         }

@@ -2718,9 +2718,9 @@ namespaces survive rejected stale cleanup; nonempty directories cannot be remove
 A consumed namespace handle cannot remove a new directory at its old pathname.
 
 Allocation failures and cancellation release local metadata without pretending
-that created filesystem objects disappeared. These component checks do not yet
-qualify frontend admission, source coherence, deduplication or the integrated
-cleanup state machine.
+that created filesystem objects disappeared. These component checks alone do not
+qualify frontend admission, source coherence or deduplication; registry/resource
+integration is checked separately below.
 
 
 ## Artifact operation dispatch (SE03, partial)
@@ -2738,8 +2738,12 @@ read-only descriptors, backing equality and identity mismatch are checked.
 Cancellation at 180 acquisition positions releases local allocations and file
 descriptors while retaining explicit slot-cleanup responsibility. Empty-slot
 cleanup refuses nonempty files and handles a missing fresh slot idempotently.
-These are dispatcher component checks; supervised offer/grant delivery, frontend
-admission, deduplication and the complete SE03 regression remain pending.
+Injected filesystem-profile rejection preserves creation/identity diagnostics;
+empty-directory cleanup remains possible while wrong-identity cleanup is refused.
+Unrepresentable comparison extents fail as malformed requests before filesystem access.
+These are dispatcher component checks. Supervised offer/grant delivery, frontend
+ownership and sharing have separate integration checks below; component success
+alone does not complete SE03 or F07 acceptance.
 
 
 ## Supervised artifact operations (SE03, partial)
@@ -2768,3 +2772,33 @@ diagnostic. Existing descriptor-fragmentation, timing and independent actual-GDB
 checks remain separate. These tests compose components through explicit test
 ownership; they do not implement the frontend artifact registry, qualify atomic
 source coherence, or establish decoder, consumer or physical-target acceptance.
+
+
+## Frontend artifact ownership (SE03, partial)
+
+```sh
+make BUILD_DIR=build/se03-ownership-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-artifact test-symbol-operation test-symbol-resource test-symbol-helper
+```
+
+`test-symbol-artifact` is included in `test` and `test-ci`. Allocation failure at
+constructor/index stages, 1,024 independently identified contexts, arbitrary
+closure order, registry replacement and identifier exhaustion check ownership and
+rollback. Real retained-file fixtures verify descriptor admission, including
+`O_PATH`, writable or non-close-on-exec rejection and an injected inspection error.
+Publication and shared commit allocate nothing. Closed contexts stay unavailable
+while leases preserve their bytes; lease pins prevent eviction. Exact cleanup
+receipts release logical capacity only after file deletion. Aggregate refusal
+preserves existing contexts and leaves new staging empty.
+
+Comparison checks distinguish request identity from artifact context revision,
+retain pins across original-context closure, refuse wrong-scope/process receipts,
+and prevent publication after construction or comparison failure. Sharing follows
+complete byte equality and duplicate cleanup without reactivating old contexts.
+The resource integration suite also composes this registry with the production
+helper, including restart with an open artifact, scoped comparison, cache
+reactivation and final cleanup. These checks establish ownership of raw frozen
+bytes, not ELF/DWARF validation, coherent acquisition, UI discovery or runtime
+access authorization. Content withdrawal invalidates existing lease eligibility
+and late comparison evidence while retaining memory and cleanup charges. Startup
+budget parsing covers units, overflow, invalid syntax and consistent per-file/aggregate ceilings.

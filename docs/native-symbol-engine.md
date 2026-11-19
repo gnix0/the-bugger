@@ -12,8 +12,9 @@ acceptance. SE01 now provides the [independent bounded primitives](architecture.
 SE02 adds the [supervised helper foundation](architecture.md#symbol-engine-helper-se02).
 SE03 has [artifact resource components](architecture.md#artifact-admission-accounting-se03-partial)
 for admission accounting, private byte copying and complete backing equality,
-with supervised storage dispatch and explicit size grants. The frontend artifact
-manager, automatic admission/deduplication, decoders and consumers remain unfinished.
+with supervised storage dispatch, explicit size grants and a frontend ownership
+registry for contexts, backing leases and scoped sharing. Artifact Open workflow,
+qualified acquisition profiles, decoders and consumers remain unfinished.
 Unknown helper operations return Unsupported.
 Verification evidence is recorded separately from integration acceptance.
 
@@ -411,7 +412,7 @@ never makes progress heartbeats sufficient or permits replacement before reap.
 
 ### Available startup configuration
 
-SE02 reads the following environment settings once during frontend initialization.
+SE02/SE03 read the following environment settings once during frontend initialization.
 Values are positive decimal integers with no sign or whitespace. MiB uses binary
 units; time settings use milliseconds and are converted with checked arithmetic.
 Invalid settings leave the Symbol Engine unavailable with a diagnostic; ordinary
@@ -420,6 +421,8 @@ changes the fixed representation constraints.
 
 | Setting | Policy and supported range |
 |---|---|
+| `TB_SYMBOL_FILE_MIB` | Per-file logical admission ceiling above; positive checked `uint64_t` MiB, no larger than aggregate admission. |
+| `TB_SYMBOL_ADMISSION_MIB` | Aggregate logical admission ceiling above; positive checked `uint64_t` MiB; includes pending reservations and cached backing. |
 | `TB_SYMBOL_FRONTEND_MIB` | Combined frontend storage ceiling above; must fit `size_t` and the initial bookkeeping. |
 | `TB_SYMBOL_IPC_MIB` | IPC ceiling above; must accommodate worker/transport bookkeeping and not exceed frontend storage. |
 | `TB_SYMBOL_JOBS` | Underlying-job ceiling above; 1–64. |

@@ -8,9 +8,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/vfs.h>
 #include <unistd.h>
 
 static bool fail_allocation;
+static bool unsupported_storage;
+
+int __real_fstatfs(int descriptor, struct statfs *filesystem);
+int __wrap_fstatfs(int descriptor, struct statfs *filesystem);
 
 void *__real_calloc(size_t count, size_t length);
 void *__wrap_calloc(size_t count, size_t length);
@@ -18,6 +23,15 @@ void *__wrap_calloc(size_t count, size_t length);
 void *__wrap_calloc(size_t count, size_t length)
 {
     return fail_allocation ? NULL : __real_calloc(count, length);
+}
+
+
+int __wrap_fstatfs(int descriptor, struct statfs *filesystem)
+{
+    int result = __real_fstatfs(descriptor, filesystem);
+    if (!result && unsupported_storage)
+        filesystem->f_type = 0;
+    return result;
 }
 
 
@@ -304,6 +318,33 @@ static void cancellation(const char *origin, const char *path, TbSymbolStorageKe
 }
 
 
+static void rejected_profile(const char *path, TbSymbolBudget_t *budget)
+{
+    Arguments_t arguments = {0};
+    paths(&arguments, path, NULL);
+    unsupported_storage = true;
+    TbSymbolOperation_t *state = operation(TB_SYMBOL_OPERATION_CREATE_STORAGE, &arguments, budget);
+    CHECK(finish(state, 1) == TB_SYMBOL_UNSUPPORTED);
+    TbSymbolOperationResult_t result = tb_symbol_operation_result(state);
+    CHECK(result.system_error == EOPNOTSUPP && !result.payload && result.descriptor < 0);
+    CHECK((result.detail & TB_SYMBOL_DETAIL_CREATED) && (result.detail & TB_SYMBOL_DETAIL_HAS_KEY));
+    tb_symbol_operation_destroy(state);
+    TbSymbolStorageKey_t wrong = result.key;
+    ++wrong.inode;
+    arguments = (Arguments_t){0};
+    word(&arguments, wrong.device);
+    word(&arguments, wrong.inode);
+    paths(&arguments, path, NULL);
+    state = operation(TB_SYMBOL_OPERATION_REMOVE_STORAGE, &arguments, budget);
+    CHECK(finish(state, 1) == TB_SYMBOL_OPERATIONAL_FAILURE);
+    CHECK(tb_symbol_operation_result(state).system_error == ESTALE);
+    tb_symbol_operation_destroy(state);
+    remove_namespace(path, result.key, budget);
+    unsupported_storage = false;
+    CHECK(!budget->used);
+}
+
+
 static void malformed(const char *path, TbSymbolBudget_t *budget)
 {
     Arguments_t arguments = {0};
@@ -336,6 +377,16 @@ static void malformed(const char *path, TbSymbolBudget_t *budget)
                                       arguments.length, budget));
     fail_allocation = false;
     CHECK(!budget->used);
+    arguments = (Arguments_t){0};
+    word(&arguments, UINT64_MAX);
+    for (unsigned i = 0; i < 8; ++i)
+        word(&arguments, 1);
+    paths(&arguments, path, NULL);
+    state = operation(TB_SYMBOL_OPERATION_COMPARE, &arguments, budget);
+    CHECK(finish(state, 1) == TB_SYMBOL_MALFORMED);
+    CHECK(!tb_symbol_operation_result(state).payload);
+    tb_symbol_operation_destroy(state);
+    CHECK(!budget->used);
 }
 
 
@@ -352,6 +403,7 @@ int main(void)
     TbSymbolBudget_t budget;
     CHECK(tb_symbol_budget_init(&budget, 256 * 1024));
     malformed(path, &budget);
+    rejected_profile(path, &budget);
     TbSymbolStorageKey_t root = create_namespace(path, &budget);
     TbSymbolStorageInfo_t first = acquire_file(origin, path, root, 1, &budget);
     TbSymbolStorageInfo_t second = acquire_file(origin, path, root, 2, &budget);

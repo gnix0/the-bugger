@@ -1,6 +1,7 @@
 #define _GNU_SOURCE /* NOLINT(bugprone-reserved-identifier) -- Actual private helper/file fixtures. */
 #include "symbol/helper.h"
 #include "symbol/admission.h"
+#include "symbol/artifact.h"
 #include "symbol/protocol.h"
 #include "symbol/worker.h"
 #include "../support/check.h"
@@ -334,6 +335,119 @@ static void close_helper(Fixture_t *fixture)
 }
 
 
+static uint64_t registry_acquire(Fixture_t *fixture, TbSymbolArtifacts_t *owner, const char *origin,
+                                 const char *path, TbSymbolStorageKey_t root)
+{
+    uint64_t context = tb_symbol_artifact_prepare(owner, origin);
+    CHECK(context);
+    Arguments_t arguments = acquisition(origin, path, root, context);
+    submit(fixture, TB_SYMBOL_OPERATION_ACQUIRE, &arguments);
+    TbSymbolAcquireOffer_t offer = await_offer(fixture);
+    CHECK(tb_symbol_artifact_offer(owner, context, offer) == TB_SYMBOL_SUCCESS);
+    CHECK(tb_symbol_helper_grant(fixture->helper, fixture->identity, offer.bytes));
+    finish(fixture, TB_SYMBOL_SUCCESS);
+    CHECK(fixture->result.length == 56 && fixture->result.descriptor >= 0);
+    TbSymbolAcquiredBytes_t bytes = {
+        .bytes      = tb_symbol_protocol_get(fixture->bytes, 8),
+        .descriptor = fixture->result.descriptor,
+        .key = {
+            .device = tb_symbol_protocol_get(fixture->bytes + 8, 8),
+            .inode  = tb_symbol_protocol_get(fixture->bytes + 16, 8)
+        }
+    };
+    memcpy(bytes.digest, fixture->bytes + 24, sizeof(bytes.digest));
+    CHECK(tb_symbol_artifact_accept(owner, context, &bytes) == TB_SYMBOL_SUCCESS);
+    fixture->result.descriptor = -1;
+    return context;
+}
+
+
+static void registry_flow(Fixture_t *fixture, const char *origin, const char *base, const char *executable)
+{
+    char path[512];
+    CHECK(snprintf(path, sizeof(path), "%s-registry", base) > 0);
+    Arguments_t arguments = {0};
+    paths(&arguments, path, NULL);
+    submit(fixture, TB_SYMBOL_OPERATION_CREATE_STORAGE, &arguments);
+    finish(fixture, TB_SYMBOL_SUCCESS);
+    CHECK(fixture->result.length == 16);
+    TbSymbolStorageKey_t root = {
+        .device = tb_symbol_protocol_get(fixture->bytes, 8),
+        .inode  = tb_symbol_protocol_get(fixture->bytes + 8, 8)
+    };
+    TbSymbolBudget_t budget;
+    CHECK(tb_symbol_budget_init(&budget, 1024 * 1024));
+    TbSymbolArtifactIds_t identities = {0};
+    TbSymbolArtifacts_t *owner = tb_symbol_artifacts_create(9, 18, &identities, &budget);
+    CHECK(owner);
+    uint64_t first = registry_acquire(fixture, owner, origin, path, root);
+    CHECK(tb_symbol_artifact_publish(owner, first));
+    TbSymbolArtifactInfo_t info;
+    CHECK(tb_symbol_artifact_info(owner, first, &info));
+    uint64_t content = info.content;
+    uint64_t generation = fixture->process_generation;
+    close_helper(fixture);
+    CHECK(tb_symbol_artifact_info(owner, first, &info) && info.content == content &&
+          info.state == TB_SYMBOL_ARTIFACT_RETAINED);
+    CHECK(tb_symbol_helper_start(fixture->helper, executable));
+    ready(fixture);
+    CHECK(fixture->process_generation == generation + 1);
+    uint64_t second = registry_acquire(fixture, owner, origin, path, root);
+    TbSymbolWorkIdentity_t captured = fixture->identity;
+    ++captured.request;
+    TbSymbolArtifactMatchPlan_t plan;
+    TbSymbolArtifactMatch_t *match = NULL;
+    CHECK(tb_symbol_artifact_match_begin(owner, second, content, captured, fixture->process_generation,
+                                         &plan, &match) == TB_SYMBOL_SUCCESS);
+    CHECK(match);
+    arguments = (Arguments_t){0};
+    word(&arguments, plan.bytes);
+    word(&arguments, root.device);
+    word(&arguments, root.inode);
+    word(&arguments, plan.left_slot);
+    word(&arguments, plan.left_key.device);
+    word(&arguments, plan.left_key.inode);
+    word(&arguments, plan.right_slot);
+    word(&arguments, plan.right_key.device);
+    word(&arguments, plan.right_key.inode);
+    paths(&arguments, path, NULL);
+    submit(fixture, TB_SYMBOL_OPERATION_COMPARE, &arguments);
+    CHECK(tb_symbol_artifact_close(owner, first));
+    TbSymbolArtifactCleanup_t cleanup;
+    CHECK(!tb_symbol_artifact_evict(owner, content, &cleanup));
+    finish(fixture, TB_SYMBOL_SUCCESS);
+    CHECK(fixture->result.length == 1 && fixture->bytes[0] == 1);
+    CHECK(tb_symbol_artifact_match_finish(match, fixture->identity, fixture->process_generation,
+                                          fixture->result.outcome, true) == TB_SYMBOL_SUCCESS);
+    CHECK(tb_symbol_artifact_share_begin(owner, second, &cleanup));
+    CHECK(tb_symbol_artifacts_usage(owner).bytes == 18);
+    remove_file(fixture, path, root, cleanup.slot, cleanup.key);
+    CHECK(tb_symbol_artifact_share_cleaned(owner, second, cleanup));
+    CHECK(tb_symbol_artifacts_usage(owner).bytes == 9 && tb_symbol_artifacts_usage(owner).open_contexts == 1);
+    CHECK(tb_symbol_artifact_info(owner, second, &info) && info.content == content);
+    CHECK(!tb_symbol_artifact_info(owner, first, &info));
+    TbSymbolArtifactLease_t *lease = tb_symbol_artifact_lease(owner, second);
+    CHECK(lease && tb_symbol_artifact_close(owner, second) && !tb_symbol_artifact_lease_current(lease));
+    unsigned char bytes[9];
+    CHECK(pread(tb_symbol_artifact_lease_descriptor(lease), bytes, sizeof(bytes), 0) == 9);
+    CHECK(!memcmp(bytes, "a\0bcdefgh", sizeof(bytes)));
+    CHECK(!tb_symbol_artifact_evict(owner, content, &cleanup));
+    tb_symbol_artifact_lease_release(lease);
+    CHECK(tb_symbol_artifact_evict(owner, content, &cleanup) && cleanup.slot == first);
+    remove_file(fixture, path, root, cleanup.slot, cleanup.key);
+    CHECK(tb_symbol_artifact_backing_cleaned(owner, cleanup));
+    CHECK(tb_symbol_artifacts_destroy(owner) && !budget.used);
+    arguments = (Arguments_t){0};
+    word(&arguments, root.device);
+    word(&arguments, root.inode);
+    paths(&arguments, path, NULL);
+    submit(fixture, TB_SYMBOL_OPERATION_REMOVE_STORAGE, &arguments);
+    finish(fixture, TB_SYMBOL_SUCCESS);
+}
+
+
+
+
 int main(int argc, char **argv)
 {
     if (argc == 2 && !strcmp(argv[1], "--symbol-worker")) {
@@ -370,6 +484,7 @@ int main(int argc, char **argv)
         .device = tb_symbol_protocol_get(fixture.bytes, 8),
         .inode  = tb_symbol_protocol_get(fixture.bytes + 8, 8)
     };
+    registry_flow(&fixture, origin, path, argv[1]);
     TbSymbolAdmissionLedger_t *ledger = tb_symbol_admission_create(9, 18, NULL);
     CHECK(ledger);
     TbSymbolReservation_t *ticket = tb_symbol_admission_prepare(ledger);
@@ -403,11 +518,12 @@ int main(int argc, char **argv)
     CHECK(tb_symbol_admission_usage(ledger).bytes == 9);
 
     /* Named backing and a separately retained descriptor survive worker restart. */
+    uint64_t generation = fixture.process_generation;
     close_helper(&fixture);
     CHECK(pread(retained, bytes, sizeof(bytes), 0) == 9 && !memcmp(bytes, "a\0bcdefgh", 9));
     CHECK(tb_symbol_helper_start(fixture.helper, argv[1]));
     ready(&fixture);
-    CHECK(fixture.process_generation == 2 && tb_symbol_admission_usage(ledger).bytes == 9);
+    CHECK(fixture.process_generation == generation + 1 && tb_symbol_admission_usage(ledger).bytes == 9);
     arguments = acquisition("/does/not/exist", path, root, 3);
     submit(&fixture, TB_SYMBOL_OPERATION_ACQUIRE, &arguments);
     finish(&fixture, TB_SYMBOL_OPERATIONAL_FAILURE);

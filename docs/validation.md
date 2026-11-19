@@ -5984,3 +5984,52 @@ reported no changes; only this subsequent evidence entry follows those checks.
 whitespace checks passed. These are local host results, not hosted Ubuntu CI or
 physical validation. Frontend registry/orchestration, complete SE03 acceptance,
 qualified reflink/coherence, decoder sizing and F07 consumers remain pending.
+
+
+### Frontend artifact identities, leases and sharing
+
+The frontend registry now composes admission charges with independently owned
+contexts, retained file descriptors and scoped backing comparisons. Identifier
+allocation belongs to the frontend across registry replacement; helper restart
+neither reissues identities nor invalidates independently retained bytes. Context
+closure, storage-capability withdrawal, lease retirement and physical cleanup are
+separate transitions. Sharing waits for complete equality and exact duplicate
+cleanup; construction/comparison failure cannot publish a candidate.
+
+Local checks passed, exit 0, with logs and exit records under
+`build/se03-evidence-20261119/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused integration | `make BUILD_DIR=build/se03-ownership-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-resource test-symbol-artifact test-symbol-operation test-symbol-helper test-symbol-helper-native`; `ownership-integrated-final`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se03-registry-ci-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `registry-test-ci`. |
+| Sanitizers | `make BUILD_DIR=build/se03-registry-sanitize-20261119 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-artifact test-symbol-operation build/se03-registry-sanitize-20261119/test-symbol-resource`, then that resource binary with its own absolute path as argument; `registry-sanitize` and `registry-sanitize-resource`. Both parent and separately executed harness worker are instrumented. |
+| Invalid budget, ordinary native debugging | `TB_SYMBOL_FILE_MIB=0 TERM=xterm-256color build/se03-registry-ci-20261119/test-native-tui /home/gnix/developer/the-bugger/build/se03-registry-ci-20261119/the-bugger /home/gnix/developer/the-bugger/build/se03-registry-ci-20261119/debug-fixture`; `registry-invalid-budget-native`. Actual GDB/TUI execution remained usable with the Symbol Engine unavailable. |
+| Analysis/build | `make analyze` and normal `make`; `registry-analysis` and `registry-normal-make`. |
+
+Coverage includes 1,024 independent contexts, index-allocation rollback, arbitrary
+closure order, registry replacement, identifier exhaustion, descriptor protection,
+inspection failure, aggregate refusal without staging growth, and allocation-free
+publication. Comparison tests distinguish consumer/request identity from context
+revision, retain backing through original-context closure, reject wrong-generation
+receipts, and handle cancellation/failure without sharing. Withdrawn storage
+correspondence invalidates existing leases and late evidence while preserving
+ownership and charges. The production-helper test retains an open artifact across
+restart, compares two independent acquisitions, reactivates cached backing only
+after duplicate deletion, and cleans the original slot after the last lease.
+
+A rejected storage-filesystem profile can now clean up its identified empty owned
+directory; wrong-identity and nonempty cleanup remain refused. Comparison extents
+outside the supported signed file-offset range fail as malformed requests.
+The original component-analysis diagnostic for an implicit `memcmp` result test
+remains in `ownership-analysis-shared`; the comparison was made explicit and the
+final complete analysis passed.
+
+`registry-tested-files.json`, `registry-tested.patch` and captured new source/header/
+test inputs identify the tested tree; `registry-environment.txt` records versions.
+The manifest found no source, test or build changes after the snapshot. Subsequent
+architecture/testing wording corrections and this evidence entry are documentation
+only. Link and whitespace checks passed. These results are local host evidence,
+not hosted Ubuntu CI, physical validation, coherent acquisition qualification or
+F07 acceptance. Qualified reflink/coherence profiles, explicit Open workflow,
+decoders, sizing and consumers remain unfinished.

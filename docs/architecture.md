@@ -91,7 +91,7 @@ Callers remain responsible for input lifetime and bounded update/scan allowances
 `worker.c` provides the private early executable entry. The frontend event loop
 pumps the helper and polls its channel/process descriptor independently of GDB.
 Initialization and opening/editing Symbols start no process or acquisition.
-Artifact Open will explicitly start work when its own foundation is implemented.
+Artifact Open will explicitly start work when the SE11 workflow is introduced.
 The worker dispatches bounded artifact storage operations; unknown operation IDs
 remain Unsupported. Decoders and artifact UI are separate foundations.
 
@@ -156,14 +156,16 @@ startup settings and failure policy are authoritative in the
 [resource policy](native-symbol-engine.md#resource-policy).
 
 The [helper tests](testing.md#supervised-symbol-engine-helper-se02) distinguish
-component, real-process and real-GDB isolation evidence. Actual artifact/decoder
-workloads, search publication and live consumers remain later foundations; this
+component, real-process and real-GDB isolation evidence. Artifact storage
+integration is described below; decoder workloads, search publication and live
+consumers remain later foundations. This
 execution boundary does not complete F07 or qualify physical targets.
 
 ### Artifact admission accounting (SE03, partial)
 
 `src/symbol/admission.c` provides an independent logical-storage ledger. Each
-acquisition first reserves its complete proposed file size. Separate opens and
+acquisition preallocates ownership before discovery and reserves the complete
+offered size before file growth. Separate opens and
 companion contexts each retain a full charge, including when their backing is
 shared. Allocation failures leave existing tickets and charges unchanged.
 Bookkeeping allocations also count toward the enclosing frontend account.
@@ -183,9 +185,9 @@ reservation, context, cached backing or cleanup owner remains, including zero-by
 files. Opaque tickets are internal owner handles and are consumed on successful
 close or confirmed cleanup.
 
-The ledger is integrated with acquisition and helper cleanup in later SE03 work.
-Acquisition validation and byte equality remain prerequisites outside the ledger;
-it cannot grant admission by itself.
+The frontend registry combines this ledger with acquisition and supervised
+cleanup. Acquisition validation and byte equality remain prerequisites outside
+the ledger; it cannot grant admission by itself.
 
 ### Private byte acquisition (SE03, partial)
 
@@ -220,9 +222,9 @@ filesystem deletion under helper supervision. Linux [descriptor release](https:/
 is distinct from persistence and namespace cleanup.
 
 The component takes a ready owned namespace, fresh slot and explicit file ceiling.
-There is no automatic acquisition, new startup setting or frontend entry point
-yet. Helper offer/grant framing, registry integration and qualified full-file
-reflink support remain SE03 work; this does not make Symbols functional.
+Helper offer/grant framing and the frontend registry now connect its ownership
+contracts. Explicit Open workflow and qualified full-file reflink support remain
+separate work; this does not make Symbols functional.
 
 `src/symbol/equal.c` compares two pinned frozen backings independently of their
 fingerprints. Positive equality requires every byte of both inputs; differing
@@ -248,7 +250,9 @@ arbitrary leaf names or recursive deletion. Retained files stay linked while
 frontend descriptors close; their final deletion belongs to the supervised
 helper after dependent leases retire. Reader/open and unlink operations check
 exact storage identity, and unlink cannot delete a replacement file. Removing a
-namespace refuses nonempty or replaced directories. Destroying a local handle
+namespace refuses nonempty or replaced directories. An identified empty owned
+directory can also be removed after its filesystem fails data-storage qualification;
+this does not admit that filesystem for retained bytes. Destroying a local handle
 closes its descriptor and releases bookkeeping, without claiming filesystem
 cleanup. Storage coordinates establish ownership, not native record identity or
 byte equality.
@@ -273,9 +277,48 @@ single-use; cancellation fences unsent grants without undoing framed traffic.
 Failure diagnostics carry the captured context, system error, operation detail
 and any established storage identity. A failed result serialization uses reserved
 failure framing and publishes no candidate prefix. Worker state and outgoing
-descriptors retire before cleanup acknowledgement. The frontend registry,
-automatic admission/deduplication orchestration and artifact UI remain SE03/SE11
-work; the helper API alone establishes none of those capabilities.
+descriptors retire before cleanup acknowledgement. The frontend registry below
+owns contexts, backing and scoped sharing; explicit Open orchestration and the
+artifact UI remain SE11 work.
+
+### Frontend artifact registry (SE03, partial)
+
+`src/symbol/artifact.c` owns artifact-open contexts, retained backing and leases
+under the shared frontend allocation account. Preparation reserves complete
+candidate bookkeeping before discovery; an exact offer reserves its full logical
+charge before a helper grant. Descriptor admission checks the offered storage
+identity, extent, owner, protection, access mode and close-on-exec. Retention
+establishes frozen bytes with unproven source coherence, not ELF/DWARF validity or
+runtime authority.
+
+Context and content identities come from a frontend-owned monotonic domain that
+outlives registry replacement and historical facts. Equal origin paths create
+independent contexts. Fixed-depth identifier lookup and checked reservations
+bound bookkeeping without scanning names or reallocating a whole context index.
+A lease pins backing while current-context eligibility remains a separate check;
+closing an artifact revokes that eligibility immediately. Detected backing
+correspondence/integrity loss withdraws storage-dependent capabilities through a
+separate content revision, without reclaiming bytes or releasing charges. Late
+comparison results cannot restore withdrawn correspondence. Final closure transfers
+its logical charge into cache. Eviction waits for leases, closes frontend file
+descriptors while storage remains linked, and retains its charge until exact
+supervised cleanup is confirmed.
+
+Digest and extent select possible duplicates. A scoped comparison token pins the
+exact existing backing, captures request identity separately from artifact context
+revision, and accepts only the corresponding completion and worker retirement.
+Positive complete-byte equality retains that pin through candidate cleanup;
+sharing is committed without allocation only after the duplicate file is removed.
+Comparison resource/operational failure prevents candidate publication. Closing
+while comparison or cleanup is pending cannot reactivate the context or bind it
+to a replacement. Each independently open context keeps its full logical charge.
+
+Frontend initialization creates only empty registry/helper owners and reads the
+[startup settings](native-symbol-engine.md#available-startup-configuration).
+The explicit Open workflow and artifact browser remain SE11 work; initialization,
+Symbols navigation and editing controls still perform no acquisition. Decoding,
+validation evidence, source correspondence and live-action consumers remain
+separate foundations.
 
 ### Event loop and text rendering
 

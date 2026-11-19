@@ -205,7 +205,7 @@ static void layout(TbSymbolOperation_t *state)
                 .bytes = state->bytes
             };
         }
-        if (!state->slots[0] || !state->slots[1])
+        if (!state->slots[0] || !state->slots[1] || state->bytes > INT64_MAX)
             fail(state, TB_SYMBOL_MALFORMED);
         break;
     case TB_SYMBOL_OPERATION_REMOVE_STORAGE:
@@ -250,7 +250,16 @@ static void namespace_step(TbSymbolOperation_t *state)
     if (result != TB_SYMBOL_SUCCESS) {
         state->system_error = tb_symbol_storage_error(state->namespace);
         state->detail = TB_SYMBOL_DETAIL_NAMESPACE;
-        if (state->code == TB_SYMBOL_OPERATION_REMOVE_STORAGE && state->system_error == ENOENT) {
+        TbSymbolStorageKey_t key;
+        if (state->code == TB_SYMBOL_OPERATION_REMOVE_STORAGE && result == TB_SYMBOL_UNSUPPORTED &&
+            tb_symbol_storage_key(state->namespace, &key)) {
+            /* A rejected data-storage profile does not prevent removal of an
+             * identified empty owned directory. All identity/protection checks
+             * must already have passed, and rmdir still refuses any entries. */
+            state->system_error = 0;
+            state->detail = 0;
+            state->phase = OPERATION_REMOVE_NAMESPACE;
+        } else if (state->code == TB_SYMBOL_OPERATION_REMOVE_STORAGE && state->system_error == ENOENT) {
             state->system_error = 0;
             fail(state, TB_SYMBOL_SUCCESS);
         } else {
