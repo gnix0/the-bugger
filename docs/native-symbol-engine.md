@@ -11,9 +11,10 @@ implementation completion, production verification, physical validation or F07
 acceptance. SE01 now provides the [independent bounded primitives](architecture.md#symbol-engine-primitives-se01);
 SE02 adds the [supervised helper foundation](architecture.md#symbol-engine-helper-se02).
 SE03 has [artifact resource components](architecture.md#artifact-admission-accounting-se03-partial)
-for admission accounting, private byte copying and complete backing equality.
-Helper acquisition integration, the artifact manager, decoders and consumers
-remain unfinished. The current worker returns Unsupported for artifact/decoder operations.
+for admission accounting, private byte copying and complete backing equality,
+with supervised storage dispatch and explicit size grants. The frontend artifact
+manager, automatic admission/deduplication, decoders and consumers remain unfinished.
+Unknown helper operations return Unsupported.
 Verification evidence is recorded separately from integration acceptance.
 
 The engine owns bounded project-native C17 ELF/DWARF decoding, metadata

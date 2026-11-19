@@ -2621,8 +2621,8 @@ same actual GDB process alive and able to answer structured MI.
 These checks qualify the execution foundation under the recorded host
 configuration. They do not measure actual artifact acquisition, decoder/index
 latency, production schema ownership, physical access or live-action consumers.
-The current production worker returns Unsupported for artifact/decoder operation
-IDs. Startup settings and their supported ranges are in the
+The current worker supports bounded storage operations; unknown IDs remain
+Unsupported. Startup settings and their supported ranges are in the
 [authoritative resource policy](native-symbol-engine.md#available-startup-configuration).
 A kernel operation that cannot yet be reaped prevents replacement; tests do not
 establish a universal filesystem or kernel scheduling guarantee.
@@ -2677,7 +2677,7 @@ The suite rejects nonregular origins, including FIFOs without waiting for a writ
 
 These are component checks on actual local files, without GDB or target access.
 They do not establish atomic acquisition coherence, qualify reflink, validate
-ELF/DWARF, or exercise the pending helper offer/grant and cleanup protocol.
+ELF/DWARF, or alone qualify the integrated helper offer/grant and cleanup protocol.
 
 
 ## Frozen backing equality (SE03, partial)
@@ -2740,3 +2740,31 @@ descriptors while retaining explicit slot-cleanup responsibility. Empty-slot
 cleanup refuses nonempty files and handles a missing fresh slot idempotently.
 These are dispatcher component checks; supervised offer/grant delivery, frontend
 admission, deduplication and the complete SE03 regression remain pending.
+
+
+## Supervised artifact operations (SE03, partial)
+
+```sh
+make BUILD_DIR=build/se03-dispatch-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-resource test-symbol-helper test-symbol-wire test-symbol-helper-native
+```
+
+`test-symbol-resource` is included in `test`/`test-ci` and exercises actual local
+files through the production executable's private helper entry. It reserves the
+exact offer before a grant, validates binary contents/digest and read-only received
+descriptors, and confirms explicit file cleanup before logical charge release.
+Two independent acquisitions retain their full logical charges; sharing follows
+complete helper-side byte equality and confirmed candidate cleanup. Quota refusal
+keeps staging empty; cancellation preserves the offer and cleanup duty. Worker
+restart preserves independently retained bytes, and a killed owned worker leaves
+its staging file for explicit cleanup after confirmed reap. Missing origins return
+typed operational failure with their system error. A separately executed harness
+worker injects result-buffer allocation failure: no partial candidate is returned,
+cleanup identity survives, and the channel remains usable.
+
+The helper fault suite additionally rejects wrong-context/duplicate offers,
+wrong-context/duplicate/inconsistent diagnostics and success following a failure
+diagnostic. Existing descriptor-fragmentation, timing and independent actual-GDB
+checks remain separate. These tests compose components through explicit test
+ownership; they do not implement the frontend artifact registry, qualify atomic
+source coherence, or establish decoder, consumer or physical-target acceptance.

@@ -92,7 +92,8 @@ Callers remain responsible for input lifetime and bounded update/scan allowances
 pumps the helper and polls its channel/process descriptor independently of GDB.
 Initialization and opening/editing Symbols start no process or acquisition.
 Artifact Open will explicitly start work when its own foundation is implemented.
-The current worker returns Unsupported for artifact/decoder operations.
+The worker dispatches bounded artifact storage operations; unknown operation IDs
+remain Unsupported. Decoders and artifact UI are separate foundations.
 
 `src/symbol/process.c` uses `fork()` followed by isolated `execve()` of the running
 executable. Child setup uses async-signal-safe operations, installs null standard
@@ -130,7 +131,7 @@ admission and receipt; buffered progress cannot extend a stalled operation.
 Repeated counters do not refresh the watchdog. Parent-enforced queue, absolute
 operation, progress and cancellation deadlines remain distinct. Failure explicitly
 completes unfinished interests, while callers retain independently accepted
-results. Acquisition operations have a separate cleanup notification. The worker sends it
+results. Resource operations have a separate cleanup notification. The worker sends it
 only after destroying operation state and finishing the outgoing result frame;
 the parent delivers it after completion acceptance and releasing its borrowed
 result resources. Backpressure retains the underlying job slot. Cancellation
@@ -138,7 +139,7 @@ before dispatch can prove that no worker ownership was acquired. Missing cleanup
 acknowledgements use the cancellation deadline and supervised termination; a
 confirmed reap can retire worker ownership, while uncertain reap cannot. Staged
 or retained filesystem objects remain independently owned and charged until
-their cleanup is confirmed. This control path does not implement acquisition yet.
+their cleanup is confirmed.
 
 There is no automatic retry, rescan or restart. The supervisor exposes separate
 current-process and last-confirmed-reap generations. Acquisition owners can retain
@@ -261,8 +262,20 @@ slot until granted the exact size. Unpublished slots whose growth grant was neve
 dispatched have a separate empty-file cleanup operation; nonempty or nonregular
 entries are refused. Local state destruction never claims retained-file cleanup.
 
-Supervised dispatch and the frontend registry remain SE03 work. No artifact,
-discovery or live-action UI is introduced.
+Private request dispatch now connects those operations to the supervised worker.
+After first-service evidence flushes, bounded steps emit meaningful progress and
+an acquisition offer. Offers identify the empty slot and exact extent. Only an
+explicit matching grant permits growth, and dormant offers wait for control
+traffic rather than spinning. The parent preserves offers until retirement and
+rejects duplicate, wrong-context or inconsistent ownership evidence. Grants are
+single-use; cancellation fences unsent grants without undoing framed traffic.
+
+Failure diagnostics carry the captured context, system error, operation detail
+and any established storage identity. A failed result serialization uses reserved
+failure framing and publishes no candidate prefix. Worker state and outgoing
+descriptors retire before cleanup acknowledgement. The frontend registry,
+automatic admission/deduplication orchestration and artifact UI remain SE03/SE11
+work; the helper API alone establishes none of those capabilities.
 
 ### Event loop and text rendering
 

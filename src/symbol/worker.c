@@ -1,6 +1,7 @@
 #define _GNU_SOURCE /* NOLINT(bugprone-reserved-identifier) -- Inherited channel descriptor flags. */
 #include "symbol/worker.h"
 #include "symbol/protocol.h"
+#include "symbol/operation.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -13,17 +14,23 @@
 typedef struct worker Worker_t;
 
 typedef struct {
-    Worker_t              *owner;
-    unsigned char         *arguments;
-    size_t                 length;
-    TbSymbolWorkIdentity_t identity;
-    uint32_t               operation;
-    uint64_t               sequence;
-    TbSymbolOutcome_e      failure;
-    bool                   used;
-    bool                   started;
-    bool                   emitted;
-    bool                   cleanup_pending;
+    Worker_t                    *owner;
+    unsigned char               *arguments;
+    size_t                       length;
+    TbSymbolWorkIdentity_t       identity;
+    uint32_t                     operation;
+    uint64_t                     sequence;
+    TbSymbolOutcome_e            failure;
+    TbSymbolOperation_t         *state;
+    TbSymbolOperationResult_t    diagnostic;
+    uint64_t                     progress;
+    uint64_t                     reported_progress;
+    bool                         offered;
+    bool                         diagnosed;
+    bool                         used;
+    bool                         started;
+    bool                         emitted;
+    bool                         cleanup_pending;
 } WorkerJob_t;
 
 struct worker {
@@ -64,13 +71,19 @@ static bool now_ns(uint64_t *now)
 static void job_destroy(void *context)
 {
     WorkerJob_t *job = context;
+    if (job->state)
+        job->diagnostic = tb_symbol_operation_result(job->state);
+    tb_symbol_operation_destroy(job->state);
+    job->state = NULL;
+    job->diagnostic.payload = NULL;
+    job->diagnostic.descriptor = -1;
     if (job->arguments) {
         free(job->arguments);
         (void)tb_symbol_budget_release(&job->owner->ipc, job->length);
     }
     job->arguments = NULL;
     if (job->emitted) {
-        if (job->operation == TB_SYMBOL_OPERATION_ACQUIRE)
+        if (tb_symbol_protocol_owned(job->operation))
             job->cleanup_pending = true;
         else
             *job = (WorkerJob_t){0};
@@ -105,17 +118,56 @@ static TbSymbolWorkResult_t job_step(void *context, uint64_t deadline_ns,
             job->started = true;
         return (TbSymbolWorkResult_t){0};
     }
-    /* The parent must receive first-service evidence before future dispatchers
-     * may enter a filesystem call. A queued but unflushed START is insufficient. */
-    if (tb_symbol_wire_sending(job->owner->wire))
-        return (TbSymbolWorkResult_t){0};
-
-    /* Artifact/decoder operations are introduced in their own gates. Unknown
-     * operation IDs have an explicit outcome; no synthetic catalog is produced. */
-    return (TbSymbolWorkResult_t){
-        .outcome  = job->failure ? job->failure : TB_SYMBOL_UNSUPPORTED,
-        .progress = 1
+    /* Flush first-service evidence before any potentially blocking operation. */
+    TbSymbolWorkResult_t pending = {
+        .progress = job->progress
     };
+    if (tb_symbol_wire_sending(job->owner->wire))
+        return pending;
+    if (job->failure || !tb_symbol_protocol_owned(job->operation)) {
+        return (TbSymbolWorkResult_t){
+            .outcome  = job->failure ? job->failure : TB_SYMBOL_UNSUPPORTED,
+            .progress = job->progress
+        };
+    }
+    if (!job->state) {
+        job->state = tb_symbol_operation_create(job->operation, job->arguments, job->length,
+                                                &job->owner->ipc);
+        if (!job->state) {
+            return (TbSymbolWorkResult_t){
+                .outcome  = TB_SYMBOL_RESOURCE_FAILURE,
+                .progress = job->progress
+            };
+        }
+    }
+    if (job->progress > job->reported_progress) {
+        unsigned char bytes[TB_SYMBOL_PROGRESS_BYTES] = {0};
+        tb_symbol_protocol_put(bytes, TB_SYMBOL_PROGRESS_ADVANCE, 4);
+        tb_symbol_protocol_put(bytes + 8, job->identity.generation, 8);
+        tb_symbol_protocol_put(bytes + 16, job->progress, 8);
+        tb_symbol_protocol_put(bytes + 24, service_ns, 8);
+        TbSymbolMessage_t message = tb_symbol_protocol_message(TB_SYMBOL_MESSAGE_PROGRESS, job->identity,
+                                                               job->owner->generation, bytes, sizeof(bytes));
+        if (tb_symbol_wire_send(job->owner->wire, &message))
+            job->reported_progress = job->progress;
+        return pending;
+    }
+    TbSymbolAcquireOffer_t offer;
+    if (!job->offered && tb_symbol_operation_offer(job->state, &offer)) {
+        unsigned char bytes[TB_SYMBOL_OFFER_BYTES];
+        tb_symbol_protocol_put(bytes, job->identity.generation, 8);
+        tb_symbol_protocol_put(bytes + 8, offer.bytes, 8);
+        tb_symbol_protocol_put(bytes + 16, offer.key.device, 8);
+        tb_symbol_protocol_put(bytes + 24, offer.key.inode, 8);
+        TbSymbolMessage_t message = tb_symbol_protocol_message(TB_SYMBOL_MESSAGE_OFFER, job->identity,
+                                                               job->owner->generation, bytes, sizeof(bytes));
+        if (tb_symbol_wire_send(job->owner->wire, &message))
+            job->offered = true;
+        return pending;
+    }
+    TbSymbolWorkResult_t result = tb_symbol_operation_step(job->state, max_bytes);
+    job->progress = result.progress;
+    return result;
 }
 
 
@@ -132,16 +184,65 @@ static bool emit(void *context, const TbSymbolWorkIdentity_t *identity, TbSymbol
     }
     if (!job)
         return false;
-    unsigned char bytes[TB_SYMBOL_RESULT_BYTES] = {0};
+    if (tb_symbol_wire_sending(worker->wire))
+        return false;
+    TbSymbolOperationResult_t facts = job->state ? tb_symbol_operation_result(job->state) : job->diagnostic;
+    if (job->failure)
+        result.outcome = job->failure;
+    if (result.outcome != TB_SYMBOL_SUCCESS && !job->diagnosed && (facts.system_error || facts.detail)) {
+        unsigned char diagnostic[TB_SYMBOL_DIAGNOSTIC_BYTES];
+        tb_symbol_protocol_put(diagnostic, job->identity.generation, 8);
+        tb_symbol_protocol_put(diagnostic + 8, (uint32_t)facts.system_error, 4);
+        tb_symbol_protocol_put(diagnostic + 12, facts.detail, 4);
+        tb_symbol_protocol_put(diagnostic + 16, facts.key.device, 8);
+        tb_symbol_protocol_put(diagnostic + 24, facts.key.inode, 8);
+        TbSymbolMessage_t message = tb_symbol_protocol_message(TB_SYMBOL_MESSAGE_DIAGNOSTIC, job->identity,
+                                                               worker->generation, diagnostic,
+                                                               sizeof(diagnostic));
+        if (tb_symbol_wire_send(worker->wire, &message))
+            job->diagnosed = true;
+        return false;
+    }
+    unsigned char bytes[TB_SYMBOL_RESULT_BYTES + 56] = {0};
     tb_symbol_protocol_put(bytes, result.outcome, 4);
     tb_symbol_protocol_put(bytes + 8, job->identity.generation, 8);
+    size_t length = TB_SYMBOL_RESULT_BYTES;
+    if (result.outcome == TB_SYMBOL_SUCCESS && facts.length) {
+        if (facts.length > sizeof(bytes) - length)
+            return false;
+        memcpy(bytes + length, facts.payload, facts.length);
+        length += facts.length;
+    }
     TbSymbolMessage_t message = tb_symbol_protocol_message(TB_SYMBOL_MESSAGE_RESULT, job->identity,
-                                                           worker->generation, bytes, sizeof(bytes));
-    if (!tb_symbol_wire_send(worker->wire, &message))
+                                                           worker->generation, bytes, length);
+    if (result.outcome == TB_SYMBOL_SUCCESS && job->state && facts.descriptor >= 0) {
+        message.descriptor = facts.descriptor;
+        message.descriptor_role = TB_SYMBOL_DESCRIPTOR_BACKING;
+    }
+    errno = 0;
+    if (!tb_symbol_wire_send(worker->wire, &message)) {
+        /* Reserved inline failure framing must remain possible when candidate
+         * serialization or descriptor duplication exhausts resources. */
+        int error = errno;
+        job->failure = !error || error == ENOMEM || error == EMFILE || error == ENFILE
+                         ? TB_SYMBOL_RESOURCE_FAILURE : TB_SYMBOL_OPERATIONAL_FAILURE;
+        job->diagnostic = (TbSymbolOperationResult_t){
+            .descriptor   = -1,
+            .system_error = error,
+            .detail       = TB_SYMBOL_DETAIL_PUBLICATION
+        };
+        if (job->state) {
+            job->diagnostic.key = facts.key;
+            job->diagnostic.detail |= facts.detail & (TB_SYMBOL_DETAIL_CREATED | TB_SYMBOL_DETAIL_HAS_KEY);
+            tb_symbol_operation_destroy(job->state);
+            job->state = NULL;
+        }
+        job->diagnosed = false;
         return false;
+    }
     job->emitted = true;
     if (!work_context) {
-        if (job->operation == TB_SYMBOL_OPERATION_ACQUIRE)
+        if (tb_symbol_protocol_owned(job->operation))
             job->cleanup_pending = true;
         else
             *job = (WorkerJob_t){0};
@@ -174,6 +275,22 @@ static bool operation_pending(const Worker_t *worker)
     for (size_t i = 0; i < TB_SYMBOL_MAX_JOBS; ++i) {
         if (worker->jobs[i].used)
             return true;
+    }
+    return false;
+}
+
+
+static bool runnable(const Worker_t *worker)
+{
+    for (size_t i = 0; i < TB_SYMBOL_MAX_JOBS; ++i) {
+        const WorkerJob_t *job = &worker->jobs[i];
+        if (!job->used || job->cleanup_pending || job->emitted)
+            continue;
+        TbSymbolAcquireOffer_t offer;
+        if (!job->state || !job->offered || job->progress > job->reported_progress ||
+            !tb_symbol_operation_offer(job->state, &offer)) {
+            return true;
+        }
     }
     return false;
 }
@@ -300,6 +417,19 @@ static bool receive(Worker_t *worker, const TbSymbolMessage_t *message)
         tb_symbol_schedule_cancel_all(worker->schedule);
         return true;
     }
+    if (message->kind == TB_SYMBOL_MESSAGE_GRANT) {
+        if (worker->stopping || message->length != TB_SYMBOL_GRANT_BYTES)
+            return false;
+        for (size_t i = 0; i < TB_SYMBOL_MAX_JOBS; ++i) {
+            WorkerJob_t *job = &worker->jobs[i];
+            if (job->used && !job->emitted && job->offered && job->identity.request == message->request &&
+                job->identity.consumer == message->consumer && job->identity.revision == message->revision &&
+                job->identity.generation == tb_symbol_protocol_get(message->payload, 8)) {
+                return tb_symbol_operation_grant(job->state, tb_symbol_protocol_get(message->payload + 8, 8));
+            }
+        }
+        return false;
+    }
     if (message->kind != TB_SYMBOL_MESSAGE_CANCEL || !message->request || !message->consumer ||
         message->request > worker->last_request || message->length != TB_SYMBOL_CANCEL_BYTES) {
         return false;
@@ -373,8 +503,8 @@ int tb_symbol_worker_main(int socket_fd)
             break;
         }
         struct pollfd fd = tb_symbol_wire_pollfd(worker.wire);
-        int timeout = worker.schedule && tb_symbol_schedule_jobs(worker.schedule) &&
-                      !tb_symbol_wire_sending(worker.wire) ? 0 : 100;
+        /* An offered acquisition is dormant until a grant/cancel arrives. */
+        int timeout = worker.schedule && runnable(&worker) && !tb_symbol_wire_sending(worker.wire) ? 0 : 100;
         if (poll(&fd, 1, timeout) < 0 && errno != EINTR)
             break;
     }

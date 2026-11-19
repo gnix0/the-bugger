@@ -5947,3 +5947,40 @@ explicit caller obligation; releasing operation state does not release that duty
 These checks exercise actual local files without GDB or target access. Supervised
 producer dispatch, frontend admission integration, full SE03 host regression and
 F07 acceptance remain pending.
+
+
+### Supervised artifact operations
+
+The production helper now dispatches protected storage creation, frozen byte
+acquisition, complete backing comparison and explicit cleanup. Acquisition sends
+an identified empty-file offer, waits for the exact reserved-size grant, and
+reports meaningful bounded progress. Diagnostics preserve operation cause and
+storage ownership independently of a usable result. Serialization failure uses
+reserved failure framing; no partial candidate is published. All resource jobs
+retain cleanup notification ownership until consumed.
+
+Local verification passed, exit 0, with evidence under
+`build/se03-evidence-20261119/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused integration | `make BUILD_DIR=build/se03-dispatch-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-resource test-symbol-helper test-symbol-wire test-symbol-helper-native`; `dispatch-focused-complete-final.log/.exit`. Actual local files, production early helper entry and independent actual GDB. |
+| Sanitizers | Fortified Clang ASan/UBSan flags above; `build/se03-dispatch-sanitize-20261119/test-symbol-helper`, then `build/se03-dispatch-sanitize-20261119/test-symbol-resource /home/gnix/developer/the-bugger/build/se03-dispatch-sanitize-20261119/test-symbol-resource`; `dispatch-sanitize-build-final`, `dispatch-sanitize-helper-final`, `dispatch-sanitize-resource-final` log/exit records. The resource harness also executes a controlled worker allocation-failure case. |
+| Complete host baseline | `TERM=xterm-256color make BUILD_DIR=build/se03-dispatch-ci-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `dispatch-test-ci.log/.exit`. |
+| Static analysis/build | `make analyze` and normal `make`; `dispatch-full-analysis` and `dispatch-normal-make` log/exit records. |
+
+The resource suite checks full logical charges for independent acquisitions,
+sharing only after complete comparison and candidate cleanup, quota refusal
+without file growth, cancellation with retained cleanup ownership, retained bytes
+across worker restart, and staging cleanup after killing and reaping the owned
+worker. Publication allocation failure returns no payload or descriptor and keeps
+cleanup identity. Fault peers reject duplicate/wrong-context offers and diagnostics,
+inconsistent storage identities, and success following a failure diagnostic.
+
+`dispatch-baseline-files.json`, `dispatch-baseline.patch` and the separately
+captured new resource test identify the tested tree. The manifest comparison
+reported no changes; only this subsequent evidence entry follows those checks.
+`dispatch-environment.txt` records host/compiler/GDB versions. Local links and
+whitespace checks passed. These are local host results, not hosted Ubuntu CI or
+physical validation. Frontend registry/orchestration, complete SE03 acceptance,
+qualified reflink/coherence, decoder sizing and F07 consumers remain pending.

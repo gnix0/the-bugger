@@ -944,7 +944,7 @@ test-symbol-process: $(BUILD_DIR)/test-symbol-process
 test: test-symbol-process
 -include $(BUILD_DIR)/tests/unit/test_symbol_process.d
 
-$(BUILD_DIR)/test-symbol-helper: $(BUILD_DIR)/tests/unit/test_symbol_helper.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o
+$(BUILD_DIR)/test-symbol-helper: $(BUILD_DIR)/tests/unit/test_symbol_helper.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o
 	$(CC) $(LDFLAGS) -Wl,--wrap=clock_gettime -Wl,--wrap=malloc -Wl,--wrap=calloc -o $@ $^ $(LDLIBS)
 
 .PHONY: test-symbol-helper
@@ -954,7 +954,7 @@ test-symbol-helper: all $(BUILD_DIR)/test-symbol-helper
 test: test-symbol-helper
 -include $(BUILD_DIR)/tests/unit/test_symbol_helper.d
 
-$(BUILD_DIR)/test-symbol-helper-native: $(BUILD_DIR)/tests/integration/test_symbol_helper_native.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o
+$(BUILD_DIR)/test-symbol-helper-native: $(BUILD_DIR)/tests/integration/test_symbol_helper_native.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 .PHONY: test-symbol-helper-native
@@ -1023,3 +1023,15 @@ test-symbol-operation: $(BUILD_DIR)/test-symbol-operation
 test: test-symbol-operation
 
 -include $(BUILD_DIR)/tests/unit/test_symbol_operation.d
+
+
+$(BUILD_DIR)/test-symbol-resource: $(BUILD_DIR)/tests/unit/test_symbol_resource.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/admission.o
+	$(CC) $(LDFLAGS) -o $@ $^ -Wl,--wrap=malloc $(LDLIBS)
+
+.PHONY: test-symbol-resource
+test-symbol-resource: all $(BUILD_DIR)/test-symbol-resource
+	$(BUILD_DIR)/test-symbol-resource $(abspath $(BINARY))
+
+test: test-symbol-resource
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_resource.d

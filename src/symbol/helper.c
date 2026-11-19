@@ -5,6 +5,7 @@
 #include "symbol/protocol.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -23,6 +24,15 @@ typedef struct {
     uint64_t               progress;
     uint64_t               cancel_deadline_ns;
     TbSymbolOutcome_e      outcome;
+    TbSymbolAcquireOffer_t offer;
+    TbSymbolStorageKey_t   storage_key;
+    uint32_t               operation;
+    uint32_t               detail;
+    int                    system_error;
+    bool                   offered;
+    bool                   granted;
+    bool                   grant_pending;
+    bool                   diagnosed;
     int                    descriptor;
     bool                   used;
     bool                   scheduler_owned;
@@ -233,6 +243,7 @@ static void job_destroy(void *context)
 {
     HelperJob_t *job = context;
     job->scheduler_owned = false;
+    job->grant_pending = false;
     if (job->release_required) {
         if (!job->sent)
             job->remote_released = true;
@@ -439,7 +450,8 @@ TbSymbolAdmission_e tb_symbol_helper_submit(TbSymbolHelper_t *helper, const TbSy
         .used            = true,
         .scheduler_owned = true,
         .heavy           = heavy,
-        .release_required = operation == TB_SYMBOL_OPERATION_ACQUIRE
+        .release_required = tb_symbol_protocol_owned(operation),
+        .operation        = operation
     };
     TbSymbolWork_t work = {
         .identity = identity,
@@ -483,6 +495,46 @@ bool tb_symbol_helper_cancel(TbSymbolHelper_t *helper, TbSymbolWorkIdentity_t id
 }
 
 
+static bool same_identity(TbSymbolWorkIdentity_t left, TbSymbolWorkIdentity_t right)
+{
+    return left.request == right.request && left.consumer == right.consumer &&
+           left.revision == right.revision && left.generation == right.generation;
+}
+
+
+bool tb_symbol_helper_offer(const TbSymbolHelper_t *helper, TbSymbolWorkIdentity_t identity,
+                            TbSymbolAcquireOffer_t *offer)
+{
+    if (!helper || !offer)
+        return false;
+    for (size_t i = 0; i < helper->config.max_jobs; ++i) {
+        const HelperJob_t *job = &helper->jobs[i];
+        if (job->used && job->offered && same_identity(job->identity, identity)) {
+            *offer = job->offer;
+            return true;
+        }
+    }
+    return false;
+}
+
+
+bool tb_symbol_helper_grant(TbSymbolHelper_t *helper, TbSymbolWorkIdentity_t identity, uint64_t bytes)
+{
+    if (!helper || helper->state != TB_SYMBOL_HELPER_READY)
+        return false;
+    for (size_t i = 0; i < helper->config.max_jobs; ++i) {
+        HelperJob_t *job = &helper->jobs[i];
+        if (job->used && job->scheduler_owned && !job->complete && job->offered && !job->granted &&
+            same_identity(job->identity, identity) && job->offer.bytes == bytes) {
+            job->granted = true;
+            job->grant_pending = true;
+            return true;
+        }
+    }
+    return false;
+}
+
+
 static bool receive(TbSymbolHelper_t *helper, const TbSymbolMessage_t *message)
 {
     if (message->generation != helper->generation)
@@ -498,7 +550,8 @@ static bool receive(TbSymbolHelper_t *helper, const TbSymbolMessage_t *message)
         return true;
     }
     if (message->kind != TB_SYMBOL_MESSAGE_PROGRESS && message->kind != TB_SYMBOL_MESSAGE_RESULT &&
-        message->kind != TB_SYMBOL_MESSAGE_SETTLED) {
+        message->kind != TB_SYMBOL_MESSAGE_SETTLED && message->kind != TB_SYMBOL_MESSAGE_DIAGNOSTIC &&
+        message->kind != TB_SYMBOL_MESSAGE_OFFER) {
         return false;
     }
     if (message->kind == TB_SYMBOL_MESSAGE_SETTLED &&
@@ -528,6 +581,42 @@ static bool receive(TbSymbolHelper_t *helper, const TbSymbolMessage_t *message)
     }
     if (job->complete)
         return false;
+    if (message->kind == TB_SYMBOL_MESSAGE_DIAGNOSTIC || message->kind == TB_SYMBOL_MESSAGE_OFFER) {
+        size_t expected = message->kind == TB_SYMBOL_MESSAGE_OFFER ? TB_SYMBOL_OFFER_BYTES
+                                                                  : TB_SYMBOL_DIAGNOSTIC_BYTES;
+        if (!job->release_required || !job->serviced || message->length != expected ||
+            message->descriptor >= 0 ||
+            tb_symbol_protocol_get(message->payload, 8) != job->identity.generation) {
+            return false;
+        }
+        TbSymbolStorageKey_t key = {
+            .device = tb_symbol_protocol_get(message->payload + 16, 8),
+            .inode  = tb_symbol_protocol_get(message->payload + 24, 8)
+        };
+        if (message->kind == TB_SYMBOL_MESSAGE_OFFER) {
+            if (job->operation != TB_SYMBOL_OPERATION_ACQUIRE || job->offered || job->diagnosed)
+                return false;
+            job->offer = (TbSymbolAcquireOffer_t){
+                .bytes = tb_symbol_protocol_get(message->payload + 8, 8),
+                .key   = key
+            };
+            job->offered = true;
+        } else {
+            uint64_t error = tb_symbol_protocol_get(message->payload + 8, 4);
+            uint32_t detail = (uint32_t)tb_symbol_protocol_get(message->payload + 12, 4);
+            if (job->diagnosed || error > INT_MAX ||
+                (!(detail & TB_SYMBOL_DETAIL_HAS_KEY) && (key.device || key.inode)) ||
+                (job->offered && (detail & TB_SYMBOL_DETAIL_HAS_KEY) &&
+                 (key.device != job->offer.key.device || key.inode != job->offer.key.inode))) {
+                return false;
+            }
+            job->system_error = (int)error;
+            job->detail = detail;
+            job->storage_key = key;
+            job->diagnosed = true;
+        }
+        return true;
+    }
     if (message->kind == TB_SYMBOL_MESSAGE_PROGRESS) {
         if (message->length != TB_SYMBOL_PROGRESS_BYTES || message->descriptor >= 0 ||
             tb_symbol_protocol_get(message->payload + 4, 4) ||
@@ -565,7 +654,8 @@ static bool receive(TbSymbolHelper_t *helper, const TbSymbolMessage_t *message)
     size_t bytes = message->length - TB_SYMBOL_RESULT_BYTES;
     if (outcome <= TB_SYMBOL_PENDING || outcome > TB_SYMBOL_OPERATIONAL_FAILURE ||
         (outcome != TB_SYMBOL_SUCCESS && (bytes || message->descriptor >= 0)) ||
-        (!job->serviced && outcome == TB_SYMBOL_SUCCESS)) {
+        (!job->serviced && outcome == TB_SYMBOL_SUCCESS) ||
+        (job->diagnosed && outcome == TB_SYMBOL_SUCCESS)) {
         return false;
     }
     if (bytes && job->scheduler_owned) {
@@ -588,6 +678,7 @@ static bool receive(TbSymbolHelper_t *helper, const TbSymbolMessage_t *message)
     job->outcome = (TbSymbolOutcome_e)outcome;
     job->complete = true;
     job->cancel_pending = false;
+    job->grant_pending = false;
     if (job->release_required && !job->cancel_deadline_ns)
         job->cancel_deadline_ns = after(helper->now_ns, helper->config.cancel_ns);
     if (!job->scheduler_owned && !job->release_required)
@@ -611,6 +702,20 @@ static bool emit_result(void *context, const TbSymbolWorkIdentity_t *identity,
         .outcome    = result.outcome,
         .descriptor = -1
     };
+    if (!job) {
+        for (size_t i = 0; i < observer->helper->config.max_jobs; ++i) {
+            HelperJob_t *owned = &observer->helper->jobs[i];
+            if (owned->used && same_identity(owned->identity, *identity)) {
+                job = owned;
+                break;
+            }
+        }
+    }
+    if (job) {
+        completion.system_error = job->system_error;
+        completion.detail = job->detail;
+        completion.storage_key = job->storage_key;
+    }
     if (job && result.outcome == TB_SYMBOL_SUCCESS) {
         completion.payload = job->buffer;
         completion.length = job->length;
@@ -669,6 +774,21 @@ static void control(TbSymbolHelper_t *helper)
                                                                job->generation, bytes, sizeof(bytes));
         if (tb_symbol_wire_send(helper->wire, &message))
             job->cancel_pending = false;
+        return;
+    }
+    if (helper->state != TB_SYMBOL_HELPER_READY)
+        return;
+    for (size_t i = 0; i < helper->config.max_jobs; ++i) {
+        HelperJob_t *job = &helper->jobs[i];
+        if (!job->used || !job->grant_pending || job->complete || !job->scheduler_owned)
+            continue;
+        unsigned char bytes[TB_SYMBOL_GRANT_BYTES];
+        tb_symbol_protocol_put(bytes, job->identity.generation, 8);
+        tb_symbol_protocol_put(bytes + 8, job->offer.bytes, 8);
+        TbSymbolMessage_t message = tb_symbol_protocol_message(TB_SYMBOL_MESSAGE_GRANT, job->identity,
+                                                               job->generation, bytes, sizeof(bytes));
+        if (tb_symbol_wire_send(helper->wire, &message))
+            job->grant_pending = false;
         return;
     }
 }

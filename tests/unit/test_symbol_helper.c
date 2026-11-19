@@ -762,6 +762,31 @@ static void result_allocation(void)
 }
 
 
+static void resource_protocol_faults(void)
+{
+    const char *modes[] = {
+        "offer-context", "offer-duplicate", "diagnostic-context", "diagnostic-duplicate",
+        "diagnostic-key", "diagnostic-offer-key", "diagnostic-success"
+    };
+    for (size_t i = 0; i < sizeof(modes) / sizeof(modes[0]); ++i) {
+        TbSymbolHelperConfig_t config;
+        tb_symbol_helper_defaults(&config);
+        ReleaseObserver_t observer = {0};
+        TbSymbolHelper_t *helper = fake_helper(modes[i], &config, &observer.observer);
+        CHECK(submit(helper, identity(1, 1), TB_SYMBOL_OPERATION_ACQUIRE,
+                     TB_SYMBOL_CONSTRUCTION, true, NULL, 0) == TB_SYMBOL_ADMITTED);
+        for (unsigned turn = 0; turn < 2000 && !observer.released; ++turn)
+            pump_owned(helper, &observer);
+        CHECK(observer.released == 1 && observer.observer.count == 1);
+        CHECK(observer.observer.outcomes[0] == TB_SYMBOL_MALFORMED);
+        CHECK(tb_symbol_helper_state(helper) == TB_SYMBOL_HELPER_UNAVAILABLE);
+        CHECK(tb_symbol_helper_reaped_generation(helper) == 1);
+        close_helper(helper, &observer.observer);
+        CHECK(!unsetenv("TB_TEST_SYMBOL_HELPER"));
+    }
+}
+
+
 typedef struct {
     TbSymbolWorkIdentity_t identity;
     unsigned              phase;
@@ -868,6 +893,10 @@ static int fake_peer(const char *mode)
                     tb_symbol_protocol_put(bytes, TB_SYMBOL_PROGRESS_START, 4);
                     job->phase = strcmp(mode, "crash") == 0 || strcmp(mode, "success") == 0 ||
                                  strncmp(mode, "settled-", 8) == 0 ? 2 : 3;
+                    if (strncmp(mode, "offer-", 6) == 0 || !strcmp(mode, "diagnostic-offer-key"))
+                        job->phase = 6;
+                    else if (strncmp(mode, "diagnostic-", 11) == 0)
+                        job->phase = 7;
                     if (strcmp(mode, "revision") == 0)
                         ++captured.revision;
                 } else if (job->phase == 2 || job->phase == 4) {
@@ -894,6 +923,31 @@ static int fake_peer(const char *mode)
                     job->used = false;
                     if (strcmp(mode, "settled-revision") == 0)
                         ++captured.revision;
+                } else if (job->phase == 6) {
+                    kind = TB_SYMBOL_MESSAGE_OFFER;
+                    length = TB_SYMBOL_OFFER_BYTES;
+                    tb_symbol_protocol_put(bytes, captured.generation +
+                                           (!strcmp(mode, "offer-context") ? 1U : 0U), 8);
+                    tb_symbol_protocol_put(bytes + 8, 9, 8);
+                    tb_symbol_protocol_put(bytes + 16, 10, 8);
+                    tb_symbol_protocol_put(bytes + 24, 11, 8);
+                    if (!strcmp(mode, "diagnostic-offer-key"))
+                        job->phase = 7;
+                } else if (job->phase == 7) {
+                    kind = TB_SYMBOL_MESSAGE_DIAGNOSTIC;
+                    length = TB_SYMBOL_DIAGNOSTIC_BYTES;
+                    tb_symbol_protocol_put(bytes, captured.generation +
+                                           (!strcmp(mode, "diagnostic-context") ? 1U : 0U), 8);
+                    tb_symbol_protocol_put(bytes + 8, ENOENT, 4);
+                    if (!strcmp(mode, "diagnostic-key"))
+                        tb_symbol_protocol_put(bytes + 16, 1, 8);
+                    if (!strcmp(mode, "diagnostic-offer-key")) {
+                        tb_symbol_protocol_put(bytes + 12, TB_SYMBOL_DETAIL_HAS_KEY, 4);
+                        tb_symbol_protocol_put(bytes + 16, 10, 8);
+                        tb_symbol_protocol_put(bytes + 24, 12, 8);
+                    }
+                    if (!strcmp(mode, "diagnostic-success"))
+                        job->phase = 2;
                 } else if (strcmp(mode, "heartbeat") == 0 || strcmp(mode, "progress") == 0 ||
                            strcmp(mode, "old-progress") == 0) {
                     tb_symbol_protocol_put(bytes, TB_SYMBOL_PROGRESS_ADVANCE, 4);
@@ -906,7 +960,7 @@ static int fake_peer(const char *mode)
                 if (kind == TB_SYMBOL_MESSAGE_SETTLED) {
                     tb_symbol_protocol_put(bytes, captured.generation +
                                            (strcmp(mode, "settled-context") == 0 ? 1U : 0U), 8);
-                } else {
+                } else if (kind != TB_SYMBOL_MESSAGE_OFFER && kind != TB_SYMBOL_MESSAGE_DIAGNOSTIC) {
                     tb_symbol_protocol_put(bytes + 8, captured.generation, 8);
                 }
                 if (kind == TB_SYMBOL_MESSAGE_PROGRESS) {
@@ -965,6 +1019,7 @@ int main(int argc, char *argv[])
     configuration();
     reap_evidence();
     release_interests();
+    resource_protocol_faults();
     real_worker();
     saturation();
     allocation_failures();

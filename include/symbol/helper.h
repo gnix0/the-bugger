@@ -2,6 +2,7 @@
 #define THE_BUGGER_SYMBOL_HELPER_H
 
 #include "symbol/schedule.h"
+#include "symbol/acquire.h"
 
 #include <poll.h>
 
@@ -48,10 +49,13 @@ typedef enum {
 } TbSymbolAdmission_e;
 
 typedef struct {
-    TbSymbolOutcome_e    outcome;
-    const unsigned char *payload;
-    size_t               length;
-    int                  descriptor;
+    TbSymbolOutcome_e     outcome;
+    const unsigned char  *payload;
+    size_t                length;
+    int                   descriptor;
+    int                   system_error;
+    uint32_t              detail;
+    TbSymbolStorageKey_t  storage_key;
 } TbSymbolHelperResult_t;
 
 typedef struct {
@@ -96,8 +100,14 @@ void tb_symbol_helper_close(TbSymbolHelper_t *helper);
 TbSymbolAdmission_e tb_symbol_helper_submit(TbSymbolHelper_t *helper, const TbSymbolHelperRequest_t *request);
 bool tb_symbol_helper_attach(TbSymbolHelper_t *helper, uint64_t request, TbSymbolWorkIdentity_t identity);
 bool tb_symbol_helper_cancel(TbSymbolHelper_t *helper, TbSymbolWorkIdentity_t identity);
+/* Ownership offers remain available until release acknowledgement, including
+ * after cancellation. Assign the exact logical reservation before granting it.
+ * The grant is single-use; cancellation does not undo an already framed grant. */
+bool tb_symbol_helper_offer(const TbSymbolHelper_t *helper, TbSymbolWorkIdentity_t identity,
+                            TbSymbolAcquireOffer_t *offer);
+bool tb_symbol_helper_grant(TbSymbolHelper_t *helper, TbSymbolWorkIdentity_t identity, uint64_t bytes);
 void tb_symbol_helper_pump(TbSymbolHelper_t *helper, tb_symbol_helper_emit_fn emit, void *context);
-/* Acquisition requires a release consumer, including on cancellation/failure.
+/* Resource operations require a release consumer, including on cancellation/failure.
  * The ordinary pump retains those notifications until a consumer is supplied. */
 void tb_symbol_helper_pump_with_release(TbSymbolHelper_t *helper, tb_symbol_helper_emit_fn emit,
                                        tb_symbol_helper_released_fn released, void *context);
