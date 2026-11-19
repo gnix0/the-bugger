@@ -18,6 +18,11 @@ typedef enum {
 
 typedef struct {
     uint64_t             bytes;
+    TbSymbolStorageKey_t key;
+} TbSymbolAcquireOffer_t;
+
+typedef struct {
+    uint64_t             bytes;
     unsigned char        digest[TB_SHA256_DIGEST_BYTES];
     int                  descriptor;
     TbSymbolStorageKey_t key;

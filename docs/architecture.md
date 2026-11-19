@@ -253,8 +253,16 @@ cleanup. Storage coordinates establish ownership, not native record identity or
 byte equality.
 
 Named retention is connected to the copier and the ledger can preallocate
-unsized ownership. Supervised acquisition and the frontend registry remain SE03
-work. No artifact, discovery or live-action UI is introduced.
+unsized ownership. The helper-side operation dispatcher in `src/symbol/operation.c`
+validates bounded, explicitly encoded requests before opening a namespace. It
+combines creation, acquisition, comparison and cleanup without merging content
+identity with storage coordinates. Acquisition pauses on an identified empty
+slot until granted the exact size. Unpublished slots whose growth grant was never
+dispatched have a separate empty-file cleanup operation; nonempty or nonregular
+entries are refused. Local state destruction never claims retained-file cleanup.
+
+Supervised dispatch and the frontend registry remain SE03 work. No artifact,
+discovery or live-action UI is introduced.
 
 ### Event loop and text rendering
 

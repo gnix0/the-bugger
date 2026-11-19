@@ -2721,3 +2721,22 @@ Allocation failures and cancellation release local metadata without pretending
 that created filesystem objects disappeared. These component checks do not yet
 qualify frontend admission, source coherence, deduplication or the integrated
 cleanup state machine.
+
+
+## Artifact operation dispatch (SE03, partial)
+
+```sh
+make BUILD_DIR=build/se03-operation-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-operation
+```
+
+Included in `test` and `test-ci`. Actual local filesystem requests exercise the
+helper-side dispatcher independently of IPC. Truncated headers, truncated paths,
+embedded or missing terminators fail before namespace creation. One-byte request
+slices, paused size offers, exact grants, binary contents, complete digests,
+read-only descriptors, backing equality and identity mismatch are checked.
+Cancellation at 180 acquisition positions releases local allocations and file
+descriptors while retaining explicit slot-cleanup responsibility. Empty-slot
+cleanup refuses nonempty files and handles a missing fresh slot idempotently.
+These are dispatcher component checks; supervised offer/grant delivery, frontend
+admission, deduplication and the complete SE03 regression remain pending.

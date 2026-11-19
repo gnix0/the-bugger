@@ -44,6 +44,9 @@ records remain in the [validation records](../docs/validation.md).
   `test`; integrated deduplication remains pending. See
   [equality coverage](../docs/testing.md#frozen-backing-equality-se03-partial).
 
+- `make test-symbol-operation`: bounded request decoding, explicit size grants,
+  retained backing operations and cancellation; see
+  [dispatcher coverage](../docs/testing.md#artifact-operation-dispatch-se03-partial).
 - `make test-symbol-storage`: private namespaces, captured storage identity,
   retained files, restart reconstruction and stale/nonempty cleanup refusal.
   Included in `test`; see

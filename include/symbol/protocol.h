@@ -18,8 +18,24 @@ enum {
 };
 
 enum {
-    TB_SYMBOL_OPERATION_ACQUIRE = 65536
+    TB_SYMBOL_OPERATION_ACQUIRE = 65536,
+    TB_SYMBOL_OPERATION_CREATE_STORAGE,
+    TB_SYMBOL_OPERATION_REMOVE_FILE,
+    TB_SYMBOL_OPERATION_COMPARE,
+    TB_SYMBOL_OPERATION_REMOVE_STORAGE,
+    TB_SYMBOL_OPERATION_DISCARD_EMPTY
 };
+
+#define TB_SYMBOL_DETAIL_CREATED   UINT32_C(65536)
+#define TB_SYMBOL_DETAIL_HAS_KEY   UINT32_C(131072)
+#define TB_SYMBOL_DETAIL_NAMESPACE UINT32_C(256)
+#define TB_SYMBOL_DETAIL_COMPARE   UINT32_C(512)
+
+static inline bool tb_symbol_protocol_owned(uint32_t operation)
+{
+    return operation >= TB_SYMBOL_OPERATION_ACQUIRE && operation <= TB_SYMBOL_OPERATION_DISCARD_EMPTY;
+}
+
 
 static inline void tb_symbol_protocol_put(unsigned char *bytes, uint64_t value, unsigned width)
 {

@@ -5923,3 +5923,27 @@ using the flags and targets above.
 
 Supervised producer dispatch and the frontend ownership registry remain pending.
 This is locally verified component integration, not completed SE03 or F07 acceptance.
+
+
+### Artifact operation dispatcher component
+
+The helper-side dispatcher now composes namespace, byte-copy, equality and cleanup
+components through explicit bounded request schemas. It performs no filesystem
+work during creation and validates the complete argument layout before opening a
+namespace. Successful acquisition returns the complete extent, storage identity,
+digest and a borrowed read-only descriptor; failures expose no candidate payload.
+
+Focused operation/storage/acquisition/admission/equality checks passed, exit 0
+(`operation-focused-final` under `build/se03-evidence-20261119/`), using
+`build/se03-operation-focused-20261119` with `_FORTIFY_SOURCE=3`. The operation
+suite passed fortified Clang ASan/UBSan (`operation-sanitize-final`, 0), using
+`build/se03-operation-sanitize-20261119` and the flags above. Component analysis
+passed (`operation-analysis-final`, 0). The initial analysis found signed bitwise
+flag operations; these were corrected, and the original diagnostic log remains.
+Cancellation is checked at 180 acquisition positions, including before a storage
+key is available and after a completed descriptor is owned. Cleanup remains an
+explicit caller obligation; releasing operation state does not release that duty.
+
+These checks exercise actual local files without GDB or target access. Supervised
+producer dispatch, frontend admission integration, full SE03 host regression and
+F07 acceptance remain pending.

@@ -25,6 +25,7 @@ struct tb_symbol_storage {
     TbSymbolBudget_t      *construction;
     const char            *path;
     TbSymbolStorageKey_t   key;
+    uint64_t               progress;
     StoragePhase_e         phase;
     TbSymbolOutcome_e      outcome;
     int                    directory;
@@ -98,6 +99,7 @@ TbSymbolOutcome_e tb_symbol_storage_step(TbSymbolStorage_t *storage)
 {
     if (!storage)
         return TB_SYMBOL_OPERATIONAL_FAILURE;
+    StoragePhase_e before = storage->phase;
     switch (storage->phase) {
     case STORAGE_CREATE:
         if (!mkdir(storage->path, 0700)) {
@@ -148,6 +150,10 @@ TbSymbolOutcome_e tb_symbol_storage_step(TbSymbolStorage_t *storage)
     case STORAGE_FAILED:
         break;
     }
+    /* Initialization has four forward-only transitions; terminal phases never
+     * advance, and EINTR does not count as progress. */
+    if (storage->phase != before)
+        ++storage->progress;
     return storage->outcome;
 }
 
@@ -170,6 +176,12 @@ bool tb_symbol_storage_created(const TbSymbolStorage_t *storage)
 int tb_symbol_storage_error(const TbSymbolStorage_t *storage)
 {
     return storage ? storage->error : EINVAL;
+}
+
+
+uint64_t tb_symbol_storage_progress(const TbSymbolStorage_t *storage)
+{
+    return storage ? storage->progress : 0;
 }
 
 
@@ -307,4 +319,20 @@ bool tb_symbol_storage_remove(TbSymbolStorage_t *storage)
         return false;
     storage->phase = STORAGE_REMOVED;
     return true;
+}
+
+
+bool tb_symbol_storage_discard_empty(TbSymbolStorage_t *storage, uint64_t slot)
+{
+    char name[48];
+    if (!leaf_name(storage, slot, name, sizeof(name)))
+        return false;
+    struct stat native;
+    if (fstatat(storage->directory, name, &native, AT_SYMLINK_NOFOLLOW))
+        return errno == ENOENT;
+    if (!S_ISREG(native.st_mode) || native.st_uid != geteuid() || native.st_nlink != 1 || native.st_size) {
+        errno = ESTALE;
+        return false;
+    }
+    return !unlinkat(storage->directory, name, 0);
 }

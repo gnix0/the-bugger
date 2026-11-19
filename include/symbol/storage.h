@@ -27,6 +27,7 @@ TbSymbolOutcome_e tb_symbol_storage_step(TbSymbolStorage_t *storage);
 bool tb_symbol_storage_key(const TbSymbolStorage_t *storage, TbSymbolStorageKey_t *key);
 bool tb_symbol_storage_created(const TbSymbolStorage_t *storage);
 int tb_symbol_storage_error(const TbSymbolStorage_t *storage);
+uint64_t tb_symbol_storage_progress(const TbSymbolStorage_t *storage);
 /* Namespace identity can survive helper restart. Destruction closes the local
  * directory descriptor and frees metadata; it never claims filesystem cleanup. */
 void tb_symbol_storage_destroy(TbSymbolStorage_t *storage);
@@ -53,5 +54,8 @@ bool tb_symbol_storage_unlink(TbSymbolStorage_t *storage, uint64_t slot,
 /* Only after all slots and references are retired. Refuses nonempty/replaced
  * directories; namespace cleanup is separate from helper process reaping. */
 bool tb_symbol_storage_remove(TbSymbolStorage_t *storage);
+/* Only for a fresh, unpublished slot owned by the caller whose growth grant was
+ * never dispatched. Refuses any nonempty or nonregular entry. */
+bool tb_symbol_storage_discard_empty(TbSymbolStorage_t *storage, uint64_t slot);
 
 #endif // THE_BUGGER_SYMBOL_STORAGE_H
