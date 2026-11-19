@@ -2620,3 +2620,26 @@ IDs. Startup settings and their supported ranges are in the
 [authoritative resource policy](native-symbol-engine.md#available-startup-configuration).
 A kernel operation that cannot yet be reaped prevents replacement; tests do not
 establish a universal filesystem or kernel scheduling guarantee.
+
+
+## Artifact admission ledger (SE03, partial)
+
+```sh
+make BUILD_DIR=build/se03-ledger-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-admission
+```
+
+Included in `test` and `test-ci`. These deterministic accounting checks perform
+no filesystem acquisition, debugger requests or target access. They cover
+per-file/aggregate exact and one-over boundaries, concurrent reservations,
+independent charges for shared contexts, cache reactivation, pinned backing,
+rejected cross-ledger/size-mismatched sharing and delayed cleanup. Reservations
+and evicted backing remain charged until explicit cleanup confirmation.
+
+Allocation fault injection covers both ticket allocations and ledger creation;
+failed ancestor-budget reservations roll back without mutation. Commit and
+cleanup are tested with allocation disabled. Zero-byte tickets still consume
+bounded metadata ownership and prevent premature destruction. Arithmetic covers
+the full `UINT64_MAX` logical boundary without allocating corresponding storage.
+These checks qualify ledger transitions, not source coherence, byte equality,
+physical cleanup or acquisition behavior; those require the remaining SE03 work.

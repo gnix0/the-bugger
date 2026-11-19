@@ -208,7 +208,7 @@ recorded independently below; neither introduces symbol discovery or live action
 | D04 | Bounded MI rejection recovery before live integration acceptance | Planned |
 | SE01 | Checked readers, physical record coordinates and streaming SHA-256 | Implemented; local verification recorded; integration review pending |
 | SE02 | Supervised helper | Transport, scheduling, process supervision and lazy event-loop integration implemented; artifact/decoder operations follow in their own gates |
-| SE03 | Retained-artifact ownership | Planned |
+| SE03 | Retained-artifact ownership | Logical admission ledger implemented; acquisition, protected backing and helper cleanup integration pending |
 | SE04–SE08 | ELF/DWARF definitions, names, native line tables/ranges and explicit companions | Planned |
 | SE09–SE10 | Complete bounded discovery/publication and actual production sizing | Planned |
 | SE11 | Offline artifact/Symbols/Source UI; may be accepted before runtime resolution | Planned |

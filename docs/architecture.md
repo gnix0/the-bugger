@@ -315,6 +315,36 @@ Session profile actions reserve separate rows
 at narrow widths. Keybind cell borders use color/bold or capture reverse video,
 without underlining box glyphs, which produces extra strokes in terminal fonts.
 
+
+### Artifact admission accounting (SE03, partial)
+
+`src/symbol/admission.c` provides an independent logical-storage ledger. Each
+acquisition first reserves its complete proposed file size. Separate opens and
+companion contexts each retain a full charge, including when their backing is
+shared. Allocation failures leave existing tickets and charges unchanged.
+Bookkeeping allocations also count toward the enclosing frontend account.
+
+The ledger performs constant-time ownership transitions without filesystem or
+GDB calls. Publication uses backing ownership preallocated during reservation;
+commit and cleanup require no further allocation. It checks lifecycle, owner
+and length when sharing, while the acquisition manager must independently prove
+complete byte equality and confirm disposal of temporary storage before sharing.
+No digest, path or ledger ticket establishes content identity.
+
+Closing the last context transfers its full charge to cached backing. Eviction
+marks cleanup pending; cancellation likewise retains its reservation until
+cleanup is confirmed. Neither helper failure nor a cleanup request alone proves
+that storage has been relinquished. The ledger refuses destruction while any
+reservation, context, cached backing or cleanup owner remains, including zero-byte
+files. Opaque tickets are internal owner handles and are consumed on successful
+close or confirmed cleanup.
+
+This is the accounting part of SE03. Acquisition, protected frozen storage,
+coherence evidence, content identity, deduplication and helper cleanup evidence
+remain to be integrated before SE03 completion. The resource defaults and
+failure policy remain in the [authoritative contract](native-symbol-engine.md#resource-policy).
+
+
 ## Source fullscreen rendering
 
 `App_t.fullscreen_source` is a temporary pane identifier, or -1 for ordinary tiled

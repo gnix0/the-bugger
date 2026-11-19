@@ -5666,3 +5666,54 @@ Normal `make` passed and updated `build/the-bugger` (`runtime-normal-make.log`,
 checks passed. The helper execution foundation is implemented and locally
 verified. Actual artifact operations, decoder behavior, production sizing,
 consumer workflows and F07 acceptance remain separate work.
+
+
+## Symbol Engine admission ledger — 2026-11-19
+
+The first SE03 component implements logical storage admission independently of
+filesystem acquisition. Its internal tickets represent reservations, open-context
+charges, cached backing and pending cleanup; they do not establish content
+identity, byte equality, metadata validity or runtime authority. Acquisition and
+helper cleanup integration remain separate work within SE03.
+
+The maintained suite exercises concurrent reservations, exact and one-over file
+and aggregate ceilings, independent charges for contexts sharing a backing,
+cache reactivation and delayed cleanup. Foreign-ledger and different-size sharing
+are rejected. Allocation failure at each ticket allocation and ancestor-budget
+exhaustion leave both logical and allocation accounts unchanged. Commit and
+cleanup need no new allocation. Zero-byte files still retain counted ownership
+and allocation charges; `UINT64_MAX` arithmetic does not wrap.
+
+```sh
+make BUILD_DIR=build/se03-ledger-focused-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-admission
+make CC=clang BUILD_DIR=build/se03-ledger-sanitize-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' test-symbol-admission
+make analyze
+```
+
+All passed, exit 0. Logs and exit records are retained under
+`build/se03-evidence-20261119/` as `ledger-focused`, `ledger-sanitize` and
+`ledger-analysis`; `ledger-environment.txt` records host/tool versions. Configured
+analysis covers the production sources including the ledger. These checks do
+not exercise acquisition, actual backing deduplication or debugger access.
+
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/se03-ledger-ci-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make
+```
+
+The fresh fortified complete host baseline passed, exit 0 (`ledger-test-ci.log`,
+`ledger-test-ci.exit`), including existing native, input/terminal/tmux, localhost
+remote and offline OpenOCD coverage. The frozen ledger source manifest
+`ledger-tested-files.json` was checked after completion with no differences;
+`ledger-commands.json` records the baseline command and environment. The next
+acquisition component was developed separately and is not covered by this result.
+Normal `make` passed and updated `build/the-bugger` (`ledger-normal-make.log`,
+`ledger-normal-make.exit`). Local documentation references and whitespace checks
+passed. This is local host verification, not hosted CI, filesystem coherence
+qualification, physical validation, SE03 completion or F07 acceptance.

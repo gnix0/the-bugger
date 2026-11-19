@@ -29,6 +29,11 @@ records remain in the [validation records](../docs/validation.md).
   Included in `test-native`. See
   [helper verification](../docs/testing.md#supervised-symbol-engine-helper-se02).
 
+- `make test-symbol-admission`: logical artifact reservations, separate shared
+  context charges, cache transitions, delayed cleanup and allocation rollback.
+  Included in `test`; no acquisition or target access. See
+  [ledger coverage](../docs/testing.md#artifact-admission-ledger-se03-partial).
+
 - `make test-fullscreen`: Source-only fullscreen PTY checks, retained header/footer,
   split/resize restoration, hidden input regions and compact/keyboard behavior;
   included in `make test`. `make test-fullscreen-native` adds actual GDB source
