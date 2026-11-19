@@ -339,11 +339,41 @@ reservation, context, cached backing or cleanup owner remains, including zero-by
 files. Opaque tickets are internal owner handles and are consumed on successful
 close or confirmed cleanup.
 
-This is the accounting part of SE03. Acquisition, protected frozen storage,
-coherence evidence, content identity, deduplication and helper cleanup evidence
-remain to be integrated before SE03 completion. The resource defaults and
-failure policy remain in the [authoritative contract](native-symbol-engine.md#resource-policy).
+The ledger is integrated with acquisition and helper cleanup in later SE03 work.
+Acquisition validation and byte equality remain prerequisites outside the ledger;
+it cannot grant admission by itself.
 
+### Private byte acquisition (SE03, partial)
+
+`src/symbol/acquire.c` implements the helper-side filesystem state machine,
+independently testable without transport. It inspects a regular origin through
+an owned descriptor and offers its size before creating storage. Copying starts
+only after an exact explicit grant; reads and writes remain within that extent
+when the source grows. Each service step performs at most one filesystem operation
+and bounds file-data inspection to its supplied checkpoint allowance. Blocking
+filesystem calls still require independent parent supervision.
+
+Storage uses an unnamed `O_TMPFILE | O_EXCL` inode on a recognized local filesystem
+(ext4, XFS, Btrfs or tmpfs). Other backing filesystems are unavailable in this
+profile; they cannot silently select remote storage or a named-file fallback.
+The file is protected to owner-read mode, reopened read-only with close-on-exec,
+and checked before the sole staging writer closes. There are no writable mappings.
+Only then does complete-file SHA-256 run. Success transfers one read-only descriptor;
+failure/cancellation releases owned descriptors and never exposes a partial digest.
+See Linux [unnamed temporary files](https://man7.org/linux/man-pages/man2/open.2.html)
+and [descriptor release](https://man7.org/linux/man-pages/man2/close.2.html).
+
+Size, inode and modification/change-time comparisons, plus an origin-path check,
+reject detected mutations. Unchanged checks establish no atomic source coherence.
+The result is raw frozen bytes with coherence unproven; required ELF/DWARF
+validation, content identity and deduplication remain separate. This copy path
+provides no reflink qualification or coherent-snapshot claim.
+
+The component takes an explicit storage directory and file ceiling. It has no
+frontend entry point, automatic acquisition or new startup setting yet. Helper
+offer/grant framing, cleanup confirmation, retained-context integration and
+qualified full-file reflink support remain SE03 work. Component success does not
+complete SE03 or make Symbols functional.
 
 ## Source fullscreen rendering
 

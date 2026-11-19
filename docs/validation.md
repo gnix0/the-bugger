@@ -5717,3 +5717,69 @@ Normal `make` passed and updated `build/the-bugger` (`ledger-normal-make.log`,
 `ledger-normal-make.exit`). Local documentation references and whitespace checks
 passed. This is local host verification, not hosted CI, filesystem coherence
 qualification, physical validation, SE03 completion or F07 acceptance.
+
+
+## Symbol Engine byte acquisition component — 2026-11-19
+
+The next SE03 component implements bounded filesystem copying and complete
+frozen-byte hashing. It is independently testable and remains disconnected from
+the private worker dispatcher and TUI. The worker still returns Unsupported for
+artifact operations. This component produces raw retained bytes, with source
+coherence unproven; decoder validation and artifact admission remain subsequent
+work. Qualified full-file reflink, deduplication and helper cleanup evidence are
+not established here.
+
+The maintained local suite uses actual unnamed temporary files on the host's
+`/tmp` tmpfs. It verifies exact size grants, copies crossing buffer boundaries,
+short/interrupted transfers, source growth/truncation, path replacement,
+allocation/storage/read failures and per-stage cancellation. Instrumented reads
+check that no supported staging writer remains when frozen-byte hashing begins.
+Retained bytes remain unchanged after the source is written. Read-only,
+close-on-exec, owner-read protection, descriptor-number reuse after a close error,
+resource rollback and descriptor cleanup are checked. Failure while hashing
+cannot expose a prefix digest or modify the caller's result.
+
+```sh
+make BUILD_DIR=build/se03-acquire-focused-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-acquire test-symbol-admission
+make CC=clang BUILD_DIR=build/se03-acquire-sanitize-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' test-symbol-acquire test-symbol-admission
+make analyze
+```
+
+The focused and sanitizer runs passed, exit 0 (`acquire-focused-final`,
+`acquire-sanitize-final` logs/exit records in `build/se03-evidence-20261119/`).
+Configured full production analysis passed, exit 0 (`acquire-analysis-initial`).
+A preceding component analysis identified swappable parameters and signed flag
+operations; these were corrected before the frozen regression source manifest
+(`acquire-component-analysis-initial.log`, exit 1). Host/tool versions remain
+in `ledger-environment.txt` from this same session.
+
+Unsupported backing filesystem behavior is injected explicitly. Runtime checks
+recognize ext4, XFS, Btrfs and tmpfs; recognizing these types is not qualification
+of every filesystem/kernel configuration. The separate local feasibility check
+`storage-feasibility.json` observed unnamed read-only retention on the build
+filesystem and tmpfs. Neither result proves atomic source consistency, persistent
+storage durability, reflink behavior or production acquisition performance.
+
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/se03-acquire-ci-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make
+```
+
+The fresh fortified complete host baseline passed, exit 0 (`acquire-test-ci.log`,
+`acquire-test-ci.exit`). The normal build passed and updated `build/the-bugger`
+(`acquire-normal-make.log`, `acquire-normal-make.exit`). The frozen implementation,
+header, test-code and Makefile hashes in `acquire-tested-files.json` remained
+unchanged. `tests/README.md` received its documentation update afterward; that
+non-code difference is recorded in `acquire-manifest-check.json`. Baseline command
+and environment are in `acquire-commands.json`. Local documentation references
+and whitespace checks passed.
+
+This is local host component/regression evidence, not hosted CI, XFS/Btrfs
+qualification, source-coherence proof, supervised acquisition acceptance,
+production sizing, physical validation, SE03 completion or F07 acceptance.

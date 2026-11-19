@@ -2643,3 +2643,30 @@ bounded metadata ownership and prevent premature destruction. Arithmetic covers
 the full `UINT64_MAX` logical boundary without allocating corresponding storage.
 These checks qualify ledger transitions, not source coherence, byte equality,
 physical cleanup or acquisition behavior; those require the remaining SE03 work.
+
+
+## Artifact byte acquisition (SE03, partial)
+
+```sh
+make BUILD_DIR=build/se03-acquire-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-acquire
+```
+
+Included in `test` and `test-ci`. Controlled local filesystem fixtures exercise
+empty/binary files, short and interrupted transfers, exact grant boundaries,
+source growth/truncation, path replacement, allocation/storage/read failures and
+cancellation at every stage. Per-step instrumentation bounds file data inspected;
+source growth cannot grow staging beyond its reservation. During frozen-byte
+hashing, descriptor inspection verifies that the supported staging writer has
+closed. Returned descriptors are read-only, close-on-exec, unlinked and protected;
+subsequent source writes leave retained bytes unchanged.
+
+Allocation accounts and descriptor counts return to baseline on failure and
+cancellation. Close-error injection includes descriptor-number reuse to detect
+unsafe retries. Unsupported storage filesystems fail explicitly. Hash-read
+failure leaves result storage untouched and never publishes a prefix digest.
+The suite rejects nonregular origins, including FIFOs without waiting for a writer.
+
+These are component checks on actual local files, without GDB or target access.
+They do not establish atomic acquisition coherence, qualify reflink, validate
+ELF/DWARF, or exercise the pending helper offer/grant and cleanup protocol.

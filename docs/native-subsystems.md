@@ -7,8 +7,9 @@ identities, explicit evidence and reusable offline capabilities without moving
 live-debugger responsibilities out of GDB/MI. The first concrete subsystem is
 the [Native Symbol Engine](native-symbol-engine.md), supporting F07 and later
 consumers. Its design is accepted; SE01 primitives and the SE02 helper foundation
-are implemented. Artifact/decoder work, consumer integration and subsystem
-acceptance remain planned.
+are implemented. SE03 admission accounting and private byte-copy components are
+implemented; their helper integration, artifact/decoder work, consumers and
+subsystem acceptance remain pending.
 This initiative introduces no runtime dependency, prototype or public SDK.
 
 The Symbol Engine separates retained artifacts, physical records, discovery,

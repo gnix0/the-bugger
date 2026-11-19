@@ -34,6 +34,11 @@ records remain in the [validation records](../docs/validation.md).
   Included in `test`; no acquisition or target access. See
   [ledger coverage](../docs/testing.md#artifact-admission-ledger-se03-partial).
 
+- `make test-symbol-acquire`: bounded private-file copying, explicit size grants,
+  complete frozen-byte hashing, mutation detection, descriptor cleanup and failures.
+  Included in `test`; helper acquisition integration is pending. See
+  [acquisition coverage](../docs/testing.md#artifact-byte-acquisition-se03-partial).
+
 - `make test-fullscreen`: Source-only fullscreen PTY checks, retained header/footer,
   split/resize restoration, hidden input regions and compact/keyboard behavior;
   included in `make test`. `make test-fullscreen-native` adds actual GDB source
