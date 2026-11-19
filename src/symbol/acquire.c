@@ -1,9 +1,9 @@
 #define _GNU_SOURCE /* NOLINT(bugprone-reserved-identifier) -- Linux private filesystem backing. */
 #include "symbol/acquire.h"
+#include "symbol/storage.h"
 
 #include <errno.h>
 #include <fcntl.h>
-#include <linux/magic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -321,8 +321,7 @@ TbSymbolOutcome_e tb_symbol_acquire_step(TbSymbolAcquire_t *acquisition, size_t 
         if (fstatfs(acquisition->directory_fd, &filesystem)) {
             if (errno != EINTR)
                 fail(acquisition, TB_SYMBOL_ACQUIRE_STORAGE, errno);
-        } else if (filesystem.f_type != EXT4_SUPER_MAGIC && filesystem.f_type != XFS_SUPER_MAGIC &&
-                   filesystem.f_type != BTRFS_SUPER_MAGIC && filesystem.f_type != TMPFS_MAGIC) {
+        } else if (!tb_symbol_storage_local_type((unsigned long)filesystem.f_type)) {
             fail(acquisition, TB_SYMBOL_ACQUIRE_STORAGE, EOPNOTSUPP);
         } else {
             acquisition->phase = ACQUIRE_STORAGE;

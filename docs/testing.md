@@ -2699,3 +2699,23 @@ not integrated content deduplication or acquisition coherence.
 `O_PATH`, writable descriptors, mismatched extents and per-input I/O failures
 cannot produce equality proof. The suite checks input-specific failure masks,
 unchanged output on failure and ancestor-budget exhaustion.
+
+
+## Retained storage namespaces (SE03, partial)
+
+```sh
+make BUILD_DIR=build/se03-storage-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-storage test-symbol-acquire
+```
+
+Included in `test` and `test-ci`. Actual local directories/files verify exclusive
+creation, owner-only protection, read-only/close-on-exec readers, helper-state
+reconstruction from captured namespace identity, and complete file/namespace
+cleanup. Wrong identities or lengths cannot reopen data. Replaced files and
+namespaces survive rejected stale cleanup; nonempty directories cannot be removed.
+A consumed namespace handle cannot remove a new directory at its old pathname.
+
+Allocation failures and cancellation release local metadata without pretending
+that created filesystem objects disappeared. These component checks do not yet
+qualify frontend admission, source coherence, deduplication or the integrated
+cleanup state machine.

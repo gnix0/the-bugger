@@ -159,6 +159,98 @@ component, real-process and real-GDB isolation evidence. Actual artifact/decoder
 workloads, search publication and live consumers remain later foundations; this
 execution boundary does not complete F07 or qualify physical targets.
 
+### Artifact admission accounting (SE03, partial)
+
+`src/symbol/admission.c` provides an independent logical-storage ledger. Each
+acquisition first reserves its complete proposed file size. Separate opens and
+companion contexts each retain a full charge, including when their backing is
+shared. Allocation failures leave existing tickets and charges unchanged.
+Bookkeeping allocations also count toward the enclosing frontend account.
+
+The ledger performs constant-time ownership transitions without filesystem or
+GDB calls. Publication uses backing ownership preallocated during reservation;
+commit and cleanup require no further allocation. It checks lifecycle, owner
+and length when sharing, while the acquisition manager must independently prove
+complete byte equality and confirm disposal of temporary storage before sharing.
+No digest, path or ledger ticket establishes content identity.
+
+Closing the last context transfers its full charge to cached backing. Eviction
+marks cleanup pending; cancellation likewise retains its reservation until
+cleanup is confirmed. Neither helper failure nor a cleanup request alone proves
+that storage has been relinquished. The ledger refuses destruction while any
+reservation, context, cached backing or cleanup owner remains, including zero-byte
+files. Opaque tickets are internal owner handles and are consumed on successful
+close or confirmed cleanup.
+
+The ledger is integrated with acquisition and helper cleanup in later SE03 work.
+Acquisition validation and byte equality remain prerequisites outside the ledger;
+it cannot grant admission by itself.
+
+### Private byte acquisition (SE03, partial)
+
+`src/symbol/acquire.c` implements the helper-side filesystem state machine,
+independently testable without transport. It inspects a regular origin through
+an owned descriptor and offers its size before creating storage. Copying starts
+only after an exact explicit grant; reads and writes remain within that extent
+when the source grows. Each service step performs at most one filesystem operation
+and bounds file-data inspection to its supplied checkpoint allowance. Blocking
+filesystem calls still require independent parent supervision.
+
+Storage uses an unnamed `O_TMPFILE | O_EXCL` inode on a recognized local filesystem
+(ext4, XFS, Btrfs or tmpfs). Other backing filesystems are unavailable in this
+profile; they cannot silently select remote storage or a named-file fallback.
+The file is protected to owner-read mode, reopened read-only with close-on-exec,
+and checked before the sole staging writer closes. There are no writable mappings.
+Only then does complete-file SHA-256 run. Success transfers one read-only descriptor;
+failure/cancellation releases owned descriptors and never exposes a partial digest.
+See Linux [unnamed temporary files](https://man7.org/linux/man-pages/man2/open.2.html)
+and [descriptor release](https://man7.org/linux/man-pages/man2/close.2.html).
+
+Size, inode and modification/change-time comparisons, plus an origin-path check,
+reject detected mutations. Unchanged checks establish no atomic source coherence.
+The result is raw frozen bytes with coherence unproven; required ELF/DWARF
+validation, content identity and deduplication remain separate. This copy path
+provides no reflink qualification or coherent-snapshot claim.
+
+The component takes an explicit storage directory and file ceiling. It has no
+frontend entry point, automatic acquisition or new startup setting yet. Helper
+offer/grant framing, cleanup confirmation, retained-context integration and
+qualified full-file reflink support remain SE03 work. Component success does not
+complete SE03 or make Symbols functional.
+
+`src/symbol/equal.c` compares two pinned frozen backings independently of their
+fingerprints. Positive equality requires every byte of both inputs; differing
+bytes give a distinct, successful negative result. Checkpoints bound both reads
+and comparison work, including when later service slices shrink. Descriptor
+properties and expected lengths are checked, then inode/length/time evidence is
+rechecked before reporting either result. Failure identifies affected input
+relationships, never treats an unread suffix as equal, and preserves caller-owned
+descriptors. This primitive does not perform artifact deduplication or merge
+open-context identities.
+
+### Retained filesystem namespaces (SE03, partial)
+
+`src/symbol/storage.c` owns helper-local handles to protected filesystem
+namespaces. Creation advances through directory creation, open, identity and
+filesystem checks without scanning a directory. Reopening requires the captured
+namespace identity and owner-only protection; a pathname alone cannot adopt a
+replacement namespace. Local backing-type qualification is shared with the
+byte-copy component.
+
+File slots are explicitly granted and never reused. The namespace permits no
+arbitrary leaf names or recursive deletion. Retained files stay linked while
+frontend descriptors close; their final deletion belongs to the supervised
+helper after dependent leases retire. Reader/open and unlink operations check
+exact storage identity, and unlink cannot delete a replacement file. Removing a
+namespace refuses nonempty or replaced directories. Destroying a local handle
+closes its descriptor and releases bookkeeping, without claiming filesystem
+cleanup. Storage coordinates establish ownership, not native record identity or
+byte equality.
+
+This component is not yet connected to artifact admission. Integrating its named
+retention with the anonymous helper-local copy component and the frontend ledger
+remains SE03 work. No artifact, discovery or live-action UI is introduced.
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
@@ -329,75 +421,6 @@ Session profile actions reserve separate rows
 at narrow widths. Keybind cell borders use color/bold or capture reverse video,
 without underlining box glyphs, which produces extra strokes in terminal fonts.
 
-
-### Artifact admission accounting (SE03, partial)
-
-`src/symbol/admission.c` provides an independent logical-storage ledger. Each
-acquisition first reserves its complete proposed file size. Separate opens and
-companion contexts each retain a full charge, including when their backing is
-shared. Allocation failures leave existing tickets and charges unchanged.
-Bookkeeping allocations also count toward the enclosing frontend account.
-
-The ledger performs constant-time ownership transitions without filesystem or
-GDB calls. Publication uses backing ownership preallocated during reservation;
-commit and cleanup require no further allocation. It checks lifecycle, owner
-and length when sharing, while the acquisition manager must independently prove
-complete byte equality and confirm disposal of temporary storage before sharing.
-No digest, path or ledger ticket establishes content identity.
-
-Closing the last context transfers its full charge to cached backing. Eviction
-marks cleanup pending; cancellation likewise retains its reservation until
-cleanup is confirmed. Neither helper failure nor a cleanup request alone proves
-that storage has been relinquished. The ledger refuses destruction while any
-reservation, context, cached backing or cleanup owner remains, including zero-byte
-files. Opaque tickets are internal owner handles and are consumed on successful
-close or confirmed cleanup.
-
-The ledger is integrated with acquisition and helper cleanup in later SE03 work.
-Acquisition validation and byte equality remain prerequisites outside the ledger;
-it cannot grant admission by itself.
-
-### Private byte acquisition (SE03, partial)
-
-`src/symbol/acquire.c` implements the helper-side filesystem state machine,
-independently testable without transport. It inspects a regular origin through
-an owned descriptor and offers its size before creating storage. Copying starts
-only after an exact explicit grant; reads and writes remain within that extent
-when the source grows. Each service step performs at most one filesystem operation
-and bounds file-data inspection to its supplied checkpoint allowance. Blocking
-filesystem calls still require independent parent supervision.
-
-Storage uses an unnamed `O_TMPFILE | O_EXCL` inode on a recognized local filesystem
-(ext4, XFS, Btrfs or tmpfs). Other backing filesystems are unavailable in this
-profile; they cannot silently select remote storage or a named-file fallback.
-The file is protected to owner-read mode, reopened read-only with close-on-exec,
-and checked before the sole staging writer closes. There are no writable mappings.
-Only then does complete-file SHA-256 run. Success transfers one read-only descriptor;
-failure/cancellation releases owned descriptors and never exposes a partial digest.
-See Linux [unnamed temporary files](https://man7.org/linux/man-pages/man2/open.2.html)
-and [descriptor release](https://man7.org/linux/man-pages/man2/close.2.html).
-
-Size, inode and modification/change-time comparisons, plus an origin-path check,
-reject detected mutations. Unchanged checks establish no atomic source coherence.
-The result is raw frozen bytes with coherence unproven; required ELF/DWARF
-validation, content identity and deduplication remain separate. This copy path
-provides no reflink qualification or coherent-snapshot claim.
-
-The component takes an explicit storage directory and file ceiling. It has no
-frontend entry point, automatic acquisition or new startup setting yet. Helper
-offer/grant framing, cleanup confirmation, retained-context integration and
-qualified full-file reflink support remain SE03 work. Component success does not
-complete SE03 or make Symbols functional.
-
-`src/symbol/equal.c` compares two pinned frozen backings independently of their
-fingerprints. Positive equality requires every byte of both inputs; differing
-bytes give a distinct, successful negative result. Checkpoints bound both reads
-and comparison work, including when later service slices shrink. Descriptor
-properties and expected lengths are checked, then inode/length/time evidence is
-rechecked before reporting either result. Failure identifies affected input
-relationships, never treats an unread suffix as equal, and preserves caller-owned
-descriptors. This primitive does not perform artifact deduplication or merge
-open-context identities.
 
 ## Source fullscreen rendering
 

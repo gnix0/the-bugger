@@ -19,7 +19,7 @@ PROJECT_CPPFLAGS := -Iinclude -Iinclude/tui -Iinclude/layout -Iinclude/gdb -Iinc
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
 SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/tui/editor.c src/tui/terminal.c src/tui/setup_capture.c src/tui/setup_restore.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/paths.c src/session/session.c src/session/openocd.c src/session/profiles.c src/session/setup.c src/model/context.c src/model/code.c src/model/browse.c src/model/monitor.c src/model/mmio.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/stack.c src/model/variables.c
-SOURCES += src/symbol/reader.c src/symbol/identity.c src/symbol/sha256.c src/symbol/wire.c src/symbol/schedule.c src/symbol/budget.c src/symbol/process.c src/symbol/worker.c src/symbol/helper.c src/symbol/admission.c src/symbol/acquire.c src/symbol/equal.c
+SOURCES += src/symbol/reader.c src/symbol/identity.c src/symbol/sha256.c src/symbol/wire.c src/symbol/schedule.c src/symbol/budget.c src/symbol/process.c src/symbol/worker.c src/symbol/helper.c src/symbol/admission.c src/symbol/acquire.c src/symbol/equal.c src/symbol/storage.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -977,7 +977,7 @@ test: test-symbol-admission
 -include $(BUILD_DIR)/tests/unit/test_symbol_admission.d
 
 
-$(BUILD_DIR)/test-symbol-acquire: $(BUILD_DIR)/tests/unit/test_symbol_acquire.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/budget.o
+$(BUILD_DIR)/test-symbol-acquire: $(BUILD_DIR)/tests/unit/test_symbol_acquire.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/budget.o
 	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=pread,--wrap=pwrite,--wrap=close,--wrap=fstatfs -o $@ $^ $(LDLIBS)
 
 .PHONY: test-symbol-acquire
@@ -999,3 +999,15 @@ test-symbol-equal: $(BUILD_DIR)/test-symbol-equal
 test: test-symbol-equal
 
 -include $(BUILD_DIR)/tests/unit/test_symbol_equal.d
+
+
+$(BUILD_DIR)/test-symbol-storage: $(BUILD_DIR)/tests/unit/test_symbol_storage.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-storage
+test-symbol-storage: $(BUILD_DIR)/test-symbol-storage
+	$(BUILD_DIR)/test-symbol-storage
+
+test: test-symbol-storage
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_storage.d

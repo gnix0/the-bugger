@@ -44,6 +44,11 @@ records remain in the [validation records](../docs/validation.md).
   `test`; integrated deduplication remains pending. See
   [equality coverage](../docs/testing.md#frozen-backing-equality-se03-partial).
 
+- `make test-symbol-storage`: private namespaces, captured storage identity,
+  retained files, restart reconstruction and stale/nonempty cleanup refusal.
+  Included in `test`; see
+  [storage coverage](../docs/testing.md#retained-storage-namespaces-se03-partial).
+
 - `make test-fullscreen`: Source-only fullscreen PTY checks, retained header/footer,
   split/resize restoration, hidden input regions and compact/keyboard behavior;
   included in `make test`. `make test-fullscreen-native` adds actual GDB source

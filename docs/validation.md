@@ -5863,3 +5863,32 @@ regression gate remain pending.
 Normal `make` passed and updated `build/the-bugger`
 (`helper-release-normal-make`, exit 0). Local documentation references and
 whitespace checks passed. Full SE03 regression remains pending integration.
+
+
+### Retained filesystem namespace component
+
+Named retained storage now has an independently testable helper-side namespace
+owner. Local files stay linked until frontend references close, with deletion
+performed separately under supervision. Namespace/file identities are storage
+ownership guards; they do not replace content identity, byte equality or metadata
+validation. The anonymous byte-copy component and frontend admission integration
+remain separate work.
+
+`test-symbol-storage` verifies exclusive creation, protected permissions, reader
+identity/extent checks, reconstructing helper-local state, replacement refusal,
+nonempty-directory refusal, allocation rollback and per-stage cancellation.
+Destroying local metadata leaves filesystem cleanup explicit. The same local
+backing-type policy is shared with acquisition.
+
+Focused storage, acquisition, admission and equality suites passed, exit 0
+(`storage-focused.log`, `storage-focused.exit` under
+`build/se03-evidence-20261119/`). Storage/acquisition also passed the fortified
+Clang ASan/UBSan checks (`storage-sanitize`, exit 0). Component analysis passed
+(`storage-analysis`, exit 0). Commands use `build/se03-storage-focused-20261119`
+and `build/se03-storage-sanitize-20261119` with the flags above and targets
+`test-symbol-storage test-symbol-acquire`; focused checks additionally include
+`test-symbol-admission test-symbol-equal`.
+
+These are actual local filesystem observations, not source-coherence, universal
+filesystem, supervised admission or production-performance qualification. Full
+SE03 host regression and F07 acceptance remain pending integration.
