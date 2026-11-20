@@ -509,6 +509,32 @@ Scratch and entry arrays are released before their backing descriptor; physical
 backing cleanup and logical admission remain separate owner responsibilities.
 
 
+### DWARF unit headers (SE05, partial)
+
+`src/symbol/dwarf.c` decodes initial lengths and non-split DWARF 4–5 unit headers
+without allocation or I/O. The supplied section extent and section-relative unit
+offset are checked independently of the available prefix. Initial-length decoding
+examines at most 12 bytes; unit decoding examines at most 40. Reserved length
+encodings, arithmetic overflow and out-of-section contributions fail without
+changing outputs. Bytes from the next contribution cannot complete a short header.
+
+Offset format and raw address size remain independent. DWARF 4 `.debug_info`
+headers identify a compile-or-partial scope until its root DIE is validated;
+`.debug_types` has a separate type header. DWARF 5 supports compile, partial and
+type headers in `.debug_info`. Split, skeleton and unknown headers remain explicit
+unsupported cases. Separately valid length framing does not decode their fields
+or establish complete coverage.
+
+Type-unit signatures remain raw metadata. Type offsets must fall after the header
+inside the same contribution; no DIE boundary, type relationship or semantic
+identity follows. Abbreviation offsets remain unresolved dependencies. Nonzero
+raw address sizes are retained without granting numeric/location support.
+Unit-body, abbreviation, form and reference validation follow in later SE05 steps;
+no catalog, helper request or UI action is introduced here. The layouts follow
+[DWARF 4](https://dwarfstd.org/doc/DWARF4.pdf) and
+[DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Section 7.5.1.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

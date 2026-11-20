@@ -210,7 +210,8 @@ independently below; symbol discovery and live native actions remain unavailable
 | SE02 | Supervised helper | Transport, scheduling, process supervision and lazy event-loop integration implemented; artifact/decoder operations follow in their own gates |
 | SE03 | Retained-artifact ownership | In progress: supervised acquisition, bounded reflink fallback and frontend ownership/lease/sharing components integrated; explicit Open workflow and acquisition-profile qualification remain |
 | SE04 | ELF foundation | In progress: retained-file reads, ELF records and scoped directory/symbol validation integrated with the helper; frontend evidence and production qualification remain |
-| SE05–SE08 | DWARF definitions, names, native line tables/ranges and explicit companions | Planned |
+| SE05 | DWARF structure | In progress: bounded DWARF 4–5 unit headers; abbreviation, form and reference validation remain |
+| SE06–SE08 | DWARF definitions/names, native line tables/ranges and explicit companions | Planned |
 | SE09–SE10 | Complete bounded discovery/publication and actual production sizing | Planned |
 | SE11 | Offline artifact/Symbols/Source UI; may be accepted before runtime resolution | Planned |
 | SE12–SE15 | Runtime preparation, native Watches, Memory drafts, exact Source actions and guarded Console/DSO integration | Planned |

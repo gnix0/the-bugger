@@ -6317,3 +6317,43 @@ This is local host evidence, not hosted CI, physical producer/architecture
 qualification, coherent-source proof, frontend evidence publication or F07
 acceptance. DWARF, production sizing, discovery and consumer integration remain
 separate gates.
+
+
+### Bounded DWARF unit-header decoding — 2026-11-20
+
+Initial-length and non-split DWARF 4–5 unit-header decoding now uses checked
+section-relative extents and fixed prefix bounds. Offset format remains separate
+from raw address size. DWARF 4 info headers retain compile-or-partial uncertainty;
+unit-body, abbreviation and reference evidence remains unavailable at this layer.
+
+Local focused checks, sanitizers, static analysis and the complete fresh host
+baseline passed, exit 0. Logs and exit records are under
+`build/se05-evidence-20261120/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused headers/readers | `make BUILD_DIR=build/se05-unit-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-dwarf test-symbol-primitives`; `units-focused`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se05-unit-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `units-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se05-unit-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-dwarf test-symbol-primitives`; `units-sanitize`. |
+| Analysis/build | `make analyze` across 51 production source files and normal `make`; `units-analysis` and `units-normal-make`. |
+
+Authored prefixes cover both byte orders and offset formats, raw address sizes
+1/2/3/4/8/16/255, supported info/type headers and mixed-format contributions.
+Every shorter supported-header prefix fails with unchanged outputs. Reserved
+length markers, exact and overflowing extents, shortened declarations despite
+available following bytes, absent bodies, invalid type offsets and unsupported
+versions/unit kinds exercise failure boundaries. A 40-byte stack prefix with an
+oversized supplied length passes under sanitizers without inspection beyond the
+fixed ceiling. Generic length framing remains distinct from supported unit
+validation, including empty or unsupported contributions.
+
+`units-tested-files.json`, `units-tested.patch`, captured source/header/test inputs
+and `units-environment.txt` identify the tested tree. Only documentation changed
+subsequently. Link checks covered 235 local references without errors; whitespace
+checks passed. The primary format references are DWARF 4 and 5, Section 7.5.1,
+linked in the architecture; downloaded copies and text extracts remain under
+ignored `build/se05-references-20261120/`.
+
+These are local host and authored-format results, not hosted CI, native/embedded
+producer qualification, complete unit/DIE validation or SE05/F07 acceptance.
+No helper request, discovery, runtime binding or target access was introduced.

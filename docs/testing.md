@@ -2955,3 +2955,24 @@ command reply, retaining the stopped-state assertion. Physical unlink precedes
 logical capacity release. This qualifies scoped helper composition, not frontend
 evidence publication, search/index reconstruction, runtime authority, producer/hardware
 qualification or F07 acceptance.
+
+
+## DWARF unit headers (SE05, partial)
+
+```sh
+make BUILD_DIR=build/se05-units CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-dwarf test-symbol-primitives
+```
+
+Included in `test`/`test-ci`. Authored prefixes cover DWARF32/64 and both byte
+orders, DWARF 4 info/type headers, DWARF 5 compile/partial/type headers, raw address
+sizes independent of offset width and mixed-format contributions in one section.
+Every truncated header prefix fails with unchanged outputs. Reserved initial
+lengths, exact/overflowing section bounds, shortened declared units, absent bodies,
+invalid type offsets, unsupported versions/unit kinds and invalid API arguments
+remain distinct from successful header decoding. A bounded stack prefix with an
+oversized supplied length checks the fixed inspection ceiling under sanitizers.
+
+These checks establish header/framing behavior only. They do not validate DIEs,
+abbreviation dependencies, attributes or cross-unit references, qualify arbitrary
+producers/targets or establish SE05/F07 acceptance.
