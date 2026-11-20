@@ -69,7 +69,10 @@ static void paths(Arguments_t *arguments, const char *first, const char *second)
 
 static TbSymbolOperation_t *operation(uint32_t code, const Arguments_t *arguments, TbSymbolBudget_t *budget)
 {
-    TbSymbolOperation_t *state = tb_symbol_operation_create(code, arguments->bytes, arguments->length, budget);
+    TbSymbolOperation_t *state = tb_symbol_operation_create(code, arguments->bytes, arguments->length,
+                                                           (TbSymbolOperationBudgets_t){
+        .control = budget
+    });
     CHECK(state);
     return state;
 }
@@ -371,10 +374,14 @@ static void malformed(const char *path, TbSymbolBudget_t *budget)
     tb_symbol_operation_destroy(state);
     struct stat native;
     CHECK(stat(path, &native) && errno == ENOENT && !budget->used);
-    CHECK(!tb_symbol_operation_create(0, NULL, 0, budget));
+    CHECK(!tb_symbol_operation_create(0, NULL, 0, (TbSymbolOperationBudgets_t){
+        .control = budget
+    }));
     fail_allocation = true;
     CHECK(!tb_symbol_operation_create(TB_SYMBOL_OPERATION_CREATE_STORAGE, arguments.bytes,
-                                      arguments.length, budget));
+                                      arguments.length, (TbSymbolOperationBudgets_t){
+        .control = budget
+    }));
     fail_allocation = false;
     CHECK(!budget->used);
     arguments = (Arguments_t){0};

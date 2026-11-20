@@ -26,6 +26,13 @@ static void command(TbGdb_t *gdb, const char *op, const char *argument)
     uint64_t end = tb_gdb_now_ms() + 2000;
     while (replies == before && tb_gdb_now_ms() < end) { pump(gdb); }
     CHECK(replies > before);
+    if (strcmp(op, "-stop") == 0) {
+        /* The fixture's result and asynchronous stop are separate MI records. */
+        end = tb_gdb_now_ms() + 2000;
+        while (tb_gdb_state(gdb) != TB_GDB_STOPPED && tb_gdb_now_ms() < end)
+            pump(gdb);
+        CHECK(tb_gdb_state(gdb) == TB_GDB_STOPPED);
+    }
 }
 static void run(const char *peer, const char *mode)
 {
@@ -87,6 +94,7 @@ static void run(const char *peer, const char *mode)
 int main(int argc, char *argv[])
 {
     CHECK(argc == 2);
+    run(argv[1], "bp-stop-delayed");
     run(argv[1], "bp-normal"); run(argv[1], "bp-race"); run(argv[1], "bp-resume-error"); run(argv[1], "bp-timeout");
     run(argv[1], "bp-timeout-silent"); run(argv[1], "bp-clean-error");
     run(argv[1], "bp-timeout-ambiguous");

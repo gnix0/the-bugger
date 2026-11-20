@@ -158,9 +158,9 @@ startup settings and failure policy are authoritative in the
 [resource policy](native-symbol-engine.md#resource-policy).
 
 The [helper tests](testing.md#supervised-symbol-engine-helper-se02) distinguish
-component, real-process and real-GDB isolation evidence. Artifact storage
-integration is described below; decoder workloads, search publication and live
-consumers remain later foundations. This
+component, real-process and real-GDB isolation evidence. Artifact storage and scoped ELF validation
+integration are described below; search publication and live consumers remain
+later foundations. This
 execution boundary does not complete F07 or qualify physical targets.
 
 ### Artifact admission accounting (SE03, partial)
@@ -398,7 +398,7 @@ and its [section](https://gabi.xinuos.com/elf/03-sheader.html),
 [symbol-table](https://gabi.xinuos.com/elf/05-symtab.html) definitions.
 These allocation-free components introduce no helper request, catalog, search,
 Source navigation or runtime binding. Section-directory and symbol-table validation
-follow below; production helper integration remains a later SE04 step. Existing
+follow below, including scoped helper validation. Existing
 `src/model/images.c` libelf consumers are unchanged.
 
 
@@ -432,7 +432,8 @@ destruction. They do not own frontend publication guarantees or grant code/stora
 meaning to raw section attributes. Program entry semantics, other cross-section
 relationships and processor/OS semantics remain separate validation scopes.
 Symbol-table dependencies have their own scope below. Production cache sizing
-still belongs to SE10; no runtime helper request or UI consumer is added by this component.
+still belongs to SE10. Scoped helper integration is described below; this
+component introduces no UI consumer.
 
 
 ### ELF symbol-table dependencies (SE04, partial)
@@ -464,8 +465,48 @@ physical identity still requires the admitted content identity. Undefined, absol
 common, TLS and processor-specific records gain no ordinary-storage or code claim
 from these checks. Object footprints, language types, program/section mapping,
 runtime correspondence, access authorization and independent frontend evidence
-remain separate work. This component adds no production helper request or UI action;
-SE10 still determines production cache/index limits.
+remain separate work. Scoped helper validation follows below; no UI action is
+introduced. SE10 still determines production cache/index limits.
+
+
+### Supervised ELF validation (SE04, partial)
+
+The internal helper dispatcher accepts explicit directory or selected symbol-table
+validation requests over an already retained file. Requests carry its namespace
+identity, slot, file identity and extent. The helper checks the private namespace
+and reopens that exact backing read-only; it never searches an origin path,
+admits a new file or discovers companions. The caller retains the content/backing
+lease through the matching worker-retirement acknowledgement or confirmed reap.
+
+Directory construction precedes selected symbol validation. Only completed scopes
+produce the fixed 56-byte summary; it identifies the selected scope, counts and
+supported header/name-coverage facts. It is not an inventory window, physical
+record binding or frontend validation-evidence owner. Unsupported coverage,
+malformed dependencies, cancellation, stale interest, resource and operational
+failure expose no candidate prefix. Diagnostics retain the failing dependency
+category and section/record ordinal where available. Program semantics and
+runtime mappings remain unexamined by this request.
+
+Decoder construction uses one shared helper account, independently of IPC and
+frontend storage. The internal helper configuration accepts an explicit byte
+ceiling without reserving it upfront. Zero disables decoder requests before
+filesystem access; there is no selected production default or user-facing startup
+setting yet. Positive allowances in the harness qualify the bounded implementation,
+not production sizing. SE10 must select the production bounds before dependent
+acceptance. Exhaustion fails the request and releases construction ownership;
+a subsequent smaller scope can succeed against the same retained file.
+
+The private wire schema is version 2: the handshake includes the decoder ceiling,
+and failure diagnostics include the ordinal. Reserved inline control storage
+accommodates these bounded messages. Version mismatch closes the helper channel;
+it does not affect GDB. Decoder progress reaches the existing parent watchdog.
+The parent samples monotonic time after a complete frame is received, so progress
+created after the pump's initial sample is not mistaken for a future event.
+Worker timestamps retain their queue/deadline meaning; genuinely future or stale
+claims still fail closed. Cancellation/restart use the existing supervision and
+exact retirement rules.
+Scratch and entry arrays are released before their backing descriptor; physical
+backing cleanup and logical admission remain separate owner responsibilities.
 
 
 ### Event loop and text rendering

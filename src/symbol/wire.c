@@ -10,7 +10,7 @@
 #include <unistd.h>
 
 enum {
-    WIRE_VERSION = 1,
+    WIRE_VERSION = 2,
     WIRE_TRAILER = 0xa5,
     WIRE_MAX_RECEIVED_FDS = 16
 };

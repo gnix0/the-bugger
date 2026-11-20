@@ -1,5 +1,6 @@
 #include "symbol/operation.h"
 #include "symbol/equal.h"
+#include "symbol/symbols.h"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -21,11 +22,16 @@ typedef enum {
     OPERATION_REMOVE_FILE,
     OPERATION_REMOVE_NAMESPACE,
     OPERATION_DISCARD_EMPTY,
+    OPERATION_ELF_OPEN,
+    OPERATION_ELF_INIT,
+    OPERATION_ELF_SECTIONS,
+    OPERATION_ELF_SYMBOLS,
     OPERATION_DONE
 } OperationPhase_e;
 
 struct tb_symbol_operation {
     TbSymbolBudget_t       *storage;
+    TbSymbolBudget_t       *decoder;
     const unsigned char    *arguments;
     size_t                  length;
     uint64_t                words[9];
@@ -51,16 +57,20 @@ struct tb_symbol_operation {
     TbSymbolStorage_t      *namespace;
     TbSymbolAcquire_t      *acquisition;
     TbSymbolEquality_t     *comparison;
+    TbSymbolSections_t     *sections;
+    TbSymbolSymbols_t      *symbols;
     unsigned char           result[56];
     size_t                  result_length;
     int                     descriptors[2];
     int                     system_error;
     uint32_t                detail;
+    uint64_t                record_index;
 };
 
 TbSymbolOperation_t *tb_symbol_operation_create(uint32_t operation, const unsigned char *arguments,
-                                               size_t length, TbSymbolBudget_t *storage)
+                                               size_t length, TbSymbolOperationBudgets_t budgets)
 {
+    TbSymbolBudget_t *storage = budgets.control;
     if (!tb_symbol_protocol_owned(operation) || (length && !arguments) ||
         (storage && !tb_symbol_budget_reserve(storage, sizeof(TbSymbolOperation_t)))) {
         return NULL;
@@ -72,6 +82,7 @@ TbSymbolOperation_t *tb_symbol_operation_create(uint32_t operation, const unsign
         return NULL;
     }
     state->storage        = storage;
+    state->decoder        = budgets.decoder;
     state->arguments      = arguments;
     state->length         = length;
     state->code           = operation;
@@ -90,6 +101,9 @@ TbSymbolOperation_t *tb_symbol_operation_create(uint32_t operation, const unsign
         break;
     case TB_SYMBOL_OPERATION_REMOVE_STORAGE:
         state->word_count = 2;
+        break;
+    case TB_SYMBOL_OPERATION_ELF_VALIDATE:
+        state->word_count = 7;
         break;
     case TB_SYMBOL_OPERATION_DISCARD_EMPTY:
         state->word_count = 3;
@@ -208,6 +222,23 @@ static void layout(TbSymbolOperation_t *state)
         if (!state->slots[0] || !state->slots[1] || state->bytes > INT64_MAX)
             fail(state, TB_SYMBOL_MALFORMED);
         break;
+    case TB_SYMBOL_OPERATION_ELF_VALIDATE:
+        state->bytes = state->words[0];
+        state->slots[0] = state->words[1];
+        state->namespace_key = (TbSymbolStorageKey_t){
+            .device = state->words[2],
+            .inode  = state->words[3]
+        };
+        state->files[0] = (TbSymbolStorageInfo_t){
+            .key = {
+                .device = state->words[4],
+                .inode  = state->words[5]
+            },
+            .bytes = state->bytes
+        };
+        if (!state->slots[0] || state->bytes > INT64_MAX)
+            fail(state, TB_SYMBOL_MALFORMED);
+        break;
     case TB_SYMBOL_OPERATION_REMOVE_STORAGE:
         state->namespace_key = (TbSymbolStorageKey_t){
             .device = state->words[0],
@@ -283,6 +314,9 @@ static void namespace_step(TbSymbolOperation_t *state)
     case TB_SYMBOL_OPERATION_ACQUIRE:
         state->phase = OPERATION_ACQUIRE_INIT;
         break;
+    case TB_SYMBOL_OPERATION_ELF_VALIDATE:
+        state->phase = OPERATION_ELF_OPEN;
+        break;
     case TB_SYMBOL_OPERATION_COMPARE:
         state->phase = OPERATION_LEFT;
         break;
@@ -295,6 +329,86 @@ static void namespace_step(TbSymbolOperation_t *state)
     default:
         state->phase = OPERATION_DISCARD_EMPTY;
         break;
+    }
+}
+
+
+static void elf_complete(TbSymbolOperation_t *state)
+{
+    TbSymbolSectionsView_t directory;
+    TbSymbolSymbolsView_t symbols = {0};
+    if (!tb_symbol_sections_view(state->sections, &directory) ||
+        (state->symbols && !tb_symbol_symbols_view(state->symbols, &symbols))) {
+        fail(state, TB_SYMBOL_OPERATIONAL_FAILURE);
+        return;
+    }
+    tb_symbol_protocol_put(state->result, directory.count, 8);
+    tb_symbol_protocol_put(state->result + 8, state->words[6], 8);
+    tb_symbol_protocol_put(state->result + 16, symbols.count, 8);
+    tb_symbol_protocol_put(state->result + 24, directory.header->object_type, 4);
+    tb_symbol_protocol_put(state->result + 28, directory.header->machine, 4);
+    tb_symbol_protocol_put(state->result + 32, directory.header->address_bytes, 4);
+    tb_symbol_protocol_put(state->result + 36,
+                           directory.header->byte_order == TB_SYMBOL_LITTLE_ENDIAN ? 1 : 2, 4);
+    tb_symbol_protocol_put(state->result + 40,
+                           directory.names == TB_SYMBOL_SECTION_NAMES_AVAILABLE ? 1 :
+                           directory.names == TB_SYMBOL_SECTION_NAMES_COMPRESSED ? 2 : 0, 4);
+    tb_symbol_protocol_put(state->result + 44,
+                           state->symbols ? directory.entries[state->words[6]].header.type : 0, 4);
+    tb_symbol_protocol_put(state->result + 48, state->bytes, 8);
+    state->result_length = sizeof(state->result);
+    fail(state, TB_SYMBOL_SUCCESS);
+}
+
+
+static void elf_sections(TbSymbolOperation_t *state, size_t max_bytes)
+{
+    TbSymbolOutcome_e outcome = tb_symbol_sections_step(state->sections, max_bytes);
+    if (outcome == TB_SYMBOL_PENDING)
+        return;
+    if (outcome != TB_SYMBOL_SUCCESS) {
+        TbSymbolSectionsFailure_t failure = tb_symbol_sections_failure(state->sections);
+        state->detail = TB_SYMBOL_DETAIL_ELF_SECTIONS | (uint32_t)failure.reason;
+        state->record_index = failure.section_index;
+        state->system_error = failure.system_error ? failure.system_error : failure.read.system_error;
+        fail(state, outcome);
+        return;
+    }
+    if (state->words[6] == UINT64_MAX) {
+        elf_complete(state);
+        return;
+    }
+    TbSymbolSectionsView_t directory;
+    if (!tb_symbol_sections_view(state->sections, &directory)) {
+        fail(state, TB_SYMBOL_OPERATIONAL_FAILURE);
+    } else if (state->words[6] >= directory.count) {
+        state->detail = TB_SYMBOL_DETAIL_ELF_SELECTION;
+        state->record_index = state->words[6];
+        fail(state, TB_SYMBOL_MALFORMED);
+    } else {
+        state->symbols = tb_symbol_symbols_create(directory, (TbSymbolTableSelection_t){
+            .section_index = state->words[6],
+            .descriptor    = state->descriptors[0]
+        }, state->decoder);
+        if (!state->symbols)
+            fail(state, TB_SYMBOL_RESOURCE_FAILURE);
+        else
+            state->phase = OPERATION_ELF_SYMBOLS;
+    }
+}
+
+
+static void elf_symbols(TbSymbolOperation_t *state, size_t max_bytes)
+{
+    TbSymbolOutcome_e outcome = tb_symbol_symbols_step(state->symbols, max_bytes);
+    if (outcome == TB_SYMBOL_SUCCESS) {
+        elf_complete(state);
+    } else if (outcome != TB_SYMBOL_PENDING) {
+        TbSymbolSymbolsFailure_t failure = tb_symbol_symbols_failure(state->symbols);
+        state->detail = TB_SYMBOL_DETAIL_ELF_SYMBOLS | (uint32_t)failure.reason;
+        state->record_index = failure.record_index;
+        state->system_error = failure.system_error ? failure.system_error : failure.read.system_error;
+        fail(state, outcome);
     }
 }
 
@@ -357,6 +471,11 @@ TbSymbolWorkResult_t tb_symbol_operation_step(TbSymbolOperation_t *state, size_t
         validate_string(state, max_bytes);
         break;
     case OPERATION_NAMESPACE_INIT: {
+        if (state->code == TB_SYMBOL_OPERATION_ELF_VALIDATE && !state->decoder) {
+            state->detail = TB_SYMBOL_DETAIL_ELF_DISABLED;
+            fail(state, TB_SYMBOL_UNSUPPORTED);
+            break;
+        }
         bool creating = state->code == TB_SYMBOL_OPERATION_CREATE_STORAGE;
         unsigned index = state->code == TB_SYMBOL_OPERATION_ACQUIRE ? 1 : 0;
         state->namespace = tb_symbol_storage_create(state->strings[index],
@@ -424,6 +543,28 @@ TbSymbolWorkResult_t tb_symbol_operation_step(TbSymbolOperation_t *state, size_t
         }
         break;
     }
+    case OPERATION_ELF_OPEN:
+        state->descriptors[0] = tb_symbol_storage_reader(state->namespace, state->slots[0], &state->files[0]);
+        if (state->descriptors[0] < 0) {
+            state->detail = TB_SYMBOL_DETAIL_ELF_OPEN;
+            io_failure(state);
+        } else {
+            state->phase = OPERATION_ELF_INIT;
+        }
+        break;
+    case OPERATION_ELF_INIT:
+        state->sections = tb_symbol_sections_create(state->files[0], state->descriptors[0], state->decoder);
+        if (!state->sections)
+            fail(state, TB_SYMBOL_RESOURCE_FAILURE);
+        else
+            state->phase = OPERATION_ELF_SECTIONS;
+        break;
+    case OPERATION_ELF_SECTIONS:
+        elf_sections(state, max_bytes);
+        break;
+    case OPERATION_ELF_SYMBOLS:
+        elf_symbols(state, max_bytes);
+        break;
     case OPERATION_REMOVE_FILE:
         if (!tb_symbol_storage_unlink(state->namespace, state->slots[0], &state->files[0].key))
             io_failure(state);
@@ -445,7 +586,9 @@ TbSymbolWorkResult_t tb_symbol_operation_step(TbSymbolOperation_t *state, size_t
     case OPERATION_DONE:
         break;
     }
-    uint64_t backend = state->acquisition ? tb_symbol_acquire_progress(state->acquisition) :
+    uint64_t backend = state->symbols ? tb_symbol_symbols_progress(state->symbols) :
+                       state->sections ? tb_symbol_sections_progress(state->sections) :
+                       state->acquisition ? tb_symbol_acquire_progress(state->acquisition) :
                        state->comparison ? tb_symbol_equal_progress(state->comparison) :
                        tb_symbol_storage_progress(state->namespace);
     if (before != state->phase || cursor != state->cursor || offset != state->string_offset ||
@@ -494,7 +637,8 @@ TbSymbolOperationResult_t tb_symbol_operation_result(const TbSymbolOperation_t *
     if (!state)
         return result;
     result.system_error = state->system_error;
-    result.detail = state->detail;
+    result.detail       = state->detail;
+    result.record_index = state->record_index;
     if (state->code == TB_SYMBOL_OPERATION_CREATE_STORAGE && state->namespace) {
         if (tb_symbol_storage_created(state->namespace))
             result.detail |= TB_SYMBOL_DETAIL_CREATED;
@@ -517,6 +661,8 @@ void tb_symbol_operation_destroy(TbSymbolOperation_t *state)
 {
     if (!state)
         return;
+    tb_symbol_symbols_destroy(state->symbols);
+    tb_symbol_sections_destroy(state->sections);
     tb_symbol_equal_destroy(state->comparison);
     tb_symbol_acquire_destroy(state->acquisition);
     for (unsigned i = 0; i < 2; ++i) {

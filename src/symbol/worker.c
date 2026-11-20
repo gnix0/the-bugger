@@ -37,6 +37,7 @@ struct worker {
     TbSymbolWire_t     *wire;
     TbSymbolSchedule_t *schedule;
     TbSymbolBudget_t    ipc;
+    TbSymbolBudget_t    decoder;
     WorkerJob_t         jobs[TB_SYMBOL_MAX_JOBS];
     uint64_t            generation;
     uint64_t            last_request;
@@ -132,7 +133,10 @@ static TbSymbolWorkResult_t job_step(void *context, uint64_t deadline_ns,
     }
     if (!job->state) {
         job->state = tb_symbol_operation_create(job->operation, job->arguments, job->length,
-                                                &job->owner->ipc);
+                                                (TbSymbolOperationBudgets_t){
+            .control = &job->owner->ipc,
+            .decoder = job->owner->decoder.limit ? &job->owner->decoder : NULL
+        });
         if (!job->state) {
             return (TbSymbolWorkResult_t){
                 .outcome  = TB_SYMBOL_RESOURCE_FAILURE,
@@ -196,6 +200,7 @@ static bool emit(void *context, const TbSymbolWorkIdentity_t *identity, TbSymbol
         tb_symbol_protocol_put(diagnostic + 12, facts.detail, 4);
         tb_symbol_protocol_put(diagnostic + 16, facts.key.device, 8);
         tb_symbol_protocol_put(diagnostic + 24, facts.key.inode, 8);
+        tb_symbol_protocol_put(diagnostic + 32, facts.record_index, 8);
         TbSymbolMessage_t message = tb_symbol_protocol_message(TB_SYMBOL_MESSAGE_DIAGNOSTIC, job->identity,
                                                                worker->generation, diagnostic,
                                                                sizeof(diagnostic));
@@ -309,14 +314,17 @@ static bool configure(Worker_t *worker, const TbSymbolMessage_t *message)
     uint64_t ipc = tb_symbol_protocol_get(message->payload + 16, 8);
     uint64_t checkpoint_bytes = tb_symbol_protocol_get(message->payload + 24, 4);
     uint64_t checkpoint_steps = tb_symbol_protocol_get(message->payload + 28, 4);
+    uint64_t decoder = tb_symbol_protocol_get(message->payload + 32, 8);
     if (!jobs || jobs > TB_SYMBOL_MAX_JOBS || !interests || interests > TB_SYMBOL_MAX_INTERESTS ||
-        !slice || ipc > SIZE_MAX || ipc < worker->ipc.used ||
+        !slice || ipc > SIZE_MAX || ipc < worker->ipc.used || decoder > SIZE_MAX ||
         checkpoint_bytes < 64 || checkpoint_bytes > TB_SYMBOL_WIRE_IO_BYTES ||
         !checkpoint_steps || checkpoint_steps > TB_SYMBOL_WIRE_IO_STEPS) {
         return false;
     }
     worker->schedule = tb_symbol_schedule_create((size_t)jobs, (size_t)jobs, &worker->ipc);
     if (!worker->schedule || ipc < worker->ipc.used)
+        return false;
+    if (decoder && !tb_symbol_budget_init(&worker->decoder, (size_t)decoder))
         return false;
     worker->generation = message->generation;
     worker->slice_ns = slice;
@@ -511,5 +519,5 @@ int tb_symbol_worker_main(int socket_fd)
     tb_symbol_schedule_destroy(worker.schedule);
     tb_symbol_wire_destroy(worker.wire);
     (void)tb_symbol_budget_release(&worker.ipc, sizeof(worker));
-    return worker.ipc.used ? EXIT_FAILURE : result;
+    return worker.ipc.used || worker.decoder.used ? EXIT_FAILURE : result;
 }

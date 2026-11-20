@@ -392,7 +392,11 @@ Count bookkeeping, retained capacity, owned strings, references and concurrent
 old/candidate/temporary storage. Charge shared allocations once. Every allocation
 has an accounting owner and checked reservation/release. Helper index/cache and
 construction costs require separate measured bounds; frontend limits cannot
-stand in for total helper memory.
+stand in for total helper memory. The internal helper configuration currently accepts
+an explicit shared decoder-construction allowance, with zero disabling decoder
+requests before filesystem access. This supplies a bounded integration path for
+verification without selecting a production default or startup setting ahead of
+SE10.
 
 | Timing boundary | Default | Enforcement and failure |
 |---|---:|---|

@@ -6,9 +6,13 @@
 
 #include <poll.h>
 
+/* decoder_bytes is a separate shared helper construction ceiling. Zero disables
+ * decoder requests before filesystem access; SE10 selects a production default.
+ * A positive explicit allowance reserves nothing in advance. */
 typedef struct {
     size_t   frontend_bytes;
     size_t   ipc_bytes;
+    size_t   decoder_bytes;
     size_t   max_jobs;
     size_t   max_interests;
     size_t   checkpoint_bytes;
@@ -55,6 +59,7 @@ typedef struct {
     int                   descriptor;
     int                   system_error;
     uint32_t              detail;
+    uint64_t              record_index;
     TbSymbolStorageKey_t  storage_key;
 } TbSymbolHelperResult_t;
 

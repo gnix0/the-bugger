@@ -2474,8 +2474,8 @@ The [Symbol Engine acceptance matrix](native-symbol-engine.md#acceptance-matrix)
 and [implementation gates](native-symbol-engine.md#implementation-gates-and-dependencies)
 define verification for the complete subsystem. The original planning delivery
 introduced no suites or commands. SE01 adds primitive checks; SE02 adds
-transport, scheduler, process and helper checks below. Acquisition, decoder and
-consumer tests remain future work. Existing
+transport, scheduler, process and helper checks below. SE03–SE04 add the
+implemented acquisition and ELF checks; DWARF and consumer tests remain future work. Existing
 commands remain in the [suite catalog](../tests/README.md).
 
 D04 will extend the existing `test-mi`/allocation and `test-controller` harnesses.
@@ -2860,11 +2860,12 @@ reader. File/reader/ledger ownership is retired and exact backing cleanup confir
 after comparison; construction accounting returns to baseline. This harness
 composition reads local file bytes only; no debugger, inferior or target access
 is involved. Agreement on those generated host files does not establish
-arbitrary-file validity, source coherence or production helper integration.
+arbitrary-file validity, source coherence or production acceptance. Scoped
+helper integration is tested separately below.
 
 Record decoding is not complete inventory validation. The checks below validate
 section/name and symbol dependencies. Compressed payloads, physical record binding
-and production helper requests remain separate work. These checks do not complete
+and frontend evidence ownership remain separate work. These checks do not complete
 SE04 or F07 acceptance.
 
 
@@ -2892,7 +2893,7 @@ retires ownership and confirms cleanup.
 
 These checks qualify the implemented section/name scope only. They do not validate
 all ELF relationships, decompress payloads, establish DWARF absence from missing
-names, add production helper requests or complete SE04/F07 acceptance.
+names or complete SE04/F07 acceptance.
 
 
 ## ELF symbol dependencies (SE04, partial)
@@ -2919,5 +2920,38 @@ name bytes with libelf after admission/acquisition, then confirms exact cleanup.
 
 These checks validate the implemented dependency scope, not language semantics,
 object/code footprints, target mappings, runtime access, arbitrary producer
-compatibility, production helper integration or SE04/F07 acceptance. Test budgets
+compatibility or SE04/F07 acceptance. Scoped helper integration follows below. Test budgets
 do not set production cache limits; SE10 remains the sizing gate.
+
+
+## Supervised ELF validation (SE04, partial)
+
+```sh
+make BUILD_DIR=build/se04-helper CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-inspect test-symbol-operation test-symbol-wire test-symbol-helper test-symbol-resource
+```
+
+Included in `test`/`test-ci`. `test-symbol-inspect` starts the production executable's
+private helper entry and admits authored files through the acquisition handshake
+and logical ledger. ELF32/64 in both byte orders cover directory-only and separate
+SYMTAB/DYNSYM scopes, malformed headers/names, unsupported compressed tables,
+out-of-range selection and exact backing mismatch. Complete summaries and failing
+section/record ordinals cross the versioned wire protocol; no debugger is started.
+
+The harness changes the origin after acquisition, cancels after decoder progress,
+restarts only after confirmed reap and preserves a separately retained descriptor.
+An explicit 80 KiB decoder allowance refuses combined construction, then admits a
+smaller directory-only scope after cleanup. A 512 KiB allowance exercises complete
+selected scopes. These are test configurations, not production defaults. The
+ordinary helper configuration disables decoder operations pending SE10 sizing;
+the disabled path refuses requests before namespace access.
+
+Transport/helper suites retain framing, descriptor, saturation, stale-generation,
+deadline and cleanup-acknowledgement coverage. A controlled clock advance during
+receipt verifies legitimate intervening progress while the existing future-time
+and buffered-progress assertions preserve deadline checks. The breakpoint harness
+also exercises a delayed asynchronous stopped event independently of the preceding
+command reply, retaining the stopped-state assertion. Physical unlink precedes
+logical capacity release. This qualifies scoped helper composition, not frontend
+evidence publication, search/index reconstruction, runtime authority, producer/hardware
+qualification or F07 acceptance.

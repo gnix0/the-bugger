@@ -153,7 +153,7 @@ static void header_bytes(unsigned char header[TB_SYMBOL_WIRE_HEADER_BYTES], size
     header[1] = 'B';
     header[2] = 'S';
     header[3] = 'E';
-    header[5] = 1;
+    header[5] = 2;
     header[7] = TB_SYMBOL_MESSAGE_RESULT;
     for (unsigned i = 0; i < 4; ++i)
         header[8 + i] = (unsigned char)(length >> ((3 - i) * 8));
@@ -278,7 +278,7 @@ static void rejected_frames(void)
         if (scenario == 0)
             header[0] = 'X';
         if (scenario == 1)
-            header[5] = 2;
+            header[5] = 1;
         if (scenario == 2)
             header[7] = 0xff;
         if (scenario == 3)

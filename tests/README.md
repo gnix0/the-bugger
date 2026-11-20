@@ -69,6 +69,11 @@ records remain in the [validation records](../docs/validation.md).
   and construction failures. Included in `test`; see
   [coverage](../docs/testing.md#elf-section-directories-se04-partial).
 
+- `make test-symbol-inspect`: production helper ELF validation over admitted
+  backing, complete scope summaries, decoder budgets, cancellation and restart.
+  Included in `test`; see
+  [helper validation coverage](../docs/testing.md#supervised-elf-validation-se04-partial).
+
 - `make test-symbol-symbols`: complete selected SYMTAB/DYNSYM dependencies,
   full names, ordinary/special/extended indexes and bounded failure paths.
   Included in `test`; see

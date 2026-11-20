@@ -6249,3 +6249,71 @@ This is local host and harness-composition evidence, not hosted CI, universal
 producer/ABI qualification, physical validation, production helper integration or
 SE04/F07 acceptance. Remaining program/section semantics, physical record binding,
 DWARF, production sizing and consumer integration retain their separate gates.
+
+
+### Supervised ELF validation and receipt-time progress — 2026-11-20
+
+The helper now validates an explicitly selected retained ELF directory or symbol
+table. Complete summaries and dependency diagnostics cross the versioned private
+channel; the request acquires no new artifact or target data. Decoder construction
+uses a separate shared bounded account. Its production default remains deferred
+to SE10; ordinary configuration disables decoder requests before filesystem access.
+
+Local focused checks, sanitizers, static analysis and the complete fresh baseline
+passed, exit 0. Logs and exit records are under
+`build/se04-helper-evidence-20261120/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused dispatch/transport/helper/ownership | `make BUILD_DIR=build/se04-helper-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-inspect test-symbol-operation test-symbol-helper test-symbol-wire test-symbol-resource`; `focused-final-tree`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se04-helper-verified-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `test-ci-verified`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se04-helper-final-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-inspect test-symbol-operation test-symbol-wire test-symbol-helper test-symbol-resource`; `sanitize-final`. |
+| Analysis/build | `make analyze` across 50 production source files and normal `make`; `analysis-frozen` and `normal-make`. |
+
+Authored ELF32/64 files in both byte orders exercise directory and distinct
+SYMTAB/DYNSYM scopes, malformed headers/names, unsupported compression, selection
+bounds and exact backing mismatch. The origin changes after admission without
+retargeting frozen content. Cancellation occurs after decoder progress; confirmed
+reap permits explicit restart while a parent descriptor remains valid. An 80 KiB
+helper decoder allowance refuses combined construction, then admits directory-only
+validation after cleanup; 512 KiB exercises full selected scopes. Those allowances
+are harness configurations, not production sizing. Exact unlink precedes logical
+admission release.
+
+The first analysis rejected adjacent interchangeable budget pointers. A named
+budget bundle resolved that interface hazard; the original analysis log remains.
+The initial full baseline was stopped for that correction and replaced with the
+fresh final directory above. Initial saturation/admission assertions also failed
+intermittently; their logs remain, and diagnostic output preserves the helper
+state/reason on recurrence. Five helper and ten inspection repetitions passed
+before the subsequent timestamp correction; those repetitions alone do not prove
+those initial failures resolved.
+
+A controlled receive-time clock test then reproduced a definite protocol rejection:
+valid worker progress generated after the pump's initial sample was classified as
+future data. `receive-time-repro` records the pre-fix failure. The parent now samples
+time after receipt while retaining worker event timestamps for deadline semantics.
+The new regression passes alongside existing genuine-future, buffered-progress,
+heartbeat and absolute-deadline assertions. The earlier intermittent failures are
+consistent with this race, but their logs do not prove that causal attribution.
+Five further helper and inspection repetitions passed after the correction.
+
+The next baseline exposed an existing breakpoint-harness race at its stopped-state
+assertion. The fixture sends the result before the asynchronous stop; those records
+need not arrive in one controller pump. A delayed-stop fixture deterministically
+reproduced the failure in `breakpoints-stop-before`. The harness now waits within
+a bounded interval for the stop event, preserving the stopped-state assertions.
+`breakpoints-stop-after` records the focused pass; production breakpoint behavior
+is unchanged. The failed `test-ci-final` log remains; the new verified directory
+above supplies the replacement complete baseline. Instrumented breakpoint checks
+passed separately in `breakpoints-sanitize`, exit 0.
+
+`verified-tested-files.json`, `verified-tested.patch`, captured source/header/test
+inputs and `environment.txt` identify the tested tree. Earlier snapshots remain
+with their superseded checks. Only documentation changed afterward. Link checks
+covered 234 local references without errors; whitespace checks passed.
+
+This is local host evidence, not hosted CI, physical producer/architecture
+qualification, coherent-source proof, frontend evidence publication or F07
+acceptance. DWARF, production sizing, discovery and consumer integration remain
+separate gates.

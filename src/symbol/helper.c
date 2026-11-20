@@ -28,6 +28,7 @@ typedef struct {
     TbSymbolStorageKey_t   storage_key;
     uint32_t               operation;
     uint32_t               detail;
+    uint64_t               record_index;
     int                    system_error;
     bool                   offered;
     bool                   granted;
@@ -331,6 +332,7 @@ bool tb_symbol_helper_start(TbSymbolHelper_t *helper, const char *path)
     tb_symbol_protocol_put(bytes + 16, helper->config.ipc_bytes, 8);
     tb_symbol_protocol_put(bytes + 24, helper->config.checkpoint_bytes, 4);
     tb_symbol_protocol_put(bytes + 28, helper->config.checkpoint_steps, 4);
+    tb_symbol_protocol_put(bytes + 32, helper->config.decoder_bytes, 8);
     TbSymbolMessage_t message = {
         .kind       = TB_SYMBOL_MESSAGE_HELLO,
         .generation = helper->generation,
@@ -612,6 +614,7 @@ static bool receive(TbSymbolHelper_t *helper, const TbSymbolMessage_t *message)
             }
             job->system_error = (int)error;
             job->detail = detail;
+            job->record_index = tb_symbol_protocol_get(message->payload + 32, 8);
             job->storage_key = key;
             job->diagnosed = true;
         }
@@ -714,6 +717,7 @@ static bool emit_result(void *context, const TbSymbolWorkIdentity_t *identity,
     if (job) {
         completion.system_error = job->system_error;
         completion.detail = job->detail;
+        completion.record_index = job->record_index;
         completion.storage_key = job->storage_key;
     }
     if (job && result.outcome == TB_SYMBOL_SUCCESS) {
@@ -862,10 +866,19 @@ void tb_symbol_helper_pump_with_release(TbSymbolHelper_t *helper, tb_symbol_help
     if (helper->wire) {
         TbSymbolWireStatus_e status = tb_symbol_wire_pump(helper->wire);
         if (status == TB_SYMBOL_WIRE_MESSAGE) {
-            if (!receive(helper, tb_symbol_wire_message(helper->wire)))
-                fail(helper, TB_SYMBOL_MALFORMED, "Symbol helper protocol or captured identity mismatch");
-            else
-                tb_symbol_wire_consume(helper->wire);
+            /* Progress can advance after the pump's initial sample. Validate
+             * against receipt time while retaining the worker's timestamp for
+             * queue/deadline/progress semantics. */
+            uint64_t received_ns;
+            if (!now_ns(&received_ns) || received_ns < helper->now_ns) {
+                fail(helper, TB_SYMBOL_OPERATIONAL_FAILURE, "Symbol helper monotonic clock unavailable");
+            } else {
+                helper->now_ns = received_ns;
+                if (!receive(helper, tb_symbol_wire_message(helper->wire)))
+                    fail(helper, TB_SYMBOL_MALFORMED, "Symbol helper protocol or captured identity mismatch");
+                else
+                    tb_symbol_wire_consume(helper->wire);
+            }
         } else if (status == TB_SYMBOL_WIRE_EOF && helper->state == TB_SYMBOL_HELPER_STOPPING) {
             tb_symbol_wire_destroy(helper->wire);
             helper->wire = NULL;

@@ -12,6 +12,7 @@
 #include <string.h>
 #include <time.h>
 #include <sys/file.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 int __real_clock_gettime(clockid_t clock_id, struct timespec *time);
@@ -20,8 +21,11 @@ void *__real_malloc(size_t length);
 void *__real_calloc(size_t count, size_t length);
 void *__wrap_malloc(size_t length);
 void *__wrap_calloc(size_t count, size_t length);
+ssize_t __real_recvmsg(int fd, struct msghdr *message, int flags);
+ssize_t __wrap_recvmsg(int fd, struct msghdr *message, int flags);
 
 static bool fake_clock;
+static bool advance_receive_clock;
 static const char *production_binary;
 static uint64_t clock_ns = UINT64_C(100000000000);
 static size_t fail_malloc_size;
@@ -38,6 +42,15 @@ int __wrap_clock_gettime(clockid_t clock_id, struct timespec *time)
         .tv_nsec = (long)(clock_ns % UINT64_C(1000000000))
     };
     return 0;
+}
+
+
+ssize_t __wrap_recvmsg(int fd, struct msghdr *message, int flags)
+{
+    ssize_t result = __real_recvmsg(fd, message, flags);
+    if (result > 0 && advance_receive_clock)
+        clock_ns += 1000;
+    return result;
 }
 
 
@@ -398,7 +411,13 @@ static void release_interests(void)
         pump_owned(helper, &observer);
     CHECK(observer.observer.count == TB_SYMBOL_MAX_JOBS && observer.attempts && !observer.released);
     CHECK(tb_symbol_helper_jobs(helper) == TB_SYMBOL_MAX_JOBS);
-    CHECK(submit(helper, identity(65, 65), 990, TB_SYMBOL_INTERACTIVE, false, NULL, 0) == TB_SYMBOL_BUSY);
+    TbSymbolAdmission_e admission = submit(helper, identity(65, 65), 990, TB_SYMBOL_INTERACTIVE,
+                                           false, NULL, 0);
+    if (admission != TB_SYMBOL_BUSY) {
+        fprintf(stderr, "retained completion saturation: admission %u, state %u; %s\n",
+                admission, tb_symbol_helper_state(helper), tb_symbol_helper_error(helper));
+    }
+    CHECK(admission == TB_SYMBOL_BUSY);
     observer.blocked = false;
     for (unsigned i = 0; i < 4000 && observer.released < TB_SYMBOL_MAX_JOBS; ++i)
         pump_owned(helper, &observer);
@@ -500,6 +519,37 @@ static void deadline_failures(void)
         close_helper(helper, &observer);
     }
     CHECK(unsetenv("TB_TEST_SYMBOL_HELPER") == 0);
+    fake_clock = false;
+}
+
+
+static void receive_time(void)
+{
+    fake_clock = true;
+    TbSymbolHelperConfig_t config;
+    tb_symbol_helper_defaults(&config);
+    Observer_t observer = {0};
+    TbSymbolHelper_t *helper = fake_helper("receive-clock", &config, &observer);
+    CHECK(submit(helper, identity(1, 1), 990, TB_SYMBOL_CONSTRUCTION, true, NULL, 0) == TB_SYMBOL_ADMITTED);
+    uint64_t before = clock_ns;
+    advance_receive_clock = true;
+    TbSymbolHelperTiming_t timing = {0};
+    for (unsigned turn = 0; turn < 2000 && !timing.serviced; ++turn) {
+        pump(helper, &observer);
+        if (tb_symbol_helper_state(helper) != TB_SYMBOL_HELPER_READY)
+            fprintf(stderr, "receive-time validation: %s\n", tb_symbol_helper_error(helper));
+        CHECK(tb_symbol_helper_state(helper) == TB_SYMBOL_HELPER_READY);
+        CHECK(tb_symbol_helper_timing(helper, 1, &timing));
+    }
+    advance_receive_clock = false;
+    CHECK(timing.serviced);
+    CHECK(tb_symbol_helper_state(helper) == TB_SYMBOL_HELPER_READY);
+    CHECK(timing.first_service_ns > before && timing.first_service_ns <= clock_ns);
+    CHECK(tb_symbol_helper_cancel(helper, identity(1, 1)));
+    results(helper, &observer, 1);
+    CHECK(observer.outcomes[0] == TB_SYMBOL_CANCELLED);
+    close_helper(helper, &observer);
+    CHECK(!unsetenv("TB_TEST_SYMBOL_HELPER"));
     fake_clock = false;
 }
 
@@ -885,7 +935,7 @@ static int fake_peer(const char *mode)
                 PeerJob_t *job = &jobs[i];
                 if (!job->used)
                     continue;
-                unsigned char bytes[TB_SYMBOL_PROGRESS_BYTES] = {0};
+                unsigned char bytes[TB_SYMBOL_DIAGNOSTIC_BYTES] = {0};
                 TbSymbolMessageKind_e kind = TB_SYMBOL_MESSAGE_PROGRESS;
                 size_t length = TB_SYMBOL_PROGRESS_BYTES;
                 TbSymbolWorkIdentity_t captured = job->identity;
@@ -981,6 +1031,8 @@ static int fake_peer(const char *mode)
                         job->start_ns = event_ns;
                     if (strcmp(mode, "old-progress") == 0)
                         event_ns = job->start_ns;
+                    if (strcmp(mode, "receive-clock") == 0)
+                        ++event_ns;
                     if (strcmp(mode, "future-time") == 0)
                         event_ns += UINT64_C(1000000000000);
                     tb_symbol_protocol_put(bytes + 24, event_ns, 8);
@@ -1024,6 +1076,7 @@ int main(int argc, char *argv[])
     saturation();
     allocation_failures();
     deadline_failures();
+    receive_time();
     buffered_progress();
     absolute_deadlines();
     cancellation_escalation();
