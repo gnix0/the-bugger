@@ -3033,3 +3033,30 @@ ELF comparisons with libelf remain separate. No DIE payload/reference validity,
 production sizing, general producer/target qualification or SE05/F07 acceptance
 follows. Unknown forms and numeric identifiers beyond the current 64-bit lookup
 profile remain explicit unsupported cases.
+
+
+## DWARF attribute-form framing (SE05, partial)
+
+```sh
+make BUILD_DIR=build/se05-form CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-form test-symbol-leb test-symbol-abbrev
+```
+
+Included in `test`/`test-ci`. The allocation-free scanner's tests cover every
+standard form in its DWARF version, both byte orders, DWARF32/64 offset widths
+and raw address widths 1, 2, 3, 4, 8, 16 and 255. Feed sizes from one byte through
+1,024 bytes verify the 256-byte inspection ceiling and no following-field theft.
+Nonuniform three-byte values check target byte order. Unit bounds, premature EOF,
+unknown forms/selectors and invalid API arguments preserve unavailable views.
+
+Large strings/blocks, 70,000-byte scalar and length encodings, repeated indirect
+selectors, indirect strings/empty blocks/implicit constants and zero-footprint
+forms check framing independently of numeric fit. Raw spans remain authoritative
+when 64-bit bits are unavailable. Direct implicit constants obtain their values
+from abbreviation metadata, not a zero-byte DIE read.
+
+These authored cases validate payload framing, not complete DIE trees, reference
+targets, string/address tables, expression evaluation or semantic type validity.
+Full retained-file composition and cross-unit validation remain separate work;
+passing this target does not establish SE05/F07 acceptance or producer/hardware
+qualification.

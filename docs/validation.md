@@ -6464,3 +6464,46 @@ All checks in the table passed (exit 0); normal `make` also passed
 errors and whitespace checks passed. Compiled input hashes match the snapshot;
 subsequent changes within that manifest were documentation only. These are local
 host results, not hosted CI, physical validation or maintainer acceptance.
+
+
+## DWARF attribute-form framing — 2026-11-20
+
+The allocation-free form scanner frames standard DWARF 4/5 attribute payloads
+inside a caller-supplied remaining unit extent, independently of numeric fit.
+Every feed inspects at most 256 bytes and stops before the next field. Complete
+views retain encoded footprints, payload spans and optional raw 64-bit bits.
+Indirect forms follow the published DWARF 5 errata, including repeated selectors
+and implicit constants carried in the DIE. Direct implicit constants remain in
+the abbreviation schema. This establishes boundaries, not reference or location
+validity, a complete unit tree or frontend/runtime authority.
+
+Local Linux x86-64 logs, exit files, captured inputs and environment are under
+ignored `build/se05-evidence-20261120/`, using the `form-` prefix.
+
+| Check | Command / evidence |
+|---|---|
+| Focused framing and schema regression | `make BUILD_DIR=build/se05-form-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-form test-symbol-leb test-symbol-abbrev`; `form-focused`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se05-form-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `form-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se05-form-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-form test-symbol-leb test-symbol-abbrev`; `form-sanitize`. |
+| Static analysis | `make analyze`, 55 production source files; `form-analysis`. |
+
+Authored cases cover every standard form in its version, both byte orders,
+DWARF32/64 offset widths and raw address widths 1/2/3/4/8/16/255. Chunk sizes
+1/2/3/7/64/256/1024 check bounded consumption and following-field preservation.
+Nonuniform three-byte values check endianness. Tests distinguish no prefix from
+complete views, zero-footprint forms, unit-boundary truncation, premature EOF,
+unknown encodings/selectors and invalid API arguments. Large strings, blocks,
+70,000-byte scalar/length encodings and indirect chains retain exact footprints.
+Wide scalar representations expose no truncated number; zero-length blocks and
+indirect strings/constants/present flags terminate at their exact boundaries.
+
+`form-tested-files.json`, `form-tested.patch`, captured inputs and
+`form-environment.txt` identify the compiled scope. The subsequent DIE traversal
+component is excluded from this form-framing step. These tests do not establish
+reference targets, type/location semantics, producer/hardware qualification or
+SE05/F07 acceptance.
+
+All checks in the form-framing table passed (exit 0), as did normal `make`
+(`form-normal-make`). Frozen compiled-input hashes match. Link checks covered
+238 local references without errors and whitespace checks passed. These are local
+host observations, not hosted CI, physical validation or maintainer acceptance.

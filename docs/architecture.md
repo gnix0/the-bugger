@@ -595,6 +595,39 @@ introduced. Production sizing remains at SE10. Declaration encoding follows
 [DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Sections 7.5.3 and 7.6.
 
 
+### DWARF attribute-form framing (SE05, partial)
+
+`src/symbol/form.c` frames one attribute payload incrementally without allocation
+or I/O. The caller supplies its declared form, DWARF version, target byte order,
+independent address/offset widths and exact remaining unit-body extent. Every
+feed inspects at most 256 bytes and stops at the attribute boundary, preserving
+the next field. Standard DWARF 4/5 fixed, string, block, expression, indexed,
+reference and variable-length forms have explicit layouts; unknown forms remain
+Unsupported. Arbitrary nonzero byte-sized address widths are framed without
+assuming that their values fit a runtime address.
+
+Complete views preserve the effective form, whole encoded footprint and payload
+coordinates. Payloads exclude indirect selectors, length prefixes and string
+terminators; LEB payloads retain their complete encoding. Optional 64-bit bits
+indicate representability only, never a type, signed interpretation of raw data,
+reference validity or location. Wider values retain their exact spans. String
+framing proves termination inside the supplied unit, not source encoding or
+matching against another section.
+
+Direct implicit constants consume no DIE bytes; their value remains in the
+validated abbreviation schema. Indirect selectors are iterative, including
+repeated indirection and an implicit constant encoded in the DIE, following the
+[DWARF 5 errata](https://dwarfstd.org/errata-dwarf5.html). No recursion, whole-unit
+buffer or numeric truncation is introduced. Truncation and unsupported encodings
+expose no candidate view. The outer construction owner accounts for embedded
+scanner state and enforces scheduling, cancellation and deadlines.
+
+This component establishes payload boundaries only. Complete DIE traversal,
+unit-to-schema association, tree structure, reference targets and semantic
+attribute requirements remain subsequent validation work. No helper opcode,
+frontend catalog, target access or production sizing default follows.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
