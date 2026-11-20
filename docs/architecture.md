@@ -693,6 +693,44 @@ encodings follow [DWARF 4](https://dwarfstd.org/doc/DWARF4.pdf) and
 [same-object clarification](https://dwarfstd.org/issues/230120.1.html).
 
 
+### Retained DWARF strings and offsets (SE05, partial)
+
+`src/symbol/strings.c` validates one explicitly bounded, terminated string over
+retained metadata. The caller establishes its section/attribute relationship and
+exclusive scan bound. Creation performs no I/O; bounded steps check the backing
+and scan within the captured range. Read windows respect the current service
+allowance, rather than loading a full maximum window for every short string.
+Complete views retain exact backing, section, start, length and scope. Empty
+strings and offsets into existing strings remain distinct valid spans.
+
+The decoder allocates no full string and performs no locale/Unicode conversion.
+Termination proof does not establish semantic names, valid UTF-8 or an entire
+ELF string table's invariants. Failed or cancelled scans expose no prefix;
+destruction releases construction storage while preserving the borrowed
+file descriptor and caller's content lease.
+
+`src/symbol/string_offsets.c` resolves one DWARF 5 indexed-string entry. It walks
+length framing from the selected section's start, so the requested CU base must
+be a proven contribution's first entry. Bytes preceding an arbitrary base cannot
+substitute for that boundary proof. The selected header must have version 5,
+zero padding, an integral entry count and the CU's DWARF32/64 offset format.
+Index multiplication and every range are checked before reading the entry.
+Mixed-format contributions belonging to different CUs remain supported.
+
+Unrelated earlier contributions receive framing examination only. An unknown
+selected version is unsupported; malformed framing, forged bases, truncated
+headers, format mismatches and invalid indexes fail explicitly. No value is
+exposed before the selected entry is complete. The resulting raw string offset
+still requires an explicitly selected string section and termination validation.
+The layout follows [DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Sections 7.4,
+7.5.5 and 7.26. Split/headerless tables remain outside this profile.
+
+Both components use required caller-owned construction accounts and outer-job
+cancellation, deadlines and revisions. They introduce no discovery, helper opcode,
+frontend evidence owner, semantic naming policy or target access. Scope-specific
+string/dependency facts do not establish full unit semantics or production sizing.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

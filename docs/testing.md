@@ -3121,3 +3121,35 @@ complete-view cases are distinct from parser/container fixtures and native
 compiler-output composition. None establishes applicable relocation proof,
 semantic type/specification validity, general producer/hardware qualification,
 production sizing or SE05/F07 acceptance.
+
+
+## Retained DWARF strings and offsets (SE05, partial)
+
+```sh
+make BUILD_DIR=build/se05-strings CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-strings test-symbol-string-offsets test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Protected ELF32/64 fixtures in both byte orders check
+empty/substrings, raw bytes, exact exclusive scan bounds, terminators across
+scratch windows, a 70,000-byte string and unavailable views on failure. Read
+instrumentation checks the selected range and per-step allowance. Constructors
+perform no I/O. Allocation/budget failure, cancellation, short/EINTR/EOF/error
+reads and descriptor replacement check ownership and bounded progress.
+
+Offset-table cases cover mixed DWARF32/64 contributions, exact final entries,
+empty tables, invalid indexes, format mismatches, nonzero padding, unsupported
+versions and truncated headers. A forged base inside entries has preceding bytes
+that resemble a valid header; it is rejected without guessing that header.
+A 1,001-contribution section checks complete framing to the selected base.
+Unknown unrelated earlier versions may be skipped using established extents;
+the selected scope still requires its supported header and complete entry.
+
+Native retained-file composition validates inline, direct and indexed string
+attributes using exact metadata coordinates. Indexed paths require the unique
+root base and the CU's offset format before reading the selected string. GCC and
+Clang fixtures exercise different string forms; recorded coverage distinguishes
+them. This is composition with compiler output, not an independent DWARF parser
+oracle. Raw strings do not prove UTF-8, semantic names or source correspondence.
+Split/headerless tables, broader producer/target qualification, production sizing
+and SE05/F07 acceptance remain separate work.

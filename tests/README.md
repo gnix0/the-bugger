@@ -90,6 +90,10 @@ records remain in the [validation records](../docs/validation.md).
   dependencies, signature conflicts and unsupported coverage; included in `test`.
   See [reference coverage](../docs/testing.md#physical-dwarf-reference-targeting-se05-partial).
 
+- `make test-symbol-strings test-symbol-string-offsets`: bounded retained strings
+  and DWARF 5 indexed-string contributions; included in `test`. See
+  [string coverage](../docs/testing.md#retained-dwarf-strings-and-offsets-se05-partial).
+
 - `make test-symbol-dwarf`: bounded DWARF32/64 unit headers, mixed address/offset
   widths, unsupported unit coverage and exact contribution bounds. Included in
   `test`; see [unit-header coverage](../docs/testing.md#dwarf-unit-headers-se05-partial).

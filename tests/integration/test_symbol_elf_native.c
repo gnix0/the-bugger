@@ -2,6 +2,8 @@
 #include "symbol/abbrev.h"
 #include "symbol/dies.h"
 #include "symbol/references.h"
+#include "symbol/string_offsets.h"
+#include "symbol/strings.h"
 #include "symbol/elf.h"
 #include "symbol/file.h"
 #include "symbol/sections.h"
@@ -41,6 +43,103 @@ static void read_record(TbSymbolFile_t *file, uint64_t offset, size_t length, un
 
 
 typedef struct {
+    uint64_t strings;
+    uint64_t line_strings;
+    uint64_t offsets;
+} StringSections_t;
+
+static uint64_t check_string(TbSymbolSectionsView_t directory, TbSymbolStringSelection_t selection)
+{
+    TbSymbolString_t *string = tb_symbol_string_create(directory, selection, &budget);
+    CHECK(string);
+    TbSymbolOutcome_e outcome = TB_SYMBOL_PENDING;
+    for (unsigned turn = 0; turn < 1000000 && outcome == TB_SYMBOL_PENDING; ++turn)
+        outcome = tb_symbol_string_step(string, 257);
+    CHECK(outcome == TB_SYMBOL_SUCCESS);
+    TbSymbolStringView_t view;
+    CHECK(tb_symbol_string_view(string, &view));
+    CHECK(view.section_index == selection.section_index && view.offset == selection.offset);
+    CHECK(view.bytes < selection.end_offset - selection.offset);
+    uint64_t bytes = view.bytes;
+    tb_symbol_string_destroy(string);
+    return bytes;
+}
+
+
+static bool check_attribute_string(TbSymbolSectionsView_t directory, TbSymbolDieAttribute_t attribute,
+                                    StringSections_t sections, TbSymbolUnitEntry_t unit,
+                                    TbSymbolDiesView_t tree, int descriptor)
+{
+    uint64_t form = attribute.value.form;
+    uint64_t section;
+    uint64_t offset;
+    uint64_t end;
+    if (form == TB_SYMBOL_FORM_STRING) {
+        offset = attribute.value.payload_offset;
+        CHECK(tb_symbol_add(offset, attribute.value.payload_bytes, &end) && tb_symbol_add(end, 1, &end));
+        CHECK(check_string(directory, (TbSymbolStringSelection_t){
+            .section_index = tree.section_index,
+            .offset        = offset,
+            .end_offset    = end,
+            .descriptor    = descriptor
+        }) == attribute.value.payload_bytes);
+        return true;
+    }
+    bool indexed = form == TB_SYMBOL_FORM_STRX ||
+                   (form >= TB_SYMBOL_FORM_STRX1 && form <= TB_SYMBOL_FORM_STRX4);
+    if (form != TB_SYMBOL_FORM_STRP && form != TB_SYMBOL_FORM_LINE_STRP && !indexed)
+        return false;
+    CHECK(attribute.value.numeric && !attribute.value.is_signed);
+    if (form == TB_SYMBOL_FORM_STRP || form == TB_SYMBOL_FORM_LINE_STRP) {
+        section = form == TB_SYMBOL_FORM_STRP ? sections.strings : sections.line_strings;
+        offset = attribute.value.bits;
+    } else if (indexed) {
+        const TbSymbolDieEntry_t *root = &tree.entries[0];
+        uint64_t bases = 0;
+        uint64_t base = 0;
+        for (uint64_t i = 0; i < root->attribute_count; ++i) {
+            const TbSymbolDieAttribute_t *candidate = &tree.attributes[root->first_attribute + i];
+            if (candidate->name != 0x72)
+                continue;
+            CHECK(candidate->value.form == TB_SYMBOL_FORM_SEC_OFFSET && candidate->value.numeric);
+            base = candidate->value.bits;
+            ++bases;
+        }
+        CHECK(bases == 1 && sections.offsets < directory.count);
+        TbSymbolStringOffsetSelection_t selection = {
+            .section_index = sections.offsets,
+            .base          = base,
+            .index         = attribute.value.bits,
+            .offset_bytes  = unit.extent.offset_bytes,
+            .descriptor    = descriptor
+        };
+        TbSymbolStringOffsets_t *offsets = tb_symbol_string_offsets_create(directory, selection, &budget);
+        CHECK(offsets);
+        TbSymbolOutcome_e outcome = TB_SYMBOL_PENDING;
+        for (unsigned turn = 0; turn < 1000000 && outcome == TB_SYMBOL_PENDING; ++turn)
+            outcome = tb_symbol_string_offsets_step(offsets, 257);
+        CHECK(outcome == TB_SYMBOL_SUCCESS);
+        TbSymbolStringOffsetView_t selected;
+        CHECK(tb_symbol_string_offsets_view(offsets, &selected));
+        CHECK(selected.base == base && selected.index == attribute.value.bits);
+        section = sections.strings;
+        offset = selected.string_offset;
+        tb_symbol_string_offsets_destroy(offsets);
+    } else {
+        return false;
+    }
+    CHECK(attribute.value.numeric && !attribute.value.is_signed && section < directory.count);
+    (void)check_string(directory, (TbSymbolStringSelection_t){
+        .section_index = section,
+        .offset        = offset,
+        .end_offset    = directory.entries[section].header.bytes,
+        .descriptor    = descriptor
+    });
+    return true;
+}
+
+
+typedef struct {
     uint64_t total;
     uint64_t unsupported;
     uint64_t abbreviations;
@@ -48,10 +147,12 @@ typedef struct {
     uint64_t attributes;
     uint64_t references;
     uint64_t dependencies;
+    uint64_t strings;
+    uint64_t indexed_strings;
 } UnitCounts_t;
 
 static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSelection_t selection,
-                                uint64_t abbreviation_section)
+                                uint64_t abbreviation_section, StringSections_t string_sections)
 {
     TbSymbolUnits_t *units = tb_symbol_units_create(directory, selection, &budget);
     CHECK(units);
@@ -69,6 +170,8 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
     uint64_t attribute_count = 0;
     uint64_t reference_count = 0;
     uint64_t dependency_count = 0;
+    uint64_t string_count = 0;
+    uint64_t indexed_count = 0;
     for (uint64_t i = 0; i < view.count; ++i) {
         const TbSymbolUnitEntry_t *entry = &view.entries[i];
         CHECK(entry->offset == cursor && entry->extent.total_bytes);
@@ -127,6 +230,15 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                 attributes += record->attribute_count;
                 CHECK(attributes <= tree.attribute_count);
                 for (uint64_t attr = 0; attr < record->attribute_count; ++attr) {
+                    if (check_attribute_string(directory, tree.attributes[record->first_attribute + attr],
+                                               string_sections, *entry, tree, selection.descriptor)) {
+                        ++string_count;
+                        uint64_t form = tree.attributes[record->first_attribute + attr].value.form;
+                        if (form == TB_SYMBOL_FORM_STRX ||
+                            (form >= TB_SYMBOL_FORM_STRX1 && form <= TB_SYMBOL_FORM_STRX4)) {
+                            ++indexed_count;
+                        }
+                    }
                     TbSymbolReference_t reference;
                     TbSymbolReferenceSelection_t selected = {
                         .unit_index      = i,
@@ -167,13 +279,15 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
     CHECK(cursor == directory.entries[selection.section_index].header.bytes);
     CHECK(unsupported == view.unsupported);
     UnitCounts_t counts = {
-        .total         = view.count,
-        .unsupported   = view.unsupported,
-        .abbreviations = abbreviations,
-        .dies          = die_count,
-        .attributes    = attribute_count,
-        .references    = reference_count,
-        .dependencies  = dependency_count
+        .total           = view.count,
+        .unsupported     = view.unsupported,
+        .abbreviations   = abbreviations,
+        .dies            = die_count,
+        .attributes      = attribute_count,
+        .references      = reference_count,
+        .dependencies    = dependency_count,
+        .strings         = string_count,
+        .indexed_strings = indexed_count
     };
     tb_symbol_units_destroy(units);
     return counts;
@@ -265,12 +379,27 @@ static void check_file(const char *path)
     CHECK(directory_view.header->address_bytes == header.address_bytes);
     CHECK(directory_view.header->byte_order == header.byte_order);
     uint64_t abbreviation_section = UINT64_MAX;
+    StringSections_t string_sections = {
+        .strings      = UINT64_MAX,
+        .line_strings = UINT64_MAX,
+        .offsets      = UINT64_MAX
+    };
     for (size_t i = 0; i < sections; ++i) {
         const TbSymbolSectionEntry_t *entry = &directory_view.entries[i];
         if (!entry->has_name)
             continue;
         const char *name = elf_strptr(reference, names, entry->header.name_offset);
         CHECK(name);
+        if (!strcmp(name, ".debug_str")) {
+            CHECK(string_sections.strings == UINT64_MAX);
+            string_sections.strings = i;
+        } else if (!strcmp(name, ".debug_line_str")) {
+            CHECK(string_sections.line_strings == UINT64_MAX);
+            string_sections.line_strings = i;
+        } else if (!strcmp(name, ".debug_str_offsets")) {
+            CHECK(string_sections.offsets == UINT64_MAX);
+            string_sections.offsets = i;
+        }
         if (!strcmp(name, ".debug_abbrev")) {
             CHECK(abbreviation_section == UINT64_MAX);
             abbreviation_section = i;
@@ -300,13 +429,15 @@ static void check_file(const char *path)
                     .section_index = i,
                     .kind          = !strcmp(expected_name, ".debug_info")
                                          ? TB_SYMBOL_DWARF_INFO : TB_SYMBOL_DWARF_TYPES,
-                    .descriptor    = fd
-                }, abbreviation_section);
+                    .descriptor = fd
+                }, abbreviation_section, string_sections);
                 unit_counts.abbreviations += counts.abbreviations;
                 unit_counts.dies += counts.dies;
                 unit_counts.attributes += counts.attributes;
                 unit_counts.references += counts.references;
                 unit_counts.dependencies += counts.dependencies;
+                unit_counts.strings += counts.strings;
+                unit_counts.indexed_strings += counts.indexed_strings;
                 unit_counts.total += counts.total;
                 unit_counts.unsupported += counts.unsupported;
             }
@@ -397,7 +528,8 @@ static void check_file(const char *path)
         CHECK(actual.physical_address == expected.p_paddr && actual.file_bytes == expected.p_filesz);
         CHECK(actual.memory_bytes == expected.p_memsz && actual.alignment == expected.p_align);
     }
-    CHECK(symbols && sections && programs && unit_counts.total > unit_counts.unsupported);
+    CHECK(symbols && sections && programs && unit_counts.strings &&
+          unit_counts.total > unit_counts.unsupported);
     printf("PASS native DWARF composition: %llu contributions, %llu unsupported, %llu abbreviations\n",
            (unsigned long long)unit_counts.total, (unsigned long long)unit_counts.unsupported,
            (unsigned long long)unit_counts.abbreviations);
@@ -405,6 +537,8 @@ static void check_file(const char *path)
            (unsigned long long)unit_counts.dies, (unsigned long long)unit_counts.attributes);
     printf("PASS native reference coordinates: %llu unit references, %llu other dependencies\n",
            (unsigned long long)unit_counts.references, (unsigned long long)unit_counts.dependencies);
+    printf("PASS native string dependencies: %llu validated strings, %llu indexed\n",
+           (unsigned long long)unit_counts.strings, (unsigned long long)unit_counts.indexed_strings);
     CHECK(!elf_end(reference));
     tb_symbol_sections_destroy(directory);
     tb_symbol_file_destroy(input);

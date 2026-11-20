@@ -6623,3 +6623,65 @@ references (`references-native-dwarf4`). All checks in the reference table passe
 hashes match. Link checks covered 240 local references with no errors and whitespace
 checks passed. These are local host observations, not hosted CI, physical
 validation or maintainer acceptance.
+
+
+## Retained DWARF strings and offsets — 2026-11-20
+
+Bounded retained strings now expose exact terminated spans without allocating
+full text or converting bytes. Selected DWARF 5 string-offset entries require a
+base proven by walking contribution framing from the section start, a supported
+header and the CU's offset format. Indexed metadata then resolves through an
+explicit string section and its termination proof. No discovery, source/runtime
+correspondence or semantic name claim follows from these facts.
+
+Local Linux x86-64 logs, exit files, captured inputs and environment are under
+ignored `build/se05-evidence-20261120/`, using the `strings-` and
+`string-offsets-` prefixes.
+
+| Check | Command / evidence |
+|---|---|
+| Focused strings, contributions and native composition | `make BUILD_DIR=build/se05-strings-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-strings test-symbol-string-offsets test-symbol-elf-native`; `strings-focused-final-tree`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se05-strings-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `strings-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se05-strings-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-strings test-symbol-string-offsets test-symbol-elf-native`; `strings-sanitize`. |
+| Static analysis | `make analyze`, 59 production source files; `strings-analysis`. |
+
+Protected ELF32/64 fixtures in both byte orders check empty/substrings, raw
+non-UTF-8 bytes, exact exclusive bounds and a 70,000-byte string. Mixed-format
+offset contributions check exact bases/entries, empty tables, format mismatches,
+nonzero padding, unknown versions, malformed framing, truncated headers and
+invalid indexes. A forged base inside entries has a preceding valid-looking
+header and value; walking actual contribution boundaries rejects it. A
+1,001-contribution scope checks bounded traversal to the selected table.
+Earlier unrelated versions receive framing examination only, preserving the
+selected-scope boundary rather than claiming whole-section semantic validation.
+
+Both constructors perform no I/O. Every allocation site, budget refusal,
+cancellation stages and short/EINTR/EOF/error paths preserve unavailable candidates
+and restore prior accounting. String descriptor replacement also fails without a
+usable span. Read instrumentation checks one read per step, service allowances
+and selected section/scan bounds. Read windows follow the service allowance;
+no entire string is allocated. Raw spans do not qualify UTF-8 or all invariants
+of an ELF string table.
+
+GCC composition validated 4,932/89/6 direct or inline string attributes in 20/1/1
+units. Clang sanitizer composition validated 4,797/26/6 strings, all indexed,
+thereby exercising native CU-base/contribution/index/string association. GCC
+produced no indexed strings in these fixtures. The paths are separate recorded
+producer configurations, not universal producer qualification. Existing 2 MiB
+retained-file and authored-fixture construction allowances remained unchanged;
+they do not establish production cache/index limits or RSS. Separate ELF/libelf
+comparisons and unit-relative reference checks still passed.
+
+Initial offset-component analysis rejected adjacent convertible size/phase
+parameters. A structured range argument resolved that interface hazard; original
+and corrected logs remain. `strings-tested-files.json`, `strings-tested.patch`,
+captured inputs and `strings-environment.txt` identify the compiled scope.
+Semantic names/types, complete dependency evidence, broader producer/target
+qualification, production sizing and SE05/F07 acceptance remain outstanding.
+
+The additional DWARF 4 executable/library fixtures passed with 89/6 validated
+strings (`strings-native-dwarf4`). All checks in the string table passed (exit 0),
+as did normal `make` (`strings-normal-make`). Frozen compiled-input hashes match.
+Link checks covered 241 local references with no errors and whitespace checks
+passed. These are local host results, not hosted CI, physical validation or
+maintainer acceptance.
