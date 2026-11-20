@@ -3002,3 +3002,34 @@ independent DWARF parser comparison; the existing ELF-field/name comparisons wit
 libelf remain separate. Authored prefixes qualify format boundaries, not arbitrary
 producer/architecture compatibility or complete unit/DIE validity. No SE05/F07
 acceptance follows from these tests.
+
+
+## DWARF abbreviation tables (SE05, partial)
+
+```sh
+make BUILD_DIR=build/se05-abbrev CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-leb test-symbol-abbrev test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Streaming LEB tests distinguish framing from signed
+and unsigned numeric fit, including boundaries, arbitrary chunking, long padding,
+wide values, EOF and preservation of the following field. Protected ELF32/64
+fixtures in both byte orders validate selected abbreviation offsets, DWARF 4/5
+form identifiers, implicit constants, empty tables, lookup, physical order and
+513 shuffled declarations. A 70,000-byte signed constant crosses reader windows;
+a wider-than-int64 value retains its span without a fabricated numeric value.
+
+Fault injection covers each allocation, budget refusal, cancellation through
+construction stages, partial/EINTR/EOF/error reads and backing mutation between
+passes. The mutation fixture deliberately retains a writer to violate the backing
+invariant; detection is not proof that every acquisition writer was closed.
+Failed/unfinished views and lookups remain unavailable, accounting returns to its
+prior level and borrowed descriptors survive destruction.
+
+The native retained-file harness selects each supported unit's abbreviation table
+and checks complete lookup/physical-order consistency. This is composition with
+compiler-produced metadata, not an independent libdw grammar oracle. Its existing
+ELF comparisons with libelf remain separate. No DIE payload/reference validity,
+production sizing, general producer/target qualification or SE05/F07 acceptance
+follows. Unknown forms and numeric identifiers beyond the current 64-bit lookup
+profile remain explicit unsupported cases.

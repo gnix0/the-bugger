@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- Native file fixture reads. */
+#include "symbol/abbrev.h"
 #include "symbol/elf.h"
 #include "symbol/file.h"
 #include "symbol/sections.h"
@@ -40,9 +41,11 @@ static void read_record(TbSymbolFile_t *file, uint64_t offset, size_t length, un
 typedef struct {
     uint64_t total;
     uint64_t unsupported;
+    uint64_t abbreviations;
 } UnitCounts_t;
 
-static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSelection_t selection)
+static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSelection_t selection,
+                                uint64_t abbreviation_section)
 {
     TbSymbolUnits_t *units = tb_symbol_units_create(directory, selection, &budget);
     CHECK(units);
@@ -55,6 +58,7 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
     CHECK(view.section_index == selection.section_index && view.kind == selection.kind);
     uint64_t cursor = 0;
     uint64_t unsupported = 0;
+    uint64_t abbreviations = 0;
     for (uint64_t i = 0; i < view.count; ++i) {
         const TbSymbolUnitEntry_t *entry = &view.entries[i];
         CHECK(entry->offset == cursor && entry->extent.total_bytes);
@@ -62,6 +66,29 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
             CHECK(entry->header.extent.end_offset == entry->extent.end_offset);
             CHECK(entry->header.version == 4 || entry->header.version == 5);
             CHECK(entry->header.header_bytes < entry->extent.total_bytes);
+            CHECK(abbreviation_section < directory.count);
+            TbSymbolAbbrev_t *abbrev = tb_symbol_abbrev_create(directory, (TbSymbolAbbrevSelection_t){
+                .section_index = abbreviation_section,
+                .table_offset  = entry->header.abbrev_offset,
+                .version       = entry->header.version,
+                .descriptor    = selection.descriptor
+            }, &budget);
+            CHECK(abbrev);
+            TbSymbolOutcome_e decoded = TB_SYMBOL_PENDING;
+            for (unsigned turn = 0; turn < 1000000 && decoded == TB_SYMBOL_PENDING; ++turn)
+                decoded = tb_symbol_abbrev_step(abbrev, 257);
+            CHECK(decoded == TB_SYMBOL_SUCCESS);
+            TbSymbolAbbrevView_t table;
+            CHECK(tb_symbol_abbrev_view(abbrev, &table));
+            CHECK(table.table_offset == entry->header.abbrev_offset && table.count);
+            for (uint64_t code = 0; code < table.count; ++code) {
+                const TbSymbolAbbrevEntry_t *found = NULL;
+                CHECK(tb_symbol_abbrev_find(abbrev, table.entries[code].code, &found) ==
+                      TB_SYMBOL_ABBREV_FOUND);
+                CHECK(found == &table.entries[code]);
+            }
+            abbreviations += table.count;
+            tb_symbol_abbrev_destroy(abbrev);
         } else {
             ++unsupported;
             CHECK(!entry->header.version && !entry->header.header_bytes);
@@ -72,7 +99,8 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
     CHECK(unsupported == view.unsupported);
     UnitCounts_t counts = {
         .total       = view.count,
-        .unsupported = view.unsupported
+        .unsupported = view.unsupported,
+        .abbreviations = abbreviations
     };
     tb_symbol_units_destroy(units);
     return counts;
@@ -163,6 +191,18 @@ static void check_file(const char *path)
     CHECK(directory_view.count == sections && directory_view.layout->section_names == names);
     CHECK(directory_view.header->address_bytes == header.address_bytes);
     CHECK(directory_view.header->byte_order == header.byte_order);
+    uint64_t abbreviation_section = UINT64_MAX;
+    for (size_t i = 0; i < sections; ++i) {
+        const TbSymbolSectionEntry_t *entry = &directory_view.entries[i];
+        if (!entry->has_name)
+            continue;
+        const char *name = elf_strptr(reference, names, entry->header.name_offset);
+        CHECK(name);
+        if (!strcmp(name, ".debug_abbrev")) {
+            CHECK(abbreviation_section == UINT64_MAX);
+            abbreviation_section = i;
+        }
+    }
     size_t symbols = 0;
     UnitCounts_t unit_counts = {0};
     for (size_t i = 0; i < sections; ++i) {
@@ -188,7 +228,8 @@ static void check_file(const char *path)
                     .kind          = !strcmp(expected_name, ".debug_info")
                                          ? TB_SYMBOL_DWARF_INFO : TB_SYMBOL_DWARF_TYPES,
                     .descriptor    = fd
-                });
+                }, abbreviation_section);
+                unit_counts.abbreviations += counts.abbreviations;
                 unit_counts.total += counts.total;
                 unit_counts.unsupported += counts.unsupported;
             }
@@ -280,8 +321,9 @@ static void check_file(const char *path)
         CHECK(actual.memory_bytes == expected.p_memsz && actual.alignment == expected.p_align);
     }
     CHECK(symbols && sections && programs && unit_counts.total > unit_counts.unsupported);
-    printf("PASS native DWARF header composition: %llu contributions, %llu unsupported\n",
-           (unsigned long long)unit_counts.total, (unsigned long long)unit_counts.unsupported);
+    printf("PASS native DWARF composition: %llu contributions, %llu unsupported, %llu abbreviations\n",
+           (unsigned long long)unit_counts.total, (unsigned long long)unit_counts.unsupported,
+           (unsigned long long)unit_counts.abbreviations);
     CHECK(!elf_end(reference));
     tb_symbol_sections_destroy(directory);
     tb_symbol_file_destroy(input);

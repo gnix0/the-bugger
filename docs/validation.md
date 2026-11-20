@@ -6404,3 +6404,63 @@ changed subsequently. Link checks covered 236 local references without errors;
 whitespace checks passed. These are local host results, not hosted CI, arbitrary
 producer/hardware qualification, complete DIE/abbreviation/reference validation
 or SE05/F07 acceptance. No new helper opcode or UI consumer was added.
+
+
+## Selected DWARF abbreviation tables — 2026-11-20
+
+Selected retained abbreviation tables now validate declaration framing, standard
+DWARF 4/5 form identifiers and unique code lookup before exposing a complete
+view. Physical declaration/attribute order and exact encoded implicit-constant
+spans are preserved. Wide constants remain available as metadata coordinates;
+identifiers beyond the current 64-bit lookup profile are explicitly unsupported.
+DIE payloads and reference targets are outside this step.
+
+Local Linux x86-64 checks use the same host/toolchain configuration as the
+preceding SE05 records. Full logs, exit files, environment and captured inputs
+are under ignored `build/se05-evidence-20261120/`, with the `abbrev-` prefix.
+
+| Check | Command / evidence |
+|---|---|
+| Focused schemas, LEB and native composition | `make BUILD_DIR=build/se05-abbrev-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-abbrev test-symbol-leb test-symbol-elf-native`; `abbrev-focused-final`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se05-abbrev-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `abbrev-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se05-abbrev-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-abbrev test-symbol-leb test-symbol-elf-native`; `abbrev-sanitize-final`. |
+| Static analysis | `make analyze`, 54 production source files; `abbrev-analysis`. |
+
+Authored ELF32/64 fixtures in both byte orders cover selected offsets, versioned
+form identifiers, empty tables, code conflicts, malformed terminators and child
+markers, truncated fields, unsupported encodings and 513 shuffled declarations.
+A 70,000-byte padded signed constant decodes to -1; a constant beyond int64 keeps
+its complete span and exposes no truncated number. LEB framing independently
+checks fit, chunk boundaries, nonminimal padding and no following-field theft.
+
+Allocation failures at all five construction allocations, insufficient budgets,
+cancellation, short/EINTR/EOF/error reads and between-pass mutation preserve
+unavailable candidates and restore prior accounting. The mutation fixture retains
+a writer deliberately to violate the backing invariant; its detected mutation
+does not prove acquisition writer closure. Constructors perform no I/O, each read
+respects its allowance and destruction preserves borrowed descriptors.
+
+Native composition validated 15/1/1 units with 782/31/5 abbreviation declarations
+summed over the selected unit tables; shared tables may be counted repeatedly.
+Sanitizer composition validated 15/1/1 units with 624/18/5 declarations using Clang
+fixtures. Both runs had zero unsupported headers. Additional GCC fixtures built with
+`cc -std=c17 -Wall -Wextra -Wpedantic -Werror -g -gdwarf-4 -O0`, adding
+`-fPIC -shared` for the library, from `tests/fixtures/native/session.c` and
+`tests/fixtures/native/breakpoints_library.c`, passed the same native harness:
+1/1 units and 31/5 declarations (`abbrev-native-dwarf4`). These checks use native
+compiler output but no independent DWARF grammar oracle. Separate libelf ELF
+comparisons still passed. Production sizing, general producer/target support,
+complete DIE/reference validity and SE05/F07 acceptance remain unestablished.
+
+Initial component analysis rejected boolean bitwise updates and an unsuffixed
+shift count in LEB framing, then interchangeable comparator indices in lookup
+sorting. Logical updates, an unsigned count and physical-entry comparator
+parameters resolved those findings; original and corrected logs are retained.
+`abbrev-tested-files.json`, `abbrev-tested.patch`, captured inputs and
+`abbrev-environment.txt` identify the tested source scope. The new form-framing
+component is subsequent work and is not part of this abbreviation-table record.
+All checks in the table passed (exit 0); normal `make` also passed
+(`abbrev-normal-make`). The final link check covered 237 local references with no
+errors and whitespace checks passed. Compiled input hashes match the snapshot;
+subsequent changes within that manifest were documentation only. These are local
+host results, not hosted CI, physical validation or maintainer acceptance.

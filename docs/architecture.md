@@ -560,6 +560,41 @@ remain unvalidated. This component adds no helper opcode or UI action and select
 no production cache/index limit ahead of SE10.
 
 
+### DWARF abbreviation tables (SE05, partial)
+
+`src/symbol/abbrev.c` validates one explicitly selected table at a section-relative
+abbreviation offset and DWARF version. It borrows the complete section directory,
+exact retained descriptor and content lease. Creation performs no I/O; bounded
+steps frame declarations through the table's zero-code terminator. The component
+recognizes standard DWARF 4/5 form identifiers for the selected version. Unknown
+forms are Unsupported because their declaration layout cannot be assumed.
+
+A counting pass reserves exact entry, attribute and lookup-array capacity before
+reconstruction. Incremental heapsort validates unique codes without changing
+physical declaration or attribute order. Duplicate codes, invalid child markers,
+inconsistent attribute terminators and truncated fields fail the selected table.
+No incomplete or failed candidate is exposed. Duplicate attribute names and
+unknown numeric tags/attributes remain raw metadata; this layer selects no
+semantic winner. Numeric identifiers exceeding its 64-bit lookup profile remain
+explicitly Unsupported rather than truncated or classified as malformed.
+
+`src/symbol/leb.c` supplies allocation-free streaming LEB framing with at most 256
+bytes inspected per call, independently of numeric representability. Abbreviation
+implicit constants retain their complete encoded coordinates even when no signed
+64-bit value is available. Long valid padding is framed across scratch windows;
+framing never consumes the following field. Owned state, scratch and all array
+capacity use the caller's checked construction account. Cancellation/destruction
+release that ownership without closing the borrowed descriptor.
+
+A complete table view establishes its selected schema only. Unit-to-table
+association remains the caller's responsibility; DIE bodies, attribute payloads,
+reference targets and semantic relationships require subsequent validation.
+No helper opcode, discovery, frontend evidence owner or runtime authority is
+introduced. Production sizing remains at SE10. Declaration encoding follows
+[DWARF 4](https://dwarfstd.org/doc/DWARF4.pdf) and
+[DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Sections 7.5.3 and 7.6.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
