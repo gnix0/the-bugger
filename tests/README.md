@@ -94,6 +94,11 @@ records remain in the [validation records](../docs/validation.md).
   and DWARF 5 indexed-string contributions; included in `test`. See
   [string coverage](../docs/testing.md#retained-dwarf-strings-and-offsets-se05-partial).
 
+- `make test-symbol-attributes test-symbol-text`: complete-scope unique field
+  selection and composed retained text dependencies, explicit missing/conflicting
+  outcomes and failure accounting; included in `test`. See
+  [text coverage](../docs/testing.md#selected-text-attributes-se05-partial).
+
 - `make test-symbol-dwarf`: bounded DWARF32/64 unit headers, mixed address/offset
   widths, unsupported unit coverage and exact contribution bounds. Included in
   `test`; see [unit-header coverage](../docs/testing.md#dwarf-unit-headers-se05-partial).

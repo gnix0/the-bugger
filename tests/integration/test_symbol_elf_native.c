@@ -2,8 +2,7 @@
 #include "symbol/abbrev.h"
 #include "symbol/dies.h"
 #include "symbol/references.h"
-#include "symbol/string_offsets.h"
-#include "symbol/strings.h"
+#include "symbol/text.h"
 #include "symbol/elf.h"
 #include "symbol/file.h"
 #include "symbol/sections.h"
@@ -48,96 +47,60 @@ typedef struct {
     uint64_t offsets;
 } StringSections_t;
 
-static uint64_t check_string(TbSymbolSectionsView_t directory, TbSymbolStringSelection_t selection)
+static bool check_attribute_string(TbSymbolSectionsView_t directory, TbSymbolUnitsView_t units,
+                                    TbSymbolDiesView_t tree, TbSymbolReferenceSelection_t selected,
+                                    StringSections_t sections, int descriptor)
 {
-    TbSymbolString_t *string = tb_symbol_string_create(directory, selection, &budget);
-    CHECK(string);
-    TbSymbolOutcome_e outcome = TB_SYMBOL_PENDING;
-    for (unsigned turn = 0; turn < 1000000 && outcome == TB_SYMBOL_PENDING; ++turn)
-        outcome = tb_symbol_string_step(string, 257);
-    CHECK(outcome == TB_SYMBOL_SUCCESS);
-    TbSymbolStringView_t view;
-    CHECK(tb_symbol_string_view(string, &view));
-    CHECK(view.section_index == selection.section_index && view.offset == selection.offset);
-    CHECK(view.bytes < selection.end_offset - selection.offset);
-    uint64_t bytes = view.bytes;
-    tb_symbol_string_destroy(string);
-    return bytes;
-}
-
-
-static bool check_attribute_string(TbSymbolSectionsView_t directory, TbSymbolDieAttribute_t attribute,
-                                    StringSections_t sections, TbSymbolUnitEntry_t unit,
-                                    TbSymbolDiesView_t tree, int descriptor)
-{
-    uint64_t form = attribute.value.form;
-    uint64_t section;
-    uint64_t offset;
-    uint64_t end;
-    if (form == TB_SYMBOL_FORM_STRING) {
-        offset = attribute.value.payload_offset;
-        CHECK(tb_symbol_add(offset, attribute.value.payload_bytes, &end) && tb_symbol_add(end, 1, &end));
-        CHECK(check_string(directory, (TbSymbolStringSelection_t){
-            .section_index = tree.section_index,
-            .offset        = offset,
-            .end_offset    = end,
-            .descriptor    = descriptor
-        }) == attribute.value.payload_bytes);
-        return true;
-    }
+    const TbSymbolDieEntry_t *die = &tree.entries[selected.die_index];
+    const TbSymbolDieAttribute_t *attribute = &tree.attributes[die->first_attribute +
+                                                              selected.attribute_index];
+    uint64_t form = attribute->value.form;
     bool indexed = form == TB_SYMBOL_FORM_STRX ||
                    (form >= TB_SYMBOL_FORM_STRX1 && form <= TB_SYMBOL_FORM_STRX4);
-    if (form != TB_SYMBOL_FORM_STRP && form != TB_SYMBOL_FORM_LINE_STRP && !indexed)
-        return false;
-    CHECK(attribute.value.numeric && !attribute.value.is_signed);
-    if (form == TB_SYMBOL_FORM_STRP || form == TB_SYMBOL_FORM_LINE_STRP) {
-        section = form == TB_SYMBOL_FORM_STRP ? sections.strings : sections.line_strings;
-        offset = attribute.value.bits;
-    } else if (indexed) {
-        const TbSymbolDieEntry_t *root = &tree.entries[0];
-        uint64_t bases = 0;
-        uint64_t base = 0;
-        for (uint64_t i = 0; i < root->attribute_count; ++i) {
-            const TbSymbolDieAttribute_t *candidate = &tree.attributes[root->first_attribute + i];
-            if (candidate->name != 0x72)
-                continue;
-            CHECK(candidate->value.form == TB_SYMBOL_FORM_SEC_OFFSET && candidate->value.numeric);
-            base = candidate->value.bits;
-            ++bases;
-        }
-        CHECK(bases == 1 && sections.offsets < directory.count);
-        TbSymbolStringOffsetSelection_t selection = {
-            .section_index = sections.offsets,
-            .base          = base,
-            .index         = attribute.value.bits,
-            .offset_bytes  = unit.extent.offset_bytes,
-            .descriptor    = descriptor
-        };
-        TbSymbolStringOffsets_t *offsets = tb_symbol_string_offsets_create(directory, selection, &budget);
-        CHECK(offsets);
-        TbSymbolOutcome_e outcome = TB_SYMBOL_PENDING;
-        for (unsigned turn = 0; turn < 1000000 && outcome == TB_SYMBOL_PENDING; ++turn)
-            outcome = tb_symbol_string_offsets_step(offsets, 257);
-        CHECK(outcome == TB_SYMBOL_SUCCESS);
-        TbSymbolStringOffsetView_t selected;
-        CHECK(tb_symbol_string_offsets_view(offsets, &selected));
-        CHECK(selected.base == base && selected.index == attribute.value.bits);
-        section = sections.strings;
-        offset = selected.string_offset;
-        tb_symbol_string_offsets_destroy(offsets);
-    } else {
+    if (form != TB_SYMBOL_FORM_STRING && form != TB_SYMBOL_FORM_STRP &&
+        form != TB_SYMBOL_FORM_LINE_STRP && !indexed) {
         return false;
     }
-    CHECK(attribute.value.numeric && !attribute.value.is_signed && section < directory.count);
-    (void)check_string(directory, (TbSymbolStringSelection_t){
-        .section_index = section,
-        .offset        = offset,
-        .end_offset    = directory.entries[section].header.bytes,
-        .descriptor    = descriptor
-    });
+    TbSymbolText_t *text = tb_symbol_text_create(directory, units, tree, (TbSymbolTextSelection_t){
+        .unit_index          = selected.unit_index,
+        .die_index           = selected.die_index,
+        .name                = attribute->name,
+        .string_section      = sections.strings,
+        .line_string_section = sections.line_strings,
+        .offset_section      = sections.offsets,
+        .descriptor          = descriptor
+    }, &budget);
+    CHECK(text);
+    TbSymbolTextOutcome_e outcome = TB_SYMBOL_TEXT_PENDING;
+    for (unsigned turn = 0; turn < 1000000 && outcome == TB_SYMBOL_TEXT_PENDING; ++turn)
+        outcome = tb_symbol_text_step(text, 257);
+    CHECK(outcome == TB_SYMBOL_TEXT_FOUND);
+    TbSymbolTextView_t view;
+    CHECK(tb_symbol_text_view(text, &view));
+    CHECK(view.backing.key.inode == directory.backing.key.inode);
+    CHECK(view.source_section == tree.section_index && view.source_unit == tree.unit_offset);
+    CHECK(view.source_record == die->offset && view.attribute.offset == attribute->offset);
+    CHECK(view.attribute.name == attribute->name && view.attribute.value.form == form);
+    CHECK(view.abbrev_section == tree.abbrev_section && view.abbrev_offset == tree.abbrev_offset);
+    CHECK(view.indexed == indexed);
+    if (indexed) {
+        CHECK(view.base_attribute.name == 0x72);
+        CHECK(view.base_attribute.value.bits == view.offsets.base);
+        CHECK(view.offsets.index == attribute->value.bits);
+        CHECK(view.offsets.section_index == sections.offsets);
+        CHECK(view.text.section_index == sections.strings && view.text.offset == view.offsets.string_offset);
+    } else if (form == TB_SYMBOL_FORM_STRING) {
+        CHECK(view.text.section_index == tree.section_index);
+        CHECK(view.text.offset == attribute->value.payload_offset);
+        CHECK(view.text.bytes == attribute->value.payload_bytes);
+    } else {
+        CHECK(view.text.section_index == (form == TB_SYMBOL_FORM_LINE_STRP
+                                             ? sections.line_strings : sections.strings));
+        CHECK(view.text.offset == attribute->value.bits);
+    }
+    tb_symbol_text_destroy(text);
     return true;
 }
-
 
 typedef struct {
     uint64_t total;
@@ -230,8 +193,13 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                 attributes += record->attribute_count;
                 CHECK(attributes <= tree.attribute_count);
                 for (uint64_t attr = 0; attr < record->attribute_count; ++attr) {
-                    if (check_attribute_string(directory, tree.attributes[record->first_attribute + attr],
-                                               string_sections, *entry, tree, selection.descriptor)) {
+                    TbSymbolReferenceSelection_t selected = {
+                        .unit_index      = i,
+                        .die_index       = die,
+                        .attribute_index = attr
+                    };
+                    if (check_attribute_string(directory, view, tree, selected, string_sections,
+                                               selection.descriptor)) {
                         ++string_count;
                         uint64_t form = tree.attributes[record->first_attribute + attr].value.form;
                         if (form == TB_SYMBOL_FORM_STRX ||
@@ -240,11 +208,6 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                         }
                     }
                     TbSymbolReference_t reference;
-                    TbSymbolReferenceSelection_t selected = {
-                        .unit_index      = i,
-                        .die_index       = die,
-                        .attribute_index = attr
-                    };
                     TbSymbolReferenceStatus_e prepared = tb_symbol_reference_prepare(view, tree, selected,
                                                                                       &reference);
                     if (prepared == TB_SYMBOL_REFERENCE_NOT_REFERENCE)

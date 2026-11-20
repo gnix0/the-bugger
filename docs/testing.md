@@ -3153,3 +3153,32 @@ them. This is composition with compiler output, not an independent DWARF parser
 oracle. Raw strings do not prove UTF-8, semantic names or source correspondence.
 Split/headerless tables, broader producer/target qualification, production sizing
 and SE05/F07 acceptance remain separate work.
+
+
+## Selected text attributes (SE05, partial)
+
+```sh
+make BUILD_DIR=build/se05-text CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-attributes test-symbol-text test-symbol-elf-native
+```
+
+The attribute cursor tests use authored complete-tree views, including duplicate
+fields with equal values and a 100,001-attribute scope with a late duplicate.
+They check complete-scope uniqueness, physical diagnostics, bounded steps and
+unchanged outputs before completion. They do not replace DIE parser fixtures.
+
+The text tests combine protected ELF32/64 backing in both byte orders with
+authored unit/tree views. Cases cover DWARF32/64, versions 4–5, inline and empty
+strings, direct/indirect effective forms, line strings and every standard indexed
+string form. Missing/duplicate fields and bases, explicit absent sections,
+unsupported forms, numeric/span errors and malformed dependent strings have
+separate outcomes. Constructor I/O, per-step reads/allowances, every allocation
+site, budget refusal, cancellation, descriptor mismatch and short/EINTR/EOF/error
+paths are instrumented. EINTR without advancement does not count as progress.
+
+Native composition now uses this resolver over actual producer-generated unit,
+abbreviation and DIE views, checking source and dependency provenance. GCC and
+Clang fixture configurations exercise different direct/indexed encodings; neither
+is a universal producer oracle. The inherited 2 MiB harness account remains
+unchanged. Semantic naming/inheritance, frontend evidence ownership, production
+sizing, hardware qualification and SE05/F07 acceptance remain separate work.

@@ -731,6 +731,39 @@ frontend evidence owner, semantic naming policy or target access. Scope-specific
 string/dependency facts do not establish full unit semantics or production sizing.
 
 
+### Selected text attributes (SE05, partial)
+
+`src/symbol/attributes.c` scans a selected DIE's complete attribute scope before
+exposing a unique field. Missing and duplicate fields have separate results;
+equal duplicate values remain distinct physical attributes. Each step examines
+at most 256 attributes. Complete diagnostics retain the source identity, total
+matches and first two physical occurrences. This allocation-free cursor borrows
+the complete tree; its caller owns accounting, lifetime and cancellation.
+
+`src/symbol/text.c` composes that lookup with retained string and string-offset
+validation. It accepts inline strings, direct string/line-string offsets and
+DWARF 5 indexed strings. Indexed strings require a unique root
+`DW_AT_str_offsets_base` with the proper form and a complete selected table entry
+using the CU's offset format. All dependent sections are explicitly selected;
+missing sections or bases never trigger discovery or a numeric fallback.
+
+Only a completed resolution exposes a text span. The view retains the exact
+source DIE, attribute, abbreviation coordinates and backing; indexed results
+also retain the base attribute and table-entry provenance. Empty text is a
+successful zero-length span, distinct from a missing field. Conflicting fields,
+unsupported forms, malformed dependencies, resource refusal and operational
+failure remain distinguishable. A failed/cancelled construction exposes no
+partial view. No full string is allocated or interpreted as Unicode.
+
+Creation checks source-view correspondence and reserves construction storage
+without I/O. Bounded steps own their child decoders through the same account;
+the completed offset fact is copied before its child is released. The caller
+retains all borrowed views, descriptor and content lease and supplies outer-job
+deadlines, request identity and revision checks. These primitives do not inherit
+names through references, create frontend evidence ownership or establish
+semantic names, runtime correspondence or permission to access a target.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

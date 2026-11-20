@@ -13,9 +13,13 @@ SE02 adds the [supervised helper foundation](architecture.md#symbol-engine-helpe
 SE03 has [artifact resource components](architecture.md#artifact-admission-accounting-se03-partial)
 for admission accounting, private byte copying and complete backing equality,
 with supervised storage dispatch, explicit size grants and a frontend ownership
-registry for contexts, backing leases and scoped sharing. Artifact Open workflow,
-qualified acquisition profiles, decoders and consumers remain unfinished.
-Unknown helper operations return Unsupported.
+registry for contexts, backing leases and scoped sharing. SE04 adds
+[scoped ELF validation](architecture.md#supervised-elf-validation-se04-partial),
+and SE05 provides structural DWARF decoding through
+[selected text dependencies](architecture.md#selected-text-attributes-se05-partial).
+Artifact Open workflow, qualified acquisition profiles, complete semantic
+interpretation and consumers remain unfinished. Unknown helper operations return
+Unsupported.
 Verification evidence is recorded separately from integration acceptance.
 
 The engine owns bounded project-native C17 ELF/DWARF decoding, metadata

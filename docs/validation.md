@@ -6685,3 +6685,59 @@ as did normal `make` (`strings-normal-make`). Frozen compiled-input hashes match
 Link checks covered 241 local references with no errors and whitespace checks
 passed. These are local host results, not hosted CI, physical validation or
 maintainer acceptance.
+
+
+## Selected text attributes — 2026-11-20
+
+Complete-scope unique-field selection now composes retained string dependencies
+without interpreting semantic names or inheriting attributes. Missing fields,
+equal-value duplicates, empty strings, unavailable sections/bases and unsupported
+forms retain distinct outcomes. A completed result preserves exact source DIE,
+attribute and abbreviation coordinates; indexed results also preserve the CU
+base and selected table-entry provenance. Failure exposes no partial text view.
+
+Local Linux x86-64 evidence is retained under ignored
+`build/se05-evidence-20261120/` with the `text-` and `attributes-` prefixes.
+
+| Check | Command / evidence |
+|---|---|
+| Focused field/text/native composition | `make BUILD_DIR=build/se05-text-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-attributes test-symbol-text test-symbol-elf-native`; `text-final-focused`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se05-text-final-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `text-final-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se05-text-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-attributes test-symbol-text test-symbol-elf-native`; `text-final-sanitize`. |
+| Static analysis | `make analyze`, 61 production source files; `text-analysis`. |
+
+Authored complete-tree cases check selected-DIE isolation, exact first/second
+physical diagnostics and a late duplicate in a 100,001-attribute scope. Retained
+ELF32/64 text fixtures in both byte orders use authored unit/tree views to check
+DWARF32/64 and version 4–5 source contexts. They cover direct, inline, indirect,
+line and all standard indexed forms; missing/duplicate bases and fields; wrong
+base forms; malformed values/spans/strings; absent sections and unsupported
+forms. These authored views are distinct from independent producer-generated
+composition. Every allocation site, budget refusal, cancellation stage and
+short/EINTR/EOF/error path preserves unavailable candidates and restores the
+original account. Constructors perform no I/O and service steps obey read and
+inspection allowances. EINTR without bounded advancement does not count as
+meaningful progress.
+
+GCC composition resolved 5,530/89/6 text attributes in 22/1/1 units; these fixtures
+had no indexed strings. Clang ASan/UBSan composition resolved 5,375/26/6 text
+attributes, all indexed. Native composition now uses the production text resolver
+rather than manually composing its children, and checks both source and indexed
+dependency provenance. Separate ELF/libelf comparisons and reference-coordinate
+checks remain. Additional DWARF 4 executable/library fixtures passed with 89/6
+strings (`text-final-native-dwarf4`). The existing 2 MiB retained-file harness allowance
+remained unchanged; it does not establish production cache/index sizing or RSS.
+
+`text-final-tested-files.json`, `text-final-tested.patch`, captured inputs and
+`text-final-environment.txt` identify the compiled scope. Semantic naming,
+inheritance, validated semantic relationships, shared frontend evidence ownership, broader
+producer/target qualification, production sizing and F07 acceptance remain
+outstanding. Local automated checks do not establish hosted CI, physical
+validation or maintainer acceptance.
+
+
+All checks in the table passed (exit 0). Initial and final full host runs are
+retained separately. Final component analysis (`text-final-component-analysis`)
+and normal `make` (`text-final-normal-make`) also passed. All 261 final compiled
+input hashes match; local link checks covered 244 references with no errors and
+whitespace checks passed. No hosted CI or physical result is claimed.
