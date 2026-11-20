@@ -3,6 +3,7 @@
 #include "symbol/file.h"
 #include "symbol/sections.h"
 #include "symbol/symbols.h"
+#include "symbol/units.h"
 #include "symbol/acquire.h"
 #include "symbol/admission.h"
 #include "../support/check.h"
@@ -33,6 +34,48 @@ static void read_record(TbSymbolFile_t *file, uint64_t offset, size_t length, un
     TbSymbolFileView_t view;
     CHECK(tb_symbol_file_view(file, &view) && view.offset == offset && view.bytes == length);
     memcpy(bytes, view.data, length);
+}
+
+
+typedef struct {
+    uint64_t total;
+    uint64_t unsupported;
+} UnitCounts_t;
+
+static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSelection_t selection)
+{
+    TbSymbolUnits_t *units = tb_symbol_units_create(directory, selection, &budget);
+    CHECK(units);
+    TbSymbolOutcome_e outcome = TB_SYMBOL_PENDING;
+    for (unsigned turn = 0; turn < 1000000 && outcome == TB_SYMBOL_PENDING; ++turn)
+        outcome = tb_symbol_units_step(units, 257);
+    CHECK(outcome == TB_SYMBOL_SUCCESS);
+    TbSymbolUnitsView_t view;
+    CHECK(tb_symbol_units_view(units, &view));
+    CHECK(view.section_index == selection.section_index && view.kind == selection.kind);
+    uint64_t cursor = 0;
+    uint64_t unsupported = 0;
+    for (uint64_t i = 0; i < view.count; ++i) {
+        const TbSymbolUnitEntry_t *entry = &view.entries[i];
+        CHECK(entry->offset == cursor && entry->extent.total_bytes);
+        if (entry->header_available) {
+            CHECK(entry->header.extent.end_offset == entry->extent.end_offset);
+            CHECK(entry->header.version == 4 || entry->header.version == 5);
+            CHECK(entry->header.header_bytes < entry->extent.total_bytes);
+        } else {
+            ++unsupported;
+            CHECK(!entry->header.version && !entry->header.header_bytes);
+        }
+        cursor = entry->extent.end_offset;
+    }
+    CHECK(cursor == directory.entries[selection.section_index].header.bytes);
+    CHECK(unsupported == view.unsupported);
+    UnitCounts_t counts = {
+        .total       = view.count,
+        .unsupported = view.unsupported
+    };
+    tb_symbol_units_destroy(units);
+    return counts;
 }
 
 
@@ -121,6 +164,7 @@ static void check_file(const char *path)
     CHECK(directory_view.header->address_bytes == header.address_bytes);
     CHECK(directory_view.header->byte_order == header.byte_order);
     size_t symbols = 0;
+    UnitCounts_t unit_counts = {0};
     for (size_t i = 0; i < sections; ++i) {
         uint64_t offset;
         CHECK(tb_symbol_elf_entry(&layout.sections, i, &offset));
@@ -138,6 +182,16 @@ static void check_file(const char *path)
             const char *expected_name = elf_strptr(reference, names, actual.name_offset);
             CHECK(expected_name && validated->has_name);
             CHECK(validated->name_bytes == strlen(expected_name));
+            if (!strcmp(expected_name, ".debug_info") || !strcmp(expected_name, ".debug_types")) {
+                UnitCounts_t counts = check_units(directory_view, (TbSymbolUnitSelection_t){
+                    .section_index = i,
+                    .kind          = !strcmp(expected_name, ".debug_info")
+                                         ? TB_SYMBOL_DWARF_INFO : TB_SYMBOL_DWARF_TYPES,
+                    .descriptor    = fd
+                });
+                unit_counts.total += counts.total;
+                unit_counts.unsupported += counts.unsupported;
+            }
             uint64_t compared = 0;
             while (compared < validated->name_bytes) {
                 uint64_t remaining = validated->name_bytes - compared;
@@ -225,7 +279,9 @@ static void check_file(const char *path)
         CHECK(actual.physical_address == expected.p_paddr && actual.file_bytes == expected.p_filesz);
         CHECK(actual.memory_bytes == expected.p_memsz && actual.alignment == expected.p_align);
     }
-    CHECK(symbols && sections && programs);
+    CHECK(symbols && sections && programs && unit_counts.total > unit_counts.unsupported);
+    printf("PASS native DWARF header composition: %llu contributions, %llu unsupported\n",
+           (unsigned long long)unit_counts.total, (unsigned long long)unit_counts.unsupported);
     CHECK(!elf_end(reference));
     tb_symbol_sections_destroy(directory);
     tb_symbol_file_destroy(input);

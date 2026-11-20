@@ -2976,3 +2976,29 @@ oversized supplied length checks the fixed inspection ceiling under sanitizers.
 These checks establish header/framing behavior only. They do not validate DIEs,
 abbreviation dependencies, attributes or cross-unit references, qualify arbitrary
 producers/targets or establish SE05/F07 acceptance.
+
+
+## DWARF header inventories (SE05, partial)
+
+```sh
+make BUILD_DIR=build/se05-inventory CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-units test-symbol-dwarf test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Protected ELF32/64 fixtures in both byte orders cover
+mixed-format headers, a large contribution spanning scratch boundaries, distinct
+physical offsets, unsupported-unit coverage, type units, empty scopes, malformed
+late contributions and unsupported compressed sections. A 5,000-unit scope checks
+complete traversal and exact allocation. Every incomplete/cancelled/failed scope
+keeps its candidate unavailable. Allocation fault injection, budget refusal,
+short/EINTR/EOF/error paths and empty-scope descriptor replacement check ownership
+and accounting. Instrumented reads check each service allowance.
+
+The native ELF harness now also constructs header inventories for `.debug_info`
+and `.debug_types` after admission/acquisition. It checks ordered extents and
+explicit supported/unsupported counts before retiring all borrowed views and
+confirming backing cleanup. This is retained-file composition, not a libdw or
+independent DWARF parser comparison; the existing ELF-field/name comparisons with
+libelf remain separate. Authored prefixes qualify format boundaries, not arbitrary
+producer/architecture compatibility or complete unit/DIE validity. No SE05/F07
+acceptance follows from these tests.

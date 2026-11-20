@@ -69,6 +69,10 @@ records remain in the [validation records](../docs/validation.md).
   and construction failures. Included in `test`; see
   [coverage](../docs/testing.md#elf-section-directories-se04-partial).
 
+- `make test-symbol-units`: complete selected DWARF header inventories, explicit
+  unsupported coverage, exact backing and bounded construction failures. Included
+  in `test`; see [inventory coverage](../docs/testing.md#dwarf-header-inventories-se05-partial).
+
 - `make test-symbol-dwarf`: bounded DWARF32/64 unit headers, mixed address/offset
   widths, unsupported unit coverage and exact contribution bounds. Included in
   `test`; see [unit-header coverage](../docs/testing.md#dwarf-unit-headers-se05-partial).

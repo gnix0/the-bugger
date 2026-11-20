@@ -6357,3 +6357,50 @@ ignored `build/se05-references-20261120/`.
 These are local host and authored-format results, not hosted CI, native/embedded
 producer qualification, complete unit/DIE validation or SE05/F07 acceptance.
 No helper request, discovery, runtime binding or target access was introduced.
+
+
+### Complete selected DWARF header inventories — 2026-11-20
+
+Selected info/type sections now produce a complete ordered header inventory only
+after framing/header checks and exact allocation succeed. A counting pass precedes
+reservation and reconstruction. Safely framed unsupported units retain explicit
+coverage entries; malformed late contributions expose no prefix. Empty selected
+sections still verify their backing descriptor. Unit bodies remain unvalidated.
+
+Local focused checks, sanitizers, static analysis and the complete fresh host
+baseline passed, exit 0. Evidence is under
+`build/se05-evidence-20261120/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused inventory/headers/native composition | `make BUILD_DIR=build/se05-inventory-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-units test-symbol-dwarf test-symbol-elf-native`; `inventory-composition-initial`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se05-inventory-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `inventory-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se05-inventory-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-units test-symbol-dwarf test-symbol-elf-native`; `inventory-sanitize`. |
+| Analysis/build | `make analyze` across 52 production source files and normal `make`; `inventory-analysis` and `inventory-normal-make`. |
+
+Authored ELF32/64 fixtures in both byte orders cover mixed formats, type headers,
+unsupported contributions, empty scopes, malformed framing/headers and compressed
+sections. A 70,000-byte contribution skips unvalidated body bytes while retaining
+exact next-unit coordinates. A 5,000-unit section exercises complete traversal and
+allocation. Fault injection covers all three allocations, budget refusal, cancellation
+through construction stages, short/EINTR/EOF/error reads and empty-scope descriptor
+replacement. Accounting returns to the retained directory's baseline; borrowed
+descriptors remain under their caller's ownership. Read instrumentation checks
+each service allowance. The fixture's 2 MiB allowance is not production sizing.
+
+Retained native files produced header inventories of 13/1/1 contributions, all
+supported in the tested configurations. ELF comparisons with libelf still passed
+for 39/37/31 sections, 15/15/11 program headers and 266/69/31 symbols. Instrumented
+composition also produced 13/1/1 units; the sanitizer executable's 9,630 symbols
+passed the separate ELF comparison. Unit inventory checks are composition evidence,
+not a libdw or independent DWARF grammar comparison.
+
+The initial authored fixture failed because its post-loop ELF width was 12;
+resetting it to 8 and bounding the byte writer corrected the fixture before the
+complete checks. The original failure and diagnostic log remain.
+`inventory-tested-files.json`, `inventory-tested.patch`, captured source/header/test
+inputs and `inventory-environment.txt` identify the tested tree. Only documentation
+changed subsequently. Link checks covered 236 local references without errors;
+whitespace checks passed. These are local host results, not hosted CI, arbitrary
+producer/hardware qualification, complete DIE/abbreviation/reference validation
+or SE05/F07 acceptance. No new helper opcode or UI consumer was added.

@@ -535,6 +535,31 @@ no catalog, helper request or UI action is introduced here. The layouts follow
 [DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Section 7.5.1.
 
 
+### Complete DWARF header inventories (SE05, partial)
+
+`src/symbol/units.c` builds a complete header inventory for one explicitly selected
+info/types section over exact retained backing. The caller retains the validated
+section directory, descriptor and content lease. Construction performs no I/O;
+steps check the section profile and descriptor, count contributions, reserve the
+exact entry array and reconstruct the same ordered scope in a second pass.
+Even an empty selected section verifies the backing descriptor before success.
+
+Every entry retains its physical section-relative offset and checked extent.
+Supported headers retain their decoded facts. Safely framed unsupported units
+remain explicit entries with unavailable headers and an aggregate coverage count;
+no guessed fields or empty-inventory substitution is introduced. Malformed framing
+or supported headers fail the selected scope. No candidate prefix is exposed.
+
+Owned state, reader scratch and complete entry capacity use the caller's checked
+construction account. Each service action handles one bounded reader step or
+contribution. Cancellation releases construction ownership while preserving the
+borrowed descriptor; no implicit retry, rescan or artifact discovery occurs.
+The view is borrowed helper cache, not independent frontend validation evidence.
+Unit bodies, DIEs, abbreviation dependencies, forms and cross-unit references
+remain unvalidated. This component adds no helper opcode or UI action and selects
+no production cache/index limit ahead of SE10.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
