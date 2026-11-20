@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- Native file fixture reads. */
 #include "symbol/abbrev.h"
+#include "symbol/dies.h"
 #include "symbol/elf.h"
 #include "symbol/file.h"
 #include "symbol/sections.h"
@@ -42,6 +43,8 @@ typedef struct {
     uint64_t total;
     uint64_t unsupported;
     uint64_t abbreviations;
+    uint64_t dies;
+    uint64_t attributes;
 } UnitCounts_t;
 
 static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSelection_t selection,
@@ -59,6 +62,8 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
     uint64_t cursor = 0;
     uint64_t unsupported = 0;
     uint64_t abbreviations = 0;
+    uint64_t die_count = 0;
+    uint64_t attribute_count = 0;
     for (uint64_t i = 0; i < view.count; ++i) {
         const TbSymbolUnitEntry_t *entry = &view.entries[i];
         CHECK(entry->offset == cursor && entry->extent.total_bytes);
@@ -88,6 +93,40 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                 CHECK(found == &table.entries[code]);
             }
             abbreviations += table.count;
+            TbSymbolDies_t *dies = tb_symbol_dies_create(directory, view, (TbSymbolDieSelection_t){
+                .unit_index = i,
+                .descriptor = selection.descriptor
+            }, abbrev, &budget);
+            CHECK(dies);
+            decoded = TB_SYMBOL_PENDING;
+            for (unsigned turn = 0; turn < 3000000 && decoded == TB_SYMBOL_PENDING; ++turn)
+                decoded = tb_symbol_dies_step(dies, 257);
+            if (decoded != TB_SYMBOL_SUCCESS) {
+                TbSymbolDiesFailure_t failure = tb_symbol_dies_failure(dies);
+                fprintf(stderr, "native DIE failure %u/%u at %llu in unit %llu\n", decoded,
+                        failure.reason, (unsigned long long)failure.offset, (unsigned long long)i);
+            }
+            CHECK(decoded == TB_SYMBOL_SUCCESS);
+            TbSymbolDiesView_t tree;
+            CHECK(tb_symbol_dies_view(dies, &tree) && tree.count);
+            CHECK(tree.section_index == selection.section_index && tree.unit_offset == entry->offset);
+            CHECK(tree.abbrev_section == abbreviation_section && tree.abbrev_offset == table.table_offset);
+            uint64_t previous = entry->offset + entry->header.header_bytes;
+            uint64_t attributes = 0;
+            for (uint64_t die = 0; die < tree.count; ++die) {
+                const TbSymbolDieEntry_t *record = &tree.entries[die];
+                CHECK(record->offset >= previous && record->end_offset > record->offset);
+                CHECK(record->end_offset <= entry->extent.end_offset);
+                CHECK(record->parent == UINT64_MAX ? !die : record->parent < die);
+                CHECK(record->first_attribute == attributes);
+                attributes += record->attribute_count;
+                CHECK(attributes <= tree.attribute_count);
+                previous = record->end_offset;
+            }
+            CHECK(attributes == tree.attribute_count);
+            die_count += tree.count;
+            attribute_count += tree.attribute_count;
+            tb_symbol_dies_destroy(dies);
             tb_symbol_abbrev_destroy(abbrev);
         } else {
             ++unsupported;
@@ -98,9 +137,11 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
     CHECK(cursor == directory.entries[selection.section_index].header.bytes);
     CHECK(unsupported == view.unsupported);
     UnitCounts_t counts = {
-        .total       = view.count,
-        .unsupported = view.unsupported,
-        .abbreviations = abbreviations
+        .total         = view.count,
+        .unsupported   = view.unsupported,
+        .abbreviations = abbreviations,
+        .dies          = die_count,
+        .attributes    = attribute_count
     };
     tb_symbol_units_destroy(units);
     return counts;
@@ -230,6 +271,8 @@ static void check_file(const char *path)
                     .descriptor    = fd
                 }, abbreviation_section);
                 unit_counts.abbreviations += counts.abbreviations;
+                unit_counts.dies += counts.dies;
+                unit_counts.attributes += counts.attributes;
                 unit_counts.total += counts.total;
                 unit_counts.unsupported += counts.unsupported;
             }
@@ -324,6 +367,8 @@ static void check_file(const char *path)
     printf("PASS native DWARF composition: %llu contributions, %llu unsupported, %llu abbreviations\n",
            (unsigned long long)unit_counts.total, (unsigned long long)unit_counts.unsupported,
            (unsigned long long)unit_counts.abbreviations);
+    printf("PASS native DIE composition: %llu records, %llu attributes\n",
+           (unsigned long long)unit_counts.dies, (unsigned long long)unit_counts.attributes);
     CHECK(!elf_end(reference));
     tb_symbol_sections_destroy(directory);
     tb_symbol_file_destroy(input);

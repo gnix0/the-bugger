@@ -3060,3 +3060,33 @@ targets, string/address tables, expression evaluation or semantic type validity.
 Full retained-file composition and cross-unit validation remain separate work;
 passing this target does not establish SE05/F07 acceptance or producer/hardware
 qualification.
+
+
+## Complete DIE trees (SE05, partial)
+
+```sh
+make BUILD_DIR=build/se05-dies CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-dies test-symbol-form test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored retained ELF32/64 files cover both byte
+orders, independent DWARF32/64 formats, DWARF 4/5 compilation/type/partial units,
+parent links and exact physical record/attribute coordinates. Two identical
+units remain separate and independently retained. Deep nesting and broad sibling
+scopes each contain more than 10,000 entries; a 70,000-byte string crosses scratch
+windows. Zero-byte attributes at the unit end retain their abbreviation values
+or present-flag semantics without consuming a following field.
+
+Malformed late records, missing code definitions, unknown root profiles, partial
+payloads, missing child terminators, extra roots and type offsets into attribute
+bytes preserve unavailable candidates. Allocation failure at every construction
+allocation, budget refusal, cancellation, short/EINTR/EOF/error reads and an
+intentionally retained writer mutating between passes check cleanup and bounded
+progress. Mutation detection does not prove acquisition writer closure.
+
+The retained-file harness composes headers, schemas and DIE trees from native
+compiler output, checks exact physical order and parent ranges, then releases
+construction before backing cleanup. Its separate libelf comparisons still test
+ELF fields/names only. These are not an independent DWARF grammar oracle, complete
+reference/type/location validation, general producer/hardware qualification,
+production sizing or SE05/F07 acceptance.

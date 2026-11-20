@@ -82,6 +82,10 @@ records remain in the [validation records](../docs/validation.md).
   raw spans, numeric fit and iterative indirect forms; included in `test`. See
   [form coverage](../docs/testing.md#dwarf-attribute-form-framing-se05-partial).
 
+- `make test-symbol-dies`: complete selected DWARF DIE trees, physical spans,
+  parent links, zero-byte attributes and failure accounting; included in `test`.
+  See [DIE coverage](../docs/testing.md#complete-die-trees-se05-partial).
+
 - `make test-symbol-dwarf`: bounded DWARF32/64 unit headers, mixed address/offset
   widths, unsupported unit coverage and exact contribution bounds. Included in
   `test`; see [unit-header coverage](../docs/testing.md#dwarf-unit-headers-se05-partial).

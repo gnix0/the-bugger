@@ -6507,3 +6507,64 @@ All checks in the form-framing table passed (exit 0), as did normal `make`
 (`form-normal-make`). Frozen compiled-input hashes match. Link checks covered
 238 local references without errors and whitespace checks passed. These are local
 host observations, not hosted CI, physical validation or maintainer acceptance.
+
+
+## Complete selected DIE trees — 2026-11-20
+
+Selected supported units now compose complete retained header and abbreviation
+views into complete structural DIE trees. Exact section/unit/record/attribute
+coordinates, schema dependencies, parent indexes and raw payload spans survive
+without name or address-based merging. Root tags refine DWARF 4 compile/partial
+classification. Type offsets must identify DIE boundaries; no type semantics or
+reference targets follow. Unfinished or failed construction exposes no prefix.
+
+Local Linux x86-64 logs, exits, captured inputs and environment are under ignored
+`build/se05-evidence-20261120/`, with the `dies-` prefix.
+
+| Check | Command / evidence |
+|---|---|
+| Focused traversal, forms and native composition | `make BUILD_DIR=build/se05-dies-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-dies test-symbol-form test-symbol-elf-native`; `dies-focused-final`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se05-dies-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `dies-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se05-dies-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-dies test-symbol-form test-symbol-elf-native`; `dies-sanitize`. |
+| Static analysis | `make analyze`, 56 production source files; `dies-analysis`. |
+
+Authored protected ELF32/64 fixtures in both byte orders cover independent
+DWARF32/64 formats, DWARF 4/5 info/type/partial units and physical parent/attribute
+ranges. Two byte-identical units remain distinct and independently retained.
+A 70,000-byte string crosses scratch windows. Separate deep and broad trees each
+contain 10,001 records; parent-stack storage is explicitly charged. Direct
+implicit constants and present flags at the unit end preserve their zero-byte
+footprint and exact schema dependency.
+
+Malformed late records, absent abbreviation codes, missing roots/child terminators,
+multiple roots, truncated strings/references, unknown root profiles, wider code
+identifiers and type offsets into attribute bytes preserve unavailable views.
+All five allocation sites, budget refusal, 128 cancellation stages and
+short/EINTR/EOF/error reads restore prior accounting and preserve borrowed
+file descriptors. A deliberately retained writer changes backing between passes;
+reconstruction reports File Changed before publication. This fault injection
+validates detection, not the acquisition writer-closure invariant. Each service
+read stays within its allowance; EINTR alone does not advance progress.
+
+Native composition produced 17/1/1 units, 9,345/136/5 DIEs and 37,104/572/30
+attributes. Instrumented Clang composition produced 17/1/1 units, 7,689/88/5 DIEs
+and 25,208/257/26 attributes. All headers were supported in these configurations.
+The existing 2 MiB native-harness construction budget remained unchanged; the
+8 MiB authored stress-fixture budget is not a production default or measurement
+of total process memory. Separate ELF comparisons with libelf passed.
+
+The additional DWARF 4 fixtures from the preceding abbreviation record passed
+the extended native harness: 136/5 DIEs and 572/28 attributes
+(`dies-native-dwarf4`). Native composition is not an independent DWARF grammar
+oracle. Initial component analysis rejected a decrement in a compound condition;
+splitting the state update resolved that finding, with original and corrected
+logs retained. `dies-tested-files.json`, `dies-tested.patch`, captured inputs and
+`dies-environment.txt` identify the compiled scope. Reference/string/address-table
+validation, semantic type/location support, general producer/hardware
+qualification, production sizing and SE05/F07 acceptance remain outstanding.
+
+All checks in the DIE traversal table passed (exit 0), as did normal `make`
+(`dies-normal-make`). Frozen compiled-input hashes match; subsequent changes to
+that scope were documentation only. Link checks covered 239 local references
+without errors and whitespace checks passed. These are local host results, not
+hosted CI, physical validation or maintainer acceptance.

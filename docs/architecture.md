@@ -628,6 +628,36 @@ attribute requirements remain subsequent validation work. No helper opcode,
 frontend catalog, target access or production sizing default follows.
 
 
+### Complete selected DIE trees (SE05, partial)
+
+`src/symbol/dies.c` composes complete unit-header and abbreviation views over the
+same retained backing. The selected schema version and table offset must match
+the unit header; the caller establishes the section relationship. Construction
+performs no I/O. Bounded reader, code and form actions frame the entire unit in a
+counting pass, reserve exact record/attribute/parent-stack capacity, then populate
+the same physical sequence. Every allocation uses the caller's construction
+account; no production depth/cache ceiling is selected ahead of SE10.
+
+The complete view preserves section/unit/record coordinates, physical attribute
+order, exact payload spans, schema coordinates and parent indexes. Null entries
+close child chains; leading/trailing null padding is not a semantic definition.
+Missing roots, multiple roots, unclosed chains, missing abbreviation codes and
+truncated payloads fail without exposing a prefix. Unknown wide code identifiers
+and unknown root profiles remain explicitly unsupported. Root tags resolve the
+DWARF 4 compile-or-partial distinction without rewriting the retained header;
+known contradictory unit/root kinds fail. Type offsets must identify actual DIE
+boundaries, which alone does not prove type semantics.
+
+Direct zero-byte attributes retain their schema dependency; indirect attributes
+retain both declared and effective forms. Wider values retain spans without
+numeric truncation. Names, duplicate attributes, cross-unit/reference targets,
+string/address tables and type/location meaning require subsequent validation.
+The view is borrowed decoded metadata, not frontend-owned evidence or runtime
+authority. Cancellation/destruction releases owned construction storage and
+preserves the caller's descriptor/content lease. No helper opcode or live action
+is introduced.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
