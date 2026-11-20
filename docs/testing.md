@@ -3212,3 +3212,41 @@ The existing retained-file account remains unchanged. These tests establish
 neither canonical semantic identities nor declaration inheritance, complete
 qualified names/signatures, usable code/storage locations, production sizing,
 SE06/F07 acceptance or physical target qualification.
+
+
+## Scoped DWARF relationship links (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-relations CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-relations test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored scoped views check each unit-relative
+reference form, effective indirect references, exact target boundaries,
+section-relative cross-unit dependencies and unchanged failed outputs. Cases
+separate absent fields, duplicate fields, wrong classes, range errors, missing
+inventories/trees, unsupported headers/tags/reference profiles, mismatched tags
+and self-cycles. The source and target declaration flags can differ in either
+direction. A two-record cycle remains two distinct direct edges, pending the
+separate inheritance traversal check; these tests do not claim graph acyclicity.
+A 100,001-attribute scope checks late conflicts without early publication.
+
+Version-specific cases validate the DWARF 4 variable-to-member specification
+pair and its required aggregate parent, including a DWARF 5 source referencing
+a DWARF 4 target. Unknown or vendor semantics are unsupported rather than
+interpreted through a standard tag rule. Missing dependencies and unsupported
+coverage remain separate outcomes.
+
+The maintained C++ fixture under `tests/fixtures/native/symbols/` has out-of-line
+methods, static data, inline calls, overloads, duplicate file statics and duplicate
+source basenames. The native target builds/runs it in DWARF 4 and 5, then verifies
+its specification and origin links through actual retained-file decoding. It
+requires all standard links in these fixtures to resolve; unsupported records
+must be the specifically identified older GNU call-site profile. The DWARF 4
+fixture also requires an actual member-tag target. A C++ compiler builds the debug
+targets only; the frontend and harness remain C17.
+
+Namespace extension links have authored-view coverage; these native fixtures do
+not promise that a producer emits such a link. Broader graph/name semantics,
+production sizing, frontend evidence/publication, SE06/F07 acceptance and physical
+qualification remain outstanding. Direct links authorize no target access.

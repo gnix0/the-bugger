@@ -2,6 +2,7 @@
 #include "symbol/abbrev.h"
 #include "symbol/dies.h"
 #include "symbol/entities.h"
+#include "symbol/relations.h"
 #include "symbol/references.h"
 #include "symbol/text.h"
 #include "symbol/elf.h"
@@ -115,6 +116,15 @@ typedef struct {
     uint64_t indexed_strings;
     uint64_t entity_kinds[4];
     uint64_t declarations;
+    uint64_t specifications;
+    uint64_t origins;
+    uint64_t extensions;
+    uint64_t relation_dependencies;
+    uint64_t relation_unsupported;
+    uint64_t vendor_call_sites;
+    uint64_t legacy_members;
+    uint64_t dwarf4_units;
+    uint64_t dwarf5_units;
 } UnitCounts_t;
 
 static TbSymbolEntityKind_e check_entity(TbSymbolDiesView_t tree, uint64_t die, uint64_t *declarations)
@@ -160,6 +170,87 @@ static TbSymbolEntityKind_e check_entity(TbSymbolDiesView_t tree, uint64_t die, 
 }
 
 
+static void check_relation(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree,
+                           TbSymbolReferenceSelection_t selected, UnitCounts_t *counts)
+{
+    const TbSymbolDieEntry_t *die = &tree.entries[selected.die_index];
+    const TbSymbolDieAttribute_t *attribute = &tree.attributes[die->first_attribute +
+                                                              selected.attribute_index];
+    TbSymbolRelationKind_e kind;
+    switch (attribute->name) {
+    case 0x47:
+        kind = TB_SYMBOL_RELATION_SPECIFICATION;
+        break;
+    case 0x31:
+        kind = TB_SYMBOL_RELATION_ORIGIN;
+        break;
+    case 0x54:
+        kind = TB_SYMBOL_RELATION_EXTENSION;
+        break;
+    default:
+        return;
+    }
+    TbSymbolRelation_t relation;
+    CHECK(tb_symbol_relation_init(&relation, units, tree, (TbSymbolRelationSelection_t){
+        .unit_index = selected.unit_index,
+        .die_index  = selected.die_index,
+        .kind       = kind
+    }) == TB_SYMBOL_RELATION_PENDING);
+    TbSymbolRelationStatus_e status = TB_SYMBOL_RELATION_PENDING;
+    for (uint64_t turn = 0; turn <= die->attribute_count && status == TB_SYMBOL_RELATION_PENDING; ++turn)
+        status = tb_symbol_relation_step(&relation, 7);
+    CHECK(status == TB_SYMBOL_RELATION_READY);
+    TbSymbolRelationSource_t source;
+    CHECK(tb_symbol_relation_source(&relation, &source));
+    CHECK(source.reference.source_record == die->offset && source.field.offset == attribute->offset);
+    CHECK(source.source_version == units.entries[selected.unit_index].header.version);
+    TbSymbolRelationNeed_t need;
+    status = tb_symbol_relation_need(source, units.kind == TB_SYMBOL_DWARF_INFO ? &units : NULL, &need);
+    if (status == TB_SYMBOL_RELATION_UNSUPPORTED) {
+        ++counts->relation_unsupported;
+        if (kind == TB_SYMBOL_RELATION_ORIGIN && source.source_version == 4 &&
+            (source.source_tag == 0x4109 || source.source_tag == 0x410a)) {
+            ++counts->vendor_call_sites;
+        }
+        return;
+    }
+    if (status == TB_SYMBOL_RELATION_DEPENDENCY) {
+        ++counts->relation_dependencies;
+        return;
+    }
+    CHECK(status == TB_SYMBOL_RELATION_READY);
+    if (need.target.section_index != tree.section_index || need.target.unit_offset != tree.unit_offset) {
+        ++counts->relation_dependencies;
+        return;
+    }
+    TbSymbolRelationEdge_t edge;
+    status = tb_symbol_relation_target(need, &tree, &edge);
+    if (status != TB_SYMBOL_RELATION_FOUND)
+        fprintf(stderr, "native relation failure %u, kind %u, source %llu, target %llu\n", status,
+                kind, (unsigned long long)source.reference.source_record,
+                (unsigned long long)need.target.record_offset);
+    CHECK(status == TB_SYMBOL_RELATION_FOUND);
+    CHECK(edge.target.record_offset == need.target.record_offset);
+    CHECK(edge.target_version == source.source_version);
+    CHECK(edge.target_abbrev_section == tree.abbrev_section && edge.target_abbrev_offset == tree.abbrev_offset);
+    switch (kind) {
+    case TB_SYMBOL_RELATION_SPECIFICATION:
+        ++counts->specifications;
+        if (edge.target_tag == 0x0d) {
+            CHECK(edge.target_version == 4);
+            ++counts->legacy_members;
+        }
+        break;
+    case TB_SYMBOL_RELATION_ORIGIN:
+        ++counts->origins;
+        break;
+    case TB_SYMBOL_RELATION_EXTENSION:
+        ++counts->extensions;
+        break;
+    }
+}
+
+
 static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSelection_t selection,
                                 uint64_t abbreviation_section, StringSections_t string_sections)
 {
@@ -183,12 +274,17 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
     uint64_t indexed_count = 0;
     uint64_t entity_kinds[4] = {0};
     uint64_t declarations = 0;
+    UnitCounts_t relations = {0};
     for (uint64_t i = 0; i < view.count; ++i) {
         const TbSymbolUnitEntry_t *entry = &view.entries[i];
         CHECK(entry->offset == cursor && entry->extent.total_bytes);
         if (entry->header_available) {
             CHECK(entry->header.extent.end_offset == entry->extent.end_offset);
             CHECK(entry->header.version == 4 || entry->header.version == 5);
+            if (entry->header.version == 4)
+                ++relations.dwarf4_units;
+            else
+                ++relations.dwarf5_units;
             CHECK(entry->header.header_bytes < entry->extent.total_bytes);
             CHECK(abbreviation_section < directory.count);
             TbSymbolAbbrev_t *abbrev = tb_symbol_abbrev_create(directory, (TbSymbolAbbrevSelection_t){
@@ -247,6 +343,7 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                         .die_index       = die,
                         .attribute_index = attr
                     };
+                    check_relation(view, tree, selected, &relations);
                     if (check_attribute_string(directory, view, tree, selected, string_sections,
                                                selection.descriptor)) {
                         ++string_count;
@@ -291,19 +388,28 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
     CHECK(cursor == directory.entries[selection.section_index].header.bytes);
     CHECK(unsupported == view.unsupported);
     UnitCounts_t counts = {
-        .total           = view.count,
-        .unsupported     = view.unsupported,
-        .abbreviations   = abbreviations,
-        .dies            = die_count,
-        .attributes      = attribute_count,
-        .references      = reference_count,
-        .dependencies    = dependency_count,
-        .strings         = string_count,
-        .indexed_strings = indexed_count,
-        .entity_kinds    = {
+        .total                 = view.count,
+        .unsupported           = view.unsupported,
+        .abbreviations         = abbreviations,
+        .dies                  = die_count,
+        .attributes            = attribute_count,
+        .references            = reference_count,
+        .dependencies          = dependency_count,
+        .strings               = string_count,
+        .indexed_strings       = indexed_count,
+        .entity_kinds          = {
             entity_kinds[0], entity_kinds[1], entity_kinds[2], entity_kinds[3]
         },
-        .declarations    = declarations
+        .declarations          = declarations,
+        .specifications        = relations.specifications,
+        .origins               = relations.origins,
+        .extensions            = relations.extensions,
+        .relation_dependencies = relations.relation_dependencies,
+        .relation_unsupported  = relations.relation_unsupported,
+        .vendor_call_sites     = relations.vendor_call_sites,
+        .legacy_members        = relations.legacy_members,
+        .dwarf4_units          = relations.dwarf4_units,
+        .dwarf5_units          = relations.dwarf5_units
     };
     tb_symbol_units_destroy(units);
     return counts;
@@ -320,7 +426,7 @@ static void compare_section(TbSymbolElfSection_t actual, GElf_Shdr expected)
 }
 
 
-static void check_file(const char *path)
+static UnitCounts_t check_file(const char *path)
 {
     TbSymbolReservation_t *ticket = tb_symbol_admission_prepare(ledger);
     CHECK(ticket);
@@ -457,6 +563,15 @@ static void check_file(const char *path)
                 for (size_t kind = 0; kind < 4; ++kind)
                     unit_counts.entity_kinds[kind] += counts.entity_kinds[kind];
                 unit_counts.declarations += counts.declarations;
+                unit_counts.specifications += counts.specifications;
+                unit_counts.origins += counts.origins;
+                unit_counts.extensions += counts.extensions;
+                unit_counts.relation_dependencies += counts.relation_dependencies;
+                unit_counts.relation_unsupported += counts.relation_unsupported;
+                unit_counts.vendor_call_sites += counts.vendor_call_sites;
+                unit_counts.legacy_members += counts.legacy_members;
+                unit_counts.dwarf4_units += counts.dwarf4_units;
+                unit_counts.dwarf5_units += counts.dwarf5_units;
                 unit_counts.total += counts.total;
                 unit_counts.unsupported += counts.unsupported;
             }
@@ -565,6 +680,11 @@ static void check_file(const char *path)
            (unsigned long long)unit_counts.entity_kinds[TB_SYMBOL_ENTITY_DATA],
            (unsigned long long)unit_counts.entity_kinds[TB_SYMBOL_ENTITY_INLINE_INSTANCE],
            (unsigned long long)unit_counts.declarations);
+    printf("PASS native direct relations: %llu specification, %llu origin, %llu extension, "
+           "%llu dependencies, %llu unsupported, %llu DWARF 4 members\n",
+           (unsigned long long)unit_counts.specifications, (unsigned long long)unit_counts.origins,
+           (unsigned long long)unit_counts.extensions, (unsigned long long)unit_counts.relation_dependencies,
+           (unsigned long long)unit_counts.relation_unsupported, (unsigned long long)unit_counts.legacy_members);
     CHECK(!elf_end(reference));
     tb_symbol_sections_destroy(directory);
     tb_symbol_file_destroy(input);
@@ -575,6 +695,7 @@ static void check_file(const char *path)
     CHECK(!tb_symbol_admission_usage(ledger).bytes);
     printf("PASS native ELF record agreement with libelf: %zu sections, %zu programs, %zu symbols\n",
            sections, programs, symbols);
+    return unit_counts;
 }
 
 
@@ -594,8 +715,21 @@ int main(int argc, char **argv)
     for (unsigned i = 0; i < 16 && outcome == TB_SYMBOL_PENDING; ++i)
         outcome = tb_symbol_storage_step(storage);
     CHECK(outcome == TB_SYMBOL_SUCCESS);
-    for (int i = 1; i < argc; ++i)
-        check_file(argv[i]);
+    for (int i = 1; i < argc; ++i) {
+        unsigned version = !strcmp(argv[i], "--relations-dwarf4") ? 4U
+                               : !strcmp(argv[i], "--relations-dwarf5") ? 5U : 0U;
+        if (version) {
+            CHECK(i + 1 < argc);
+            UnitCounts_t counts = check_file(argv[++i]);
+            CHECK(counts.specifications && counts.origins && !counts.relation_dependencies);
+            CHECK(counts.relation_unsupported == counts.vendor_call_sites);
+            CHECK((version == 4 ? counts.dwarf4_units : counts.dwarf5_units) == counts.total);
+            CHECK(version != 4 || counts.legacy_members);
+            printf("PASS C++ direct relationship fixture DWARF %u\n", version);
+        } else {
+            (void)check_file(argv[i]);
+        }
+    }
     CHECK(tb_symbol_storage_remove(storage));
     tb_symbol_storage_destroy(storage);
     CHECK(tb_symbol_admission_destroy(ledger) && !budget.used);

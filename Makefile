@@ -19,7 +19,7 @@ PROJECT_CPPFLAGS := -Iinclude -Iinclude/tui -Iinclude/layout -Iinclude/gdb -Iinc
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
 SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/tui/editor.c src/tui/terminal.c src/tui/setup_capture.c src/tui/setup_restore.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/paths.c src/session/session.c src/session/openocd.c src/session/profiles.c src/session/setup.c src/model/context.c src/model/code.c src/model/browse.c src/model/monitor.c src/model/mmio.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/stack.c src/model/variables.c
-SOURCES += src/symbol/reader.c src/symbol/identity.c src/symbol/sha256.c src/symbol/wire.c src/symbol/schedule.c src/symbol/budget.c src/symbol/process.c src/symbol/worker.c src/symbol/helper.c src/symbol/admission.c src/symbol/acquire.c src/symbol/equal.c src/symbol/storage.c src/symbol/operation.c src/symbol/artifact.c src/symbol/elf.c src/symbol/file.c src/symbol/sections.c src/symbol/symbols.c src/symbol/dwarf.c src/symbol/units.c src/symbol/leb.c src/symbol/abbrev.c src/symbol/form.c src/symbol/dies.c src/symbol/references.c src/symbol/strings.c src/symbol/string_offsets.c src/symbol/attributes.c src/symbol/text.c src/symbol/entities.c
+SOURCES += src/symbol/reader.c src/symbol/identity.c src/symbol/sha256.c src/symbol/wire.c src/symbol/schedule.c src/symbol/budget.c src/symbol/process.c src/symbol/worker.c src/symbol/helper.c src/symbol/admission.c src/symbol/acquire.c src/symbol/equal.c src/symbol/storage.c src/symbol/operation.c src/symbol/artifact.c src/symbol/elf.c src/symbol/file.c src/symbol/sections.c src/symbol/symbols.c src/symbol/dwarf.c src/symbol/units.c src/symbol/leb.c src/symbol/abbrev.c src/symbol/form.c src/symbol/dies.c src/symbol/references.c src/symbol/strings.c src/symbol/string_offsets.c src/symbol/attributes.c src/symbol/text.c src/symbol/entities.c src/symbol/relations.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -1073,12 +1073,14 @@ test: test-symbol-elf
 -include $(BUILD_DIR)/tests/unit/test_symbol_elf.d
 
 
-$(BUILD_DIR)/test-symbol-elf-native: $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/tests/integration/test_symbol_elf_native.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/units.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/abbrev.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/dies.o $(BUILD_DIR)/src/symbol/form.o $(BUILD_DIR)/src/symbol/references.o $(BUILD_DIR)/src/symbol/strings.o $(BUILD_DIR)/src/symbol/string_offsets.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/text.o $(BUILD_DIR)/src/symbol/entities.o
+$(BUILD_DIR)/test-symbol-elf-native: $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/tests/integration/test_symbol_elf_native.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/units.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/abbrev.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/dies.o $(BUILD_DIR)/src/symbol/form.o $(BUILD_DIR)/src/symbol/references.o $(BUILD_DIR)/src/symbol/strings.o $(BUILD_DIR)/src/symbol/string_offsets.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/text.o $(BUILD_DIR)/src/symbol/entities.o $(BUILD_DIR)/src/symbol/relations.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 .PHONY: test-symbol-elf-native
-test-symbol-elf-native: $(BUILD_DIR)/test-symbol-elf-native $(BUILD_DIR)/debug-fixture $(BUILD_DIR)/break-fixture-library.so $(BUILD_DIR)/code-fixture-cpp
-	$(BUILD_DIR)/test-symbol-elf-native $(abspath $(BUILD_DIR)/test-symbol-elf-native) $(abspath $(BUILD_DIR)/debug-fixture) $(abspath $(BUILD_DIR)/break-fixture-library.so) $(abspath $(BUILD_DIR)/code-fixture-cpp)
+test-symbol-elf-native: $(BUILD_DIR)/test-symbol-elf-native $(BUILD_DIR)/debug-fixture $(BUILD_DIR)/break-fixture-library.so $(BUILD_DIR)/code-fixture-cpp $(BUILD_DIR)/symbol-fixture-dwarf4 $(BUILD_DIR)/symbol-fixture-dwarf5
+	$(BUILD_DIR)/symbol-fixture-dwarf4
+	$(BUILD_DIR)/symbol-fixture-dwarf5
+	$(BUILD_DIR)/test-symbol-elf-native $(abspath $(BUILD_DIR)/test-symbol-elf-native) $(abspath $(BUILD_DIR)/debug-fixture) $(abspath $(BUILD_DIR)/break-fixture-library.so) $(abspath $(BUILD_DIR)/code-fixture-cpp) --relations-dwarf4 $(abspath $(BUILD_DIR)/symbol-fixture-dwarf4) --relations-dwarf5 $(abspath $(BUILD_DIR)/symbol-fixture-dwarf5)
 
 test: test-symbol-elf-native
 
@@ -1270,3 +1272,25 @@ test-symbol-entities: $(BUILD_DIR)/test-symbol-entities
 test: test-symbol-entities
 
 -include $(BUILD_DIR)/tests/unit/test_symbol_entities.d
+
+
+SYMBOL_FIXTURE_SOURCES := tests/fixtures/native/symbols/main.cpp tests/fixtures/native/symbols/left/definition.cpp tests/fixtures/native/symbols/right/definition.cpp
+
+$(BUILD_DIR)/symbol-fixture-dwarf4: $(SYMBOL_FIXTURE_SOURCES) tests/fixtures/native/symbols/shared.h
+	mkdir -p $(dir $@)
+	$(CXX) -std=c++17 -Wall -Wextra -Wpedantic -Werror -g -gdwarf-4 -O2 -fno-omit-frame-pointer $(SYMBOL_FIXTURE_SOURCES) -o $@
+
+$(BUILD_DIR)/symbol-fixture-dwarf5: $(SYMBOL_FIXTURE_SOURCES) tests/fixtures/native/symbols/shared.h
+	mkdir -p $(dir $@)
+	$(CXX) -std=c++17 -Wall -Wextra -Wpedantic -Werror -g -gdwarf-5 -O2 -fno-omit-frame-pointer $(SYMBOL_FIXTURE_SOURCES) -o $@
+
+$(BUILD_DIR)/test-symbol-relations: $(BUILD_DIR)/tests/unit/test_symbol_relations.o $(BUILD_DIR)/src/symbol/relations.o $(BUILD_DIR)/src/symbol/references.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-relations
+test-symbol-relations: $(BUILD_DIR)/test-symbol-relations
+	$(BUILD_DIR)/test-symbol-relations
+
+test: test-symbol-relations
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_relations.d

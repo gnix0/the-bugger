@@ -795,6 +795,52 @@ malformed selected flags and invalid requests expose no candidate view. This
 component introduces no helper operation, frontend publication or target access.
 
 
+### Scoped DWARF relationship links (SE06, partial)
+
+`src/symbol/relations.c` prepares one specification, abstract-origin or namespace
+extension reference from an explicitly selected DIE. It examines that field's
+complete attribute scope before publishing a raw source fact. Missing fields,
+equal-value duplicates, non-reference forms and invalid reference operands have
+separate outcomes. Other attributes remain outside this validation scope.
+
+Target preparation selects a required physical unit before binding an exact DIE.
+Unit-relative links use the captured source contribution; section-relative links
+require an explicitly selected complete info inventory. Missing inventories and
+unavailable trees are dependencies, while a complete empty inventory or an
+invalid target boundary has its own outcome. No file discovery or unit decoding
+occurs here. Supplementary and signature-based relationship targets, vendor tags
+and tags not assigned by the selected DWARF version remain unsupported.
+
+The direct tag-pair profile accepts matching specification tags, the
+inlined-subroutine to subprogram origin pair, and namespace extension pairs.
+It also supports a variable definition referencing a DWARF 4 member declaration
+inside a class, structure or union. DWARF 5 represents that declaration with a
+variable tag. The target version comes from its own inventory, including mixed
+version links. This distinction follows [DWARF 4](https://dwarfstd.org/doc/DWARF4.pdf)
+and [DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Section 4.1. A specification
+target need not carry a true declaration flag: a non-defining variable can
+reference its definition. No declaration flag is inherited by this component.
+
+Each completed edge preserves the original source identity, selected attribute,
+raw reference, target identity, unit kinds/versions, abbreviation coordinates
+and target parent provenance. Source and target records remain distinct.
+Wrong tag pairs and self-references expose no edge; the raw source reference
+remains available for diagnostics. Multi-record cycles, inheritance, language
+semantics and applicable relocation correspondence need separate validation.
+An exact link is not a canonical identity or authorization for a live action.
+
+The caller owns and accounts the embedded cursor and retains its complete views,
+content/context evidence, cancellation and revision checks. Steps inspect at most
+256 attributes; target lookup uses bounded inventory/DIE searches. No allocation,
+I/O, helper operation or frontend publication is introduced. Failed output
+arguments remain unchanged.
+
+GCC's older call-site extension reuses `DW_AT_abstract_origin` with different
+semantics, as shown in its [DWARF 5 transition](https://gcc.gnu.org/pipermail/gcc-patches/2016-October/459758.html).
+Those vendor-tag records retain raw metadata and explicit unsupported coverage;
+they do not acquire standard inline-inheritance semantics.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

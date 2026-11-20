@@ -6798,3 +6798,71 @@ Local link checks covered 246 references with no errors; whitespace checks
 passed. These are local host results for this step. The preceding commit's
 reported hosted result does not establish hosted CI for these new changes,
 physical validation or maintainer acceptance of SE06/F07.
+
+
+## Scoped DWARF relationship links — 2026-11-20
+
+Direct relationship preparation now keeps a unique raw specification, origin or
+namespace extension reference separate from target-unit selection and exact DIE
+binding. Completed links retain independent source/target identities, unit kinds
+and versions, source attributes, abbreviation coordinates and target parent
+provenance. Missing fields/dependencies, conflicting fields, malformed classes,
+range errors, unsupported profiles, tag mismatches and self-cycles remain distinct.
+This does not establish graph acyclicity, inheritance, language equivalence,
+relocation correspondence or live authority.
+
+Local Linux x86-64 evidence is under ignored `build/se06-evidence-20261120/`,
+using the `relations-` prefix. Compiler/tool versions, the 276 captured inputs and
+the checked patch are retained with the environment, input hashes and input copies.
+
+| Check | Command / evidence |
+|---|---|
+| Focused sources, dependencies and native composition | `make BUILD_DIR=build/se06-relations-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-relations test-symbol-elf-native`; `relations-final-focused`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-relations-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `relations-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-relations-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-relations test-symbol-elf-native`; `relations-sanitize`. |
+| Static analysis | `make analyze`, 63 production source files; `relations-analysis`. |
+
+Authored scoped views cover each unit-relative reference form, indirect effective
+forms, section-relative cross-unit selection, missing and duplicate fields,
+empty versus unavailable inventories, unavailable or mismatched trees, malformed
+classes/operands, exact boundaries, mismatched tags and self-cycles. They preserve
+failed outputs and prior state on invalid initialization. A 100,001-attribute
+scope has a late duplicate. A two-record cycle remains two separate direct links;
+these cases explicitly leave whole-path acyclicity to the subsequent traversal.
+The allocation/I/O-free primitive borrows its complete scopes and outer-job
+accounting, cancellation and revisions.
+
+The maintained C++ fixture has out-of-line methods, static data, inline calls,
+overloads, duplicate file statics and duplicate source basenames. Both binaries
+run successfully before native inspection. Each DWARF version has three units,
+82 DIEs, ten specification links and sixteen standard origin links, with zero
+unresolved relationship dependencies in the tested GCC configurations. DWARF 4
+has one variable-to-member specification inside an aggregate; DWARF 5 uses a
+variable-tag declaration. Cross-version authored cases establish that the target's
+version, not the source's version, selects the member exception.
+
+The first native relationship check failed on a GNU call-site record in the
+DWARF 4 fixture (`relations-focused`, exit 2). The original log is retained.
+The standard inline-origin tag rule had been applied to an extension that uses
+that attribute for call-origin metadata. GNU's [emission rules](https://gnu.googlesource.com/gcc/+/refs/heads/master/gcc/dwarf2out.cc)
+and the retained `readelf --debug-dump=info` outputs identify this reuse.
+The corrected profile preserves the raw reference and reports unsupported
+semantics. Missing dependencies and unsupported coverage have separate counters;
+fixture assertions permit only the specifically identified older GNU call-site
+records as unsupported. Four such records occur in the DWARF 4 fixture, and none
+in the DWARF 5 fixture. Standard-link target assertions remain enforced.
+
+GCC harness composition additionally bound 2,497 standard origin links;
+Clang sanitizer harness composition bound 389. Namespace extension links have
+authored-view coverage but zero emitted native examples in these fixtures.
+Separate ELF/libelf, physical-reference and string checks remain. The native
+retained-file account remains 2 MiB; it is not production index/cache sizing or
+an RSS limit. Broader producer/target qualification, inheritance and cycle
+traversal, qualified names/signatures, frontend evidence/publication, SE06/F07
+acceptance and physical validation remain outstanding.
+
+All checks above passed (exit 0), followed by normal `make`
+(`relations-normal-make`). All 276 captured compiled inputs remained unchanged.
+Local link checks covered 248 references with no errors; whitespace checks
+passed. These are local host results, not hosted CI, physical qualification or
+maintainer acceptance of SE06/F07.

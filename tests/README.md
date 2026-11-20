@@ -103,6 +103,12 @@ records remain in the [validation records](../docs/validation.md).
   physical flag presence, nonzero truth and conflict diagnostics; included in
   `test`. See [entry-fact coverage](../docs/testing.md#direct-dwarf-entry-facts-se06-partial).
 
+- `make test-symbol-relations`: unique relationship sources, explicit unit
+  dependencies, direct target/tag checks, versioned static members and unsupported
+  coverage; included in `test`. The native ELF target also checks the maintained
+  C++ relationship fixture in DWARF 4 and 5. See
+  [relationship coverage](../docs/testing.md#scoped-dwarf-relationship-links-se06-partial).
+
 - `make test-symbol-dwarf`: bounded DWARF32/64 unit headers, mixed address/offset
   widths, unsupported unit coverage and exact contribution bounds. Included in
   `test`; see [unit-header coverage](../docs/testing.md#dwarf-unit-headers-se05-partial).
