@@ -6568,3 +6568,58 @@ All checks in the DIE traversal table passed (exit 0), as did normal `make`
 that scope were documentation only. Link checks covered 239 local references
 without errors and whitespace checks passed. These are local host results, not
 hosted CI, physical validation or maintainer acceptance.
+
+
+## Physical DWARF reference targeting — 2026-11-20
+
+Reference attributes now retain exact source coordinates and their effective
+encoding class. Unit-relative forms require checked contribution bounds and exact
+DIE boundaries. Section-relative forms select an explicit same-backing info unit;
+signature lookup examines its complete captured scope before exposing a required
+target. Different physical matches conflict without semantic merging. Unsupported
+headers, missing types and unavailable target trees remain distinct outcomes.
+Supplementary reference semantics remain unsupported. These are raw physical
+lookup facts, not semantic relationships, relocation proof or live authority.
+
+Local Linux x86-64 logs, exit files, captured inputs and environment use the
+`references-` prefix under ignored `build/se05-evidence-20261120/`.
+
+| Check | Command / evidence |
+|---|---|
+| Focused coordinates, traversal and native composition | `make BUILD_DIR=build/se05-references-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-references test-symbol-dies test-symbol-elf-native`; `references-focused-complete`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se05-references-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `references-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se05-references-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-references test-symbol-dies test-symbol-elf-native`; `references-sanitize`. |
+| Static analysis | `make analyze`, 57 production source files; `references-analysis`. |
+
+Authored complete-view cases distinguish each unit-relative reference form from
+numeric constants, preserve duplicate attribute selections and handle indirect
+effective forms. Tests check header/end/overflow bounds, payload-interior offsets,
+wrong backing/section/unit selections, explicit cross-unit info selection and
+unchanged failure outputs. Signature cases distinguish repeated physical views,
+different units/sections, missing types, unsupported coverage and invalid scopes.
+A 100,001-record tree checks exact lookup boundaries; a 100,001-unit signature
+scope checks late conflict/coverage detection without exposing an early candidate.
+These view fixtures are distinct from retained-file parser/container fixtures.
+
+Native composition checked 8,708/124/3 unit-relative references in 18/1/1 units,
+containing 9,837/136/5 DIEs and 39,165/572/30 attributes. Instrumented Clang
+composition checked 5,724/73/2 references, 8,095/88/5 DIEs and 26,675/257/26
+attributes. Both configurations had zero other reference dependencies in these
+fixtures. Therefore the native runs do not qualify cross-unit/signature lookup;
+those paths have the authored-view coverage above. The existing 2 MiB retained-file
+harness budget remained unchanged. Separate ELF comparisons with libelf passed.
+
+Initial component analysis rejected adjacent interchangeable DIE/attribute index
+parameters. A named selection bundle resolved that interface hazard; original
+and corrected logs are retained. `references-tested-files.json`,
+`references-tested.patch`, captured inputs and `references-environment.txt`
+identify the compiled scope. Scoped dependency evidence, applicable relocation
+correspondence, semantic type/specification validation, broader native/embedded
+producer qualification, production sizing and SE05/F07 acceptance remain outstanding.
+
+The additional DWARF 4 executable/library fixtures passed with 124/3 unit-relative
+references (`references-native-dwarf4`). All checks in the reference table passed
+(exit 0), as did normal `make` (`references-normal-make`). Frozen compiled-input
+hashes match. Link checks covered 240 local references with no errors and whitespace
+checks passed. These are local host observations, not hosted CI, physical
+validation or maintainer acceptance.

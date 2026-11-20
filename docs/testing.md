@@ -3090,3 +3090,34 @@ construction before backing cleanup. Its separate libelf comparisons still test
 ELF fields/names only. These are not an independent DWARF grammar oracle, complete
 reference/type/location validation, general producer/hardware qualification,
 production sizing or SE05/F07 acceptance.
+
+
+## Physical DWARF reference targeting (SE05, partial)
+
+```sh
+make BUILD_DIR=build/se05-references CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-references test-symbol-dies test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Complete-view fixtures check each unit-relative
+reference form, indirect effective forms, exact source/target coordinates,
+non-reference numeric constants and duplicate attribute names without first-name
+selection. Header/end/overflow bounds, offsets inside payloads and changed
+backing/unit/section selections retain distinct range, missing-boundary and
+dependency outcomes with unchanged failure outputs.
+
+Explicit cross-unit info selection checks unit framing and target boundaries.
+Incremental signature lookup checks complete scans, repeated physical views,
+distinct matching units/sections, missing types, unsupported coverage, invalid
+scopes. Large 100,001-entry
+scopes test lookup boundaries and a late signature conflict/coverage limitation;
+no candidate becomes available early. Supplementary references remain unsupported.
+
+The native retained-file harness prepares every reference-form attribute and
+checks exact boundaries for unit-relative references. Other reference kinds are
+counted as dependencies; this harness does not claim their full semantic
+validation. Separate ELF comparisons with libelf remain unchanged. Authored
+complete-view cases are distinct from parser/container fixtures and native
+compiler-output composition. None establishes applicable relocation proof,
+semantic type/specification validity, general producer/hardware qualification,
+production sizing or SE05/F07 acceptance.

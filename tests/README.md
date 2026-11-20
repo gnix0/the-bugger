@@ -86,6 +86,10 @@ records remain in the [validation records](../docs/validation.md).
   parent links, zero-byte attributes and failure accounting; included in `test`.
   See [DIE coverage](../docs/testing.md#complete-die-trees-se05-partial).
 
+- `make test-symbol-references`: exact DWARF reference coordinates, cross-unit
+  dependencies, signature conflicts and unsupported coverage; included in `test`.
+  See [reference coverage](../docs/testing.md#physical-dwarf-reference-targeting-se05-partial).
+
 - `make test-symbol-dwarf`: bounded DWARF32/64 unit headers, mixed address/offset
   widths, unsupported unit coverage and exact contribution bounds. Included in
   `test`; see [unit-header coverage](../docs/testing.md#dwarf-unit-headers-se05-partial).

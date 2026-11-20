@@ -658,6 +658,41 @@ preserves the caller's descriptor/content lease. No helper opcode or live action
 is introduced.
 
 
+### Physical DWARF reference targeting (SE05, partial)
+
+`src/symbol/references.c` selects reference attributes by their exact unit, DIE
+and attribute indexes. Effective forms distinguish unit-relative, info-section,
+type-signature and supplementary references; a numeric constant is not treated
+as a reference because its bits happen to match an offset. Raw source provenance
+and backing remain attached to prepared coordinates. All operations are
+allocation-free and perform no I/O, admission, discovery or target access.
+
+Unit-relative offsets must fit inside the exact source contribution after its
+header. Binary lookup requires an actual physical DIE boundary in the complete
+matching tree. Section-relative references require an explicitly selected
+same-backing `.debug_info` inventory, then the exact target unit/tree. Missing
+or mismatched target views remain dependency outcomes. Looking up a raw encoded
+offset does not validate applicable relocation correspondence or semantic
+specification/type relationships.
+
+Type-signature lookup incrementally examines a fixed captured inventory set,
+one header or scope transition per step. It exposes no candidate before the
+entire set is examined. Different physical matches conflict even when signatures
+are equal; repeated views of the same physical unit do not duplicate a match.
+Unsupported headers prevent a claim of unique resolution. Missing types, coverage
+limitations and conflicts remain distinct. The selected type offset still needs
+its complete target DIE tree. A signature never replaces physical identity.
+
+Supplementary references remain explicitly unsupported. Caller-owned inventory
+pins, construction accounting, cancellation, deadlines and context revisions
+bound these primitive operations. Complete reference/dependency evidence and
+semantic attribute validation remain separate work; physical lookup grants no
+frontend guarantee, runtime correspondence or access authority. Reference
+encodings follow [DWARF 4](https://dwarfstd.org/doc/DWARF4.pdf) and
+[DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Section 7.5.5, with the
+[same-object clarification](https://dwarfstd.org/issues/230120.1.html).
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

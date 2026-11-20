@@ -19,7 +19,7 @@ PROJECT_CPPFLAGS := -Iinclude -Iinclude/tui -Iinclude/layout -Iinclude/gdb -Iinc
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
 SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/tui/editor.c src/tui/terminal.c src/tui/setup_capture.c src/tui/setup_restore.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/paths.c src/session/session.c src/session/openocd.c src/session/profiles.c src/session/setup.c src/model/context.c src/model/code.c src/model/browse.c src/model/monitor.c src/model/mmio.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/stack.c src/model/variables.c
-SOURCES += src/symbol/reader.c src/symbol/identity.c src/symbol/sha256.c src/symbol/wire.c src/symbol/schedule.c src/symbol/budget.c src/symbol/process.c src/symbol/worker.c src/symbol/helper.c src/symbol/admission.c src/symbol/acquire.c src/symbol/equal.c src/symbol/storage.c src/symbol/operation.c src/symbol/artifact.c src/symbol/elf.c src/symbol/file.c src/symbol/sections.c src/symbol/symbols.c src/symbol/dwarf.c src/symbol/units.c src/symbol/leb.c src/symbol/abbrev.c src/symbol/form.c src/symbol/dies.c
+SOURCES += src/symbol/reader.c src/symbol/identity.c src/symbol/sha256.c src/symbol/wire.c src/symbol/schedule.c src/symbol/budget.c src/symbol/process.c src/symbol/worker.c src/symbol/helper.c src/symbol/admission.c src/symbol/acquire.c src/symbol/equal.c src/symbol/storage.c src/symbol/operation.c src/symbol/artifact.c src/symbol/elf.c src/symbol/file.c src/symbol/sections.c src/symbol/symbols.c src/symbol/dwarf.c src/symbol/units.c src/symbol/leb.c src/symbol/abbrev.c src/symbol/form.c src/symbol/dies.c src/symbol/references.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -1073,7 +1073,7 @@ test: test-symbol-elf
 -include $(BUILD_DIR)/tests/unit/test_symbol_elf.d
 
 
-$(BUILD_DIR)/test-symbol-elf-native: $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/tests/integration/test_symbol_elf_native.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/units.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/abbrev.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/dies.o $(BUILD_DIR)/src/symbol/form.o
+$(BUILD_DIR)/test-symbol-elf-native: $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/tests/integration/test_symbol_elf_native.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/units.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/abbrev.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/dies.o $(BUILD_DIR)/src/symbol/form.o $(BUILD_DIR)/src/symbol/references.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 .PHONY: test-symbol-elf-native
@@ -1201,3 +1201,14 @@ test-symbol-dies: $(BUILD_DIR)/test-symbol-dies
 test: test-symbol-dies
 
 -include $(BUILD_DIR)/tests/unit/test_symbol_dies.d
+
+$(BUILD_DIR)/test-symbol-references: $(BUILD_DIR)/tests/unit/test_symbol_references.o $(BUILD_DIR)/src/symbol/references.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-references
+test-symbol-references: $(BUILD_DIR)/test-symbol-references
+	$(BUILD_DIR)/test-symbol-references
+
+test: test-symbol-references
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_references.d

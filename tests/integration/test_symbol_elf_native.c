@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- Native file fixture reads. */
 #include "symbol/abbrev.h"
 #include "symbol/dies.h"
+#include "symbol/references.h"
 #include "symbol/elf.h"
 #include "symbol/file.h"
 #include "symbol/sections.h"
@@ -45,6 +46,8 @@ typedef struct {
     uint64_t abbreviations;
     uint64_t dies;
     uint64_t attributes;
+    uint64_t references;
+    uint64_t dependencies;
 } UnitCounts_t;
 
 static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSelection_t selection,
@@ -64,6 +67,8 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
     uint64_t abbreviations = 0;
     uint64_t die_count = 0;
     uint64_t attribute_count = 0;
+    uint64_t reference_count = 0;
+    uint64_t dependency_count = 0;
     for (uint64_t i = 0; i < view.count; ++i) {
         const TbSymbolUnitEntry_t *entry = &view.entries[i];
         CHECK(entry->offset == cursor && entry->extent.total_bytes);
@@ -121,6 +126,31 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                 CHECK(record->first_attribute == attributes);
                 attributes += record->attribute_count;
                 CHECK(attributes <= tree.attribute_count);
+                for (uint64_t attr = 0; attr < record->attribute_count; ++attr) {
+                    TbSymbolReference_t reference;
+                    TbSymbolReferenceSelection_t selected = {
+                        .unit_index      = i,
+                        .die_index       = die,
+                        .attribute_index = attr
+                    };
+                    TbSymbolReferenceStatus_e prepared = tb_symbol_reference_prepare(view, tree, selected,
+                                                                                      &reference);
+                    if (prepared == TB_SYMBOL_REFERENCE_NOT_REFERENCE)
+                        continue;
+                    CHECK(prepared == TB_SYMBOL_REFERENCE_READY);
+                    if (reference.kind == TB_SYMBOL_REFERENCE_UNIT) {
+                        TbSymbolReferenceTarget_t target;
+                        CHECK(tb_symbol_reference_unit(reference, tree, &target) ==
+                              TB_SYMBOL_REFERENCE_FOUND);
+                        CHECK(target.backing.key.inode == directory.backing.key.inode);
+                        CHECK(target.section_index == tree.section_index &&
+                              target.unit_offset == tree.unit_offset);
+                        CHECK(target.record_offset == tree.entries[target.entry_index].offset);
+                        ++reference_count;
+                    } else {
+                        ++dependency_count;
+                    }
+                }
                 previous = record->end_offset;
             }
             CHECK(attributes == tree.attribute_count);
@@ -141,7 +171,9 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
         .unsupported   = view.unsupported,
         .abbreviations = abbreviations,
         .dies          = die_count,
-        .attributes    = attribute_count
+        .attributes    = attribute_count,
+        .references    = reference_count,
+        .dependencies  = dependency_count
     };
     tb_symbol_units_destroy(units);
     return counts;
@@ -273,6 +305,8 @@ static void check_file(const char *path)
                 unit_counts.abbreviations += counts.abbreviations;
                 unit_counts.dies += counts.dies;
                 unit_counts.attributes += counts.attributes;
+                unit_counts.references += counts.references;
+                unit_counts.dependencies += counts.dependencies;
                 unit_counts.total += counts.total;
                 unit_counts.unsupported += counts.unsupported;
             }
@@ -369,6 +403,8 @@ static void check_file(const char *path)
            (unsigned long long)unit_counts.abbreviations);
     printf("PASS native DIE composition: %llu records, %llu attributes\n",
            (unsigned long long)unit_counts.dies, (unsigned long long)unit_counts.attributes);
+    printf("PASS native reference coordinates: %llu unit references, %llu other dependencies\n",
+           (unsigned long long)unit_counts.references, (unsigned long long)unit_counts.dependencies);
     CHECK(!elf_end(reference));
     tb_symbol_sections_destroy(directory);
     tb_symbol_file_destroy(input);
