@@ -6200,3 +6200,52 @@ architecture/producer qualification, production helper integration or F07
 acceptance. Program semantics, symbol/string dependencies, extended symbol indexes,
 other cross-section relationships, DWARF, sizing and consumers remain separate
 work. The helper directory owns no independent frontend publication guarantee.
+
+
+### Complete ELF symbol-table dependencies — 2026-11-20
+
+Selected SYMTAB/DYNSYM construction now checks its string/index dependencies,
+reserved null entry, local ordering and ordinary section references before
+exposing a complete view. Raw fields, special markers and full name coordinates
+remain separate from resolved ordinary section indexes. The directory carries
+its captured backing identity into the reader; no pathname is reopened.
+
+Local checks passed, exit 0. Logs and exit records are retained under
+`build/se04-evidence-20261120/`, except the earlier focused log noted below:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused symbols/directory/reader/records/native composition | `make BUILD_DIR=build/se04-symbols-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-symbols test-symbol-sections test-symbol-file test-symbol-elf test-symbol-elf-native`; `build/se04-evidence-20261119/symbols-focused-final`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se04-symbols-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `symbols-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se04-symbols-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-symbols test-symbol-sections test-symbol-file test-symbol-elf test-symbol-elf-native`; `symbols-sanitize`. |
+| Analysis/build | `make analyze` across 50 production source files and normal `make`; `symbols-analysis` and `symbols-normal-make`. |
+
+Authored fixtures cover both classes and byte orders, distinct symbol-table
+provenance, empty/long/substring names, malformed dependency links and local/null
+ordering, unsupported compression, raw special records and missing/conflicting
+extended-index dependencies. A sparse 70,000-section file resolves an extended
+ordinary index of `0xfff1` without interpreting it as `SHN_ABS`. Allocation and
+budget refusal, cancellation, short/EINTR/EOF/error paths expose no candidate
+prefix or leaked ownership. Read/NUL-scan instrumentation checks service allowances.
+The 16 MiB fixture budget is not a production cache default.
+
+The native-file comparison checks complete selected inventories and full name
+bytes against libelf after admission/acquisition. Its three generated host files
+contained 39/37/31 sections, 15/15/11 program headers and 253/69/31 symbols; all
+comparisons passed. The sanitizer executable's 9,600 symbols also passed.
+The harness retires readers and directory views before closing the descriptor,
+then confirms exact backing cleanup and logical capacity release.
+
+Initial component analysis rejected duplicate branches; equivalent failure
+conditions were combined before the final checks. Earlier diagnostics remain in
+`build/se04-evidence-20261119/`; the corrected component analysis and complete
+analysis passed. `symbols-tested-files.json`,
+`symbols-tested.patch`, captured source/header/test inputs and
+`symbols-environment.txt` identify the tested tree. Only documentation changed
+after the snapshot. Link checks covered 233 local references without errors;
+whitespace checks passed.
+
+This is local host and harness-composition evidence, not hosted CI, universal
+producer/ABI qualification, physical validation, production helper integration or
+SE04/F07 acceptance. Remaining program/section semantics, physical record binding,
+DWARF, production sizing and consumer integration retain their separate gates.

@@ -69,6 +69,11 @@ records remain in the [validation records](../docs/validation.md).
   and construction failures. Included in `test`; see
   [coverage](../docs/testing.md#elf-section-directories-se04-partial).
 
+- `make test-symbol-symbols`: complete selected SYMTAB/DYNSYM dependencies,
+  full names, ordinary/special/extended indexes and bounded failure paths.
+  Included in `test`; see
+  [symbol dependency coverage](../docs/testing.md#elf-symbol-dependencies-se04-partial).
+
 - `make test-symbol-elf test-symbol-elf-native`: fixed ELF32/64 records in both
   byte orders, checked extended table layout, malformed boundaries and native
   file agreement with libelf after admission/acquisition through retained-file

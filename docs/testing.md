@@ -2853,7 +2853,8 @@ architecture or producer-compatibility qualification.
 The native-file suite compares decoded header, section, program and symbol fields
 with the existing libelf library for its own executable, the native debug fixture
 and the breakpoint shared library. Complete section-directory fields and full
-section names are also compared with libelf. Each file first passes the admission ledger's
+section names, complete selected symbol tables and full symbol names are also
+compared with libelf. Each file first passes the admission ledger's
 explicit size grant and private acquisition, then uses the bounded retained-file
 reader. File/reader/ledger ownership is retired and exact backing cleanup confirmed
 after comparison; construction accounting returns to baseline. This harness
@@ -2861,10 +2862,9 @@ composition reads local file bytes only; no debugger, inferior or target access
 is involved. Agreement on those generated host files does not establish
 arbitrary-file validity, source coherence or production helper integration.
 
-Record decoding is not complete inventory validation. The section-directory checks
-below validate section/name dependencies; symbol dependencies, compressed payloads,
-extended symbol section-index resolution, physical record binding and helper
-requests remain separate work. These checks do not complete
+Record decoding is not complete inventory validation. The checks below validate
+section/name and symbol dependencies. Compressed payloads, physical record binding
+and production helper requests remain separate work. These checks do not complete
 SE04 or F07 acceptance.
 
 
@@ -2893,3 +2893,31 @@ retires ownership and confirms cleanup.
 These checks qualify the implemented section/name scope only. They do not validate
 all ELF relationships, decompress payloads, establish DWARF absence from missing
 names, add production helper requests or complete SE04/F07 acceptance.
+
+
+## ELF symbol dependencies (SE04, partial)
+
+```sh
+make BUILD_DIR=build/se04-symbols CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-symbols test-symbol-sections test-symbol-file test-symbol-elf test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored ELF32/64 fixtures in both byte orders cover
+selected SYMTAB/DYNSYM scopes, exact table/string dependencies, null/local ordering,
+ordinary/special indexes, missing/conflicting/malformed extended-index tables,
+unused index words, unsupported compression and full names across scratch reads.
+A sparse 70,000-section fixture distinguishes an extended ordinary section index
+from the same numeric reserved 16-bit marker. Raw TLS/type/binding/visibility
+fields retain their encoding; their interpretation requires separate validation.
+
+Fault injection covers each allocation, budget refusal, cancellation, short and
+interrupted reads, EOF and operational failure. Instrumented reads and NUL scans
+check service allowances. Failed scopes expose no candidate prefix, accounting
+returns to the directory's retained baseline, and borrowed descriptors remain open.
+The native ELF suite compares complete selected inventories, raw records and full
+name bytes with libelf after admission/acquisition, then confirms exact cleanup.
+
+These checks validate the implemented dependency scope, not language semantics,
+object/code footprints, target mappings, runtime access, arbitrary producer
+compatibility, production helper integration or SE04/F07 acceptance. Test budgets
+do not set production cache limits; SE10 remains the sizing gate.

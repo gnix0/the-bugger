@@ -25,6 +25,7 @@ typedef struct {
     const TbSymbolSectionEntry_t *entries;
     uint64_t                     count;
     TbSymbolSectionNames_e       names;
+    TbSymbolStorageInfo_t         backing;
 } TbSymbolSectionsView_t;
 
 typedef enum {

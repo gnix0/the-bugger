@@ -397,8 +397,8 @@ and its [section](https://gabi.xinuos.com/elf/03-sheader.html),
 [program-header](https://gabi.xinuos.com/elf/07-pheader.html) and
 [symbol-table](https://gabi.xinuos.com/elf/05-symtab.html) definitions.
 These allocation-free components introduce no helper request, catalog, search,
-Source navigation or runtime binding. Section-directory validation follows below; symbol-table dependencies and helper
-integration remain later SE04 steps. Existing
+Source navigation or runtime binding. Section-directory and symbol-table validation
+follow below; production helper integration remains a later SE04 step. Existing
 `src/model/images.c` libelf consumers are unchanged.
 
 
@@ -429,10 +429,43 @@ prefix. Reader/storage errors remain distinct from malformed encoded metadata.
 
 The directory and its views are reconstructible helper cache, borrowed until
 destruction. They do not own frontend publication guarantees or grant code/storage
-meaning to raw section attributes. Program entry semantics, symbol-table links,
-extended symbol indexes, other cross-section relationships and processor/OS
-semantics remain separate validation scopes. Production cache sizing still belongs
-to SE10; no runtime helper request or UI consumer is added by this component.
+meaning to raw section attributes. Program entry semantics, other cross-section
+relationships and processor/OS semantics remain separate validation scopes.
+Symbol-table dependencies have their own scope below. Production cache sizing
+still belongs to SE10; no runtime helper request or UI consumer is added by this component.
+
+
+### ELF symbol-table dependencies (SE04, partial)
+
+`src/symbol/symbols.c` validates one selected `.symtab` or `.dynsym` inventory
+against a complete section directory and its exact retained backing. Construction
+performs no I/O; subsequent steps yield between bounded dependency, record, name
+and reader actions. The caller retains the directory, descriptor and content
+lease. All owned state and the complete entry array require checked reservations
+against the caller's construction budget. No candidate prefix is exposed.
+
+The scope checks the selected table's stride, linked string table, reserved zero
+entry, local/nonlocal ordering and ordinary section references. A unique associated
+`SHT_SYMTAB_SHNDX` supplies extended indexes; its words correspond one-to-one with
+symbols, and unused words must be zero. An extended ordinary index whose numeric
+value equals a reserved 16-bit marker remains an ordinary physical section index.
+The raw index and other symbol fields remain available separately. Unknown framed
+bindings/types and all `st_other` bits retain their original values.
+
+Names retain full backing coordinates and lengths, including duplicates, substring
+references and strings spanning scratch reads. No name is truncated or copied into
+an identity. Compressed symbol/string/index dependencies are explicitly unsupported;
+malformed supported dependencies fail the complete selected scope. An unsupported
+scope does not establish an empty inventory or artifact-wide completeness.
+
+The completed view is borrowed helper cache. Its table section, section-relative
+record offset and record kind distinguish physical coordinates; constructing a
+physical identity still requires the admitted content identity. Undefined, absolute,
+common, TLS and processor-specific records gain no ordinary-storage or code claim
+from these checks. Object footprints, language types, program/section mapping,
+runtime correspondence, access authorization and independent frontend evidence
+remain separate work. This component adds no production helper request or UI action;
+SE10 still determines production cache/index limits.
 
 
 ### Event loop and text rendering

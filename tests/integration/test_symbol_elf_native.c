@@ -2,6 +2,7 @@
 #include "symbol/elf.h"
 #include "symbol/file.h"
 #include "symbol/sections.h"
+#include "symbol/symbols.h"
 #include "symbol/acquire.h"
 #include "symbol/admission.h"
 #include "../support/check.h"
@@ -157,6 +158,21 @@ static void check_file(const char *path)
             .count  = actual.bytes / actual.entry_bytes,
             .stride = actual.entry_bytes
         };
+        TbSymbolSymbols_t *validated_symbols = tb_symbol_symbols_create(directory_view,
+                                                                       (TbSymbolTableSelection_t){
+            .section_index = i,
+            .descriptor    = fd
+        }, &budget);
+        CHECK(validated_symbols);
+        outcome = TB_SYMBOL_PENDING;
+        for (unsigned turn = 0; turn < 1000000 && outcome == TB_SYMBOL_PENDING; ++turn)
+            outcome = tb_symbol_symbols_step(validated_symbols, 257);
+        CHECK(outcome == TB_SYMBOL_SUCCESS);
+        TbSymbolSymbolsView_t symbol_view;
+        CHECK(tb_symbol_symbols_view(validated_symbols, &symbol_view));
+        CHECK(symbol_view.count == table.count && symbol_view.table_section == i);
+        CHECK(symbol_view.kind == (actual.type == SHT_SYMTAB
+                                       ? TB_SYMBOL_RECORD_SYMTAB : TB_SYMBOL_RECORD_DYNSYM));
         Elf_Data *data = elf_getdata(section, NULL);
         CHECK(data);
         for (uint64_t entry = 0; entry < table.count; ++entry) {
@@ -170,8 +186,30 @@ static void check_file(const char *path)
             CHECK(symbol.other == expected_symbol.st_other &&
                   symbol.section_index == expected_symbol.st_shndx);
             CHECK(symbol.value == expected_symbol.st_value && symbol.bytes == expected_symbol.st_size);
+            const TbSymbolElfEntry_t *validated_entry = &symbol_view.entries[entry];
+            CHECK(validated_entry->record_offset == entry * table.stride);
+            CHECK(validated_entry->raw.name_offset == symbol.name_offset &&
+                  validated_entry->raw.info == symbol.info);
+            CHECK(validated_entry->raw.other == symbol.other &&
+                  validated_entry->raw.section_index == symbol.section_index);
+            CHECK(validated_entry->raw.value == symbol.value && validated_entry->raw.bytes == symbol.bytes);
+            if (symbol.name_offset) {
+                const char *name = elf_strptr(reference, actual.link, symbol.name_offset);
+                CHECK(name && validated_entry->has_name && validated_entry->name_bytes == strlen(name));
+                uint64_t compared = 0;
+                while (compared < validated_entry->name_bytes) {
+                    uint64_t remaining = validated_entry->name_bytes - compared;
+                    size_t length = remaining < sizeof(bytes) ? (size_t)remaining : sizeof(bytes);
+                    read_record(input, validated_entry->name_offset + compared, length, bytes);
+                    CHECK(!memcmp(bytes, name + compared, length));
+                    compared += length;
+                }
+            } else {
+                CHECK(!validated_entry->has_name);
+            }
             ++symbols;
         }
+        tb_symbol_symbols_destroy(validated_symbols);
     }
     for (size_t i = 0; i < programs; ++i) {
         uint64_t offset;
@@ -208,7 +246,7 @@ int main(int argc, char **argv)
     CHECK(mkdtemp(directory));
     char pool[256];
     CHECK(snprintf(pool, sizeof(pool), "%s/pool", directory) > 0);
-    CHECK(tb_symbol_budget_init(&budget, 256 * 1024));
+    CHECK(tb_symbol_budget_init(&budget, 2 * 1024 * 1024));
     ledger = tb_symbol_admission_create(TB_SYMBOL_FILE_BYTES_DEFAULT, TB_SYMBOL_ADMISSION_BYTES_DEFAULT,
                                          &budget);
     storage = tb_symbol_storage_create(pool, NULL, &budget);

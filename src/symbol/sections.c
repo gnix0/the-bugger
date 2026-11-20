@@ -562,7 +562,8 @@ bool tb_symbol_sections_view(const TbSymbolSections_t *sections, TbSymbolSection
         .layout  = &sections->layout,
         .entries = sections->entries,
         .count   = sections->layout.sections.count,
-        .names   = sections->names
+        .names   = sections->names,
+        .backing = sections->expected
     };
     return true;
 }
