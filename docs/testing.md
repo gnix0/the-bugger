@@ -3227,8 +3227,9 @@ section-relative cross-unit dependencies and unchanged failed outputs. Cases
 separate absent fields, duplicate fields, wrong classes, range errors, missing
 inventories/trees, unsupported headers/tags/reference profiles, mismatched tags
 and self-cycles. The source and target declaration flags can differ in either
-direction. A two-record cycle remains two distinct direct edges, pending the
-separate inheritance traversal check; these tests do not claim graph acyclicity.
+direction. A two-record cycle remains two distinct direct edges; the separate
+[graph traversal](#bounded-dwarf-relationship-traversal-se06-partial) checks
+acyclicity. Direct-link tests do not claim graph acyclicity.
 A 100,001-attribute scope checks late conflicts without early publication.
 
 Version-specific cases validate the DWARF 4 variable-to-member specification
@@ -3250,3 +3251,35 @@ Namespace extension links have authored-view coverage; these native fixtures do
 not promise that a producer emits such a link. Broader graph/name semantics,
 production sizing, frontend evidence/publication, SE06/F07 acceptance and physical
 qualification remain outstanding. Direct links authorize no target access.
+
+
+## Bounded DWARF relationship traversal (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-graph CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-graph test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored scoped views check shared completed targets,
+cycles in either branch, mixed specification/origin paths, namespace extensions,
+exact storage exhaustion and no successful prefix. A 1,001-record chain uses
+single-action steps without recursion. A 1,001-attribute scope rejects a late
+conflict before requesting a target. Cross-unit cases verify explicit info/tree
+dependencies and reject changed target versions or abbreviation provenance.
+Malformed forms, unsupported vendor semantics and missing DIE boundaries retain
+separate relationship diagnostics and available source/field provenance.
+Invalid initialization, invalid source supplies and unavailable output requests
+preserve existing state or output as documented.
+
+Native composition traverses supported function, data, inline and namespace
+records over actual unit/abbreviation/form decoding. Both maintained C++ fixtures
+require successful graphs with at least one traversed edge and zero graph
+coverage/dependency failures. Other native inputs report incomplete graph scopes
+explicitly. The harness reserves and releases its 64-node workspace from the
+existing retained-file construction account; that capacity is test-specific.
+
+These checks validate only the captured three-kind reachable graph. They do not
+establish attribute inheritance, qualified names/signatures, type-graph
+acyclicity, relocation correspondence, production capacity or latency,
+independent frontend evidence, SE06/F07 acceptance or physical qualification.
+All traversal and dependency transfer here perform zero live debugger access.

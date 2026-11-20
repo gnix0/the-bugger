@@ -18,7 +18,8 @@ registry for contexts, backing leases and scoped sharing. SE04 adds
 and SE05 provides structural DWARF decoding through
 [selected text dependencies](architecture.md#selected-text-attributes-se05-partial).
 SE06 provides [direct entry facts](architecture.md#direct-dwarf-entry-facts-se06-partial)
-and [scoped relationship links](architecture.md#scoped-dwarf-relationship-links-se06-partial).
+with [scoped links](architecture.md#scoped-dwarf-relationship-links-se06-partial)
+and [bounded relationship traversal](architecture.md#bounded-dwarf-relationship-traversal-se06-partial).
 Artifact Open workflow, qualified acquisition profiles, complete semantic
 interpretation and consumers remain unfinished. Unknown helper operations return
 Unsupported.

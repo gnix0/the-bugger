@@ -109,6 +109,10 @@ records remain in the [validation records](../docs/validation.md).
   C++ relationship fixture in DWARF 4 and 5. See
   [relationship coverage](../docs/testing.md#scoped-dwarf-relationship-links-se06-partial).
 
+- `make test-symbol-graph`: bounded reachable relationship traversal, shared
+  paths, cycles, explicit dependencies and failed-prefix isolation; included in
+  `test`. See [graph coverage](../docs/testing.md#bounded-dwarf-relationship-traversal-se06-partial).
+
 - `make test-symbol-dwarf`: bounded DWARF32/64 unit headers, mixed address/offset
   widths, unsupported unit coverage and exact contribution bounds. Included in
   `test`; see [unit-header coverage](../docs/testing.md#dwarf-unit-headers-se05-partial).

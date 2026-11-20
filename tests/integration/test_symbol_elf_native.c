@@ -3,6 +3,7 @@
 #include "symbol/dies.h"
 #include "symbol/entities.h"
 #include "symbol/relations.h"
+#include "symbol/graph.h"
 #include "symbol/references.h"
 #include "symbol/text.h"
 #include "symbol/elf.h"
@@ -116,6 +117,10 @@ typedef struct {
     uint64_t indexed_strings;
     uint64_t entity_kinds[4];
     uint64_t declarations;
+    uint64_t graphs;
+    uint64_t graph_nodes;
+    uint64_t graph_dependencies;
+    uint64_t graph_unsupported;
     uint64_t specifications;
     uint64_t origins;
     uint64_t extensions;
@@ -251,6 +256,79 @@ static void check_relation(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree,
 }
 
 
+static void check_graph(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree, uint64_t unit_index,
+                        uint64_t die_index, TbSymbolGraphNode_t *nodes, UnitCounts_t *counts)
+{
+    TbSymbolGraph_t graph;
+    CHECK(tb_symbol_graph_init(&graph, (TbSymbolReferenceTarget_t){
+        .backing       = tree.backing,
+        .section_index = tree.section_index,
+        .unit_offset   = tree.unit_offset,
+        .record_offset = tree.entries[die_index].offset,
+        .entry_index   = die_index
+    }, nodes, 64) == TB_SYMBOL_GRAPH_SOURCE);
+    for (unsigned turn = 0; turn < 1000000; ++turn) {
+        TbSymbolGraphNeed_t need;
+        TbSymbolGraphView_t incomplete;
+        CHECK(!tb_symbol_graph_view(&graph, &incomplete));
+        if (tb_symbol_graph_need(&graph, &need)) {
+            if (need.kind == TB_SYMBOL_GRAPH_SOURCE) {
+                bool available = need.record.section_index == tree.section_index &&
+                                 need.record.unit_offset == tree.unit_offset;
+                (void)tb_symbol_graph_source(&graph, available ? &units : NULL,
+                                             available ? &tree : NULL, unit_index);
+            } else {
+                TbSymbolRelationNeed_t target;
+                TbSymbolRelationStatus_e status = tb_symbol_relation_need(need.source, &units, &target);
+                bool available = status == TB_SYMBOL_RELATION_READY &&
+                                 target.target.section_index == tree.section_index &&
+                                 target.target.unit_offset == tree.unit_offset;
+                (void)tb_symbol_graph_target(&graph, &units, available ? &tree : NULL);
+            }
+        }
+        TbSymbolGraphStatus_e status = tb_symbol_graph_step(&graph, 31);
+        if (status == TB_SYMBOL_GRAPH_READY) {
+            TbSymbolGraphView_t view;
+            CHECK(tb_symbol_graph_view(&graph, &view));
+            CHECK(view.count && view.count <= 64);
+            CHECK(view.nodes[0].record.record_offset == tree.entries[die_index].offset);
+            for (size_t i = 0; i < view.count; ++i) {
+                const TbSymbolGraphNode_t *node = &view.nodes[i];
+                CHECK(node->complete && node->record.section_index == tree.section_index);
+                CHECK(node->record.unit_offset == tree.unit_offset);
+                CHECK(node->record.entry_index < tree.count);
+                CHECK(node->record.record_offset == tree.entries[node->record.entry_index].offset);
+                CHECK(node->context.tag == tree.entries[node->record.entry_index].tag);
+                CHECK(node->context.version == units.entries[unit_index].header.version);
+                for (unsigned kind = 0; kind < TB_SYMBOL_GRAPH_RELATIONS; ++kind) {
+                    if (node->present & (1u << kind)) {
+                        CHECK(node->edges[kind].source.reference.source_record == node->record.record_offset);
+                        CHECK(node->edges[kind].source.kind == (TbSymbolRelationKind_e)kind);
+                    }
+                }
+            }
+            ++counts->graphs;
+            counts->graph_nodes += view.count;
+            return;
+        }
+        if (status == TB_SYMBOL_GRAPH_DEPENDENCY) {
+            ++counts->graph_dependencies;
+            return;
+        }
+        if (status == TB_SYMBOL_GRAPH_RELATION) {
+            TbSymbolGraphFailure_t failure;
+            CHECK(tb_symbol_graph_failure(&graph, &failure));
+            CHECK(failure.relation_status == TB_SYMBOL_RELATION_UNSUPPORTED);
+            ++counts->graph_unsupported;
+            return;
+        }
+        CHECK(status == TB_SYMBOL_GRAPH_PENDING || status == TB_SYMBOL_GRAPH_SOURCE ||
+              status == TB_SYMBOL_GRAPH_TARGET);
+    }
+    CHECK(false);
+}
+
+
 static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSelection_t selection,
                                 uint64_t abbreviation_section, StringSections_t string_sections)
 {
@@ -275,6 +353,10 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
     uint64_t entity_kinds[4] = {0};
     uint64_t declarations = 0;
     UnitCounts_t relations = {0};
+    uint64_t graph_bytes = 64 * sizeof(TbSymbolGraphNode_t);
+    CHECK(tb_symbol_budget_reserve(&budget, graph_bytes));
+    TbSymbolGraphNode_t *graph_nodes = malloc((size_t)graph_bytes);
+    CHECK(graph_nodes);
     for (uint64_t i = 0; i < view.count; ++i) {
         const TbSymbolUnitEntry_t *entry = &view.entries[i];
         CHECK(entry->offset == cursor && entry->extent.total_bytes);
@@ -336,7 +418,10 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                 CHECK(record->first_attribute == attributes);
                 attributes += record->attribute_count;
                 CHECK(attributes <= tree.attribute_count);
-                ++entity_kinds[check_entity(tree, die, &declarations)];
+                TbSymbolEntityKind_e kind = check_entity(tree, die, &declarations);
+                ++entity_kinds[kind];
+                if (kind != TB_SYMBOL_ENTITY_OTHER || record->tag == 0x39)
+                    check_graph(view, tree, i, die, graph_nodes, &relations);
                 for (uint64_t attr = 0; attr < record->attribute_count; ++attr) {
                     TbSymbolReferenceSelection_t selected = {
                         .unit_index      = i,
@@ -401,6 +486,10 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
             entity_kinds[0], entity_kinds[1], entity_kinds[2], entity_kinds[3]
         },
         .declarations          = declarations,
+        .graphs                = relations.graphs,
+        .graph_nodes           = relations.graph_nodes,
+        .graph_dependencies    = relations.graph_dependencies,
+        .graph_unsupported     = relations.graph_unsupported,
         .specifications        = relations.specifications,
         .origins               = relations.origins,
         .extensions            = relations.extensions,
@@ -411,6 +500,8 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
         .dwarf4_units          = relations.dwarf4_units,
         .dwarf5_units          = relations.dwarf5_units
     };
+    free(graph_nodes);
+    CHECK(tb_symbol_budget_release(&budget, graph_bytes));
     tb_symbol_units_destroy(units);
     return counts;
 }
@@ -563,6 +654,10 @@ static UnitCounts_t check_file(const char *path)
                 for (size_t kind = 0; kind < 4; ++kind)
                     unit_counts.entity_kinds[kind] += counts.entity_kinds[kind];
                 unit_counts.declarations += counts.declarations;
+                unit_counts.graphs += counts.graphs;
+                unit_counts.graph_nodes += counts.graph_nodes;
+                unit_counts.graph_dependencies += counts.graph_dependencies;
+                unit_counts.graph_unsupported += counts.graph_unsupported;
                 unit_counts.specifications += counts.specifications;
                 unit_counts.origins += counts.origins;
                 unit_counts.extensions += counts.extensions;
@@ -695,6 +790,10 @@ static UnitCounts_t check_file(const char *path)
     CHECK(!tb_symbol_admission_usage(ledger).bytes);
     printf("PASS native ELF record agreement with libelf: %zu sections, %zu programs, %zu symbols\n",
            sections, programs, symbols);
+    printf("native graphs %llu, reachable nodes %llu, dependencies %llu, unsupported %llu\n",
+           (unsigned long long)unit_counts.graphs, (unsigned long long)unit_counts.graph_nodes,
+           (unsigned long long)unit_counts.graph_dependencies,
+           (unsigned long long)unit_counts.graph_unsupported);
     return unit_counts;
 }
 
@@ -722,6 +821,8 @@ int main(int argc, char **argv)
             CHECK(i + 1 < argc);
             UnitCounts_t counts = check_file(argv[++i]);
             CHECK(counts.specifications && counts.origins && !counts.relation_dependencies);
+            CHECK(counts.graphs && counts.graph_nodes > counts.graphs);
+            CHECK(!counts.graph_dependencies && !counts.graph_unsupported);
             CHECK(counts.relation_unsupported == counts.vendor_call_sites);
             CHECK((version == 4 ? counts.dwarf4_units : counts.dwarf5_units) == counts.total);
             CHECK(version != 4 || counts.legacy_members);

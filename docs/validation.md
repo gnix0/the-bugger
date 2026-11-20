@@ -6866,3 +6866,60 @@ All checks above passed (exit 0), followed by normal `make`
 Local link checks covered 248 references with no errors; whitespace checks
 passed. These are local host results, not hosted CI, physical qualification or
 maintainer acceptance of SE06/F07.
+
+
+## Bounded DWARF relationship traversal — 2026-11-20
+
+Reachable specification, origin and namespace-extension traversal now validates
+all selected direct fields and links before exposing a graph. Iterative visits
+distinguish active-path cycles from completed shared targets and retain every
+physical record and direct edge. Source dependencies are explicit; changed
+versions, abbreviation context or parent provenance cannot silently replace a
+captured target. Failures retain available raw source/field diagnostics without
+a successful graph prefix. This does not yet select inherited fields or names.
+
+Local Linux x86-64 evidence is under ignored `build/se06-evidence-20261120/`,
+using the `graph-` prefix. The captured environment, patch, input copies and
+`graph-tested-files.json` identify 279 compiled inputs.
+
+| Check | Command / evidence |
+|---|---|
+| Focused traversal and native composition | `make BUILD_DIR=build/se06-graph-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-graph test-symbol-elf-native`; `graph-final-focused`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-graph-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `graph-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-graph-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-graph test-symbol-elf-native`; `graph-sanitize`. |
+| Static analysis | `make analyze`, 64 production source files; `graph-analysis`. |
+
+Authored scoped views exercise shared diamonds, mixed-link cycles of one through
+eight records, a cycle after a completed sibling, namespace chains, exact
+workspace exhaustion and rejected partial views. Cross-unit source/target
+supplies distinguish unavailable dependencies from invalid requests, preserving
+pending state when source context disagrees. Unsupported vendor tags, malformed
+reference classes and missing target boundaries retain distinct diagnostics.
+A 1,001-record chain advances in single-action slices without recursion. A
+1,001-attribute scope rejects a late duplicate before requesting any target.
+
+Native composition uses actual retained-file/unit/abbreviation/form outputs.
+The maintained DWARF 4 C++ fixture produced 38 rooted graphs with 62 node visits;
+DWARF 5 produced 39 with 63. All these scopes completed without missing
+dependencies or unsupported relationship semantics. The DWARF 4 member-tag
+static declaration participates when reached by its defining variable; it is not
+an independent data-tag root. GCC harness composition produced 2,321 rooted
+graphs with 3,347 node visits; Clang sanitizer composition produced 1,705 with
+1,928. Visits across independent rooted graphs are not distinct-record totals.
+Separate direct-link, text and ELF/libelf checks remain enforced.
+
+The harness accounts its 64-node workspace within the unchanged 2 MiB
+retained-file construction allowance and releases that reservation. This is a
+test configuration, not a production capacity or RSS bound. Linear visited-node
+lookup can require quadratic total work; bounded slices do not establish end-to-end
+latency. SE10 measurements must include actual graph state, unused capacity,
+contention, cancellation and responsiveness. Production sizing, attribute
+inheritance, qualified names/signatures, type/lexical graph validation,
+relocation correspondence, frontend evidence/publication, SE06/F07 acceptance
+and physical target qualification remain outstanding.
+
+All checks above passed (exit 0), as did normal `make` (`graph-normal-make`).
+All 279 captured compiled inputs remained unchanged. Local link checks covered
+252 references with no errors; whitespace checks passed. These are local host
+results for this step, not hosted CI, physical validation or maintainer
+acceptance of SE06/F07.

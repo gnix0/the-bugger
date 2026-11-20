@@ -825,8 +825,10 @@ Each completed edge preserves the original source identity, selected attribute,
 raw reference, target identity, unit kinds/versions, abbreviation coordinates
 and target parent provenance. Source and target records remain distinct.
 Wrong tag pairs and self-references expose no edge; the raw source reference
-remains available for diagnostics. Multi-record cycles, inheritance, language
-semantics and applicable relocation correspondence need separate validation.
+remains available for diagnostics. Multi-record cycles require the separate
+[graph traversal](#bounded-dwarf-relationship-traversal-se06-partial).
+Inheritance, language semantics and applicable relocation correspondence need
+their own validation.
 An exact link is not a canonical identity or authorization for a live action.
 
 The caller owns and accounts the embedded cursor and retains its complete views,
@@ -839,6 +841,49 @@ GCC's older call-site extension reuses `DW_AT_abstract_origin` with different
 semantics, as shown in its [DWARF 5 transition](https://gcc.gnu.org/pipermail/gcc-patches/2016-October/459758.html).
 Those vendor-tag records retain raw metadata and explicit unsupported coverage;
 they do not acquire standard inline-inheritance semantics.
+
+
+### Bounded DWARF relationship traversal (SE06, partial)
+
+`src/symbol/graph.c` validates the reachable specification, abstract-origin and
+namespace-extension graph of one exact selected record. It scans each selected
+field's complete attribute scope, binds each direct link through the scoped
+relationship profile, and visits every reachable target before exposing a
+successful graph. Acyclicity applies to these three relation kinds in this
+captured scope, not to type references, lexical ancestry or all artifact metadata.
+
+Traversal uses iterative depth-first work with caller-owned node storage. A link
+to an active ancestor is a cycle; a link to a completed node is a shared path.
+Both incoming edges survive, and no physical records are canonicalized. Stored
+nodes retain source/target coordinates, tag/version/unit/abbreviation context,
+parent provenance and full direct edges. A supplied target's context must agree
+with its later source view and with an already visited record's context.
+
+The cursor requests explicit source views or target dependencies. Supplying a
+source selects its exact unit and DIE; target supply uses the relationship
+validator and an explicitly selected info inventory where required. These
+requests cause no discovery, decoding, file access or debugger traffic. Wrong
+source supplies leave the request intact; an explicitly unavailable dependency
+or a failed direct relationship ends the traversal. Diagnostics distinguish
+cycles, missing dependencies, relationship failures and exhausted storage, with
+raw source/field provenance where available. Failed traversal exposes no
+successfully validated graph prefix.
+
+Each step performs at most 256 bounded attribute examinations or traversal
+actions; each visited-record comparison is a separate action. This initial
+visited lookup is linear, so total work can be quadratic in graph size. The outer
+job owns cancellation, absolute deadlines, context revisions and the checked
+account for the entire state and workspace, including unused capacity. There is
+no allocation, recursion or production capacity default here; production sizing
+and responsiveness remain SE10 obligations. Views are borrowed through the
+stated source/workspace lifetimes and establish no independent frontend evidence.
+
+A successful graph does not select inherited attributes, qualified lexical
+context or canonical language entities. In particular, declaration coordinates
+must retain the compilation unit of the eventual attribute owner; the selected
+record cannot borrow another unit's file number as its own. Attribute inheritance,
+qualified names/signatures, inline interpretation, relocation correspondence and
+live authority remain separate work.
 
 
 ### Event loop and text rendering
