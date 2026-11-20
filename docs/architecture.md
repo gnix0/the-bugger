@@ -881,9 +881,56 @@ stated source/workspace lifetimes and establish no independent frontend evidence
 A successful graph does not select inherited attributes, qualified lexical
 context or canonical language entities. In particular, declaration coordinates
 must retain the compilation unit of the eventual attribute owner; the selected
-record cannot borrow another unit's file number as its own. Attribute inheritance,
-qualified names/signatures, inline interpretation, relocation correspondence and
-live authority remain separate work.
+record cannot borrow another unit's file number as its own. The separate
+[inherited-field selector](#inherited-dwarf-attribute-owners-se06-partial) retains
+that ownership. Semantic field agreement, qualified names/signatures, inline
+interpretation, relocation correspondence and live authority remain separate work.
+
+
+### Inherited DWARF attribute owners (SE06, partial)
+
+`src/symbol/inherit.c` selects physical attribute owners over a completed,
+unchanged relationship graph. Its explicit profile covers `DW_AT_name`, standard
+`DW_AT_linkage_name`, `DW_AT_type` and the three declaration coordinates.
+A direct field stops inheritance on that path; a missing field follows the
+captured specification, origin and namespace-extension links. Every visited
+field's complete attribute scope must finish before it can become an owner.
+Duplicate fields conflict even when their values agree.
+
+The result distinguishes absent, unique and multiple physical owners. A shared
+owner reached through two paths occurs once, while the graph retains both
+paths. Distinct owners remain multiple even if their raw values agree: field-value
+agreement, string interpretation and type equivalence require separate checks.
+A direct malformed or unsupported value cannot silently fall back to another
+record. Owner selection itself retains raw forms and spans; it does not validate
+their value classes or grant semantic naming or type claims.
+
+Every owner retains its exact attribute, backing, section, unit and record
+coordinates. Inherited declaration-file numbers belong to that owner's unit,
+not automatically to the selected root. Explicit source supply must match the
+captured tag, version, unit kind, abbreviation and parent context. DWARF 4 info
+headers permit compilation/partial refinement only through the validated root;
+that header ambiguity is not accepted for DWARF 5 or type-unit mismatches.
+
+Flags, sibling links, runtime locations and other fields are outside this
+inheritance profile. Physical flag presence is not a generic inheritance rule:
+[DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Section 7.5.4, represents a zero
+flag as semantic absence. Declaration and sibling attributes also have explicit
+inheritance exclusions. The direct-entry reader continues to record physical
+presence and truth separately; it makes no inherited-flag claim.
+
+The cursor performs no allocation, I/O, callbacks, discovery or recursion. It
+initializes caller-owned workspace and advances at most 256 bounded actions per
+step. Source requests are explicit; missing dependencies, conflicting fields and
+invalid scopes expose no completed candidate prefix. Invalid source supplies
+preserve the pending request. The caller accounts the entire workspace capacity
+and state and retains the graph/context and current borrowed source for their
+stated lifetimes. Linear queue/edge lookup can require quadratic total work;
+absolute deadlines and SE10 production sizing remain necessary.
+
+This component selects owners, not complete inherited definitions, qualified
+lexical contexts, signatures or usable locations. Its borrowed results do not
+establish independent frontend evidence, runtime bindings or action authority.
 
 
 ### Event loop and text rendering

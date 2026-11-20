@@ -6923,3 +6923,81 @@ All 279 captured compiled inputs remained unchanged. Local link checks covered
 252 references with no errors; whitespace checks passed. These are local host
 results for this step, not hosted CI, physical validation or maintainer
 acceptance of SE06/F07.
+
+
+## Inherited DWARF attribute owners — 2026-11-20
+
+Bounded owner selection now walks a completed relationship graph for the six
+supported descriptive fields. It keeps direct-field precedence separate from
+attribute interpretation, follows every required missing-field path, and retains
+the actual owner unit and field coordinates. Shared paths yield one physical
+owner; distinct owners remain multiple even if their raw values agree. Missing
+dependencies and conflicts expose no completed candidate prefix. Flags, runtime
+locations, semantic value agreement and qualified names remain separate work.
+
+Local Linux x86-64 evidence is retained under ignored
+`build/se06-evidence-20261120/`, using the `inherit-` prefix. Authored scoped views
+construct completed graphs before selecting fields. They cover shared diamonds,
+multiple equal-valued owners, direct-field precedence, absence, duplicate fields,
+namespace extensions, unchanged invalid requests and missing dependencies after
+a candidate. A 513-record chain advances in single-action slices without
+recursion. Cross-unit declaration-file selection retains the owner unit rather
+than reusing the selected root's file-number context. All other selected fields
+remain unsupported; raw value classes are intentionally not interpreted here.
+
+The first native composition run failed on a DWARF 4 info contribution
+(`inherit-native-focused`, exit 2). Its header cannot distinguish compilation
+from partial units before root decoding. The selector had incorrectly required
+an exact header/root kind match. The corrected profile permits that specific
+DWARF 4 refinement; authored compilation/partial cases and both actual C++
+fixtures pass. Mismatched DWARF 5 and type-unit kinds remain rejected. The
+original failure log is retained, and existing native assertions remain enforced.
+
+Initial full static analysis also failed (`inherit-analysis`, exit 2), reporting
+a potential out-of-bounds edge index in private traversal state. The normal
+end-of-edges equality check did not establish the full array bound. Explicit
+edge and scan range guards now reject invalid indices; fault cases inject
+one-over and maximum edge indices and a one-over scan index. No analyzer warning
+is suppressed. The original compiled scope and logs are retained separately
+from the corrected tree's verification.
+
+Native composition selects all six fields over every completed graph, checks
+each owner against the exact decoded attribute and resolves selected name/linkage
+fields through the retained-text provider. The maintained DWARF 4 fixture has
+228 queries, 212 owner selections and 96 selections owned by another record;
+DWARF 5 has 234, 218 and 97 respectively. These are selection observations, not
+distinct-record totals, runtime indirections or proof of equivalent names.
+Namespace extensions have authored coverage but no emitted examples in these
+native fixtures. Earlier graph, direct-link, reference, text and ELF/libelf
+checks remain enforced.
+
+The harness accounts and releases its 64-slot inherited workspace alongside the
+64-node graph workspace within the unchanged 2 MiB construction allowance.
+Those capacities are test-specific; they establish neither production sizing
+nor RSS limits. Queue and edge lookup can require quadratic total work, despite
+bounded slices. SE10 must measure the actual construction, dependency and
+publication peaks and responsiveness. Semantic field agreement, definition roles,
+qualified names/signatures, inline interpretation, native line tables,
+relocation correspondence, independent frontend evidence/publication, SE06/F07
+acceptance and physical qualification remain outstanding.
+
+The original fresh fortified baseline passed with all 282 captured inputs
+unchanged (`inherit-test-ci`, exit 0). Its sanitizer run also passed
+(`inherit-sanitize`, exit 0), while the static-analysis failure above remained
+unresolved in that tree. The corrected source changes only `inherit.c` and its
+unit test within that captured compiled scope. The final environment, patch,
+input copies and `inherit-final-tested-files.json` identify the corrected
+282-input tree independently.
+
+| Corrected-tree check | Command / evidence |
+|---|---|
+| Focused owner selection and native composition | `make BUILD_DIR=build/se06-inherit-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-inherit test-symbol-elf-native`; `inherit-fixed-focused`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-inherit-final-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `inherit-final-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-inherit-final-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-inherit test-symbol-elf-native`; `inherit-final-sanitize`. |
+| Static analysis | `make analyze`, 65 production source files; `inherit-final-analysis`. |
+
+All corrected-tree checks above passed (exit 0), as did normal `make`
+(`inherit-final-normal-make`). All 282 final captured compiled inputs remained
+unchanged. Local link checks covered 255 references with no errors; whitespace
+checks passed. These are local host results for this step, not hosted CI,
+physical validation or maintainer acceptance of SE06/F07.

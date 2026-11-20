@@ -3283,3 +3283,40 @@ establish attribute inheritance, qualified names/signatures, type-graph
 acyclicity, relocation correspondence, production capacity or latency,
 independent frontend evidence, SE06/F07 acceptance or physical qualification.
 All traversal and dependency transfer here perform zero live debugger access.
+
+
+## Inherited DWARF attribute owners (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-inherit CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-inherit test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored scoped views first construct a completed
+relationship graph, then select owners for each supported descriptive field.
+Cases cover origin/specification chains, namespace extensions, shared owners,
+multiple distinct owners with equal raw values, direct-field precedence,
+absence and equal-value duplicate conflicts. A dependency failure after one
+candidate blocks the whole result. Invalid initialization/capacity and wrong
+source supplies preserve prior state; incomplete graphs expose no candidate.
+A 513-record chain advances in single-action slices without recursion.
+
+Cross-unit declaration-file selection retains the actual owner's unit. DWARF 4
+compilation and partial roots refine their ambiguous info header, while
+incompatible kinds/versions are rejected. Flags, sibling, runtime and other
+fields remain explicitly unsupported. Raw value-class validation is separate
+from owner selection; tests deliberately preserve unvalidated raw attributes.
+
+Native composition selects all six supported fields over each completed graph.
+It checks every owner against actual decoded attribute coordinates and resolves
+selected name/linkage fields through retained text dependencies. Both C++
+fixtures require actual indirect ownership; earlier graph, physical-reference,
+text and ELF/libelf assertions remain. The harness accounts and releases a
+64-slot inherited-field workspace alongside its graph workspace within the
+existing retained-file construction allowance. Those capacities are specific
+to this test, not production defaults.
+
+These checks do not establish agreement between distinct owners, semantic
+flag/location inheritance, qualified names/signatures, native line tables,
+production capacity/latency, independent frontend evidence, SE06/F07 acceptance
+or physical qualification. No debugger operation is introduced.

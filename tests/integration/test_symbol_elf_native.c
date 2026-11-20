@@ -4,6 +4,7 @@
 #include "symbol/entities.h"
 #include "symbol/relations.h"
 #include "symbol/graph.h"
+#include "symbol/inherit.h"
 #include "symbol/references.h"
 #include "symbol/text.h"
 #include "symbol/elf.h"
@@ -117,6 +118,10 @@ typedef struct {
     uint64_t indexed_strings;
     uint64_t entity_kinds[4];
     uint64_t declarations;
+    uint64_t inherited_queries;
+    uint64_t inherited_owners;
+    uint64_t inherited_indirect;
+    uint64_t inherited_multiple;
     uint64_t graphs;
     uint64_t graph_nodes;
     uint64_t graph_dependencies;
@@ -256,8 +261,9 @@ static void check_relation(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree,
 }
 
 
-static void check_graph(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree, uint64_t unit_index,
-                        uint64_t die_index, TbSymbolGraphNode_t *nodes, UnitCounts_t *counts)
+static bool check_graph(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree, uint64_t unit_index,
+                        uint64_t die_index, TbSymbolGraphNode_t *nodes, UnitCounts_t *counts,
+                        TbSymbolGraphView_t *completed)
 {
     TbSymbolGraph_t graph;
     CHECK(tb_symbol_graph_init(&graph, (TbSymbolReferenceTarget_t){
@@ -309,23 +315,98 @@ static void check_graph(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree, uint
             }
             ++counts->graphs;
             counts->graph_nodes += view.count;
-            return;
+            *completed = view;
+            return true;
         }
         if (status == TB_SYMBOL_GRAPH_DEPENDENCY) {
             ++counts->graph_dependencies;
-            return;
+            return false;
         }
         if (status == TB_SYMBOL_GRAPH_RELATION) {
             TbSymbolGraphFailure_t failure;
             CHECK(tb_symbol_graph_failure(&graph, &failure));
             CHECK(failure.relation_status == TB_SYMBOL_RELATION_UNSUPPORTED);
             ++counts->graph_unsupported;
-            return;
+            return false;
         }
         CHECK(status == TB_SYMBOL_GRAPH_PENDING || status == TB_SYMBOL_GRAPH_SOURCE ||
               status == TB_SYMBOL_GRAPH_TARGET);
     }
     CHECK(false);
+    return false;
+}
+
+
+typedef struct {
+    TbSymbolSectionsView_t directory;
+    TbSymbolUnitsView_t    units;
+    TbSymbolDiesView_t     tree;
+    StringSections_t      strings;
+    uint64_t              unit_index;
+    int                   descriptor;
+} InheritedScope_t;
+
+static void check_inherited(InheritedScope_t scope, TbSymbolGraphView_t graph,
+                             TbSymbolInheritSlot_t *slots, UnitCounts_t *counts)
+{
+    const uint64_t names[] = {0x03, 0x6e, 0x49, 0x3a, 0x3b, 0x39};
+    for (size_t field = 0; field < sizeof(names) / sizeof(names[0]); ++field) {
+        TbSymbolInherit_t inherit;
+        CHECK(tb_symbol_inherit_init(&inherit, graph, names[field], slots, 64) == TB_SYMBOL_INHERIT_PENDING);
+        bool complete = false;
+        for (unsigned turn = 0; turn < 100000 && !complete; ++turn) {
+            TbSymbolInheritNeed_t need;
+            if (tb_symbol_inherit_need(&inherit, &need)) {
+                CHECK(need.record.section_index == scope.tree.section_index);
+                CHECK(need.record.unit_offset == scope.tree.unit_offset);
+                CHECK(tb_symbol_inherit_source(&inherit, &scope.units, &scope.tree, scope.unit_index) ==
+                      TB_SYMBOL_INHERIT_PENDING);
+            }
+            TbSymbolInheritStatus_e status = tb_symbol_inherit_step(&inherit, 31);
+            complete = status == TB_SYMBOL_INHERIT_UNIQUE || status == TB_SYMBOL_INHERIT_MULTIPLE ||
+                       status == TB_SYMBOL_INHERIT_ABSENT;
+            CHECK(complete || status == TB_SYMBOL_INHERIT_PENDING || status == TB_SYMBOL_INHERIT_SOURCE);
+        }
+        CHECK(complete);
+        TbSymbolInheritResult_t result;
+        CHECK(tb_symbol_inherit_result(&inherit, &result));
+        CHECK(result.name == names[field] && result.owner_count <= graph.count);
+        uint64_t owners = 0;
+        for (size_t i = 0; i < graph.count; ++i) {
+            TbSymbolInheritOwner_t owner;
+            if (!tb_symbol_inherit_owner(&inherit, i, &owner))
+                continue;
+            ++owners;
+            const TbSymbolGraphNode_t *node = &graph.nodes[i];
+            const TbSymbolDieEntry_t *entry = &scope.tree.entries[node->record.entry_index];
+            CHECK(owner.node_index == i && owner.selection.matches == 1);
+            CHECK(owner.selection.section_index == node->record.section_index);
+            CHECK(owner.selection.unit_offset == node->record.unit_offset);
+            CHECK(owner.selection.record_offset == node->record.record_offset);
+            CHECK(owner.selection.first_index >= entry->first_attribute);
+            uint64_t index = owner.selection.first_index - entry->first_attribute;
+            CHECK(index < entry->attribute_count);
+            const TbSymbolDieAttribute_t *actual = &scope.tree.attributes[owner.selection.first_index];
+            CHECK(actual->name == names[field] && actual->offset == owner.attribute.offset);
+            CHECK(actual->value.form == owner.attribute.value.form);
+            CHECK(actual->value.bits == owner.attribute.value.bits);
+            if (names[field] == 0x03 || names[field] == 0x6e) {
+                CHECK(check_attribute_string(scope.directory, scope.units, scope.tree,
+                                             (TbSymbolReferenceSelection_t){
+                                                 .unit_index      = scope.unit_index,
+                                                 .die_index       = node->record.entry_index,
+                                                 .attribute_index = index
+                                             }, scope.strings, scope.descriptor));
+            }
+            if (i)
+                ++counts->inherited_indirect;
+        }
+        CHECK(owners == result.owner_count);
+        ++counts->inherited_queries;
+        counts->inherited_owners += owners;
+        if (owners > 1)
+            ++counts->inherited_multiple;
+    }
 }
 
 
@@ -357,6 +438,10 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
     CHECK(tb_symbol_budget_reserve(&budget, graph_bytes));
     TbSymbolGraphNode_t *graph_nodes = malloc((size_t)graph_bytes);
     CHECK(graph_nodes);
+    uint64_t inherited_bytes = 64 * sizeof(TbSymbolInheritSlot_t);
+    CHECK(tb_symbol_budget_reserve(&budget, inherited_bytes));
+    TbSymbolInheritSlot_t *inherited_slots = malloc((size_t)inherited_bytes);
+    CHECK(inherited_slots);
     for (uint64_t i = 0; i < view.count; ++i) {
         const TbSymbolUnitEntry_t *entry = &view.entries[i];
         CHECK(entry->offset == cursor && entry->extent.total_bytes);
@@ -420,8 +505,19 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                 CHECK(attributes <= tree.attribute_count);
                 TbSymbolEntityKind_e kind = check_entity(tree, die, &declarations);
                 ++entity_kinds[kind];
-                if (kind != TB_SYMBOL_ENTITY_OTHER || record->tag == 0x39)
-                    check_graph(view, tree, i, die, graph_nodes, &relations);
+                if (kind != TB_SYMBOL_ENTITY_OTHER || record->tag == 0x39) {
+                    TbSymbolGraphView_t completed;
+                    if (check_graph(view, tree, i, die, graph_nodes, &relations, &completed)) {
+                        check_inherited((InheritedScope_t){
+                            .directory  = directory,
+                            .units      = view,
+                            .tree       = tree,
+                            .strings    = string_sections,
+                            .unit_index = i,
+                            .descriptor = selection.descriptor
+                        }, completed, inherited_slots, &relations);
+                    }
+                }
                 for (uint64_t attr = 0; attr < record->attribute_count; ++attr) {
                     TbSymbolReferenceSelection_t selected = {
                         .unit_index      = i,
@@ -486,6 +582,10 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
             entity_kinds[0], entity_kinds[1], entity_kinds[2], entity_kinds[3]
         },
         .declarations          = declarations,
+        .inherited_queries     = relations.inherited_queries,
+        .inherited_owners      = relations.inherited_owners,
+        .inherited_indirect    = relations.inherited_indirect,
+        .inherited_multiple    = relations.inherited_multiple,
         .graphs                = relations.graphs,
         .graph_nodes           = relations.graph_nodes,
         .graph_dependencies    = relations.graph_dependencies,
@@ -500,6 +600,8 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
         .dwarf4_units          = relations.dwarf4_units,
         .dwarf5_units          = relations.dwarf5_units
     };
+    free(inherited_slots);
+    CHECK(tb_symbol_budget_release(&budget, inherited_bytes));
     free(graph_nodes);
     CHECK(tb_symbol_budget_release(&budget, graph_bytes));
     tb_symbol_units_destroy(units);
@@ -654,6 +756,10 @@ static UnitCounts_t check_file(const char *path)
                 for (size_t kind = 0; kind < 4; ++kind)
                     unit_counts.entity_kinds[kind] += counts.entity_kinds[kind];
                 unit_counts.declarations += counts.declarations;
+                unit_counts.inherited_queries += counts.inherited_queries;
+                unit_counts.inherited_owners += counts.inherited_owners;
+                unit_counts.inherited_indirect += counts.inherited_indirect;
+                unit_counts.inherited_multiple += counts.inherited_multiple;
                 unit_counts.graphs += counts.graphs;
                 unit_counts.graph_nodes += counts.graph_nodes;
                 unit_counts.graph_dependencies += counts.graph_dependencies;
@@ -790,6 +896,11 @@ static UnitCounts_t check_file(const char *path)
     CHECK(!tb_symbol_admission_usage(ledger).bytes);
     printf("PASS native ELF record agreement with libelf: %zu sections, %zu programs, %zu symbols\n",
            sections, programs, symbols);
+    printf("native inherited queries %llu, owners %llu, indirect owners %llu, multiple %llu\n",
+           (unsigned long long)unit_counts.inherited_queries,
+           (unsigned long long)unit_counts.inherited_owners,
+           (unsigned long long)unit_counts.inherited_indirect,
+           (unsigned long long)unit_counts.inherited_multiple);
     printf("native graphs %llu, reachable nodes %llu, dependencies %llu, unsupported %llu\n",
            (unsigned long long)unit_counts.graphs, (unsigned long long)unit_counts.graph_nodes,
            (unsigned long long)unit_counts.graph_dependencies,
@@ -823,6 +934,7 @@ int main(int argc, char **argv)
             CHECK(counts.specifications && counts.origins && !counts.relation_dependencies);
             CHECK(counts.graphs && counts.graph_nodes > counts.graphs);
             CHECK(!counts.graph_dependencies && !counts.graph_unsupported);
+            CHECK(counts.inherited_queries == counts.graphs * 6 && counts.inherited_indirect);
             CHECK(counts.relation_unsupported == counts.vendor_call_sites);
             CHECK((version == 4 ? counts.dwarf4_units : counts.dwarf5_units) == counts.total);
             CHECK(version != 4 || counts.legacy_members);
