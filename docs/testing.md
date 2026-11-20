@@ -3182,3 +3182,33 @@ Clang fixture configurations exercise different direct/indexed encodings; neithe
 is a universal producer oracle. The inherited 2 MiB harness account remains
 unchanged. Semantic naming/inheritance, frontend evidence ownership, production
 sizing, hardware qualification and SE05/F07 acceptance remain separate work.
+
+
+## Direct DWARF entry facts (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-entities CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-entities test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored complete-tree views check selected-DIE
+isolation, exact field coordinates, missing versus false flags, every possible
+flag byte and effective indirect `flag_present`. These authored views isolate
+selected-DIE lookup scopes; native composition below supplies actual unit-parser
+outputs. Known duplicate fields conflict
+even when their values agree; raw names, inline codes and references receive no
+semantic validation here. Wrong flag classes, unrepresentable/signed values and
+invalid implicit flag values fail without exposing a view. A 100,001-attribute
+scope checks late conflicts, bounded steps and no early candidate. Invalid
+initialization preserves existing state; caller-owned cursors can be discarded
+without allocation or file cleanup.
+
+Native composition checks every DIE's selected source fields and parent/kind
+facts over real unit/abbreviation/form decoding. It includes the existing C++
+code fixture alongside the C executable, DSO and harness itself; this target
+requires a C++ compiler for the debug target only. ELF/libelf,
+physical reference and retained-string comparisons remain separate checks.
+The existing retained-file account remains unchanged. These tests establish
+neither canonical semantic identities nor declaration inheritance, complete
+qualified names/signatures, usable code/storage locations, production sizing,
+SE06/F07 acceptance or physical target qualification.

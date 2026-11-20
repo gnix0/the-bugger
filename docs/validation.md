@@ -6741,3 +6741,60 @@ retained separately. Final component analysis (`text-final-component-analysis`)
 and normal `make` (`text-final-normal-make`) also passed. All 261 final compiled
 input hashes match; local link checks covered 244 references with no errors and
 whitespace checks passed. No hosted CI or physical result is claimed.
+
+
+## Direct DWARF entry facts — 2026-11-20
+
+Direct entry inspection now retains selected unique attributes and physical
+coordinates from a complete DIE. Declaration, external and artificial flags
+receive class/value validation; all byte values other than zero mean true.
+Physical absence and explicit false remain distinct. Subprogram, variable and
+inline-instance tags remain separate, without proving emitted code, storage,
+nonlocality, inherited names or runtime authority.
+
+The maintainer reported that hosted CI passed for the preceding text-attribute
+commit before this step resumed. This is a reported hosted result, separate from
+the local checks and pending integration/feature acceptance below.
+
+Local Linux x86-64 evidence is retained under ignored
+`build/se06-evidence-20261120/` using the `entities-` prefix.
+
+| Check | Command / evidence |
+|---|---|
+| Focused entry facts and native composition | `make BUILD_DIR=build/se06-entities-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-entities test-symbol-elf-native`; `entities-focused-final`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-entities-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `entities-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-entities-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-entities test-symbol-elf-native`; `entities-sanitize`. |
+| Static analysis | `make analyze`, 62 production source files; `entities-analysis`. |
+
+Authored complete-tree views check every possible flag byte, effective indirect
+implicit flags, missing/false distinctions, invalid forms/values and duplicate
+fields with equal values. Diagnostics retain exact first/second physical
+occurrences. Selected-DIE isolation and a 100,001-attribute scope check full-scope
+uniqueness, late conflicts, bounded stepping and unavailable partial views.
+Failed initialization leaves prior state intact. The allocation/I/O-free cursor
+can be discarded at any stage without retaining resource ownership.
+
+Native composition checks each selected field against independently decoded
+source coordinates and raw forms. GCC composition inspected 12,853/136/5/13 DIEs
+in the harness/C executable/DSO/C++ executable respectively; Clang sanitizer
+composition inspected 10,472/88/5/13. The C++ fixture had three subprogram and
+three variable records and one true declaration flag in both configurations.
+These are tag/flag observations, not counts of validated definitions or storage
+locations. Existing reference, string and separate ELF/libelf checks remain.
+The native retained-file construction allowance remains 2 MiB; this is not a
+production index/cache measurement or RSS bound.
+
+`entities-tested-files.json`, `entities-tested.patch`, captured inputs and
+`entities-environment.txt` identify the compiled scope. Validated relationships,
+qualified names, the supported signature grammar, semantic inline interpretation,
+frontend evidence ownership, production sizing and SE06/F07 acceptance remain
+outstanding. These local configurations do not qualify other producers, remote
+backends or physical targets.
+
+
+All checks above passed (exit 0), as did normal `make`
+(`entities-normal-make`). All 269 captured compiled inputs remained unchanged.
+Local link checks covered 246 references with no errors; whitespace checks
+passed. These are local host results for this step. The preceding commit's
+reported hosted result does not establish hosted CI for these new changes,
+physical validation or maintainer acceptance of SE06/F07.

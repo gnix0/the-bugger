@@ -764,6 +764,37 @@ names through references, create frontend evidence ownership or establish
 semantic names, runtime correspondence or permission to access a target.
 
 
+### Direct DWARF entry facts (SE06, partial)
+
+`src/symbol/entities.c` inspects one complete physical DIE before exposing its
+selected direct fields. It records name, linkage name, declaration, external,
+artificial, inline, specification, abstract-origin and type attributes with their
+exact source coordinates. Every selected field must be unique; equal values do
+not merge duplicate attributes. Missing fields remain explicit. Unrelated
+attributes do not receive semantic validation from this inspection.
+
+Only declaration, external and artificial flags receive class/value validation
+here. `DW_FORM_flag` accepts every nonzero byte as true; `DW_FORM_flag_present`
+is true without an encoded value. Physical presence is retained separately from
+truth, so an absent flag and an explicitly encoded false flag remain distinct.
+Names, inline codes and references remain raw fields for their own interpreters.
+These rules follow [DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Sections 2.13,
+3.3 and 7.5.5.
+
+Entry kinds distinguish subprogram, variable and concrete inline-instance tags;
+other tags remain metadata without adding a search category. A subprogram tag
+does not prove standalone emitted code, and a variable tag does not prove
+nonlocality, storage or a live address. No attribute inheritance,
+reference-target validation, type rendering or semantic name construction occurs.
+
+The cursor borrows its complete tree and context. It performs no allocation or
+I/O and examines at most 256 attributes per step; its caller accounts the embedded
+state and supplies cancellation, deadlines and revision checks. A complete view
+retains the backing, unit, DIE, parent and abbreviation coordinates. Conflicts,
+malformed selected flags and invalid requests expose no candidate view. This
+component introduces no helper operation, frontend publication or target access.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

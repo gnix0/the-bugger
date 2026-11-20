@@ -99,6 +99,10 @@ records remain in the [validation records](../docs/validation.md).
   outcomes and failure accounting; included in `test`. See
   [text coverage](../docs/testing.md#selected-text-attributes-se05-partial).
 
+- `make test-symbol-entities`: bounded direct entry kinds and unique fields,
+  physical flag presence, nonzero truth and conflict diagnostics; included in
+  `test`. See [entry-fact coverage](../docs/testing.md#direct-dwarf-entry-facts-se06-partial).
+
 - `make test-symbol-dwarf`: bounded DWARF32/64 unit headers, mixed address/offset
   widths, unsupported unit coverage and exact contribution bounds. Included in
   `test`; see [unit-header coverage](../docs/testing.md#dwarf-unit-headers-se05-partial).

@@ -17,6 +17,7 @@ registry for contexts, backing leases and scoped sharing. SE04 adds
 [scoped ELF validation](architecture.md#supervised-elf-validation-se04-partial),
 and SE05 provides structural DWARF decoding through
 [selected text dependencies](architecture.md#selected-text-attributes-se05-partial).
+SE06 begins with [direct entry facts](architecture.md#direct-dwarf-entry-facts-se06-partial).
 Artifact Open workflow, qualified acquisition profiles, complete semantic
 interpretation and consumers remain unfinished. Unknown helper operations return
 Unsupported.

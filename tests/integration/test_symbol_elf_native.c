@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- Native file fixture reads. */
 #include "symbol/abbrev.h"
 #include "symbol/dies.h"
+#include "symbol/entities.h"
 #include "symbol/references.h"
 #include "symbol/text.h"
 #include "symbol/elf.h"
@@ -112,7 +113,52 @@ typedef struct {
     uint64_t dependencies;
     uint64_t strings;
     uint64_t indexed_strings;
+    uint64_t entity_kinds[4];
+    uint64_t declarations;
 } UnitCounts_t;
+
+static TbSymbolEntityKind_e check_entity(TbSymbolDiesView_t tree, uint64_t die, uint64_t *declarations)
+{
+    TbSymbolEntity_t entity;
+    CHECK(tb_symbol_entity_init(&entity, tree, die) == TB_SYMBOL_ENTITY_PENDING);
+    TbSymbolEntityStatus_e status = TB_SYMBOL_ENTITY_PENDING;
+    for (uint64_t turn = 0; turn <= tree.entries[die].attribute_count &&
+                            status == TB_SYMBOL_ENTITY_PENDING; ++turn) {
+        status = tb_symbol_entity_step(&entity, 7);
+    }
+    CHECK(status == TB_SYMBOL_ENTITY_READY);
+    TbSymbolEntityView_t view;
+    CHECK(tb_symbol_entity_view(&entity, &view));
+    CHECK(view.backing.key.inode == tree.backing.key.inode && view.backing.bytes == tree.backing.bytes);
+    CHECK(view.section_index == tree.section_index && view.unit_offset == tree.unit_offset);
+    CHECK(view.record_offset == tree.entries[die].offset && view.tag == tree.entries[die].tag);
+    CHECK(view.parent_index == tree.entries[die].parent);
+    CHECK(view.abbrev_section == tree.abbrev_section && view.abbrev_offset == tree.abbrev_offset);
+    for (size_t i = 0; i < TB_SYMBOL_ENTITY_FIELDS; ++i) {
+        const TbSymbolEntityField_t *field = &view.fields[i];
+        CHECK(field->selection.matches <= 1);
+        if (!field->selection.matches) {
+            CHECK(field->selection.first_index == UINT64_MAX);
+            continue;
+        }
+        uint64_t index = field->selection.first_index;
+        CHECK(index >= tree.entries[die].first_attribute);
+        CHECK(index - tree.entries[die].first_attribute < tree.entries[die].attribute_count);
+        const TbSymbolDieAttribute_t *source = &tree.attributes[index];
+        CHECK(field->selection.record_offset == view.record_offset);
+        CHECK(field->selection.first_offset == source->offset);
+        CHECK(field->attribute.offset == source->offset && field->attribute.name == source->name);
+        CHECK(field->attribute.value.form == source->value.form);
+        CHECK(field->attribute.value.bits == source->value.bits);
+        CHECK(field->attribute.value.payload_offset == source->value.payload_offset);
+        CHECK(field->attribute.value.payload_bytes == source->value.payload_bytes);
+    }
+    if (view.declaration.present && view.declaration.value)
+        ++*declarations;
+    CHECK(view.kind <= TB_SYMBOL_ENTITY_INLINE_INSTANCE);
+    return view.kind;
+}
+
 
 static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSelection_t selection,
                                 uint64_t abbreviation_section, StringSections_t string_sections)
@@ -135,6 +181,8 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
     uint64_t dependency_count = 0;
     uint64_t string_count = 0;
     uint64_t indexed_count = 0;
+    uint64_t entity_kinds[4] = {0};
+    uint64_t declarations = 0;
     for (uint64_t i = 0; i < view.count; ++i) {
         const TbSymbolUnitEntry_t *entry = &view.entries[i];
         CHECK(entry->offset == cursor && entry->extent.total_bytes);
@@ -192,6 +240,7 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                 CHECK(record->first_attribute == attributes);
                 attributes += record->attribute_count;
                 CHECK(attributes <= tree.attribute_count);
+                ++entity_kinds[check_entity(tree, die, &declarations)];
                 for (uint64_t attr = 0; attr < record->attribute_count; ++attr) {
                     TbSymbolReferenceSelection_t selected = {
                         .unit_index      = i,
@@ -250,7 +299,11 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
         .references      = reference_count,
         .dependencies    = dependency_count,
         .strings         = string_count,
-        .indexed_strings = indexed_count
+        .indexed_strings = indexed_count,
+        .entity_kinds    = {
+            entity_kinds[0], entity_kinds[1], entity_kinds[2], entity_kinds[3]
+        },
+        .declarations    = declarations
     };
     tb_symbol_units_destroy(units);
     return counts;
@@ -401,6 +454,9 @@ static void check_file(const char *path)
                 unit_counts.dependencies += counts.dependencies;
                 unit_counts.strings += counts.strings;
                 unit_counts.indexed_strings += counts.indexed_strings;
+                for (size_t kind = 0; kind < 4; ++kind)
+                    unit_counts.entity_kinds[kind] += counts.entity_kinds[kind];
+                unit_counts.declarations += counts.declarations;
                 unit_counts.total += counts.total;
                 unit_counts.unsupported += counts.unsupported;
             }
@@ -502,6 +558,13 @@ static void check_file(const char *path)
            (unsigned long long)unit_counts.references, (unsigned long long)unit_counts.dependencies);
     printf("PASS native string dependencies: %llu validated strings, %llu indexed\n",
            (unsigned long long)unit_counts.strings, (unsigned long long)unit_counts.indexed_strings);
+    CHECK(unit_counts.entity_kinds[0] + unit_counts.entity_kinds[1] +
+          unit_counts.entity_kinds[2] + unit_counts.entity_kinds[3] == unit_counts.dies);
+    printf("PASS native entry facts: %llu functions, %llu data, %llu inline, %llu declaration flags\n",
+           (unsigned long long)unit_counts.entity_kinds[TB_SYMBOL_ENTITY_FUNCTION],
+           (unsigned long long)unit_counts.entity_kinds[TB_SYMBOL_ENTITY_DATA],
+           (unsigned long long)unit_counts.entity_kinds[TB_SYMBOL_ENTITY_INLINE_INSTANCE],
+           (unsigned long long)unit_counts.declarations);
     CHECK(!elf_end(reference));
     tb_symbol_sections_destroy(directory);
     tb_symbol_file_destroy(input);
