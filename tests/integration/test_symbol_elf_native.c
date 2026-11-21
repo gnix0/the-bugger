@@ -12,6 +12,7 @@
 #include "symbol/qualified.h"
 #include "symbol/inline_scope.h"
 #include "symbol/locality.h"
+#include "symbol/parameters.h"
 #include "symbol/references.h"
 #include "symbol/text.h"
 #include "symbol/elf.h"
@@ -34,6 +35,9 @@ static TbSymbolBudget_t budget;
 static TbSymbolAdmissionLedger_t *ledger;
 static TbSymbolStorage_t *storage;
 static uint64_t next_slot;
+static uint64_t parameter_queries;
+static uint64_t parameter_formals;
+static uint64_t parameter_markers;
 static uint64_t locality_nonlocal;
 static uint64_t locality_local;
 static uint64_t locality_unsupported;
@@ -219,6 +223,56 @@ static void check_constant_field(TbSymbolDiesView_t tree, TbSymbolAbbrevView_t s
 }
 
 
+static void check_parameters(TbSymbolDiesView_t tree, uint64_t selected)
+{
+    TbSymbolParameters_t parameters;
+    TbSymbolParameter_t  arena[64];
+    size_t               charge = sizeof(parameters) + sizeof(arena);
+    size_t               before = budget.used;
+    CHECK(tb_symbol_budget_reserve(&budget, charge));
+    CHECK(tb_symbol_parameters_init(&parameters, tree, selected, arena, 64) == TB_SYMBOL_PARAMETERS_PENDING);
+    TbSymbolParametersStatus_e status = TB_SYMBOL_PARAMETERS_PENDING;
+    for (unsigned step = 0; step < 100000 && status == TB_SYMBOL_PARAMETERS_PENDING; ++step)
+        status = tb_symbol_parameters_step(&parameters, 127);
+    CHECK(status == TB_SYMBOL_PARAMETERS_READY);
+    TbSymbolParametersView_t view;
+    CHECK(tb_symbol_parameters_view(&parameters, &view));
+    CHECK(view.selected.entry_index == selected);
+    size_t found = 0;
+    for (uint64_t index = 0; index < tree.count; ++index) {
+        const TbSymbolDieEntry_t *entry = &tree.entries[index];
+        if (entry->parent != selected || (entry->tag != 0x05 && entry->tag != 0x18))
+            continue;
+        CHECK(found < view.count);
+        const TbSymbolParameter_t *parameter = &view.parameters[found++];
+        CHECK(parameter->record.entry_index == index && parameter->record.record_offset == entry->offset);
+        CHECK(parameter->direct.tag == entry->tag);
+        CHECK(parameter->unspecified == (entry->tag == 0x18));
+        for (size_t field = 0; field < TB_SYMBOL_ENTITY_FIELDS; ++field) {
+            const TbSymbolEntityField_t *fact = &parameter->direct.fields[field];
+            CHECK(fact->selection.matches <= 1);
+            if (fact->selection.matches) {
+                CHECK(fact->selection.first_index >= entry->first_attribute);
+                CHECK(fact->selection.first_index - entry->first_attribute < entry->attribute_count);
+                const TbSymbolDieAttribute_t *raw = &tree.attributes[fact->selection.first_index];
+                CHECK(raw->name == fact->attribute.name && raw->offset == fact->attribute.offset);
+                CHECK(raw->value.form == fact->attribute.value.form);
+                CHECK(raw->value.bits == fact->attribute.value.bits);
+            }
+        }
+    }
+    CHECK(found == view.count);
+    ++parameter_queries;
+    for (size_t i = 0; i < view.count; ++i) {
+        if (view.parameters[i].unspecified)
+            ++parameter_markers;
+        else
+            ++parameter_formals;
+    }
+    CHECK(tb_symbol_budget_release(&budget, charge) && budget.used == before);
+}
+
+
 static TbSymbolEntityKind_e check_entity(TbSymbolDiesView_t tree, TbSymbolAbbrevView_t schema,
                                          uint64_t die, uint64_t *declarations)
 {
@@ -268,6 +322,8 @@ static TbSymbolEntityKind_e check_entity(TbSymbolDiesView_t tree, TbSymbolAbbrev
                           ? TB_SYMBOL_ROLE_INLINE_INSTANCE : TB_SYMBOL_ROLE_OTHER));
     }
     CHECK(view.kind <= TB_SYMBOL_ENTITY_INLINE_INSTANCE);
+    if (view.tag == 0x2e || view.tag == 0x1d || view.tag == 0x15)
+        check_parameters(tree, die);
     if (view.kind == TB_SYMBOL_ENTITY_FUNCTION)
         check_constant_field(tree, schema, die, TB_SYMBOL_CONSTANT_INLINE,
                              &view.fields[TB_SYMBOL_ENTITY_INLINE]);
@@ -1582,6 +1638,10 @@ int main(int argc, char **argv)
     printf("PASS native logical locality: %llu nonlocal, %llu local, %llu unsupported\n",
            (unsigned long long)locality_nonlocal, (unsigned long long)locality_local,
            (unsigned long long)locality_unsupported);
+    CHECK(parameter_queries && parameter_formals);
+    printf("PASS native direct parameters: %llu queries, %llu formal records, %llu unspecified markers\n",
+           (unsigned long long)parameter_queries, (unsigned long long)parameter_formals,
+           (unsigned long long)parameter_markers);
     CHECK(qualified_ready);
     printf("PASS native qualified recipes: %llu ready, %llu unnamed, %llu unavailable profiles\n",
            (unsigned long long)qualified_ready, (unsigned long long)qualified_unnamed,

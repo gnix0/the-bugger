@@ -3591,3 +3591,26 @@ locality with an independent fixed-point calculation over the completed graph.
 It requires both local and nonlocal results, reports unsupported profiles
 separately and retains the existing 4 MiB construction allowance and assertions.
 These are metadata checks, without location, runtime, target-access or F07 claims.
+
+
+## Ordered direct parameters (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-parameters CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-parameters test-symbol-elf-native
+```
+
+Authored tree views cover ordered parameters interspersed with types, nested
+parameter exclusion, all supported callable tags, empty scopes, repeated
+unspecified markers, exact raw fields, duplicates and malformed flags. Capacity,
+count arithmetic, invalid requests, invalid parents and progress exhaustion
+expose no completed inventory. A 512-level nested scope scans iteratively;
+discard/restart is exercised at every successive step.
+
+The native harness independently scans complete decoded trees for each callable's
+immediate parameter records, checking order, physical coordinates and raw selected
+fields. It reports formal and unspecified-marker counts separately, preserves
+existing assertions and accounts the full cursor/arena within its unchanged
+4 MiB construction allowance. These tests do not establish inherited signature
+reconciliation, C prototype completeness, method qualifiers, runtime access or
+SE06/F07 acceptance.

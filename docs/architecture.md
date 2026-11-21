@@ -1240,6 +1240,39 @@ Signature rendering, concrete-inline details, frontend evidence and consumer
 acceptance remain separate work.
 
 
+### Ordered direct parameters (SE06, partial)
+
+`src/symbol/parameters.c` captures the immediate physical formal-parameter and
+unspecified-parameter records of a selected subprogram, subroutine type or
+concrete-inline record. Their decoded order is preserved. Interspersed type or
+other entries do not terminate the inventory; parameters belonging to nested
+scopes are excluded. Each result retains exact physical identity and complete
+direct entry facts, including raw type/specification/origin selections and flag
+provenance. Repeated unspecified-parameter markers remain distinct records;
+interpreting their validity as a source parameter list is separate work.
+
+Only a completed physical scope exposes an inventory. Capacity exhaustion,
+duplicate fields, malformed flags and invalid ancestry produce typed failures,
+with exact selected/current records and available field diagnostics. Invalid
+initialization or step requests preserve existing state. A zero-capacity arena
+can represent an empty scope; a required parameter then fails explicitly.
+
+The complete tree remains borrowed and unchanged through discard. Caller-owned
+state and full arena capacity require accounting, without a production default.
+Each step performs at most 256 bounded tree or direct-field actions. There is
+no allocation, I/O, recursion, discovery or target access; the outer job owns
+cancellation, revisions, interests and deadlines.
+
+Unrecognized child constructs still require signature-profile examination of
+the retained tree. Direct inventories do not merge declaration, abstract and
+concrete parameter lists. Missing direct types or flags can still require inherited interpretation.
+An empty child inventory alone does not establish an empty C prototype. Type
+resolution, artificial/object parameter handling, method qualifiers, complete
+signature rendering and consumer acceptance remain separate work. Physical
+ordering and inline sharing follow [DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf),
+Sections 3.3.4 and 3.3.8.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

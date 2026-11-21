@@ -7497,3 +7497,55 @@ publication and consumer safety retain separate gates. The earlier intermittent
 keybinding snapshot failure remains [unresolved historical evidence](#language-and-inline-constants--2026-11-21).
 Fresh comparable STM32/ARM, ESP32/Xtensa and ESP32/RISC-V functional validation
 remains required before the subsystem merge and planned v0.3.0 release.
+
+
+## Ordered direct parameters — 2026-11-21
+
+Implemented the [direct parameter inventory](architecture.md#ordered-direct-parameters-se06-partial)
+over complete retained trees. It preserves each immediate formal or unspecified
+parameter's physical identity, order and direct field provenance, while excluding
+nested parameters. Interspersed unrelated entries do not end the scan. A completed
+direct scope is distinct from inherited signature completeness and known C
+prototype status. No allocation, I/O, recursion or target access is introduced.
+
+Authored tree views cover all supported callable tags, interspersed/nested
+entries, empty and zero-capacity scopes, repeated unspecified markers, direct
+type/reference facts, duplicate fields, malformed flags and invalid ancestry.
+Boundary cases include count/capacity arithmetic, invalid requests preserving
+state, failure getters preserving unavailable output and progress exhaustion
+without an active child. A 512-level nested scope scans iteratively. Restart at
+each successive step exposes a result only after complete scope capture.
+
+The native harness independently scans complete trees by immediate parent and
+checks every returned record's order, coordinates, kind and raw selections.
+Full cursor/arena charges are reserved and released within its unchanged 4 MiB
+construction allowance. Focused GCC composition reported 2,192 callable queries,
+4,505 formal records and 17 unspecified markers; Clang sanitizer composition
+reported 1,224 queries, 2,438 formal records and eight unspecified markers. These
+are per-query observations of different compiler-produced metadata, including
+the self-inspected harness, not equivalent-corpus comparisons or production sizing.
+
+Evidence under `build/se06-parameters-evidence-20261121/` retains environment,
+logs/statuses, input patch, copied compiled inputs and their SHA-256 manifest.
+The final snapshot contains 328 files: Makefile and all source/header/test inputs.
+
+| Check | Command and recorded result |
+|---|---|
+| Focused components/native composition | `make BUILD_DIR=build/se06-parameters-focused-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-parameters test-symbol-elf-native`; `focused`, exit 0. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-parameters-ci-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `test-ci`, exit 0. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-parameters-sanitize-20261121 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-parameters test-symbol-elf-native`; `sanitize`, exit 0. |
+| Static analysis | `make analyze`, 75 production source files; `analysis`, exit 0. |
+| Fortified test compilation | All `tests/unit/*.c`, `tests/integration/*.c` and `tests/support/*.c` object targets with `BUILD_DIR=build/se06-parameters-static-tests-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3`; `test-compilation`, exit 0. |
+
+Normal `make` passed (`normal-make`, exit 0). Documentation checks covered 229
+internal references without errors; whitespace checks passed. All 328 frozen
+compiled inputs remained unchanged through the final checks.
+
+These are local host checks, separate from hosted CI, physical qualification,
+maintainer acceptance and production sizing. Inherited parameter reconciliation,
+callable/type interpretation, supported complete/partial signatures and bounded
+concrete-inline details remain SE06 work. Source/ranges, frontend publication
+and consumers retain independent gates. The earlier intermittent keybinding
+snapshot failure remains [unresolved historical evidence](#language-and-inline-constants--2026-11-21).
+Fresh comparable STM32/ARM, ESP32/Xtensa and ESP32/RISC-V functional validation
+remains required before the subsystem merge and planned v0.3.0 release.
