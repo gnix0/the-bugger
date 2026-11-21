@@ -512,6 +512,29 @@ static void check_deep(void)
 }
 
 
+static void check_node_source(void)
+{
+    fixture(1);
+    TbSymbolGraphNode_t node;
+    TbSymbolGraph_t graph;
+    CHECK(tb_symbol_graph_init(&graph, root(), &node, 1) == TB_SYMBOL_GRAPH_SOURCE);
+    CHECK(run(&graph, 1) == TB_SYMBOL_GRAPH_READY);
+    CHECK(tb_symbol_graph_node_matches(&node, units, tree, 0));
+    CHECK(!tb_symbol_graph_node_matches(NULL, units, tree, 0));
+    CHECK(!tb_symbol_graph_node_matches(&node, units, tree, 1));
+    node.complete = false;
+    CHECK(!tb_symbol_graph_node_matches(&node, units, tree, 0));
+    node.complete = true;
+    TbSymbolDiesView_t wrong = tree;
+    ++wrong.abbrev_offset;
+    CHECK(!tb_symbol_graph_node_matches(&node, units, wrong, 0));
+    wrong = tree;
+    ++wrong.backing.key.inode;
+    CHECK(!tb_symbol_graph_node_matches(&node, units, wrong, 0));
+    CHECK(tb_symbol_graph_node_matches(&node, units, tree, 0));
+}
+
+
 int main(void)
 {
     check_diamond();
@@ -523,6 +546,7 @@ int main(void)
     check_namespace();
     check_cross_unit();
     check_deep();
+    check_node_source();
     puts("PASS bounded physical relationship traversal, shared paths, cycles and failed-prefix isolation");
     return 0;
 }

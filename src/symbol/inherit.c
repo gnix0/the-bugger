@@ -92,49 +92,6 @@ bool tb_symbol_inherit_need(const TbSymbolInherit_t *inherit, TbSymbolInheritNee
 }
 
 
-static bool source_context(const TbSymbolGraphNode_t *node, TbSymbolUnitsView_t units,
-                           TbSymbolDiesView_t tree, uint64_t unit_index)
-{
-    if (!units.entries || unit_index >= units.count || !units.entries[unit_index].header_available ||
-        units.entries[unit_index].offset != node->record.unit_offset ||
-        units.entries[unit_index].header.version != node->context.version ||
-        units.section_index != node->record.section_index ||
-        units.backing.key.device != node->record.backing.key.device ||
-        units.backing.key.inode != node->record.backing.key.inode ||
-        units.backing.bytes != node->record.backing.bytes || !tree.entries ||
-        node->record.entry_index >= tree.count || tree.kind != node->context.unit_kind ||
-        tree.abbrev_section != node->context.abbrev_section ||
-        tree.abbrev_offset != node->context.abbrev_offset) {
-        return false;
-    }
-    /* DWARF 4 info headers defer compilation/partial distinction to the root DIE. */
-    TbSymbolDwarfUnitKind_e kind = units.entries[unit_index].header.kind;
-    if (kind != node->context.unit_kind &&
-        !(units.entries[unit_index].header.version == 4 && kind == TB_SYMBOL_DWARF_COMPILE_OR_PARTIAL &&
-          (node->context.unit_kind == TB_SYMBOL_DWARF_COMPILE ||
-           node->context.unit_kind == TB_SYMBOL_DWARF_PARTIAL))) {
-        return false;
-    }
-    TbSymbolReferenceTarget_t target = {
-        .backing       = tree.backing,
-        .section_index = tree.section_index,
-        .unit_offset   = tree.unit_offset,
-        .record_offset = tree.entries[node->record.entry_index].offset,
-        .entry_index   = node->record.entry_index
-    };
-    if (!same_record(node->record, target))
-        return false;
-    const TbSymbolDieEntry_t *entry = &tree.entries[node->record.entry_index];
-    if (entry->tag != node->context.tag ||
-        (entry->parent != UINT64_MAX && entry->parent >= target.entry_index)) {
-        return false;
-    }
-    uint64_t parent = entry->parent == UINT64_MAX ? UINT64_MAX : tree.entries[entry->parent].offset;
-    uint64_t tag    = entry->parent == UINT64_MAX ? 0 : tree.entries[entry->parent].tag;
-    return parent == node->context.parent_record && tag == node->context.parent_tag;
-}
-
-
 TbSymbolInheritStatus_e tb_symbol_inherit_source(TbSymbolInherit_t *inherit,
                                                  const TbSymbolUnitsView_t *units,
                                                  const TbSymbolDiesView_t *tree, uint64_t unit_index)
@@ -148,7 +105,7 @@ TbSymbolInheritStatus_e tb_symbol_inherit_source(TbSymbolInherit_t *inherit,
         return inherit->status;
     }
     TbSymbolAttributes_t lookup;
-    if (!source_context(node, *units, *tree, unit_index) ||
+    if (!tb_symbol_graph_node_matches(node, *units, *tree, unit_index) ||
         tb_symbol_attributes_init(&lookup, *tree, (TbSymbolAttributeSelection_t){
             .die_index = node->record.entry_index,
             .name      = inherit->name

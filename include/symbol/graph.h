@@ -109,6 +109,11 @@ TbSymbolGraphStatus_e tb_symbol_graph_target(TbSymbolGraph_t *graph, const TbSym
  * records are never canonicalized. No inheritance, lexical-context equivalence,
  * relocation correspondence, runtime binding or action authority follows. */
 bool tb_symbol_graph_view(const TbSymbolGraph_t *graph, TbSymbolGraphView_t *view);
+/* Agreement with a completed node and complete source views, not fresh decoding.
+ * Checks physical coordinates and captured tag/version/unit/abbreviation/parent
+ * context, including DWARF 4 info header refinement. No allocation or I/O. */
+bool tb_symbol_graph_node_matches(const TbSymbolGraphNode_t *node, TbSymbolUnitsView_t units,
+                                  TbSymbolDiesView_t tree, uint64_t unit_index);
 /* Failed graph diagnostics only. Raw source/selection availability is explicit;
  * a source dependency failure has no selected outgoing field. Workspace can be
  * inspected diagnostically, but it is not a successfully validated graph. */

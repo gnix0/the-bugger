@@ -7001,3 +7001,78 @@ All corrected-tree checks above passed (exit 0), as did normal `make`
 unchanged. Local link checks covered 255 references with no errors; whitespace
 checks passed. These are local host results for this step, not hosted CI,
 physical validation or maintainer acceptance of SE06/F07.
+
+
+## Inherited DWARF text agreement — 2026-11-21
+
+Implemented the [composed inherited-text provider](architecture.md#inherited-dwarf-text-agreement-se06-partial)
+and bounded retained-string byte ordering. The provider keeps all physical owners
+when their full selected name/linkage values agree. It preserves source-unit,
+root, attribute, string and indexed-table dependencies in parent-owned local
+facts while the original captured scopes remain pinned. No canonical identity,
+qualified context or independent frontend evidence follows from byte agreement.
+
+Authored composition covers both byte orders, DWARF 4/5 and 32/64 formats,
+equal-valued distinct owners, disagreement, empty/absent attributes, duplicate
+fields, unsupported supplementary values, invalid supplies, missing dependencies
+and allocation failures throughout nested construction. A DWARF32 definition's
+cross-unit indexed name resolves through a DWARF64 owner's distinct base and
+contribution; its retained provenance identifies that owner rather than the
+selected root. Destruction at each successive interruption point returns the
+construction account to its baseline. Missing dependencies after an earlier
+candidate expose no completed prefix.
+
+String ordering checks complete values beyond presentation limits, including
+100,001-byte shared prefixes, high bytes, empty strings and alternating slices.
+Wrapped comparisons enforce the combined 64 KiB inspection checkpoint. Read
+faults cover EINTR, short transfers, EOF and EIO; descriptor checks reject O_PATH
+and missing close-on-exec without taking ownership. Allocation and exact-budget
+failures release all parent/reader storage. Prior foundational assertions remain.
+
+The first native run failed at an existing text-provider assertion
+(`names-native-composition`, exit 2). Added diagnostics confirmed resource
+exhaustion (`names-native-diagnostic`, exit 2): the self-inspected harness retained
+2,069,256 bytes of its 2,097,152-byte allowance before another text-reader
+allocation. Its linked decoder metadata grew with the new components. The
+explicit test-only allowance is now 4 MiB; production ceilings are unchanged,
+exact-budget unit tests remain, and every operation still releases its charges.
+Native composition then passed (`names-complete-focused`, exit 0), retaining the
+original assertions and both maintained C++ fixtures. This is harness capacity,
+not SE10 production sizing or an RSS guarantee.
+
+Verification artifacts are retained under `build/se06-evidence-20261121/`.
+The original frozen tree passed the fresh fortified baseline (`names-test-ci`),
+focused ASan/UBSan (`names-sanitize`) and complete static analysis
+(`names-analysis`, 67 production files), all exit 0. All 303 captured inputs in
+`names-tested-files.json` remained unchanged; `names-inputs/` retains their bytes.
+Development logs are also preserved under `build/se06-evidence-20261120/names-*`.
+
+During review, an added descriptor regression exposed a failure-classification
+defect: direct-string or indexed-table reader rejection could be reported as
+unsupported metadata (`names-reader-regression`, exit 1). The composed provider
+now distinguishes that operational failure from unsupported DWARF constructs.
+The corrected O_PATH and missing-close-on-exec cases preserve raw nested
+reader diagnostics and borrowed ownership. Partial-unit composition now also
+covers the DWARF 4 ambiguous-header refinement and DWARF 5 explicit partial kind.
+
+The final focused checks passed (`names-final-focused`, exit 0). The corrected
+303-input tree is captured independently in `names-final-tested-files.json` and
+`names-final-inputs/`, with environment and patch alongside. All final-tree
+checks below passed (exit 0), and all 303 captured inputs remained unchanged.
+
+| Final-tree check | Command / evidence |
+|---|---|
+| Focused components and native composition | `make BUILD_DIR=build/se06-names-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-graph test-symbol-inherit test-symbol-string-order test-symbol-inherited-text test-symbol-elf-native`; `names-final-focused`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-names-final-ci-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `names-final-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-names-final-sanitize-20261121 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-graph test-symbol-inherit test-symbol-string-order test-symbol-inherited-text test-symbol-elf-native`; `names-final-sanitize`. |
+| Static analysis | `make analyze`, 67 production source files; `names-final-analysis`. |
+
+Normal `make` also passed (`names-final-normal-make`, exit 0). Final local link
+checks covered 209 internal references with no errors, and whitespace checks
+passed. These are local host results; hosted CI and physical qualification of
+this step have not been performed.
+
+The scope remains partial SE06: definition roles, qualified contexts/names,
+signatures, inline interpretation,
+frontend evidence/publication, production sizing and SE06/F07 acceptance remain
+outstanding. Local host checks do not establish hosted CI or physical validation.

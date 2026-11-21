@@ -933,6 +933,51 @@ lexical contexts, signatures or usable locations. Its borrowed results do not
 establish independent frontend evidence, runtime bindings or action authority.
 
 
+### Inherited DWARF text agreement (SE06, partial)
+
+`src/symbol/inherited_text.c` composes physical owner selection with the retained
+text provider for standard `DW_AT_name` and `DW_AT_linkage_name`. Each selected
+owner must have a supported string-class value. The provider validates its full
+attribute scope, string bytes and, when indexed, the owning unit's root base and
+string-offset contribution. Source supply must match the graph's captured
+physical coordinates and unit/abbreviation/parent context. A cross-unit owner
+uses its own format and table base, including mixed DWARF32/DWARF64 artifacts.
+
+Multiple physical owners succeed only when their complete byte sequences agree.
+All owners and their exact selected attributes remain in the result; the first
+is a value representative, not a canonical definition. Equal names do not merge
+records or prove equal lexical contexts. Empty names remain distinct from absent
+attributes. Duplicate attributes, disagreeing values, malformed strings and
+missing dependencies expose no successful prefix. Supplementary strings remain
+unsupported; a direct unsupported value never falls back to another owner.
+Rejected backing readers are operational failures with nested diagnostics, not
+unsupported metadata coverage.
+
+`src/symbol/string_order.c` compares two fully validated retained strings in
+unsigned byte order without locale conversion, normalization, hashing or summary
+truncation. It uses two bounded readers and examines at most 64 KiB across both
+operands per comparison step. Each reader step performs at most one filesystem
+call. Empty strings still require descriptor validation and comparison through
+the terminating byte. Invalid step arguments preserve the pending operation;
+EOF, changed backing, descriptor and read failures remain explicit.
+
+The composed provider owns checked construction storage for its state, owner
+workspace and exact fact array, plus at most one text decoder or byte comparator.
+A completed child claim is copied into a pointer-free local fact before its
+reconstructible decoder scratch is released. The parent retains the graph,
+directory, frozen descriptor lease and **every supplied source view** through
+destruction; those borrowed scopes remain independently pinned and accounted.
+Facts include their owning unit, root coordinates, selected attribute and text
+validation dependencies. They cannot outlive the parent as independent evidence.
+Destruction releases all owned allocations without traversing the owner array.
+
+The outer job still owns request/consumer identities, captured revisions,
+cancellation and monotonic deadlines. This pull interface performs no discovery,
+constructor I/O or debugger dispatch. It establishes simple-name/linkage-value
+agreement only. Qualified context, definition roles, signatures, inline semantics,
+frontend evidence/publication and runtime eligibility require subsequent work.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

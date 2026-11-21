@@ -3320,3 +3320,46 @@ These checks do not establish agreement between distinct owners, semantic
 flag/location inheritance, qualified names/signatures, native line tables,
 production capacity/latency, independent frontend evidence, SE06/F07 acceptance
 or physical qualification. No debugger operation is introduced.
+
+
+## Inherited DWARF text agreement (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-inherited-text CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-graph test-symbol-inherit test-symbol-string-order \
+  test-symbol-inherited-text test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Byte-order tests use protected read-only retained
+files and complete section/string providers. They cover equal values, different
+lengths, empty strings, unsigned non-UTF-8 bytes and 100,001-byte common prefixes.
+Changing slices, interrupted/short reads, EOF, I/O errors, descriptor rejection
+and allocation/exact-budget failures retain explicit outcomes and ownership.
+The comparison harness checks a maximum of 32 KiB per operand per comparison
+and at most one read syscall per step.
+
+Composed tests cover DWARF 4/5, DWARF32/64 and both byte orders, compilation
+and partial units, distinct owners with equal full values, disagreement, duplicate
+attributes, absent/empty names, malformed value classes and unsupported
+supplementary strings. A DWARF32 definition inherits an indexed name from a
+DWARF64 unit with a different table base; the
+result must retain that owner's root, width, contribution and string offset.
+Wrong source supplies and invalid slices preserve pending state. Destruction at
+every successive interruption point releases all owned storage; a missing source
+or offset-table dependency after an earlier candidate exposes no prefix.
+Allocation faults cover the parent, workspaces, facts and nested providers.
+Rejected descriptors during direct-string and indexed-table reads must report
+operational failure, preserving their nested reader reason and borrowed ownership.
+
+Native composition runs the complete resolver for both name fields over each
+completed graph and compares all retained physical owners with the decoded
+attributes. Earlier raw owner/reference/text and ELF/libelf checks remain. Both
+maintained C++ fixtures require indirect ownership. The native harness's explicit
+construction allowance is now 4 MiB because it also inspects the linked decoder
+implementation's debug metadata. It remains separately bounded and fully
+released; authored exact-budget failure tests are unchanged. This harness limit
+is not a production sizing decision or RSS guarantee.
+
+These checks establish neither qualified-name agreement nor definition/signature
+semantics, independent frontend evidence, production sizing, native line tables,
+SE06/F07 acceptance or physical qualification. No debugger operation is added.

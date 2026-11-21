@@ -5,6 +5,7 @@
 #include "symbol/relations.h"
 #include "symbol/graph.h"
 #include "symbol/inherit.h"
+#include "symbol/inherited_text.h"
 #include "symbol/references.h"
 #include "symbol/text.h"
 #include "symbol/elf.h"
@@ -78,6 +79,12 @@ static bool check_attribute_string(TbSymbolSectionsView_t directory, TbSymbolUni
     TbSymbolTextOutcome_e outcome = TB_SYMBOL_TEXT_PENDING;
     for (unsigned turn = 0; turn < 1000000 && outcome == TB_SYMBOL_TEXT_PENDING; ++turn)
         outcome = tb_symbol_text_step(text, 257);
+    if (outcome != TB_SYMBOL_TEXT_FOUND) {
+        TbSymbolTextFailure_t failure = tb_symbol_text_failure(text);
+        fprintf(stderr, "text outcome %u reason %u, budget %llu/%llu, unit %llu record %llu\n",
+                outcome, failure.reason, (unsigned long long)budget.used, (unsigned long long)budget.limit,
+                (unsigned long long)tree.unit_offset, (unsigned long long)die->offset);
+    }
     CHECK(outcome == TB_SYMBOL_TEXT_FOUND);
     TbSymbolTextView_t view;
     CHECK(tb_symbol_text_view(text, &view));
@@ -346,6 +353,52 @@ typedef struct {
     int                   descriptor;
 } InheritedScope_t;
 
+static void check_inherited_text(InheritedScope_t scope, TbSymbolGraphView_t graph,
+                                  uint64_t name, uint64_t expected_owners)
+{
+    uint64_t before = budget.used;
+    TbSymbolInheritedText_t *text = tb_symbol_inherited_text_create(scope.directory, graph,
+        (TbSymbolInheritedTextSelection_t){
+            .name                = name,
+            .string_section      = scope.strings.strings,
+            .line_string_section = scope.strings.line_strings,
+            .offset_section      = scope.strings.offsets,
+            .descriptor          = scope.descriptor
+        }, &budget);
+    CHECK(text);
+    TbSymbolInheritedTextStatus_e status = TB_SYMBOL_INHERITED_TEXT_PENDING;
+    for (unsigned turn = 0; turn < 1000000; ++turn) {
+        TbSymbolInheritedTextNeed_t need;
+        if (tb_symbol_inherited_text_need(text, &need)) {
+            CHECK(need.source.record.unit_offset == scope.tree.unit_offset);
+            CHECK(tb_symbol_inherited_text_source(text, &scope.units, &scope.tree, scope.unit_index) ==
+                  TB_SYMBOL_INHERITED_TEXT_PENDING);
+        }
+        status = tb_symbol_inherited_text_step(text, 257);
+        if (status != TB_SYMBOL_INHERITED_TEXT_PENDING && status != TB_SYMBOL_INHERITED_TEXT_SOURCE)
+            break;
+    }
+    CHECK(status == (expected_owners ? TB_SYMBOL_INHERITED_TEXT_FOUND : TB_SYMBOL_INHERITED_TEXT_ABSENT));
+    TbSymbolInheritedTextView_t view;
+    if (expected_owners) {
+        CHECK(tb_symbol_inherited_text_view(text, &view) && view.count == expected_owners);
+        CHECK(view.selected.record_offset == graph.nodes[0].record.record_offset);
+        for (size_t i = 0; i < view.count; ++i) {
+            CHECK(view.facts[i].node_index < graph.count);
+            CHECK(view.facts[i].text.source_record ==
+                  graph.nodes[view.facts[i].node_index].record.record_offset);
+            CHECK(view.facts[i].text.attribute.name == name);
+            CHECK(view.facts[i].unit.offset == scope.tree.unit_offset);
+            CHECK(view.facts[i].text.text.bytes == view.facts[0].text.text.bytes);
+        }
+    } else {
+        CHECK(!tb_symbol_inherited_text_view(text, &view));
+    }
+    tb_symbol_inherited_text_destroy(text);
+    CHECK(budget.used == before);
+}
+
+
 static void check_inherited(InheritedScope_t scope, TbSymbolGraphView_t graph,
                              TbSymbolInheritSlot_t *slots, UnitCounts_t *counts)
 {
@@ -402,6 +455,8 @@ static void check_inherited(InheritedScope_t scope, TbSymbolGraphView_t graph,
                 ++counts->inherited_indirect;
         }
         CHECK(owners == result.owner_count);
+        if (names[field] == 0x03 || names[field] == 0x6e)
+            check_inherited_text(scope, graph, names[field], owners);
         ++counts->inherited_queries;
         counts->inherited_owners += owners;
         if (owners > 1)
@@ -916,7 +971,9 @@ int main(int argc, char **argv)
     CHECK(mkdtemp(directory));
     char pool[256];
     CHECK(snprintf(pool, sizeof(pool), "%s/pool", directory) > 0);
-    CHECK(tb_symbol_budget_init(&budget, 2 * 1024 * 1024));
+    /* The self-inspected harness includes every linked decoder's debug metadata.
+     * Keep its construction allowance explicit and separate from production sizing. */
+    CHECK(tb_symbol_budget_init(&budget, 4 * 1024 * 1024));
     ledger = tb_symbol_admission_create(TB_SYMBOL_FILE_BYTES_DEFAULT, TB_SYMBOL_ADMISSION_BYTES_DEFAULT,
                                          &budget);
     storage = tb_symbol_storage_create(pool, NULL, &budget);
