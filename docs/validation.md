@@ -7189,3 +7189,76 @@ These are local host checks, separate from hosted CI, physical qualification and
 SE06/F07 acceptance. Qualified-name construction/agreement, definition roles,
 signatures, inline interpretation, frontend evidence/publication and production
 sizing remain unfinished. No debugger operation is added by this component.
+
+
+## Language and inline constants — 2026-11-21
+
+Implemented [direct constant interpretation](architecture.md#language-and-inline-constants-se06-partial)
+for unit-root language and subprogram inline attributes. Complete uniqueness
+precedes value interpretation. Fixed-width/LEB and direct/indirect implicit
+constants retain their original provenance, while missing fields, equal
+duplicates, malformed classes, unresolved schemas and wider unsupported values
+remain distinct outcomes. Language-family and inline-code helpers do not
+establish full qualified names, definition roles or emitted locations.
+
+The initial native composition rejected a compiler-generated direct implicit
+constant (`focused` and `diagnosed-focused`, exit 2). Its DIE correctly had no
+inline numeric payload; the value belonged to the abbreviation table. The new
+interpreter now requests the exact retained table and validates the owning code,
+tag, children flag and attribute position before adopting the separate value.
+The structural decoder and its zero-footprint representation were preserved.
+Corrected focused/native checks passed (`schema-focused`,
+`schema-negative-focused`, `indirect-focused` and `final-focused`, exit 0).
+
+Maintained cases cover endian/DWARF 4/5 framing, integer boundaries and signedness,
+wrong classes, missing/unknown values, late duplicates, direct schema ownership,
+wrong-table request preservation, explicit missing dependencies, negative/wider
+implicit constants and single-action traversal of 512 abbreviation entries.
+Zero-footprint duplicates sharing a byte offset remain distinct physical
+attributes. An indirect implicit operand is validated through the form decoder
+and remains separate from a direct schema value.
+
+Native composition checks every unit root's language and every subprogram's
+inline field against the actual decoded records and retained abbreviation table,
+including both DWARF 4/5 C++ fixtures. New cursor state uses the unchanged 4 MiB
+harness construction allowance; existing decoded arrays remain charged once.
+All earlier entry/reference/text/context/ELF assertions remain enforced.
+
+Language-code recognition was checked against the official
+[DWARF language registry](https://dwarfstd.org/languages.html) on November 21,
+2026; the inline interpretation follows
+[DWARF 5, sections 3.3.8 and 7.16](https://dwarfstd.org/doc/DWARF5.pdf).
+These identify a bounded interpretation profile, not general C++ semantics or
+universal producer/runtime compatibility.
+
+Evidence is under `build/se06-constants-evidence-20261121/`. Environment,
+`tested-files.json`, retained `inputs/`, patch and complete logs identify 312
+frozen source/header/test/build inputs. Sanitizers and production analysis passed
+(exit 0). The first complete baseline stopped at the existing tmux keybinding
+assertion in `tests/integration/test_keybinds_tui.c:70` (`test-ci`, exit 2): an
+expected action label was absent from the current terminal snapshot. Direct
+keybinding coverage had passed earlier in that run. The unchanged focused tmux
+suite passed in isolation (`keybinds-reproduction`, exit 0), as did an isolated
+copy adding diagnostics (`keybinds-diagnostic`, exit 0). The original failure is
+retained; its cause has not been established. Three further diagnostic runs also
+passed (`keybinds-observation-1..3`, exit 0), retaining the original assertion and
+adding observation only. No tracked test or application code changed during this
+investigation. The subsequent fresh complete baseline passed on the same frozen
+tree (`final-test-ci`, exit 0); all 312 inputs remained unchanged. The earlier
+intermittent failure remains an unresolved observation, not a diagnosed or fixed
+defect. Isolated passes did not substitute for the full rerun.
+
+| Check | Command / evidence |
+|---|---|
+| Focused components and native composition | `make BUILD_DIR=build/se06-constants-focused-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-constants test-symbol-elf-native`; `final-focused`, exit 0. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-constants-final-ci-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `final-test-ci`, exit 0. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-constants-sanitize-20261121 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-constants test-symbol-elf-native`; `sanitize`, exit 0. |
+| Static analysis | `make analyze`, 70 production source files; `analysis`, exit 0. |
+
+Normal `make` passed (`normal-make`, exit 0), and final checks covered 217
+internal references without errors. Whitespace checks passed.
+
+No target/debugger operation is added. These host checks do not establish hosted
+CI, physical qualification, production sizing or SE06/F07 acceptance. Full
+qualified naming, definition roles, signatures, inline-instance interpretation
+and consumer integration remain unfinished.

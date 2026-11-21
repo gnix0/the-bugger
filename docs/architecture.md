@@ -1046,6 +1046,44 @@ construction, signatures, inline interpretation, frontend evidence ownership and
 runtime authorization remain separate work.
 
 
+### Language and inline constants (SE06, partial)
+
+`src/symbol/constants.c` interprets a unique direct `DW_AT_language` on a
+compilation/partial/type-unit root or `DW_AT_inline` on a subprogram. The result
+retains the physical attribute selection, original form and abbreviation context
+alongside a nonnegative 64-bit value. Missing fields remain absent; a zero value
+is present. Equal duplicate values remain conflicts, including zero-byte
+attributes that share a DIE byte offset but occupy distinct attribute positions.
+
+Supported numeric encodings are `data1/2/4/8`, `udata`, nonnegative `sdata` and
+`implicit_const`. A direct implicit constant requests the exact retained
+abbreviation table explicitly. Bounded entry lookup validates the DIE's code,
+tag, children flag and attribute position before using that table's signed
+constant. The result preserves its separate encoded span and the unchanged
+zero-byte DIE form. An indirect implicit constant uses the validated inline
+operand instead. Framed `data16` and abbreviation constants outside the retained
+signed 64-bit interpretation remain unsupported; negative values and wrong
+attribute classes fail rather than being converted or truncated.
+
+The language helper recognizes the explicitly listed C and C++ codes from the
+[DWARF language registry](https://dwarfstd.org/languages.html), including later
+registered codes used with DWARF 4/5. Other codes retain their raw value without
+acquiring a C++ profile. The inline helper accepts the four standard codes from
+[DWARF 5, sections 3.3.8 and 7.16](https://dwarfstd.org/doc/DWARF5.pdf).
+Code 2, declared but not inlined, is among the nonzero abstract-root markers;
+it is not a standalone-code or concrete-instance claim. Full definition roles,
+inline descendants, signatures and qualified naming remain separate work.
+
+Each step scans at most 256 attributes or abbreviation entries. Complete
+uniqueness precedes interpretation; schema requests publish no value. Wrong
+schema context preserves the request, while an explicit missing schema produces
+a dependency failure. Caller-owned state and all borrowed tree/schema capacities
+are accounted and pinned through discard. The cursor performs no allocation,
+I/O, discovery or inheritance. Outer jobs retain captured revisions, cancellation
+and absolute deadlines. No frontend evidence, runtime mapping or access authority
+is established.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

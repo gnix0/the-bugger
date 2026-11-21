@@ -3443,3 +3443,34 @@ is not a production sizing decision or RSS bound.
 
 These checks establish bounded context dependency construction, not complete
 qualified names, semantic equivalence, runtime eligibility or SE06/F07 acceptance.
+
+
+## Language and inline constants (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-constants CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-constants test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored cases cover supported numeric forms,
+zero/maximum/one-over boundaries, negative and inconsistent values, wrong
+classes, missing attributes, unknown codes and late equal duplicates. Framing
+composition covers DWARF 4/5, both byte orders, indirect fixed-width constants,
+unsigned/signed LEB operands and DWARF 5 indirect implicit constants.
+
+Direct implicit constants require exact abbreviation provenance. Tests reject
+wrong tables without consuming the request, distinguish explicit dependency
+failure, reject mismatched code/tag/children/attribute ownership and preserve
+unsupported wider spans. A 512-entry table runs in single-action slices. Equal
+zero-footprint attributes sharing a byte offset remain distinct duplicates.
+Raw DIE attributes are preserved alongside the separately adopted schema value.
+Language-family recognition does not grant a complete semantic profile, and the
+four inline codes do not prove emitted locations or definition roles.
+
+Native composition interprets each decoded unit root's language and each
+subprogram's direct inline attribute, comparing selection and raw/schema value
+coordinates with the original decoded records. New cursor state is charged to
+the existing 4 MiB harness construction allowance; retained abbreviation arrays
+are already charged by their decoder. Prior entry/reference/text/context/ELF
+assertions and both DWARF 4/5 C++ fixtures remain enforced. No target or debugger
+operation is introduced, and production sizing/SE06/F07 acceptance remain open.

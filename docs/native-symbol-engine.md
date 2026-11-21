@@ -23,7 +23,8 @@ and [bounded relationship traversal](architecture.md#bounded-dwarf-relationship-
 followed by [inherited attribute owners](architecture.md#inherited-dwarf-attribute-owners-se06-partial),
 [full inherited text agreement](architecture.md#inherited-dwarf-text-agreement-se06-partial)
 and [declaration-context anchors](architecture.md#declaration-context-anchors-se06-partial)
-with [recursive dependency validation](architecture.md#recursive-declaration-context-graph-se06-partial).
+with [recursive dependency validation](architecture.md#recursive-declaration-context-graph-se06-partial)
+and [language/inline constants](architecture.md#language-and-inline-constants-se06-partial).
 Artifact Open workflow, qualified acquisition profiles, complete semantic
 interpretation and consumers remain unfinished. Unknown helper operations return
 Unsupported.

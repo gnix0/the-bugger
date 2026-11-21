@@ -8,6 +8,7 @@
 #include "symbol/inherited_text.h"
 #include "symbol/context.h"
 #include "symbol/scope_graph.h"
+#include "symbol/constants.h"
 #include "symbol/references.h"
 #include "symbol/text.h"
 #include "symbol/elf.h"
@@ -146,7 +147,68 @@ typedef struct {
     uint64_t dwarf5_units;
 } UnitCounts_t;
 
-static TbSymbolEntityKind_e check_entity(TbSymbolDiesView_t tree, uint64_t die, uint64_t *declarations)
+static void check_constant_field(TbSymbolDiesView_t tree, TbSymbolAbbrevView_t schema,
+                                 uint64_t die, TbSymbolConstantField_e field,
+                                 const TbSymbolEntityField_t *expected)
+{
+    TbSymbolConstant_t constant;
+    CHECK(tb_symbol_budget_reserve(&budget, sizeof(constant)));
+    CHECK(tb_symbol_constant_init(&constant, tree, die, field) == TB_SYMBOL_CONSTANT_PENDING);
+    TbSymbolConstantStatus_e status = TB_SYMBOL_CONSTANT_PENDING;
+    for (unsigned turn = 0; turn < 1000000 &&
+                            (status == TB_SYMBOL_CONSTANT_PENDING || status == TB_SYMBOL_CONSTANT_SCHEMA);
+         ++turn) {
+        if (status == TB_SYMBOL_CONSTANT_SCHEMA)
+            CHECK(tb_symbol_constant_schema(&constant, &schema) == TB_SYMBOL_CONSTANT_PENDING);
+        status = tb_symbol_constant_step(&constant, 7);
+    }
+    if (status != TB_SYMBOL_CONSTANT_FOUND && status != TB_SYMBOL_CONSTANT_ABSENT) {
+        fprintf(stderr, "native constant status %u, unit %llu, record %llu, field %u, form %llu, "
+                        "numeric %u, signed %u, bits %llu\n",
+                (unsigned)status, (unsigned long long)tree.unit_offset,
+                (unsigned long long)tree.entries[die].offset, (unsigned)field,
+                (unsigned long long)constant.view.attribute.value.form,
+                (unsigned)constant.view.attribute.value.numeric,
+                (unsigned)constant.view.attribute.value.is_signed,
+                (unsigned long long)constant.view.attribute.value.bits);
+    }
+    CHECK(status == TB_SYMBOL_CONSTANT_FOUND || status == TB_SYMBOL_CONSTANT_ABSENT);
+    TbSymbolAttributeResult_t selection;
+    CHECK(tb_symbol_constant_selection(&constant, &selection));
+    CHECK(selection.record_offset == tree.entries[die].offset && selection.name == (uint64_t)field);
+    if (expected) {
+        CHECK(selection.matches == expected->selection.matches);
+        CHECK(selection.first_offset == expected->selection.first_offset);
+    }
+    if (status == TB_SYMBOL_CONSTANT_FOUND) {
+        TbSymbolConstantView_t view;
+        CHECK(tb_symbol_constant_view(&constant, &view));
+        CHECK(view.selection.matches == 1 && view.selection.first_index < tree.attribute_count);
+        const TbSymbolDieAttribute_t *source = &tree.attributes[view.selection.first_index];
+        CHECK(view.attribute.offset == source->offset);
+        if (view.from_abbreviation) {
+            CHECK(view.value == (uint64_t)schema.attributes[source->schema_attribute].implicit_value);
+            CHECK(!view.attribute.value.numeric && !view.attribute.value.bytes);
+            CHECK(view.abbreviation.offset == schema.attributes[source->schema_attribute].offset);
+        } else {
+            CHECK(view.value == source->value.bits);
+        }
+        CHECK(view.attribute.value.form == source->value.form);
+        CHECK(view.abbrev_section == tree.abbrev_section && view.abbrev_offset == tree.abbrev_offset);
+        if (field == TB_SYMBOL_CONSTANT_INLINE) {
+            TbSymbolInlineKind_e kind;
+            CHECK(tb_symbol_inline_kind(view.value, &kind));
+            CHECK((uint64_t)kind == view.value);
+        }
+    } else {
+        CHECK(selection.matches == 0 && selection.first_index == UINT64_MAX);
+    }
+    CHECK(tb_symbol_budget_release(&budget, sizeof(constant)));
+}
+
+
+static TbSymbolEntityKind_e check_entity(TbSymbolDiesView_t tree, TbSymbolAbbrevView_t schema,
+                                         uint64_t die, uint64_t *declarations)
 {
     TbSymbolEntity_t entity;
     CHECK(tb_symbol_entity_init(&entity, tree, die) == TB_SYMBOL_ENTITY_PENDING);
@@ -185,6 +247,11 @@ static TbSymbolEntityKind_e check_entity(TbSymbolDiesView_t tree, uint64_t die, 
     if (view.declaration.present && view.declaration.value)
         ++*declarations;
     CHECK(view.kind <= TB_SYMBOL_ENTITY_INLINE_INSTANCE);
+    if (view.kind == TB_SYMBOL_ENTITY_FUNCTION)
+        check_constant_field(tree, schema, die, TB_SYMBOL_CONSTANT_INLINE,
+                             &view.fields[TB_SYMBOL_ENTITY_INLINE]);
+    if (die == 0 && (view.tag == 0x11 || view.tag == 0x3c || view.tag == 0x41))
+        check_constant_field(tree, schema, die, TB_SYMBOL_CONSTANT_LANGUAGE, NULL);
     return view.kind;
 }
 
@@ -722,7 +789,7 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                 CHECK(record->first_attribute == attributes);
                 attributes += record->attribute_count;
                 CHECK(attributes <= tree.attribute_count);
-                TbSymbolEntityKind_e kind = check_entity(tree, die, &declarations);
+                TbSymbolEntityKind_e kind = check_entity(tree, table, die, &declarations);
                 ++entity_kinds[kind];
                 if (kind != TB_SYMBOL_ENTITY_OTHER || record->tag == 0x39) {
                     TbSymbolGraphView_t completed;
