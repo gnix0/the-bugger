@@ -6,6 +6,7 @@
 #include "symbol/graph.h"
 #include "symbol/inherit.h"
 #include "symbol/inherited_text.h"
+#include "symbol/context.h"
 #include "symbol/references.h"
 #include "symbol/text.h"
 #include "symbol/elf.h"
@@ -465,6 +466,57 @@ static void check_inherited(InheritedScope_t scope, TbSymbolGraphView_t graph,
 }
 
 
+static void check_context_anchors(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree,
+                                   uint64_t unit_index, TbSymbolGraphView_t graph)
+{
+    TbSymbolContext_t context;
+    TbSymbolContextAnchor_t anchors[64];
+    size_t charge = sizeof(context) + sizeof(anchors);
+    CHECK(tb_symbol_budget_reserve(&budget, charge));
+    CHECK(tb_symbol_context_init(&context, graph, anchors, 64) == TB_SYMBOL_CONTEXT_PENDING);
+    TbSymbolContextStatus_e status = TB_SYMBOL_CONTEXT_PENDING;
+    for (unsigned turn = 0; turn < 100000; ++turn) {
+        TbSymbolGraphNeed_t need;
+        if (tb_symbol_context_need(&context, &need)) {
+            CHECK(need.record.unit_offset == tree.unit_offset);
+            CHECK(tb_symbol_context_source(&context, &units, &tree, unit_index) == TB_SYMBOL_CONTEXT_PENDING);
+        }
+        status = tb_symbol_context_step(&context, 31);
+        if (status != TB_SYMBOL_CONTEXT_PENDING && status != TB_SYMBOL_CONTEXT_SOURCE)
+            break;
+    }
+    CHECK(status == TB_SYMBOL_CONTEXT_READY);
+    TbSymbolContextView_t view;
+    CHECK(tb_symbol_context_view(&context, &view));
+    size_t terminal_count = 0;
+    for (size_t i = 0; i < graph.count; ++i) {
+        if (!graph.nodes[i].present)
+            ++terminal_count;
+    }
+    CHECK(view.count == terminal_count && view.selected.record_offset == graph.nodes[0].record.record_offset);
+    for (size_t i = 0; i < view.count; ++i) {
+        const TbSymbolContextAnchor_t *anchor = &view.anchors[i];
+        CHECK(anchor->node_index < graph.count);
+        CHECK(!graph.nodes[anchor->node_index].present);
+        CHECK(anchor->record.record_offset == graph.nodes[anchor->node_index].record.record_offset);
+        CHECK(anchor->unit.offset == units.entries[unit_index].offset);
+        CHECK(anchor->unit_root.record_offset == tree.entries[0].offset);
+        uint64_t parent = tree.entries[anchor->record.entry_index].parent;
+        if (parent == UINT64_MAX) {
+            CHECK(anchor->kind == TB_SYMBOL_CONTEXT_UNIT_ROOT && anchor->record.entry_index == 0);
+        } else {
+            CHECK(anchor->kind == (parent ? TB_SYMBOL_CONTEXT_LEXICAL_PARENT
+                                          : TB_SYMBOL_CONTEXT_UNIT_PARENT));
+            CHECK(anchor->parent.entry_index == parent &&
+                  anchor->parent.record_offset == tree.entries[parent].offset);
+            CHECK(anchor->parent_context.tag == tree.entries[parent].tag);
+            CHECK(anchor->parent_context.version == units.entries[unit_index].header.version);
+        }
+    }
+    CHECK(tb_symbol_budget_release(&budget, charge));
+}
+
+
 static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSelection_t selection,
                                 uint64_t abbreviation_section, StringSections_t string_sections)
 {
@@ -571,6 +623,7 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                             .unit_index = i,
                             .descriptor = selection.descriptor
                         }, completed, inherited_slots, &relations);
+                        check_context_anchors(view, tree, i, completed);
                     }
                 }
                 for (uint64_t attr = 0; attr < record->attribute_count; ++attr) {

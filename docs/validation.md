@@ -7076,3 +7076,60 @@ The scope remains partial SE06: definition roles, qualified contexts/names,
 signatures, inline interpretation,
 frontend evidence/publication, production sizing and SE06/F07 acceptance remain
 outstanding. Local host checks do not establish hosted CI or physical validation.
+
+
+## Declaration-context anchors — 2026-11-21
+
+Implemented the [declaration-context cursor](architecture.md#declaration-context-anchors-se06-partial)
+with separate physical anchors for each terminal specification/origin/namespace
+path. Direct name ownership does not select declaration context. Parent and
+unit-root coordinates, unit format/version and abbreviation context remain
+explicit; shared terminals are reused without merging distinct records.
+
+Authored cases cover out-of-line method/specification context, inline callee
+versus caller scope, namespace extensions, distinct terminals sharing a parent,
+shared diamonds, unit boundaries, cross-unit DWARF32/DWARF64 provenance and a
+512-record graph with 256 anchors in single-action slices. Negative cases retain
+invalid requests, reject incomplete graphs/unknown relation bits, bound progress
+and expose no result after a missing source dependency following an earlier
+anchor. A lexical parent returning to an earlier relation record remains visible:
+recursive mixed-cycle validation belongs to qualified-context construction.
+
+Native composition checks every completed graph's anchors against actual decoded
+DIE parents and unit roots, retaining prior name/reference/ELF assertions and
+both maintained DWARF 4/5 C++ fixtures. Cursor and 64-slot workspace storage are
+reserved and released within the unchanged 4 MiB test allowance. No production
+sizing or runtime eligibility is established.
+
+Preflight static analysis identified adjacent convertible integer parameters and
+a signed shift-count operand. The parent-context helper now takes its unit
+explicitly, and mask construction uses unsigned operands. The diagnostics remain
+in `preflight-analysis` and `typed-analysis`; corrected `unsigned-analysis`
+passed (exit 0), without new suppressions. Focused component/native composition
+passed (`verified-focused`, exit 0).
+
+Evidence is under `build/se06-context-evidence-20261121/`. The environment,
+`tested-files.json`, retained `inputs/` and patch identify 306 frozen
+source/header/test/build inputs. All 306 remained unchanged throughout the
+complete fortified baseline, sanitizer and production-analysis checks below;
+all passed (exit 0). Final review wrapped one expression; preprocessed tokens and
+the resulting debug-stripped object match the actual fortified baseline object
+(`format-equivalence`). Post-review focused component/native checks also passed.
+`final-files.json` identifies that final source tree.
+
+| Check | Command / evidence |
+|---|---|
+| Focused component and native composition | `make BUILD_DIR=build/se06-context-focused-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-context test-symbol-elf-native`; `verified-focused` and `post-review-focused`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-context-ci-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-context-sanitize-20261121 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-context test-symbol-elf-native`; `sanitize`. |
+| Static analysis | `make analyze`, 68 production source files; `analysis`. |
+
+Normal `make` passed (`normal-make`, exit 0); final checks covered 212 internal
+references with no errors, and whitespace checks passed. These host results are
+separate from hosted CI, physical validation and SE06/F07 acceptance.
+
+The planned v0.3.0 merge/release gate now requires the same fresh, applicable
+functional validation on STM32/ARM, ESP32/Xtensa and ESP32/RISC-V, including
+previously validated functionality and native regression. This records the
+maintainer's acceptance requirement, not performed hardware evidence. Physical
+results, subsystem/consumer acceptance, merge and release remain pending.

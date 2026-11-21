@@ -1807,6 +1807,21 @@ for resolution before release acceptance. Tests are not waived because a release
 only changes UI. QEMU test infrastructure does not add simulator support to the
 product. Do not claim unsupported target-specific features or untested boards.
 
+### Native Symbol Engine and v0.3.0
+
+Before the subsystem merge and the planned v0.3.0 release, run the applicable
+matrix above on all three physical architectures: STM32/ARM, ESP32/Xtensa and
+ESP32/RISC-V, alongside native x86-64 regression. Use the same coverage and
+evidence standard for each. Recheck existing functionality as well as the new
+native-symbol consumers; historical feature acceptance does not waive fresh
+execution, inspection, deliberate editing, persistence, UI or lifecycle checks.
+
+Record results per function and architecture, including capability-specific
+exclusions and failures. A passing board cannot stand in for another board, and
+an unsupported capability must be distinguished from a failed supported one.
+Hardware results and merge/release acceptance remain pending until performed
+and reviewed; host tests and prior releases do not satisfy this gate.
+
 ## Post-release embedded validation
 
 Native fixtures remain a required, repeatable regression foundation;
@@ -3363,3 +3378,37 @@ is not a production sizing decision or RSS guarantee.
 These checks establish neither qualified-name agreement nor definition/signature
 semantics, independent frontend evidence, production sizing, native line tables,
 SE06/F07 acceptance or physical qualification. No debugger operation is added.
+
+
+## Declaration-context anchors (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-context CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-context test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored graphs cover an out-of-line method whose
+direct name owner differs from its declaration-context anchor, inline callee
+versus caller context, namespace extensions, shared terminals and distinct
+terminals with a common parent. Compilation, partial and type-unit boundaries
+cover DWARF 4/5, including DWARF 4's ambiguous info header. Cross-unit context
+retains a DWARF64 owner's parent/root instead of the DWARF32 selected unit.
+
+Single-action slices traverse a 512-record graph with 256 separate terminal
+anchors. Capacity failures and invalid arguments preserve previous state;
+incomplete graphs, unknown relationship bits and progress exhaustion fail
+explicitly. Wrong source/abbreviation/unit-header supplies preserve the pending
+request. A missing dependency after an earlier anchor exposes no completed
+prefix. A returning lexical parent demonstrates why pure relationship acyclicity
+does not prove recursive qualified-context acyclicity.
+
+Native composition runs the cursor over every completed graph and checks every
+terminal, parent and unit boundary against the actual decoded tree. The harness
+reserves/releases the cursor and its 64-slot stack workspace within its existing
+4 MiB test construction allowance. This does not select a production limit or
+establish RSS bounds. Earlier native inheritance, full text, reference and
+ELF/libelf assertions remain enforced.
+
+Full qualified-name construction/agreement, mixed dependency-cycle rejection,
+definition roles, signatures, inline interpretation, production sizing and
+SE06/F07 acceptance remain outstanding. No debugger request is introduced.

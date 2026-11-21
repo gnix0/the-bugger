@@ -978,6 +978,40 @@ agreement only. Qualified context, definition roles, signatures, inline semantic
 frontend evidence/publication and runtime eligibility require subsequent work.
 
 
+### Declaration-context anchors (SE06, partial)
+
+`src/symbol/context.c` selects one layer of declaration-context dependencies from
+a complete relationship graph. It follows the captured specification,
+abstract-origin and namespace-extension paths to their terminal records, then
+obtains each terminal's exact lexical parent from an explicitly supplied complete
+tree. This is independent of name ownership: a direct name on an out-of-line
+method does not discard its specification's class context, and an inline
+instance's caller is not automatically the callee's declaration scope.
+
+Each terminal retains its own physical record, parent, unit/root coordinates,
+version and abbreviation provenance. Distinct terminals remain distinct even
+when they have the same parent. A shared terminal occurs once; the original
+graph retains its incoming derivations. Compilation, partial and type-unit roots
+are explicit boundaries, so a unit's source filename need not become a qualifier.
+Cross-unit parents retain their actual unit and format.
+
+The cursor checks completeness across the captured graph before requesting source views.
+Missing dependencies and invalid graphs expose no successful prefix; invalid
+source supplies preserve the pending request. Unit-root shape and coordinates
+must agree with the selected unit header. Caller-owned state and at least
+`graph.count` anchor slots are accounted in full, including unused capacity.
+Steps perform at most 256 bounded actions, with no allocation, I/O, discovery,
+callbacks or recursion. The outer job retains cancellation, deadline and captured
+revision responsibilities. Production sizing remains part of SE10.
+
+These anchors do not establish a complete qualified name, scope equivalence,
+nonlocality or independent evidence. Recursive qualification must detect cycles
+that combine relationship and lexical-parent dependencies, interpret supported
+scope/language profiles and compare complete constructed values. An acyclic
+relationship graph can still lead back to an earlier record through a lexical
+parent; this layer preserves that dependency for the recursive consumer.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
