@@ -3565,3 +3565,29 @@ its original decoder assertions and construction allowance remain in place.
 
 These checks establish physical metadata ancestry, not definition/nonlocal roles,
 source ranges, runtime correspondence, target access or SE06/F07 acceptance.
+
+
+## Direct roles and logical locality (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-locality CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-roles test-symbol-locality test-symbol-entities test-symbol-elf-native
+```
+
+Role cases cover function/data declarations, absent and explicit-false flags,
+specification/origin references, concrete-inline and other tags, malformed flags
+and duplicates. Direct flag provenance remains available independently of role.
+
+Locality fixtures supply completed context graphs with every supported parent
+kind, anonymous transparent scopes, local classes, unsupported outer contexts
+behind local barriers, shared-parent diamonds and conflicting alternatives.
+A 512-level chain completes iteratively. Invalid identities, anchors, parents,
+cycles, capacity/size boundaries and invalid requests expose no successful result.
+Dropping and restarting at each successive step preserves borrowed sources;
+progress exhaustion before arena initialization retains safe diagnostics.
+
+The native harness composes actual relationship/context decoders and compares
+locality with an independent fixed-point calculation over the completed graph.
+It requires both local and nonlocal results, reports unsupported profiles
+separately and retains the existing 4 MiB construction allowance and assertions.
+These are metadata checks, without location, runtime, target-access or F07 claims.

@@ -157,3 +157,24 @@ bool tb_symbol_entity_failure(const TbSymbolEntity_t *entity, TbSymbolEntityFiel
     *selection = entity->view.fields[*field].selection;
     return true;
 }
+
+
+bool tb_symbol_entity_role(const TbSymbolEntity_t *entity, TbSymbolEntityRole_e *role)
+{
+    if (!entity || !entity->initialized || !role || entity->status != TB_SYMBOL_ENTITY_READY)
+        return false;
+    switch (entity->view.kind) {
+    case TB_SYMBOL_ENTITY_FUNCTION:
+    case TB_SYMBOL_ENTITY_DATA:
+        *role = entity->view.declaration.present && entity->view.declaration.value
+                    ? TB_SYMBOL_ROLE_DECLARATION : TB_SYMBOL_ROLE_DEFINITION;
+        break;
+    case TB_SYMBOL_ENTITY_INLINE_INSTANCE:
+        *role = TB_SYMBOL_ROLE_INLINE_INSTANCE;
+        break;
+    default:
+        *role = TB_SYMBOL_ROLE_OTHER;
+        break;
+    }
+    return true;
+}

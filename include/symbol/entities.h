@@ -11,6 +11,13 @@ typedef enum {
 } TbSymbolEntityKind_e;
 
 typedef enum {
+    TB_SYMBOL_ROLE_OTHER,
+    TB_SYMBOL_ROLE_DEFINITION,
+    TB_SYMBOL_ROLE_DECLARATION,
+    TB_SYMBOL_ROLE_INLINE_INSTANCE
+} TbSymbolEntityRole_e;
+
+typedef enum {
     TB_SYMBOL_ENTITY_NAME,
     TB_SYMBOL_ENTITY_LINKAGE,
     TB_SYMBOL_ENTITY_DECLARATION,
@@ -89,5 +96,10 @@ bool tb_symbol_entity_view(const TbSymbolEntity_t *entity, TbSymbolEntityView_t 
 /* Complete selected-field diagnostics only on CONFLICT/MALFORMED. */
 bool tb_symbol_entity_failure(const TbSymbolEntity_t *entity, TbSymbolEntityField_e *field,
                               TbSymbolAttributeResult_t *selection);
+
+/* Complete direct metadata only. Declaration is never inherited across a
+ * specification/origin reference. DEFINITION grants neither executable/storage
+ * existence nor location/action authority; inline instances remain separate. */
+bool tb_symbol_entity_role(const TbSymbolEntity_t *entity, TbSymbolEntityRole_e *role);
 
 #endif // THE_BUGGER_SYMBOL_ENTITIES_H

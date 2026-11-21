@@ -11,6 +11,7 @@
 #include "symbol/constants.h"
 #include "symbol/qualified.h"
 #include "symbol/inline_scope.h"
+#include "symbol/locality.h"
 #include "symbol/references.h"
 #include "symbol/text.h"
 #include "symbol/elf.h"
@@ -33,6 +34,9 @@ static TbSymbolBudget_t budget;
 static TbSymbolAdmissionLedger_t *ledger;
 static TbSymbolStorage_t *storage;
 static uint64_t next_slot;
+static uint64_t locality_nonlocal;
+static uint64_t locality_local;
+static uint64_t locality_unsupported;
 static uint64_t qualified_ready;
 static uint64_t qualified_unnamed;
 static uint64_t qualified_unavailable;
@@ -254,6 +258,15 @@ static TbSymbolEntityKind_e check_entity(TbSymbolDiesView_t tree, TbSymbolAbbrev
     }
     if (view.declaration.present && view.declaration.value)
         ++*declarations;
+    TbSymbolEntityRole_e role;
+    CHECK(tb_symbol_entity_role(&entity, &role));
+    if (view.kind == TB_SYMBOL_ENTITY_FUNCTION || view.kind == TB_SYMBOL_ENTITY_DATA) {
+        CHECK(role == (view.declaration.present && view.declaration.value
+                          ? TB_SYMBOL_ROLE_DECLARATION : TB_SYMBOL_ROLE_DEFINITION));
+    } else {
+        CHECK(role == (view.kind == TB_SYMBOL_ENTITY_INLINE_INSTANCE
+                          ? TB_SYMBOL_ROLE_INLINE_INSTANCE : TB_SYMBOL_ROLE_OTHER));
+    }
     CHECK(view.kind <= TB_SYMBOL_ENTITY_INLINE_INSTANCE);
     if (view.kind == TB_SYMBOL_ENTITY_FUNCTION)
         check_constant_field(tree, schema, die, TB_SYMBOL_CONSTANT_INLINE,
@@ -787,6 +800,90 @@ static void check_qualified_context(InheritedScope_t source, TbSymbolAbbrevView_
 }
 
 
+/* Independent fixed-point oracle: resolve every complete node from its parent
+ * classifications rather than following the production traversal stack. Unknown
+ * outer contexts cannot erase a known local barrier. */
+static unsigned locality_oracle(TbSymbolScopeView_t scope, unsigned values[64])
+{
+    CHECK(scope.node_count <= 64);
+    memset(values, 0, 64 * sizeof(*values));
+    for (size_t round = 0; round <= scope.node_count; ++round) {
+        for (size_t i = 0; i < scope.node_count; ++i) {
+            if (values[i])
+                continue;
+            const TbSymbolScopeNode_t *node = &scope.nodes[i];
+            unsigned agreed = 0;
+            bool pending = false;
+            for (size_t j = 0; j < node->contexts.count; ++j) {
+                const TbSymbolScopeEdge_t *edge = &scope.edges[node->first_edge + j];
+                unsigned value = 1;
+                if (edge->target_node != SIZE_MAX) {
+                    CHECK(edge->target_node < scope.node_count);
+                    uint64_t tag = scope.nodes[edge->target_node].context.tag;
+                    if (tag == 0x2e || tag == 0x1d || tag == 0x0b || tag == 0x25 || tag == 0x32)
+                        value = 2;
+                    else if (tag == 0x39 || tag == 0x02 || tag == 0x13 || tag == 0x17)
+                        value = values[edge->target_node];
+                    else
+                        value = 3;
+                }
+                if (!value) {
+                    pending = true;
+                } else if (!agreed || agreed == value) {
+                    agreed = value;
+                } else {
+                    agreed = agreed == 3 || value == 3 ? 3 : 4;
+                }
+            }
+            if (!pending)
+                values[i] = agreed;
+        }
+    }
+    CHECK(values[0]);
+    return values[0];
+}
+
+
+static void check_logical_locality(TbSymbolScopeView_t scope)
+{
+    TbSymbolLocality_t locality;
+    TbSymbolLocalitySlot_t slots[64];
+    unsigned oracle[64];
+    size_t charge = sizeof(locality) + sizeof(slots) + sizeof(oracle);
+    CHECK(tb_symbol_budget_reserve(&budget, charge));
+    CHECK(tb_symbol_locality_init(&locality, scope, slots, 64) == TB_SYMBOL_LOCALITY_PENDING);
+    TbSymbolLocalityStatus_e status = TB_SYMBOL_LOCALITY_PENDING;
+    for (unsigned step = 0; step < 100000 && status == TB_SYMBOL_LOCALITY_PENDING; ++step)
+        status = tb_symbol_locality_step(&locality, 31);
+    if (status != TB_SYMBOL_LOCALITY_READY && status != TB_SYMBOL_LOCALITY_UNSUPPORTED) {
+        TbSymbolLocalityFailure_t failure;
+        CHECK(tb_symbol_locality_failure(&locality, &failure));
+        fprintf(stderr, "native locality failure %u node %zu anchor %zu tag %llu\n", status,
+                failure.node_index, failure.anchor_index, (unsigned long long)failure.parent_tag);
+    }
+    CHECK(status == TB_SYMBOL_LOCALITY_READY || status == TB_SYMBOL_LOCALITY_UNSUPPORTED);
+    unsigned expected = locality_oracle(scope, oracle);
+    TbSymbolLocalityView_t result;
+    if (status == TB_SYMBOL_LOCALITY_READY) {
+        CHECK(tb_symbol_locality_view(&locality, &result));
+        CHECK(result.selected.record_offset == scope.nodes[0].record.record_offset);
+        CHECK(result.count == scope.node_count && result.slots[0].has_value);
+        CHECK(result.scope.nodes == scope.nodes && result.scope.edges == scope.edges);
+        CHECK(expected == 1 || expected == 2);
+        CHECK(result.value == (expected == 1 ? TB_SYMBOL_SCOPE_NONLOCAL : TB_SYMBOL_SCOPE_LOCAL));
+        if (result.value == TB_SYMBOL_SCOPE_NONLOCAL)
+            ++locality_nonlocal;
+        else
+            ++locality_local;
+    } else {
+        CHECK(expected == 3);
+        ++locality_unsupported;
+        CHECK(!tb_symbol_locality_view(&locality, &result));
+    }
+    CHECK(tb_symbol_budget_release(&budget, charge));
+}
+
+
 static void check_recursive_context(InheritedScope_t source, TbSymbolAbbrevView_t schema,
                                     TbSymbolReferenceTarget_t selected)
 {
@@ -844,6 +941,7 @@ static void check_recursive_context(InheritedScope_t source, TbSymbolAbbrevView_
             }
         }
     }
+    check_logical_locality(view);
     check_qualified_context(source, schema, view);
     for (size_t i = 0; i < input_count; ++i) {
         free(inputs[i]);
@@ -1480,6 +1578,10 @@ int main(int argc, char **argv)
            "%llu with abstract, %llu with concrete marker\n",
            (unsigned long long)inline_ancestry_queries, (unsigned long long)inline_abstract_markers,
            (unsigned long long)inline_concrete_markers);
+    CHECK(locality_nonlocal && locality_local);
+    printf("PASS native logical locality: %llu nonlocal, %llu local, %llu unsupported\n",
+           (unsigned long long)locality_nonlocal, (unsigned long long)locality_local,
+           (unsigned long long)locality_unsupported);
     CHECK(qualified_ready);
     printf("PASS native qualified recipes: %llu ready, %llu unnamed, %llu unavailable profiles\n",
            (unsigned long long)qualified_ready, (unsigned long long)qualified_unnamed,

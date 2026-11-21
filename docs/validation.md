@@ -7436,3 +7436,64 @@ separate gates. The earlier intermittent keybinding snapshot failure remains
 [unresolved historical evidence](#language-and-inline-constants--2026-11-21).
 Fresh comparable validation on STM32/ARM, ESP32/Xtensa and ESP32/RISC-V remains
 required before the subsystem merge and planned v0.3.0 release.
+
+
+## Direct roles and logical locality — 2026-11-21
+
+Implemented [direct declaration roles and logical locality](architecture.md#direct-roles-and-logical-locality-se06-partial)
+as independent metadata interpretations. The selected function/data record's own
+validated declaration flag determines its role; specification/origin references
+do not inherit that flag. Concrete-inline and other records remain separate.
+Definitions do not establish emitted code or storage.
+
+The locality cursor consumes complete retained context graphs, propagates named
+or anonymous namespace/class/structure/union scopes, and stops interpretation at
+known local function/inline/lexical/try/catch barriers. Unsupported outer scopes
+do not erase a proven local barrier. Required alternative contexts must agree;
+all physical graph paths remain available independently of the resulting value.
+There is no allocation, I/O, recursion, runtime resolution or target access.
+Caller-owned state and full slot capacity require accounting; production sizing
+remains an independent gate.
+
+Authored completed views cover every supported parent kind, local classes,
+anonymous scopes, shared-parent diamonds, conflicting alternatives, cycles,
+wrong identities/anchors/tags, missing completed nodes, count/capacity overflow,
+invalid requests and a 512-level chain. Restarting at every successive step
+preserves borrowed source records. Progress exhaustion before workspace
+initialization produces safe failure diagnostics. Role cases retain direct flags
+and references, including absent/explicit-false declarations, malformed values,
+duplicates, inline instances and other tags.
+
+Native composition uses actual relationship/context decoders and an independent
+fixed-point locality calculation. Focused GCC inspection reported 2,180 nonlocal
+and 1,491 local selections; Clang sanitizer inspection reported 1,652 nonlocal
+and 1,198 local selections. Neither reported unsupported parents in these inputs.
+The harness also inspects its own different compiler-produced metadata; these
+are per-query observations of different inputs, not equivalent-corpus comparisons
+or production sizing. Original assertions and the 4 MiB construction allowance
+remain unchanged.
+
+Evidence under `build/se06-locality-evidence-20261121/` retains environment,
+logs/statuses and preliminary checks. After an alignment-only correction,
+`final/` retains the repeated checks, tested patch, copied inputs and SHA-256
+manifest. The final snapshot contains 325 compiled inputs: Makefile and all source/header/test files.
+
+| Check | Command and recorded result |
+|---|---|
+| Focused components/native composition | `make BUILD_DIR=build/se06-locality-final-focused-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-roles test-symbol-locality test-symbol-entities test-symbol-elf-native`; `focused`, exit 0. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-locality-final-ci-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `test-ci`, exit 0. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-locality-final-sanitize-20261121 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-roles test-symbol-locality test-symbol-entities test-symbol-elf-native`; `sanitize`, exit 0. |
+| Static analysis | `make analyze`, 74 production source files; `analysis`, exit 0. |
+| Fortified test compilation | All `tests/unit/*.c`, `tests/integration/*.c` and `tests/support/*.c` object targets with `BUILD_DIR=build/se06-locality-final-static-tests-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3`; `test-compilation`, exit 0. |
+
+Normal `make` passed (`normal-make`, exit 0). Documentation checks covered 227
+internal references without errors; whitespace checks passed. All 325 final
+compiled inputs remained unchanged through the final checks.
+
+These are local host results, separate from hosted CI, physical qualification,
+maintainer acceptance and production sizing. Signatures, concrete-inline detail
+enumeration and composed acceptance remain SE06 work. Source/ranges, frontend
+publication and consumer safety retain separate gates. The earlier intermittent
+keybinding snapshot failure remains [unresolved historical evidence](#language-and-inline-constants--2026-11-21).
+Fresh comparable STM32/ARM, ESP32/Xtensa and ESP32/RISC-V functional validation
+remains required before the subsystem merge and planned v0.3.0 release.

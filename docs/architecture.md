@@ -1165,7 +1165,7 @@ overflow is resource failure. Production capacities remain subject to SE10.
 
 A metadata recipe is not a canonical C++ expression, semantic type equivalence,
 nonlocality or definition classification, runtime correspondence or permission
-to act. Definition roles, signatures and concrete-inline detail enumeration remain SE06 work;
+to act. Signatures and concrete-inline detail enumeration remain SE06 work;
 frontend evidence/publication and consumers retain their separate gates.
 
 
@@ -1198,6 +1198,47 @@ a completed view exposes the claims; diagnostic selections do not authorize use
 of a failed candidate. Definition/nonlocal classification and qualified-name
 contexts remain separate interpretations. These rules follow [DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Section
 3.3.8.1 and do not introduce another search category.
+
+### Direct roles and logical locality (SE06, partial)
+
+`tb_symbol_entity_role()` classifies a completed direct entry as a declaration,
+definition, concrete-inline instance or other metadata. Functions and variables
+use their own validated `DW_AT_declaration`; absence and explicit false mean a
+metadata definition. The flag is never inherited from a specification or origin.
+A reference's presence or direction cannot substitute for the selected record's
+role. An abstract subprogram or optimized-out variable can be a definition without
+emitted code or storage. Inline instances retain their separate role; other
+metadata does not introduce a Types search category.
+
+`src/symbol/locality.c` separately interprets a successful complete logical
+context graph. Typed unit boundaries are nonlocal. Namespace, class, structure
+and union parents propagate their containing context without requiring names,
+so anonymous namespaces and file statics do not depend on qualified-name support.
+Function, concrete-inline, lexical, try and catch scopes establish locality.
+A local class remains local. A known local barrier needs no semantic claim about
+its outer scopes. Other parent tags remain explicitly unsupported. All required
+alternative declaration contexts must agree; local/nonlocal disagreement is a
+conflict. Physical specification/origin paths remain retained, even when they
+establish the same classification.
+
+The locality cursor borrows the unchanged complete graph and its underlying
+relationship/context dependencies through discard. Caller-owned state and the
+entire slot capacity require accounting. Each step performs at most 256 bounded
+initialization, edge or traversal actions, without allocation, I/O or recursion.
+The outer job owns revisions, cancellation, consumer interest and deadlines.
+Invalid initialization or step arguments preserve the existing operation;
+capacity exhaustion, unsupported parents, conflicting alternatives and invalid
+dependencies expose no completed claim. No production capacity is selected.
+
+Role, logical locality, physical inline ancestry and qualified names are
+independent interpretations. F07's nonlocal restriction applies to data; it does
+not automatically exclude supported function definitions in local contexts.
+Neither a definition nor nonlocal classification establishes storage duration,
+location, runtime correspondence or access authority. The metadata rules follow
+[DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Sections 2.13, 3.3.8, 3.5, 3.8 and 4.1.
+Signature rendering, concrete-inline details, frontend evidence and consumer
+acceptance remain separate work.
+
 
 ### Event loop and text rendering
 
