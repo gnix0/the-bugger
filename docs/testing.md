@@ -3507,3 +3507,35 @@ it is not a claimed synchronization fix.
 
 These checks establish byte comparison and ownership, not complete qualified
 names, semantic equivalence, runtime correspondence or SE06/F07 acceptance.
+
+
+## Qualified metadata recipes (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-qualified CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-qualified test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Protected ELF/string fixtures and authored completed
+scope proofs exercise nested C++ names, complete-prefix agreement despite
+different component boundaries, conflicting prefixes, shared physical parents,
+unnamed selections/ancestors, unsupported languages and local contexts. Every
+inherited name owner remains available. An owner in a different unit requests
+that unit's language; the selected record's context cannot substitute for it.
+
+Fault cases cover all constructor allocations, transient comparison allocations,
+failed replacement peaks, wrong source identities, typed child failures, invalid
+later owner facts, EOF, I/O/resource errors and interrupted reads. Repeated EINTR
+does not advance the progress counter. Discard at every successive step through
+completion returns all owned charges and preserves the borrowed descriptor.
+A 512-level parent chain completes without recursive traversal. Instrumentation
+bounds each step to at most one read and each byte comparison to 32 KiB per operand.
+
+The native ELF harness composes actual graph/context, inherited-text and direct
+language decoders over retained compiler-produced DWARF. It adopts every completed
+name-owner fact before destroying child scratch and retains all original sources.
+It reports ready, unnamed and unavailable-profile counts separately, requires
+successful recipes, checks component counts/lengths/identities, and rejects resource,
+malformed or operational failures. Its existing 4 MiB construction budget remains
+unchanged. These are host metadata checks, not full SE06/F07 acceptance or proof
+of a canonical source expression, runtime address or target-access authority.

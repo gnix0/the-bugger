@@ -9,6 +9,7 @@
 #include "symbol/context.h"
 #include "symbol/scope_graph.h"
 #include "symbol/constants.h"
+#include "symbol/qualified.h"
 #include "symbol/references.h"
 #include "symbol/text.h"
 #include "symbol/elf.h"
@@ -31,6 +32,9 @@ static TbSymbolBudget_t budget;
 static TbSymbolAdmissionLedger_t *ledger;
 static TbSymbolStorage_t *storage;
 static uint64_t next_slot;
+static uint64_t qualified_ready;
+static uint64_t qualified_unnamed;
+static uint64_t qualified_unavailable;
 
 static void read_record(TbSymbolFile_t *file, uint64_t offset, size_t length, unsigned char *bytes)
 {
@@ -635,9 +639,157 @@ static void build_scope_input(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree
 }
 
 
-static void check_recursive_context(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree,
-                                    uint64_t unit_index, TbSymbolReferenceTarget_t selected)
+static TbSymbolInheritedTextStatus_e qualified_name_source(InheritedScope_t scope,
+                                                          TbSymbolGraphView_t relationships,
+                                                          TbSymbolInheritedTextView_t *adopted,
+                                                          TbSymbolInheritedTextFact_t **owned)
 {
+    TbSymbolInheritedText_t *text = tb_symbol_inherited_text_create(scope.directory, relationships,
+        (TbSymbolInheritedTextSelection_t){
+            .name                = 3,
+            .string_section      = scope.strings.strings,
+            .line_string_section = scope.strings.line_strings,
+            .offset_section      = scope.strings.offsets,
+            .descriptor          = scope.descriptor
+        }, &budget);
+    CHECK(text);
+    TbSymbolInheritedTextStatus_e status = TB_SYMBOL_INHERITED_TEXT_PENDING;
+    for (unsigned turn = 0; turn < 1000000; ++turn) {
+        TbSymbolInheritedTextNeed_t need;
+        if (tb_symbol_inherited_text_need(text, &need)) {
+            CHECK(need.source.record.unit_offset == scope.tree.unit_offset);
+            CHECK(tb_symbol_inherited_text_source(text, &scope.units, &scope.tree, scope.unit_index) ==
+                  TB_SYMBOL_INHERITED_TEXT_PENDING);
+        }
+        status = tb_symbol_inherited_text_step(text, 257);
+        if (status != TB_SYMBOL_INHERITED_TEXT_PENDING && status != TB_SYMBOL_INHERITED_TEXT_SOURCE)
+            break;
+    }
+    CHECK(status == TB_SYMBOL_INHERITED_TEXT_FOUND || status == TB_SYMBOL_INHERITED_TEXT_ABSENT);
+    if (status == TB_SYMBOL_INHERITED_TEXT_FOUND) {
+        TbSymbolInheritedTextView_t view;
+        CHECK(tb_symbol_inherited_text_view(text, &view));
+        CHECK(view.count && view.count <= relationships.count);
+        size_t charge = view.count * sizeof(**owned);
+        CHECK(tb_symbol_budget_reserve(&budget, charge));
+        *owned = malloc(charge);
+        CHECK(*owned);
+        memcpy(*owned, view.facts, charge);
+        *adopted = view;
+        adopted->facts = *owned;
+    }
+    /* Adopt every completed pointer-free owner fact before child scratch ends;
+     * the original unit/tree/schema/directory and frozen backing stay pinned. */
+    tb_symbol_inherited_text_destroy(text);
+    return status;
+}
+
+
+static void check_qualified_context(InheritedScope_t source, TbSymbolAbbrevView_t schema,
+                                     TbSymbolScopeView_t scope)
+{
+    TbSymbolInheritedTextFact_t *names[64] = {0};
+    size_t charges[64] = {0};
+    size_t before = budget.used;
+    size_t charge = sizeof(names) + sizeof(charges) + sizeof(TbSymbolConstant_t);
+    CHECK(scope.node_count <= 64 && tb_symbol_budget_reserve(&budget, charge));
+    TbSymbolQualified_t *qualified = tb_symbol_qualified_create(source.directory, scope, source.descriptor,
+                                                               &budget);
+    CHECK(qualified);
+    TbSymbolQualifiedStatus_e status = TB_SYMBOL_QUALIFIED_PENDING;
+    for (unsigned turn = 0; turn < 1000000; ++turn) {
+        TbSymbolQualifiedNeed_t need;
+        if (tb_symbol_qualified_need(qualified, &need)) {
+            CHECK(need.record.unit_offset == source.tree.unit_offset);
+            if (need.kind == TB_SYMBOL_QUALIFIED_NAME) {
+                TbSymbolInheritedTextView_t value = {0};
+                CHECK(need.node_index < scope.node_count && !names[need.node_index]);
+                TbSymbolInheritedTextStatus_e found = qualified_name_source(source,
+                    scope.nodes[need.node_index].relationships, &value, &names[need.node_index]);
+                charges[need.node_index] = value.count * sizeof(*value.facts);
+                status = tb_symbol_qualified_name(qualified, found, &value);
+            } else {
+                CHECK(need.record.entry_index == 0 &&
+                      need.record.record_offset == source.tree.entries[0].offset);
+                TbSymbolConstant_t constant;
+                TbSymbolConstantStatus_e found = tb_symbol_constant_init(&constant, source.tree, 0,
+                                                                          TB_SYMBOL_CONSTANT_LANGUAGE);
+                CHECK(found == TB_SYMBOL_CONSTANT_PENDING);
+                for (unsigned step = 0; step < 100000; ++step) {
+                    if (found == TB_SYMBOL_CONSTANT_SCHEMA)
+                        CHECK(tb_symbol_constant_schema(&constant, &schema) == TB_SYMBOL_CONSTANT_PENDING);
+                    found = tb_symbol_constant_step(&constant, 31);
+                    if (found != TB_SYMBOL_CONSTANT_PENDING && found != TB_SYMBOL_CONSTANT_SCHEMA)
+                        break;
+                }
+                CHECK(found == TB_SYMBOL_CONSTANT_FOUND || found == TB_SYMBOL_CONSTANT_ABSENT);
+                TbSymbolConstantView_t value = {0};
+                if (found == TB_SYMBOL_CONSTANT_FOUND)
+                    CHECK(tb_symbol_constant_view(&constant, &value));
+                status = tb_symbol_qualified_language(qualified, found, &value);
+            }
+            if (status != TB_SYMBOL_QUALIFIED_PENDING)
+                break;
+        }
+        status = tb_symbol_qualified_step(qualified, 257);
+        if (status != TB_SYMBOL_QUALIFIED_PENDING && status != TB_SYMBOL_QUALIFIED_SOURCE)
+            break;
+    }
+    /* Anonymous/local contexts and unit-root selections remain explicit profile
+     * exclusions; decoder/resource/operational failure is never accepted here. */
+    if (status != TB_SYMBOL_QUALIFIED_READY && status != TB_SYMBOL_QUALIFIED_UNNAMED &&
+        status != TB_SYMBOL_QUALIFIED_UNSUPPORTED) {
+        TbSymbolQualifiedFailure_t failure = tb_symbol_qualified_failure(qualified);
+        fprintf(stderr, "qualified status %u reason %u node %zu anchor %zu, budget %llu/%llu\n",
+                status, failure.reason, failure.node_index, failure.anchor_index,
+                (unsigned long long)budget.used, (unsigned long long)budget.limit);
+    }
+    CHECK(status == TB_SYMBOL_QUALIFIED_READY || status == TB_SYMBOL_QUALIFIED_UNNAMED ||
+          status == TB_SYMBOL_QUALIFIED_UNSUPPORTED);
+    TbSymbolQualifiedView_t view;
+    if (status == TB_SYMBOL_QUALIFIED_READY) {
+        ++qualified_ready;
+        CHECK(tb_symbol_qualified_view(qualified, &view) && view.count == scope.node_count);
+        CHECK(view.selected.record_offset == scope.nodes[0].record.record_offset);
+        CHECK(view.language_count == scope.edge_count);
+        size_t node = 0;
+        size_t components = 0;
+        uint64_t bytes = 0;
+        while (node != SIZE_MAX) {
+            CHECK(node < view.count && components < view.count && view.nodes[node].complete);
+            const TbSymbolQualifiedNode_t *part = &view.nodes[node];
+            CHECK(part->name.facts == names[node] && part->name.count);
+            uint64_t part_bytes = part->name.facts[0].text.text.bytes;
+            CHECK(part_bytes && tb_symbol_add(bytes, part_bytes, &bytes));
+            if (components)
+                CHECK(tb_symbol_add(bytes, 2, &bytes));
+            ++components;
+            node = part->parent_node;
+        }
+        CHECK(components == view.nodes[0].part_count && bytes == view.nodes[0].bytes);
+    } else {
+        if (status == TB_SYMBOL_QUALIFIED_UNNAMED)
+            ++qualified_unnamed;
+        else
+            ++qualified_unavailable;
+        CHECK(!tb_symbol_qualified_view(qualified, &view));
+    }
+    tb_symbol_qualified_destroy(qualified);
+    for (size_t i = 0; i < scope.node_count; ++i) {
+        free(names[i]);
+        CHECK(tb_symbol_budget_release(&budget, charges[i]));
+    }
+    CHECK(tb_symbol_budget_release(&budget, charge) && budget.used == before);
+}
+
+
+static void check_recursive_context(InheritedScope_t source, TbSymbolAbbrevView_t schema,
+                                    TbSymbolReferenceTarget_t selected)
+{
+    TbSymbolUnitsView_t units      = source.units;
+    TbSymbolDiesView_t  tree       = source.tree;
+    uint64_t           unit_index = source.unit_index;
+
     TbSymbolScope_t scope;
     TbSymbolScopeNode_t nodes[64];
     TbSymbolScopeEdge_t edges[256];
@@ -688,6 +840,7 @@ static void check_recursive_context(TbSymbolUnitsView_t units, TbSymbolDiesView_
             }
         }
     }
+    check_qualified_context(source, schema, view);
     for (size_t i = 0; i < input_count; ++i) {
         free(inputs[i]);
         CHECK(tb_symbol_budget_release(&budget, sizeof(NativeScopeInput_t)));
@@ -803,7 +956,14 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                             .descriptor = selection.descriptor
                         }, completed, inherited_slots, &relations);
                         check_context_anchors(view, tree, i, completed);
-                        check_recursive_context(view, tree, i, completed.nodes[0].record);
+                        check_recursive_context((InheritedScope_t){
+                            .directory  = directory,
+                            .units      = view,
+                            .tree       = tree,
+                            .strings    = string_sections,
+                            .unit_index = i,
+                            .descriptor = selection.descriptor
+                        }, table, completed.nodes[0].record);
                     }
                 }
                 for (uint64_t attr = 0; attr < record->attribute_count; ++attr) {
@@ -1233,6 +1393,10 @@ int main(int argc, char **argv)
             (void)check_file(argv[i]);
         }
     }
+    CHECK(qualified_ready);
+    printf("PASS native qualified recipes: %llu ready, %llu unnamed, %llu unavailable profiles\n",
+           (unsigned long long)qualified_ready, (unsigned long long)qualified_unnamed,
+           (unsigned long long)qualified_unavailable);
     CHECK(tb_symbol_storage_remove(storage));
     tb_symbol_storage_destroy(storage);
     CHECK(tb_symbol_admission_destroy(ledger) && !budget.used);

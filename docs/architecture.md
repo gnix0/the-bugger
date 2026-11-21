@@ -1120,8 +1120,53 @@ on failure or while pending.
 This component orders already validated component sequences. It does not select
 namespace/class contexts, prove a language-specific qualification profile,
 construct signatures, merge physical records or authorize runtime actions.
-Qualified-name construction and agreement across the declaration-context graph
-remain subsequent SE06 work.
+The qualified-name coordinator below composes this comparison with retained
+declaration-context and inherited-text proofs.
+
+
+### Qualified metadata recipes (SE06, partial)
+
+`src/symbol/qualified.c` constructs a bounded component recipe from a complete
+recursive declaration-context graph, validated inherited names and each terminal
+owner unit's direct language fact. The selected record's own name does not replace
+its specification/origin context. Every inherited name owner, physical context
+edge and language provenance remains retained; equal values do not merge records.
+
+The initial metadata profile supports C at a typed unit boundary and C++ through
+named namespace/class/struct/union parents. Unknown or absent languages, unnamed
+ancestors and local-function contexts leave qualification explicitly unavailable.
+An absent or empty selected name is unnamed. Ordinary and linkage-name facts may
+remain independently useful when qualification is unavailable. Components are
+opaque byte strings; embedded `::`, template arguments and conversion-operator
+spellings are preserved without splitting or canonicalization.
+
+Parent recipes must complete before their children. Alternative context prefixes
+must have identical complete bytes, including when their component boundaries
+differ. The coordinator uses the bounded name-sequence comparator, retains all
+physical derivations, and selects only a value representative. Conflicting
+prefixes produce conflict, never a guessed context. Iterative bounded steps avoid
+recursion; no successful recipe is exposed until the entire captured graph agrees.
+
+A required construction account reserves state, all node/language slots, two
+full-capacity component workspaces and transient comparison scratch. The caller
+pins and accounts the complete graph, every supplied inherited-name fact array,
+original unit/tree/schema dependencies, directory and descriptor/content lease
+through discard. Completed pointer-free facts may be adopted before child scratch
+is retired; ownership of the dependencies remains separate. Creation performs
+no I/O. Each step performs one bounded metadata action or one comparator action;
+actual advancement, rather than interrupted-read heartbeats, updates progress.
+Cancellation, captured revisions and absolute deadlines belong to the outer job.
+
+Wrong source identities preserve the pending request. Missing dependencies,
+unsupported profiles, conflicting values, malformed metadata, resource exhaustion
+and operational failure remain distinct and expose no partial result. Destruction
+releases owned state without closing the borrowed descriptor. Derived-length
+overflow is resource failure. Production capacities remain subject to SE10.
+
+A metadata recipe is not a canonical C++ expression, semantic type equivalence,
+nonlocality or definition classification, runtime correspondence or permission
+to act. Definition roles, signatures and inline interpretation remain SE06 work;
+frontend evidence/publication and consumers retain their separate gates.
 
 
 ### Event loop and text rendering

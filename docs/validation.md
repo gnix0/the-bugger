@@ -7316,3 +7316,65 @@ These are local host checks, separate from hosted CI and physical qualification.
 The component introduces no debugger/target access. It does not establish a
 complete language-specific qualified name, signature, definition role, runtime
 binding or SE06/F07 acceptance.
+
+## Qualified metadata recipes — 2026-11-21
+
+Implemented the [bounded qualified-metadata coordinator](architecture.md#qualified-metadata-recipes-se06-partial)
+over complete declaration-context graphs, inherited-text proofs and direct
+language constants. Every name owner, context derivation and language fact remains
+retained. Different component boundaries can establish equal complete bytes;
+physical records remain distinct. Supported C unit boundaries and named C++
+namespace/class/struct/union contexts yield metadata recipes. Unnamed records,
+unknown languages and unsupported/local contexts remain explicit outcomes.
+No canonical C++ expression, definition/nonlocal classification or runtime claim
+follows from a successful recipe.
+
+Protected ELF/string fixtures and authored completed scope proofs cover nested
+names, equal/different prefixes, shared parents, multiple inherited owners,
+selected/owner-unit differences, empty names and unsupported profiles. Fault
+injection covers constructor and transient comparator allocations, replacement
+peaks, wrong source identities, invalid later owner facts, typed child failures,
+EOF and I/O/resource errors. Thirty-two interrupted reads preserve the progress
+counter while stalled. Discard at every successive step through completion
+returns owned charges without closing the borrowed descriptor. A 512-level chain
+completes iteratively; each step performs at most one read and each byte comparison
+inspects at most 32 KiB per operand.
+
+The native harness composes the actual context, inherited-text and language
+interpreters over retained compiler-produced metadata, preserving every original
+source through discard. Completed owner facts are adopted before child scratch
+is retired. The existing 4 MiB construction allowance is unchanged. The focused
+GCC build reported 2,056 ready recipes, no unnamed selections and 1,402 unavailable
+profiles; the Clang sanitizer build reported 1,171 ready, 374 unnamed and 1,107
+unavailable. The harness inspects its own compiler-produced metadata as well as
+fixtures, so these are observations of different inputs, not equivalent-corpus
+comparisons or production sizing measurements. Both require successful recipes
+and reject malformed, resource or operational outcomes.
+
+Evidence is retained under `build/se06-qualified-evidence-20261121/`, including
+environment and preliminary checks. A header-alignment correction followed the
+initial passing baseline; `final/` retains the final complete logs/exit statuses,
+input patch, copied compiled inputs and their SHA-256 manifest. Each snapshot
+contains 318 files: Makefile and all source, header and test inputs. Final checks
+use the unchanged final snapshot.
+
+| Check | Command and recorded result |
+|---|---|
+| Focused components/native composition | `make BUILD_DIR=build/se06-qualified-final-focused-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-qualified test-symbol-elf-native`; `focused`, exit 0. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-qualified-final-ci-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `test-ci`, exit 0. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-qualified-final-sanitize-20261121 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-qualified test-symbol-elf-native`; `sanitize`, exit 0. |
+| Static analysis | `make analyze`, 72 production source files; `analysis`, exit 0. |
+| Fortified test compilation | All `tests/unit/*.c`, `tests/integration/*.c` and `tests/support/*.c` object targets with `BUILD_DIR=build/se06-qualified-final-static-tests-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3`; `test-compilation`, exit 0. |
+
+Normal `make` passed (`normal-make`, exit 0). Documentation checks covered 223
+internal references without errors; whitespace checks passed. All 318 frozen
+compiled inputs remained unchanged through the final checks.
+
+These are local host results, distinct from hosted CI, physical qualification,
+maintainer acceptance and production sizing. The prior intermittent keybinding
+snapshot failure remains [unresolved historical evidence](#language-and-inline-constants--2026-11-21);
+subsequent passing runs do not establish its cause or a fix. Definition roles,
+signatures, inline interpretation, frontend evidence/publication and the remaining
+consumer gates are still required before SE06/F07 acceptance. Fresh comparable
+STM32/ARM, ESP32/Xtensa and ESP32/RISC-V functional validation remains required
+before the subsystem merge and planned v0.3.0 release.
