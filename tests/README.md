@@ -10,6 +10,134 @@ target cases establish architecture coverage, not physical-board support.
 See [testing](../docs/testing.md) for procedures and prerequisites; execution
 records remain in the [validation records](../docs/validation.md).
 
+- `make test-symbol-primitives test-sha256`: independent Symbol Engine checked
+  readers, physical record coordinates and streaming hash vectors/failure paths.
+  Included in `test`/`test-ci`; no debugger or target needed. See
+  [primitive coverage](../docs/testing.md#symbol-engine-primitives-se01).
+
+- `make test-symbol-wire test-symbol-schedule`: bounded private IPC framing,
+  descriptor association/cleanup/close-on-exec, shared allocation accounting,
+  scheduling fairness, independent interests and retained completion ownership.
+  These component tests do not start or qualify the supervised helper; see
+  [coverage and limits](../docs/testing.md#symbol-engine-transport-and-scheduling-se02-partial).
+
+- `make test-symbol-process test-symbol-helper`: isolated worker entry, owned
+  process supervision/reaping, startup settings, deadlines, shared cancellation,
+  resource faults and completed-result retention. Included in `test`.
+- `make test-symbol-helper-native`: actual GDB remains alive and answers MI
+  after an independently supervised helper crashes; no inferior or hardware.
+  Included in `test-native`. See
+  [helper verification](../docs/testing.md#supervised-symbol-engine-helper-se02).
+
+- `make test-symbol-admission`: logical artifact reservations, separate shared
+  context charges, cache transitions, delayed cleanup and allocation rollback.
+  Included in `test`; no acquisition or target access. See
+  [ledger coverage](../docs/testing.md#artifact-admission-ledger-se03-partial).
+
+- `make test-symbol-acquire test-symbol-reflink`: bounded private-file acquisition,
+  fixed-extent clone/fallback, explicit grants, frozen-byte hashing, mutation
+  detection and cleanup failures. Clone fault injection is distinct from the
+  separately reported native probe. Included in `test`; see
+  [acquisition coverage](../docs/testing.md#artifact-byte-acquisition-se03-partial).
+
+- `make test-symbol-equal`: complete frozen-backing comparison, changing work
+  allowances, per-input failures and borrowed descriptor ownership. Included in
+  `test`; integrated deduplication remains pending. See
+  [equality coverage](../docs/testing.md#frozen-backing-equality-se03-partial).
+
+- `make test-symbol-artifact`: frontend contexts, identity lifetime, descriptor
+  admission, leases, scoped sharing and cleanup; see
+  [registry coverage](../docs/testing.md#frontend-artifact-ownership-se03-partial).
+- `make test-symbol-resource`: production helper acquisition, exact size grants,
+  equality, cleanup accounting, worker restart/death and publication failure; see
+  [supervised operation coverage](../docs/testing.md#supervised-artifact-operations-se03-partial).
+- `make test-symbol-operation`: bounded request decoding, explicit size grants,
+  retained backing operations and cancellation; see
+  [dispatcher coverage](../docs/testing.md#artifact-operation-dispatch-se03-partial).
+- `make test-symbol-storage`: private namespaces, captured storage identity,
+  retained files, restart reconstruction and stale/nonempty cleanup refusal.
+  Included in `test`; see
+  [storage coverage](../docs/testing.md#retained-storage-namespaces-se03-partial).
+
+- `make test-symbol-file`: bounded retained-file scratch, descriptor/extent
+  guards, partial reads, mutation detection, cancellation and borrowed ownership.
+  Included in `test`; see
+  [coverage](../docs/testing.md#retained-file-scratch-reads-se04-partial).
+
+- `make test-symbol-sections`: complete bounded section/name directories,
+  incremental overlap checks, extended counts, long names, unsupported coverage
+  and construction failures. Included in `test`; see
+  [coverage](../docs/testing.md#elf-section-directories-se04-partial).
+
+- `make test-symbol-units`: complete selected DWARF header inventories, explicit
+  unsupported coverage, exact backing and bounded construction failures. Included
+  in `test`; see [inventory coverage](../docs/testing.md#dwarf-header-inventories-se05-partial).
+
+- `make test-symbol-leb test-symbol-abbrev`: bounded streaming LEB framing and
+  complete selected DWARF abbreviation tables, wide implicit constants, lookup,
+  cancellation and failure accounting; included in `test`. See
+  [abbreviation coverage](../docs/testing.md#dwarf-abbreviation-tables-se05-partial).
+
+- `make test-symbol-form`: bounded streaming standard DWARF attribute payloads,
+  raw spans, numeric fit and iterative indirect forms; included in `test`. See
+  [form coverage](../docs/testing.md#dwarf-attribute-form-framing-se05-partial).
+
+- `make test-symbol-dies`: complete selected DWARF DIE trees, physical spans,
+  parent links, zero-byte attributes and failure accounting; included in `test`.
+  See [DIE coverage](../docs/testing.md#complete-die-trees-se05-partial).
+
+- `make test-symbol-references`: exact DWARF reference coordinates, cross-unit
+  dependencies, signature conflicts and unsupported coverage; included in `test`.
+  See [reference coverage](../docs/testing.md#physical-dwarf-reference-targeting-se05-partial).
+
+- `make test-symbol-strings test-symbol-string-offsets`: bounded retained strings
+  and DWARF 5 indexed-string contributions; included in `test`. See
+  [string coverage](../docs/testing.md#retained-dwarf-strings-and-offsets-se05-partial).
+
+- `make test-symbol-attributes test-symbol-text`: complete-scope unique field
+  selection and composed retained text dependencies, explicit missing/conflicting
+  outcomes and failure accounting; included in `test`. See
+  [text coverage](../docs/testing.md#selected-text-attributes-se05-partial).
+
+- `make test-symbol-entities`: bounded direct entry kinds and unique fields,
+  physical flag presence, nonzero truth and conflict diagnostics; included in
+  `test`. See [entry-fact coverage](../docs/testing.md#direct-dwarf-entry-facts-se06-partial).
+
+- `make test-symbol-relations`: unique relationship sources, explicit unit
+  dependencies, direct target/tag checks, versioned static members and unsupported
+  coverage; included in `test`. The native ELF target also checks the maintained
+  C++ relationship fixture in DWARF 4 and 5. See
+  [relationship coverage](../docs/testing.md#scoped-dwarf-relationship-links-se06-partial).
+
+- `make test-symbol-graph`: bounded reachable relationship traversal, shared
+  paths, cycles, explicit dependencies and failed-prefix isolation; included in
+  `test`. See [graph coverage](../docs/testing.md#bounded-dwarf-relationship-traversal-se06-partial).
+
+- `make test-symbol-inherit`: bounded physical owners for supported descriptive
+  attributes, shared paths, multiple owners and explicit source dependencies;
+  included in `test`. See
+  [inherited-field coverage](../docs/testing.md#inherited-dwarf-attribute-owners-se06-partial).
+
+- `make test-symbol-dwarf`: bounded DWARF32/64 unit headers, mixed address/offset
+  widths, unsupported unit coverage and exact contribution bounds. Included in
+  `test`; see [unit-header coverage](../docs/testing.md#dwarf-unit-headers-se05-partial).
+
+- `make test-symbol-inspect`: production helper ELF validation over admitted
+  backing, complete scope summaries, decoder budgets, cancellation and restart.
+  Included in `test`; see
+  [helper validation coverage](../docs/testing.md#supervised-elf-validation-se04-partial).
+
+- `make test-symbol-symbols`: complete selected SYMTAB/DYNSYM dependencies,
+  full names, ordinary/special/extended indexes and bounded failure paths.
+  Included in `test`; see
+  [symbol dependency coverage](../docs/testing.md#elf-symbol-dependencies-se04-partial).
+
+- `make test-symbol-elf test-symbol-elf-native`: fixed ELF32/64 records in both
+  byte orders, checked extended table layout, malformed boundaries and native
+  file agreement with libelf after admission/acquisition through retained-file
+  reads. Included in `test`; no debugger or target access.
+  See [coverage and limits](../docs/testing.md#elf-records-se04-partial).
+
 - `make test-fullscreen`: Source-only fullscreen PTY checks, retained header/footer,
   split/resize restoration, hidden input regions and compact/keyboard behavior;
   included in `make test`. `make test-fullscreen-native` adds actual GDB source

@@ -65,6 +65,13 @@ Physical RISC-V validation was deferred for v0.1.3. Task2.1 now records real
 RISC-V RV32 checks using ESP32-C6FH4 as the test device. Acceptance adds no new
 physical results or waiver of later release regression.
 
+The next minor release is planned as **v0.3.0**, with the Native Symbol Engine
+in place. Before merging the subsystem and preparing that release, repeat the
+[physical/native regression matrix](testing.md#every-release-regression-matrix)
+across STM32/ARM, ESP32/Xtensa and ESP32/RISC-V. Apply the same standard to all
+three, covering both the new subsystem and existing debugger functionality.
+Earlier feature validation does not replace this fresh acceptance work.
+
 ## Implementation status
 
 M00–M18 form the accepted v0.1.0 baseline. Physical ARM/Cortex-M and Xtensa
@@ -200,13 +207,19 @@ The [accepted Symbol Engine design](native-symbol-engine.md) replaces F07's
 planned GDB-query discovery direction with bounded project-native ELF/DWARF
 metadata discovery. GDB/MI retains supported live operations. This is planned
 work: no implementation, production verification, physical validation or F07
-acceptance is established by the design decision.
+acceptance is established by the design decision. Foundation progress is recorded
+independently below; symbol discovery and live native actions remain unavailable.
 
 | Foundation group | Capability and consumer dependency | Status |
 |---|---|---|
 | D04 | Bounded MI rejection recovery before live integration acceptance | Planned |
-| SE01–SE03 | Checked readers/SHA-256, supervised helper and retained-artifact ownership | Planned |
-| SE04–SE08 | ELF/DWARF definitions, names, native line tables/ranges and explicit companions | Planned |
+| SE01 | Checked readers, physical record coordinates and streaming SHA-256 | Implemented; local verification recorded; integration review pending |
+| SE02 | Supervised helper | Transport, scheduling, process supervision and lazy event-loop integration implemented; artifact/decoder operations follow in their own gates |
+| SE03 | Retained-artifact ownership | In progress: supervised acquisition, bounded reflink fallback and frontend ownership/lease/sharing components integrated; explicit Open workflow and acquisition-profile qualification remain |
+| SE04 | ELF foundation | In progress: retained-file reads, ELF records and scoped directory/symbol validation integrated with the helper; frontend evidence and production qualification remain |
+| SE05 | DWARF structure | In progress: bounded DWARF 4–5 headers, selected header inventories, abbreviation tables, attribute forms, selected DIE trees, reference targeting, unique attribute selection and composed string dependencies; semantic consumers and shared evidence ownership follow |
+| SE06 | DWARF definitions and names | In progress: direct facts, scoped relationships, inherited text agreement and recursive declaration contexts; qualified names, definition roles, signatures and inline interpretation remain |
+| SE07–SE08 | Native line tables/ranges and explicit companions | Planned |
 | SE09–SE10 | Complete bounded discovery/publication and actual production sizing | Planned |
 | SE11 | Offline artifact/Symbols/Source UI; may be accepted before runtime resolution | Planned |
 | SE12–SE15 | Runtime preparation, native Watches, Memory drafts, exact Source actions and guarded Console/DSO integration | Planned |

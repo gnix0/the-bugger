@@ -8,7 +8,29 @@ decision set is **1A / 2A / 3A / 4A / 5A / 6B / 7A**, including cancellable
 Console review, centralized command provenance, safe retirement while running
 and close-on-exec for received descriptors. Planning approval establishes no
 implementation completion, production verification, physical validation or F07
-acceptance.
+acceptance. SE01 now provides the [independent bounded primitives](architecture.md#symbol-engine-primitives-se01);
+SE02 adds the [supervised helper foundation](architecture.md#symbol-engine-helper-se02).
+SE03 has [artifact resource components](architecture.md#artifact-admission-accounting-se03-partial)
+for admission accounting, private byte copying and complete backing equality,
+with supervised storage dispatch, explicit size grants and a frontend ownership
+registry for contexts, backing leases and scoped sharing. SE04 adds
+[scoped ELF validation](architecture.md#supervised-elf-validation-se04-partial),
+and SE05 provides structural DWARF decoding through
+[selected text dependencies](architecture.md#selected-text-attributes-se05-partial).
+SE06 provides [direct entry facts](architecture.md#direct-dwarf-entry-facts-se06-partial)
+with [scoped links](architecture.md#scoped-dwarf-relationship-links-se06-partial)
+and [bounded relationship traversal](architecture.md#bounded-dwarf-relationship-traversal-se06-partial),
+followed by [inherited attribute owners](architecture.md#inherited-dwarf-attribute-owners-se06-partial),
+[full inherited text agreement](architecture.md#inherited-dwarf-text-agreement-se06-partial)
+and [declaration-context anchors](architecture.md#declaration-context-anchors-se06-partial)
+with [recursive dependency validation](architecture.md#recursive-declaration-context-graph-se06-partial)
+and [language/inline constants](architecture.md#language-and-inline-constants-se06-partial).
+[Name sequence comparison](architecture.md#name-sequence-comparison-se06-partial)
+provides complete byte ordering independently of component boundaries.
+Artifact Open workflow, qualified acquisition profiles, complete semantic
+interpretation and consumers remain unfinished. Unknown helper operations return
+Unsupported.
+Verification evidence is recorded separately from integration acceptance.
 
 The engine owns bounded project-native C17 ELF/DWARF decoding, metadata
 interpretation, identity and discovery. “Native” describes the implementation,
@@ -146,6 +168,13 @@ concurrently with retained backing. Filesystem capacity and logical admission
 capacity are independent. Every independently opened artifact and attached
 companion context retains its full logical charge even if backing is physically
 shared. Deduplication saves physical storage, not logical admission capacity.
+
+Ownership may be preallocated before its file size is known. An unsized ticket
+cannot commit as an empty artifact: the full offered size, including explicit
+zero, must be assigned before a grant permits file-data growth. Empty staging
+creation does not establish admitted content. Retained storage stays named while
+frontend descriptors close; final filesystem deletion runs in the helper.
+Operation retirement and process reaping do not prove namespace cleanup.
 
 When final active ownership ends, cached backing receives one full-size cache
 charge. Capacity is released only after confirmed cleanup; delayed cleanup stays
@@ -335,6 +364,7 @@ Configuration does not alter the fixed representation constraints below.
 | Frontend temporary construction | 16 MiB | Construction owner; contained in aggregate; candidate discarded on failure. |
 | IPC storage | 4 MiB/process | Transport owner in each process; frontend portion included in aggregate; fail operation/channel safely. |
 | Admitted underlying helper jobs, active included | 64 jobs | Parent scheduler returns Busy at saturation; separate reserved control capacity. |
+| Consumer interests, including retained completions | 128 interests | Parent scheduler bounds interests independently; Busy preserves other consumers. |
 
 ### Fixed representation constraints
 
@@ -376,7 +406,11 @@ Count bookkeeping, retained capacity, owned strings, references and concurrent
 old/candidate/temporary storage. Charge shared allocations once. Every allocation
 has an accounting owner and checked reservation/release. Helper index/cache and
 construction costs require separate measured bounds; frontend limits cannot
-stand in for total helper memory.
+stand in for total helper memory. The internal helper configuration currently accepts
+an explicit shared decoder-construction allowance, with zero disabling decoder
+requests before filesystem access. This supplies a bounded integration path for
+verification without selecting a production default or startup setting ahead of
+SE10.
 
 | Timing boundary | Default | Enforcement and failure |
 |---|---:|---|
@@ -393,6 +427,43 @@ stand in for total helper memory.
 All timing settings are startup-configurable and parent-enforced with monotonic
 time; cooperative targets also require helper checkpoints. Raising a setting
 never makes progress heartbeats sufficient or permits replacement before reap.
+
+### Available startup configuration
+
+SE02/SE03 read the following environment settings once during frontend initialization.
+Values are positive decimal integers with no sign or whitespace. MiB uses binary
+units; time settings use milliseconds and are converted with checked arithmetic.
+Invalid settings leave the Symbol Engine unavailable with a diagnostic; ordinary
+GDB workflows remain available. Configuration neither starts the helper nor
+changes the fixed representation constraints.
+
+| Setting | Policy and supported range |
+|---|---|
+| `TB_SYMBOL_FILE_MIB` | Per-file logical admission ceiling above; positive checked `uint64_t` MiB, no larger than aggregate admission. |
+| `TB_SYMBOL_ADMISSION_MIB` | Aggregate logical admission ceiling above; positive checked `uint64_t` MiB; includes pending reservations and cached backing. |
+| `TB_SYMBOL_FRONTEND_MIB` | Combined frontend storage ceiling above; must fit `size_t` and the initial bookkeeping. |
+| `TB_SYMBOL_IPC_MIB` | IPC ceiling above; must accommodate worker/transport bookkeeping and not exceed frontend storage. |
+| `TB_SYMBOL_JOBS` | Underlying-job ceiling above; 1–64. |
+| `TB_SYMBOL_INTERESTS` | Consumer-interest ceiling above; 1–128. |
+| `TB_SYMBOL_CHECKPOINT_BYTES` | Work-byte allowance; 64 bytes through the checkpoint maximum above. The minimum accommodates a fixed ELF header/hash block. |
+| `TB_SYMBOL_CHECKPOINT_STEPS` | Work-step allowance; 1 through the checkpoint maximum above. The scheduler can supply a smaller allowance to reserve bounded control work. |
+| `TB_SYMBOL_SLICE_MS` | Cooperative service slice above. |
+| `TB_SYMBOL_STARTUP_MS` | Helper startup deadline above. |
+| `TB_SYMBOL_QUEUE_MS` | Queue wait before first service above. |
+| `TB_SYMBOL_READY_MS` | Ready-index window/details deadline above. |
+| `TB_SYMBOL_HEAVY_MS` | Acquisition/index/query/reconstruction deadline above. |
+| `TB_SYMBOL_PROGRESS_MS` | No-meaningful-progress deadline above. |
+| `TB_SYMBOL_CANCEL_MS` | Cancellation grace before TERM above. |
+| `TB_SYMBOL_TERM_MS` | TERM grace before KILL above. |
+
+These are ceilings/allowances, not reservations. The frontend root also contains
+helper IPC, scheduler/job metadata and frontend ownership bookkeeping. The worker
+IPC account includes its job/scheduler bookkeeping, request copies and transport
+storage. Small protocol-control buffers are owned and charged at channel creation,
+so cancellation and failure acknowledgements need no later allocation. Decoder,
+index/cache, evidence, prepared-fact and publication budgets receive their own
+integration and sizing work; this configuration does not establish their
+implementation or acceptance.
 
 ## Consumer integration and live actions
 

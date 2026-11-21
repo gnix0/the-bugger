@@ -5394,3 +5394,1925 @@ implementation gates still require maintained fixtures and fresh evidence.
 The documentation checker and `git diff --check` passed again after clarification;
 normal `make` also passed. The seven-document delivery scope is unchanged. No
 research, application regression matrix or physical validation was rerun.
+
+## SE01 — bounded symbol primitives — 2026-11-19
+
+Implemented independent C17 checked readers, physical record coordinates and
+streaming SHA-256 under `src/symbol/`, with matching internal headers. The readers
+borrow immutable bounded input, decode explicit byte order and preserve cursor/
+outputs on failure. Record equality compares admitted content handles and exact
+kind/section/unit/record coordinates; shape validity is not metadata evidence.
+SHA-256 requires the expected complete byte count at finalization and prevents
+publication after input/length failure. These components allocate no heap storage
+and perform no file, helper or debugger I/O.
+
+`test-symbol-primitives` and `test-sha256` are included in `test`/`test-ci`.
+There is no artifact manager, helper, ELF/DWARF decoder, Symbols UI, runtime
+binding or live-action implementation in this gate. D04 and SE02 onward remain
+separate work; SE01 does not complete F07 or establish physical acceptance.
+
+### Configuration and focused evidence
+
+Host: Linux 7.3.4-arch1-2 x86-64, glibc 2.44, GCC 16.2.1 (20260810),
+Clang/clang-tidy 23.1.5, GDB/gdbserver 18.1, tmux 3.8 and OpenOCD
+0.12.0-01004-g9ea7f3d64-dirty. Library versions: ncursesw 6.6.20251230,
+libelf 0.197 and json-c 0.19. Logs, environment, source hashes and command
+records are under `build/se01-evidence-20261119/`.
+
+- `make BUILD_DIR=build/se01-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3
+  test-symbol-primitives test-sha256`: PASS, exit 0 (`focused-final.log`).
+  Covers checked arithmetic, integer widths/endianness/signed bounds, truncated
+  LEB128 prefixes, overflow, nonminimal values, bounded strings/slices, distinct
+  coordinates, SHA-256 vectors/fragmentation/padding and poisoned-stream failures.
+- `clang-tidy src/symbol/reader.c src/symbol/identity.c src/symbol/sha256.c
+  --checks='-*,clang-analyzer-*,bugprone-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling'
+  --warnings-as-errors='*' -- -Iinclude -std=c17 -Wall -Wextra -Wpedantic -Werror`:
+  PASS, exit 0 (`analysis-final.log`). The initial `analysis.log` retains unsigned
+  operand and multiplication-width diagnostics; explicit unsigned shifts/masks
+  and widened multiplication resolved them without suppressing checks.
+- `make CC=clang BUILD_DIR=build/se01-sanitize-20261119
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer'
+  LDFLAGS='-fsanitize=address,undefined' test-symbol-primitives test-sha256`:
+  PASS outside the sandbox, exit 0 (`sanitize-final.log`). The earlier sandbox
+  attempt stopped at LeakSanitizer's process-inspection restriction
+  (`sanitize.log`); that failure is preserved, not counted as success.
+
+Object-reference inspection found only compiler stack protection and libc copying,
+with no allocator, file or debugger dependencies (`symbol-undefined-references.log`).
+Algorithm/vector references and reproducible focused commands are in
+[primitive testing](testing.md#symbol-engine-primitives-se01). The vectors are
+correctness evidence, not cryptographic certification. Source input lifetime,
+semantic validation, acquisition coherence, admitted handle allocation and
+runtime authority remain responsibilities of later layers.
+
+### Host regression and integration boundary
+
+The initial sandboxed fortified baseline in `build/se01-ci-20261119` stopped
+at `test-registers-native`: GDB reported fixture startup exit 127. Its full log
+and exit 2 are preserved as `test-ci.log` and `test-ci.exit`. The fresh unrestricted
+baseline in `build/se01-ci-unrestricted-20261119` then passed, exit 0
+(`test-ci-unrestricted.log`). It included actual native/attach, terminal/tmux,
+localhost remote and offline OpenOCD checks, without physical target access.
+
+Supplementary deterministic cross-checks (`check_reference.py`, `reference.log`,
+seed 7107) compared 20,512 signed/unsigned LEB128 decodes with an independent
+arbitrary-precision reference, and 1,025 binary SHA-256 messages with random
+fragmentation against Python `hashlib`: PASS. This local cross-check is additional
+evidence; the maintained C vectors and failure tests remain in the host baseline.
+
+The final reviewed source tree passed the complete baseline in another unused
+build directory:
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/se01-ci-final-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+Result: PASS, exit 0 (`test-ci-final.log`, `test-ci-final.exit`).
+`final-tested-files.json` records source hashes and `baseline-final-command.json`
+records the invocation/environment. Production sources, test sources and Makefile
+were checked unchanged against that manifest after completion. This is local
+Linux host success, not hosted Ubuntu CI or physical ARM/Xtensa/RISC-V evidence.
+The earlier successful unrestricted run preceded final formatting/comment review;
+the final run covers the reviewed tree. Existing assertions remained intact.
+
+Documentation links, new-source whitespace/line limits and `git diff --check`
+passed. Normal `make` also passed and updated `build/the-bugger`
+(`normal-make.log`). SE01 is implemented and locally verified; integration review
+remains pending. Hosted checks and later subsystem/consumer/physical acceptance
+remain separate gates.
+
+## SE02 transport and scheduling components — 2026-11-19
+
+This partial SE02 implementation adds standalone IPC, allocation-accounting and
+cooperative-scheduling components. It does not yet connect them to the frontend,
+start a production helper, acquire artifacts or issue debugger operations.
+Supervision and integration remain pending; these observations do not establish
+SE02 completion or F07 acceptance.
+
+The local Linux x86-64 configuration used GCC 16, GDB 18.1, the installed ncurses,
+libelf and json-c development libraries, and `TERM=xterm-256color` for terminal
+regressions. Exact compiler/debugger versions and the kernel are retained in
+`build/se02-evidence-20261119/environment.txt`. Evidence artifacts remain ignored
+local files; maintained tests and reproduction commands are in the repository.
+
+### Component observations
+
+```sh
+make BUILD_DIR=build/se02-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-wire test-symbol-schedule
+```
+
+PASS, exit 0 (`components-focused.log`). Wire tests exercised one-byte transfer
+fragmentation, empty and maximum payloads, adjacent descriptor-bearing frames,
+borrowed/completed ownership, exact receive boundaries, close-on-exec, malformed
+ancillary data, descriptor rejection/cleanup, partial EOF, interrupted calls,
+allocation faults and aggregate exhaustion. Scheduler tests exercised separate
+consumer interests, stale attachments, cancellation at saturation, retained
+completions/backpressure, monotonic progress and construction service during
+sustained interactive arrivals. Exact/one-over account limits, `SIZE_MAX`,
+underflow and failed-allocation rollback passed. See
+[maintained coverage](testing.md#symbol-engine-transport-and-scheduling-se02-partial)
+for the boundary of these checks.
+
+```sh
+make CC=clang BUILD_DIR=build/se02-sanitize-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' test-symbol-wire test-symbol-schedule
+make analyze
+```
+
+Focused Clang AddressSanitizer/UndefinedBehaviorSanitizer checks passed, exit 0
+(`components-sanitize.log`). The full configured production static-analysis
+command passed, exit 0 (`full-analysis.log`, `full-analysis.exit`); focused
+analysis also passed (`components-analysis.log`). No existing test assertions or
+fixtures were changed.
+
+The earlier baseline log `full-ci.log` records an intentionally interrupted run
+(exit 143), stopped while finalizing allocation-failure coverage. It is not a
+passing baseline. The final source manifest is `tested-files.json`; process
+supervision developed subsequently is outside this component evidence.
+
+### Host regression and remaining integration
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/se02-ci-final-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+PASS, exit 0 (`full-ci-final.log`, `full-ci-final.exit`). This included the new
+component suites, existing native GDB and attach checks, terminal/tmux tests,
+localhost remote integration and actual offline OpenOCD script/cleanup checks.
+It exercised no physical target. This is local host success, not hosted Ubuntu
+CI or ARM/Xtensa/RISC-V qualification.
+
+Final review changed only declaration alignment in the scheduler source/header;
+`final-alignment.json` records those differences against the tested source
+hashes. Focused fortified checks rebuilt those files and passed afterward.
+Normal `make` passed and updated `build/the-bugger` (`normal-make.log`).
+Documentation checks found 215 local references with no missing targets/anchors
+(`document-links.log`); new-source width/whitespace and `git diff --check` passed.
+
+Remaining SE02 work includes the production helper entry point, process
+supervisor, parent-enforced startup/queue/operation/progress deadlines,
+cancellation escalation, confirmed reaping and frontend event-loop integration.
+The standalone process work begun next is not covered by this baseline.
+No worker-failure, artifact or consumer acceptance is inferred from these tests.
+
+## SE02 supervised helper integration — 2026-11-19
+
+The execution foundation now connects the bounded transport and scheduler to a
+lazy frontend-owned supervisor and private early worker entry. It adds no artifact
+acquisition or native discovery; artifact/decoder operation IDs currently produce
+Unsupported. D04, acquisition, semantic validation, publication, live actions and
+F07 acceptance retain their independent gates.
+
+The local Linux x86-64 host used kernel 7.3.4, glibc 2.44, GCC 16.2.1 and GDB 18.1;
+exact compiler/debugger versions are in
+`build/se02-evidence-20261119/runtime-environment.txt`. The initial process profile
+requires Linux pidfd and `close_range` support, default SIGCHLD disposition and
+exclusive child reaping. Unsupported conditions disable helper eligibility while
+preserving ordinary GDB workflows. This evidence does not qualify other kernels,
+filesystems, remote servers or physical targets.
+
+### Focused process and protocol observations
+
+```sh
+make BUILD_DIR=build/se02-runtime-focused-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-wire test-symbol-schedule \
+  test-symbol-process test-symbol-helper test-symbol-helper-native
+```
+
+PASS, exit 0 (`runtime-focused-final.log`, `runtime-focused-final.exit`).
+Maintained [helper coverage](testing.md#supervised-symbol-engine-helper-se02)
+includes:
+
+- Descriptor isolation with inherited and closed standard descriptors;
+  asynchronous exec failure; parent ownership while exec is deliberately blocked.
+- Read-only/close-on-exec descriptor framing and complete cleanup; allocation-free
+  small control messages when the shared account has no free capacity.
+- Shared interests surviving creator cancellation, replacement queries, dispatch
+  order differing from admission order, saturation and independent publication.
+- Nested-account ceilings and rollback across frontend/IPC ownership; retained
+  capacities and worker/scheduler bookkeeping remain charged.
+- Deterministic startup, queue, ready/heavy absolute, no-progress and cancellation
+  boundaries. Heartbeats and buffered old progress cannot extend deadlines;
+  future timestamps and mismatched context/process generations are rejected.
+- TERM/KILL escalation, delayed acknowledgement/reap, unavailable ownership and
+  explicit restart; no replacement before confirmed reap.
+- Completed payload retention across helper death and allocation failure without
+  exposing a partial candidate.
+
+The worker is started through the actual application executable in the focused
+suite. Fault peers and the harness clock file exercise failure contracts; they
+are neither ELF/DWARF producers nor target emulators. No metadata semantics or
+artifact coherence is inferred from their payloads.
+
+The native isolation suite started actual GDB without an inferior, crashed a
+separately supervised helper, and confirmed that the same GDB process still
+answered `-list-features` through structured MI. Both processes were closed and
+reaped. This establishes the tested process boundary, not live symbol binding,
+remote traffic envelopes or physical bus behavior.
+
+### Analysis and failure-injection follow-up
+
+```sh
+make CC=clang BUILD_DIR=build/se02-runtime-sanitize-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' \
+  test-symbol-wire test-symbol-schedule test-symbol-process test-symbol-helper
+make analyze
+```
+
+Focused AddressSanitizer/UndefinedBehaviorSanitizer checks passed, exit 0
+(`runtime-sanitize-final.log`, `runtime-sanitize-final.exit`). Final configured
+production static analysis passed, exit 0 (`runtime-full-analysis-final.log`,
+`runtime-full-analysis-final.exit`).
+
+Initial full analysis diagnosed intentional pointer-size bookkeeping expressions;
+frontend ownership was grouped into one explicitly accounted struct instead
+(`runtime-full-analysis-initial.log`, exit 2). A transient identifier substitution
+error during that grouping was caught by compilation and corrected before the
+final focused run (`runtime-grouping-initial.log`, exit 2). Existing application
+assertions and fixtures were preserved.
+
+The transport quota fixture now uses a Request frame to keep its ordinary
+allocation-exhaustion assertion. Small Result/control payloads instead use their
+already-accounted inline capacity; separate tests prove those control messages
+remain available at exhaustion. No quota assertion was waived.
+
+The complete regression command, environment and source hashes are retained in
+`runtime-baseline-command.json` and `runtime-tested-files.json`. Final regression
+results and the normal build are recorded after completion below.
+
+### Complete host regression
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/se02-runtime-ci-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+```
+
+PASS, exit 0 (`runtime-test-ci.log`, `runtime-test-ci.exit`). This fresh build
+included existing native/attach, input/terminal/tmux, localhost remote and offline
+OpenOCD suites, plus the new helper/process and actual-GDB isolation checks.
+`runtime-tested-files.json` was checked after completion: no implementation,
+header, test or Makefile differed from the frozen manifest. This is local host
+success, not hosted Ubuntu CI or physical ARM/Xtensa/RISC-V evidence.
+
+Normal `make` passed and updated `build/the-bugger` (`runtime-normal-make.log`,
+`runtime-normal-make.exit`). Documentation links and source whitespace/width
+checks passed. The helper execution foundation is implemented and locally
+verified. Actual artifact operations, decoder behavior, production sizing,
+consumer workflows and F07 acceptance remain separate work.
+
+
+## Symbol Engine admission ledger — 2026-11-19
+
+The first SE03 component implements logical storage admission independently of
+filesystem acquisition. Its internal tickets represent reservations, open-context
+charges, cached backing and pending cleanup; they do not establish content
+identity, byte equality, metadata validity or runtime authority. Acquisition and
+helper cleanup integration remain separate work within SE03.
+
+The maintained suite exercises concurrent reservations, exact and one-over file
+and aggregate ceilings, independent charges for contexts sharing a backing,
+cache reactivation and delayed cleanup. Foreign-ledger and different-size sharing
+are rejected. Allocation failure at each ticket allocation and ancestor-budget
+exhaustion leave both logical and allocation accounts unchanged. Commit and
+cleanup need no new allocation. Zero-byte files still retain counted ownership
+and allocation charges; `UINT64_MAX` arithmetic does not wrap.
+
+```sh
+make BUILD_DIR=build/se03-ledger-focused-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-admission
+make CC=clang BUILD_DIR=build/se03-ledger-sanitize-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' test-symbol-admission
+make analyze
+```
+
+All passed, exit 0. Logs and exit records are retained under
+`build/se03-evidence-20261119/` as `ledger-focused`, `ledger-sanitize` and
+`ledger-analysis`; `ledger-environment.txt` records host/tool versions. Configured
+analysis covers the production sources including the ledger. These checks do
+not exercise acquisition, actual backing deduplication or debugger access.
+
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/se03-ledger-ci-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make
+```
+
+The fresh fortified complete host baseline passed, exit 0 (`ledger-test-ci.log`,
+`ledger-test-ci.exit`), including existing native, input/terminal/tmux, localhost
+remote and offline OpenOCD coverage. The frozen ledger source manifest
+`ledger-tested-files.json` was checked after completion with no differences;
+`ledger-commands.json` records the baseline command and environment. The next
+acquisition component was developed separately and is not covered by this result.
+Normal `make` passed and updated `build/the-bugger` (`ledger-normal-make.log`,
+`ledger-normal-make.exit`). Local documentation references and whitespace checks
+passed. This is local host verification, not hosted CI, filesystem coherence
+qualification, physical validation, SE03 completion or F07 acceptance.
+
+
+## Symbol Engine byte acquisition component — 2026-11-19
+
+The next SE03 component implements bounded filesystem copying and complete
+frozen-byte hashing. It is independently testable and remains disconnected from
+the private worker dispatcher and TUI. The worker still returns Unsupported for
+artifact operations. This component produces raw retained bytes, with source
+coherence unproven; decoder validation and artifact admission remain subsequent
+work. Qualified full-file reflink, deduplication and helper cleanup evidence are
+not established here.
+
+The maintained local suite uses actual unnamed temporary files on the host's
+`/tmp` tmpfs. It verifies exact size grants, copies crossing buffer boundaries,
+short/interrupted transfers, source growth/truncation, path replacement,
+allocation/storage/read failures and per-stage cancellation. Instrumented reads
+check that no supported staging writer remains when frozen-byte hashing begins.
+Retained bytes remain unchanged after the source is written. Read-only,
+close-on-exec, owner-read protection, descriptor-number reuse after a close error,
+resource rollback and descriptor cleanup are checked. Failure while hashing
+cannot expose a prefix digest or modify the caller's result.
+
+```sh
+make BUILD_DIR=build/se03-acquire-focused-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-acquire test-symbol-admission
+make CC=clang BUILD_DIR=build/se03-acquire-sanitize-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' test-symbol-acquire test-symbol-admission
+make analyze
+```
+
+The focused and sanitizer runs passed, exit 0 (`acquire-focused-final`,
+`acquire-sanitize-final` logs/exit records in `build/se03-evidence-20261119/`).
+Configured full production analysis passed, exit 0 (`acquire-analysis-initial`).
+A preceding component analysis identified swappable parameters and signed flag
+operations; these were corrected before the frozen regression source manifest
+(`acquire-component-analysis-initial.log`, exit 1). Host/tool versions remain
+in `ledger-environment.txt` from this same session.
+
+Unsupported backing filesystem behavior is injected explicitly. Runtime checks
+recognize ext4, XFS, Btrfs and tmpfs; recognizing these types is not qualification
+of every filesystem/kernel configuration. The separate local feasibility check
+`storage-feasibility.json` observed unnamed read-only retention on the build
+filesystem and tmpfs. Neither result proves atomic source consistency, persistent
+storage durability, reflink behavior or production acquisition performance.
+
+
+```sh
+TERM=xterm-256color make BUILD_DIR=build/se03-acquire-ci-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci
+make
+```
+
+The fresh fortified complete host baseline passed, exit 0 (`acquire-test-ci.log`,
+`acquire-test-ci.exit`). The normal build passed and updated `build/the-bugger`
+(`acquire-normal-make.log`, `acquire-normal-make.exit`). The frozen implementation,
+header, test-code and Makefile hashes in `acquire-tested-files.json` remained
+unchanged. `tests/README.md` received its documentation update afterward; that
+non-code difference is recorded in `acquire-manifest-check.json`. Baseline command
+and environment are in `acquire-commands.json`. Local documentation references
+and whitespace checks passed.
+
+This is local host component/regression evidence, not hosted CI, XFS/Btrfs
+qualification, source-coherence proof, supervised acquisition acceptance,
+production sizing, physical validation, SE03 completion or F07 acceptance.
+
+
+## Symbol Engine backing equality component — 2026-11-19
+
+`test-symbol-equal` uses actual unnamed read-only backings to verify complete
+positive byte equality, distinct negative results, final-byte differences,
+changing service allowances, interrupted/short reads, scoped input failures and
+allocation rollback. Instrumentation covers both file reads and comparison work.
+A controlled backing-length change after both ranges arrive prevents equality
+publication. Cancellation retains the caller's descriptors and releases the
+component account. No digest or inode shortcut establishes positive equality.
+
+```sh
+make BUILD_DIR=build/se03-equal-focused-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-equal test-symbol-acquire test-symbol-admission
+make CC=clang BUILD_DIR=build/se03-equal-sanitize-20261119 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' test-symbol-equal
+```
+
+Focused and sanitizer checks passed, exit 0 (`equal-focused-final` and
+`equal-sanitize-final` logs/exit records under `build/se03-evidence-20261119/`).
+Initial component analysis diagnosed swappable parameters and comparison/flag
+expressions; final component analysis passed after correction. Full SE03 host
+regression remains pending integration; the preceding acquisition baseline does
+not cover this later component. Content ownership, actual deduplication, helper
+cleanup and F07 acceptance remain separate work.
+
+
+## Symbol Engine ownership integration — 2026-11-19
+
+### Helper ownership evidence for acquisition
+
+Separate process-generation and confirmed-reap markers now support pending
+acquisition cleanup. Focused helper tests passed, exit 0
+(`helper-reap-focused.log`, `helper-reap-focused.exit`), including cooperative
+shutdown/restart and a controlled loss of reap ownership after startup. The latter
+leaves confirmed-reap evidence unchanged and prevents another start. EOF and
+operation failure cannot substitute for owned reap. Frontend result/descriptor
+ownership remains independent of this evidence.
+
+The same helper suite passed with Clang AddressSanitizer/UndefinedBehaviorSanitizer
+(`helper-reap-sanitize` log/exit, 0); configured component analysis passed
+(`helper-reap-analysis`, 0). Commands use `build/se03-helper-focused-20261119` and
+`build/se03-helper-sanitize-20261119`, the fortified flags and sanitizer settings
+above, with `test-symbol-helper`. Healthy-worker cleanup acknowledgements and
+integrated artifact admission remain pending; these markers alone do not complete
+SE03 or authorize a charge release while frontend backing remains owned.
+
+
+### Bounded helper cleanup notifications
+
+A private cleanup acknowledgement now separates operation results from retirement
+of worker-owned state and frame descriptors. Notifications retain their job slots
+until consumed. Focused checks cover all job slots held by backpressured cleanup,
+unsent cancellation, result-before-cleanup delivery, missing acknowledgements and
+premature/wrong-context/wrong-revision acknowledgements. Completed result data
+survives later channel failure. Invalid or missing acknowledgements require owned
+reap before retirement; staged/retained filesystem objects still need their own
+cleanup proof and charge release.
+
+`helper-release-focused-final`, `helper-release-sanitize` and
+`helper-release-analysis` logs/exit records under `build/se03-evidence-20261119/`
+record PASS, exit 0. The focused target is `test-symbol-helper test-symbol-wire`
+in `build/se03-release-focused-20261119`; the sanitizer variant uses
+`build/se03-release-sanitize-20261119` and the fortified Clang ASan/UBSan flags
+above. Component analysis covers helper, worker and wire sources. Actual-GDB
+isolation passed, exit 0 (`helper-release-native`, target
+`test-symbol-helper-native`), with GDB remaining independently responsive.
+
+The reserved acquisition operation still returns Unsupported; it exercises this
+ownership protocol without producing synthetic artifact metadata. Actual helper
+acquisition, filesystem-object ownership, deduplication and the complete SE03
+regression gate remain pending.
+
+Normal `make` passed and updated `build/the-bugger`
+(`helper-release-normal-make`, exit 0). Local documentation references and
+whitespace checks passed. Full SE03 regression remains pending integration.
+
+
+### Retained filesystem namespace component
+
+Named retained storage now has an independently testable helper-side namespace
+owner. Local files stay linked until frontend references close, with deletion
+performed separately under supervision. Namespace/file identities are storage
+ownership guards; they do not replace content identity, byte equality or metadata
+validation. The anonymous byte-copy component and frontend admission integration
+remain separate work.
+
+`test-symbol-storage` verifies exclusive creation, protected permissions, reader
+identity/extent checks, reconstructing helper-local state, replacement refusal,
+nonempty-directory refusal, allocation rollback and per-stage cancellation.
+Destroying local metadata leaves filesystem cleanup explicit. The same local
+backing-type policy is shared with acquisition.
+
+Focused storage, acquisition, admission and equality suites passed, exit 0
+(`storage-focused.log`, `storage-focused.exit` under
+`build/se03-evidence-20261119/`). Storage/acquisition also passed the fortified
+Clang ASan/UBSan checks (`storage-sanitize`, exit 0). Component analysis passed
+(`storage-analysis`, exit 0). Commands use `build/se03-storage-focused-20261119`
+and `build/se03-storage-sanitize-20261119` with the flags above and targets
+`test-symbol-storage test-symbol-acquire`; focused checks additionally include
+`test-symbol-admission test-symbol-equal`.
+
+These are actual local filesystem observations, not source-coherence, universal
+filesystem, supervised admission or production-performance qualification. Full
+SE03 host regression and F07 acceptance remain pending integration.
+
+
+### Named acquisition and size commitment
+
+The copier now uses an owned named slot instead of anonymous staging. This
+integration keeps final potentially blocking deletion in the helper after
+frontend descriptors close. Earlier anonymous-file observations above remain
+historical component evidence. Acquisition destruction closes only its own
+descriptors; the caller retains named-slot ownership and cleanup obligations.
+
+Admission can preallocate unsized ownership before discovery. Such a ticket
+cannot commit until assigned the exact offer, including explicit zero. Assignment
+reserves the full logical charge without allocating; per-file or aggregate
+failure leaves the placeholder unchanged. The helper identifies an empty staging
+file before offering its size and writes no data before an exact grant. Reader
+identity is checked against that original file before complete frozen-byte hashing.
+
+Focused acquisition/admission/storage/equality checks passed, exit 0
+(`retained-acquire-focused` in `build/se03-evidence-20261119/`). They verify empty
+staging at the offer, storage identity in the completed result, explicit size
+assignment, unchanged quota failures, and unsized/cancelled commitment refusal.
+Existing binary-byte, mutation, short/EINTR, failure and descriptor checks remain.
+The storage filesystem-profile rejection is now checked at namespace qualification.
+Fortified Clang ASan/UBSan passed for acquisition/admission/storage
+(`retained-acquire-sanitize`, 0); component analysis passed
+(`retained-acquire-analysis`, 0). Build directories are
+`build/se03-retain-focused-20261119` and `build/se03-retain-sanitize-20261119`,
+using the flags and targets above.
+
+Supervised producer dispatch and the frontend ownership registry remain pending.
+This is locally verified component integration, not completed SE03 or F07 acceptance.
+
+
+### Artifact operation dispatcher component
+
+The helper-side dispatcher now composes namespace, byte-copy, equality and cleanup
+components through explicit bounded request schemas. It performs no filesystem
+work during creation and validates the complete argument layout before opening a
+namespace. Successful acquisition returns the complete extent, storage identity,
+digest and a borrowed read-only descriptor; failures expose no candidate payload.
+
+Focused operation/storage/acquisition/admission/equality checks passed, exit 0
+(`operation-focused-final` under `build/se03-evidence-20261119/`), using
+`build/se03-operation-focused-20261119` with `_FORTIFY_SOURCE=3`. The operation
+suite passed fortified Clang ASan/UBSan (`operation-sanitize-final`, 0), using
+`build/se03-operation-sanitize-20261119` and the flags above. Component analysis
+passed (`operation-analysis-final`, 0). The initial analysis found signed bitwise
+flag operations; these were corrected, and the original diagnostic log remains.
+Cancellation is checked at 180 acquisition positions, including before a storage
+key is available and after a completed descriptor is owned. Cleanup remains an
+explicit caller obligation; releasing operation state does not release that duty.
+
+These checks exercise actual local files without GDB or target access. Supervised
+producer dispatch, frontend admission integration, full SE03 host regression and
+F07 acceptance remain pending.
+
+
+### Supervised artifact operations
+
+The production helper now dispatches protected storage creation, frozen byte
+acquisition, complete backing comparison and explicit cleanup. Acquisition sends
+an identified empty-file offer, waits for the exact reserved-size grant, and
+reports meaningful bounded progress. Diagnostics preserve operation cause and
+storage ownership independently of a usable result. Serialization failure uses
+reserved failure framing; no partial candidate is published. All resource jobs
+retain cleanup notification ownership until consumed.
+
+Local verification passed, exit 0, with evidence under
+`build/se03-evidence-20261119/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused integration | `make BUILD_DIR=build/se03-dispatch-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-resource test-symbol-helper test-symbol-wire test-symbol-helper-native`; `dispatch-focused-complete-final.log/.exit`. Actual local files, production early helper entry and independent actual GDB. |
+| Sanitizers | Fortified Clang ASan/UBSan flags above; `build/se03-dispatch-sanitize-20261119/test-symbol-helper`, then `build/se03-dispatch-sanitize-20261119/test-symbol-resource /home/gnix/developer/the-bugger/build/se03-dispatch-sanitize-20261119/test-symbol-resource`; `dispatch-sanitize-build-final`, `dispatch-sanitize-helper-final`, `dispatch-sanitize-resource-final` log/exit records. The resource harness also executes a controlled worker allocation-failure case. |
+| Complete host baseline | `TERM=xterm-256color make BUILD_DIR=build/se03-dispatch-ci-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `dispatch-test-ci.log/.exit`. |
+| Static analysis/build | `make analyze` and normal `make`; `dispatch-full-analysis` and `dispatch-normal-make` log/exit records. |
+
+The resource suite checks full logical charges for independent acquisitions,
+sharing only after complete comparison and candidate cleanup, quota refusal
+without file growth, cancellation with retained cleanup ownership, retained bytes
+across worker restart, and staging cleanup after killing and reaping the owned
+worker. Publication allocation failure returns no payload or descriptor and keeps
+cleanup identity. Fault peers reject duplicate/wrong-context offers and diagnostics,
+inconsistent storage identities, and success following a failure diagnostic.
+
+`dispatch-baseline-files.json`, `dispatch-baseline.patch` and the separately
+captured new resource test identify the tested tree. The manifest comparison
+reported no changes; only this subsequent evidence entry follows those checks.
+`dispatch-environment.txt` records host/compiler/GDB versions. Local links and
+whitespace checks passed. These are local host results, not hosted Ubuntu CI or
+physical validation. Frontend registry/orchestration, complete SE03 acceptance,
+qualified reflink/coherence, decoder sizing and F07 consumers remain pending.
+
+
+### Frontend artifact identities, leases and sharing
+
+The frontend registry now composes admission charges with independently owned
+contexts, retained file descriptors and scoped backing comparisons. Identifier
+allocation belongs to the frontend across registry replacement; helper restart
+neither reissues identities nor invalidates independently retained bytes. Context
+closure, storage-capability withdrawal, lease retirement and physical cleanup are
+separate transitions. Sharing waits for complete equality and exact duplicate
+cleanup; construction/comparison failure cannot publish a candidate.
+
+Local checks passed, exit 0, with logs and exit records under
+`build/se03-evidence-20261119/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused integration | `make BUILD_DIR=build/se03-ownership-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-resource test-symbol-artifact test-symbol-operation test-symbol-helper test-symbol-helper-native`; `ownership-integrated-final`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se03-registry-ci-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `registry-test-ci`. |
+| Sanitizers | `make BUILD_DIR=build/se03-registry-sanitize-20261119 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-artifact test-symbol-operation build/se03-registry-sanitize-20261119/test-symbol-resource`, then that resource binary with its own absolute path as argument; `registry-sanitize` and `registry-sanitize-resource`. Both parent and separately executed harness worker are instrumented. |
+| Invalid budget, ordinary native debugging | `TB_SYMBOL_FILE_MIB=0 TERM=xterm-256color build/se03-registry-ci-20261119/test-native-tui /home/gnix/developer/the-bugger/build/se03-registry-ci-20261119/the-bugger /home/gnix/developer/the-bugger/build/se03-registry-ci-20261119/debug-fixture`; `registry-invalid-budget-native`. Actual GDB/TUI execution remained usable with the Symbol Engine unavailable. |
+| Analysis/build | `make analyze` and normal `make`; `registry-analysis` and `registry-normal-make`. |
+
+Coverage includes 1,024 independent contexts, index-allocation rollback, arbitrary
+closure order, registry replacement, identifier exhaustion, descriptor protection,
+inspection failure, aggregate refusal without staging growth, and allocation-free
+publication. Comparison tests distinguish consumer/request identity from context
+revision, retain backing through original-context closure, reject wrong-generation
+receipts, and handle cancellation/failure without sharing. Withdrawn storage
+correspondence invalidates existing leases and late evidence while preserving
+ownership and charges. The production-helper test retains an open artifact across
+restart, compares two independent acquisitions, reactivates cached backing only
+after duplicate deletion, and cleans the original slot after the last lease.
+
+A rejected storage-filesystem profile can now clean up its identified empty owned
+directory; wrong-identity and nonempty cleanup remain refused. Comparison extents
+outside the supported signed file-offset range fail as malformed requests.
+The original component-analysis diagnostic for an implicit `memcmp` result test
+remains in `ownership-analysis-shared`; the comparison was made explicit and the
+final complete analysis passed.
+
+`registry-tested-files.json`, `registry-tested.patch` and captured new source/header/
+test inputs identify the tested tree; `registry-environment.txt` records versions.
+The manifest found no source, test or build changes after the snapshot. Subsequent
+architecture/testing wording corrections and this evidence entry are documentation
+only. Link and whitespace checks passed. These results are local host evidence,
+not hosted Ubuntu CI, physical validation, coherent acquisition qualification or
+F07 acceptance. Qualified reflink/coherence profiles, explicit Open workflow,
+decoders, sizing and consumers remain unfinished.
+
+
+### Bounded reflink acquisition — 2026-11-19
+
+Acquisition now attempts a nonzero `FICLONERANGE` covering exactly the granted
+extent. Zero-length files bypass cloning. Unsupported cloning resets the owned
+staging file before a complete streaming copy; storage exhaustion and other
+operational errors fail explicitly. Clone success still requires exact-size and
+identity checks, source mutation checks, staging-writer closure and complete
+frozen-byte hashing. The retained bytes carry no stronger source-coherence claim.
+
+Local checks passed, exit 0. Logs and exit records are under
+`build/se03-evidence-20261119/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused components/integration | `make BUILD_DIR=build/se03-clone-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-acquire test-symbol-reflink test-symbol-operation test-symbol-artifact test-symbol-resource`; `clone-focused-final`. Helper scheduling and actual GDB isolation also passed in `clone-focused`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se03-clone-ci-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `clone-test-ci`. |
+| Sanitizers | `make BUILD_DIR=build/se03-clone-sanitize-20261119 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-acquire test-symbol-reflink test-symbol-operation test-symbol-artifact test-symbol-resource`; `clone-sanitize-final`. The resource binary also passed with its own absolute path as its worker argument, instrumenting the separate harness worker; `clone-sanitize-resource-final`. |
+| Analysis/build | `make analyze` and normal `make`; `clone-analysis` and `clone-normal-make`. |
+
+The maintained reflink fixture injects successful, short, interrupted and failed
+kernel outcomes, source growth, fallback-reset failure and cancellation. These
+emulations test control flow and ownership, not filesystem atomicity. The separate
+native probe reported cloning unavailable on this host; complete streaming bytes,
+hash and isolation from subsequent source writes passed. No positive reflink
+filesystem profile or coherent-source acquisition is qualified by this result.
+
+`clone-final-tested-files.json`, `clone-final-tested.patch` and the captured new
+test identify the checked tree; `clone-environment.txt` records tool versions.
+Documentation-only changes followed the final snapshot. Link checks covered 229
+local references without errors; whitespace checks passed. The preserved original
+F07 research archive still matched its recorded SHA-256 checksum.
+These are local host results, not hosted CI, physical target validation, SE03
+completion or F07 acceptance. Explicit Open workflow, acquisition-profile
+qualification, decoders, production sizing and consumers remain outstanding.
+
+
+### ELF fixed records and table layout — 2026-11-19
+
+The first SE04 component decodes fixed ELF32/64 header, section, program and
+symbol records independently of filesystem I/O and IPC. Layout checks resolve
+extended counts and section-name indexes without allocating an inventory.
+Malformed supported structure and unavailable formats remain distinct; failed
+calls leave output unchanged. Raw special-symbol fields confer no storage,
+code-location or runtime authority.
+
+Local checks passed, exit 0; logs and exit records are under
+`build/se04-evidence-20261119/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused records and native comparison | `make BUILD_DIR=build/se04-record-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-elf test-symbol-elf-native`; `records-focused-final-tree`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se04-record-ci-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `records-test-ci`. |
+| Sanitizers | `make BUILD_DIR=build/se04-record-sanitize-20261119 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-elf test-symbol-elf-native`; `records-sanitize`. |
+| Analysis/build | `make analyze` across 47 production source files and normal `make`; `records-analysis` and `records-normal-make`. |
+
+Authored fixtures cover both classes in both byte orders, every truncated record
+prefix, extended counts/indexes, overflow, stride changes, NOBITS/NULL behavior
+and address-width boundaries. The native comparison agreed with libelf on all
+decoded fields in three generated files: 39/37/31 sections, 15/15/11 program
+headers and 112/69/31 symbols respectively. The sanitizer executable's larger
+symbol table also passed comparison. These are host-file and format observations,
+not physical architecture or general compiler/ABI qualification.
+
+Initial strict-compilation and component-analysis diagnostics remain in
+`records-focused` and `records-component-analysis`. Test expectation signedness
+and extent-argument placement were corrected before the complete baseline;
+`records-component-analysis-final` passed as well.
+`records-tested-files.json`, `records-tested.patch`, captured new source/header/
+test inputs and `records-environment.txt` identify the tested tree and toolchain.
+Only documentation changed after that snapshot. Link checks covered 230 local
+references without errors; whitespace checks passed.
+
+These results are local host evidence, not hosted CI, physical target validation,
+SE04 completion or F07 acceptance. Complete inventories, string/section/symbol
+dependencies, extended symbol section-index resolution, helper integration,
+DWARF, sizing and consumer acceptance remain outstanding. Existing libelf image
+consumers and debugger operations are unchanged.
+
+
+### Retained-file reads and ELF composition — 2026-11-19
+
+A helper-side scratch reader now borrows exact frozen backing and reserves its
+complete owned state against a caller budget. Each step performs one bounded
+filesystem operation; partial/interrupted reads cannot expose a prefix. Descriptor
+and metadata checks bracket every complete view, retaining the original observed
+timestamps across later requests. Destruction releases only scratch ownership;
+the descriptor, content lease and physical cleanup remain with their owners.
+
+Local checks passed, exit 0, with logs and exit records under
+`build/se04-evidence-20261119/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused reader/ELF composition | `make BUILD_DIR=build/se04-file-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-file test-symbol-elf test-symbol-elf-native`; `file-focused-final`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se04-file-ci-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `file-test-ci`. |
+| Sanitizers | `make BUILD_DIR=build/se04-file-sanitize-20261119 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-file test-symbol-elf test-symbol-elf-native`; `file-sanitize`. |
+| Analysis/build | `make analyze` across 48 production source files and normal `make`; `file-analysis` and `file-normal-make`. |
+
+The reader tests cover exact/out-of-range requests, changing read allowances,
+allocation failure, partial/EINTR/EOF/error paths, descriptor protection, changed
+backing and cancellation. Mutation injection deliberately retains a writer;
+these checks do not prove coherence against arbitrary external writers.
+The native ELF comparison now obtains each input through logical admission and
+private acquisition, then decodes through the retained-file reader. All fields
+agreed with libelf for 39/37/31 sections, 15/15/11 program headers and 223/69/31
+symbols respectively. The sanitizer executable's 9,554-symbol table also passed.
+Reader retirement precedes descriptor close; exact unlink precedes logical
+capacity release. Construction accounting returns to baseline after cleanup.
+
+The original signed-bitwise diagnostics remain in `file-component-analysis`;
+explicit unsigned flag tests passed in `file-component-analysis-final` before
+the complete baseline. `file-tested-files.json`, `file-tested.patch`, captured
+new source/header/test inputs and `file-environment.txt` identify the tested tree.
+Only documentation changed after that snapshot. Checks covered 231 local links
+without errors, and whitespace checks passed.
+
+This is local host and harness-composition evidence, not hosted CI, production
+helper integration, coherent-source qualification, hardware validation or F07
+acceptance. Section/string/symbol dependency validation, DWARF, sizing and
+consumers remain pending. No new startup setting or production cache limit was
+introduced; the scratch span is separate from a Symbols result window.
+
+
+### Complete section directories and names — 2026-11-19
+
+Section-directory construction now validates the implemented section/name scope
+before exposing a view. Auxiliary heap sorting yields between bounded actions and
+preserves original section order. File-backed overlaps and supported malformed
+name dependencies fail explicitly; compressed-name coverage remains unavailable
+without interpreting payload bytes. Full name coordinates/lengths survive
+scratch boundaries, duplicate strings and substring references.
+
+Local checks passed, exit 0. Logs and exit records are under
+`build/se04-evidence-20261119/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused directory/reader/native composition | `make BUILD_DIR=build/se04-sections-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-sections test-symbol-file test-symbol-elf-native`; `sections-focused-final`. Fixed-record checks also passed in `sections-integrated`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se04-sections-ci-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `sections-test-ci`. |
+| Sanitizers | `make BUILD_DIR=build/se04-sections-sanitize-20261119 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-sections test-symbol-file test-symbol-elf test-symbol-elf-native`; `sections-sanitize`. |
+| Analysis/build | `make analyze` across 49 production source files and normal `make`; `sections-analysis` and `sections-normal-make`. |
+
+Authored fixtures cover both classes and byte orders, long names over 64 KiB,
+empty/absent/unsupported/malformed name tables, shuffled offsets, overlaps,
+allocation failures, interrupted/short/failed reads and cancellation. A sparse
+70,000-section file validates extended counts and complete traversal; a smaller
+caller budget refuses construction without a candidate prefix. The fixture's
+16 MiB allowance is test configuration, not a production index/cache default.
+Read and NUL-scan instrumentation checks each service allowance. Owned allocations
+return to baseline, and borrowed descriptors remain valid until owner cleanup.
+
+The admitted native-file comparison now also checks complete directory fields
+and full section-name bytes against libelf. Its three generated files contained
+39/37/31 sections, 15/15/11 program headers and 244/69/31 symbols; all comparisons
+passed. The sanitizer executable's 9,579-symbol table passed as well.
+`sections-tested-files.json`, `sections-tested.patch`, captured new source/header/
+test inputs and `sections-environment.txt` identify the tested tree. Only
+documentation changed after the snapshot. Link checks covered 232 local references
+without errors; whitespace checks passed.
+
+These are local host and harness-composition results, not hosted CI, physical
+architecture/producer qualification, production helper integration or F07
+acceptance. Program semantics, symbol/string dependencies, extended symbol indexes,
+other cross-section relationships, DWARF, sizing and consumers remain separate
+work. The helper directory owns no independent frontend publication guarantee.
+
+
+### Complete ELF symbol-table dependencies — 2026-11-20
+
+Selected SYMTAB/DYNSYM construction now checks its string/index dependencies,
+reserved null entry, local ordering and ordinary section references before
+exposing a complete view. Raw fields, special markers and full name coordinates
+remain separate from resolved ordinary section indexes. The directory carries
+its captured backing identity into the reader; no pathname is reopened.
+
+Local checks passed, exit 0. Logs and exit records are retained under
+`build/se04-evidence-20261120/`, except the earlier focused log noted below:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused symbols/directory/reader/records/native composition | `make BUILD_DIR=build/se04-symbols-focused-20261119 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-symbols test-symbol-sections test-symbol-file test-symbol-elf test-symbol-elf-native`; `build/se04-evidence-20261119/symbols-focused-final`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se04-symbols-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `symbols-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se04-symbols-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-symbols test-symbol-sections test-symbol-file test-symbol-elf test-symbol-elf-native`; `symbols-sanitize`. |
+| Analysis/build | `make analyze` across 50 production source files and normal `make`; `symbols-analysis` and `symbols-normal-make`. |
+
+Authored fixtures cover both classes and byte orders, distinct symbol-table
+provenance, empty/long/substring names, malformed dependency links and local/null
+ordering, unsupported compression, raw special records and missing/conflicting
+extended-index dependencies. A sparse 70,000-section file resolves an extended
+ordinary index of `0xfff1` without interpreting it as `SHN_ABS`. Allocation and
+budget refusal, cancellation, short/EINTR/EOF/error paths expose no candidate
+prefix or leaked ownership. Read/NUL-scan instrumentation checks service allowances.
+The 16 MiB fixture budget is not a production cache default.
+
+The native-file comparison checks complete selected inventories and full name
+bytes against libelf after admission/acquisition. Its three generated host files
+contained 39/37/31 sections, 15/15/11 program headers and 253/69/31 symbols; all
+comparisons passed. The sanitizer executable's 9,600 symbols also passed.
+The harness retires readers and directory views before closing the descriptor,
+then confirms exact backing cleanup and logical capacity release.
+
+Initial component analysis rejected duplicate branches; equivalent failure
+conditions were combined before the final checks. Earlier diagnostics remain in
+`build/se04-evidence-20261119/`; the corrected component analysis and complete
+analysis passed. `symbols-tested-files.json`,
+`symbols-tested.patch`, captured source/header/test inputs and
+`symbols-environment.txt` identify the tested tree. Only documentation changed
+after the snapshot. Link checks covered 233 local references without errors;
+whitespace checks passed.
+
+This is local host and harness-composition evidence, not hosted CI, universal
+producer/ABI qualification, physical validation, production helper integration or
+SE04/F07 acceptance. Remaining program/section semantics, physical record binding,
+DWARF, production sizing and consumer integration retain their separate gates.
+
+
+### Supervised ELF validation and receipt-time progress — 2026-11-20
+
+The helper now validates an explicitly selected retained ELF directory or symbol
+table. Complete summaries and dependency diagnostics cross the versioned private
+channel; the request acquires no new artifact or target data. Decoder construction
+uses a separate shared bounded account. Its production default remains deferred
+to SE10; ordinary configuration disables decoder requests before filesystem access.
+
+Local focused checks, sanitizers, static analysis and the complete fresh baseline
+passed, exit 0. Logs and exit records are under
+`build/se04-helper-evidence-20261120/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused dispatch/transport/helper/ownership | `make BUILD_DIR=build/se04-helper-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-inspect test-symbol-operation test-symbol-helper test-symbol-wire test-symbol-resource`; `focused-final-tree`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se04-helper-verified-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `test-ci-verified`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se04-helper-final-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-inspect test-symbol-operation test-symbol-wire test-symbol-helper test-symbol-resource`; `sanitize-final`. |
+| Analysis/build | `make analyze` across 50 production source files and normal `make`; `analysis-frozen` and `normal-make`. |
+
+Authored ELF32/64 files in both byte orders exercise directory and distinct
+SYMTAB/DYNSYM scopes, malformed headers/names, unsupported compression, selection
+bounds and exact backing mismatch. The origin changes after admission without
+retargeting frozen content. Cancellation occurs after decoder progress; confirmed
+reap permits explicit restart while a parent descriptor remains valid. An 80 KiB
+helper decoder allowance refuses combined construction, then admits directory-only
+validation after cleanup; 512 KiB exercises full selected scopes. Those allowances
+are harness configurations, not production sizing. Exact unlink precedes logical
+admission release.
+
+The first analysis rejected adjacent interchangeable budget pointers. A named
+budget bundle resolved that interface hazard; the original analysis log remains.
+The initial full baseline was stopped for that correction and replaced with the
+fresh final directory above. Initial saturation/admission assertions also failed
+intermittently; their logs remain, and diagnostic output preserves the helper
+state/reason on recurrence. Five helper and ten inspection repetitions passed
+before the subsequent timestamp correction; those repetitions alone do not prove
+those initial failures resolved.
+
+A controlled receive-time clock test then reproduced a definite protocol rejection:
+valid worker progress generated after the pump's initial sample was classified as
+future data. `receive-time-repro` records the pre-fix failure. The parent now samples
+time after receipt while retaining worker event timestamps for deadline semantics.
+The new regression passes alongside existing genuine-future, buffered-progress,
+heartbeat and absolute-deadline assertions. The earlier intermittent failures are
+consistent with this race, but their logs do not prove that causal attribution.
+Five further helper and inspection repetitions passed after the correction.
+
+The next baseline exposed an existing breakpoint-harness race at its stopped-state
+assertion. The fixture sends the result before the asynchronous stop; those records
+need not arrive in one controller pump. A delayed-stop fixture deterministically
+reproduced the failure in `breakpoints-stop-before`. The harness now waits within
+a bounded interval for the stop event, preserving the stopped-state assertions.
+`breakpoints-stop-after` records the focused pass; production breakpoint behavior
+is unchanged. The failed `test-ci-final` log remains; the new verified directory
+above supplies the replacement complete baseline. Instrumented breakpoint checks
+passed separately in `breakpoints-sanitize`, exit 0.
+
+`verified-tested-files.json`, `verified-tested.patch`, captured source/header/test
+inputs and `environment.txt` identify the tested tree. Earlier snapshots remain
+with their superseded checks. Only documentation changed afterward. Link checks
+covered 234 local references without errors; whitespace checks passed.
+
+This is local host evidence, not hosted CI, physical producer/architecture
+qualification, coherent-source proof, frontend evidence publication or F07
+acceptance. DWARF, production sizing, discovery and consumer integration remain
+separate gates.
+
+
+### Bounded DWARF unit-header decoding — 2026-11-20
+
+Initial-length and non-split DWARF 4–5 unit-header decoding now uses checked
+section-relative extents and fixed prefix bounds. Offset format remains separate
+from raw address size. DWARF 4 info headers retain compile-or-partial uncertainty;
+unit-body, abbreviation and reference evidence remains unavailable at this layer.
+
+Local focused checks, sanitizers, static analysis and the complete fresh host
+baseline passed, exit 0. Logs and exit records are under
+`build/se05-evidence-20261120/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused headers/readers | `make BUILD_DIR=build/se05-unit-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-dwarf test-symbol-primitives`; `units-focused`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se05-unit-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `units-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se05-unit-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-dwarf test-symbol-primitives`; `units-sanitize`. |
+| Analysis/build | `make analyze` across 51 production source files and normal `make`; `units-analysis` and `units-normal-make`. |
+
+Authored prefixes cover both byte orders and offset formats, raw address sizes
+1/2/3/4/8/16/255, supported info/type headers and mixed-format contributions.
+Every shorter supported-header prefix fails with unchanged outputs. Reserved
+length markers, exact and overflowing extents, shortened declarations despite
+available following bytes, absent bodies, invalid type offsets and unsupported
+versions/unit kinds exercise failure boundaries. A 40-byte stack prefix with an
+oversized supplied length passes under sanitizers without inspection beyond the
+fixed ceiling. Generic length framing remains distinct from supported unit
+validation, including empty or unsupported contributions.
+
+`units-tested-files.json`, `units-tested.patch`, captured source/header/test inputs
+and `units-environment.txt` identify the tested tree. Only documentation changed
+subsequently. Link checks covered 235 local references without errors; whitespace
+checks passed. The primary format references are DWARF 4 and 5, Section 7.5.1,
+linked in the architecture; downloaded copies and text extracts remain under
+ignored `build/se05-references-20261120/`.
+
+These are local host and authored-format results, not hosted CI, native/embedded
+producer qualification, complete unit/DIE validation or SE05/F07 acceptance.
+No helper request, discovery, runtime binding or target access was introduced.
+
+
+### Complete selected DWARF header inventories — 2026-11-20
+
+Selected info/type sections now produce a complete ordered header inventory only
+after framing/header checks and exact allocation succeed. A counting pass precedes
+reservation and reconstruction. Safely framed unsupported units retain explicit
+coverage entries; malformed late contributions expose no prefix. Empty selected
+sections still verify their backing descriptor. Unit bodies remain unvalidated.
+
+Local focused checks, sanitizers, static analysis and the complete fresh host
+baseline passed, exit 0. Evidence is under
+`build/se05-evidence-20261120/`:
+
+| Check | Command/configuration and evidence |
+|---|---|
+| Focused inventory/headers/native composition | `make BUILD_DIR=build/se05-inventory-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-units test-symbol-dwarf test-symbol-elf-native`; `inventory-composition-initial`. |
+| Complete fresh host baseline | `TERM=xterm-256color make BUILD_DIR=build/se05-inventory-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `inventory-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se05-inventory-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-units test-symbol-dwarf test-symbol-elf-native`; `inventory-sanitize`. |
+| Analysis/build | `make analyze` across 52 production source files and normal `make`; `inventory-analysis` and `inventory-normal-make`. |
+
+Authored ELF32/64 fixtures in both byte orders cover mixed formats, type headers,
+unsupported contributions, empty scopes, malformed framing/headers and compressed
+sections. A 70,000-byte contribution skips unvalidated body bytes while retaining
+exact next-unit coordinates. A 5,000-unit section exercises complete traversal and
+allocation. Fault injection covers all three allocations, budget refusal, cancellation
+through construction stages, short/EINTR/EOF/error reads and empty-scope descriptor
+replacement. Accounting returns to the retained directory's baseline; borrowed
+descriptors remain under their caller's ownership. Read instrumentation checks
+each service allowance. The fixture's 2 MiB allowance is not production sizing.
+
+Retained native files produced header inventories of 13/1/1 contributions, all
+supported in the tested configurations. ELF comparisons with libelf still passed
+for 39/37/31 sections, 15/15/11 program headers and 266/69/31 symbols. Instrumented
+composition also produced 13/1/1 units; the sanitizer executable's 9,630 symbols
+passed the separate ELF comparison. Unit inventory checks are composition evidence,
+not a libdw or independent DWARF grammar comparison.
+
+The initial authored fixture failed because its post-loop ELF width was 12;
+resetting it to 8 and bounding the byte writer corrected the fixture before the
+complete checks. The original failure and diagnostic log remain.
+`inventory-tested-files.json`, `inventory-tested.patch`, captured source/header/test
+inputs and `inventory-environment.txt` identify the tested tree. Only documentation
+changed subsequently. Link checks covered 236 local references without errors;
+whitespace checks passed. These are local host results, not hosted CI, arbitrary
+producer/hardware qualification, complete DIE/abbreviation/reference validation
+or SE05/F07 acceptance. No new helper opcode or UI consumer was added.
+
+
+## Selected DWARF abbreviation tables — 2026-11-20
+
+Selected retained abbreviation tables now validate declaration framing, standard
+DWARF 4/5 form identifiers and unique code lookup before exposing a complete
+view. Physical declaration/attribute order and exact encoded implicit-constant
+spans are preserved. Wide constants remain available as metadata coordinates;
+identifiers beyond the current 64-bit lookup profile are explicitly unsupported.
+DIE payloads and reference targets are outside this step.
+
+Local Linux x86-64 checks use the same host/toolchain configuration as the
+preceding SE05 records. Full logs, exit files, environment and captured inputs
+are under ignored `build/se05-evidence-20261120/`, with the `abbrev-` prefix.
+
+| Check | Command / evidence |
+|---|---|
+| Focused schemas, LEB and native composition | `make BUILD_DIR=build/se05-abbrev-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-abbrev test-symbol-leb test-symbol-elf-native`; `abbrev-focused-final`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se05-abbrev-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `abbrev-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se05-abbrev-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-abbrev test-symbol-leb test-symbol-elf-native`; `abbrev-sanitize-final`. |
+| Static analysis | `make analyze`, 54 production source files; `abbrev-analysis`. |
+
+Authored ELF32/64 fixtures in both byte orders cover selected offsets, versioned
+form identifiers, empty tables, code conflicts, malformed terminators and child
+markers, truncated fields, unsupported encodings and 513 shuffled declarations.
+A 70,000-byte padded signed constant decodes to -1; a constant beyond int64 keeps
+its complete span and exposes no truncated number. LEB framing independently
+checks fit, chunk boundaries, nonminimal padding and no following-field theft.
+
+Allocation failures at all five construction allocations, insufficient budgets,
+cancellation, short/EINTR/EOF/error reads and between-pass mutation preserve
+unavailable candidates and restore prior accounting. The mutation fixture retains
+a writer deliberately to violate the backing invariant; its detected mutation
+does not prove acquisition writer closure. Constructors perform no I/O, each read
+respects its allowance and destruction preserves borrowed descriptors.
+
+Native composition validated 15/1/1 units with 782/31/5 abbreviation declarations
+summed over the selected unit tables; shared tables may be counted repeatedly.
+Sanitizer composition validated 15/1/1 units with 624/18/5 declarations using Clang
+fixtures. Both runs had zero unsupported headers. Additional GCC fixtures built with
+`cc -std=c17 -Wall -Wextra -Wpedantic -Werror -g -gdwarf-4 -O0`, adding
+`-fPIC -shared` for the library, from `tests/fixtures/native/session.c` and
+`tests/fixtures/native/breakpoints_library.c`, passed the same native harness:
+1/1 units and 31/5 declarations (`abbrev-native-dwarf4`). These checks use native
+compiler output but no independent DWARF grammar oracle. Separate libelf ELF
+comparisons still passed. Production sizing, general producer/target support,
+complete DIE/reference validity and SE05/F07 acceptance remain unestablished.
+
+Initial component analysis rejected boolean bitwise updates and an unsuffixed
+shift count in LEB framing, then interchangeable comparator indices in lookup
+sorting. Logical updates, an unsigned count and physical-entry comparator
+parameters resolved those findings; original and corrected logs are retained.
+`abbrev-tested-files.json`, `abbrev-tested.patch`, captured inputs and
+`abbrev-environment.txt` identify the tested source scope. The new form-framing
+component is subsequent work and is not part of this abbreviation-table record.
+All checks in the table passed (exit 0); normal `make` also passed
+(`abbrev-normal-make`). The final link check covered 237 local references with no
+errors and whitespace checks passed. Compiled input hashes match the snapshot;
+subsequent changes within that manifest were documentation only. These are local
+host results, not hosted CI, physical validation or maintainer acceptance.
+
+
+## DWARF attribute-form framing — 2026-11-20
+
+The allocation-free form scanner frames standard DWARF 4/5 attribute payloads
+inside a caller-supplied remaining unit extent, independently of numeric fit.
+Every feed inspects at most 256 bytes and stops before the next field. Complete
+views retain encoded footprints, payload spans and optional raw 64-bit bits.
+Indirect forms follow the published DWARF 5 errata, including repeated selectors
+and implicit constants carried in the DIE. Direct implicit constants remain in
+the abbreviation schema. This establishes boundaries, not reference or location
+validity, a complete unit tree or frontend/runtime authority.
+
+Local Linux x86-64 logs, exit files, captured inputs and environment are under
+ignored `build/se05-evidence-20261120/`, using the `form-` prefix.
+
+| Check | Command / evidence |
+|---|---|
+| Focused framing and schema regression | `make BUILD_DIR=build/se05-form-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-form test-symbol-leb test-symbol-abbrev`; `form-focused`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se05-form-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `form-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se05-form-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-form test-symbol-leb test-symbol-abbrev`; `form-sanitize`. |
+| Static analysis | `make analyze`, 55 production source files; `form-analysis`. |
+
+Authored cases cover every standard form in its version, both byte orders,
+DWARF32/64 offset widths and raw address widths 1/2/3/4/8/16/255. Chunk sizes
+1/2/3/7/64/256/1024 check bounded consumption and following-field preservation.
+Nonuniform three-byte values check endianness. Tests distinguish no prefix from
+complete views, zero-footprint forms, unit-boundary truncation, premature EOF,
+unknown encodings/selectors and invalid API arguments. Large strings, blocks,
+70,000-byte scalar/length encodings and indirect chains retain exact footprints.
+Wide scalar representations expose no truncated number; zero-length blocks and
+indirect strings/constants/present flags terminate at their exact boundaries.
+
+`form-tested-files.json`, `form-tested.patch`, captured inputs and
+`form-environment.txt` identify the compiled scope. The subsequent DIE traversal
+component is excluded from this form-framing step. These tests do not establish
+reference targets, type/location semantics, producer/hardware qualification or
+SE05/F07 acceptance.
+
+All checks in the form-framing table passed (exit 0), as did normal `make`
+(`form-normal-make`). Frozen compiled-input hashes match. Link checks covered
+238 local references without errors and whitespace checks passed. These are local
+host observations, not hosted CI, physical validation or maintainer acceptance.
+
+
+## Complete selected DIE trees — 2026-11-20
+
+Selected supported units now compose complete retained header and abbreviation
+views into complete structural DIE trees. Exact section/unit/record/attribute
+coordinates, schema dependencies, parent indexes and raw payload spans survive
+without name or address-based merging. Root tags refine DWARF 4 compile/partial
+classification. Type offsets must identify DIE boundaries; no type semantics or
+reference targets follow. Unfinished or failed construction exposes no prefix.
+
+Local Linux x86-64 logs, exits, captured inputs and environment are under ignored
+`build/se05-evidence-20261120/`, with the `dies-` prefix.
+
+| Check | Command / evidence |
+|---|---|
+| Focused traversal, forms and native composition | `make BUILD_DIR=build/se05-dies-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-dies test-symbol-form test-symbol-elf-native`; `dies-focused-final`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se05-dies-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `dies-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se05-dies-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-dies test-symbol-form test-symbol-elf-native`; `dies-sanitize`. |
+| Static analysis | `make analyze`, 56 production source files; `dies-analysis`. |
+
+Authored protected ELF32/64 fixtures in both byte orders cover independent
+DWARF32/64 formats, DWARF 4/5 info/type/partial units and physical parent/attribute
+ranges. Two byte-identical units remain distinct and independently retained.
+A 70,000-byte string crosses scratch windows. Separate deep and broad trees each
+contain 10,001 records; parent-stack storage is explicitly charged. Direct
+implicit constants and present flags at the unit end preserve their zero-byte
+footprint and exact schema dependency.
+
+Malformed late records, absent abbreviation codes, missing roots/child terminators,
+multiple roots, truncated strings/references, unknown root profiles, wider code
+identifiers and type offsets into attribute bytes preserve unavailable views.
+All five allocation sites, budget refusal, 128 cancellation stages and
+short/EINTR/EOF/error reads restore prior accounting and preserve borrowed
+file descriptors. A deliberately retained writer changes backing between passes;
+reconstruction reports File Changed before publication. This fault injection
+validates detection, not the acquisition writer-closure invariant. Each service
+read stays within its allowance; EINTR alone does not advance progress.
+
+Native composition produced 17/1/1 units, 9,345/136/5 DIEs and 37,104/572/30
+attributes. Instrumented Clang composition produced 17/1/1 units, 7,689/88/5 DIEs
+and 25,208/257/26 attributes. All headers were supported in these configurations.
+The existing 2 MiB native-harness construction budget remained unchanged; the
+8 MiB authored stress-fixture budget is not a production default or measurement
+of total process memory. Separate ELF comparisons with libelf passed.
+
+The additional DWARF 4 fixtures from the preceding abbreviation record passed
+the extended native harness: 136/5 DIEs and 572/28 attributes
+(`dies-native-dwarf4`). Native composition is not an independent DWARF grammar
+oracle. Initial component analysis rejected a decrement in a compound condition;
+splitting the state update resolved that finding, with original and corrected
+logs retained. `dies-tested-files.json`, `dies-tested.patch`, captured inputs and
+`dies-environment.txt` identify the compiled scope. Reference/string/address-table
+validation, semantic type/location support, general producer/hardware
+qualification, production sizing and SE05/F07 acceptance remain outstanding.
+
+All checks in the DIE traversal table passed (exit 0), as did normal `make`
+(`dies-normal-make`). Frozen compiled-input hashes match; subsequent changes to
+that scope were documentation only. Link checks covered 239 local references
+without errors and whitespace checks passed. These are local host results, not
+hosted CI, physical validation or maintainer acceptance.
+
+
+## Physical DWARF reference targeting — 2026-11-20
+
+Reference attributes now retain exact source coordinates and their effective
+encoding class. Unit-relative forms require checked contribution bounds and exact
+DIE boundaries. Section-relative forms select an explicit same-backing info unit;
+signature lookup examines its complete captured scope before exposing a required
+target. Different physical matches conflict without semantic merging. Unsupported
+headers, missing types and unavailable target trees remain distinct outcomes.
+Supplementary reference semantics remain unsupported. These are raw physical
+lookup facts, not semantic relationships, relocation proof or live authority.
+
+Local Linux x86-64 logs, exit files, captured inputs and environment use the
+`references-` prefix under ignored `build/se05-evidence-20261120/`.
+
+| Check | Command / evidence |
+|---|---|
+| Focused coordinates, traversal and native composition | `make BUILD_DIR=build/se05-references-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-references test-symbol-dies test-symbol-elf-native`; `references-focused-complete`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se05-references-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `references-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se05-references-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-references test-symbol-dies test-symbol-elf-native`; `references-sanitize`. |
+| Static analysis | `make analyze`, 57 production source files; `references-analysis`. |
+
+Authored complete-view cases distinguish each unit-relative reference form from
+numeric constants, preserve duplicate attribute selections and handle indirect
+effective forms. Tests check header/end/overflow bounds, payload-interior offsets,
+wrong backing/section/unit selections, explicit cross-unit info selection and
+unchanged failure outputs. Signature cases distinguish repeated physical views,
+different units/sections, missing types, unsupported coverage and invalid scopes.
+A 100,001-record tree checks exact lookup boundaries; a 100,001-unit signature
+scope checks late conflict/coverage detection without exposing an early candidate.
+These view fixtures are distinct from retained-file parser/container fixtures.
+
+Native composition checked 8,708/124/3 unit-relative references in 18/1/1 units,
+containing 9,837/136/5 DIEs and 39,165/572/30 attributes. Instrumented Clang
+composition checked 5,724/73/2 references, 8,095/88/5 DIEs and 26,675/257/26
+attributes. Both configurations had zero other reference dependencies in these
+fixtures. Therefore the native runs do not qualify cross-unit/signature lookup;
+those paths have the authored-view coverage above. The existing 2 MiB retained-file
+harness budget remained unchanged. Separate ELF comparisons with libelf passed.
+
+Initial component analysis rejected adjacent interchangeable DIE/attribute index
+parameters. A named selection bundle resolved that interface hazard; original
+and corrected logs are retained. `references-tested-files.json`,
+`references-tested.patch`, captured inputs and `references-environment.txt`
+identify the compiled scope. Scoped dependency evidence, applicable relocation
+correspondence, semantic type/specification validation, broader native/embedded
+producer qualification, production sizing and SE05/F07 acceptance remain outstanding.
+
+The additional DWARF 4 executable/library fixtures passed with 124/3 unit-relative
+references (`references-native-dwarf4`). All checks in the reference table passed
+(exit 0), as did normal `make` (`references-normal-make`). Frozen compiled-input
+hashes match. Link checks covered 240 local references with no errors and whitespace
+checks passed. These are local host observations, not hosted CI, physical
+validation or maintainer acceptance.
+
+
+## Retained DWARF strings and offsets — 2026-11-20
+
+Bounded retained strings now expose exact terminated spans without allocating
+full text or converting bytes. Selected DWARF 5 string-offset entries require a
+base proven by walking contribution framing from the section start, a supported
+header and the CU's offset format. Indexed metadata then resolves through an
+explicit string section and its termination proof. No discovery, source/runtime
+correspondence or semantic name claim follows from these facts.
+
+Local Linux x86-64 logs, exit files, captured inputs and environment are under
+ignored `build/se05-evidence-20261120/`, using the `strings-` and
+`string-offsets-` prefixes.
+
+| Check | Command / evidence |
+|---|---|
+| Focused strings, contributions and native composition | `make BUILD_DIR=build/se05-strings-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-strings test-symbol-string-offsets test-symbol-elf-native`; `strings-focused-final-tree`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se05-strings-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `strings-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se05-strings-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-strings test-symbol-string-offsets test-symbol-elf-native`; `strings-sanitize`. |
+| Static analysis | `make analyze`, 59 production source files; `strings-analysis`. |
+
+Protected ELF32/64 fixtures in both byte orders check empty/substrings, raw
+non-UTF-8 bytes, exact exclusive bounds and a 70,000-byte string. Mixed-format
+offset contributions check exact bases/entries, empty tables, format mismatches,
+nonzero padding, unknown versions, malformed framing, truncated headers and
+invalid indexes. A forged base inside entries has a preceding valid-looking
+header and value; walking actual contribution boundaries rejects it. A
+1,001-contribution scope checks bounded traversal to the selected table.
+Earlier unrelated versions receive framing examination only, preserving the
+selected-scope boundary rather than claiming whole-section semantic validation.
+
+Both constructors perform no I/O. Every allocation site, budget refusal,
+cancellation stages and short/EINTR/EOF/error paths preserve unavailable candidates
+and restore prior accounting. String descriptor replacement also fails without a
+usable span. Read instrumentation checks one read per step, service allowances
+and selected section/scan bounds. Read windows follow the service allowance;
+no entire string is allocated. Raw spans do not qualify UTF-8 or all invariants
+of an ELF string table.
+
+GCC composition validated 4,932/89/6 direct or inline string attributes in 20/1/1
+units. Clang sanitizer composition validated 4,797/26/6 strings, all indexed,
+thereby exercising native CU-base/contribution/index/string association. GCC
+produced no indexed strings in these fixtures. The paths are separate recorded
+producer configurations, not universal producer qualification. Existing 2 MiB
+retained-file and authored-fixture construction allowances remained unchanged;
+they do not establish production cache/index limits or RSS. Separate ELF/libelf
+comparisons and unit-relative reference checks still passed.
+
+Initial offset-component analysis rejected adjacent convertible size/phase
+parameters. A structured range argument resolved that interface hazard; original
+and corrected logs remain. `strings-tested-files.json`, `strings-tested.patch`,
+captured inputs and `strings-environment.txt` identify the compiled scope.
+Semantic names/types, complete dependency evidence, broader producer/target
+qualification, production sizing and SE05/F07 acceptance remain outstanding.
+
+The additional DWARF 4 executable/library fixtures passed with 89/6 validated
+strings (`strings-native-dwarf4`). All checks in the string table passed (exit 0),
+as did normal `make` (`strings-normal-make`). Frozen compiled-input hashes match.
+Link checks covered 241 local references with no errors and whitespace checks
+passed. These are local host results, not hosted CI, physical validation or
+maintainer acceptance.
+
+
+## Selected text attributes — 2026-11-20
+
+Complete-scope unique-field selection now composes retained string dependencies
+without interpreting semantic names or inheriting attributes. Missing fields,
+equal-value duplicates, empty strings, unavailable sections/bases and unsupported
+forms retain distinct outcomes. A completed result preserves exact source DIE,
+attribute and abbreviation coordinates; indexed results also preserve the CU
+base and selected table-entry provenance. Failure exposes no partial text view.
+
+Local Linux x86-64 evidence is retained under ignored
+`build/se05-evidence-20261120/` with the `text-` and `attributes-` prefixes.
+
+| Check | Command / evidence |
+|---|---|
+| Focused field/text/native composition | `make BUILD_DIR=build/se05-text-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-attributes test-symbol-text test-symbol-elf-native`; `text-final-focused`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se05-text-final-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `text-final-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se05-text-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-attributes test-symbol-text test-symbol-elf-native`; `text-final-sanitize`. |
+| Static analysis | `make analyze`, 61 production source files; `text-analysis`. |
+
+Authored complete-tree cases check selected-DIE isolation, exact first/second
+physical diagnostics and a late duplicate in a 100,001-attribute scope. Retained
+ELF32/64 text fixtures in both byte orders use authored unit/tree views to check
+DWARF32/64 and version 4–5 source contexts. They cover direct, inline, indirect,
+line and all standard indexed forms; missing/duplicate bases and fields; wrong
+base forms; malformed values/spans/strings; absent sections and unsupported
+forms. These authored views are distinct from independent producer-generated
+composition. Every allocation site, budget refusal, cancellation stage and
+short/EINTR/EOF/error path preserves unavailable candidates and restores the
+original account. Constructors perform no I/O and service steps obey read and
+inspection allowances. EINTR without bounded advancement does not count as
+meaningful progress.
+
+GCC composition resolved 5,530/89/6 text attributes in 22/1/1 units; these fixtures
+had no indexed strings. Clang ASan/UBSan composition resolved 5,375/26/6 text
+attributes, all indexed. Native composition now uses the production text resolver
+rather than manually composing its children, and checks both source and indexed
+dependency provenance. Separate ELF/libelf comparisons and reference-coordinate
+checks remain. Additional DWARF 4 executable/library fixtures passed with 89/6
+strings (`text-final-native-dwarf4`). The existing 2 MiB retained-file harness allowance
+remained unchanged; it does not establish production cache/index sizing or RSS.
+
+`text-final-tested-files.json`, `text-final-tested.patch`, captured inputs and
+`text-final-environment.txt` identify the compiled scope. Semantic naming,
+inheritance, validated semantic relationships, shared frontend evidence ownership, broader
+producer/target qualification, production sizing and F07 acceptance remain
+outstanding. Local automated checks do not establish hosted CI, physical
+validation or maintainer acceptance.
+
+
+All checks in the table passed (exit 0). Initial and final full host runs are
+retained separately. Final component analysis (`text-final-component-analysis`)
+and normal `make` (`text-final-normal-make`) also passed. All 261 final compiled
+input hashes match; local link checks covered 244 references with no errors and
+whitespace checks passed. No hosted CI or physical result is claimed.
+
+
+## Direct DWARF entry facts — 2026-11-20
+
+Direct entry inspection now retains selected unique attributes and physical
+coordinates from a complete DIE. Declaration, external and artificial flags
+receive class/value validation; all byte values other than zero mean true.
+Physical absence and explicit false remain distinct. Subprogram, variable and
+inline-instance tags remain separate, without proving emitted code, storage,
+nonlocality, inherited names or runtime authority.
+
+The maintainer reported that hosted CI passed for the preceding text-attribute
+commit before this step resumed. This is a reported hosted result, separate from
+the local checks and pending integration/feature acceptance below.
+
+Local Linux x86-64 evidence is retained under ignored
+`build/se06-evidence-20261120/` using the `entities-` prefix.
+
+| Check | Command / evidence |
+|---|---|
+| Focused entry facts and native composition | `make BUILD_DIR=build/se06-entities-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-entities test-symbol-elf-native`; `entities-focused-final`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-entities-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `entities-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-entities-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-entities test-symbol-elf-native`; `entities-sanitize`. |
+| Static analysis | `make analyze`, 62 production source files; `entities-analysis`. |
+
+Authored complete-tree views check every possible flag byte, effective indirect
+implicit flags, missing/false distinctions, invalid forms/values and duplicate
+fields with equal values. Diagnostics retain exact first/second physical
+occurrences. Selected-DIE isolation and a 100,001-attribute scope check full-scope
+uniqueness, late conflicts, bounded stepping and unavailable partial views.
+Failed initialization leaves prior state intact. The allocation/I/O-free cursor
+can be discarded at any stage without retaining resource ownership.
+
+Native composition checks each selected field against independently decoded
+source coordinates and raw forms. GCC composition inspected 12,853/136/5/13 DIEs
+in the harness/C executable/DSO/C++ executable respectively; Clang sanitizer
+composition inspected 10,472/88/5/13. The C++ fixture had three subprogram and
+three variable records and one true declaration flag in both configurations.
+These are tag/flag observations, not counts of validated definitions or storage
+locations. Existing reference, string and separate ELF/libelf checks remain.
+The native retained-file construction allowance remains 2 MiB; this is not a
+production index/cache measurement or RSS bound.
+
+`entities-tested-files.json`, `entities-tested.patch`, captured inputs and
+`entities-environment.txt` identify the compiled scope. Validated relationships,
+qualified names, the supported signature grammar, semantic inline interpretation,
+frontend evidence ownership, production sizing and SE06/F07 acceptance remain
+outstanding. These local configurations do not qualify other producers, remote
+backends or physical targets.
+
+
+All checks above passed (exit 0), as did normal `make`
+(`entities-normal-make`). All 269 captured compiled inputs remained unchanged.
+Local link checks covered 246 references with no errors; whitespace checks
+passed. These are local host results for this step. The preceding commit's
+reported hosted result does not establish hosted CI for these new changes,
+physical validation or maintainer acceptance of SE06/F07.
+
+
+## Scoped DWARF relationship links — 2026-11-20
+
+Direct relationship preparation now keeps a unique raw specification, origin or
+namespace extension reference separate from target-unit selection and exact DIE
+binding. Completed links retain independent source/target identities, unit kinds
+and versions, source attributes, abbreviation coordinates and target parent
+provenance. Missing fields/dependencies, conflicting fields, malformed classes,
+range errors, unsupported profiles, tag mismatches and self-cycles remain distinct.
+This does not establish graph acyclicity, inheritance, language equivalence,
+relocation correspondence or live authority.
+
+Local Linux x86-64 evidence is under ignored `build/se06-evidence-20261120/`,
+using the `relations-` prefix. Compiler/tool versions, the 276 captured inputs and
+the checked patch are retained with the environment, input hashes and input copies.
+
+| Check | Command / evidence |
+|---|---|
+| Focused sources, dependencies and native composition | `make BUILD_DIR=build/se06-relations-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-relations test-symbol-elf-native`; `relations-final-focused`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-relations-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `relations-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-relations-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-relations test-symbol-elf-native`; `relations-sanitize`. |
+| Static analysis | `make analyze`, 63 production source files; `relations-analysis`. |
+
+Authored scoped views cover each unit-relative reference form, indirect effective
+forms, section-relative cross-unit selection, missing and duplicate fields,
+empty versus unavailable inventories, unavailable or mismatched trees, malformed
+classes/operands, exact boundaries, mismatched tags and self-cycles. They preserve
+failed outputs and prior state on invalid initialization. A 100,001-attribute
+scope has a late duplicate. A two-record cycle remains two separate direct links;
+these cases explicitly leave whole-path acyclicity to the subsequent traversal.
+The allocation/I/O-free primitive borrows its complete scopes and outer-job
+accounting, cancellation and revisions.
+
+The maintained C++ fixture has out-of-line methods, static data, inline calls,
+overloads, duplicate file statics and duplicate source basenames. Both binaries
+run successfully before native inspection. Each DWARF version has three units,
+82 DIEs, ten specification links and sixteen standard origin links, with zero
+unresolved relationship dependencies in the tested GCC configurations. DWARF 4
+has one variable-to-member specification inside an aggregate; DWARF 5 uses a
+variable-tag declaration. Cross-version authored cases establish that the target's
+version, not the source's version, selects the member exception.
+
+The first native relationship check failed on a GNU call-site record in the
+DWARF 4 fixture (`relations-focused`, exit 2). The original log is retained.
+The standard inline-origin tag rule had been applied to an extension that uses
+that attribute for call-origin metadata. GNU's [emission rules](https://gnu.googlesource.com/gcc/+/refs/heads/master/gcc/dwarf2out.cc)
+and the retained `readelf --debug-dump=info` outputs identify this reuse.
+The corrected profile preserves the raw reference and reports unsupported
+semantics. Missing dependencies and unsupported coverage have separate counters;
+fixture assertions permit only the specifically identified older GNU call-site
+records as unsupported. Four such records occur in the DWARF 4 fixture, and none
+in the DWARF 5 fixture. Standard-link target assertions remain enforced.
+
+GCC harness composition additionally bound 2,497 standard origin links;
+Clang sanitizer harness composition bound 389. Namespace extension links have
+authored-view coverage but zero emitted native examples in these fixtures.
+Separate ELF/libelf, physical-reference and string checks remain. The native
+retained-file account remains 2 MiB; it is not production index/cache sizing or
+an RSS limit. Broader producer/target qualification, inheritance and cycle
+traversal, qualified names/signatures, frontend evidence/publication, SE06/F07
+acceptance and physical validation remain outstanding.
+
+All checks above passed (exit 0), followed by normal `make`
+(`relations-normal-make`). All 276 captured compiled inputs remained unchanged.
+Local link checks covered 248 references with no errors; whitespace checks
+passed. These are local host results, not hosted CI, physical qualification or
+maintainer acceptance of SE06/F07.
+
+
+## Bounded DWARF relationship traversal — 2026-11-20
+
+Reachable specification, origin and namespace-extension traversal now validates
+all selected direct fields and links before exposing a graph. Iterative visits
+distinguish active-path cycles from completed shared targets and retain every
+physical record and direct edge. Source dependencies are explicit; changed
+versions, abbreviation context or parent provenance cannot silently replace a
+captured target. Failures retain available raw source/field diagnostics without
+a successful graph prefix. This does not yet select inherited fields or names.
+
+Local Linux x86-64 evidence is under ignored `build/se06-evidence-20261120/`,
+using the `graph-` prefix. The captured environment, patch, input copies and
+`graph-tested-files.json` identify 279 compiled inputs.
+
+| Check | Command / evidence |
+|---|---|
+| Focused traversal and native composition | `make BUILD_DIR=build/se06-graph-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-graph test-symbol-elf-native`; `graph-final-focused`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-graph-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `graph-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-graph-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-graph test-symbol-elf-native`; `graph-sanitize`. |
+| Static analysis | `make analyze`, 64 production source files; `graph-analysis`. |
+
+Authored scoped views exercise shared diamonds, mixed-link cycles of one through
+eight records, a cycle after a completed sibling, namespace chains, exact
+workspace exhaustion and rejected partial views. Cross-unit source/target
+supplies distinguish unavailable dependencies from invalid requests, preserving
+pending state when source context disagrees. Unsupported vendor tags, malformed
+reference classes and missing target boundaries retain distinct diagnostics.
+A 1,001-record chain advances in single-action slices without recursion. A
+1,001-attribute scope rejects a late duplicate before requesting any target.
+
+Native composition uses actual retained-file/unit/abbreviation/form outputs.
+The maintained DWARF 4 C++ fixture produced 38 rooted graphs with 62 node visits;
+DWARF 5 produced 39 with 63. All these scopes completed without missing
+dependencies or unsupported relationship semantics. The DWARF 4 member-tag
+static declaration participates when reached by its defining variable; it is not
+an independent data-tag root. GCC harness composition produced 2,321 rooted
+graphs with 3,347 node visits; Clang sanitizer composition produced 1,705 with
+1,928. Visits across independent rooted graphs are not distinct-record totals.
+Separate direct-link, text and ELF/libelf checks remain enforced.
+
+The harness accounts its 64-node workspace within the unchanged 2 MiB
+retained-file construction allowance and releases that reservation. This is a
+test configuration, not a production capacity or RSS bound. Linear visited-node
+lookup can require quadratic total work; bounded slices do not establish end-to-end
+latency. SE10 measurements must include actual graph state, unused capacity,
+contention, cancellation and responsiveness. Production sizing, attribute
+inheritance, qualified names/signatures, type/lexical graph validation,
+relocation correspondence, frontend evidence/publication, SE06/F07 acceptance
+and physical target qualification remain outstanding.
+
+All checks above passed (exit 0), as did normal `make` (`graph-normal-make`).
+All 279 captured compiled inputs remained unchanged. Local link checks covered
+252 references with no errors; whitespace checks passed. These are local host
+results for this step, not hosted CI, physical validation or maintainer
+acceptance of SE06/F07.
+
+
+## Inherited DWARF attribute owners — 2026-11-20
+
+Bounded owner selection now walks a completed relationship graph for the six
+supported descriptive fields. It keeps direct-field precedence separate from
+attribute interpretation, follows every required missing-field path, and retains
+the actual owner unit and field coordinates. Shared paths yield one physical
+owner; distinct owners remain multiple even if their raw values agree. Missing
+dependencies and conflicts expose no completed candidate prefix. Flags, runtime
+locations, semantic value agreement and qualified names remain separate work.
+
+Local Linux x86-64 evidence is retained under ignored
+`build/se06-evidence-20261120/`, using the `inherit-` prefix. Authored scoped views
+construct completed graphs before selecting fields. They cover shared diamonds,
+multiple equal-valued owners, direct-field precedence, absence, duplicate fields,
+namespace extensions, unchanged invalid requests and missing dependencies after
+a candidate. A 513-record chain advances in single-action slices without
+recursion. Cross-unit declaration-file selection retains the owner unit rather
+than reusing the selected root's file-number context. All other selected fields
+remain unsupported; raw value classes are intentionally not interpreted here.
+
+The first native composition run failed on a DWARF 4 info contribution
+(`inherit-native-focused`, exit 2). Its header cannot distinguish compilation
+from partial units before root decoding. The selector had incorrectly required
+an exact header/root kind match. The corrected profile permits that specific
+DWARF 4 refinement; authored compilation/partial cases and both actual C++
+fixtures pass. Mismatched DWARF 5 and type-unit kinds remain rejected. The
+original failure log is retained, and existing native assertions remain enforced.
+
+Initial full static analysis also failed (`inherit-analysis`, exit 2), reporting
+a potential out-of-bounds edge index in private traversal state. The normal
+end-of-edges equality check did not establish the full array bound. Explicit
+edge and scan range guards now reject invalid indices; fault cases inject
+one-over and maximum edge indices and a one-over scan index. No analyzer warning
+is suppressed. The original compiled scope and logs are retained separately
+from the corrected tree's verification.
+
+Native composition selects all six fields over every completed graph, checks
+each owner against the exact decoded attribute and resolves selected name/linkage
+fields through the retained-text provider. The maintained DWARF 4 fixture has
+228 queries, 212 owner selections and 96 selections owned by another record;
+DWARF 5 has 234, 218 and 97 respectively. These are selection observations, not
+distinct-record totals, runtime indirections or proof of equivalent names.
+Namespace extensions have authored coverage but no emitted examples in these
+native fixtures. Earlier graph, direct-link, reference, text and ELF/libelf
+checks remain enforced.
+
+The harness accounts and releases its 64-slot inherited workspace alongside the
+64-node graph workspace within the unchanged 2 MiB construction allowance.
+Those capacities are test-specific; they establish neither production sizing
+nor RSS limits. Queue and edge lookup can require quadratic total work, despite
+bounded slices. SE10 must measure the actual construction, dependency and
+publication peaks and responsiveness. Semantic field agreement, definition roles,
+qualified names/signatures, inline interpretation, native line tables,
+relocation correspondence, independent frontend evidence/publication, SE06/F07
+acceptance and physical qualification remain outstanding.
+
+The original fresh fortified baseline passed with all 282 captured inputs
+unchanged (`inherit-test-ci`, exit 0). Its sanitizer run also passed
+(`inherit-sanitize`, exit 0), while the static-analysis failure above remained
+unresolved in that tree. The corrected source changes only `inherit.c` and its
+unit test within that captured compiled scope. The final environment, patch,
+input copies and `inherit-final-tested-files.json` identify the corrected
+282-input tree independently.
+
+| Corrected-tree check | Command / evidence |
+|---|---|
+| Focused owner selection and native composition | `make BUILD_DIR=build/se06-inherit-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-inherit test-symbol-elf-native`; `inherit-fixed-focused`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-inherit-final-ci-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `inherit-final-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-inherit-final-sanitize-20261120 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-inherit test-symbol-elf-native`; `inherit-final-sanitize`. |
+| Static analysis | `make analyze`, 65 production source files; `inherit-final-analysis`. |
+
+All corrected-tree checks above passed (exit 0), as did normal `make`
+(`inherit-final-normal-make`). All 282 final captured compiled inputs remained
+unchanged. Local link checks covered 255 references with no errors; whitespace
+checks passed. These are local host results for this step, not hosted CI,
+physical validation or maintainer acceptance of SE06/F07.
+
+
+## Inherited DWARF text agreement — 2026-11-21
+
+Implemented the [composed inherited-text provider](architecture.md#inherited-dwarf-text-agreement-se06-partial)
+and bounded retained-string byte ordering. The provider keeps all physical owners
+when their full selected name/linkage values agree. It preserves source-unit,
+root, attribute, string and indexed-table dependencies in parent-owned local
+facts while the original captured scopes remain pinned. No canonical identity,
+qualified context or independent frontend evidence follows from byte agreement.
+
+Authored composition covers both byte orders, DWARF 4/5 and 32/64 formats,
+equal-valued distinct owners, disagreement, empty/absent attributes, duplicate
+fields, unsupported supplementary values, invalid supplies, missing dependencies
+and allocation failures throughout nested construction. A DWARF32 definition's
+cross-unit indexed name resolves through a DWARF64 owner's distinct base and
+contribution; its retained provenance identifies that owner rather than the
+selected root. Destruction at each successive interruption point returns the
+construction account to its baseline. Missing dependencies after an earlier
+candidate expose no completed prefix.
+
+String ordering checks complete values beyond presentation limits, including
+100,001-byte shared prefixes, high bytes, empty strings and alternating slices.
+Wrapped comparisons enforce the combined 64 KiB inspection checkpoint. Read
+faults cover EINTR, short transfers, EOF and EIO; descriptor checks reject O_PATH
+and missing close-on-exec without taking ownership. Allocation and exact-budget
+failures release all parent/reader storage. Prior foundational assertions remain.
+
+The first native run failed at an existing text-provider assertion
+(`names-native-composition`, exit 2). Added diagnostics confirmed resource
+exhaustion (`names-native-diagnostic`, exit 2): the self-inspected harness retained
+2,069,256 bytes of its 2,097,152-byte allowance before another text-reader
+allocation. Its linked decoder metadata grew with the new components. The
+explicit test-only allowance is now 4 MiB; production ceilings are unchanged,
+exact-budget unit tests remain, and every operation still releases its charges.
+Native composition then passed (`names-complete-focused`, exit 0), retaining the
+original assertions and both maintained C++ fixtures. This is harness capacity,
+not SE10 production sizing or an RSS guarantee.
+
+Verification artifacts are retained under `build/se06-evidence-20261121/`.
+The original frozen tree passed the fresh fortified baseline (`names-test-ci`),
+focused ASan/UBSan (`names-sanitize`) and complete static analysis
+(`names-analysis`, 67 production files), all exit 0. All 303 captured inputs in
+`names-tested-files.json` remained unchanged; `names-inputs/` retains their bytes.
+Development logs are also preserved under `build/se06-evidence-20261120/names-*`.
+
+During review, an added descriptor regression exposed a failure-classification
+defect: direct-string or indexed-table reader rejection could be reported as
+unsupported metadata (`names-reader-regression`, exit 1). The composed provider
+now distinguishes that operational failure from unsupported DWARF constructs.
+The corrected O_PATH and missing-close-on-exec cases preserve raw nested
+reader diagnostics and borrowed ownership. Partial-unit composition now also
+covers the DWARF 4 ambiguous-header refinement and DWARF 5 explicit partial kind.
+
+The final focused checks passed (`names-final-focused`, exit 0). The corrected
+303-input tree is captured independently in `names-final-tested-files.json` and
+`names-final-inputs/`, with environment and patch alongside. All final-tree
+checks below passed (exit 0), and all 303 captured inputs remained unchanged.
+
+| Final-tree check | Command / evidence |
+|---|---|
+| Focused components and native composition | `make BUILD_DIR=build/se06-names-focused-20261120 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-graph test-symbol-inherit test-symbol-string-order test-symbol-inherited-text test-symbol-elf-native`; `names-final-focused`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-names-final-ci-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `names-final-test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-names-final-sanitize-20261121 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-graph test-symbol-inherit test-symbol-string-order test-symbol-inherited-text test-symbol-elf-native`; `names-final-sanitize`. |
+| Static analysis | `make analyze`, 67 production source files; `names-final-analysis`. |
+
+Normal `make` also passed (`names-final-normal-make`, exit 0). Final local link
+checks covered 209 internal references with no errors, and whitespace checks
+passed. These are local host results; hosted CI and physical qualification of
+this step have not been performed.
+
+The scope remains partial SE06: definition roles, qualified contexts/names,
+signatures, inline interpretation,
+frontend evidence/publication, production sizing and SE06/F07 acceptance remain
+outstanding. Local host checks do not establish hosted CI or physical validation.
+
+
+## Declaration-context anchors — 2026-11-21
+
+Implemented the [declaration-context cursor](architecture.md#declaration-context-anchors-se06-partial)
+with separate physical anchors for each terminal specification/origin/namespace
+path. Direct name ownership does not select declaration context. Parent and
+unit-root coordinates, unit format/version and abbreviation context remain
+explicit; shared terminals are reused without merging distinct records.
+
+Authored cases cover out-of-line method/specification context, inline callee
+versus caller scope, namespace extensions, distinct terminals sharing a parent,
+shared diamonds, unit boundaries, cross-unit DWARF32/DWARF64 provenance and a
+512-record graph with 256 anchors in single-action slices. Negative cases retain
+invalid requests, reject incomplete graphs/unknown relation bits, bound progress
+and expose no result after a missing source dependency following an earlier
+anchor. A lexical parent returning to an earlier relation record remains visible:
+recursive mixed-cycle validation belongs to qualified-context construction.
+
+Native composition checks every completed graph's anchors against actual decoded
+DIE parents and unit roots, retaining prior name/reference/ELF assertions and
+both maintained DWARF 4/5 C++ fixtures. Cursor and 64-slot workspace storage are
+reserved and released within the unchanged 4 MiB test allowance. No production
+sizing or runtime eligibility is established.
+
+Preflight static analysis identified adjacent convertible integer parameters and
+a signed shift-count operand. The parent-context helper now takes its unit
+explicitly, and mask construction uses unsigned operands. The diagnostics remain
+in `preflight-analysis` and `typed-analysis`; corrected `unsigned-analysis`
+passed (exit 0), without new suppressions. Focused component/native composition
+passed (`verified-focused`, exit 0).
+
+Evidence is under `build/se06-context-evidence-20261121/`. The environment,
+`tested-files.json`, retained `inputs/` and patch identify 306 frozen
+source/header/test/build inputs. All 306 remained unchanged throughout the
+complete fortified baseline, sanitizer and production-analysis checks below;
+all passed (exit 0). Final review wrapped one expression; preprocessed tokens and
+the resulting debug-stripped object match the actual fortified baseline object
+(`format-equivalence`). Post-review focused component/native checks also passed.
+`final-files.json` identifies that final source tree.
+
+| Check | Command / evidence |
+|---|---|
+| Focused component and native composition | `make BUILD_DIR=build/se06-context-focused-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-context test-symbol-elf-native`; `verified-focused` and `post-review-focused`. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-context-ci-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `test-ci`. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-context-sanitize-20261121 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-context test-symbol-elf-native`; `sanitize`. |
+| Static analysis | `make analyze`, 68 production source files; `analysis`. |
+
+Normal `make` passed (`normal-make`, exit 0); final checks covered 212 internal
+references with no errors, and whitespace checks passed. These host results are
+separate from hosted CI, physical validation and SE06/F07 acceptance.
+
+The planned v0.3.0 merge/release gate now requires the same fresh, applicable
+functional validation on STM32/ARM, ESP32/Xtensa and ESP32/RISC-V, including
+previously validated functionality and native regression. This records the
+maintainer's acceptance requirement, not performed hardware evidence. Physical
+results, subsystem/consumer acceptance, merge and release remain pending.
+
+
+## Recursive declaration-context graph — 2026-11-21
+
+Implemented the [recursive context dependency graph](architecture.md#recursive-declaration-context-graph-se06-partial).
+It composes retained successful relationship and anchor views, rejects mixed
+relationship/lexical cycles and conflicting captures, and reuses completed
+physical parents. Each terminal derivation remains present. Unit boundaries are
+explicit; failure exposes no completed graph prefix.
+
+Authored cases cover shared parents, direct and multi-hop mixed cycles,
+cross-unit DWARF32/DWARF64 cycles, missing dependencies, arena exhaustion,
+invalid supplies and a 512-parent chain in single-action slices. False unit
+boundaries, inconsistent root coordinates, missing headers and abbreviation
+contradictions are rejected. Native composition checks every completed graph's
+recursive parent edges and typed boundaries within the unchanged 4 MiB harness
+allowance, retaining all earlier inheritance/text/reference/ELF assertions.
+
+Stronger anchor validation changed an early conflict fixture's outcome: its
+internally contradictory abbreviation capture is now rejected before shared-node
+lookup (`anchor-validation`, exit 2). The corrected conflict fixture supplies two
+internally consistent captures of a shared parent's ancestry; the disagreement
+is detected during reuse. An intermediate fixture used a namespace tag for a
+function reference target and failed the existing relationship assertion
+(`anchor-corrections`, exit 2). The corrected fixture and added invalid-anchor
+cases passed together with native composition (`anchor-corrections-final`, exit 0).
+No assertion or production validation was removed.
+
+Evidence is under `build/se06-scope-evidence-20261121/`. The initial 309-input
+snapshot passed the complete fortified baseline, sanitizers and 69-file analysis;
+all inputs remained unchanged during those checks. Subsequent review found that
+a rejected later anchor could report the first anchor's position. The isolated
+`diagnostic-regression` failed on that coordinate assertion (exit 1), while the
+corrected draft passed (`diagnostic-corrected`, exit 0). Rejection itself remained
+fail-closed. Final source now reports the rejected terminal and anchor ordinal;
+unrelated failure coordinates use an explicit unavailable sentinel.
+
+`final/` retains a new environment, `inputs/`, `tested-files.json`, patch and logs
+for the corrected 309-input tree. All final-tree checks below passed (exit 0),
+and all 309 frozen inputs remained unchanged throughout. The initial baseline is
+not substituted for these corrected-tree checks.
+
+| Check | Command / evidence |
+|---|---|
+| Focused component and native composition | `make BUILD_DIR=build/se06-scope-focused-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-scope-graph test-symbol-elf-native`; `final-focused`, exit 0. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-scope-final-ci-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `final/test-ci`, exit 0. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-scope-final-sanitize-20261121 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-scope-graph test-symbol-elf-native`; `final/sanitize`, exit 0. |
+| Static analysis | `make analyze`, 69 production source files; `final/analysis`, exit 0. |
+
+Normal `make` passed (`final/normal-make`, exit 0). Final documentation checks
+covered 215 internal references without errors; whitespace checks passed.
+
+These are local host checks, separate from hosted CI, physical qualification and
+SE06/F07 acceptance. Qualified-name construction/agreement, definition roles,
+signatures, inline interpretation, frontend evidence/publication and production
+sizing remain unfinished. No debugger operation is added by this component.
+
+
+## Language and inline constants — 2026-11-21
+
+Implemented [direct constant interpretation](architecture.md#language-and-inline-constants-se06-partial)
+for unit-root language and subprogram inline attributes. Complete uniqueness
+precedes value interpretation. Fixed-width/LEB and direct/indirect implicit
+constants retain their original provenance, while missing fields, equal
+duplicates, malformed classes, unresolved schemas and wider unsupported values
+remain distinct outcomes. Language-family and inline-code helpers do not
+establish full qualified names, definition roles or emitted locations.
+
+The initial native composition rejected a compiler-generated direct implicit
+constant (`focused` and `diagnosed-focused`, exit 2). Its DIE correctly had no
+inline numeric payload; the value belonged to the abbreviation table. The new
+interpreter now requests the exact retained table and validates the owning code,
+tag, children flag and attribute position before adopting the separate value.
+The structural decoder and its zero-footprint representation were preserved.
+Corrected focused/native checks passed (`schema-focused`,
+`schema-negative-focused`, `indirect-focused` and `final-focused`, exit 0).
+
+Maintained cases cover endian/DWARF 4/5 framing, integer boundaries and signedness,
+wrong classes, missing/unknown values, late duplicates, direct schema ownership,
+wrong-table request preservation, explicit missing dependencies, negative/wider
+implicit constants and single-action traversal of 512 abbreviation entries.
+Zero-footprint duplicates sharing a byte offset remain distinct physical
+attributes. An indirect implicit operand is validated through the form decoder
+and remains separate from a direct schema value.
+
+Native composition checks every unit root's language and every subprogram's
+inline field against the actual decoded records and retained abbreviation table,
+including both DWARF 4/5 C++ fixtures. New cursor state uses the unchanged 4 MiB
+harness construction allowance; existing decoded arrays remain charged once.
+All earlier entry/reference/text/context/ELF assertions remain enforced.
+
+Language-code recognition was checked against the official
+[DWARF language registry](https://dwarfstd.org/languages.html) on November 21,
+2026; the inline interpretation follows
+[DWARF 5, sections 3.3.8 and 7.16](https://dwarfstd.org/doc/DWARF5.pdf).
+These identify a bounded interpretation profile, not general C++ semantics or
+universal producer/runtime compatibility.
+
+Evidence is under `build/se06-constants-evidence-20261121/`. Environment,
+`tested-files.json`, retained `inputs/`, patch and complete logs identify 312
+frozen source/header/test/build inputs. Sanitizers and production analysis passed
+(exit 0). The first complete baseline stopped at the existing tmux keybinding
+assertion in `tests/integration/test_keybinds_tui.c:70` (`test-ci`, exit 2): an
+expected action label was absent from the current terminal snapshot. Direct
+keybinding coverage had passed earlier in that run. The unchanged focused tmux
+suite passed in isolation (`keybinds-reproduction`, exit 0), as did an isolated
+copy adding diagnostics (`keybinds-diagnostic`, exit 0). The original failure is
+retained; its cause has not been established. Three further diagnostic runs also
+passed (`keybinds-observation-1..3`, exit 0), retaining the original assertion and
+adding observation only. No tracked test or application code changed during this
+investigation. The subsequent fresh complete baseline passed on the same frozen
+tree (`final-test-ci`, exit 0); all 312 inputs remained unchanged. The earlier
+intermittent failure remains an unresolved observation, not a diagnosed or fixed
+defect. Isolated passes did not substitute for the full rerun.
+
+| Check | Command / evidence |
+|---|---|
+| Focused components and native composition | `make BUILD_DIR=build/se06-constants-focused-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-constants test-symbol-elf-native`; `final-focused`, exit 0. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-constants-final-ci-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `final-test-ci`, exit 0. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-constants-sanitize-20261121 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-constants test-symbol-elf-native`; `sanitize`, exit 0. |
+| Static analysis | `make analyze`, 70 production source files; `analysis`, exit 0. |
+
+Normal `make` passed (`normal-make`, exit 0), and final checks covered 217
+internal references without errors. Whitespace checks passed.
+
+No target/debugger operation is added. These host checks do not establish hosted
+CI, physical qualification, production sizing or SE06/F07 acceptance. Full
+qualified naming, definition roles, signatures, inline-instance interpretation
+and consumer integration remain unfinished.
+
+
+## Name sequence comparison — 2026-11-21
+
+Implemented [name sequence comparison](architecture.md#name-sequence-comparison-se06-partial)
+over complete retained string spans. Ordering considers the entire joined byte
+value rather than component boundaries. All component geometry and the derived
+length are examined before a result. Physical records, contexts and validation
+provenance remain separate from byte equality.
+
+Protected ELF fixtures use the actual section/string readers, retaining their
+completed spans before retiring child scratch. Tests cover differently segmented
+equal names, embedded separators, template/conversion spellings, empty values,
+prefixes, case, high bytes, distinct Unicode byte sequences and names crossing
+64 KiB windows. Thirty-two deterministic reference cases compare independently
+assembled strings and flattened equivalents. Instrumentation bounds comparison
+and reads; repeated EINTR does not advance the progress counter.
+
+Allocation fault injection, one-under budgets and replacement peaks preserve
+older valid results and restore owned charges. Discard at successive step
+boundaries preserves borrowed descriptors. Invalid later components prevent
+early-difference publication. EOF, short reads, I/O/resource errors, O_PATH and
+missing close-on-exec remain explicit. Synthetic geometry tests derived-length
+overflow before file access; no enormous backing file was created or decoded.
+Read resource failures retain their resource class; derived overflow does not
+mislabel valid source metadata as malformed.
+
+The keybinding TUI lookup that previously failed intermittently now emits the
+action label, selection, dimensions and screen when its original predicate is
+false. It uses the same lookup and failure condition, with no added wait or
+input/settling change. The earlier observation remains
+[unresolved](#language-and-inline-constants--2026-11-21); diagnostic context is not
+a claimed root-cause fix.
+
+Focused comparator/keybinding checks passed (`verified-focused`, exit 0).
+Evidence is under `build/se06-name-order-evidence-20261121/`: environment,
+`tested-files.json`, retained `inputs/`, patch and full logs identify 315 frozen
+source/header/test/build inputs. All checks below passed (exit 0), and all 315
+frozen inputs remained unchanged throughout.
+
+| Check | Command / evidence |
+|---|---|
+| Focused components and TUI | `make BUILD_DIR=build/se06-name-order-focused-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-name-order test-keybinds`; `verified-focused`, exit 0. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-name-order-ci-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `test-ci`, exit 0. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-name-order-sanitize-20261121 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-name-order`; `sanitize`, exit 0. |
+| Static analysis | `make analyze`, 71 production source files; `analysis`, exit 0. |
+
+Normal `make` passed (`normal-make`, exit 0). Documentation checks covered 221
+internal references without errors, and whitespace checks passed.
+
+These are local host checks, separate from hosted CI and physical qualification.
+The component introduces no debugger/target access. It does not establish a
+complete language-specific qualified name, signature, definition role, runtime
+binding or SE06/F07 acceptance.

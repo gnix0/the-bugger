@@ -18,6 +18,7 @@ preferences. GDB performs instruction decoding and target operations.
 | `src/gdb/` | Owned MI parsing, nonblocking transport, request correlation and debugger lifecycle |
 | `src/session/` | Session setup, ownership, capability/region evidence, profiles and OpenOCD lifecycle |
 | `src/model/` | Context, code, breakpoints and bounded inspection/editing state |
+| `src/symbol/` | Native metadata primitives, supervised helper and artifact/decoder foundations |
 
 Module headers live in the matching `include/<module>/` directories.
 `include/the_bugger/tui.h` and `version.h` retain the application-facing namespace.
@@ -34,9 +35,10 @@ also need the [request audit](#value-producing-request-audit) and
 ### Planned Native Symbol Engine
 
 The [Native Symbol Engine](native-symbol-engine.md) is an accepted design for
-bounded project-owned ELF/DWARF metadata discovery supporting F07. It is not
-implemented by this planning work. The module inventory above describes the
-existing frontend; existing libelf image consumers remain in place. GDB retains
+bounded project-owned ELF/DWARF metadata discovery supporting F07. Foundations
+are progressing below; symbol discovery and live native actions remain unavailable.
+The module inventory above describes the existing frontend; existing libelf image
+consumers remain in place. GDB retains
 instruction decoding and supported live target operations, with explicit
 consumer integration rather than implicit symbol-file reloads.
 
@@ -56,6 +58,1071 @@ are authoritative planned contracts. They do not describe behavior already
 available in the current parser, Console, Watch or Memory transfer paths.
 The [subsystem roadmap](native-subsystems.md) keeps other candidates at future
 research/design scope; it selects no additional architecture or dependencies.
+
+### Symbol Engine primitives (SE01)
+
+`src/symbol/reader.c`, `identity.c` and `sha256.c` provide the first independent
+foundation. They are built into the frontend but have no runtime consumers yet.
+They introduce no helper process, artifact acquisition, symbol discovery or live
+debugger operation. The [overall design](native-symbol-engine.md) remains the
+contract for later integration.
+
+The checked reader borrows immutable byte spans. Fixed integers decode explicit
+target byte order and width, independently of host representation; bounded
+LEB128 and string operations retain the cursor and outputs on failure. Subreaders
+cannot cross their declared span. Checked arithmetic uses subtraction/division
+bounds before addition or multiplication.
+
+Physical record IDs distinguish content, section, unit and record coordinates
+and DWARF/ELF record kinds. Their validity check establishes shape only. Content
+handles must later come from admitted, nonreused identities; paths, truncated
+hashes and runtime addresses cannot substitute. Open-context identity remains
+separate. No artifact manager or handle allocator is implemented in SE01.
+
+Streaming SHA-256 owns fixed caller-provided state and publishes a digest only
+on explicit finalization with the exact expected complete byte count. Invalid
+input, length overflow or a final length mismatch poisons the active stream;
+failed or repeated finalization leaves output unchanged. A digest is only a
+candidate for later byte-equality comparison, never coherence or access evidence.
+These primitives allocate no heap storage and perform no file/debugger I/O.
+Callers remain responsible for input lifetime and bounded update/scan allowances.
+
+### Symbol Engine helper (SE02)
+
+`src/symbol/helper.c` owns the lazy helper lifecycle and operation interests;
+`worker.c` provides the private early executable entry. The frontend event loop
+pumps the helper and polls its channel/process descriptor independently of GDB.
+Initialization and opening/editing Symbols start no process or acquisition.
+Artifact Open will explicitly start work when the SE11 workflow is introduced.
+The worker dispatches bounded artifact storage operations; unknown operation IDs
+remain Unsupported. Decoders and artifact UI are separate foundations.
+
+`src/symbol/process.c` uses `fork()` followed by isolated `execve()` of the running
+executable. Child setup uses async-signal-safe operations, installs null standard
+descriptors and the private channel, resets signal state and closes inherited
+endpoints. The parent can supervise a child blocked before exec. The initial
+Linux profile requires pidfd and `close_range` support, default SIGCHLD disposition
+and exclusive child reaping. Unsupported ownership/isolation conditions disable
+the engine without changing the debugger connection. Signals use the verified
+owned process descriptor; there is no numeric-PID signalling fallback. A previous
+helper must be reaped before explicit restart; uncertain ownership prevents it.
+See the Linux [pidfd ownership](https://man7.org/linux/man-pages/man2/pidfd_open.2.html),
+[signalling](https://man7.org/linux/man-pages/man2/pidfd_send_signal.2.html) and
+[descriptor isolation](https://man7.org/linux/man-pages/man2/close_range.2.html)
+interfaces.
+
+`src/symbol/wire.c` implements versioned big-endian frames with separate header,
+payload and descriptor-trailer receive boundaries. Every receive uses `recvmsg()`
+with atomic close-on-exec. Read-only regular backing descriptors are checked;
+these properties alone establish neither acquisition coherence nor writer
+relinquishment. One outgoing and one incoming frame remain owned until completed
+or consumed. Protocol/resource/I/O failure closes the channel and releases its
+incomplete storage and descriptors. Framing success grants no metadata authority.
+
+`src/symbol/schedule.c` separates underlying jobs from consumer interests.
+Explicit sharing preserves each captured identity. Cancellation detaches only
+that interest; a sent job retains its underlying slot until acknowledgement or
+helper reaping. Completed work remains owned until its consumer accepts delivery.
+Publication attempts rotate so one backpressured consumer cannot obstruct others.
+Finite interactive-first rounds preserve service for admitted construction jobs.
+Control metadata and small control-frame storage remain available at saturation.
+
+Requests carry separate frontend-context and helper-process generations. Worker
+service/progress reports include monotonic work timestamps, checked against
+admission and receipt; buffered progress cannot extend a stalled operation.
+Repeated counters do not refresh the watchdog. Parent-enforced queue, absolute
+operation, progress and cancellation deadlines remain distinct. Failure explicitly
+completes unfinished interests, while callers retain independently accepted
+results. Resource operations have a separate cleanup notification. The worker sends it
+only after destroying operation state and finishing the outgoing result frame;
+the parent delivers it after completion acceptance and releasing its borrowed
+result resources. Backpressure retains the underlying job slot. Cancellation
+before dispatch can prove that no worker ownership was acquired. Missing cleanup
+acknowledgements use the cancellation deadline and supervised termination; a
+confirmed reap can retire worker ownership, while uncertain reap cannot. Staged
+or retained filesystem objects remain independently owned and charged until
+their cleanup is confirmed.
+
+There is no automatic retry, rescan or restart. The supervisor exposes separate
+current-process and last-confirmed-reap generations. Acquisition owners can retain
+failed-operation reservations until worker ownership has ended; EOF, cancellation
+and lost/uncertain reap do not advance that evidence. Independently retained
+frontend descriptors and results still require their own cleanup.
+
+`src/symbol/budget.c` checks nested reservation chains before mutation. IPC and
+frontend limits apply concurrently, with each allocation charged once to its
+owner and all containing accounts. Failed allocation rolls reservations back;
+reclamation precedes release. Fixed bookkeeping and retained capacity count too.
+These are owned-storage limits, not RSS guarantees. Defaults, units, supported
+startup settings and failure policy are authoritative in the
+[resource policy](native-symbol-engine.md#resource-policy).
+
+The [helper tests](testing.md#supervised-symbol-engine-helper-se02) distinguish
+component, real-process and real-GDB isolation evidence. Artifact storage and scoped ELF validation
+integration are described below; search publication and live consumers remain
+later foundations. This
+execution boundary does not complete F07 or qualify physical targets.
+
+### Artifact admission accounting (SE03, partial)
+
+`src/symbol/admission.c` provides an independent logical-storage ledger. Each
+acquisition preallocates ownership before discovery and reserves the complete
+offered size before file growth. Separate opens and
+companion contexts each retain a full charge, including when their backing is
+shared. Allocation failures leave existing tickets and charges unchanged.
+Bookkeeping allocations also count toward the enclosing frontend account.
+
+The ledger performs constant-time ownership transitions without filesystem or
+GDB calls. Publication uses backing ownership preallocated during reservation;
+commit and cleanup require no further allocation. It checks lifecycle, owner
+and length when sharing, while the acquisition manager must independently prove
+complete byte equality and confirm disposal of temporary storage before sharing.
+No digest, path or ledger ticket establishes content identity.
+
+Closing the last context transfers its full charge to cached backing. Eviction
+marks cleanup pending; cancellation likewise retains its reservation until
+cleanup is confirmed. Neither helper failure nor a cleanup request alone proves
+that storage has been relinquished. The ledger refuses destruction while any
+reservation, context, cached backing or cleanup owner remains, including zero-byte
+files. Opaque tickets are internal owner handles and are consumed on successful
+close or confirmed cleanup.
+
+The frontend registry combines this ledger with acquisition and supervised
+cleanup. Acquisition validation and byte equality remain prerequisites outside
+the ledger; it cannot grant admission by itself.
+
+### Private byte acquisition (SE03, partial)
+
+`src/symbol/acquire.c` implements the helper-side filesystem state machine,
+independently testable without transport. The caller first owns a fresh slot in a
+protected namespace and preallocates an unsized admission ticket. The helper
+inspects the regular origin, creates an empty staging file and captures its exact
+storage identity. Its size offer is available before any file-data write. The
+parent assigns the full logical size and grants copying explicitly; source growth
+cannot grow backing beyond that extent. Unknown size is distinct from a validated
+empty file and cannot be committed as one.
+
+Each service step performs at most one filesystem operation and bounds file-data
+inspection in userspace to its supplied checkpoint allowance. A clone may process
+the full reserved extent inside one kernel call. Blocking calls require
+independent parent supervision. Namespace qualification is shared with retained
+storage. The file is protected to owner-read mode, reopened read-only with
+close-on-exec, and checked against its original storage identity before the sole
+staging writer closes. No writable mappings are created. Only then does
+complete-file SHA-256 run. Success transfers one read-only descriptor and complete
+identity/digest facts; no unfinished digest is exposed.
+
+Size, inode and modification/change-time comparisons, plus an origin-path check,
+reject detected mutations. Unchanged checks prove no atomic source coherence.
+Required ELF/DWARF validation, content identity and deduplication remain separate.
+For a nonempty grant, acquisition first attempts Linux `FICLONERANGE` with exact
+source length and zero source/destination offsets. It never uses a zero-length
+clone request, which means through EOF, or unbounded `FICLONE`. Unsupported range
+cloning resets the owned staging file before the complete streaming fallback.
+Resource and other operational errors fail explicitly. Successful cloning still
+passes exact-size/identity checks, source mutation checks, writer closure and
+complete frozen-byte hashing. The internal method diagnostic appears only after
+success and does not upgrade source-coherence evidence.
+
+Linux documents [range-clone atomicity](https://man7.org/linux/man-pages/man2/FICLONERANGE.2const.html),
+but a captured range does not establish that source file size remained constant.
+The bounded clone path therefore makes no coherent-source snapshot claim.
+Filesystem-specific positive qualification remains separate from branch tests.
+
+Destroying acquisition state closes its local descriptors and releases its
+construction account. The named slot remains owned by the caller, including on
+failure; its charge cannot disappear with helper metadata. This permits frontend
+read-only descriptors to close while the file is still linked, with final
+filesystem deletion under helper supervision. Linux [descriptor release](https://man7.org/linux/man-pages/man2/close.2.html)
+is distinct from persistence and namespace cleanup.
+
+The component takes a ready owned namespace, fresh slot and explicit file ceiling.
+Helper offer/grant framing and the frontend registry now connect its ownership
+contracts. Explicit Open workflow and positive reflink/coherence profile qualification remain
+separate work; this does not make Symbols functional.
+
+`src/symbol/equal.c` compares two pinned frozen backings independently of their
+fingerprints. Positive equality requires every byte of both inputs; differing
+bytes give a distinct, successful negative result. Checkpoints bound both reads
+and comparison work, including when later service slices shrink. Descriptor
+properties and expected lengths are checked, then inode/length/time evidence is
+rechecked before reporting either result. Failure identifies affected input
+relationships, never treats an unread suffix as equal, and preserves caller-owned
+descriptors. This primitive does not perform artifact deduplication or merge
+open-context identities.
+
+### Retained filesystem namespaces (SE03, partial)
+
+`src/symbol/storage.c` owns helper-local handles to protected filesystem
+namespaces. Creation advances through directory creation, open, identity and
+filesystem checks without scanning a directory. Reopening requires the captured
+namespace identity and owner-only protection; a pathname alone cannot adopt a
+replacement namespace. Local backing-type qualification is shared with the
+byte-copy component.
+
+File slots are explicitly granted and never reused. The namespace permits no
+arbitrary leaf names or recursive deletion. Retained files stay linked while
+frontend descriptors close; their final deletion belongs to the supervised
+helper after dependent leases retire. Reader/open and unlink operations check
+exact storage identity, and unlink cannot delete a replacement file. Removing a
+namespace refuses nonempty or replaced directories. An identified empty owned
+directory can also be removed after its filesystem fails data-storage qualification;
+this does not admit that filesystem for retained bytes. Destroying a local handle
+closes its descriptor and releases bookkeeping, without claiming filesystem
+cleanup. Storage coordinates establish ownership, not native record identity or
+byte equality.
+
+Named retention is connected to the copier and the ledger can preallocate
+unsized ownership. The helper-side operation dispatcher in `src/symbol/operation.c`
+validates bounded, explicitly encoded requests before opening a namespace. It
+combines creation, acquisition, comparison and cleanup without merging content
+identity with storage coordinates. Acquisition pauses on an identified empty
+slot until granted the exact size. Unpublished slots whose growth grant was never
+dispatched have a separate empty-file cleanup operation; nonempty or nonregular
+entries are refused. Local state destruction never claims retained-file cleanup.
+
+Private request dispatch now connects those operations to the supervised worker.
+After first-service evidence flushes, bounded steps emit meaningful progress and
+an acquisition offer. Offers identify the empty slot and exact extent. Only an
+explicit matching grant permits growth, and dormant offers wait for control
+traffic rather than spinning. The parent preserves offers until retirement and
+rejects duplicate, wrong-context or inconsistent ownership evidence. Grants are
+single-use; cancellation fences unsent grants without undoing framed traffic.
+
+Failure diagnostics carry the captured context, system error, operation detail
+and any established storage identity. A failed result serialization uses reserved
+failure framing and publishes no candidate prefix. Worker state and outgoing
+descriptors retire before cleanup acknowledgement. The frontend registry below
+owns contexts, backing and scoped sharing; explicit Open orchestration and the
+artifact UI remain SE11 work.
+
+### Frontend artifact registry (SE03, partial)
+
+`src/symbol/artifact.c` owns artifact-open contexts, retained backing and leases
+under the shared frontend allocation account. Preparation reserves complete
+candidate bookkeeping before discovery; an exact offer reserves its full logical
+charge before a helper grant. Descriptor admission checks the offered storage
+identity, extent, owner, protection, access mode and close-on-exec. Retention
+establishes frozen bytes with unproven source coherence, not ELF/DWARF validity or
+runtime authority.
+
+Context and content identities come from a frontend-owned monotonic domain that
+outlives registry replacement and historical facts. Equal origin paths create
+independent contexts. Fixed-depth identifier lookup and checked reservations
+bound bookkeeping without scanning names or reallocating a whole context index.
+A lease pins backing while current-context eligibility remains a separate check;
+closing an artifact revokes that eligibility immediately. Detected backing
+correspondence/integrity loss withdraws storage-dependent capabilities through a
+separate content revision, without reclaiming bytes or releasing charges. Late
+comparison results cannot restore withdrawn correspondence. Final closure transfers
+its logical charge into cache. Eviction waits for leases, closes frontend file
+descriptors while storage remains linked, and retains its charge until exact
+supervised cleanup is confirmed.
+
+Digest and extent select possible duplicates. A scoped comparison token pins the
+exact existing backing, captures request identity separately from artifact context
+revision, and accepts only the corresponding completion and worker retirement.
+Positive complete-byte equality retains that pin through candidate cleanup;
+sharing is committed without allocation only after the duplicate file is removed.
+Comparison resource/operational failure prevents candidate publication. Closing
+while comparison or cleanup is pending cannot reactivate the context or bind it
+to a replacement. Each independently open context keeps its full logical charge.
+
+Frontend initialization creates only empty registry/helper owners and reads the
+[startup settings](native-symbol-engine.md#available-startup-configuration).
+The explicit Open workflow and artifact browser remain SE11 work; initialization,
+Symbols navigation and editing controls still perform no acquisition. Decoding,
+validation evidence, source correspondence and live-action consumers remain
+separate foundations.
+
+
+### Retained-file scratch reads (SE04, partial)
+
+`src/symbol/file.c` supplies bounded byte spans from already frozen, pinned
+backing. Construction reserves its complete owned state against a required
+caller budget and performs no I/O. The descriptor remains borrowed: its owner
+keeps the file and content lease alive until reader retirement. Destroying the
+reader releases scratch storage, never the descriptor or filesystem charge.
+
+Each request covers 1–65,536 bytes within the captured file extent. Each service
+step performs at most one filesystem syscall and limits byte inspection to the
+supplied checkpoint allowance. Descriptor checks require read-only, close-on-exec,
+non-`O_PATH` regular protected backing with the expected storage identity/extent.
+Pre/post-read metadata checks retain the first observed timestamps across later
+requests, rather than silently accepting a changed file as a new baseline.
+Blocked syscalls still require independent parent supervision.
+
+A view becomes available only after every requested byte and the final metadata
+check succeed. An invalid request preserves the previous valid view; an accepted
+replacement invalidates that borrowed view immediately. Interrupted/partial reads
+remain pending; failure publishes no prefix and cannot be silently retried on the
+same reader. Reconstructible scratch owns no published metadata guarantee.
+
+This scratch span is distinct from a Symbols result window or decoded-cache
+allowance. There is no new production cache budget or startup setting. Descriptor
+inspection does not prove writer closure or source coherence; acquisition retains
+those ownership/evidence obligations. Request generations and consumer interest
+belong to the outer operation. No frontend helper request or UI consumer uses this
+component yet.
+
+
+### ELF record decoding (SE04, partial)
+
+`src/symbol/elf.c` decodes fixed ELF headers, section headers, program headers and
+symbol records through the checked reader. Class and target byte order are
+independent of the host; no input is cast to a native C ELF structure. Each call
+examines at most 64 bytes, allocates nothing and leaves outputs unchanged on
+failure. Linked executables and shared objects are supported; other file types
+and unknown format versions remain explicit unsupported cases.
+
+Header decoding provides raw fields. Layout validation separately resolves
+escaped section/program counts and section-name indexes through section zero,
+then checks complete table extents with checked arithmetic. Before fetching
+section zero, its prefix must also be checked against retained file bounds.
+Larger record schemas are unsupported rather than guessed. A successful layout
+does not validate individual records, section overlaps, names or cross-section
+relationships.
+
+`SHT_NULL` fields do not describe file payload; section zero may hold extended
+counts. `SHT_NOBITS` describes memory extent without requiring stored file bytes.
+Supported structural checks include file bounds, alignment and target-width
+address ranges. Raw machine/ABI flags, symbol bindings/types, visibility bits and
+special section indexes remain intact. In particular, TLS, undefined, absolute,
+common, extended-index and processor-specific symbols gain no ordinary-storage
+or code-location meaning from decoding success. Compressed payloads are not
+decoded by this layer.
+
+The layouts follow the [ELF generic ABI](https://gabi.xinuos.com/elf/02-eheader.html)
+and its [section](https://gabi.xinuos.com/elf/03-sheader.html),
+[program-header](https://gabi.xinuos.com/elf/07-pheader.html) and
+[symbol-table](https://gabi.xinuos.com/elf/05-symtab.html) definitions.
+These allocation-free components introduce no helper request, catalog, search,
+Source navigation or runtime binding. Section-directory and symbol-table validation
+follow below, including scoped helper validation. Existing
+`src/model/images.c` libelf consumers are unchanged.
+
+
+### ELF section directories (SE04, partial)
+
+`src/symbol/sections.c` constructs a complete helper-local section directory over
+frozen backing, using the bounded reader and fixed-record decoders. It reserves
+all entries and an auxiliary ordering array against a caller budget before
+allocation. Individual entries remain in physical section order. Incremental
+heap operations sort only the auxiliary array, yielding after each bounded
+action; file-backed section ranges must neither overlap each other nor consume
+structural header/table bytes. NULL, NOBITS and empty payloads retain their
+distinct meanings.
+
+Section-name validation checks the declared string table and supported references.
+Names retain exact full byte lengths and backing coordinates, including duplicate
+names, substring references and names longer than one scratch span. No full-name
+copy or truncated-name identity is introduced. Nonempty tables require their first
+and last bytes to be NUL; empty tables permit only index zero, following the
+[ELF string-table contract](https://gabi.xinuos.com/elf/04-strtab.html).
+
+The complete directory becomes visible only after its requested checks succeed.
+Compressed name tables produce explicit unavailable-name coverage, without
+interpreting their payload or pretending nonzero name indexes are empty names.
+An absent section-name table does not prove that the artifact contains no DWARF.
+Malformed supported dependencies and allocation/read failures expose no candidate
+prefix. Reader/storage errors remain distinct from malformed encoded metadata.
+
+The directory and its views are reconstructible helper cache, borrowed until
+destruction. They do not own frontend publication guarantees or grant code/storage
+meaning to raw section attributes. Program entry semantics, other cross-section
+relationships and processor/OS semantics remain separate validation scopes.
+Symbol-table dependencies have their own scope below. Production cache sizing
+still belongs to SE10. Scoped helper integration is described below; this
+component introduces no UI consumer.
+
+
+### ELF symbol-table dependencies (SE04, partial)
+
+`src/symbol/symbols.c` validates one selected `.symtab` or `.dynsym` inventory
+against a complete section directory and its exact retained backing. Construction
+performs no I/O; subsequent steps yield between bounded dependency, record, name
+and reader actions. The caller retains the directory, descriptor and content
+lease. All owned state and the complete entry array require checked reservations
+against the caller's construction budget. No candidate prefix is exposed.
+
+The scope checks the selected table's stride, linked string table, reserved zero
+entry, local/nonlocal ordering and ordinary section references. A unique associated
+`SHT_SYMTAB_SHNDX` supplies extended indexes; its words correspond one-to-one with
+symbols, and unused words must be zero. An extended ordinary index whose numeric
+value equals a reserved 16-bit marker remains an ordinary physical section index.
+The raw index and other symbol fields remain available separately. Unknown framed
+bindings/types and all `st_other` bits retain their original values.
+
+Names retain full backing coordinates and lengths, including duplicates, substring
+references and strings spanning scratch reads. No name is truncated or copied into
+an identity. Compressed symbol/string/index dependencies are explicitly unsupported;
+malformed supported dependencies fail the complete selected scope. An unsupported
+scope does not establish an empty inventory or artifact-wide completeness.
+
+The completed view is borrowed helper cache. Its table section, section-relative
+record offset and record kind distinguish physical coordinates; constructing a
+physical identity still requires the admitted content identity. Undefined, absolute,
+common, TLS and processor-specific records gain no ordinary-storage or code claim
+from these checks. Object footprints, language types, program/section mapping,
+runtime correspondence, access authorization and independent frontend evidence
+remain separate work. Scoped helper validation follows below; no UI action is
+introduced. SE10 still determines production cache/index limits.
+
+
+### Supervised ELF validation (SE04, partial)
+
+The internal helper dispatcher accepts explicit directory or selected symbol-table
+validation requests over an already retained file. Requests carry its namespace
+identity, slot, file identity and extent. The helper checks the private namespace
+and reopens that exact backing read-only; it never searches an origin path,
+admits a new file or discovers companions. The caller retains the content/backing
+lease through the matching worker-retirement acknowledgement or confirmed reap.
+
+Directory construction precedes selected symbol validation. Only completed scopes
+produce the fixed 56-byte summary; it identifies the selected scope, counts and
+supported header/name-coverage facts. It is not an inventory window, physical
+record binding or frontend validation-evidence owner. Unsupported coverage,
+malformed dependencies, cancellation, stale interest, resource and operational
+failure expose no candidate prefix. Diagnostics retain the failing dependency
+category and section/record ordinal where available. Program semantics and
+runtime mappings remain unexamined by this request.
+
+Decoder construction uses one shared helper account, independently of IPC and
+frontend storage. The internal helper configuration accepts an explicit byte
+ceiling without reserving it upfront. Zero disables decoder requests before
+filesystem access; there is no selected production default or user-facing startup
+setting yet. Positive allowances in the harness qualify the bounded implementation,
+not production sizing. SE10 must select the production bounds before dependent
+acceptance. Exhaustion fails the request and releases construction ownership;
+a subsequent smaller scope can succeed against the same retained file.
+
+The private wire schema is version 2: the handshake includes the decoder ceiling,
+and failure diagnostics include the ordinal. Reserved inline control storage
+accommodates these bounded messages. Version mismatch closes the helper channel;
+it does not affect GDB. Decoder progress reaches the existing parent watchdog.
+The parent samples monotonic time after a complete frame is received, so progress
+created after the pump's initial sample is not mistaken for a future event.
+Worker timestamps retain their queue/deadline meaning; genuinely future or stale
+claims still fail closed. Cancellation/restart use the existing supervision and
+exact retirement rules.
+Scratch and entry arrays are released before their backing descriptor; physical
+backing cleanup and logical admission remain separate owner responsibilities.
+
+
+### DWARF unit headers (SE05, partial)
+
+`src/symbol/dwarf.c` decodes initial lengths and non-split DWARF 4–5 unit headers
+without allocation or I/O. The supplied section extent and section-relative unit
+offset are checked independently of the available prefix. Initial-length decoding
+examines at most 12 bytes; unit decoding examines at most 40. Reserved length
+encodings, arithmetic overflow and out-of-section contributions fail without
+changing outputs. Bytes from the next contribution cannot complete a short header.
+
+Offset format and raw address size remain independent. DWARF 4 `.debug_info`
+headers identify a compile-or-partial scope until its root DIE is validated;
+`.debug_types` has a separate type header. DWARF 5 supports compile, partial and
+type headers in `.debug_info`. Split, skeleton and unknown headers remain explicit
+unsupported cases. Separately valid length framing does not decode their fields
+or establish complete coverage.
+
+Type-unit signatures remain raw metadata. Type offsets must fall after the header
+inside the same contribution; no DIE boundary, type relationship or semantic
+identity follows. Abbreviation offsets remain unresolved dependencies. Nonzero
+raw address sizes are retained without granting numeric/location support.
+Unit-body, abbreviation, form and reference validation follow in later SE05 steps;
+no catalog, helper request or UI action is introduced here. The layouts follow
+[DWARF 4](https://dwarfstd.org/doc/DWARF4.pdf) and
+[DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Section 7.5.1.
+
+
+### Complete DWARF header inventories (SE05, partial)
+
+`src/symbol/units.c` builds a complete header inventory for one explicitly selected
+info/types section over exact retained backing. The caller retains the validated
+section directory, descriptor and content lease. Construction performs no I/O;
+steps check the section profile and descriptor, count contributions, reserve the
+exact entry array and reconstruct the same ordered scope in a second pass.
+Even an empty selected section verifies the backing descriptor before success.
+
+Every entry retains its physical section-relative offset and checked extent.
+Supported headers retain their decoded facts. Safely framed unsupported units
+remain explicit entries with unavailable headers and an aggregate coverage count;
+no guessed fields or empty-inventory substitution is introduced. Malformed framing
+or supported headers fail the selected scope. No candidate prefix is exposed.
+
+Owned state, reader scratch and complete entry capacity use the caller's checked
+construction account. Each service action handles one bounded reader step or
+contribution. Cancellation releases construction ownership while preserving the
+borrowed descriptor; no implicit retry, rescan or artifact discovery occurs.
+The view is borrowed helper cache, not independent frontend validation evidence.
+Unit bodies, DIEs, abbreviation dependencies, forms and cross-unit references
+remain unvalidated. This component adds no helper opcode or UI action and selects
+no production cache/index limit ahead of SE10.
+
+
+### DWARF abbreviation tables (SE05, partial)
+
+`src/symbol/abbrev.c` validates one explicitly selected table at a section-relative
+abbreviation offset and DWARF version. It borrows the complete section directory,
+exact retained descriptor and content lease. Creation performs no I/O; bounded
+steps frame declarations through the table's zero-code terminator. The component
+recognizes standard DWARF 4/5 form identifiers for the selected version. Unknown
+forms are Unsupported because their declaration layout cannot be assumed.
+
+A counting pass reserves exact entry, attribute and lookup-array capacity before
+reconstruction. Incremental heapsort validates unique codes without changing
+physical declaration or attribute order. Duplicate codes, invalid child markers,
+inconsistent attribute terminators and truncated fields fail the selected table.
+No incomplete or failed candidate is exposed. Duplicate attribute names and
+unknown numeric tags/attributes remain raw metadata; this layer selects no
+semantic winner. Numeric identifiers exceeding its 64-bit lookup profile remain
+explicitly Unsupported rather than truncated or classified as malformed.
+
+`src/symbol/leb.c` supplies allocation-free streaming LEB framing with at most 256
+bytes inspected per call, independently of numeric representability. Abbreviation
+implicit constants retain their complete encoded coordinates even when no signed
+64-bit value is available. Long valid padding is framed across scratch windows;
+framing never consumes the following field. Owned state, scratch and all array
+capacity use the caller's checked construction account. Cancellation/destruction
+release that ownership without closing the borrowed descriptor.
+
+A complete table view establishes its selected schema only. Unit-to-table
+association remains the caller's responsibility; DIE bodies, attribute payloads,
+reference targets and semantic relationships require subsequent validation.
+No helper opcode, discovery, frontend evidence owner or runtime authority is
+introduced. Production sizing remains at SE10. Declaration encoding follows
+[DWARF 4](https://dwarfstd.org/doc/DWARF4.pdf) and
+[DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Sections 7.5.3 and 7.6.
+
+
+### DWARF attribute-form framing (SE05, partial)
+
+`src/symbol/form.c` frames one attribute payload incrementally without allocation
+or I/O. The caller supplies its declared form, DWARF version, target byte order,
+independent address/offset widths and exact remaining unit-body extent. Every
+feed inspects at most 256 bytes and stops at the attribute boundary, preserving
+the next field. Standard DWARF 4/5 fixed, string, block, expression, indexed,
+reference and variable-length forms have explicit layouts; unknown forms remain
+Unsupported. Arbitrary nonzero byte-sized address widths are framed without
+assuming that their values fit a runtime address.
+
+Complete views preserve the effective form, whole encoded footprint and payload
+coordinates. Payloads exclude indirect selectors, length prefixes and string
+terminators; LEB payloads retain their complete encoding. Optional 64-bit bits
+indicate representability only, never a type, signed interpretation of raw data,
+reference validity or location. Wider values retain their exact spans. String
+framing proves termination inside the supplied unit, not source encoding or
+matching against another section.
+
+Direct implicit constants consume no DIE bytes; their value remains in the
+validated abbreviation schema. Indirect selectors are iterative, including
+repeated indirection and an implicit constant encoded in the DIE, following the
+[DWARF 5 errata](https://dwarfstd.org/errata-dwarf5.html). No recursion, whole-unit
+buffer or numeric truncation is introduced. Truncation and unsupported encodings
+expose no candidate view. The outer construction owner accounts for embedded
+scanner state and enforces scheduling, cancellation and deadlines.
+
+This component establishes payload boundaries only. Complete DIE traversal,
+unit-to-schema association, tree structure, reference targets and semantic
+attribute requirements remain subsequent validation work. No helper opcode,
+frontend catalog, target access or production sizing default follows.
+
+
+### Complete selected DIE trees (SE05, partial)
+
+`src/symbol/dies.c` composes complete unit-header and abbreviation views over the
+same retained backing. The selected schema version and table offset must match
+the unit header; the caller establishes the section relationship. Construction
+performs no I/O. Bounded reader, code and form actions frame the entire unit in a
+counting pass, reserve exact record/attribute/parent-stack capacity, then populate
+the same physical sequence. Every allocation uses the caller's construction
+account; no production depth/cache ceiling is selected ahead of SE10.
+
+The complete view preserves section/unit/record coordinates, physical attribute
+order, exact payload spans, schema coordinates and parent indexes. Null entries
+close child chains; leading/trailing null padding is not a semantic definition.
+Missing roots, multiple roots, unclosed chains, missing abbreviation codes and
+truncated payloads fail without exposing a prefix. Unknown wide code identifiers
+and unknown root profiles remain explicitly unsupported. Root tags resolve the
+DWARF 4 compile-or-partial distinction without rewriting the retained header;
+known contradictory unit/root kinds fail. Type offsets must identify actual DIE
+boundaries, which alone does not prove type semantics.
+
+Direct zero-byte attributes retain their schema dependency; indirect attributes
+retain both declared and effective forms. Wider values retain spans without
+numeric truncation. Names, duplicate attributes, cross-unit/reference targets,
+string/address tables and type/location meaning require subsequent validation.
+The view is borrowed decoded metadata, not frontend-owned evidence or runtime
+authority. Cancellation/destruction releases owned construction storage and
+preserves the caller's descriptor/content lease. No helper opcode or live action
+is introduced.
+
+
+### Physical DWARF reference targeting (SE05, partial)
+
+`src/symbol/references.c` selects reference attributes by their exact unit, DIE
+and attribute indexes. Effective forms distinguish unit-relative, info-section,
+type-signature and supplementary references; a numeric constant is not treated
+as a reference because its bits happen to match an offset. Raw source provenance
+and backing remain attached to prepared coordinates. All operations are
+allocation-free and perform no I/O, admission, discovery or target access.
+
+Unit-relative offsets must fit inside the exact source contribution after its
+header. Binary lookup requires an actual physical DIE boundary in the complete
+matching tree. Section-relative references require an explicitly selected
+same-backing `.debug_info` inventory, then the exact target unit/tree. Missing
+or mismatched target views remain dependency outcomes. Looking up a raw encoded
+offset does not validate applicable relocation correspondence or semantic
+specification/type relationships.
+
+Type-signature lookup incrementally examines a fixed captured inventory set,
+one header or scope transition per step. It exposes no candidate before the
+entire set is examined. Different physical matches conflict even when signatures
+are equal; repeated views of the same physical unit do not duplicate a match.
+Unsupported headers prevent a claim of unique resolution. Missing types, coverage
+limitations and conflicts remain distinct. The selected type offset still needs
+its complete target DIE tree. A signature never replaces physical identity.
+
+Supplementary references remain explicitly unsupported. Caller-owned inventory
+pins, construction accounting, cancellation, deadlines and context revisions
+bound these primitive operations. Complete reference/dependency evidence and
+semantic attribute validation remain separate work; physical lookup grants no
+frontend guarantee, runtime correspondence or access authority. Reference
+encodings follow [DWARF 4](https://dwarfstd.org/doc/DWARF4.pdf) and
+[DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Section 7.5.5, with the
+[same-object clarification](https://dwarfstd.org/issues/230120.1.html).
+
+
+### Retained DWARF strings and offsets (SE05, partial)
+
+`src/symbol/strings.c` validates one explicitly bounded, terminated string over
+retained metadata. The caller establishes its section/attribute relationship and
+exclusive scan bound. Creation performs no I/O; bounded steps check the backing
+and scan within the captured range. Read windows respect the current service
+allowance, rather than loading a full maximum window for every short string.
+Complete views retain exact backing, section, start, length and scope. Empty
+strings and offsets into existing strings remain distinct valid spans.
+
+The decoder allocates no full string and performs no locale/Unicode conversion.
+Termination proof does not establish semantic names, valid UTF-8 or an entire
+ELF string table's invariants. Failed or cancelled scans expose no prefix;
+destruction releases construction storage while preserving the borrowed
+file descriptor and caller's content lease.
+
+`src/symbol/string_offsets.c` resolves one DWARF 5 indexed-string entry. It walks
+length framing from the selected section's start, so the requested CU base must
+be a proven contribution's first entry. Bytes preceding an arbitrary base cannot
+substitute for that boundary proof. The selected header must have version 5,
+zero padding, an integral entry count and the CU's DWARF32/64 offset format.
+Index multiplication and every range are checked before reading the entry.
+Mixed-format contributions belonging to different CUs remain supported.
+
+Unrelated earlier contributions receive framing examination only. An unknown
+selected version is unsupported; malformed framing, forged bases, truncated
+headers, format mismatches and invalid indexes fail explicitly. No value is
+exposed before the selected entry is complete. The resulting raw string offset
+still requires an explicitly selected string section and termination validation.
+The layout follows [DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Sections 7.4,
+7.5.5 and 7.26. Split/headerless tables remain outside this profile.
+
+Both components use required caller-owned construction accounts and outer-job
+cancellation, deadlines and revisions. They introduce no discovery, helper opcode,
+frontend evidence owner, semantic naming policy or target access. Scope-specific
+string/dependency facts do not establish full unit semantics or production sizing.
+
+
+### Selected text attributes (SE05, partial)
+
+`src/symbol/attributes.c` scans a selected DIE's complete attribute scope before
+exposing a unique field. Missing and duplicate fields have separate results;
+equal duplicate values remain distinct physical attributes. Each step examines
+at most 256 attributes. Complete diagnostics retain the source identity, total
+matches and first two physical occurrences. This allocation-free cursor borrows
+the complete tree; its caller owns accounting, lifetime and cancellation.
+
+`src/symbol/text.c` composes that lookup with retained string and string-offset
+validation. It accepts inline strings, direct string/line-string offsets and
+DWARF 5 indexed strings. Indexed strings require a unique root
+`DW_AT_str_offsets_base` with the proper form and a complete selected table entry
+using the CU's offset format. All dependent sections are explicitly selected;
+missing sections or bases never trigger discovery or a numeric fallback.
+
+Only a completed resolution exposes a text span. The view retains the exact
+source DIE, attribute, abbreviation coordinates and backing; indexed results
+also retain the base attribute and table-entry provenance. Empty text is a
+successful zero-length span, distinct from a missing field. Conflicting fields,
+unsupported forms, malformed dependencies, resource refusal and operational
+failure remain distinguishable. A failed/cancelled construction exposes no
+partial view. No full string is allocated or interpreted as Unicode.
+
+Creation checks source-view correspondence and reserves construction storage
+without I/O. Bounded steps own their child decoders through the same account;
+the completed offset fact is copied before its child is released. The caller
+retains all borrowed views, descriptor and content lease and supplies outer-job
+deadlines, request identity and revision checks. These primitives do not inherit
+names through references, create frontend evidence ownership or establish
+semantic names, runtime correspondence or permission to access a target.
+
+
+### Direct DWARF entry facts (SE06, partial)
+
+`src/symbol/entities.c` inspects one complete physical DIE before exposing its
+selected direct fields. It records name, linkage name, declaration, external,
+artificial, inline, specification, abstract-origin and type attributes with their
+exact source coordinates. Every selected field must be unique; equal values do
+not merge duplicate attributes. Missing fields remain explicit. Unrelated
+attributes do not receive semantic validation from this inspection.
+
+Only declaration, external and artificial flags receive class/value validation
+here. `DW_FORM_flag` accepts every nonzero byte as true; `DW_FORM_flag_present`
+is true without an encoded value. Physical presence is retained separately from
+truth, so an absent flag and an explicitly encoded false flag remain distinct.
+Names, inline codes and references remain raw fields for their own interpreters.
+These rules follow [DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Sections 2.13,
+3.3 and 7.5.5.
+
+Entry kinds distinguish subprogram, variable and concrete inline-instance tags;
+other tags remain metadata without adding a search category. A subprogram tag
+does not prove standalone emitted code, and a variable tag does not prove
+nonlocality, storage or a live address. No attribute inheritance,
+reference-target validation, type rendering or semantic name construction occurs.
+
+The cursor borrows its complete tree and context. It performs no allocation or
+I/O and examines at most 256 attributes per step; its caller accounts the embedded
+state and supplies cancellation, deadlines and revision checks. A complete view
+retains the backing, unit, DIE, parent and abbreviation coordinates. Conflicts,
+malformed selected flags and invalid requests expose no candidate view. This
+component introduces no helper operation, frontend publication or target access.
+
+
+### Scoped DWARF relationship links (SE06, partial)
+
+`src/symbol/relations.c` prepares one specification, abstract-origin or namespace
+extension reference from an explicitly selected DIE. It examines that field's
+complete attribute scope before publishing a raw source fact. Missing fields,
+equal-value duplicates, non-reference forms and invalid reference operands have
+separate outcomes. Other attributes remain outside this validation scope.
+
+Target preparation selects a required physical unit before binding an exact DIE.
+Unit-relative links use the captured source contribution; section-relative links
+require an explicitly selected complete info inventory. Missing inventories and
+unavailable trees are dependencies, while a complete empty inventory or an
+invalid target boundary has its own outcome. No file discovery or unit decoding
+occurs here. Supplementary and signature-based relationship targets, vendor tags
+and tags not assigned by the selected DWARF version remain unsupported.
+
+The direct tag-pair profile accepts matching specification tags, the
+inlined-subroutine to subprogram origin pair, and namespace extension pairs.
+It also supports a variable definition referencing a DWARF 4 member declaration
+inside a class, structure or union. DWARF 5 represents that declaration with a
+variable tag. The target version comes from its own inventory, including mixed
+version links. This distinction follows [DWARF 4](https://dwarfstd.org/doc/DWARF4.pdf)
+and [DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Section 4.1. A specification
+target need not carry a true declaration flag: a non-defining variable can
+reference its definition. No declaration flag is inherited by this component.
+
+Each completed edge preserves the original source identity, selected attribute,
+raw reference, target identity, unit kinds/versions, abbreviation coordinates
+and target parent provenance. Source and target records remain distinct.
+Wrong tag pairs and self-references expose no edge; the raw source reference
+remains available for diagnostics. Multi-record cycles require the separate
+[graph traversal](#bounded-dwarf-relationship-traversal-se06-partial).
+Inheritance, language semantics and applicable relocation correspondence need
+their own validation.
+An exact link is not a canonical identity or authorization for a live action.
+
+The caller owns and accounts the embedded cursor and retains its complete views,
+content/context evidence, cancellation and revision checks. Steps inspect at most
+256 attributes; target lookup uses bounded inventory/DIE searches. No allocation,
+I/O, helper operation or frontend publication is introduced. Failed output
+arguments remain unchanged.
+
+GCC's older call-site extension reuses `DW_AT_abstract_origin` with different
+semantics, as shown in its [DWARF 5 transition](https://gcc.gnu.org/pipermail/gcc-patches/2016-October/459758.html).
+Those vendor-tag records retain raw metadata and explicit unsupported coverage;
+they do not acquire standard inline-inheritance semantics.
+
+
+### Bounded DWARF relationship traversal (SE06, partial)
+
+`src/symbol/graph.c` validates the reachable specification, abstract-origin and
+namespace-extension graph of one exact selected record. It scans each selected
+field's complete attribute scope, binds each direct link through the scoped
+relationship profile, and visits every reachable target before exposing a
+successful graph. Acyclicity applies to these three relation kinds in this
+captured scope, not to type references, lexical ancestry or all artifact metadata.
+
+Traversal uses iterative depth-first work with caller-owned node storage. A link
+to an active ancestor is a cycle; a link to a completed node is a shared path.
+Both incoming edges survive, and no physical records are canonicalized. Stored
+nodes retain source/target coordinates, tag/version/unit/abbreviation context,
+parent provenance and full direct edges. A supplied target's context must agree
+with its later source view and with an already visited record's context.
+
+The cursor requests explicit source views or target dependencies. Supplying a
+source selects its exact unit and DIE; target supply uses the relationship
+validator and an explicitly selected info inventory where required. These
+requests cause no discovery, decoding, file access or debugger traffic. Wrong
+source supplies leave the request intact; an explicitly unavailable dependency
+or a failed direct relationship ends the traversal. Diagnostics distinguish
+cycles, missing dependencies, relationship failures and exhausted storage, with
+raw source/field provenance where available. Failed traversal exposes no
+successfully validated graph prefix.
+
+Each step performs at most 256 bounded attribute examinations or traversal
+actions; each visited-record comparison is a separate action. This initial
+visited lookup is linear, so total work can be quadratic in graph size. The outer
+job owns cancellation, absolute deadlines, context revisions and the checked
+account for the entire state and workspace, including unused capacity. There is
+no allocation, recursion or production capacity default here; production sizing
+and responsiveness remain SE10 obligations. Views are borrowed through the
+stated source/workspace lifetimes and establish no independent frontend evidence.
+
+A successful graph does not select inherited attributes, qualified lexical
+context or canonical language entities. In particular, declaration coordinates
+must retain the compilation unit of the eventual attribute owner; the selected
+record cannot borrow another unit's file number as its own. The separate
+[inherited-field selector](#inherited-dwarf-attribute-owners-se06-partial) retains
+that ownership. Semantic field agreement, qualified names/signatures, inline
+interpretation, relocation correspondence and live authority remain separate work.
+
+
+### Inherited DWARF attribute owners (SE06, partial)
+
+`src/symbol/inherit.c` selects physical attribute owners over a completed,
+unchanged relationship graph. Its explicit profile covers `DW_AT_name`, standard
+`DW_AT_linkage_name`, `DW_AT_type` and the three declaration coordinates.
+A direct field stops inheritance on that path; a missing field follows the
+captured specification, origin and namespace-extension links. Every visited
+field's complete attribute scope must finish before it can become an owner.
+Duplicate fields conflict even when their values agree.
+
+The result distinguishes absent, unique and multiple physical owners. A shared
+owner reached through two paths occurs once, while the graph retains both
+paths. Distinct owners remain multiple even if their raw values agree: field-value
+agreement, string interpretation and type equivalence require separate checks.
+A direct malformed or unsupported value cannot silently fall back to another
+record. Owner selection itself retains raw forms and spans; it does not validate
+their value classes or grant semantic naming or type claims.
+
+Every owner retains its exact attribute, backing, section, unit and record
+coordinates. Inherited declaration-file numbers belong to that owner's unit,
+not automatically to the selected root. Explicit source supply must match the
+captured tag, version, unit kind, abbreviation and parent context. DWARF 4 info
+headers permit compilation/partial refinement only through the validated root;
+that header ambiguity is not accepted for DWARF 5 or type-unit mismatches.
+
+Flags, sibling links, runtime locations and other fields are outside this
+inheritance profile. Physical flag presence is not a generic inheritance rule:
+[DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Section 7.5.4, represents a zero
+flag as semantic absence. Declaration and sibling attributes also have explicit
+inheritance exclusions. The direct-entry reader continues to record physical
+presence and truth separately; it makes no inherited-flag claim.
+
+The cursor performs no allocation, I/O, callbacks, discovery or recursion. It
+initializes caller-owned workspace and advances at most 256 bounded actions per
+step. Source requests are explicit; missing dependencies, conflicting fields and
+invalid scopes expose no completed candidate prefix. Invalid source supplies
+preserve the pending request. The caller accounts the entire workspace capacity
+and state and retains the graph/context and current borrowed source for their
+stated lifetimes. Linear queue/edge lookup can require quadratic total work;
+absolute deadlines and SE10 production sizing remain necessary.
+
+This component selects owners, not complete inherited definitions, qualified
+lexical contexts, signatures or usable locations. Its borrowed results do not
+establish independent frontend evidence, runtime bindings or action authority.
+
+
+### Inherited DWARF text agreement (SE06, partial)
+
+`src/symbol/inherited_text.c` composes physical owner selection with the retained
+text provider for standard `DW_AT_name` and `DW_AT_linkage_name`. Each selected
+owner must have a supported string-class value. The provider validates its full
+attribute scope, string bytes and, when indexed, the owning unit's root base and
+string-offset contribution. Source supply must match the graph's captured
+physical coordinates and unit/abbreviation/parent context. A cross-unit owner
+uses its own format and table base, including mixed DWARF32/DWARF64 artifacts.
+
+Multiple physical owners succeed only when their complete byte sequences agree.
+All owners and their exact selected attributes remain in the result; the first
+is a value representative, not a canonical definition. Equal names do not merge
+records or prove equal lexical contexts. Empty names remain distinct from absent
+attributes. Duplicate attributes, disagreeing values, malformed strings and
+missing dependencies expose no successful prefix. Supplementary strings remain
+unsupported; a direct unsupported value never falls back to another owner.
+Rejected backing readers are operational failures with nested diagnostics, not
+unsupported metadata coverage.
+
+`src/symbol/string_order.c` compares two fully validated retained strings in
+unsigned byte order without locale conversion, normalization, hashing or summary
+truncation. It uses two bounded readers and examines at most 64 KiB across both
+operands per comparison step. Each reader step performs at most one filesystem
+call. Empty strings still require descriptor validation and comparison through
+the terminating byte. Invalid step arguments preserve the pending operation;
+EOF, changed backing, descriptor and read failures remain explicit.
+
+The composed provider owns checked construction storage for its state, owner
+workspace and exact fact array, plus at most one text decoder or byte comparator.
+A completed child claim is copied into a pointer-free local fact before its
+reconstructible decoder scratch is released. The parent retains the graph,
+directory, frozen descriptor lease and **every supplied source view** through
+destruction; those borrowed scopes remain independently pinned and accounted.
+Facts include their owning unit, root coordinates, selected attribute and text
+validation dependencies. They cannot outlive the parent as independent evidence.
+Destruction releases all owned allocations without traversing the owner array.
+
+The outer job still owns request/consumer identities, captured revisions,
+cancellation and monotonic deadlines. This pull interface performs no discovery,
+constructor I/O or debugger dispatch. It establishes simple-name/linkage-value
+agreement only. Qualified context, definition roles, signatures, inline semantics,
+frontend evidence/publication and runtime eligibility require subsequent work.
+
+
+### Declaration-context anchors (SE06, partial)
+
+`src/symbol/context.c` selects one layer of declaration-context dependencies from
+a complete relationship graph. It follows the captured specification,
+abstract-origin and namespace-extension paths to their terminal records, then
+obtains each terminal's exact lexical parent from an explicitly supplied complete
+tree. This is independent of name ownership: a direct name on an out-of-line
+method does not discard its specification's class context, and an inline
+instance's caller is not automatically the callee's declaration scope.
+
+Each terminal retains its own physical record, parent, unit/root coordinates,
+version and abbreviation provenance. Distinct terminals remain distinct even
+when they have the same parent. A shared terminal occurs once; the original
+graph retains its incoming derivations. Compilation, partial and type-unit roots
+are explicit boundaries, so a unit's source filename need not become a qualifier.
+Cross-unit parents retain their actual unit and format.
+
+The cursor checks completeness across the captured graph before requesting source views.
+Missing dependencies and invalid graphs expose no successful prefix; invalid
+source supplies preserve the pending request. Unit-root shape and coordinates
+must agree with the selected unit header. Caller-owned state and at least
+`graph.count` anchor slots are accounted in full, including unused capacity.
+Steps perform at most 256 bounded actions, with no allocation, I/O, discovery,
+callbacks or recursion. The outer job retains cancellation, deadline and captured
+revision responsibilities. Production sizing remains part of SE10.
+
+These anchors do not establish a complete qualified name, scope equivalence,
+nonlocality or independent evidence. Recursive qualification must detect cycles
+that combine relationship and lexical-parent dependencies, interpret supported
+scope/language profiles and compare complete constructed values. An acyclic
+relationship graph can still lead back to an earlier record through a lexical
+parent; this layer preserves that dependency for the recursive consumer.
+
+
+### Recursive declaration-context graph (SE06, partial)
+
+`src/symbol/scope_graph.c` composes complete relationship graphs and their
+context anchors into a dependency graph for one selected physical record.
+Each lexical parent requests its own explicit relationship/context inputs;
+compilation, partial and type-unit boundaries stop traversal. A depth-first
+cursor rejects cycles that combine otherwise acyclic relationship and lexical
+parent edges. Completed shared parents are reused without merging distinct
+physical records. Conflicting captures of the same physical parent fail
+explicitly rather than selecting one path.
+
+Every terminal anchor retains its derivation, unit and physical coordinates.
+Before traversal, bounded validation checks complete relationship coverage,
+anchor order, unit/root boundaries and agreement between captured source and
+parent context. These checks validate composition of successful decoder views;
+they do not independently decode or replace their underlying validation.
+A successful result includes one edge per anchor, with an explicit boundary
+sentinel where no lexical parent is required. No result view is available after
+missing dependencies, contradictory inputs, cycles or capacity exhaustion.
+
+The caller owns and accounts the cursor and complete node/edge arena capacities,
+including unused slots. Every supplied successful graph and anchor view remains
+pinned and unchanged until the entire operation is discarded. Construction uses
+no allocation, I/O, discovery, callback or recursion. Each step performs at most
+256 bounded actions; incremental linear lookups can make total work quadratic.
+Cancellation, captured revisions and absolute deadlines remain the outer job's
+responsibility. No production arena capacity is selected before SE10.
+
+This graph establishes dependency acyclicity, not qualified-name agreement,
+language-specific scope equivalence, nonlocality or definition roles. Full name
+construction, signatures, inline interpretation, frontend evidence ownership and
+runtime authorization remain separate work.
+
+
+### Language and inline constants (SE06, partial)
+
+`src/symbol/constants.c` interprets a unique direct `DW_AT_language` on a
+compilation/partial/type-unit root or `DW_AT_inline` on a subprogram. The result
+retains the physical attribute selection, original form and abbreviation context
+alongside a nonnegative 64-bit value. Missing fields remain absent; a zero value
+is present. Equal duplicate values remain conflicts, including zero-byte
+attributes that share a DIE byte offset but occupy distinct attribute positions.
+
+Supported numeric encodings are `data1/2/4/8`, `udata`, nonnegative `sdata` and
+`implicit_const`. A direct implicit constant requests the exact retained
+abbreviation table explicitly. Bounded entry lookup validates the DIE's code,
+tag, children flag and attribute position before using that table's signed
+constant. The result preserves its separate encoded span and the unchanged
+zero-byte DIE form. An indirect implicit constant uses the validated inline
+operand instead. Framed `data16` and abbreviation constants outside the retained
+signed 64-bit interpretation remain unsupported; negative values and wrong
+attribute classes fail rather than being converted or truncated.
+
+The language helper recognizes the explicitly listed C and C++ codes from the
+[DWARF language registry](https://dwarfstd.org/languages.html), including later
+registered codes used with DWARF 4/5. Other codes retain their raw value without
+acquiring a C++ profile. The inline helper accepts the four standard codes from
+[DWARF 5, sections 3.3.8 and 7.16](https://dwarfstd.org/doc/DWARF5.pdf).
+Code 2, declared but not inlined, is among the nonzero abstract-root markers;
+it is not a standalone-code or concrete-instance claim. Full definition roles,
+inline descendants, signatures and qualified naming remain separate work.
+
+Each step scans at most 256 attributes or abbreviation entries. Complete
+uniqueness precedes interpretation; schema requests publish no value. Wrong
+schema context preserves the request, while an explicit missing schema produces
+a dependency failure. Caller-owned state and all borrowed tree/schema capacities
+are accounted and pinned through discard. The cursor performs no allocation,
+I/O, discovery or inheritance. Outer jobs retain captured revisions, cancellation
+and absolute deadlines. No frontend evidence, runtime mapping or access authority
+is established.
+
+
+### Name sequence comparison (SE06, partial)
+
+`src/symbol/name_order.c` compares complete byte sequences formed by joining
+validated name components with `::`. Component boundaries do not determine
+value equality: `A` plus `B` has the same bytes as one `A::B` component. Template
+arguments and conversion-operator names may themselves contain that separator.
+An empty sequence has a known empty value; it does not represent an unavailable
+name field.
+
+Every component's captured backing, section and span, and the complete derived
+length, are checked before any ordering result. Comparison uses unsigned bytes
+with no locale, Unicode normalization, hash substitution or summary truncation.
+It does not allocate a complete name. Two independently owned bounded readers
+retain unconsumed windows across differing component boundaries. A step profiles
+one component, advances one reader with at most one filesystem syscall, or
+compares at most 32 KiB per operand within the 64 KiB combined checkpoint.
+
+The caller pins and accounts both component arrays, directories, validation
+claims and descriptor/content leases through destruction. The required
+construction account owns comparator state and both readers; creation performs
+no I/O. Each operation is independent, so failed replacement allocation leaves
+an older completed comparison intact. Destruction retires only owned state and
+scratch, preserving borrowed descriptors. Actual component/byte/reader
+advancement updates progress; repeated interrupted reads do not heartbeat the
+outer watchdog. Captured revisions, cancellation and absolute deadlines remain
+the outer job's responsibility.
+
+Malformed spans, unsupported section representations, resource exhaustion and
+operational descriptor/I/O failures remain distinct. Derived-length overflow is
+a resource failure, not a claim that valid source metadata is malformed. Reader
+resource failures retain their resource status. No comparison result is exposed
+on failure or while pending.
+
+This component orders already validated component sequences. It does not select
+namespace/class contexts, prove a language-specific qualification profile,
+construct signatures, merge physical records or authorize runtime actions.
+Qualified-name construction and agreement across the declaration-context graph
+remain subsequent SE06 work.
+
 
 ### Event loop and text rendering
 
@@ -226,6 +1293,7 @@ Back at the right edge; below 78 columns the group wraps into two rows.
 Session profile actions reserve separate rows
 at narrow widths. Keybind cell borders use color/bold or capture reverse video,
 without underlining box glyphs, which produces extra strokes in terminal fonts.
+
 
 ## Source fullscreen rendering
 

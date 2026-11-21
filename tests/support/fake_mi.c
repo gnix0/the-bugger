@@ -659,7 +659,10 @@ int main(int argc, char *argv[])
             register_stop_held = false; reply(token, "^done");
             puts("*stopped,reason=\"breakpoint-hit\",thread-id=\"1\"");
         } else if (strcmp(command, "-stop\n") == 0) {
-            reply(token, "^done"); puts("*stopped,reason=\"breakpoint-hit\",thread-id=\"1\"");
+            reply(token, "^done");
+            if (strcmp(mode, "bp-stop-delayed") == 0)
+                delay(20);
+            puts("*stopped,reason=\"breakpoint-hit\",thread-id=\"1\"");
         } else if (strcmp(command, "-run\n") == 0) {
             reply(token, "^running"); puts("*running,thread-id=\"all\"");
             puts("*running,thread-id=\"all\"");
