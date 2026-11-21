@@ -7133,3 +7133,59 @@ functional validation on STM32/ARM, ESP32/Xtensa and ESP32/RISC-V, including
 previously validated functionality and native regression. This records the
 maintainer's acceptance requirement, not performed hardware evidence. Physical
 results, subsystem/consumer acceptance, merge and release remain pending.
+
+
+## Recursive declaration-context graph — 2026-11-21
+
+Implemented the [recursive context dependency graph](architecture.md#recursive-declaration-context-graph-se06-partial).
+It composes retained successful relationship and anchor views, rejects mixed
+relationship/lexical cycles and conflicting captures, and reuses completed
+physical parents. Each terminal derivation remains present. Unit boundaries are
+explicit; failure exposes no completed graph prefix.
+
+Authored cases cover shared parents, direct and multi-hop mixed cycles,
+cross-unit DWARF32/DWARF64 cycles, missing dependencies, arena exhaustion,
+invalid supplies and a 512-parent chain in single-action slices. False unit
+boundaries, inconsistent root coordinates, missing headers and abbreviation
+contradictions are rejected. Native composition checks every completed graph's
+recursive parent edges and typed boundaries within the unchanged 4 MiB harness
+allowance, retaining all earlier inheritance/text/reference/ELF assertions.
+
+Stronger anchor validation changed an early conflict fixture's outcome: its
+internally contradictory abbreviation capture is now rejected before shared-node
+lookup (`anchor-validation`, exit 2). The corrected conflict fixture supplies two
+internally consistent captures of a shared parent's ancestry; the disagreement
+is detected during reuse. An intermediate fixture used a namespace tag for a
+function reference target and failed the existing relationship assertion
+(`anchor-corrections`, exit 2). The corrected fixture and added invalid-anchor
+cases passed together with native composition (`anchor-corrections-final`, exit 0).
+No assertion or production validation was removed.
+
+Evidence is under `build/se06-scope-evidence-20261121/`. The initial 309-input
+snapshot passed the complete fortified baseline, sanitizers and 69-file analysis;
+all inputs remained unchanged during those checks. Subsequent review found that
+a rejected later anchor could report the first anchor's position. The isolated
+`diagnostic-regression` failed on that coordinate assertion (exit 1), while the
+corrected draft passed (`diagnostic-corrected`, exit 0). Rejection itself remained
+fail-closed. Final source now reports the rejected terminal and anchor ordinal;
+unrelated failure coordinates use an explicit unavailable sentinel.
+
+`final/` retains a new environment, `inputs/`, `tested-files.json`, patch and logs
+for the corrected 309-input tree. All final-tree checks below passed (exit 0),
+and all 309 frozen inputs remained unchanged throughout. The initial baseline is
+not substituted for these corrected-tree checks.
+
+| Check | Command / evidence |
+|---|---|
+| Focused component and native composition | `make BUILD_DIR=build/se06-scope-focused-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-scope-graph test-symbol-elf-native`; `final-focused`, exit 0. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-scope-final-ci-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `final/test-ci`, exit 0. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-scope-final-sanitize-20261121 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-scope-graph test-symbol-elf-native`; `final/sanitize`, exit 0. |
+| Static analysis | `make analyze`, 69 production source files; `final/analysis`, exit 0. |
+
+Normal `make` passed (`final/normal-make`, exit 0). Final documentation checks
+covered 215 internal references without errors; whitespace checks passed.
+
+These are local host checks, separate from hosted CI, physical qualification and
+SE06/F07 acceptance. Qualified-name construction/agreement, definition roles,
+signatures, inline interpretation, frontend evidence/publication and production
+sizing remain unfinished. No debugger operation is added by this component.

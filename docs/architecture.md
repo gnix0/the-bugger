@@ -1012,6 +1012,40 @@ relationship graph can still lead back to an earlier record through a lexical
 parent; this layer preserves that dependency for the recursive consumer.
 
 
+### Recursive declaration-context graph (SE06, partial)
+
+`src/symbol/scope_graph.c` composes complete relationship graphs and their
+context anchors into a dependency graph for one selected physical record.
+Each lexical parent requests its own explicit relationship/context inputs;
+compilation, partial and type-unit boundaries stop traversal. A depth-first
+cursor rejects cycles that combine otherwise acyclic relationship and lexical
+parent edges. Completed shared parents are reused without merging distinct
+physical records. Conflicting captures of the same physical parent fail
+explicitly rather than selecting one path.
+
+Every terminal anchor retains its derivation, unit and physical coordinates.
+Before traversal, bounded validation checks complete relationship coverage,
+anchor order, unit/root boundaries and agreement between captured source and
+parent context. These checks validate composition of successful decoder views;
+they do not independently decode or replace their underlying validation.
+A successful result includes one edge per anchor, with an explicit boundary
+sentinel where no lexical parent is required. No result view is available after
+missing dependencies, contradictory inputs, cycles or capacity exhaustion.
+
+The caller owns and accounts the cursor and complete node/edge arena capacities,
+including unused slots. Every supplied successful graph and anchor view remains
+pinned and unchanged until the entire operation is discarded. Construction uses
+no allocation, I/O, discovery, callback or recursion. Each step performs at most
+256 bounded actions; incremental linear lookups can make total work quadratic.
+Cancellation, captured revisions and absolute deadlines remain the outer job's
+responsibility. No production arena capacity is selected before SE10.
+
+This graph establishes dependency acyclicity, not qualified-name agreement,
+language-specific scope equivalence, nonlocality or definition roles. Full name
+construction, signatures, inline interpretation, frontend evidence ownership and
+runtime authorization remain separate work.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

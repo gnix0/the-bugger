@@ -7,6 +7,7 @@
 #include "symbol/inherit.h"
 #include "symbol/inherited_text.h"
 #include "symbol/context.h"
+#include "symbol/scope_graph.h"
 #include "symbol/references.h"
 #include "symbol/text.h"
 #include "symbol/elf.h"
@@ -517,6 +518,117 @@ static void check_context_anchors(TbSymbolUnitsView_t units, TbSymbolDiesView_t 
 }
 
 
+typedef struct {
+    TbSymbolGraphNode_t     nodes[64];
+    TbSymbolContextAnchor_t anchors[64];
+    TbSymbolGraphView_t     relationships;
+    TbSymbolContextView_t   contexts;
+} NativeScopeInput_t;
+
+
+static void build_scope_input(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree,
+                              uint64_t unit_index, TbSymbolReferenceTarget_t selected,
+                              NativeScopeInput_t *input)
+{
+    TbSymbolGraph_t relationships;
+    TbSymbolContext_t contexts;
+    size_t charge = sizeof(relationships) + sizeof(contexts);
+    CHECK(tb_symbol_budget_reserve(&budget, charge));
+    CHECK(tb_symbol_graph_init(&relationships, selected, input->nodes, 64) == TB_SYMBOL_GRAPH_SOURCE);
+    for (unsigned turn = 0; turn < 1000000 && relationships.status != TB_SYMBOL_GRAPH_READY; ++turn) {
+        TbSymbolGraphNeed_t need;
+        if (tb_symbol_graph_need(&relationships, &need)) {
+            if (need.kind == TB_SYMBOL_GRAPH_SOURCE) {
+                CHECK(need.record.unit_offset == tree.unit_offset);
+                CHECK(tb_symbol_graph_source(&relationships, &units, &tree, unit_index) ==
+                      TB_SYMBOL_GRAPH_PENDING);
+            } else {
+                TbSymbolRelationNeed_t target;
+                CHECK(tb_symbol_relation_need(need.source, &units, &target) == TB_SYMBOL_RELATION_READY);
+                CHECK(target.target.unit_offset == tree.unit_offset);
+                CHECK(tb_symbol_graph_target(&relationships, &units, &tree) == TB_SYMBOL_GRAPH_PENDING);
+            }
+        }
+        (void)tb_symbol_graph_step(&relationships, 31);
+    }
+    CHECK(tb_symbol_graph_view(&relationships, &input->relationships));
+    CHECK(tb_symbol_context_init(&contexts, input->relationships, input->anchors, 64) ==
+          TB_SYMBOL_CONTEXT_PENDING);
+    for (unsigned turn = 0; turn < 1000000 && contexts.status != TB_SYMBOL_CONTEXT_READY; ++turn) {
+        TbSymbolGraphNeed_t need;
+        if (tb_symbol_context_need(&contexts, &need)) {
+            CHECK(need.record.unit_offset == tree.unit_offset);
+            CHECK(tb_symbol_context_source(&contexts, &units, &tree, unit_index) ==
+                  TB_SYMBOL_CONTEXT_PENDING);
+        }
+        (void)tb_symbol_context_step(&contexts, 31);
+    }
+    CHECK(tb_symbol_context_view(&contexts, &input->contexts));
+    CHECK(tb_symbol_budget_release(&budget, charge));
+}
+
+
+static void check_recursive_context(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree,
+                                    uint64_t unit_index, TbSymbolReferenceTarget_t selected)
+{
+    TbSymbolScope_t scope;
+    TbSymbolScopeNode_t nodes[64];
+    TbSymbolScopeEdge_t edges[256];
+    NativeScopeInput_t *inputs[64] = {0};
+    size_t input_count = 0;
+    size_t charge = sizeof(scope) + sizeof(nodes) + sizeof(edges) + sizeof(inputs);
+    size_t before = budget.used;
+    CHECK(tb_symbol_budget_reserve(&budget, charge));
+    CHECK(tb_symbol_scope_init(&scope, selected, nodes, 64, edges, 256) == TB_SYMBOL_SCOPE_SOURCE);
+    TbSymbolScopeStatus_e status = TB_SYMBOL_SCOPE_SOURCE;
+    for (unsigned turn = 0; turn < 1000000; ++turn) {
+        TbSymbolScopeNeed_t need;
+        if (tb_symbol_scope_need(&scope, &need)) {
+            CHECK(input_count < 64 && need.record.unit_offset == tree.unit_offset);
+            CHECK(tb_symbol_budget_reserve(&budget, sizeof(NativeScopeInput_t)));
+            NativeScopeInput_t *input = calloc(1, sizeof(*input));
+            CHECK(input);
+            inputs[input_count++] = input;
+            build_scope_input(units, tree, unit_index, need.record, input);
+            CHECK(tb_symbol_scope_source(&scope, &input->relationships, &input->contexts) ==
+                  TB_SYMBOL_SCOPE_PENDING);
+        }
+        status = tb_symbol_scope_step(&scope, 31);
+        if (status != TB_SYMBOL_SCOPE_PENDING && status != TB_SYMBOL_SCOPE_SOURCE)
+            break;
+    }
+    CHECK(status == TB_SYMBOL_SCOPE_READY);
+    TbSymbolScopeView_t view;
+    CHECK(tb_symbol_scope_view(&scope, &view) && view.node_count == input_count);
+    CHECK(view.nodes[0].record.record_offset == selected.record_offset);
+    for (size_t i = 0; i < view.node_count; ++i) {
+        const TbSymbolScopeNode_t *node = &view.nodes[i];
+        CHECK(node->complete && node->first_edge <= view.edge_count);
+        CHECK(node->contexts.count <= view.edge_count - node->first_edge);
+        for (size_t j = 0; j < node->contexts.count; ++j) {
+            const TbSymbolScopeEdge_t *edge = &view.edges[node->first_edge + j];
+            const TbSymbolContextAnchor_t *anchor = &node->contexts.anchors[j];
+            CHECK(edge->anchor_index == j);
+            if (anchor->kind == TB_SYMBOL_CONTEXT_LEXICAL_PARENT) {
+                CHECK(edge->target_node < view.node_count);
+                const TbSymbolScopeNode_t *target = &view.nodes[edge->target_node];
+                CHECK(target->record.record_offset == anchor->parent.record_offset);
+                CHECK(target->record.unit_offset == anchor->parent.unit_offset);
+                CHECK(target->context.tag == anchor->parent_context.tag);
+                CHECK(target->context.parent_record == anchor->parent_context.parent_record);
+            } else {
+                CHECK(edge->target_node == SIZE_MAX);
+            }
+        }
+    }
+    for (size_t i = 0; i < input_count; ++i) {
+        free(inputs[i]);
+        CHECK(tb_symbol_budget_release(&budget, sizeof(NativeScopeInput_t)));
+    }
+    CHECK(tb_symbol_budget_release(&budget, charge) && budget.used == before);
+}
+
+
 static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSelection_t selection,
                                 uint64_t abbreviation_section, StringSections_t string_sections)
 {
@@ -624,6 +736,7 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                             .descriptor = selection.descriptor
                         }, completed, inherited_slots, &relations);
                         check_context_anchors(view, tree, i, completed);
+                        check_recursive_context(view, tree, i, completed.nodes[0].record);
                     }
                 }
                 for (uint64_t attr = 0; attr < record->attribute_count; ++attr) {

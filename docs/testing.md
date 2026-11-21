@@ -3409,6 +3409,37 @@ reserves/releases the cursor and its 64-slot stack workspace within its existing
 establish RSS bounds. Earlier native inheritance, full text, reference and
 ELF/libelf assertions remain enforced.
 
-Full qualified-name construction/agreement, mixed dependency-cycle rejection,
-definition roles, signatures, inline interpretation, production sizing and
-SE06/F07 acceptance remain outstanding. No debugger request is introduced.
+Full qualified-name construction/agreement, definition roles, signatures,
+inline interpretation, production sizing and SE06/F07 acceptance remain
+outstanding. Mixed dependency-cycle rejection is covered by the separate
+[recursive context tests](#recursive-declaration-context-graph-se06-partial).
+No debugger request is introduced.
+
+
+## Recursive declaration-context graph (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-scope CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-scope-graph test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored cases combine specification/origin links
+with lexical parents: direct and multi-hop mixed cycles, a cross-unit
+DWARF32/DWARF64 cycle, shared completed parents, inconsistent captures of a
+shared parent, missing dependencies and node/edge exhaustion. A 512-parent chain
+runs in single-action slices without recursion. Invalid initial capacities and
+step arguments preserve state; wrong source captures preserve the pending
+request. Reordered anchors, false unit-boundary claims, changed unit roots,
+missing headers and inconsistent abbreviation context produce no result view.
+Later-anchor rejection reports that exact terminal and anchor ordinal, with
+unavailable diagnostic coordinates explicitly distinguished.
+
+Native composition runs recursive construction for every completed relationship
+graph, then checks every edge against its exact parent or typed unit boundary.
+All retained input workspaces, cursor state and full arena capacities are charged
+and released within the existing 4 MiB harness allowance. Prior reference,
+inheritance, full-text and ELF assertions remain enforced. This test allowance
+is not a production sizing decision or RSS bound.
+
+These checks establish bounded context dependency construction, not complete
+qualified names, semantic equivalence, runtime eligibility or SE06/F07 acceptance.
