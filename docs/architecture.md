@@ -1084,6 +1084,46 @@ and absolute deadlines. No frontend evidence, runtime mapping or access authorit
 is established.
 
 
+### Name sequence comparison (SE06, partial)
+
+`src/symbol/name_order.c` compares complete byte sequences formed by joining
+validated name components with `::`. Component boundaries do not determine
+value equality: `A` plus `B` has the same bytes as one `A::B` component. Template
+arguments and conversion-operator names may themselves contain that separator.
+An empty sequence has a known empty value; it does not represent an unavailable
+name field.
+
+Every component's captured backing, section and span, and the complete derived
+length, are checked before any ordering result. Comparison uses unsigned bytes
+with no locale, Unicode normalization, hash substitution or summary truncation.
+It does not allocate a complete name. Two independently owned bounded readers
+retain unconsumed windows across differing component boundaries. A step profiles
+one component, advances one reader with at most one filesystem syscall, or
+compares at most 32 KiB per operand within the 64 KiB combined checkpoint.
+
+The caller pins and accounts both component arrays, directories, validation
+claims and descriptor/content leases through destruction. The required
+construction account owns comparator state and both readers; creation performs
+no I/O. Each operation is independent, so failed replacement allocation leaves
+an older completed comparison intact. Destruction retires only owned state and
+scratch, preserving borrowed descriptors. Actual component/byte/reader
+advancement updates progress; repeated interrupted reads do not heartbeat the
+outer watchdog. Captured revisions, cancellation and absolute deadlines remain
+the outer job's responsibility.
+
+Malformed spans, unsupported section representations, resource exhaustion and
+operational descriptor/I/O failures remain distinct. Derived-length overflow is
+a resource failure, not a claim that valid source metadata is malformed. Reader
+resource failures retain their resource status. No comparison result is exposed
+on failure or while pending.
+
+This component orders already validated component sequences. It does not select
+namespace/class contexts, prove a language-specific qualification profile,
+construct signatures, merge physical records or authorize runtime actions.
+Qualified-name construction and agreement across the declaration-context graph
+remain subsequent SE06 work.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

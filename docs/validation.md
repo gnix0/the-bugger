@@ -7262,3 +7262,57 @@ No target/debugger operation is added. These host checks do not establish hosted
 CI, physical qualification, production sizing or SE06/F07 acceptance. Full
 qualified naming, definition roles, signatures, inline-instance interpretation
 and consumer integration remain unfinished.
+
+
+## Name sequence comparison — 2026-11-21
+
+Implemented [name sequence comparison](architecture.md#name-sequence-comparison-se06-partial)
+over complete retained string spans. Ordering considers the entire joined byte
+value rather than component boundaries. All component geometry and the derived
+length are examined before a result. Physical records, contexts and validation
+provenance remain separate from byte equality.
+
+Protected ELF fixtures use the actual section/string readers, retaining their
+completed spans before retiring child scratch. Tests cover differently segmented
+equal names, embedded separators, template/conversion spellings, empty values,
+prefixes, case, high bytes, distinct Unicode byte sequences and names crossing
+64 KiB windows. Thirty-two deterministic reference cases compare independently
+assembled strings and flattened equivalents. Instrumentation bounds comparison
+and reads; repeated EINTR does not advance the progress counter.
+
+Allocation fault injection, one-under budgets and replacement peaks preserve
+older valid results and restore owned charges. Discard at successive step
+boundaries preserves borrowed descriptors. Invalid later components prevent
+early-difference publication. EOF, short reads, I/O/resource errors, O_PATH and
+missing close-on-exec remain explicit. Synthetic geometry tests derived-length
+overflow before file access; no enormous backing file was created or decoded.
+Read resource failures retain their resource class; derived overflow does not
+mislabel valid source metadata as malformed.
+
+The keybinding TUI lookup that previously failed intermittently now emits the
+action label, selection, dimensions and screen when its original predicate is
+false. It uses the same lookup and failure condition, with no added wait or
+input/settling change. The earlier observation remains
+[unresolved](#language-and-inline-constants--2026-11-21); diagnostic context is not
+a claimed root-cause fix.
+
+Focused comparator/keybinding checks passed (`verified-focused`, exit 0).
+Evidence is under `build/se06-name-order-evidence-20261121/`: environment,
+`tested-files.json`, retained `inputs/`, patch and full logs identify 315 frozen
+source/header/test/build inputs. All checks below passed (exit 0), and all 315
+frozen inputs remained unchanged throughout.
+
+| Check | Command / evidence |
+|---|---|
+| Focused components and TUI | `make BUILD_DIR=build/se06-name-order-focused-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-name-order test-keybinds`; `verified-focused`, exit 0. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-name-order-ci-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `test-ci`, exit 0. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-name-order-sanitize-20261121 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-name-order`; `sanitize`, exit 0. |
+| Static analysis | `make analyze`, 71 production source files; `analysis`, exit 0. |
+
+Normal `make` passed (`normal-make`, exit 0). Documentation checks covered 221
+internal references without errors, and whitespace checks passed.
+
+These are local host checks, separate from hosted CI and physical qualification.
+The component introduces no debugger/target access. It does not establish a
+complete language-specific qualified name, signature, definition role, runtime
+binding or SE06/F07 acceptance.

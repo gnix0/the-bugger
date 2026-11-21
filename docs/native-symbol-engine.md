@@ -25,6 +25,8 @@ followed by [inherited attribute owners](architecture.md#inherited-dwarf-attribu
 and [declaration-context anchors](architecture.md#declaration-context-anchors-se06-partial)
 with [recursive dependency validation](architecture.md#recursive-declaration-context-graph-se06-partial)
 and [language/inline constants](architecture.md#language-and-inline-constants-se06-partial).
+[Name sequence comparison](architecture.md#name-sequence-comparison-se06-partial)
+provides complete byte ordering independently of component boundaries.
 Artifact Open workflow, qualified acquisition profiles, complete semantic
 interpretation and consumers remain unfinished. Unknown helper operations return
 Unsupported.

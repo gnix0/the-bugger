@@ -3474,3 +3474,36 @@ the existing 4 MiB harness construction allowance; retained abbreviation arrays
 are already charged by their decoder. Prior entry/reference/text/context/ELF
 assertions and both DWARF 4/5 C++ fixtures remain enforced. No target or debugger
 operation is introduced, and production sizing/SE06/F07 acceptance remain open.
+
+
+## Name sequence comparison (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-name-order CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-name-order test-keybinds
+```
+
+Included in `test`/`test-ci`. Protected ELF fixtures use the real section/string
+readers to establish retained component spans. Cases compare differently
+segmented equal names, template/conversion spellings containing `::`, empty
+sequences/components, prefixes, case, high bytes and distinct Unicode byte
+spellings. Long names cross the 64 KiB reader boundary. Thirty-two deterministic
+reference cases compare independently assembled strings and flattened equivalents.
+
+Instrumentation bounds each comparison to 32 KiB per operand and each step to
+at most one `pread`. Failure cases cover every constructor allocation, budget
+exhaustion, failed replacement peaks, invalid later components before an early
+byte difference, short reads, EINTR, EOF, I/O/resource errors, O_PATH and missing
+close-on-exec. Repeated interrupted reads preserve the progress counter. Discard
+at every successive construction/read boundary releases owned charges without
+closing borrowed descriptors. Synthetic coordinates check derived-length
+overflow before file access; no enormous backing file is created or decoded.
+
+The existing keybinding TUI assertion now prints the missing action, selection,
+terminal dimensions and screen on failure. Its predicate and input/settling
+sequence are preserved. This improves evidence for the earlier intermittent
+[snapshot failure](validation.md#language-and-inline-constants--2026-11-21);
+it is not a claimed synchronization fix.
+
+These checks establish byte comparison and ownership, not complete qualified
+names, semantic equivalence, runtime correspondence or SE06/F07 acceptance.

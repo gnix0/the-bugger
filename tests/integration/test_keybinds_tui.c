@@ -67,7 +67,15 @@ static void resize_keys(int rows, int cols)
 static void cell(int action, int *x, int *y)
 {
     char label[25]; (void)snprintf(label, sizeof label, "%.24s", tb_keybind_action((size_t)action));
-    int column; CHECK(test_terminal_find(&term, label, &column, y));
+    int column;
+    bool found = test_terminal_find(&term, label, &column, y);
+    if (!found) {
+        fprintf(stderr, "Missing keybind action %d (%s), selected %d, terminal %dx%d\n",
+                action, label, selected, term.rows, term.cols);
+        for (int row = 0; row < term.rows; ++row)
+            fprintf(stderr, "%s\n", term.cells[row]);
+    }
+    CHECK(found);
     for (int row = 0; row < *y; ++row) {
         if (strncmp(term.cells[row] + column, "Action", 6) != 0) { continue; }
         const char *key = strstr(term.cells[row] + column + 6, "Key");
