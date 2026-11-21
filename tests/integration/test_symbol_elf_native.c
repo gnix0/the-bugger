@@ -10,6 +10,7 @@
 #include "symbol/scope_graph.h"
 #include "symbol/constants.h"
 #include "symbol/qualified.h"
+#include "symbol/inline_scope.h"
 #include "symbol/references.h"
 #include "symbol/text.h"
 #include "symbol/elf.h"
@@ -35,6 +36,9 @@ static uint64_t next_slot;
 static uint64_t qualified_ready;
 static uint64_t qualified_unnamed;
 static uint64_t qualified_unavailable;
+static uint64_t inline_ancestry_queries;
+static uint64_t inline_abstract_markers;
+static uint64_t inline_concrete_markers;
 
 static void read_record(TbSymbolFile_t *file, uint64_t offset, size_t length, unsigned char *bytes)
 {
@@ -849,6 +853,83 @@ static void check_recursive_context(InheritedScope_t source, TbSymbolAbbrevView_
 }
 
 
+static void check_physical_inline(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree,
+                                  TbSymbolAbbrevView_t schema, uint64_t unit_index, uint64_t die)
+{
+    TbSymbolInlineScope_t     scope;
+    TbSymbolInlineScopeFact_t facts[64];
+    size_t                   charge = sizeof(scope) + sizeof(facts);
+    CHECK(tb_symbol_budget_reserve(&budget, charge));
+    TbSymbolInlineScopeStatus_e status = tb_symbol_inline_scope_init(&scope, units, tree, unit_index,
+                                                                    die, facts, 64);
+    CHECK(status == TB_SYMBOL_INLINE_SCOPE_PENDING);
+    for (unsigned step = 0; step < 100000; ++step) {
+        if (status == TB_SYMBOL_INLINE_SCOPE_SCHEMA)
+            CHECK(tb_symbol_inline_scope_schema(&scope, &schema) == TB_SYMBOL_INLINE_SCOPE_PENDING);
+        status = tb_symbol_inline_scope_step(&scope, 31);
+        if (status != TB_SYMBOL_INLINE_SCOPE_PENDING && status != TB_SYMBOL_INLINE_SCOPE_SCHEMA)
+            break;
+    }
+    if (status != TB_SYMBOL_INLINE_SCOPE_READY)
+        fprintf(stderr, "physical inline scope failed status %u record %llu\n", status,
+                (unsigned long long)tree.entries[die].offset);
+    CHECK(status == TB_SYMBOL_INLINE_SCOPE_READY);
+    TbSymbolInlineScopeView_t view;
+    CHECK(tb_symbol_inline_scope_view(&scope, &view));
+    CHECK(view.selected.entry_index == die && view.selected.record_offset == tree.entries[die].offset);
+    uint64_t expected_abstract = UINT64_MAX;
+    uint64_t expected_concrete = UINT64_MAX;
+    size_t   expected_facts    = 0;
+    for (uint64_t at = die; at != UINT64_MAX; at = tree.entries[at].parent) {
+        CHECK(at < tree.count);
+        const TbSymbolDieEntry_t *entry = &tree.entries[at];
+        if (entry->tag == 0x1d && expected_concrete == UINT64_MAX)
+            expected_concrete = at;
+        if (entry->tag != 0x2e)
+            continue;
+        CHECK(expected_facts < view.count);
+        const TbSymbolInlineScopeFact_t *fact = &view.facts[expected_facts++];
+        CHECK(fact->record.entry_index == at && fact->record.record_offset == entry->offset);
+        const TbSymbolDieAttribute_t *inline_value = NULL;
+        for (uint64_t i = 0; i < entry->attribute_count; ++i) {
+            const TbSymbolDieAttribute_t *attribute = &tree.attributes[entry->first_attribute + i];
+            if (attribute->name == TB_SYMBOL_CONSTANT_INLINE) {
+                CHECK(!inline_value);
+                inline_value = attribute;
+            }
+        }
+        if (!inline_value) {
+            CHECK(fact->status == TB_SYMBOL_CONSTANT_ABSENT && !fact->selection.matches);
+            continue;
+        }
+        CHECK(fact->status == TB_SYMBOL_CONSTANT_FOUND && fact->selection.matches == 1);
+        uint64_t code = inline_value->value.bits;
+        if (inline_value->value.form == TB_SYMBOL_FORM_IMPLICIT_CONST && !inline_value->value.indirect) {
+            CHECK(inline_value->schema_attribute < schema.attribute_count);
+            CHECK(schema.attributes[inline_value->schema_attribute].implicit_fits &&
+                  schema.attributes[inline_value->schema_attribute].implicit_value >= 0);
+            code = (uint64_t)schema.attributes[inline_value->schema_attribute].implicit_value;
+        }
+        CHECK(code <= 3 && fact->constant.value == code);
+        if (code && expected_abstract == UINT64_MAX)
+            expected_abstract = at;
+    }
+    CHECK(expected_facts == view.count);
+    CHECK(view.abstract_available == (expected_abstract != UINT64_MAX));
+    CHECK(view.concrete_available == (expected_concrete != UINT64_MAX));
+    CHECK(view.selected_abstract == (expected_abstract == die));
+    CHECK(view.selected_concrete == (expected_concrete == die));
+    if (view.abstract_available)
+        CHECK(view.abstract_root.entry_index == expected_abstract);
+    if (view.concrete_available)
+        CHECK(view.concrete_root.entry_index == expected_concrete);
+    ++inline_ancestry_queries;
+    inline_abstract_markers += view.abstract_available;
+    inline_concrete_markers += view.concrete_available;
+    CHECK(tb_symbol_budget_release(&budget, charge));
+}
+
+
 static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSelection_t selection,
                                 uint64_t abbreviation_section, StringSections_t string_sections)
 {
@@ -942,6 +1023,7 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                 CHECK(record->first_attribute == attributes);
                 attributes += record->attribute_count;
                 CHECK(attributes <= tree.attribute_count);
+                check_physical_inline(view, tree, table, i, die);
                 TbSymbolEntityKind_e kind = check_entity(tree, table, die, &declarations);
                 ++entity_kinds[kind];
                 if (kind != TB_SYMBOL_ENTITY_OTHER || record->tag == 0x39) {
@@ -1393,6 +1475,11 @@ int main(int argc, char **argv)
             (void)check_file(argv[i]);
         }
     }
+    CHECK(inline_ancestry_queries && inline_abstract_markers && inline_concrete_markers);
+    printf("PASS native physical inline ancestry: %llu queries, "
+           "%llu with abstract, %llu with concrete marker\n",
+           (unsigned long long)inline_ancestry_queries, (unsigned long long)inline_abstract_markers,
+           (unsigned long long)inline_concrete_markers);
     CHECK(qualified_ready);
     printf("PASS native qualified recipes: %llu ready, %llu unnamed, %llu unavailable profiles\n",
            (unsigned long long)qualified_ready, (unsigned long long)qualified_unnamed,

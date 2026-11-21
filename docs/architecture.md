@@ -1165,9 +1165,39 @@ overflow is resource failure. Production capacities remain subject to SE10.
 
 A metadata recipe is not a canonical C++ expression, semantic type equivalence,
 nonlocality or definition classification, runtime correspondence or permission
-to act. Definition roles, signatures and inline interpretation remain SE06 work;
+to act. Definition roles, signatures and concrete-inline detail enumeration remain SE06 work;
 frontend evidence/publication and consumers retain their separate gates.
 
+
+### Physical inline ancestry (SE06, partial)
+
+`src/symbol/inline_scope.c` walks a selected record's physical parent chain and
+interprets each enclosing subprogram's direct `DW_AT_inline` constant. It retains
+every examined selection and its value/abbreviation provenance, including absent
+attributes. The nearest nonzero standard inline code identifies the nearest
+abstract instance root; code 2 (`declared_not_inlined`) follows the same rule.
+A zero or absent attribute does not establish a new abstract root. This physical
+membership claim does not follow specification or abstract-origin references.
+
+The cursor independently records the nearest `inlined_subroutine` tag and whether
+either marker is the selected entry. It walks the complete physical ancestry;
+an unknown or malformed enclosing inline value cannot become an ordinary-instance
+claim. Markers identify metadata records, without proving executable ranges,
+concrete runtime existence, standalone entry points or action eligibility.
+
+A complete, unchanged unit/tree and any supplied exact abbreviation schema remain
+borrowed through discard. Caller-owned state and the entire fact arena require
+accounting; no production capacity default is selected. A step processes one
+ancestor or at most 256 direct-constant actions, without allocation, I/O, callbacks
+or recursion. The outer job retains cancellation, captured revisions and deadlines.
+
+Schema requests require explicit supply. Wrong source/schema requests preserve
+pending work; missing dependencies, unsupported codes, duplicate or malformed
+attributes, invalid ancestry and exhausted fact capacity remain distinct. Only
+a completed view exposes the claims; diagnostic selections do not authorize use
+of a failed candidate. Definition/nonlocal classification and qualified-name
+contexts remain separate interpretations. These rules follow [DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Section
+3.3.8.1 and do not introduce another search category.
 
 ### Event loop and text rendering
 

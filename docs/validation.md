@@ -7378,3 +7378,61 @@ signatures, inline interpretation, frontend evidence/publication and the remaini
 consumer gates are still required before SE06/F07 acceptance. Fresh comparable
 STM32/ARM, ESP32/Xtensa and ESP32/RISC-V functional validation remains required
 before the subsystem merge and planned v0.3.0 release.
+
+## Physical inline ancestry — 2026-11-21
+
+Implemented the [physical inline-ancestry cursor](architecture.md#physical-inline-ancestry-se06-partial)
+over complete retained unit/tree views. It records the nearest physical abstract
+root and concrete-inline marker independently, retaining every examined
+subprogram's direct selection and constant/abbreviation provenance. Nonzero
+standard inline codes, including `declared_not_inlined`, establish abstract roots;
+zero or absence does not reset an enclosing root. Specification/origin references
+do not replace physical ancestry. These are metadata claims, without executable
+ranges, concrete runtime existence, definition/nonlocal roles or action authority.
+
+Authored completed views cover standard/unknown codes, nested roots and markers,
+absent/zero values, a sibling abstract-origin reference, a 512-level parent chain,
+DWARF 4 compilation/partial root-kind compatibility, malformed/duplicate constants,
+missing/wrong schemas, capacity exhaustion, invalid parents and checked count
+boundaries. Invalid initialization/step/schema requests preserve existing state.
+Failure diagnostics retain exact physical selection and any validated numeric
+value without treating an unknown integer as a supported inline code. Failed or
+pending operations expose no successful view.
+
+The native harness compares every result with an independent walk of decoded
+parent links, attributes and abbreviation values. Existing assertions and its
+4 MiB construction allowance remain unchanged. Focused GCC composition checked
+21,777 records: 1,155 selections had an abstract root and 5,973 had a concrete-inline
+marker. Clang sanitizer composition checked 18,859 records, with 661 and 730
+respectively. These are per-query observations, not unique instance counts or
+comparisons of equivalent corpora: the harness also inspects its own different
+compiler-produced metadata. They do not select production limits or qualify a
+runtime backend.
+
+Evidence is retained under `build/se06-inline-evidence-20261121/`, including
+environment, logs/exit statuses, input patch, copied inputs and their SHA-256
+manifest. The final snapshot contains 321 compiled inputs: Makefile and all
+source, header and test files.
+
+| Check | Command and recorded result |
+|---|---|
+| Focused components/native composition | `make BUILD_DIR=build/se06-inline-focused-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-inline-scope test-symbol-elf-native`; `final-focused`, exit 0. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-inline-ci-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `test-ci`, exit 0. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-inline-sanitize-20261121 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-inline-scope test-symbol-elf-native`; `sanitize`, exit 0. |
+| Static analysis | `make analyze`, 73 production source files; `analysis`, exit 0. |
+| Fortified test compilation | All `tests/unit/*.c`, `tests/integration/*.c` and `tests/support/*.c` object targets with `BUILD_DIR=build/se06-inline-static-tests-20261121 CPPFLAGS=-D_FORTIFY_SOURCE=3`; `test-compilation`, exit 0. |
+
+Normal `make` passed (`normal-make-final`, exit 0). Documentation checks covered
+225 internal references without errors; whitespace checks passed. All 321 frozen
+compiled inputs remained unchanged through the final checks. The first normal-build
+log completed linking, but its shell status recorder used a read-only shell name;
+the repeated normal build and corrected status recording passed.
+
+These are local host checks, separate from hosted CI, physical qualification,
+maintainer acceptance and production sizing. Direct roles, logical scope
+classification, signatures and concrete-inline detail enumeration remain SE06
+work. Source/range evidence, frontend publication and consumer safety retain
+separate gates. The earlier intermittent keybinding snapshot failure remains
+[unresolved historical evidence](#language-and-inline-constants--2026-11-21).
+Fresh comparable validation on STM32/ARM, ESP32/Xtensa and ESP32/RISC-V remains
+required before the subsystem merge and planned v0.3.0 release.

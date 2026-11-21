@@ -3539,3 +3539,29 @@ successful recipes, checks component counts/lengths/identities, and rejects reso
 malformed or operational failures. Its existing 4 MiB construction budget remains
 unchanged. These are host metadata checks, not full SE06/F07 acceptance or proof
 of a canonical source expression, runtime address or target-access authority.
+
+
+## Physical inline ancestry (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-inline CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-inline-scope test-symbol-elf-native
+```
+
+Authored completed-unit views cover every standard inline code, absent/zero
+attributes, nested abstract roots, multiple concrete-inline markers, ordinary
+nested subprograms and a sibling abstract-origin reference that must not change
+physical membership. A 512-level chain completes iteratively with every examined
+subprogram's direct selection retained. DWARF 4 compilation/partial unit header
+compatibility remains distinct from the root's validated kind.
+
+Wrong source/schema requests, missing schema, unknown codes, malformed constants,
+duplicates, exhausted fact capacity, invalid parent links and invalid requests
+expose no successful prefix. Failure diagnostics preserve exact physical identity
+and applicable direct selection. Invalid initialization and step arguments preserve
+existing state. The native harness compares the cursor with an independent parent
+walk and raw validated attributes/schema values over compiler-produced DWARF 4/5;
+its original decoder assertions and construction allowance remain in place.
+
+These checks establish physical metadata ancestry, not definition/nonlocal roles,
+source ranges, runtime correspondence, target access or SE06/F07 acceptance.
