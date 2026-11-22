@@ -3794,3 +3794,48 @@ under the [documented grammar](native-symbol-engine.md#descriptive-callable-reci
 Focused sanitizer runs are appropriate for this retained-closure integration.
 Host tests establish neither universal producer compatibility, production sizing,
 concrete-inline acceptance nor live/physical target behavior.
+
+## Concrete-inline details and composed SE06 checks
+
+```sh
+make BUILD_DIR=build/symbol-inline-details CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-inline-details test-symbol-constants test-symbol-elf-native
+```
+
+The unit target checks complete and empty unit inventories, nested physical
+instances sharing origins and coordinates, direct call-site versus declaration
+metadata, zero/full-width constants, safely unsupported fields and DWARF 4/5
+contexts. A 520-instance inventory exercises bounded stepping. Negative cases
+include zero/insufficient capacity, late duplicate coordinates, malformed classes,
+incomplete child graphs, stale/wrong child identities, explicit graph failures,
+implicit-constant schema mismatch/missing dependency, progress overflow and
+discard at every suspended prefix of a small operation. Rejected initialization
+preserves state and storage; unavailable views preserve their outputs.
+
+The native target compares complete inventories and coordinates with the decoded
+trees and abbreviation evidence from real fixtures and self-inspection. Compact
+graph copies remain accounted and pinned until discard. Whole-unit inventories
+that cannot fit the unchanged harness allowance must report resource exhaustion
+and expose no successful prefix. Resource outcomes are counted separately from
+unsupported or unavailable dependencies. All preceding decoder assertions and
+exact final budget balance remain active. The harness's within-unit provider is
+not cross-unit compatibility qualification.
+
+The composed SE06 review uses the existing focused targets together:
+
+| Contract | Maintained checks |
+|---|---|
+| Distinct physical definitions, roles and locality | `test-symbol-entities`, `test-symbol-roles`, `test-symbol-locality`, native duplicate file-static/basename fixtures |
+| Relationship provenance, cycles and inherited agreement | `test-symbol-relations`, `test-symbol-graph`, `test-symbol-inherit`, `test-symbol-inherited-text`, `test-symbol-inherited-flag`, `test-symbol-inherited-reference` |
+| Qualified names and context | `test-symbol-context`, `test-symbol-scope-graph`, `test-symbol-constants`, `test-symbol-name-order`, `test-symbol-qualified` |
+| Supported signatures and explicit partial coverage | `test-symbol-type-recipe`, `test-symbol-parameters`, `test-symbol-parameter-links`, `test-symbol-parameter-source`, `test-symbol-callable` |
+| Inline ancestry, instance identities and direct call sites | `test-symbol-inline-scope`, `test-symbol-inline-details`, native DWARF 4/5 integration |
+
+These checks establish the supported metadata foundation, not a complete C++
+semantic analyzer. Unsupported type constructors, reduced producer metadata and
+missing correspondence remain partial or unavailable under the authoritative
+[callable grammar](native-symbol-engine.md#descriptive-callable-recipes-se06).
+Line/file/range interpretation, indexed multi-unit discovery, frontend publication,
+production sizing and live actions retain their later gates. Full fortified host
+regression, complete static analysis and maintainer acceptance are separate from
+focused success. Hardware and F07 acceptance remain outstanding.

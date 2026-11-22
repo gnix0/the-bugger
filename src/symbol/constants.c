@@ -13,7 +13,11 @@ TbSymbolConstantStatus_e tb_symbol_constant_init(TbSymbolConstant_t *constant, T
             (entry->tag != 0x11 && entry->tag != 0x3c && entry->tag != 0x41)) {
             return TB_SYMBOL_CONSTANT_INVALID;
         }
-    } else if (field != TB_SYMBOL_CONSTANT_INLINE || entry->tag != 0x2e) {
+    } else if (field == TB_SYMBOL_CONSTANT_INLINE) {
+        if (entry->tag != 0x2e)
+            return TB_SYMBOL_CONSTANT_INVALID;
+    } else if ((field != TB_SYMBOL_CONSTANT_CALL_FILE && field != TB_SYMBOL_CONSTANT_CALL_LINE &&
+                field != TB_SYMBOL_CONSTANT_CALL_COLUMN) || entry->tag != 0x1d) {
         return TB_SYMBOL_CONSTANT_INVALID;
     }
 

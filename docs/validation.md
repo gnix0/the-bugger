@@ -8116,3 +8116,58 @@ actionable diagnostic. Normal `make` and whitespace checks passed. Commands,
 logs/statuses, copied source, input hash and tool versions are retained under
 `build/se06-callable-analysis-fix-20261122/`. Full verification of the corrected
 batch remains pending; SE06 acceptance and physical qualification remain open.
+
+Complete `make analyze` subsequently passed (exit 0) on clean commit
+`9746bdf`, processing all 81 production sources without actionable diagnostics.
+Full output, status, command, compiler version and tree identity remain under
+`build/se06-callable-analysis-closeout-20261122/`. Together with the earlier
+passing 147-command host regression and fortified test-source compilation, and
+the focused post-correction unit test, this closes local verification of the
+equivalent-condition mapping correction. It adds no hosted or physical evidence.
+
+## Concrete-inline inventories and composed SE06 review — 2026-11-22
+
+Implemented the [single-unit inline inventory contract](native-symbol-engine.md#concrete-inline-details-se06),
+completing the remaining SE06 implementation scope within its supported metadata
+grammar. Each physical inline instance retains its direct parent, validated
+relationship graph and independent direct call-site selections. Line/file/range
+interpretation, multi-unit indexing, frontend details and live actions remain
+separate gates. The [composed coverage matrix](testing.md#concrete-inline-details-and-composed-se06-checks)
+links existing definition, relationship, name, signature and inline tests.
+
+Focused fortified checks passed for the 21 SE06 unit targets in that matrix and
+`test-symbol-elf-native` (exit 0). The new unit models cover shared origins,
+nested instances, equal coordinates without identity merging, absent versus
+zero/full-width values, unsupported coordinate forms, duplicate/malformed fields,
+stale dependencies, late failure with no prefix, bounded 520-instance traversal
+and discard at every small-operation prefix. A completed-child model retains an
+origin in another unit; that composition check is not encoded cross-unit producer
+qualification. Final additional unit cases and focused Clang ASan/UBSan unit
+checks also passed.
+
+An initial native integration run failed while reserving a whole-unit arena under
+the unchanged 4 MiB construction allowance (`native.log`, exit 2). The integration
+now accounts available arena capacity while retaining space for graph copies and
+reports explicit resource exhaustion when the complete inventory cannot fit.
+Graph-copy reservation failure follows the same typed failure path. Failed
+inventories expose no prefix, and all previous decoder assertions and exact
+budget restoration remain active. The failed log and partial source/binary
+snapshot are retained; they are development evidence, not production sizing.
+
+The corrected composed native run completed 55 unit inventories, 923 physical
+instances and 2,769 direct call-site constants, with zero partial/unavailable
+inventories and one explicit exhausted inventory. The separate Clang ASan/UBSan
+unit/native run, with stack-use-after-return detection enabled, completed 56
+inventories, 341 instances and 1,022 constants without partial, unavailable or
+exhausted outcomes (exit 0). These self-inspection corpora differ by compiler;
+C++ fixtures used the default fixture compiler, not a comprehensive Clang
+producer matrix. The bounded native provider remains within one unit and does
+not qualify every producer or cross-unit dependency profile.
+
+Commands, logs/statuses, source snapshots/hashes and tool versions remain under
+`build/se06-inline-details-evidence-20261122/`. Normal `make`, whitespace/style
+review and internal documentation-link checks passed. The supported SE06 code
+is implemented; its final complete fortified host baseline, complete analysis
+and fortified test-source compilation remain pending. Focused success establishes
+neither maintainer acceptance, hosted CI, production sizing nor physical/F07
+acceptance. SE07 and later consumer gates remain unimplemented.

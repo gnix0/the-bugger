@@ -1071,8 +1071,9 @@ registered codes used with DWARF 4/5. Other codes retain their raw value without
 acquiring a C++ profile. The inline helper accepts the four standard codes from
 [DWARF 5, sections 3.3.8 and 7.16](https://dwarfstd.org/doc/DWARF5.pdf).
 Code 2, declared but not inlined, is among the nonzero abstract-root markers;
-it is not a standalone-code or concrete-instance claim. Full definition roles,
-inline descendants, signatures and qualified naming remain separate work.
+it is not a standalone-code or concrete-instance claim. Definition roles,
+qualified names, callable recipes and inline inventories use their separate
+interpreters below.
 
 Each step scans at most 256 attributes or abbreviation entries. Complete
 uniqueness precedes interpretation; schema requests publish no value. Wrong
@@ -1165,7 +1166,7 @@ overflow is resource failure. Production capacities remain subject to SE10.
 
 A metadata recipe is not a canonical C++ expression, semantic type equivalence,
 nonlocality or definition classification, runtime correspondence or permission
-to act. Signatures and concrete-inline detail enumeration remain SE06 work;
+to act. Callable recipes and concrete-inline inventories are described below;
 frontend evidence/publication and consumers retain their separate gates.
 
 
@@ -1437,9 +1438,9 @@ attribute, edge-lookup or correspondence actions without allocation, I/O,
 discovery or recursion. Dependency ordering and linear target lookup may require
 quadratic total work; outer deadlines and SE10 sizing remain required.
 
-This selects a physical list. Language/prototype interpretation, implicit objects,
-artificial parameters, method qualifiers, returns and complete callable recipes
-remain separate work. No frontend publication or live authority is added.
+This selects a physical list. The callable coordinator below separately composes
+language/prototype interpretation, implicit objects, artificial parameters,
+method qualifiers and returns. No frontend publication or live authority is added.
 
 
 
@@ -1480,8 +1481,32 @@ the 4 MiB construction allowance or reducing metadata assertions. These are test
 ownership arrangements, not production cache or sizing policies.
 
 Structured callable recipes complete this part of SE06's metadata interpretation.
-Concrete-inline detail inventories and composed SE06 acceptance remain open;
-there is no functional Symbols UI or live consumer integration yet.
+Composed SE06 verification and acceptance remain separate; there is no functional
+Symbols UI or live consumer integration yet.
+
+### Concrete-inline inventories (SE06)
+
+`src/symbol/inline_details.c` implements the
+[single-unit inventory contract](native-symbol-engine.md#concrete-inline-details-se06).
+It scans a complete supported tree, requests completed graphs for exact inline
+records, and decodes their direct call-site constants. The extended constant
+interpreter admits these fields only on concrete inline records; language and
+inline-marker selection retain their existing tag constraints.
+
+Each instance retains its physical parent, graph and three independently selected
+coordinates. Successful views require the entire supplied unit to finish.
+Safely unsupported coordinates and absent origins remain partial with provenance;
+dependency, malformed-input, conflict and capacity failures expose no view.
+Caller-owned state, arena and pinned child dependencies remain separate from
+frontend-owned publication. Discard releases references without modifying the
+caller's arenas. No target operations or source/range inference occur.
+
+The native support harness retains compact graph copies through inventory discard
+and charges scratch, arenas, copied nodes and bookkeeping. Whole-unit inventories
+that exceed the unchanged 4 MiB test allowance report resource exhaustion without
+weakening the earlier decoder checks. This is fault-boundary evidence, not a
+production sizing result. SE07 supplies file/line/range interpretation; SE09 and
+SE11 supply indexed discovery and explicit frontend details.
 
 
 

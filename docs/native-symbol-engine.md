@@ -27,6 +27,10 @@ with [recursive dependency validation](architecture.md#recursive-declaration-con
 and [language/inline constants](architecture.md#language-and-inline-constants-se06-partial).
 [Name sequence comparison](architecture.md#name-sequence-comparison-se06-partial)
 provides complete byte ordering independently of component boundaries.
+The supported [callable grammar](#descriptive-callable-recipes-se06) and
+[concrete-inline inventories](#concrete-inline-details-se06) complete the SE06
+implementation scope; composed host verification and maintainer acceptance
+remain separate from implementation completion.
 Artifact Open workflow, qualified acquisition profiles, complete semantic
 interpretation and consumers remain unfinished. Unknown helper operations return
 Unsupported.
@@ -274,9 +278,9 @@ deadlines bound construction; production sizing remains SE10 work.
 
 This does not add a Types search category or prove storage size, scalar encoding,
 a valid C/C++ declarator, ABI correspondence, object footprint, runtime binding
-or access permission. Callable parameter reconciliation, implicit-object and
-method-qualifier rules, return interpretation and final complete/partial
-signature behavior must still be documented and verified before SE06 acceptance.
+or access permission. [Callable recipes](#descriptive-callable-recipes-se06)
+define parameter reconciliation, implicit objects, method qualifiers, returns
+and complete/partial status separately from this type grammar.
 
 
 ### Callable parameter sources (SE06, partial)
@@ -387,6 +391,49 @@ identity/context preserves the pending request. Failed candidates expose no
 successful view; partial results distinguish supported facts, unsupported
 coverage and unexamined fields explicitly. No rendering, discovery, target
 access, expression selection or frontend publication follows from completion.
+
+### Concrete-inline details (SE06)
+
+An explicit complete supported unit supplies a bounded physical inventory of
+`DW_TAG_inlined_subroutine` records, including nested instances, in DIE order.
+Each entry retains its exact identity, immediate physical parent and parent tag,
+completed relationship graph and direct `DW_AT_call_file`, `DW_AT_call_line`
+and `DW_AT_call_column` selections. Distinct instances remain distinct even when
+their origins, names or coordinates agree. Declaration coordinates are not
+substituted for call-site coordinates, and names never associate instances.
+
+The caller supplies completed graphs rooted at the exact requested instances,
+including required cross-unit dependencies. Graph nodes, source views and
+abbreviation dependencies remain pinned through discard. Wrong record or root
+context preserves the pending request. Missing dependencies, malformed metadata,
+conflicting/cyclic relationships and exhausted construction capacity expose no
+successful inventory prefix. Diagnostics retain the failed instance and available
+child provenance. Absence of a direct origin remains an explicit partial entry;
+it cannot be associated with a definition by spelling or proximity.
+
+Direct call-site constants support nonnegative standard constant forms through
+the existing bounded decoder, including DWARF 5 abbreviation implicit constants.
+Each field distinguishes found, absent and safely framed unsupported values.
+Found zero remains zero, and full-width values are never truncated. Duplicate
+fields conflict even when values agree. An unsupported coordinate retains its
+raw physical selection and makes the inventory partial. Malformed supported
+coordinates fail the inventory.
+
+File indexes and zero/sentinel meanings are interpreted only with the relevant
+line-table version and dependencies under SE07. This inventory neither resolves
+source paths nor establishes executable ranges, standalone entry points, runtime
+locations or action authority. Consumers may inspect the retained graph to follow
+validated physical relationships; the inventory introduces no semantic identity
+merging, artifact-wide index or implicit enumeration of other units.
+
+Caller-owned stationary state and the entire arena capacity require accounting;
+every retained graph and source dependency has its own owner. Each step performs
+at most 256 bounded tree, graph-node or constant-decoder actions. No allocation,
+I/O, recursion or discovery occurs in the core. Outer jobs own revisions,
+consumer interests, cancellation and deadlines. A complete borrowed unit
+inventory is not frontend publication. Multi-unit search coverage, reusable
+indexes, result windows and explicit UI details remain SE09/SE11 work; actual
+production capacities remain subject to SE10.
 
 ## Committed searches and result windows
 

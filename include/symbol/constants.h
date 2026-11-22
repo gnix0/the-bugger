@@ -4,8 +4,11 @@
 #include "symbol/attributes.h"
 
 typedef enum {
-    TB_SYMBOL_CONSTANT_LANGUAGE = 0x13,
-    TB_SYMBOL_CONSTANT_INLINE   = 0x20
+    TB_SYMBOL_CONSTANT_LANGUAGE    = 0x13,
+    TB_SYMBOL_CONSTANT_INLINE      = 0x20,
+    TB_SYMBOL_CONSTANT_CALL_COLUMN = 0x57,
+    TB_SYMBOL_CONSTANT_CALL_FILE   = 0x58,
+    TB_SYMBOL_CONSTANT_CALL_LINE   = 0x59
 } TbSymbolConstantField_e;
 
 typedef enum {
@@ -62,7 +65,10 @@ typedef struct {
 } TbSymbolConstant_t;
 
 /* LANGUAGE selects a compile/partial/type unit's physical root; INLINE selects
- * a subprogram. Failed initialization preserves state. No unit-header evidence
+ * a subprogram; CALL_FILE/LINE/COLUMN select a concrete inline instance's direct
+ * call-site metadata. File indexes and zero values remain uninterpreted until
+ * the applicable line-table version/dependencies are validated by SE07.
+ * Failed initialization preserves state. No unit-header evidence
  * or language inheritance is created by this direct attribute interpreter. */
 TbSymbolConstantStatus_e tb_symbol_constant_init(TbSymbolConstant_t *constant, TbSymbolDiesView_t tree,
                                                  uint64_t die_index, TbSymbolConstantField_e field);

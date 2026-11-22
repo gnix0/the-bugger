@@ -19,6 +19,7 @@
 #include "symbol/parameter_links.h"
 #include "symbol/parameter_source.h"
 #include "../support/symbol_callable.h"
+#include "../support/symbol_inline_details.h"
 #include "symbol/references.h"
 #include "symbol/text.h"
 #include "symbol/elf.h"
@@ -2142,6 +2143,7 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                 previous = record->end_offset;
             }
             CHECK(attributes == tree.attribute_count);
+            test_symbol_inline_details_run(view, tree, table, i, &budget);
             die_count += tree.count;
             attribute_count += tree.attribute_count;
             tb_symbol_dies_destroy(dies);
@@ -2560,6 +2562,7 @@ int main(int argc, char **argv)
         }
     }
     test_symbol_callable_report();
+    test_symbol_inline_details_report();
     CHECK(parameter_link_queries && parameter_link_edges);
     printf("PASS native parameter correspondence: %llu queries, %llu links, %llu empty inventories\n",
            (unsigned long long)parameter_link_queries, (unsigned long long)parameter_link_edges,
