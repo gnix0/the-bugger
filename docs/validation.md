@@ -8096,3 +8096,23 @@ fortified baseline, complete static analysis and fortified compilation of all C
 test sources remain pending for this committed batch. No complete-production,
 hosted CI, physical qualification or SE06/F07 acceptance is claimed. Concrete-inline
 detail inventories and composed SE06 acceptance remain open.
+
+### Callable composition analysis correction — 2026-11-22
+
+The subsequent owner-run verification on clean commit
+`55923efa505dcdb2c59a262b8f6eaa2f8e4dcc1c` passed all 147 individual test
+commands and fortified compilation of all 140 C test sources. Recorded inputs
+remained unchanged during the run. Complete static analysis failed on one
+`bugprone-branch-clone` diagnostic in `mapped_object`: missing object mappings
+and disagreement between mapped parameters used identical failure branches.
+Full logs and statuses remain under `build/se06-callable-owner-20261122/`.
+
+The two failure conditions now share one branch. Initial mapping, agreement,
+failure state and subsequent bounded processing retain their existing behavior.
+The focused fortified callable unit test and targeted `clang-tidy` check of
+`src/symbol/callable.c` with the existing analyzer/bugprone policy passed
+(exit 0). The analyzer emitted one suppressed non-user-code warning and no
+actionable diagnostic. Normal `make` and whitespace checks passed. Commands,
+logs/statuses, copied source, input hash and tool versions are retained under
+`build/se06-callable-analysis-fix-20261122/`. Full verification of the corrected
+batch remains pending; SE06 acceptance and physical qualification remain open.

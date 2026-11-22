@@ -244,12 +244,11 @@ static void compare_references(TbSymbolCallable_t *state)
 
 static void mapped_object(TbSymbolCallable_t *state, size_t parameter)
 {
-    if (parameter == SIZE_MAX) {
+    if (parameter == SIZE_MAX ||
+        (state->mapped_parameter != SIZE_MAX && state->mapped_parameter != parameter)) {
         state->object_failed = true;
     } else if (state->mapped_parameter == SIZE_MAX) {
         state->mapped_parameter = parameter;
-    } else if (state->mapped_parameter != parameter) {
-        state->object_failed = true;
     }
 
     ++state->object_fact;
