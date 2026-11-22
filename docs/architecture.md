@@ -1481,8 +1481,9 @@ the 4 MiB construction allowance or reducing metadata assertions. These are test
 ownership arrangements, not production cache or sizing policies.
 
 Structured callable recipes complete this part of SE06's metadata interpretation.
-Composed SE06 verification and acceptance remain separate; there is no functional
-Symbols UI or live consumer integration yet.
+The [SE06 closeout](validation.md#se06-delivery-closeout--2026-11-22) records composed
+local host verification and delivery acceptance; there is no functional Symbols
+UI or live consumer integration yet.
 
 ### Concrete-inline inventories (SE06)
 

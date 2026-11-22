@@ -30,7 +30,7 @@ provides complete byte ordering independently of component boundaries.
 The supported [callable grammar](#descriptive-callable-recipes-se06) and
 [concrete-inline inventories](#concrete-inline-details-se06) complete the SE06
 implementation scope; composed host verification and maintainer acceptance
-remain separate from implementation completion.
+are recorded in the [SE06 delivery closeout](validation.md#se06-delivery-closeout--2026-11-22).
 Artifact Open workflow, qualified acquisition profiles, complete semantic
 interpretation and consumers remain unfinished. Unknown helper operations return
 Unsupported.
