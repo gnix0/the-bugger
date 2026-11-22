@@ -7925,3 +7925,66 @@ and tool versions are retained under `build/keybind-navigation-fix-20261122/`.
 Normal `make` and whitespace checks passed. A subsequent fresh full baseline,
 static analysis and fortified test compilation remain pending. Local focused
 checks do not establish hosted CI, physical qualification or SE06 acceptance.
+
+
+The subsequent owner-run full verification passed on clean commit
+`85b22dfe716486b8e143fdcbeccc7ae6dd2fb0e1`: all 145 individual test commands
+returned zero, including the real-tmux keybinding workflow. Analysis completed
+for all 79 production sources without actionable diagnostics, and all 137 C test
+sources have recorded `_FORTIFY_SOURCE=3` compilation commands and object files.
+All 399 recorded input hashes remained unchanged. Logs and the aggregate summary
+are retained under `build/se06-keybind-navigation-owner-20261122/`. This closes
+the pending local host verification for that batch; it does not establish a cause
+for every older intermittent failure, hosted CI, physical qualification or SE06
+acceptance.
+
+
+## Callable parameter-source selection — 2026-11-22
+
+Implemented the [source-inventory profile](native-symbol-engine.md#callable-parameter-sources-se06-partial)
+over validated callable graphs, independent direct inventories and exact
+parameter correspondence. Selection retains potentially reduced signature-container
+declarations, follows abstract origins when concrete children are omitted and
+preserves ambiguity without name, position or type matching. Unknown direct-child
+constructs and missing explicit parameter links remain partial. Intermediate
+inventories are checked even when the concrete root has no formal children.
+Implicit-object interpretation, method qualifiers, returns and complete callable
+recipes remain open; an empty selected list is not an empty C prototype claim.
+
+Focused verification used:
+
+```sh
+make BUILD_DIR=build/se06-parameter-source-focused-20261122 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-parameter-source test-symbol-elf-native
+UBSAN_OPTIONS=halt_on_error=1 ASAN_OPTIONS=detect_stack_use_after_return=1 \
+  make BUILD_DIR=build/se06-parameter-source-sanitize-20261122 CC=clang \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' test-symbol-parameter-source
+```
+
+Both passed (exit 0). The final native target reported 2,689 correspondence
+queries and 3,012 links; source selection reported 2,504 READY and 185 PARTIAL
+results, with six potentially reduced inventories examined. Counts include
+repeated captured scopes and frontend self-inspection, not unique semantic
+functions or production sizing. All earlier assertions and the unchanged 4 MiB
+construction allowance remained active. The sanitizer run covers the new unit
+coordinator and its direct dependencies, not the complete native target or suite.
+
+A supplementary native probe used the retained Clang-built non-split type-unit
+fixture, the focused debug fixture and DWARF 4 relationship fixture (exit 0).
+It reported 30 READY and 16 PARTIAL selections and six potentially reduced
+inventories. Clang retained declaration parameters where GCC omitted them;
+both shapes preserve the separate definition inventory. This is bounded native
+producer evidence, not qualification of every compiler/version or cross-unit
+runtime behavior. Authored unit models cover separate source units.
+
+Complete logs/statuses, exact commands, copied changed compiled inputs, their
+hashes and tool versions are retained under
+`build/se06-parameter-source-evidence-20261122/`. Normal `make`, whitespace and
+internal document-reference checks are recorded with the final snapshot.
+The fresh full fortified baseline, complete static analysis and fortified
+compilation of all test sources remain pending after this implementation batch.
+No hosted CI, physical target validation, SE06 acceptance or F07 acceptance is
+claimed.

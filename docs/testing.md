@@ -3734,3 +3734,34 @@ Every link is checked against its physical parameter graph and target's actual
 parent. Earlier native assertions remain active. Completion establishes the
 [correspondence contract](architecture.md#exact-parameter-correspondence-se06-partial),
 not source-list selection, complete signature semantics or runtime authority.
+
+
+## Callable parameter sources (SE06, partial)
+
+```sh
+make BUILD_DIR=build/symbol-parameter-source CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-parameter-source test-symbol-elf-native
+```
+
+Authored complete child views and direct inventories exercise specification and
+origin chains across separate units, omitted concrete children, potentially
+reduced type-unit declarations with and without retained children, shared versus
+distinct source alternatives and explicit correspondence coverage. Missing links
+in intermediate inventories remain partial even when the concrete root is empty.
+Unknown child constructs and version-specific tags retain coverage limitations.
+An empty physical list does not establish an empty C prototype.
+
+Negative cases cover repeated/misplaced unspecified markers, duplicate or malformed
+class signature attributes, invalid dependency ordering, stale source context,
+missing dependencies, capacity rejection and progress overflow. A 517-formal
+inventory exercises single-action stepping, and discard is checked at every
+suspended prefix of a small selection. Rejected initialization preserves the
+previous state and full arena; unavailable getters preserve outputs.
+
+The native harness composes selection after real decoded callable graphs,
+inventories and parameter links, retaining all borrowed inputs until discard.
+The maintained type-unit fixture covers producer-dependent declaration shapes;
+all earlier native assertions and the 4 MiB construction allowance remain in
+place. The [selection profile](native-symbol-engine.md#callable-parameter-sources-se06-partial)
+does not establish complete signatures, language applicability, implicit objects,
+method qualifiers, returns, frontend publication or runtime actions.

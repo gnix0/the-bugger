@@ -278,6 +278,52 @@ or access permission. Callable parameter reconciliation, implicit-object and
 method-qualifier rules, return interpretation and final complete/partial
 signature behavior must still be documented and verified before SE06 acceptance.
 
+
+### Callable parameter sources (SE06, partial)
+
+The initial source-inventory profile selects an exact physical parameter list
+from a completed callable graph and its validated parameter correspondences.
+It does not construct a language-level prototype. Each callable's independent
+inventory and every relationship remain available; selection neither merges
+records nor concatenates lists.
+
+An origin-bearing instance uses the source selected through its abstract-origin
+relationship, because concrete children may be omitted. A non-reduced
+specification inventory is preferred over a local inventory. An enclosing class,
+structure or union with `DW_AT_signature` makes its member inventory potentially
+reduced, whether or not the producer retained children. Such a declaration
+cannot independently establish the source list in this profile. A non-origin
+subprogram may instead use its own inventory when its specification supplies
+only a potentially reduced inventory. A concrete-inline record never supplies
+its own source list. Distinct preferred physical sources remain alternatives;
+equal names, parameter positions or apparent types do not resolve them.
+
+The complete selected direct-child scope is examined. Standard type definitions,
+lexical blocks, nested callables, variables, labels, template type/value
+parameters and imported module/unit records do not add source formals. Unknown
+child constructs, including vendor formal-parameter packs, leave explicit
+coverage limitations. Standard tag meanings introduced in DWARF 5 are not
+assumed for DWARF 4 extension tags. The original child coordinates remain
+available. More than one unspecified-parameters marker, or a formal following
+that marker, is a conflicting list; no successful selection view is exposed.
+
+Every formal in a captured inventory that selects another inventory needs an
+explicit validated correspondence to that selected source. Missing links remain
+partial, including those in intermediate callable records when the concrete
+root omitted all children. Source parameters omitted from a concrete instance
+remain in the selected source list. No positional correspondence is invented.
+
+READY means this inventory-selection profile completed without a partial reason.
+It proves neither an empty C prototype nor source-language applicability,
+artificial-parameter handling, implicit-object identity, method qualifiers,
+return semantics or complete type descriptions. Those are subsequent callable
+recipe obligations. A PARTIAL view retains the selected inventory when unique,
+or no selected inventory when unavailable/ambiguous, together with exact
+supporting scopes and reasons. Malformed required signature attributes,
+conflicting lists, unavailable dependencies, resource failure and invalid
+captured contexts do not expose a successful prefix. Physical inventories and
+otherwise independent metadata retain their own validity.
+
 ## Committed searches and result windows
 
 Opening Symbols and editing controls perform no discovery. Search/Enter commits

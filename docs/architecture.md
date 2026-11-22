@@ -1408,6 +1408,40 @@ implicit objects, method qualifiers and return interpretation remain separate
 signature obligations. No frontend publication or live action is introduced.
 
 
+### Callable parameter-source selection (SE06, partial)
+
+`src/symbol/parameter_source.c` implements the
+[source-inventory profile](native-symbol-engine.md#callable-parameter-sources-se06-partial)
+over a completed parameter-correspondence view. It requests a complete matching
+unit/tree source for each captured callable, verifies its direct inventory,
+examines child coverage and checks enclosing class signature attributes before
+selecting a source. Each slot retains the borrowed tree, exact relationship
+target indexes, selected inventory, coverage location and signature-container
+provenance. Source selection never compares names or types.
+
+Origin/specification dependencies are resolved iteratively. Parameter-link
+coverage includes intermediate callable inventories, not just the selected
+concrete root. READY/PARTIAL views appear only after all captured source scopes
+and applicable correspondences have been examined. Missing or ambiguous sources,
+unknown child constructs and missing explicit links retain distinct partial
+reasons. A conflicting marker sequence or malformed required signature attribute
+fails this selection without publishing a prefix or discarding independently
+valid child inventories.
+
+Caller-owned state and the full slot arena require accounting. Completed
+correspondence inputs, their dependency closure and supplied source trees remain
+borrowed unchanged through discard. Wrong source contexts preserve the pending
+request; explicit missing dependencies fail it. Initialization rejection preserves
+the previous state and arena. Steps perform at most 256 bounded source-record,
+attribute, edge-lookup or correspondence actions without allocation, I/O,
+discovery or recursion. Dependency ordering and linear target lookup may require
+quadratic total work; outer deadlines and SE10 sizing remain required.
+
+This selects a physical list. Language/prototype interpretation, implicit objects,
+artificial parameters, method qualifiers, returns and complete callable recipes
+remain separate work. No frontend publication or live authority is added.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

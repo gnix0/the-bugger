@@ -17,6 +17,7 @@
 #include "symbol/locality.h"
 #include "symbol/parameters.h"
 #include "symbol/parameter_links.h"
+#include "symbol/parameter_source.h"
 #include "symbol/references.h"
 #include "symbol/text.h"
 #include "symbol/elf.h"
@@ -52,6 +53,9 @@ static uint64_t parameter_markers;
 static uint64_t parameter_link_queries;
 static uint64_t parameter_link_edges;
 static uint64_t parameter_link_empty_scopes;
+static uint64_t parameter_source_ready;
+static uint64_t parameter_source_partial;
+static uint64_t parameter_source_reduced;
 static uint64_t locality_nonlocal;
 static uint64_t locality_local;
 static uint64_t locality_unsupported;
@@ -1177,6 +1181,62 @@ static NativeScopeInput_t *build_scope_input(TbSymbolUnitsView_t units, TbSymbol
 }
 
 
+static void check_parameter_source(InheritedScope_t source, TbSymbolParameterLinksView_t input)
+{
+    TbSymbolParameterSource_t     state;
+    TbSymbolParameterSourceSlot_t slots[64];
+    TbSymbolParameterSourceView_t view;
+    size_t charge = sizeof(state) + sizeof(slots) + sizeof(view);
+
+    CHECK(input.callables.count <= 64 && tb_symbol_budget_reserve(&budget, charge));
+    CHECK(tb_symbol_parameter_source_init(&state, input, slots, 64) == TB_SYMBOL_PARAMETER_SOURCE_PENDING);
+    for (unsigned turn = 0; turn < 1000000; ++turn) {
+        TbSymbolGraphNeed_t need;
+        if (tb_symbol_parameter_source_need(&state, &need)) {
+            CHECK(need.record.unit_offset == source.tree.unit_offset);
+            CHECK(tb_symbol_parameter_source_source(&state, &source.units, &source.tree,
+                source.unit_index) == TB_SYMBOL_PARAMETER_SOURCE_PENDING);
+        }
+
+        (void)tb_symbol_parameter_source_step(&state, 31);
+        if (state.status != TB_SYMBOL_PARAMETER_SOURCE_PENDING &&
+            state.status != TB_SYMBOL_PARAMETER_SOURCE_SOURCE) {
+            break;
+        }
+    }
+
+    if (state.status != TB_SYMBOL_PARAMETER_SOURCE_READY && state.status != TB_SYMBOL_PARAMETER_SOURCE_PARTIAL) {
+        fprintf(stderr, "parameter source status=%u root=%llu scope=%zu entry=%llu attribute=%llu\n",
+            state.status, (unsigned long long)input.callables.nodes[0].record.record_offset,
+            state.failure.scope_index, (unsigned long long)state.failure.entry_index,
+            (unsigned long long)state.failure.attribute_index);
+    }
+    CHECK(tb_symbol_parameter_source_view(&state, &view));
+    CHECK(view.correspondence.scopes == input.scopes);
+    if (view.selected_scope != SIZE_MAX) {
+        CHECK(view.selected_scope < input.callables.count);
+        CHECK(!slots[view.selected_scope].reduced);
+        CHECK(!(input.callables.nodes[view.selected_scope].present & (1u << TB_SYMBOL_RELATION_ORIGIN)));
+        CHECK(input.callables.nodes[view.selected_scope].context.tag == 0x2e);
+    }
+    CHECK((state.status == TB_SYMBOL_PARAMETER_SOURCE_READY) == (view.reasons == 0));
+    parameter_source_ready += state.status == TB_SYMBOL_PARAMETER_SOURCE_READY;
+    parameter_source_partial += state.status == TB_SYMBOL_PARAMETER_SOURCE_PARTIAL;
+    for (size_t i = 0; i < input.callables.count; ++i) {
+        if (!slots[i].reduced)
+            continue;
+
+        CHECK(slots[i].first_signature < slots[i].tree.count);
+        CHECK(slots[i].signature_attribute < slots[i].tree.attribute_count);
+        CHECK(slots[i].tree.attributes[slots[i].signature_attribute].name == 0x69);
+        ++parameter_source_reduced;
+    }
+
+    tb_symbol_parameter_source_discard(&state);
+    CHECK(tb_symbol_budget_release(&budget, charge));
+}
+
+
 static void check_parameter_links(InheritedScope_t source, TbSymbolGraphView_t graph)
 {
     TbSymbolParameterLinks_t  state;
@@ -1297,6 +1357,7 @@ static void check_parameter_links(InheritedScope_t source, TbSymbolGraphView_t g
         }
     }
 
+    check_parameter_source(source, view);
     ++parameter_link_queries;
     parameter_link_edges += view.link_count;
     tb_symbol_parameter_links_discard(&state);
@@ -2433,6 +2494,10 @@ int main(int argc, char **argv)
     printf("PASS native parameter correspondence: %llu queries, %llu links, %llu empty inventories\n",
            (unsigned long long)parameter_link_queries, (unsigned long long)parameter_link_edges,
            (unsigned long long)parameter_link_empty_scopes);
+    CHECK(parameter_source_ready + parameter_source_partial == parameter_link_queries);
+    printf("PASS native parameter sources: %llu ready, %llu partial, %llu reduced inventories\n",
+           (unsigned long long)parameter_source_ready, (unsigned long long)parameter_source_partial,
+           (unsigned long long)parameter_source_reduced);
     CHECK(inline_ancestry_queries && inline_abstract_markers && inline_concrete_markers);
     printf("PASS native physical inline ancestry: %llu queries, "
            "%llu with abstract, %llu with concrete marker\n",
