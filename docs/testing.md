@@ -566,6 +566,10 @@ persistence, compatibility and editor interactions. The latter two require GDB,
 ptrace and (for the second) tmux; they exercise remapped Continue/Pause, literal
 Console input and spatial content transfer after loading a connection profile.
 They are included in `test`/`test-native` and therefore `test-ci`.
+After a keyboard-navigation burst, the harness enters capture through the same
+input stream and verifies the requested row's capture border before cancelling
+capture and using its coordinates. This waits for observable navigation completion
+rather than assuming tmux has rendered the destination within a fixed delay.
 
 Use a temporary `XDG_CONFIG_HOME` for this manual check so saved personal
 bindings are preserved and the expected factory keys apply.

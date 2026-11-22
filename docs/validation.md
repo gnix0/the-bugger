@@ -7872,3 +7872,56 @@ return interpretation, complete callable recipes, bounded concrete-inline
 details and composed SE06 acceptance remain open. Full host verification for
 this step remains pending after its commit; no full baseline or complete static
 analysis has been rerun during its development.
+
+
+## Keybinding navigation completion — 2026-11-22
+
+The owner-run full verification of the parameter-correspondence batch
+(`8a48ece4a56c0c6b5fb3ffc56887cc05651a0f4c`) recorded one failure among
+145 individual test commands: the real-tmux keybinding harness could not find
+Next control (action 28) in its current 60×112 screen. All other test commands,
+static analysis of 79 production sources and fortified test-source compilation
+completed successfully. The clean-tree record, 399 input hashes and complete
+logs remain under `build/se06-parameter-links-owner-20261122/`. The private
+aggregate summary correctly identifies the failed command despite the test
+stage's zero Make exit status. This run is failed, not an accepted baseline.
+
+The harness sent Home and up to 28 Tabs, then waited 100 ms before locating a
+row for its next mouse click. The retained failed screen still showed the first
+viewport. An unchanged diagnostic copy passed in isolation; that pass does not
+explain away the failure. A controlled probe removing the navigation settle
+interval observed missing rows for actions 9, 10 and 14 become visible after
+pumping output alone, without additional input. That probe later failed another
+capture expectation and remains failed evidence, not a passing regression run.
+These observations demonstrate the stale-screen risk; they do not establish the
+cause of every historical intermittent keybinding failure.
+
+Navigation now sends Enter after the key burst, waits for capture, verifies the
+exact requested row's existing capture-border assertions, then cancels capture
+before using its coordinates. Input ordering and an observable response replace
+the fixed-delay assumption. No application behavior or assertion was relaxed.
+A separate negative copy deliberately omitted the last Tab for Next control;
+it failed the exact-row capture assertion as expected (exit 1).
+
+Focused fortified compilation and complete actual-GDB keybinding workflows
+passed directly and through isolated tmux (`fixed-direct` and `fixed-tmux`, exit
+0). Both used the frontend and fixture from the owner-run fortified build:
+
+```sh
+make BUILD_DIR=build/se06-parameter-links-owner-20261122/build \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  build/se06-parameter-links-owner-20261122/build/test-keybinds-tui
+build/se06-parameter-links-owner-20261122/build/test-keybinds-tui \
+  "$PWD/build/se06-parameter-links-owner-20261122/build/the-bugger" \
+  "$PWD/build/se06-parameter-links-owner-20261122/build/debug-fixture"
+TB_KEYBINDS_TEST_TMUX=1 \
+  build/se06-parameter-links-owner-20261122/build/test-keybinds-tui \
+  "$PWD/build/se06-parameter-links-owner-20261122/build/the-bugger" \
+  "$PWD/build/se06-parameter-links-owner-20261122/build/debug-fixture"
+```
+
+Logs, statuses, diagnostic copies, changed test input, supporting input hashes
+and tool versions are retained under `build/keybind-navigation-fix-20261122/`.
+Normal `make` and whitespace checks passed. A subsequent fresh full baseline,
+static analysis and fortified test compilation remain pending. Local focused
+checks do not establish hosted CI, physical qualification or SE06 acceptance.
