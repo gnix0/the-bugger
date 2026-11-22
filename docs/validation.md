@@ -7815,3 +7815,60 @@ analysis and fortified compilation of all test sources remain pending for this
 committed batch.
 These local focused observations are separate from hosted CI, production
 sizing, SE06/F07 acceptance and physical target qualification.
+
+The subsequent owner-run local verification passed on a clean committed tree:
+144 individual test commands returned zero, all 78 production sources completed
+static analysis without actionable diagnostics, and all 136 C test sources have
+recorded fortified compilation commands. The 396 recorded input hashes remained
+unchanged. Complete logs, command records and the aggregate summary are retained
+under `build/se06-type-recipes-owner-20261122/`. This closes the pending host
+verification for that batch; it does not resolve historical intermittent
+keybinding failures or establish hosted CI, physical qualification or SE06
+acceptance.
+
+
+## Exact parameter correspondence — 2026-11-22
+
+Implemented [physical parameter links](architecture.md#exact-parameter-correspondence-se06-partial)
+while retaining each callable's independent ordered inventory. Authored models
+and native composition initially passed. A negative model then demonstrated that
+membership in the captured callable set did not establish a path from the source
+callable to the referenced parameter's owner (`parent-path-negative`, nonzero).
+The coordinator now validates that path with caller-owned bounded reachability
+workspace. It rejects contradictory correspondence within each inventory pair
+without publishing a prefix. The initial negative log remains preserved under
+`build/se06-parameter-links-20261122/`.
+
+The corrected focused unit and native checks passed (`paths-unit` and
+`paths-native`, exit 0). Native composition reported 2,611 queries, 2,932 exact
+links and 106 empty inventories. Clang ASan/UBSan unit checks also passed
+(`sanitize`, exit 0). These observations precede later whitespace and boundary-test
+additions; final focused checks for the completed step are recorded separately.
+They are development evidence, not production sizing or a complete signature
+claim. No type equality, name matching or positional correspondence is inferred.
+
+Final focused evidence is retained under
+`build/se06-parameter-links-evidence-20261122/`, with copied changed compiled
+inputs, hashes, tool versions and full logs/statuses:
+
+- `focused`: fortified `test-symbol-parameter-links test-symbol-elf-native`, exit 0.
+- `clang-type-units`: the native harness with the retained Clang type-unit fixture,
+  exit 0; 46 correspondence queries, eight links and 11 empty inventories.
+- `sanitize`: Clang ASan/UBSan unit and native targets, including stack-use-after-return
+  detection, exit 0; native composition reported 1,441 queries, 426 links and 63
+  empty inventories. This is a different compiler/self-inspection corpus.
+
+These runs cover the copied `inputs/` snapshot. The subsequent
+`reviewed/inputs/` snapshot clarifies unavailable graph-cursor diagnostics and
+passes parent checks by reference, avoiding whole graph-node copies. Its fortified
+unit target passed (`reviewed/unit`, exit 0), and normal `make` passed
+(`reviewed/normal-make`, exit 0). Whitespace checks and 239 internal document
+references passed. No source-list choice or type comparison was introduced by
+those changes. The final full baseline and complete static analysis remain
+pending for the committed tree.
+
+Source-list selection and coverage, implicit-object and method-qualifier rules,
+return interpretation, complete callable recipes, bounded concrete-inline
+details and composed SE06 acceptance remain open. Full host verification for
+this step remains pending after its commit; no full baseline or complete static
+analysis has been rerun during its development.

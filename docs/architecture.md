@@ -1375,6 +1375,39 @@ Independent frontend ownership and publication remain later gates. A complete
 descriptive recipe supplies neither full signature semantics nor live authority.
 
 
+### Exact parameter correspondence (SE06, partial)
+
+`src/symbol/parameter_links.c` reconciles explicit formal-parameter relationships
+across the captured callable relationship graph. Each callable retains its own
+completed, ordered direct parameter inventory, including unspecified markers and
+empty inventories. The coordinator requests a completed graph for every formal
+parameter and matches its physical endpoints to those inventories. Source names,
+parameter positions and equal-looking type descriptions never create a link.
+
+Each linked target callable must be reachable from that parameter's own source
+callable through captured relationships. Caller-owned reachability workspace is
+cleared and advanced in bounded steps. Within a source/target inventory pair,
+explicit correspondences must be one-to-one; contradictory alternatives,
+unmatched endpoints and unrelated parent scopes produce a scoped conflict.
+This withholds the correspondence result without declaring otherwise validated
+child graphs malformed. Wrong root/context supplies preserve the pending request.
+Missing dependencies, capacity failure and progress overflow expose no successful
+prefix. No allocation, I/O, discovery or recursive traversal occurs.
+
+Caller-owned state, both full arenas and the complete reachability workspace
+require accounting. All inventories and parameter graphs remain borrowed and
+unchanged through discard. The native harness retains compact child ownership,
+checks every output edge against physical metadata, and discards the coordinator
+before releasing its inputs under the existing construction allowance.
+
+A completed correspondence result does not select a source parameter list,
+concatenate lists, prove type equivalence or establish a complete signature.
+Reduced type-unit declarations and omitted concrete children remain distinct.
+Source-list completeness, child-construct coverage, language profiles,
+implicit objects, method qualifiers and return interpretation remain separate
+signature obligations. No frontend publication or live action is introduced.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

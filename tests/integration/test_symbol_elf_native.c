@@ -16,6 +16,7 @@
 #include "symbol/inline_scope.h"
 #include "symbol/locality.h"
 #include "symbol/parameters.h"
+#include "symbol/parameter_links.h"
 #include "symbol/references.h"
 #include "symbol/text.h"
 #include "symbol/elf.h"
@@ -48,6 +49,9 @@ static uint64_t flag_parameter_unsupported;
 static uint64_t parameter_queries;
 static uint64_t parameter_formals;
 static uint64_t parameter_markers;
+static uint64_t parameter_link_queries;
+static uint64_t parameter_link_edges;
+static uint64_t parameter_link_empty_scopes;
 static uint64_t locality_nonlocal;
 static uint64_t locality_local;
 static uint64_t locality_unsupported;
@@ -607,6 +611,7 @@ typedef struct {
 } InheritedScope_t;
 
 static void check_type_recipe(InheritedScope_t source, TbSymbolReferenceTarget_t selected);
+static void check_parameter_links(InheritedScope_t source, TbSymbolGraphView_t graph);
 static TbSymbolTypeRecipe_t *type_receiver;
 static TbSymbolTypeRecipeStatus_e type_completion;
 static uint64_t type_queries;
@@ -1032,6 +1037,8 @@ static void check_inherited(InheritedScope_t scope, TbSymbolGraphView_t graph,
     check_inherited_flags(scope, graph, flag_slots);
     check_inherited_references(scope, graph, slots);
     CHECK(tb_symbol_budget_release(&budget, charge));
+    if (graph.nodes[0].context.tag == 0x2e || graph.nodes[0].context.tag == 0x1d)
+        check_parameter_links(scope, graph);
 }
 
 
@@ -1167,6 +1174,154 @@ static NativeScopeInput_t *build_scope_input(TbSymbolUnitsView_t units, TbSymbol
     input->contexts.anchors = input->anchors;
     CHECK(tb_symbol_budget_release(&budget, charge));
     return input;
+}
+
+
+static void check_parameter_links(InheritedScope_t source, TbSymbolGraphView_t graph)
+{
+    TbSymbolParameterLinks_t  state;
+    TbSymbolParameters_t      parameters;
+    TbSymbolParameter_t       scratch[64];
+    TbSymbolParametersView_t  scopes[64];
+    TbSymbolParameter_t      *arenas[64] = {0};
+    size_t                    starts[64];
+    bool                      reachable[64];
+
+    size_t before = budget.used;
+    size_t charge = sizeof(state) + sizeof(parameters) + sizeof(scratch) + sizeof(scopes) +
+                    sizeof(arenas) + sizeof(starts) + sizeof(reachable);
+    size_t total = 0;
+
+    CHECK(graph.count <= 64 && tb_symbol_budget_reserve(&budget, charge));
+
+    for (size_t i = 0; i < graph.count; ++i) {
+        CHECK(graph.nodes[i].record.unit_offset == source.tree.unit_offset);
+        CHECK(tb_symbol_parameters_init(&parameters, source.tree, graph.nodes[i].record.entry_index,
+            scratch, 64) == TB_SYMBOL_PARAMETERS_PENDING);
+        for (unsigned turn = 0; turn < 100000 && parameters.status == TB_SYMBOL_PARAMETERS_PENDING; ++turn)
+            (void)tb_symbol_parameters_step(&parameters, 31);
+        CHECK(tb_symbol_parameters_view(&parameters, &scopes[i]));
+        CHECK(scopes[i].count <= 64 && total <= SIZE_MAX - scopes[i].count);
+        starts[i] = total;
+        total += scopes[i].count;
+
+        if (scopes[i].count) {
+            size_t owned = scopes[i].count * sizeof(*scratch);
+            CHECK(tb_symbol_budget_reserve(&budget, owned));
+            arenas[i] = malloc(owned);
+            CHECK(arenas[i]);
+            memcpy(arenas[i], scratch, owned);
+        } else {
+            ++parameter_link_empty_scopes;
+        }
+        scopes[i].parameters = arenas[i];
+    }
+
+    size_t slots        = total ? total : 1;
+    size_t input_charge = slots * sizeof(NativeScopeInput_t *);
+    CHECK(tb_symbol_budget_reserve(&budget, input_charge));
+    NativeScopeInput_t **inputs = calloc(slots, sizeof(*inputs));
+    CHECK(inputs);
+
+    size_t link_capacity = 0;
+    size_t formal_count  = 0;
+
+    for (size_t i = 0; i < graph.count; ++i) {
+        for (size_t j = 0; j < scopes[i].count; ++j) {
+            if (scopes[i].parameters[j].unspecified)
+                continue;
+
+            NativeScopeInput_t *input = build_scope_input(source.units, source.tree, source.unit_index,
+                scopes[i].parameters[j].record);
+            inputs[starts[i] + j] = input;
+            CHECK(link_capacity <= SIZE_MAX - (input->relationships.count - 1));
+            link_capacity += input->relationships.count - 1;
+            ++formal_count;
+        }
+    }
+
+    size_t fact_slots = formal_count ? formal_count : 1;
+    size_t link_slots = link_capacity ? link_capacity : 1;
+    size_t result_charge = fact_slots * sizeof(TbSymbolParameterLinkFact_t) +
+                           link_slots * sizeof(TbSymbolParameterLink_t);
+    CHECK(tb_symbol_budget_reserve(&budget, result_charge));
+    TbSymbolParameterLinkFact_t *facts = calloc(fact_slots, sizeof(*facts));
+    TbSymbolParameterLink_t     *links = calloc(link_slots, sizeof(*links));
+    CHECK(facts && links);
+    CHECK(tb_symbol_parameter_links_init(&state, graph, scopes, graph.count, facts, formal_count,
+        links, link_capacity, reachable, 64) == TB_SYMBOL_PARAMETER_LINKS_PENDING);
+
+    for (unsigned turn = 0; turn < 1000000; ++turn) {
+        size_t                    scope_index;
+        size_t                    parameter_index;
+        TbSymbolReferenceTarget_t record;
+        if (tb_symbol_parameter_links_need(&state, &scope_index, &parameter_index, &record)) {
+            NativeScopeInput_t *input = inputs[starts[scope_index] + parameter_index];
+            CHECK(input && input->relationships.nodes[0].record.record_offset == record.record_offset);
+            CHECK(tb_symbol_parameter_links_graph(&state, &input->relationships) ==
+                  TB_SYMBOL_PARAMETER_LINKS_PENDING);
+        }
+
+        (void)tb_symbol_parameter_links_step(&state, 31);
+        if (state.status != TB_SYMBOL_PARAMETER_LINKS_PENDING && state.status != TB_SYMBOL_PARAMETER_LINKS_GRAPH)
+            break;
+    }
+
+    if (state.status != TB_SYMBOL_PARAMETER_LINKS_READY) {
+        fprintf(stderr, "parameter links status=%u root=%llu scope=%zu parameter=%zu node=%zu previous=%zu\n",
+            state.status, (unsigned long long)graph.nodes[0].record.record_offset,
+            state.failure.scope_index, state.failure.parameter_index, state.failure.graph_node,
+            state.failure.previous_link);
+    }
+    CHECK(state.status == TB_SYMBOL_PARAMETER_LINKS_READY);
+    TbSymbolParameterLinksView_t view;
+    CHECK(tb_symbol_parameter_links_view(&state, &view));
+    CHECK(view.fact_count == formal_count && view.link_count == link_capacity);
+
+    for (size_t i = 0; i < view.fact_count; ++i) {
+        const TbSymbolParameterLinkFact_t *fact = &view.facts[i];
+        CHECK(fact->link_count == fact->graph.count - 1);
+        for (size_t j = 0; j < fact->link_count; ++j) {
+            const TbSymbolParameterLink_t *link = &view.links[fact->first_link + j];
+            CHECK(link->source_scope == fact->scope_index && link->source_parameter == fact->parameter_index);
+            CHECK(link->graph_node == j + 1 && link->target_scope < graph.count);
+            CHECK(link->target_parameter < scopes[link->target_scope].count);
+            const TbSymbolReferenceTarget_t *target =
+                &scopes[link->target_scope].parameters[link->target_parameter].record;
+            const TbSymbolGraphNode_t *node = &fact->graph.nodes[link->graph_node];
+            CHECK(target->record_offset == node->record.record_offset);
+            CHECK(target->unit_offset == node->record.unit_offset);
+            CHECK(target->section_index == node->record.section_index);
+            CHECK(source.tree.entries[target->entry_index].parent ==
+                  graph.nodes[link->target_scope].record.entry_index);
+        }
+    }
+
+    ++parameter_link_queries;
+    parameter_link_edges += view.link_count;
+    tb_symbol_parameter_links_discard(&state);
+
+    for (size_t i = 0; i < total; ++i) {
+        if (!inputs[i])
+            continue;
+
+        size_t owned = inputs[i]->charge;
+        free(inputs[i]->anchors);
+        free(inputs[i]->nodes);
+        free(inputs[i]);
+        CHECK(tb_symbol_budget_release(&budget, owned));
+    }
+    for (size_t i = 0; i < graph.count; ++i) {
+        free(arenas[i]);
+        CHECK(tb_symbol_budget_release(&budget, scopes[i].count * sizeof(*scratch)));
+    }
+    free(inputs);
+    free(facts);
+    free(links);
+
+    CHECK(tb_symbol_budget_release(&budget, input_charge));
+    CHECK(tb_symbol_budget_release(&budget, result_charge));
+    CHECK(tb_symbol_budget_release(&budget, charge) && budget.used == before);
 }
 
 
@@ -2274,6 +2429,10 @@ int main(int argc, char **argv)
             (void)check_file(argv[i]);
         }
     }
+    CHECK(parameter_link_queries && parameter_link_edges);
+    printf("PASS native parameter correspondence: %llu queries, %llu links, %llu empty inventories\n",
+           (unsigned long long)parameter_link_queries, (unsigned long long)parameter_link_edges,
+           (unsigned long long)parameter_link_empty_scopes);
     CHECK(inline_ancestry_queries && inline_abstract_markers && inline_concrete_markers);
     printf("PASS native physical inline ancestry: %llu queries, "
            "%llu with abstract, %llu with concrete marker\n",

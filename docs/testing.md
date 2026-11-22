@@ -3705,3 +3705,28 @@ under the unchanged 4 MiB harness allowance. Complete and partial mean the
 [documented descriptive profile](native-symbol-engine.md#descriptive-type-recipes-se06-partial),
 without proving type equivalence, object layout, complete callable signatures,
 frontend publication or target access.
+
+
+## Exact parameter correspondence (SE06, partial)
+
+```sh
+make BUILD_DIR=build/symbol-parameter-links CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-parameter-links test-symbol-elf-native
+```
+
+Authored completed-child views cover cross-unit and transitive links, shared
+origins, independent parameter lists, omitted concrete children, empty reduced
+inventories, unspecified markers and 512 physical parameter records. Negative
+cases include an unrelated callable path, unmatched parent context, one-to-many
+and many-to-one correspondence, stale child context, exhausted arenas and
+progress overflow. Rejected initialization preserves the previous state, arenas
+and reachability workspace. These coordinator models complement encoded decoder
+fixtures rather than replacing them.
+
+Native composition constructs all direct inventories and parameter relationship
+graphs for each supported completed callable graph. Exact-size retained storage
+and scratch overlap are accounted under the unchanged 4 MiB harness allowance.
+Every link is checked against its physical parameter graph and target's actual
+parent. Earlier native assertions remain active. Completion establishes the
+[correspondence contract](architecture.md#exact-parameter-correspondence-se06-partial),
+not source-list selection, complete signature semantics or runtime authority.
