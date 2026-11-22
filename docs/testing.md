@@ -3614,3 +3614,26 @@ existing assertions and accounts the full cursor/arena within its unchanged
 4 MiB construction allowance. These tests do not establish inherited signature
 reconciliation, C prototype completeness, method qualifiers, runtime access or
 SE06/F07 acceptance.
+
+
+## Inherited flag presence (SE06, partial)
+
+```sh
+make BUILD_DIR=build/symbol-inherited-flag CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-inherit test-symbol-inherited-flag test-symbol-elf-native
+```
+
+Authored views cover all four supported fields, missing versus physically zero
+flags, zero-to-true inheritance within and across units, multiple physical owners, shared ancestry,
+duplicate attributes and malformed value classes. Wrong source context preserves
+the request; missing dependencies, incomplete graphs and inconsistent edges fail
+explicitly. Capacity and arithmetic boundaries preserve prior state on rejected
+initialization. A 512-node chain and restart at each successive step exercise
+bounded traversal without recursion or early result exposure.
+
+The native composition harness independently follows relationships and scans
+actual decoded attributes to check semantic owners, raw provenance and absence.
+It includes formal-parameter graphs as well as callable/data records, within the
+unchanged 4 MiB construction allowance. Existing physical attribute-owner checks
+remain separate. These tests do not establish complete signatures, method
+qualifiers, runtime authority, production sizing or SE06/F07 acceptance.

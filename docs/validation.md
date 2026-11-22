@@ -7549,3 +7549,76 @@ and consumers retain independent gates. The earlier intermittent keybinding
 snapshot failure remains [unresolved historical evidence](#language-and-inline-constants--2026-11-21).
 Fresh comparable STM32/ARM, ESP32/Xtensa and ESP32/RISC-V functional validation
 remains required before the subsystem merge and planned v0.3.0 release.
+
+
+## Inherited flag presence — 2026-11-22
+
+Implemented the [semantic flag traversal](architecture.md#inherited-dwarf-flag-presence-se06-partial)
+for artificial, prototyped and lvalue/rvalue-reference attributes over completed
+relationship graphs. Missing fields and physical zero flags continue inheritance;
+nonzero flags retain each physical owner. Duplicate or malformed fields and
+inconsistent dependencies expose typed failure without a result prefix. The
+existing physical attribute-owner selector is unchanged.
+
+An earlier uncommitted draft incorrectly treated zero as a false override. It was
+rejected after checking DWARF 5 Section 7.5.4, and the corrected tests explicitly
+require zero-to-true inheritance. The rejected draft and finding remain under
+`build/se06-inherited-flag-draft/rejected-physical-zero-override/`; its earlier
+passing expectations are not evidence for the corrected implementation.
+
+Maintained tests cover missing/zero distinction, multiple owners, shared ancestry,
+all four fields, invalid effective forms, duplicates, incomplete graphs and
+inconsistent target coordinates. Wrong supplied context preserves the source
+request. Capacity/arithmetic rejection preserves prior state; progress exhaustion
+fails explicitly. A 512-node zero chain and restart at successive steps exercise
+bounded traversal. Native composition independently scans decoded attributes and
+relationships, including formal parameters, within its unchanged 4 MiB allowance.
+A supplementary sanitizer probe exercised a zero flag inheriting a nonzero
+foreign-unit owner; this case is now also included in the maintained unit target.
+
+Evidence directory: `build/se06-inherited-flag-evidence-20261122/`. It retains
+commands, environment, full logs/statuses, input patch, copied compiled inputs
+and SHA-256 manifest for 331 files. The initial analyzer run rejected a signed
+bitwise operand in the graph-mask check; explicit unsigned operands corrected it.
+The original snapshot and failed log are retained outside `final/`. Focused,
+sanitizer, analyzer and test-compilation checks passed on the corrected snapshot.
+
+The corrected full baseline stopped at the existing tmux keybinding assertion
+`tests/integration/test_keybinds_tui.c:619` (`final/test-ci`, exit 2). The retained
+preferences assign Ctrl+N to Quit (index 27), while Next control (index 28) is
+unset. `keybind-investigation/` contains that file, the unchanged focused rerun,
+and an isolated diagnostic copy retaining every assertion while recording the
+requested action and screens. Both reruns passed (exit 0); the diagnostic run
+clicked the expected Next control row and saved Next control=-14, Quit=0. The
+cause of the original failure remains unestablished. No tracked application or
+keybinding test changed, no assertion was relaxed, and isolated passes do not
+substitute for a complete baseline. The fresh complete rerun passed on the same
+331 frozen inputs (`final/verified-test-ci`, exit 0), including the unchanged tmux
+keybinding suite. This does not establish a cause or fix for the earlier failure.
+
+| Check | Command and recorded result |
+|---|---|
+| Focused components/native composition | `make BUILD_DIR=build/se06-inherited-flag-final-focused-20261122 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-inherit test-symbol-inherited-flag test-symbol-elf-native`; `final/focused`, exit 0. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-inherited-flag-verified-ci-20261122 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `final/verified-test-ci`, exit 0. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 make BUILD_DIR=build/se06-inherited-flag-final-sanitize-20261122 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-inherited-flag test-symbol-elf-native`; `final/sanitize`, exit 0. |
+| Static analysis | `make analyze`, 76 production sources; `final/analysis`, exit 0. |
+| Fortified test compilation | All `tests/unit/*.c`, `tests/integration/*.c` and `tests/support/*.c` object targets with `BUILD_DIR=build/se06-inherited-flag-final-static-tests-20261122 CPPFLAGS=-D_FORTIFY_SOURCE=3`; `final/test-compilation`, exit 0. |
+
+GCC native composition reported 34,652 flag queries, 2,680 found, 31,972 absent
+and 1,649 indirect owners; Clang sanitizer composition reported 22,328 queries,
+1,266 found, 21,062 absent and 245 indirect owners. These are observations of
+different compiler-produced metadata, including the self-inspected harness,
+not equivalent-corpus comparisons or production sizing.
+
+Normal `make` passed (`final/normal-make`, exit 0). Documentation checks covered
+232 internal references without errors; whitespace checks passed. All 331 frozen
+compiled inputs remained unchanged through the final checks.
+
+These checks do not establish language/tag applicability, implicit-object
+handling, method qualification, complete signatures, production sizing or
+SE06/F07 acceptance. Hosted CI and physical target validation remain separate.
+Inherited parameter reconciliation, supported signature recipes and bounded
+concrete-inline details remain SE06 work. The earlier intermittent keybinding
+snapshot failure remains [unresolved historical evidence](#language-and-inline-constants--2026-11-21).
+Fresh comparable STM32/ARM, ESP32/Xtensa and ESP32/RISC-V functional validation
+remains required before the subsystem merge and planned v0.3.0 release.

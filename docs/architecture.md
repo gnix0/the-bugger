@@ -1273,6 +1273,38 @@ ordering and inline sharing follow [DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf
 Sections 3.3.4 and 3.3.8.
 
 
+### Inherited DWARF flag presence (SE06, partial)
+
+`src/symbol/inherited_flag.c` interprets `DW_AT_artificial`, `DW_AT_prototyped`,
+`DW_AT_reference` and `DW_AT_rvalue_reference` over a completed relationship
+graph. It validates effective flag forms and retains each distinct physical owner.
+A nonzero flag establishes semantic presence and stops that path. A missing field
+or physically encoded zero continues through the captured specification/origin
+relationships. Examined slots distinguish missing attributes from retained zero
+encodings; unvisited nodes make no field claim. This follows the flag encoding
+rule in [DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Section 7.5.4.
+
+This semantic traversal is separate from the [physical attribute-owner selector](#inherited-dwarf-attribute-owners-se06-partial),
+whose supported fields and physical-presence contract are unchanged. Declaration
+and runtime fields are excluded. Duplicate fields, invalid flag classes, missing
+source dependencies and inconsistent graph edges produce typed failures without
+exposing a successful prefix. Wrong source context preserves the outstanding
+source request. Several true owners remain distinct; absence does not supply a
+false override.
+
+Caller-owned state and the complete slot arena require accounting. The completed
+graph and its context evidence remain borrowed and unchanged through discard;
+source views remain borrowed until the next source request or completion. Each
+step performs at most 256 bounded actions, without allocation, recursion, I/O,
+discovery or target access. The outer job owns cancellation, context revisions
+and deadlines. No production arena size is selected here.
+
+Flag-class and presence proof alone establishes neither language/tag applicability,
+known prototypes, implicit-object handling nor method qualifiers. Those require
+the signature profile and related reference evidence. Frontend evidence ownership,
+publication, runtime correspondence and action authorization remain separate gates.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

@@ -6,6 +6,7 @@
 #include "symbol/graph.h"
 #include "symbol/inherit.h"
 #include "symbol/inherited_text.h"
+#include "symbol/inherited_flag.h"
 #include "symbol/context.h"
 #include "symbol/scope_graph.h"
 #include "symbol/constants.h"
@@ -35,6 +36,13 @@ static TbSymbolBudget_t budget;
 static TbSymbolAdmissionLedger_t *ledger;
 static TbSymbolStorage_t *storage;
 static uint64_t next_slot;
+static uint64_t flag_queries;
+static uint64_t flag_found;
+static uint64_t flag_absent;
+static uint64_t flag_indirect;
+static uint64_t flag_parameter_graphs;
+static uint64_t flag_parameter_dependencies;
+static uint64_t flag_parameter_unsupported;
 static uint64_t parameter_queries;
 static uint64_t parameter_formals;
 static uint64_t parameter_markers;
@@ -545,6 +553,131 @@ static void check_inherited_text(InheritedScope_t scope, TbSymbolGraphView_t gra
 }
 
 
+static uint64_t flag_oracle(InheritedScope_t scope, TbSymbolGraphView_t graph, uint64_t name,
+                             bool values[64])
+{
+    CHECK(graph.count && graph.count <= 64);
+    uint64_t pending = 1;
+    uint64_t visited = 0;
+    uint64_t owners = 0;
+    while (pending) {
+        size_t index = 0;
+        while (!(pending & (UINT64_C(1) << index)))
+            ++index;
+        CHECK(index < graph.count);
+        uint64_t bit = UINT64_C(1) << index;
+        pending &= ~bit;
+        if (visited & bit)
+            continue;
+        visited |= bit;
+        const TbSymbolGraphNode_t *node  = &graph.nodes[index];
+        const TbSymbolDieEntry_t  *entry = &scope.tree.entries[node->record.entry_index];
+        unsigned found = 0;
+        for (uint64_t attr = 0; attr < entry->attribute_count; ++attr) {
+            const TbSymbolDieAttribute_t *raw = &scope.tree.attributes[entry->first_attribute + attr];
+            if (raw->name != name)
+                continue;
+            ++found;
+            CHECK(raw->value.numeric && !raw->value.is_signed);
+            CHECK(raw->value.form == TB_SYMBOL_FORM_FLAG || raw->value.form == TB_SYMBOL_FORM_FLAG_PRESENT);
+            CHECK(raw->value.form == TB_SYMBOL_FORM_FLAG ? raw->value.bits <= UINT8_MAX
+                                                         : raw->value.bits == 1);
+            values[index] = raw->value.bits != 0;
+        }
+        CHECK(found <= 1);
+        if (found && values[index]) {
+            owners |= bit;
+            continue;
+        }
+        for (unsigned kind = 0; kind < TB_SYMBOL_GRAPH_RELATIONS; ++kind) {
+            if (!(node->present & (1U << kind)))
+                continue;
+            const TbSymbolReferenceTarget_t *target = &node->edges[kind].target;
+            size_t match = SIZE_MAX;
+            for (size_t candidate = 0; candidate < graph.count; ++candidate) {
+                if (graph.nodes[candidate].record.record_offset == target->record_offset &&
+                    graph.nodes[candidate].record.unit_offset == target->unit_offset &&
+                    graph.nodes[candidate].record.section_index == target->section_index) {
+                    CHECK(match == SIZE_MAX);
+                    match = candidate;
+                }
+            }
+            CHECK(match != SIZE_MAX);
+            pending |= UINT64_C(1) << match;
+        }
+    }
+    return owners;
+}
+
+
+static void check_inherited_flags(InheritedScope_t scope, TbSymbolGraphView_t graph,
+                                   TbSymbolInheritedFlagSlot_t *slots)
+{
+    const uint64_t names[] = {0x34, 0x27, 0x77, 0x78};
+    for (size_t field = 0; field < sizeof(names) / sizeof(*names); ++field) {
+        TbSymbolInheritedFlag_t flag;
+        bool                    values[64] = {0};
+        size_t                  before = budget.used;
+        size_t                  charge = sizeof(flag) + sizeof(values);
+        CHECK(tb_symbol_budget_reserve(&budget, charge));
+        uint64_t owners = flag_oracle(scope, graph, names[field], values);
+        CHECK(tb_symbol_inherited_flag_init(&flag, graph, names[field], slots, 64) == TB_SYMBOL_FLAG_PENDING);
+        TbSymbolInheritedFlagStatus_e status = TB_SYMBOL_FLAG_PENDING;
+        for (unsigned turn = 0; turn < 100000; ++turn) {
+            TbSymbolInheritNeed_t need;
+            if (tb_symbol_inherited_flag_need(&flag, &need)) {
+                CHECK(need.record.unit_offset == scope.tree.unit_offset);
+                CHECK(tb_symbol_inherited_flag_source(&flag, &scope.units, &scope.tree, scope.unit_index) ==
+                      TB_SYMBOL_FLAG_PENDING);
+            }
+            status = tb_symbol_inherited_flag_step(&flag, 31);
+            if (status != TB_SYMBOL_FLAG_PENDING && status != TB_SYMBOL_FLAG_SOURCE)
+                break;
+        }
+        CHECK(status == (owners ? TB_SYMBOL_FLAG_FOUND : TB_SYMBOL_FLAG_ABSENT));
+        TbSymbolInheritedFlagView_t result;
+        size_t count = 0;
+        for (size_t index = 0; index < graph.count; ++index) {
+            if (owners & (UINT64_C(1) << index))
+                ++count;
+        }
+        CHECK(tb_symbol_inherited_flag_view(&flag, &result));
+        CHECK(result.selected.record_offset == graph.nodes[0].record.record_offset);
+        CHECK(result.graph.nodes == graph.nodes && result.graph.count == graph.count);
+        CHECK(result.slots == slots && result.name == names[field] && result.owner_count == count);
+        CHECK(result.value_available == (owners != 0));
+        if (owners)
+            CHECK(result.value);
+        for (size_t index = 0; index < graph.count; ++index) {
+            TbSymbolInheritOwner_t owner;
+            bool available = tb_symbol_inherited_flag_owner(&flag, index, &owner);
+            CHECK(available == ((owners & (UINT64_C(1) << index)) != 0));
+            if (!available)
+                continue;
+            const TbSymbolGraphNode_t *node  = &graph.nodes[index];
+            const TbSymbolDieEntry_t  *entry = &scope.tree.entries[node->record.entry_index];
+            CHECK(owner.node_index == index && owner.selection.matches == 1);
+            CHECK(owner.selection.record_offset == node->record.record_offset);
+            CHECK(owner.selection.first_index >= entry->first_attribute);
+            CHECK(owner.selection.first_index - entry->first_attribute < entry->attribute_count);
+            const TbSymbolDieAttribute_t *raw = &scope.tree.attributes[owner.selection.first_index];
+            CHECK(raw->name == names[field] && raw->offset == owner.attribute.offset);
+            CHECK(raw->value.form == owner.attribute.value.form &&
+                  raw->value.bits == owner.attribute.value.bits);
+            CHECK((raw->value.bits != 0) == result.value);
+            if (index)
+                ++flag_indirect;
+        }
+        if (owners)
+            ++flag_found;
+        else
+            ++flag_absent;
+        ++flag_queries;
+        CHECK(tb_symbol_budget_release(&budget, charge) && budget.used == before);
+    }
+}
+
+
 static void check_inherited(InheritedScope_t scope, TbSymbolGraphView_t graph,
                              TbSymbolInheritSlot_t *slots, UnitCounts_t *counts)
 {
@@ -608,6 +741,11 @@ static void check_inherited(InheritedScope_t scope, TbSymbolGraphView_t graph,
         if (owners > 1)
             ++counts->inherited_multiple;
     }
+    TbSymbolInheritedFlagSlot_t flag_slots[64];
+    size_t charge = sizeof(flag_slots);
+    CHECK(tb_symbol_budget_reserve(&budget, charge));
+    check_inherited_flags(scope, graph, flag_slots);
+    CHECK(tb_symbol_budget_release(&budget, charge));
 }
 
 
@@ -1108,6 +1246,9 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
     uint64_t entity_kinds[4] = {0};
     uint64_t declarations = 0;
     UnitCounts_t relations = {0};
+    UnitCounts_t parameter_relations = {0};
+    TbSymbolInheritedFlagSlot_t flag_slots[64];
+    CHECK(tb_symbol_budget_reserve(&budget, sizeof(flag_slots)));
     uint64_t graph_bytes = 64 * sizeof(TbSymbolGraphNode_t);
     CHECK(tb_symbol_budget_reserve(&budget, graph_bytes));
     TbSymbolGraphNode_t *graph_nodes = malloc((size_t)graph_bytes);
@@ -1202,6 +1343,19 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                         }, table, completed.nodes[0].record);
                     }
                 }
+                if (record->tag == 0x05) {
+                    TbSymbolGraphView_t completed;
+                    if (check_graph(view, tree, i, die, graph_nodes, &parameter_relations, &completed)) {
+                        check_inherited_flags((InheritedScope_t){
+                            .directory  = directory,
+                            .units      = view,
+                            .tree       = tree,
+                            .strings    = string_sections,
+                            .unit_index = i,
+                            .descriptor = selection.descriptor
+                        }, completed, flag_slots);
+                    }
+                }
                 for (uint64_t attr = 0; attr < record->attribute_count; ++attr) {
                     TbSymbolReferenceSelection_t selected = {
                         .unit_index      = i,
@@ -1284,6 +1438,10 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
         .dwarf4_units          = relations.dwarf4_units,
         .dwarf5_units          = relations.dwarf5_units
     };
+    CHECK(tb_symbol_budget_release(&budget, sizeof(flag_slots)));
+    flag_parameter_graphs += parameter_relations.graphs;
+    flag_parameter_dependencies += parameter_relations.graph_dependencies;
+    flag_parameter_unsupported += parameter_relations.graph_unsupported;
     free(inherited_slots);
     CHECK(tb_symbol_budget_release(&budget, inherited_bytes));
     free(graph_nodes);
@@ -1638,6 +1796,14 @@ int main(int argc, char **argv)
     printf("PASS native logical locality: %llu nonlocal, %llu local, %llu unsupported\n",
            (unsigned long long)locality_nonlocal, (unsigned long long)locality_local,
            (unsigned long long)locality_unsupported);
+    CHECK(flag_queries && flag_found && flag_absent && flag_indirect && flag_parameter_graphs);
+    CHECK(flag_queries % 4 == 0);
+    printf("PASS native inherited flags: %llu queries, %llu found, %llu absent, "
+           "%llu indirect owners; parameter graphs %llu, dependencies %llu, unsupported %llu\n",
+           (unsigned long long)flag_queries, (unsigned long long)flag_found,
+           (unsigned long long)flag_absent,
+           (unsigned long long)flag_indirect, (unsigned long long)flag_parameter_graphs,
+           (unsigned long long)flag_parameter_dependencies, (unsigned long long)flag_parameter_unsupported);
     CHECK(parameter_queries && parameter_formals);
     printf("PASS native direct parameters: %llu queries, %llu formal records, %llu unspecified markers\n",
            (unsigned long long)parameter_queries, (unsigned long long)parameter_formals,
