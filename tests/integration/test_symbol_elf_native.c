@@ -18,6 +18,7 @@
 #include "symbol/parameters.h"
 #include "symbol/parameter_links.h"
 #include "symbol/parameter_source.h"
+#include "../support/symbol_callable.h"
 #include "symbol/references.h"
 #include "symbol/text.h"
 #include "symbol/elf.h"
@@ -616,6 +617,7 @@ typedef struct {
 
 static void check_type_recipe(InheritedScope_t source, TbSymbolReferenceTarget_t selected);
 static void check_parameter_links(InheritedScope_t source, TbSymbolGraphView_t graph);
+static void check_callable(InheritedScope_t source, TbSymbolParameterSourceView_t parameters);
 static TbSymbolTypeRecipe_t *type_receiver;
 static TbSymbolTypeRecipeStatus_e type_completion;
 static uint64_t type_queries;
@@ -628,6 +630,7 @@ static void finish_type_recipe(TbSymbolTypeRecipe_t *recipe)
 {
     TbSymbolTypeRecipeView_t view;
     CHECK(tb_symbol_type_recipe_view(recipe, &view) && view.count);
+    test_symbol_callable_capture_type(recipe->status, &view);
     CHECK(view.selected.record_offset == view.nodes[0].record.record_offset);
     for (size_t i = 0; i < view.count; ++i) {
         const TbSymbolTypeRecipeNode_t *node = &view.nodes[i];
@@ -1112,34 +1115,54 @@ static size_t native_scope_peak_inputs;
 static NativeScopeInput_t *build_scope_input(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree,
                                              uint64_t unit_index, TbSymbolReferenceTarget_t selected)
 {
-    TbSymbolGraph_t          relationships;
-    TbSymbolContext_t        contexts;
-    TbSymbolGraphNode_t      graph_nodes[64];
-    TbSymbolContextAnchor_t  anchors[64];
-    TbSymbolGraphView_t      graph_view;
-    TbSymbolContextView_t    context_view;
-    size_t charge = sizeof(relationships) + sizeof(contexts) + sizeof(graph_nodes) + sizeof(anchors) +
-                    sizeof(graph_view) + sizeof(context_view);
+    TbSymbolGraph_t       relationships;
+    TbSymbolContext_t     contexts;
+    TbSymbolGraphView_t   graph_view;
+    TbSymbolContextView_t context_view;
+    size_t charge = sizeof(relationships) + sizeof(contexts) + sizeof(graph_view) + sizeof(context_view);
     CHECK(tb_symbol_budget_reserve(&budget, charge));
-    CHECK(tb_symbol_graph_init(&relationships, selected, graph_nodes, 64) == TB_SYMBOL_GRAPH_SOURCE);
-    for (unsigned turn = 0; turn < 1000000 && relationships.status != TB_SYMBOL_GRAPH_READY; ++turn) {
-        TbSymbolGraphNeed_t need;
-        if (tb_symbol_graph_need(&relationships, &need)) {
-            if (need.kind == TB_SYMBOL_GRAPH_SOURCE) {
-                CHECK(need.record.unit_offset == tree.unit_offset);
-                CHECK(tb_symbol_graph_source(&relationships, &units, &tree, unit_index) ==
-                      TB_SYMBOL_GRAPH_PENDING);
-            } else {
-                TbSymbolRelationNeed_t target;
-                CHECK(tb_symbol_relation_need(need.source, &units, &target) == TB_SYMBOL_RELATION_READY);
-                CHECK(target.target.unit_offset == tree.unit_offset);
-                CHECK(tb_symbol_graph_target(&relationships, &units, &tree) == TB_SYMBOL_GRAPH_PENDING);
+    size_t capacity = 1;
+    size_t graph_charge = 0;
+    TbSymbolGraphNode_t *graph_nodes = NULL;
+    for (;;) {
+        graph_charge = capacity * sizeof(*graph_nodes);
+        CHECK(tb_symbol_budget_reserve(&budget, graph_charge));
+        graph_nodes = calloc(capacity, sizeof(*graph_nodes));
+        CHECK(graph_nodes);
+        CHECK(tb_symbol_graph_init(&relationships, selected, graph_nodes, capacity) == TB_SYMBOL_GRAPH_SOURCE);
+        for (unsigned turn = 0; turn < 1000000 && relationships.status != TB_SYMBOL_GRAPH_READY; ++turn) {
+            TbSymbolGraphNeed_t need;
+            if (tb_symbol_graph_need(&relationships, &need)) {
+                if (need.kind == TB_SYMBOL_GRAPH_SOURCE) {
+                    CHECK(need.record.unit_offset == tree.unit_offset);
+                    CHECK(tb_symbol_graph_source(&relationships, &units, &tree, unit_index) ==
+                          TB_SYMBOL_GRAPH_PENDING);
+                } else {
+                    TbSymbolRelationNeed_t target;
+                    CHECK(tb_symbol_relation_need(need.source, &units, &target) == TB_SYMBOL_RELATION_READY);
+                    CHECK(target.target.unit_offset == tree.unit_offset);
+                    CHECK(tb_symbol_graph_target(&relationships, &units, &tree) == TB_SYMBOL_GRAPH_PENDING);
+                }
             }
+            (void)tb_symbol_graph_step(&relationships, 31);
+            if (relationships.status == TB_SYMBOL_GRAPH_RESOURCE)
+                break;
         }
-        (void)tb_symbol_graph_step(&relationships, 31);
+        if (relationships.status != TB_SYMBOL_GRAPH_RESOURCE)
+            break;
+
+        CHECK(capacity < 64);
+        relationships = (TbSymbolGraph_t) {0};
+        free(graph_nodes);
+        CHECK(tb_symbol_budget_release(&budget, graph_charge));
+        capacity *= 2;
     }
     CHECK(tb_symbol_graph_view(&relationships, &graph_view));
-    CHECK(tb_symbol_context_init(&contexts, graph_view, anchors, 64) ==
+    size_t anchor_charge = graph_view.count * sizeof(TbSymbolContextAnchor_t);
+    CHECK(tb_symbol_budget_reserve(&budget, anchor_charge));
+    TbSymbolContextAnchor_t *anchors = calloc(graph_view.count, sizeof(*anchors));
+    CHECK(anchors);
+    CHECK(tb_symbol_context_init(&contexts, graph_view, anchors, graph_view.count) ==
           TB_SYMBOL_CONTEXT_PENDING);
     for (unsigned turn = 0; turn < 1000000 && contexts.status != TB_SYMBOL_CONTEXT_READY; ++turn) {
         TbSymbolGraphNeed_t need;
@@ -1176,6 +1199,10 @@ static NativeScopeInput_t *build_scope_input(TbSymbolUnitsView_t units, TbSymbol
     input->relationships.nodes = input->nodes;
     input->contexts = context_view;
     input->contexts.anchors = input->anchors;
+    free(anchors);
+    free(graph_nodes);
+    CHECK(tb_symbol_budget_release(&budget, anchor_charge));
+    CHECK(tb_symbol_budget_release(&budget, graph_charge));
     CHECK(tb_symbol_budget_release(&budget, charge));
     return input;
 }
@@ -1232,6 +1259,7 @@ static void check_parameter_source(InheritedScope_t source, TbSymbolParameterLin
         ++parameter_source_reduced;
     }
 
+    check_callable(source, view);
     tb_symbol_parameter_source_discard(&state);
     CHECK(tb_symbol_budget_release(&budget, charge));
 }
@@ -1438,6 +1466,7 @@ static void check_qualified_context(InheritedScope_t source, TbSymbolAbbrevView_
     TbSymbolInheritedTextFact_t *names[64] = {0};
     size_t charges[64] = {0};
     size_t before = budget.used;
+    size_t captured_before = test_symbol_callable_owned();
     size_t charge = sizeof(names) + sizeof(charges) + sizeof(TbSymbolConstant_t);
     CHECK(scope.node_count <= 64 && tb_symbol_budget_reserve(&budget, charge));
     TbSymbolQualified_t *qualified = tb_symbol_qualified_create(source.directory, scope, source.descriptor,
@@ -1521,6 +1550,7 @@ static void check_qualified_context(InheritedScope_t source, TbSymbolAbbrevView_
             ++qualified_unavailable;
         CHECK(!tb_symbol_qualified_view(qualified, &view));
     }
+    test_symbol_callable_capture_name(status, status == TB_SYMBOL_QUALIFIED_READY ? &view : NULL);
     if (type_receiver) {
         TbSymbolReferenceTarget_t selected;
         CHECK(tb_symbol_type_recipe_need(type_receiver, &selected));
@@ -1539,7 +1569,9 @@ static void check_qualified_context(InheritedScope_t source, TbSymbolAbbrevView_
         free(names[i]);
         CHECK(tb_symbol_budget_release(&budget, charges[i]));
     }
-    CHECK(tb_symbol_budget_release(&budget, charge) && budget.used == before);
+    CHECK(tb_symbol_budget_release(&budget, charge));
+    CHECK(test_symbol_callable_owned() >= captured_before && budget.used >= before &&
+          budget.used - before == test_symbol_callable_owned() - captured_before);
 }
 
 
@@ -1641,6 +1673,7 @@ static void check_recursive_context(InheritedScope_t source, TbSymbolAbbrevView_
     size_t input_count = 0;
     size_t charge = sizeof(scope) + sizeof(nodes) + sizeof(edges) + sizeof(inputs);
     size_t before = budget.used;
+    size_t captured_before = test_symbol_callable_owned();
     CHECK(tb_symbol_budget_reserve(&budget, charge));
     CHECK(tb_symbol_scope_init(&scope, selected, nodes, 64, edges, 256) == TB_SYMBOL_SCOPE_SOURCE);
     TbSymbolScopeStatus_e status = TB_SYMBOL_SCOPE_SOURCE;
@@ -1697,7 +1730,9 @@ static void check_recursive_context(InheritedScope_t source, TbSymbolAbbrevView_
         native_scope_peak_retained = retained;
     if (input_count > native_scope_peak_inputs)
         native_scope_peak_inputs = input_count;
-    CHECK(tb_symbol_budget_release(&budget, charge) && budget.used == before);
+    CHECK(tb_symbol_budget_release(&budget, charge));
+    CHECK(test_symbol_callable_owned() >= captured_before && budget.used >= before &&
+          budget.used - before == test_symbol_callable_owned() - captured_before);
 }
 
 
@@ -1753,6 +1788,7 @@ static void check_type_recipe(InheritedScope_t source, TbSymbolReferenceTarget_t
     TbSymbolTypeRecipeNode_t nodes[64];
     TypeInput_t              inputs[64] = {0};
     size_t before = budget.used;
+    size_t captured_before = test_symbol_callable_owned();
     size_t charge = sizeof(recipe) + sizeof(nodes) + sizeof(inputs);
     CHECK(!type_receiver && selected.unit_offset == source.tree.unit_offset);
     CHECK(tb_symbol_budget_reserve(&budget, charge));
@@ -1796,6 +1832,7 @@ static void check_type_recipe(InheritedScope_t source, TbSymbolReferenceTarget_t
                     recipe.status, (unsigned long long)selected.record_offset, recipe.count, budget.used);
             CHECK(recipe.status == TB_SYMBOL_TYPE_UNSUPPORTED || recipe.status == TB_SYMBOL_TYPE_DEPENDENCY);
             ++type_unavailable;
+            test_symbol_callable_capture_type(recipe.status, NULL);
         }
         tb_symbol_type_recipe_discard(&recipe);
     }
@@ -1811,7 +1848,39 @@ static void check_type_recipe(InheritedScope_t source, TbSymbolReferenceTarget_t
         free(input);
         CHECK(tb_symbol_budget_release(&budget, owned));
     }
-    CHECK(tb_symbol_budget_release(&budget, charge) && budget.used == before);
+    CHECK(tb_symbol_budget_release(&budget, charge));
+    CHECK(test_symbol_callable_owned() >= captured_before && budget.used >= before &&
+          budget.used - before == test_symbol_callable_owned() - captured_before);
+}
+
+
+static void callable_name_provider(void *context, TbSymbolReferenceTarget_t record)
+{
+    InheritedScope_t *source = context;
+    check_recursive_context(*source, source->schema, record);
+}
+
+
+static void callable_type_provider(void *context, TbSymbolReferenceTarget_t record)
+{
+    InheritedScope_t *source = context;
+    check_type_recipe(*source, record);
+}
+
+
+static void check_callable(InheritedScope_t source, TbSymbolParameterSourceView_t parameters)
+{
+    CHECK(!type_receiver);
+    test_symbol_callable_run((TestSymbolCallableSource_t) {
+        .units      = source.units,
+        .tree       = source.tree,
+        .schema     = source.schema,
+        .unit_index = source.unit_index
+    }, parameters, (TestSymbolCallableProviders_t) {
+        .name    = callable_name_provider,
+        .type    = callable_type_provider,
+        .context = &source
+    }, &budget);
 }
 
 
@@ -2490,6 +2559,7 @@ int main(int argc, char **argv)
             (void)check_file(argv[i]);
         }
     }
+    test_symbol_callable_report();
     CHECK(parameter_link_queries && parameter_link_edges);
     printf("PASS native parameter correspondence: %llu queries, %llu links, %llu empty inventories\n",
            (unsigned long long)parameter_link_queries, (unsigned long long)parameter_link_edges,

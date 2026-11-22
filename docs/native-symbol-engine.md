@@ -324,6 +324,70 @@ conflicting lists, unavailable dependencies, resource failure and invalid
 captured contexts do not expose a successful prefix. Physical inventories and
 otherwise independent metadata retain their own validity.
 
+
+### Descriptive callable recipes (SE06)
+
+The initial callable grammar combines a complete qualified metadata name, a
+selected physical source inventory, the existing type-recipe grammar and scoped
+language/flag/reference evidence:
+
+```text
+callable := name return_description ordered_parameters member_description
+return_description := type | no_recorded_return_type | partial
+parameter := explicit(type) | object(type) | artificial(type) | unspecified
+member_description := ordinary | static_member | instance_member(cv, ref) | partial
+```
+
+This is structured metadata, not a C/C++ declarator, expression, type-equivalence
+proof or ABI description. Every type, parameter, object-pointer owner and source
+inventory retains its physical provenance. The initial language profile is the
+existing explicit C/C++ language-code set. Unsupported or inconsistent language
+coverage remains partial, without interpreting an unchecked parameter prefix.
+
+Return types are resolved from the selected callable's inherited type owners,
+so a definition's deduced return type can override a declaration's unspecified
+auto type. Complete inherited absence is recorded as `no_recorded_return_type`;
+it does not choose between C++ void, constructor or destructor syntax. Missing
+formal-parameter types remain partial. Distinct physical type targets remain
+alternatives even when their names look equal. Unsupported type constructors or
+unavailable type names retain partial type status; malformed metadata, missing
+required dependencies and exhausted resources do not become a successful prefix.
+
+Parameters retain source order, including unspecified markers and every
+artificial parameter. The object pointer must resolve to an exact formal in the
+captured inventories and map through explicit parameter correspondences to the
+selected source list. All object-pointer owners must agree on that mapped
+formal. Only that formal with validated artificial presence receives the object
+role; no spelling or position identifies it. Other artificial arguments remain
+visible and make the source description partial. No parameter is removed from
+the structured result.
+
+Member classification examines every captured lexical-context derivation.
+Supported C++ class/structure/union contexts, an exact object formal and its
+artificial evidence establish the instance profile. Complete object-pointer
+absence in that context supports the static profile only without unexplained
+artificial arguments. Mixed or unsupported contexts remain partial. Object cv
+comes from a supported pointer-to-record recipe: qualifiers on the pointer
+object do not become method qualifiers, while const/volatile on its pointee do.
+Every containing-class derivation must match a physical node in the pointee's
+validated relationship graph. Opaque aliases, unsupported pointer shapes,
+restrict-qualified pointees and unresolved class correspondence remain partial.
+Names do not establish class correspondence, including across type-unit signatures.
+
+Both lvalue- and rvalue-reference qualifier presence is a conflict. DWARF 5
+absence can establish an unqualified supported instance method. DWARF 4
+qualifier facts are retained, but the instance description remains partial for
+that version's extension profile; absence is not a completeness proof. C
+prototype completeness requires validated prototyped presence, including for an
+empty parameter list. These limits preserve useful discovery without claiming
+universal compiler or source-language support.
+
+A completed recipe is immutable borrowed metadata until discard. Wrong child
+identity/context preserves the pending request. Failed candidates expose no
+successful view; partial results distinguish supported facts, unsupported
+coverage and unexamined fields explicitly. No rendering, discovery, target
+access, expression selection or frontend publication follows from completion.
+
 ## Committed searches and result windows
 
 Opening Symbols and editing controls perform no discovery. Search/Enter commits

@@ -1442,6 +1442,49 @@ artificial parameters, method qualifiers, returns and complete callable recipes
 remain separate work. No frontend publication or live authority is added.
 
 
+
+### Descriptive callable composition (SE06)
+
+`src/symbol/callable.c` composes the
+[callable metadata grammar](native-symbol-engine.md#descriptive-callable-recipes-se06)
+from completed qualified names, parameter-source selection and exact child
+flag/reference/type results. A direct language fact must match the selected
+source's unit root. Qualified-context language evidence is checked separately;
+unsupported language/source coverage never publishes uninitialized parameters.
+
+The coordinator requests bounded child work with exact subject, captured graph
+and field identity. Each source parameter retains its graph, artificial evidence,
+resolved type owners and optional complete/partial type recipe. Return and object
+facts remain separate from the source inventory. Object mapping, lexical-class
+checks and pointer/pointee qualifiers are iterative; no parameter is matched by
+position, name or descriptive type. Every partial reason has retained provenance
+and field-availability state. Conflict, malformed input, unavailable required
+dependencies, resource failure and operational errors expose no successful view.
+
+The caller owns/accounts the full state and parameter arena, and pins every
+borrowed input and child dependency until discard. Initialization rejection
+preserves the preceding result and arena. Each step performs at most 256 bounded
+mapping, constructor or context actions. Linear inventory/link/class searches can
+require quadratic work; outer revisions, cancellation, deadlines and SE10 sizing
+remain mandatory. There is no allocation, I/O, recursion, frontend publication or
+runtime authority in the coordinator.
+
+The native harness adopts child results before their temporary providers end.
+`tests/support/symbol_callable.c` retains complete graph/context/name/type closures
+and accounts each allocation and bookkeeping header. Existing helper balance
+checks include exactly those retained charges, and final discard/free restores
+the preceding budget. Temporary graph construction grows within the existing
+64-node harness bound; its context arena uses the completed graph count. The
+separate support source keeps self-inspected debug units bounded without changing
+the 4 MiB construction allowance or reducing metadata assertions. These are test
+ownership arrangements, not production cache or sizing policies.
+
+Structured callable recipes complete this part of SE06's metadata interpretation.
+Concrete-inline detail inventories and composed SE06 acceptance remain open;
+there is no functional Symbols UI or live consumer integration yet.
+
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

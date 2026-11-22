@@ -3765,3 +3765,32 @@ all earlier native assertions and the 4 MiB construction allowance remain in
 place. The [selection profile](native-symbol-engine.md#callable-parameter-sources-se06-partial)
 does not establish complete signatures, language applicability, implicit objects,
 method qualifiers, returns, frontend publication or runtime actions.
+
+
+## Descriptive callable recipes (SE06)
+
+```sh
+make BUILD_DIR=build/symbol-callable CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-callable test-symbol-elf-native
+```
+
+Unit models exercise ordinary/static/instance descriptions, explicit object
+correspondence through an origin, artificial-argument retention, pointer-object
+versus pointee cv, reference-qualifier conflicts, DWARF 4 partial qualification,
+opaque aliases, physical class mismatches, missing/alternative types, neutral
+return-type absence, C prototypes and variadic markers. A 520-constructor object
+type exercises bounded stepping. Pending-context rejection, late resource failure,
+state/arena preservation and discard at every small-operation prefix check failure
+and lifetime boundaries. Authored completed-child views isolate composition;
+they do not replace encoded metadata validation.
+
+The native target composes recipes from decoded C/C++ fixtures, both DWARF
+versions, non-split type-unit declarations and the native harness itself. It
+retains all child graph/context/name/type dependencies through recipe discard
+using the charged support module. Earlier decoder, identity, ordering and budget
+assertions remain active, including exact release of concurrent captured storage.
+Compiler-dependent and unsupported shapes remain partial or explicitly unavailable
+under the [documented grammar](native-symbol-engine.md#descriptive-callable-recipes-se06).
+Focused sanitizer runs are appropriate for this retained-closure integration.
+Host tests establish neither universal producer compatibility, production sizing,
+concrete-inline acceptance nor live/physical target behavior.

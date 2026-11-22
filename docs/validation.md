@@ -8016,3 +8016,83 @@ versions are retained under
 corrected batch remains pending; the targeted analyzer check does not replace
 the complete analysis or fortified baseline. SE06 and physical acceptance remain
 open.
+
+
+The subsequent owner-run verification passed on clean commit
+`568222af8fd37a0c3ba39f205598dfadaee43760`: all 146 individual test commands
+returned zero, all 80 production sources completed analysis without actionable
+diagnostics, and all 138 C test sources have recorded fortified compilation
+commands and object files. All 402 recorded input hashes remained unchanged.
+Complete logs and the aggregate summary are retained under
+`build/se06-parameter-source-fixed-owner-20261122/`. This closes the pending
+local host verification for parameter-source selection, without establishing
+hosted CI, physical qualification or SE06 acceptance.
+
+
+## Descriptive callable composition — 2026-11-22
+
+Implemented the [callable metadata grammar](native-symbol-engine.md#descriptive-callable-recipes-se06)
+as one composed delivery covering source inventories, returns, parameter types,
+implicit objects, artificial arguments, C prototypes and supported method
+qualifiers. Names, source lists and type descriptions remain separate physical
+facts; the resulting structured recipe is not a GDB expression or ABI proof.
+Partial reasons preserve unsupported coverage, unresolved object mappings,
+alternative types and the DWARF 4 ref-qualifier boundary. Absent return metadata
+does not choose C++ void/constructor/destructor syntax.
+
+Unit models cover exact origin-mapped object identity, static/instance/ordinary
+contexts, pointer-object versus pointee qualifiers, conflicting ref flags,
+missing/alternative types, C prototype absence, variadic markers, stale child
+contexts, resource failure after valid work, a 520-constructor object type and
+safe discard at every suspended prefix of a small composition.
+
+The native integration retains child metadata before temporary providers end,
+then discards the callable before freeing its complete dependency closure. Initial
+native runs failed within the unchanged 4 MiB construction allowance. The first
+failure requested 115,624 bytes with 4,092,304 already charged; a subsequent
+string-reader request needed 65,776 bytes with 4,182,536 charged. Both failures
+occurred before retained callable snapshots were constructed. Full logs and
+GDB budget/backtrace observations remain under
+`build/se06-callable-work-20261122/` (`focused`, `compact-focused` and the two
+`budget-investigation` records). These were failed development runs; exact
+pre-split working-tree snapshots were not retained, so those observations are
+not a reproducible production sizing measurement.
+
+Temporary graph construction now grows within its existing 64-node harness
+bound and charges its actual capacity; context scratch uses the completed graph
+count. New callable support resides in a separate C source so the harness's
+self-inspected debug units stay bounded. The corrected native run passed
+(`split-focused`, exit 0) without increasing the construction ceiling, reducing
+metadata assertions or dropping self-inspection. Helper balance checks include
+exactly the independently retained snapshot charges, and final cleanup restores
+the preceding budget.
+
+Focused fortified unit/native checks and Clang ASan/UBSan checks, including
+stack-use-after-return detection, use:
+
+```sh
+make BUILD_DIR=build/se06-callable-focused-20261122 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-callable test-symbol-elf-native
+UBSAN_OPTIONS=halt_on_error=1 ASAN_OPTIONS=detect_stack_use_after_return=1 \
+  make BUILD_DIR=build/se06-callable-sanitize-20261122 CC=clang \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' test-symbol-callable test-symbol-elf-native
+```
+
+The final fortified run reported 2,495 complete and 388 partial callable recipes;
+the Clang sanitizer self-inspection corpus reported 1,212 complete and 386 partial
+recipes. Both included seven instance-member observations and zero unavailable
+callables. These are different compiler/self-inspection corpora, not comparative
+performance or sizing measurements. A supplementary retained Clang type-unit
+probe passed with 24 complete, 16 partial and six explicitly unavailable callable
+recipes. That within-unit provider does not qualify every producer-specific
+context/type dependency; unavailable results remain unavailable.
+
+Final logs/statuses, changed compiled inputs, hashes, commands and tool versions
+are retained under `build/se06-callable-evidence-20261122/`. Normal `make` and
+internal document consistency checks accompany the completed snapshot. The full
+fortified baseline, complete static analysis and fortified compilation of all C
+test sources remain pending for this committed batch. No complete-production,
+hosted CI, physical qualification or SE06/F07 acceptance is claimed. Concrete-inline
+detail inventories and composed SE06 acceptance remain open.
