@@ -4,12 +4,13 @@
 #include "symbol/graph.h"
 
 typedef enum {
-    TB_SYMBOL_INHERIT_NAME         = 0x03,
-    TB_SYMBOL_INHERIT_LINKAGE_NAME = 0x6e,
-    TB_SYMBOL_INHERIT_TYPE         = 0x49,
-    TB_SYMBOL_INHERIT_DECL_FILE    = 0x3a,
-    TB_SYMBOL_INHERIT_DECL_LINE    = 0x3b,
-    TB_SYMBOL_INHERIT_DECL_COLUMN  = 0x39
+    TB_SYMBOL_INHERIT_NAME           = 0x03,
+    TB_SYMBOL_INHERIT_LINKAGE_NAME   = 0x6e,
+    TB_SYMBOL_INHERIT_TYPE           = 0x49,
+    TB_SYMBOL_INHERIT_OBJECT_POINTER = 0x64,
+    TB_SYMBOL_INHERIT_DECL_FILE      = 0x3a,
+    TB_SYMBOL_INHERIT_DECL_LINE      = 0x3b,
+    TB_SYMBOL_INHERIT_DECL_COLUMN    = 0x39
 } TbSymbolInheritField_e;
 
 typedef enum {
@@ -86,8 +87,8 @@ typedef struct {
     bool                          initialized;
 } TbSymbolInherit_t;
 
-/* name is explicitly limited to name, standard linkage name, type and the three
- * declaration coordinates. Flags, sibling, runtime locations and all other
+/* name is explicitly limited to name, standard linkage name, type, object pointer
+ * and the three declaration coordinates. Flags, sibling, runtime locations and all other
  * fields are unsupported. Workspace has at least graph.count accounted slots;
  * checked capacity failure and invalid initialization leave old state intact.
  * The graph must be an unchanged successful graph_view result. */
@@ -105,7 +106,7 @@ TbSymbolInheritStatus_e tb_symbol_inherit_source(TbSymbolInherit_t *inherit,
 /* Available only after complete selection. A direct field stops inheritance on
  * that path; absent fields follow all three captured relationship kinds. Equal
  * physical owners reached by multiple paths occur once. Distinct physical
- * owners remain MULTIPLE even if their values might agree. No value-class,
+ * owners remain MULTIPLE even if their values might agree. No value-class, reference-target,
  * field-value agreement, type equivalence or semantic naming claim follows.
  * Every owner retains its own CU, never the selected root's declaration-file
  * numbering. The graph retains the independent derivation paths.

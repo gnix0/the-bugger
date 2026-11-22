@@ -297,7 +297,8 @@ static void check_invalid(void)
     CHECK(tb_symbol_inherit_init(&inherit, view, 0x03, slots, NODES) == TB_SYMBOL_INHERIT_PENDING);
     TbSymbolInherit_t saved = inherit;
     for (uint64_t name = 0; name < 0x100; ++name) {
-        if (name != 0x03 && name != 0x6e && name != 0x49 && name != 0x3a && name != 0x3b && name != 0x39) {
+        if (name != 0x03 && name != 0x6e && name != 0x49 && name != 0x3a && name != 0x3b &&
+            name != 0x39 && name != 0x64) {
             CHECK(tb_symbol_inherit_init(&inherit, view, name, slots, NODES) ==
                   TB_SYMBOL_INHERIT_UNSUPPORTED);
             CHECK(!memcmp(&saved, &inherit, sizeof(inherit)));
@@ -494,7 +495,7 @@ static void check_state_bounds(void)
 
 static void check_fields(void)
 {
-    const uint64_t names[] = {0x03, 0x6e, 0x49, 0x3a, 0x3b, 0x39};
+    const uint64_t names[] = {0x03, 0x6e, 0x49, 0x64, 0x3a, 0x3b, 0x39};
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i) {
         fixture(2);
         link_nodes(0, 1, TB_SYMBOL_RELATION_SPECIFICATION);

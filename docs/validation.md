@@ -7622,3 +7622,75 @@ concrete-inline details remain SE06 work. The earlier intermittent keybinding
 snapshot failure remains [unresolved historical evidence](#language-and-inline-constants--2026-11-21).
 Fresh comparable STM32/ARM, ESP32/Xtensa and ESP32/RISC-V functional validation
 remains required before the subsystem merge and planned v0.3.0 release.
+
+
+## Inherited reference targets — 2026-11-22
+
+Implemented [type/object-pointer target resolution](architecture.md#inherited-dwarf-reference-targets-se06-partial)
+from exact physical owners. Each fact retains its owner selection, raw attribute,
+reference operand and physical target. Equal targets do not merge distinct owners;
+completed absence retains the captured graph and examined slots. Type equivalence,
+implicit-object semantics and complete signatures remain separate work.
+
+Authored views cover relative/absolute/type-signature references, indirect forms,
+foreign owner units, equal and distinct targets, missing dependencies, malformed
+classes, unsupported supplementary references and duplicate fields. A later
+ambiguous signature withholds the entire result after an earlier target resolved.
+Wrong target context or changed raw source preserves the pending request.
+Rejected replacement initialization preserves the completed state and both full
+arenas. Arithmetic/progress boundaries and restart at successive steps remain
+explicit. These models complement encoded decoder fixtures; they do not replace them.
+
+Native composition independently scans decoded attributes and relationships and
+checks all returned owner/target identities. It includes formal-parameter graphs
+as well as callable/data graphs. Fixture object pointers target formal children
+of their exact physical owners. Earlier ELF, context, qualified-name, locality,
+inline and flag assertions remain enabled. No target access is introduced.
+
+The first GCC native run exhausted the unchanged 4 MiB construction allowance in
+the test harness (`build/se06-inherited-reference-preflight-20261122/focused`, exit 2).
+A diagnostic run (`scope-diagnostic`, exit 2) recorded 4,100,208 bytes already
+charged, a further 114,264-byte scope buffer requested and nine retained inputs.
+Each input unnecessarily retained full 64-entry graph and anchor arenas.
+The harness now builds with those same capacities, then copies every completed
+record into fully charged compact ownership. Scratch and retained copies remain
+charged concurrently until transfer completes; cleanup releases the compact
+charge only after freeing its allocations. No fixture, assertion or ceiling was
+relaxed. The earlier fixed-buffer source remains in the ignored reference draft;
+the failure logs retain the observed allocation boundary.
+
+Focused composition passed after compaction (`compact-scopes` and
+`parameter-composition`, exit 0). The observed retained-scope peak was 20,336 owned
+bytes for the GCC corpus and 18,960 for the Clang sanitizer corpus, each with up to
+ten retained inputs. These are harness observations of different compiler-produced
+metadata, including self-inspection, not equivalent-corpus comparisons, RSS
+measurements or production sizing. Clang ASan/UBSan also passed with
+`ASAN_OPTIONS=detect_stack_use_after_return=1` (`sanitize`, exit 0).
+The preflight logs and statuses are under
+`build/se06-inherited-reference-preflight-20261122/`.
+
+Final evidence is under `build/se06-inherited-reference-evidence-20261122/`, with
+environment, complete logs/statuses, input patch, copied compiled inputs and a
+SHA-256 manifest for 334 files. All final checks below passed on that frozen set.
+
+| Check | Command and recorded result |
+|---|---|
+| Focused components/native composition | `make BUILD_DIR=build/se06-inherited-reference-final-focused-20261122 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-inherit test-symbol-inherited-reference test-symbol-inherited-flag test-symbol-elf-native`; `focused`, exit 0. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-inherited-reference-ci-20261122 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `test-ci`, exit 0. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 ASAN_OPTIONS=detect_stack_use_after_return=1 make BUILD_DIR=build/se06-inherited-reference-sanitize-20261122 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-inherit test-symbol-inherited-reference test-symbol-inherited-flag test-symbol-elf-native`; `sanitize`, exit 0. |
+| Static analysis | `make analyze`, 77 production sources; `analysis`, exit 0. |
+| Fortified test compilation | All `tests/unit/*.c`, `tests/integration/*.c` and `tests/support/*.c` object targets with `BUILD_DIR=build/se06-inherited-reference-static-tests-20261122 CPPFLAGS=-D_FORTIFY_SOURCE=3`; `test-compilation`, exit 0. |
+
+Normal `make` passed (`normal-make`, exit 0). Documentation checks covered 233
+internal references without errors; whitespace checks passed. All 334 compiled
+inputs remained unchanged through the final checks.
+
+These are local host results, separate from hosted CI, physical validation,
+production sizing and maintainer acceptance. Supported type recipes, source
+parameter-list reconciliation, implicit-object/qualifier handling,
+bounded concrete-inline details and composed acceptance remain SE06 work. D04,
+frontend evidence/publication, runtime bindings and consumer acceptance retain
+independent gates. The earlier keybinding failures remain unresolved observations;
+passing reruns do not establish their cause. Fresh comparable STM32/ARM,
+ESP32/Xtensa and ESP32/RISC-V validation remains required before subsystem merge
+and the planned v0.3.0 release.

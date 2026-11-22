@@ -891,7 +891,7 @@ interpretation, relocation correspondence and live authority remain separate wor
 
 `src/symbol/inherit.c` selects physical attribute owners over a completed,
 unchanged relationship graph. Its explicit profile covers `DW_AT_name`, standard
-`DW_AT_linkage_name`, `DW_AT_type` and the three declaration coordinates.
+`DW_AT_linkage_name`, `DW_AT_type`, `DW_AT_object_pointer` and the three declaration coordinates.
 A direct field stops inheritance on that path; a missing field follows the
 captured specification, origin and namespace-extension links. Every visited
 field's complete attribute scope must finish before it can become an owner.
@@ -1285,7 +1285,7 @@ encodings; unvisited nodes make no field claim. This follows the flag encoding
 rule in [DWARF 5](https://dwarfstd.org/doc/DWARF5.pdf), Section 7.5.4.
 
 This semantic traversal is separate from the [physical attribute-owner selector](#inherited-dwarf-attribute-owners-se06-partial),
-whose supported fields and physical-presence contract are unchanged. Declaration
+whose physical-presence contract applies to its explicit field set. Declaration
 and runtime fields are excluded. Duplicate fields, invalid flag classes, missing
 source dependencies and inconsistent graph edges produce typed failures without
 exposing a successful prefix. Wrong source context preserves the outstanding
@@ -1303,6 +1303,44 @@ Flag-class and presence proof alone establishes neither language/tag applicabili
 known prototypes, implicit-object handling nor method qualifiers. Those require
 the signature profile and related reference evidence. Frontend evidence ownership,
 publication, runtime correspondence and action authorization remain separate gates.
+
+
+### Inherited DWARF reference targets (SE06, partial)
+
+`src/symbol/inherited_reference.c` resolves physical `DW_AT_type` and
+`DW_AT_object_pointer` targets after complete owner selection. Every raw owner,
+attribute, prepared reference and exact target remains distinct, including owners
+that resolve to the same physical target. Different targets do not silently merge
+or become a type-equivalence claim. Completed absence retains the captured graph
+and examined owner slots; an unavailable dependency is a separate outcome.
+
+Each reference uses its owner's compilation unit. CU-relative forms resolve in
+that exact unit; absolute info references use an explicitly supplied same-backing
+info inventory. Type-signature references examine the entire captured signature
+inventory before selecting a unique physical candidate. Missing inventories,
+conflicting signatures and safely unsupported dependencies remain explicit.
+Supplementary references stay unsupported. No lookup initiates discovery,
+admission, companion attachment or I/O.
+
+Source and target requests are explicit. A supplied source must match both its
+captured context and the selected raw attribute. Wrong source/target context
+preserves the pending request; NULL reports an unavailable dependency. Duplicate
+fields, invalid reference classes, out-of-range operands and missing DIE boundaries
+fail without exposing a successful prefix, even after earlier owners resolved.
+Only complete resolution or complete absence exposes a view.
+
+The caller owns/accounts state and both full-capacity arenas, each covering the
+captured graph count. Graphs, inventories and every supplied complete source/target
+view remain borrowed and unchanged through discard. Initialization rejection
+preserves prior state and arenas. Each step performs at most 256 bounded owner,
+selection or signature-inventory actions; source/target supply uses the existing
+bounded reference routines. There is no allocation, recursion, I/O or production
+capacity default. The outer job owns cancellation, revisions, interests and deadlines.
+
+A target boundary is not proof of a semantic type, the correct implicit object,
+a complete signature, frontend-owned evidence, runtime correspondence or access
+authority. Signature construction must separately validate supported type shapes,
+formal ownership, artificial flags, parameter-list relationships and method qualifiers.
 
 
 ### Event loop and text rendering

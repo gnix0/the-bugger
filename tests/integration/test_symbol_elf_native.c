@@ -7,6 +7,7 @@
 #include "symbol/inherit.h"
 #include "symbol/inherited_text.h"
 #include "symbol/inherited_flag.h"
+#include "symbol/inherited_reference.h"
 #include "symbol/context.h"
 #include "symbol/scope_graph.h"
 #include "symbol/constants.h"
@@ -678,6 +679,149 @@ static void check_inherited_flags(InheritedScope_t scope, TbSymbolGraphView_t gr
 }
 
 
+static uint64_t reference_oracle(InheritedScope_t scope, TbSymbolGraphView_t graph, uint64_t name)
+{
+    CHECK(graph.count && graph.count <= 64);
+    uint64_t pending = 1;
+    uint64_t visited = 0;
+    uint64_t owners = 0;
+    while (pending) {
+        size_t index = 0;
+        while (!(pending & (UINT64_C(1) << index)))
+            ++index;
+        CHECK(index < graph.count);
+        uint64_t bit = UINT64_C(1) << index;
+        pending &= ~bit;
+        if (visited & bit)
+            continue;
+        visited |= bit;
+        const TbSymbolGraphNode_t *node  = &graph.nodes[index];
+        const TbSymbolDieEntry_t  *entry = &scope.tree.entries[node->record.entry_index];
+        unsigned found = 0;
+        for (uint64_t attr = 0; attr < entry->attribute_count; ++attr) {
+            const TbSymbolDieAttribute_t *raw = &scope.tree.attributes[entry->first_attribute + attr];
+            if (raw->name != name)
+                continue;
+            ++found;
+
+        }
+        CHECK(found <= 1);
+        if (found) {
+            owners |= bit;
+            continue;
+        }
+        for (unsigned kind = 0; kind < TB_SYMBOL_GRAPH_RELATIONS; ++kind) {
+            if (!(node->present & (1U << kind)))
+                continue;
+            const TbSymbolReferenceTarget_t *target = &node->edges[kind].target;
+            size_t match = SIZE_MAX;
+            for (size_t candidate = 0; candidate < graph.count; ++candidate) {
+                if (graph.nodes[candidate].record.record_offset == target->record_offset &&
+                    graph.nodes[candidate].record.unit_offset == target->unit_offset &&
+                    graph.nodes[candidate].record.section_index == target->section_index) {
+                    CHECK(match == SIZE_MAX);
+                    match = candidate;
+                }
+            }
+            CHECK(match != SIZE_MAX);
+            pending |= UINT64_C(1) << match;
+        }
+    }
+    return owners;
+}
+
+
+static uint64_t reference_queries;
+static uint64_t reference_found;
+static uint64_t reference_absent;
+static uint64_t reference_dependencies;
+static uint64_t reference_object_owners;
+
+static void check_inherited_references(InheritedScope_t scope, TbSymbolGraphView_t graph,
+                                        TbSymbolInheritSlot_t *slots)
+{
+    const uint64_t names[] = {0x49, 0x64};
+    for (size_t field = 0; field < sizeof(names) / sizeof(*names); ++field) {
+        TbSymbolInheritedReference_t reference;
+        TbSymbolInheritedReferenceFact_t facts[64];
+        size_t charge = sizeof(reference) + sizeof(facts);
+        size_t before = budget.used;
+        CHECK(tb_symbol_budget_reserve(&budget, charge));
+        uint64_t expected = reference_oracle(scope, graph, names[field]);
+        CHECK(tb_symbol_inherited_reference_init(&reference, graph, names[field], slots, 64,
+                                                  facts, 64, &scope.units, NULL, 0) ==
+              TB_SYMBOL_INHERITED_REFERENCE_PENDING);
+        TbSymbolInheritedReferenceStatus_e status = TB_SYMBOL_INHERITED_REFERENCE_PENDING;
+        for (unsigned turn = 0; turn < 100000; ++turn) {
+            TbSymbolInheritedReferenceSource_t source;
+            if (tb_symbol_inherited_reference_source_need(&reference, &source)) {
+                CHECK(source.source.record.unit_offset == scope.tree.unit_offset);
+                (void)tb_symbol_inherited_reference_source(&reference, &scope.units, &scope.tree,
+                                                           scope.unit_index);
+            }
+            TbSymbolReferenceNeed_t need;
+            if (tb_symbol_inherited_reference_target_need(&reference, &need))
+                (void)tb_symbol_inherited_reference_target(&reference,
+                    need.unit_offset == scope.tree.unit_offset ? &scope.tree : NULL);
+            status = tb_symbol_inherited_reference_step(&reference, 31);
+            if (status != TB_SYMBOL_INHERITED_REFERENCE_PENDING &&
+                status != TB_SYMBOL_INHERITED_REFERENCE_SOURCE && status != TB_SYMBOL_INHERITED_REFERENCE_TARGET)
+                break;
+        }
+        ++reference_queries;
+        if (status == TB_SYMBOL_INHERITED_REFERENCE_DEPENDENCY) {
+            TbSymbolInheritedReferenceFailure_t failure;
+            CHECK(tb_symbol_inherited_reference_failure(&reference, &failure));
+            CHECK(failure.reference_available);
+            ++reference_dependencies;
+        } else {
+            CHECK(status == (expected ? TB_SYMBOL_INHERITED_REFERENCE_FOUND : TB_SYMBOL_INHERITED_REFERENCE_ABSENT));
+            if (expected) {
+                TbSymbolInheritedReferenceView_t result;
+                CHECK(tb_symbol_inherited_reference_view(&reference, &result));
+                uint64_t returned = 0;
+                for (size_t i = 0; i < result.count; ++i) {
+                    const TbSymbolInheritedReferenceFact_t *fact = &result.facts[i];
+                    CHECK(fact->node_index < graph.count);
+                    uint64_t bit = UINT64_C(1) << fact->node_index;
+                    CHECK(!(returned & bit));
+                    returned |= bit;
+                    const TbSymbolGraphNode_t *node = &graph.nodes[fact->node_index];
+                    CHECK(fact->selection.record_offset == node->record.record_offset);
+                    CHECK(fact->reference.source_record == node->record.record_offset);
+                    CHECK(fact->reference.source_unit == node->record.unit_offset);
+                    const TbSymbolDieAttribute_t *raw = &scope.tree.attributes[fact->selection.first_index];
+                    CHECK(raw->name == names[field] && raw->value.form == fact->reference.form);
+                    CHECK(raw->value.bits == fact->reference.value && raw->offset == fact->reference.source_attribute);
+                    CHECK(fact->target.unit_offset == scope.tree.unit_offset);
+                    CHECK(fact->target.entry_index < scope.tree.count);
+                    CHECK(fact->target.record_offset == scope.tree.entries[fact->target.entry_index].offset);
+                    uint64_t offset = raw->value.bits;
+                    if (raw->value.form != TB_SYMBOL_FORM_REF_ADDR) {
+                        CHECK(raw->value.bits <= UINT64_MAX - node->record.unit_offset);
+                        offset += node->record.unit_offset;
+                    }
+                    CHECK(offset == fact->target.record_offset);
+                    if (field) {
+                        const TbSymbolDieEntry_t *formal = &scope.tree.entries[fact->target.entry_index];
+                        CHECK(formal->tag == 0x05 && formal->parent == node->record.entry_index);
+                        ++reference_object_owners;
+                    }
+                }
+                CHECK(returned == expected);
+                ++reference_found;
+            } else {
+                TbSymbolInheritedReferenceView_t result;
+                CHECK(tb_symbol_inherited_reference_view(&reference, &result));
+                CHECK(!result.count && result.graph.nodes == graph.nodes && result.slots == slots);
+                ++reference_absent;
+            }
+        }
+        CHECK(tb_symbol_budget_release(&budget, charge) && budget.used == before);
+    }
+}
+
+
 static void check_inherited(InheritedScope_t scope, TbSymbolGraphView_t graph,
                              TbSymbolInheritSlot_t *slots, UnitCounts_t *counts)
 {
@@ -745,6 +889,7 @@ static void check_inherited(InheritedScope_t scope, TbSymbolGraphView_t graph,
     size_t charge = sizeof(flag_slots);
     CHECK(tb_symbol_budget_reserve(&budget, charge));
     check_inherited_flags(scope, graph, flag_slots);
+    check_inherited_references(scope, graph, slots);
     CHECK(tb_symbol_budget_release(&budget, charge));
 }
 
@@ -801,22 +946,30 @@ static void check_context_anchors(TbSymbolUnitsView_t units, TbSymbolDiesView_t 
 
 
 typedef struct {
-    TbSymbolGraphNode_t     nodes[64];
-    TbSymbolContextAnchor_t anchors[64];
-    TbSymbolGraphView_t     relationships;
-    TbSymbolContextView_t   contexts;
+    TbSymbolGraphNode_t     *nodes;
+    TbSymbolContextAnchor_t *anchors;
+    TbSymbolGraphView_t      relationships;
+    TbSymbolContextView_t    contexts;
+    size_t                  charge;
 } NativeScopeInput_t;
 
+static size_t native_scope_peak_retained;
+static size_t native_scope_peak_inputs;
 
-static void build_scope_input(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree,
-                              uint64_t unit_index, TbSymbolReferenceTarget_t selected,
-                              NativeScopeInput_t *input)
+
+static NativeScopeInput_t *build_scope_input(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree,
+                                             uint64_t unit_index, TbSymbolReferenceTarget_t selected)
 {
-    TbSymbolGraph_t relationships;
-    TbSymbolContext_t contexts;
-    size_t charge = sizeof(relationships) + sizeof(contexts);
+    TbSymbolGraph_t          relationships;
+    TbSymbolContext_t        contexts;
+    TbSymbolGraphNode_t      graph_nodes[64];
+    TbSymbolContextAnchor_t  anchors[64];
+    TbSymbolGraphView_t      graph_view;
+    TbSymbolContextView_t    context_view;
+    size_t charge = sizeof(relationships) + sizeof(contexts) + sizeof(graph_nodes) + sizeof(anchors) +
+                    sizeof(graph_view) + sizeof(context_view);
     CHECK(tb_symbol_budget_reserve(&budget, charge));
-    CHECK(tb_symbol_graph_init(&relationships, selected, input->nodes, 64) == TB_SYMBOL_GRAPH_SOURCE);
+    CHECK(tb_symbol_graph_init(&relationships, selected, graph_nodes, 64) == TB_SYMBOL_GRAPH_SOURCE);
     for (unsigned turn = 0; turn < 1000000 && relationships.status != TB_SYMBOL_GRAPH_READY; ++turn) {
         TbSymbolGraphNeed_t need;
         if (tb_symbol_graph_need(&relationships, &need)) {
@@ -833,8 +986,8 @@ static void build_scope_input(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree
         }
         (void)tb_symbol_graph_step(&relationships, 31);
     }
-    CHECK(tb_symbol_graph_view(&relationships, &input->relationships));
-    CHECK(tb_symbol_context_init(&contexts, input->relationships, input->anchors, 64) ==
+    CHECK(tb_symbol_graph_view(&relationships, &graph_view));
+    CHECK(tb_symbol_context_init(&contexts, graph_view, anchors, 64) ==
           TB_SYMBOL_CONTEXT_PENDING);
     for (unsigned turn = 0; turn < 1000000 && contexts.status != TB_SYMBOL_CONTEXT_READY; ++turn) {
         TbSymbolGraphNeed_t need;
@@ -845,8 +998,34 @@ static void build_scope_input(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree
         }
         (void)tb_symbol_context_step(&contexts, 31);
     }
-    CHECK(tb_symbol_context_view(&contexts, &input->contexts));
+    CHECK(tb_symbol_context_view(&contexts, &context_view));
+    uint64_t graph_bytes;
+    uint64_t anchor_bytes;
+    uint64_t retained;
+    CHECK(graph_view.count && graph_view.count <= 64 && context_view.count <= 64);
+    CHECK(tb_symbol_multiply(graph_view.count, sizeof(*graph_nodes), &graph_bytes));
+    CHECK(tb_symbol_multiply(context_view.count, sizeof(*anchors), &anchor_bytes));
+    CHECK(tb_symbol_add(sizeof(NativeScopeInput_t), graph_bytes, &retained));
+    CHECK(tb_symbol_add(retained, anchor_bytes, &retained) && retained <= SIZE_MAX);
+    /* Keep the construction arena charged until every retained record is copied. */
+    CHECK(tb_symbol_budget_reserve(&budget, (size_t)retained));
+    NativeScopeInput_t *input = calloc(1, sizeof(*input));
+    CHECK(input);
+    input->charge = (size_t)retained;
+    input->nodes = malloc((size_t)graph_bytes);
+    CHECK(input->nodes);
+    memcpy(input->nodes, graph_nodes, (size_t)graph_bytes);
+    if (anchor_bytes) {
+        input->anchors = malloc((size_t)anchor_bytes);
+        CHECK(input->anchors);
+        memcpy(input->anchors, anchors, (size_t)anchor_bytes);
+    }
+    input->relationships = graph_view;
+    input->relationships.nodes = input->nodes;
+    input->contexts = context_view;
+    input->contexts.anchors = input->anchors;
     CHECK(tb_symbol_budget_release(&budget, charge));
+    return input;
 }
 
 
@@ -1099,11 +1278,8 @@ static void check_recursive_context(InheritedScope_t source, TbSymbolAbbrevView_
         TbSymbolScopeNeed_t need;
         if (tb_symbol_scope_need(&scope, &need)) {
             CHECK(input_count < 64 && need.record.unit_offset == tree.unit_offset);
-            CHECK(tb_symbol_budget_reserve(&budget, sizeof(NativeScopeInput_t)));
-            NativeScopeInput_t *input = calloc(1, sizeof(*input));
-            CHECK(input);
+            NativeScopeInput_t *input = build_scope_input(units, tree, unit_index, need.record);
             inputs[input_count++] = input;
-            build_scope_input(units, tree, unit_index, need.record, input);
             CHECK(tb_symbol_scope_source(&scope, &input->relationships, &input->contexts) ==
                   TB_SYMBOL_SCOPE_PENDING);
         }
@@ -1137,10 +1313,20 @@ static void check_recursive_context(InheritedScope_t source, TbSymbolAbbrevView_
     }
     check_logical_locality(view);
     check_qualified_context(source, schema, view);
+    size_t retained = 0;
     for (size_t i = 0; i < input_count; ++i) {
+        CHECK(inputs[i]->charge <= SIZE_MAX - retained);
+        retained += inputs[i]->charge;
+        size_t input_charge = inputs[i]->charge;
+        free(inputs[i]->anchors);
+        free(inputs[i]->nodes);
         free(inputs[i]);
-        CHECK(tb_symbol_budget_release(&budget, sizeof(NativeScopeInput_t)));
+        CHECK(tb_symbol_budget_release(&budget, input_charge));
     }
+    if (retained > native_scope_peak_retained)
+        native_scope_peak_retained = retained;
+    if (input_count > native_scope_peak_inputs)
+        native_scope_peak_inputs = input_count;
     CHECK(tb_symbol_budget_release(&budget, charge) && budget.used == before);
 }
 
@@ -1346,14 +1532,16 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                 if (record->tag == 0x05) {
                     TbSymbolGraphView_t completed;
                     if (check_graph(view, tree, i, die, graph_nodes, &parameter_relations, &completed)) {
-                        check_inherited_flags((InheritedScope_t){
+                        InheritedScope_t parameter_scope = {
                             .directory  = directory,
                             .units      = view,
                             .tree       = tree,
                             .strings    = string_sections,
                             .unit_index = i,
                             .descriptor = selection.descriptor
-                        }, completed, flag_slots);
+                        };
+                        check_inherited_flags(parameter_scope, completed, flag_slots);
+                        check_inherited_references(parameter_scope, completed, inherited_slots);
                     }
                 }
                 for (uint64_t attr = 0; attr < record->attribute_count; ++attr) {
@@ -1804,6 +1992,13 @@ int main(int argc, char **argv)
            (unsigned long long)flag_absent,
            (unsigned long long)flag_indirect, (unsigned long long)flag_parameter_graphs,
            (unsigned long long)flag_parameter_dependencies, (unsigned long long)flag_parameter_unsupported);
+    printf("native scope retained peaks: %zu owned bytes, %zu inputs; 4 MiB construction ceiling\n",
+           native_scope_peak_retained, native_scope_peak_inputs);
+    CHECK(reference_queries && reference_found && reference_absent && reference_object_owners);
+    printf("PASS native inherited references: %llu queries, %llu found, %llu absent, "
+           "%llu dependencies, %llu object owners\n", (unsigned long long)reference_queries,
+           (unsigned long long)reference_found, (unsigned long long)reference_absent,
+           (unsigned long long)reference_dependencies, (unsigned long long)reference_object_owners);
     CHECK(parameter_queries && parameter_formals);
     printf("PASS native direct parameters: %llu queries, %llu formal records, %llu unspecified markers\n",
            (unsigned long long)parameter_queries, (unsigned long long)parameter_formals,

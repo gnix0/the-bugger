@@ -20,7 +20,8 @@ static bool supported_field(uint64_t name)
 {
     return name == TB_SYMBOL_INHERIT_NAME || name == TB_SYMBOL_INHERIT_LINKAGE_NAME ||
            name == TB_SYMBOL_INHERIT_TYPE || name == TB_SYMBOL_INHERIT_DECL_FILE ||
-           name == TB_SYMBOL_INHERIT_DECL_LINE || name == TB_SYMBOL_INHERIT_DECL_COLUMN;
+           name == TB_SYMBOL_INHERIT_DECL_LINE || name == TB_SYMBOL_INHERIT_DECL_COLUMN ||
+           name == TB_SYMBOL_INHERIT_OBJECT_POINTER;
 }
 
 

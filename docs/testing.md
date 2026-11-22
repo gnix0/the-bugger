@@ -3637,3 +3637,33 @@ It includes formal-parameter graphs as well as callable/data records, within the
 unchanged 4 MiB construction allowance. Existing physical attribute-owner checks
 remain separate. These tests do not establish complete signatures, method
 qualifiers, runtime authority, production sizing or SE06/F07 acceptance.
+
+
+## Inherited reference targets (SE06, partial)
+
+```sh
+make BUILD_DIR=build/symbol-inherited-reference CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-inherit test-symbol-inherited-reference test-symbol-inherited-flag \
+  test-symbol-elf-native
+```
+
+Authored views cover CU-relative and indirect reference forms, exact foreign-unit
+owners, absolute info references, type signatures, shared/equal and distinct
+targets, absence and typed failures. They distinguish zero operands from absent
+attributes. Wrong context or changed raw source preserves the pending request.
+An ambiguous signature after an earlier resolution exposes no result prefix;
+rejected replacement initialization preserves the previous result and both arenas.
+Capacity/arithmetic boundaries and restart at successive steps remain explicit.
+
+Native composition independently traverses actual decoded relationships and
+checks each selected owner's raw reference and physical target. It includes
+callable/data and formal-parameter graphs. Fixture object-pointer targets are
+checked as children of their exact physical owners; broader implicit-object
+semantics remain signature work. Existing flag, name, context and ELF comparisons
+remain enabled.
+
+The harness retains completed scope records in charged compact buffers while
+keeping its 64-slot construction arenas and 4 MiB aggregate allowance. Scratch and
+candidate copies count concurrently until transfer completes. This avoids retaining
+unused arena capacity for every ancestor; it does not change production limits or
+establish production sizing. Native reference targets alone grant no target access.
