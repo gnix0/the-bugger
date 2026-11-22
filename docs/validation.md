@@ -7988,3 +7988,31 @@ The fresh full fortified baseline, complete static analysis and fortified
 compilation of all test sources remain pending after this implementation batch.
 No hosted CI, physical target validation, SE06 acceptance or F07 acceptance is
 claimed.
+
+
+## Parameter-source analyzer corrections — 2026-11-22
+
+The owner-run full verification of the parameter-source batch on clean commit
+`1f3b2006504b15e9e28cdc6d914bd626d075e0f5` passed all 146 individual test
+commands and fortified compilation of all 138 C test sources. Its 402 recorded
+inputs remained unchanged during the run. Static analysis failed with 11
+warnings treated as errors in `parameter_source.c` and its header: signed
+operands in bitwise expressions and adjacent numeric helper parameters that
+could be swapped. Complete failed-run evidence remains under
+`build/se06-parameter-source-owner-20261122/`; this was not a passing baseline.
+
+Reason-mask operations and shift counts now use explicit unsigned operands.
+The child classifier receives a const DIE-entry pointer and a version, replacing
+the adjacent numeric tag/version arguments. Values, selection rules and ownership
+contracts are preserved; no analyzer exclusion or test assertion changed.
+
+The fortified `test-symbol-parameter-source` target and a targeted `clang-tidy`
+check of `src/symbol/parameter_source.c` with the existing analyzer/bugprone
+policy passed (exit 0). The analyzer reported one suppressed non-user-code
+warning and no actionable diagnostic. Normal `make` and whitespace checks passed.
+Exact commands, full logs/statuses, copied changed inputs, their hashes and tool
+versions are retained under
+`build/se06-parameter-source-analysis-fix-20261122/`. Full verification of the
+corrected batch remains pending; the targeted analyzer check does not replace
+the complete analysis or fortified baseline. SE06 and physical acceptance remain
+open.

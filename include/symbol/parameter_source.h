@@ -16,10 +16,10 @@ typedef enum {
 } TbSymbolParameterSourceStatus_e;
 
 typedef enum {
-    TB_SYMBOL_PARAMETER_SOURCE_NO_LIST      = 1u << 0,
-    TB_SYMBOL_PARAMETER_SOURCE_ALTERNATIVES = 1u << 1,
-    TB_SYMBOL_PARAMETER_SOURCE_CHILD        = 1u << 2,
-    TB_SYMBOL_PARAMETER_SOURCE_UNLINKED     = 1u << 3
+    TB_SYMBOL_PARAMETER_SOURCE_NO_LIST      = 1u << 0u,
+    TB_SYMBOL_PARAMETER_SOURCE_ALTERNATIVES = 1u << 1u,
+    TB_SYMBOL_PARAMETER_SOURCE_CHILD        = 1u << 2u,
+    TB_SYMBOL_PARAMETER_SOURCE_UNLINKED     = 1u << 3u
 } TbSymbolParameterSourceReason_e;
 
 /* One slot per callable, retained through discard. A signature-bearing class

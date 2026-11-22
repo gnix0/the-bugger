@@ -97,9 +97,9 @@ static void initialize(TbSymbolParameterSource_t *state)
 
 /* These standard constructs do not add source formal parameters to this direct
  * list. In particular, vendor parameter packs are deliberately not ignored. */
-static bool non_parameter(uint64_t tag, unsigned version)
+static bool non_parameter(const TbSymbolDieEntry_t *entry, unsigned version)
 {
-    switch (tag) {
+    switch (entry->tag) {
     case 0x01: case 0x02: case 0x04: case 0x0a: case 0x0b: case 0x0f: case 0x10:
     case 0x13: case 0x15: case 0x16: case 0x17: case 0x1d: case 0x1f: case 0x21:
     case 0x24: case 0x26: case 0x2e: case 0x2f: case 0x30: case 0x34: case 0x35:
@@ -152,7 +152,7 @@ static void children(TbSymbolParameterSource_t *state)
 
             slot->variadic = entry->tag == 0x18;
             ++state->parameter_index;
-        } else if (!non_parameter(entry->tag,
+        } else if (!non_parameter(entry,
                        state->correspondence.callables.nodes[state->scope_index].context.version) &&
                    slot->first_child == UINT64_MAX) {
             slot->first_child = state->cursor;
@@ -303,15 +303,15 @@ static void resolve(TbSymbolParameterSource_t *state)
         slot->reasons        = state->slots[origin].reasons;
         if (specification != SIZE_MAX) {
             const TbSymbolParameterSourceSlot_t *other = &state->slots[specification];
-            if ((other->reasons & TB_SYMBOL_PARAMETER_SOURCE_ALTERNATIVES) ||
+            if ((other->reasons & (unsigned)TB_SYMBOL_PARAMETER_SOURCE_ALTERNATIVES) ||
                 (other->selected_scope != SIZE_MAX && other->selected_scope != slot->selected_scope)) {
                 slot->selected_scope = SIZE_MAX;
-                slot->reasons |= TB_SYMBOL_PARAMETER_SOURCE_ALTERNATIVES;
+                slot->reasons |= (unsigned)TB_SYMBOL_PARAMETER_SOURCE_ALTERNATIVES;
             }
         }
     } else if (specification != SIZE_MAX &&
                (state->slots[specification].selected_scope != SIZE_MAX ||
-                (state->slots[specification].reasons & TB_SYMBOL_PARAMETER_SOURCE_ALTERNATIVES))) {
+                (state->slots[specification].reasons & (unsigned)TB_SYMBOL_PARAMETER_SOURCE_ALTERNATIVES))) {
         slot->selected_scope = state->slots[specification].selected_scope;
         slot->reasons        = state->slots[specification].reasons;
     } else if (!slot->reduced && state->correspondence.callables.nodes[index].context.tag != 0x1d) {
@@ -320,7 +320,7 @@ static void resolve(TbSymbolParameterSource_t *state)
     }
 
     if (slot->selected_scope == SIZE_MAX)
-        slot->reasons |= TB_SYMBOL_PARAMETER_SOURCE_NO_LIST;
+        slot->reasons |= (unsigned)TB_SYMBOL_PARAMETER_SOURCE_NO_LIST;
 
     slot->resolved = true;
     --state->remaining;
@@ -363,8 +363,8 @@ static void link(TbSymbolParameterSource_t *state)
     const TbSymbolParameterLinkFact_t *current = &state->correspondence.facts[state->fact_index];
     if (state->link_index == current->link_count) {
         if (!state->linked) {
-            state->reasons |= TB_SYMBOL_PARAMETER_SOURCE_UNLINKED;
-            state->slots[current->scope_index].reasons |= TB_SYMBOL_PARAMETER_SOURCE_UNLINKED;
+            state->reasons |= (unsigned)TB_SYMBOL_PARAMETER_SOURCE_UNLINKED;
+            state->slots[current->scope_index].reasons |= (unsigned)TB_SYMBOL_PARAMETER_SOURCE_UNLINKED;
             if (state->first_unlinked == SIZE_MAX) {
                 state->first_unlinked_scope = current->scope_index;
                 state->first_unlinked       = current->parameter_index;
