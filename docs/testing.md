@@ -3669,6 +3669,19 @@ unused arena capacity for every ancestor; it does not change production limits o
 establish production sizing. Native reference targets alone grant no target access.
 
 
+The native target also builds and runs `symbol-fixture-type-units` from
+`tests/fixtures/native/symbols/type_units.cpp`, using DWARF 4,
+`-fdebug-types-section` and `-fno-inline`. It requires non-split type units,
+three member declarations under a type-signature container and three exact
+specification-linked definitions with their own parameter children. The two
+instance definitions retain object pointers; the static definition does not.
+GCC and Clang can retain different declaration child inventories. The harness
+records reduced empty declarations without requiring every compiler to omit
+those children. These checks preserve both physical inventories; they do not
+select an authoritative callable signature or infer staticness from an empty
+reduced declaration.
+
+
 ## Bounded type recipes (SE06, partial)
 
 ```sh

@@ -171,7 +171,103 @@ typedef struct {
     uint64_t legacy_members;
     uint64_t dwarf4_units;
     uint64_t dwarf5_units;
+    uint64_t type_units;
+    uint64_t signature_callables;
+    uint64_t reduced_callables;
+    uint64_t signature_parameter_definitions;
+    uint64_t signature_object_definitions;
 } UnitCounts_t;
+
+static bool direct_attribute(TbSymbolDiesView_t tree, uint64_t selected, uint64_t name)
+{
+    const TbSymbolDieEntry_t *entry = &tree.entries[selected];
+
+    for (uint64_t i = 0; i < entry->attribute_count; ++i) {
+        if (tree.attributes[entry->first_attribute + i].name == name)
+            return true;
+    }
+
+    return false;
+}
+
+
+static uint64_t direct_formals(TbSymbolDiesView_t tree, uint64_t selected)
+{
+    uint64_t count = 0;
+
+    for (uint64_t i = selected + 1; i < tree.count && tree.entries[i].parent >= selected; ++i) {
+        if (tree.entries[i].parent == selected && tree.entries[i].tag == 0x05)
+            ++count;
+    }
+
+    return count;
+}
+
+
+/* A physical fixture shape, not a declaration-completeness or source-selection
+ * policy. check_entity has already validated this subprogram's flag fields. */
+static bool signature_member(TbSymbolDiesView_t tree, uint64_t selected)
+{
+    const TbSymbolDieEntry_t *entry = &tree.entries[selected];
+    if (entry->tag != 0x2e || entry->parent == UINT64_MAX)
+        return false;
+
+    bool declaration = false;
+    for (uint64_t i = 0; i < entry->attribute_count; ++i) {
+        const TbSymbolDieAttribute_t *attribute = &tree.attributes[entry->first_attribute + i];
+        if (attribute->name == 0x3c)
+            declaration = attribute->value.bits != 0;
+    }
+
+    uint64_t tag = tree.entries[entry->parent].tag;
+
+    return declaration && (tag == 0x02 || tag == 0x13 || tag == 0x17) &&
+           direct_attribute(tree, entry->parent, 0x69);
+}
+
+
+static void check_signature_member_shape(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree,
+                                   uint64_t unit_index, uint64_t selected, UnitCounts_t *counts)
+{
+    const TbSymbolDieEntry_t *entry = &tree.entries[selected];
+    if (entry->tag != 0x2e)
+        return;
+
+    if (signature_member(tree, selected)) {
+        ++counts->signature_callables;
+        if (!direct_formals(tree, selected) && !direct_attribute(tree, selected, 0x64))
+            ++counts->reduced_callables;
+    }
+
+    if (!direct_formals(tree, selected))
+        return;
+
+    for (uint64_t i = 0; i < entry->attribute_count; ++i) {
+        if (tree.attributes[entry->first_attribute + i].name != 0x47)
+            continue;
+
+        TbSymbolReference_t       reference;
+        TbSymbolReferenceTarget_t target;
+        TbSymbolReferenceStatus_e status = tb_symbol_reference_prepare(units, tree,
+            (TbSymbolReferenceSelection_t) {
+                .unit_index      = unit_index,
+                .die_index       = selected,
+                .attribute_index = i
+            }, &reference);
+        CHECK(status == TB_SYMBOL_REFERENCE_READY);
+        if (reference.kind != TB_SYMBOL_REFERENCE_UNIT)
+            continue;
+
+        CHECK(tb_symbol_reference_unit(reference, tree, &target) == TB_SYMBOL_REFERENCE_FOUND);
+        if (!signature_member(tree, target.entry_index))
+            continue;
+
+        ++counts->signature_parameter_definitions;
+        if (direct_attribute(tree, selected, 0x64))
+            ++counts->signature_object_definitions;
+    }
+}
+
 
 static void check_constant_field(TbSymbolDiesView_t tree, TbSymbolAbbrevView_t schema,
                                  uint64_t die, TbSymbolConstantField_e field,
@@ -1625,6 +1721,9 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                 ++relations.dwarf4_units;
             else
                 ++relations.dwarf5_units;
+            if (entry->header.kind == TB_SYMBOL_DWARF_TYPE)
+                ++relations.type_units;
+
             CHECK(entry->header.header_bytes < entry->extent.total_bytes);
             CHECK(abbreviation_section < directory.count);
             TbSymbolAbbrev_t *abbrev = tb_symbol_abbrev_create(directory, (TbSymbolAbbrevSelection_t){
@@ -1679,6 +1778,7 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                 check_physical_inline(view, tree, table, i, die);
                 TbSymbolEntityKind_e kind = check_entity(tree, table, die, &declarations);
                 ++entity_kinds[kind];
+                check_signature_member_shape(view, tree, i, die, &relations);
                 if (kind != TB_SYMBOL_ENTITY_OTHER || record->tag == 0x39) {
                     TbSymbolGraphView_t completed;
                     if (check_graph(view, tree, i, die, graph_nodes, &relations, &completed)) {
@@ -1770,36 +1870,41 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
     CHECK(cursor == directory.entries[selection.section_index].header.bytes);
     CHECK(unsupported == view.unsupported);
     UnitCounts_t counts = {
-        .total                 = view.count,
-        .unsupported           = view.unsupported,
-        .abbreviations         = abbreviations,
-        .dies                  = die_count,
-        .attributes            = attribute_count,
-        .references            = reference_count,
-        .dependencies          = dependency_count,
-        .strings               = string_count,
-        .indexed_strings       = indexed_count,
-        .entity_kinds          = {
+        .total                           = view.count,
+        .unsupported                     = view.unsupported,
+        .abbreviations                   = abbreviations,
+        .dies                            = die_count,
+        .attributes                      = attribute_count,
+        .references                      = reference_count,
+        .dependencies                    = dependency_count,
+        .strings                         = string_count,
+        .indexed_strings                 = indexed_count,
+        .entity_kinds                    = {
             entity_kinds[0], entity_kinds[1], entity_kinds[2], entity_kinds[3]
         },
-        .declarations          = declarations,
-        .inherited_queries     = relations.inherited_queries,
-        .inherited_owners      = relations.inherited_owners,
-        .inherited_indirect    = relations.inherited_indirect,
-        .inherited_multiple    = relations.inherited_multiple,
-        .graphs                = relations.graphs,
-        .graph_nodes           = relations.graph_nodes,
-        .graph_dependencies    = relations.graph_dependencies,
-        .graph_unsupported     = relations.graph_unsupported,
-        .specifications        = relations.specifications,
-        .origins               = relations.origins,
-        .extensions            = relations.extensions,
-        .relation_dependencies = relations.relation_dependencies,
-        .relation_unsupported  = relations.relation_unsupported,
-        .vendor_call_sites     = relations.vendor_call_sites,
-        .legacy_members        = relations.legacy_members,
-        .dwarf4_units          = relations.dwarf4_units,
-        .dwarf5_units          = relations.dwarf5_units
+        .declarations                    = declarations,
+        .inherited_queries               = relations.inherited_queries,
+        .inherited_owners                = relations.inherited_owners,
+        .inherited_indirect              = relations.inherited_indirect,
+        .inherited_multiple              = relations.inherited_multiple,
+        .graphs                          = relations.graphs,
+        .graph_nodes                     = relations.graph_nodes,
+        .graph_dependencies              = relations.graph_dependencies,
+        .graph_unsupported               = relations.graph_unsupported,
+        .specifications                  = relations.specifications,
+        .origins                         = relations.origins,
+        .extensions                      = relations.extensions,
+        .relation_dependencies           = relations.relation_dependencies,
+        .relation_unsupported            = relations.relation_unsupported,
+        .vendor_call_sites               = relations.vendor_call_sites,
+        .legacy_members                  = relations.legacy_members,
+        .dwarf4_units                    = relations.dwarf4_units,
+        .dwarf5_units                    = relations.dwarf5_units,
+        .type_units                      = relations.type_units,
+        .signature_callables             = relations.signature_callables,
+        .reduced_callables               = relations.reduced_callables,
+        .signature_parameter_definitions = relations.signature_parameter_definitions,
+        .signature_object_definitions    = relations.signature_object_definitions
     };
     CHECK(tb_symbol_budget_release(&budget, sizeof(flag_slots)));
     flag_parameter_graphs += parameter_relations.graphs;
@@ -1978,6 +2083,11 @@ static UnitCounts_t check_file(const char *path)
                 unit_counts.legacy_members += counts.legacy_members;
                 unit_counts.dwarf4_units += counts.dwarf4_units;
                 unit_counts.dwarf5_units += counts.dwarf5_units;
+                unit_counts.type_units += counts.type_units;
+                unit_counts.signature_callables += counts.signature_callables;
+                unit_counts.reduced_callables += counts.reduced_callables;
+                unit_counts.signature_parameter_definitions += counts.signature_parameter_definitions;
+                unit_counts.signature_object_definitions += counts.signature_object_definitions;
                 unit_counts.total += counts.total;
                 unit_counts.unsupported += counts.unsupported;
             }
@@ -2133,6 +2243,20 @@ int main(int argc, char **argv)
         outcome = tb_symbol_storage_step(storage);
     CHECK(outcome == TB_SYMBOL_SUCCESS);
     for (int i = 1; i < argc; ++i) {
+        if (!strcmp(argv[i], "--type-units-dwarf4")) {
+            CHECK(i + 1 < argc);
+            UnitCounts_t counts = check_file(argv[++i]);
+            CHECK(counts.type_units && counts.dwarf4_units == counts.total);
+            CHECK(counts.signature_callables == 3 && counts.signature_parameter_definitions == 3);
+            CHECK(counts.signature_object_definitions == 2 && !counts.relation_dependencies);
+            printf("PASS non-split type units: %llu reduced declarations, "
+                   "%llu exact specification-linked parameter definitions, %llu with object pointers\n",
+                   (unsigned long long)counts.reduced_callables,
+                   (unsigned long long)counts.signature_parameter_definitions,
+                   (unsigned long long)counts.signature_object_definitions);
+            continue;
+        }
+
         unsigned version = !strcmp(argv[i], "--relations-dwarf4") ? 4U
                                : !strcmp(argv[i], "--relations-dwarf5") ? 5U : 0U;
         if (version) {

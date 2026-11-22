@@ -7769,3 +7769,49 @@ details and composed acceptance remain SE06 work. Frontend evidence/publication,
 D04, runtime bindings and consumers retain separate gates. Fresh comparable
 STM32/ARM, ESP32/Xtensa and ESP32/RISC-V validation remains required before
 subsystem merge and the planned v0.3.0 release.
+
+
+## Non-split type-unit callable fixture — 2026-11-22
+
+Added `tests/fixtures/native/symbols/type_units.cpp` to the maintained native
+metadata target. It builds with DWARF 4, `-fdebug-types-section`, optimization
+and `-fno-inline`, then runs before metadata inspection. The class has two
+ref-qualified instance methods and one static method, each with an explicit
+parameter. Exact specification references, rather than names, connect the
+three definitions to their declarations in the type-signature container.
+
+The GCC fixture contains three reduced declarations without formal children or
+object-pointer attributes. Their definitions retain parameter children, and the
+two instance definitions retain object pointers. The Clang fixture retains
+formal children in all three declarations instead. Both forms were observed
+with the same source. The maintained checks require the three exact links,
+type units and definition parameter/object facts while recording the number
+of reduced declarations separately. Compiler-specific child omission is not a
+universal requirement. No earlier assertion or resource ceiling was relaxed.
+
+The complete focused native metadata target passed with the new fixture:
+
+```sh
+make BUILD_DIR=build/se06-type-recipe-verified-focused-20261122 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-elf-native
+```
+
+Its final log/status are under
+`build/se06-type-unit-fixture-evidence-20261122/` (`focused`, exit 0), with copied
+changed inputs, their hashes and tool/environment information. Earlier GCC
+composition and the separate Clang build/readelf/native probe are retained in
+`build/se06-type-unit-signature-study-20261122/`. The Clang probe used
+`clang++ -std=c++17 -Wall -Wextra -Wpedantic -Werror -g -gdwarf-4 -O2 -fno-inline -fdebug-types-section`
+and the maintained harness's `--type-units-dwarf4` mode; build and native probe
+both exited 0. GCC reported three reduced declarations; Clang reported zero.
+Both reported three exact specification-linked parameter definitions and two
+with object pointers. This extends maintained coverage of the earlier
+[development study](#bounded-metadata-type-recipes--2026-11-22); it does not
+establish callable source selection or complete signature semantics.
+
+Normal `make` passed (`normal-make`, exit 0); whitespace checks and 237 internal
+document references passed. The fresh full fortified baseline, complete static
+analysis and fortified compilation of all test sources remain pending for this
+committed batch.
+These local focused observations are separate from hosted CI, production
+sizing, SE06/F07 acceptance and physical target qualification.

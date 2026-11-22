@@ -1077,10 +1077,11 @@ $(BUILD_DIR)/test-symbol-elf-native: $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_D
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 .PHONY: test-symbol-elf-native
-test-symbol-elf-native: $(BUILD_DIR)/test-symbol-elf-native $(BUILD_DIR)/debug-fixture $(BUILD_DIR)/break-fixture-library.so $(BUILD_DIR)/code-fixture-cpp $(BUILD_DIR)/symbol-fixture-dwarf4 $(BUILD_DIR)/symbol-fixture-dwarf5
+test-symbol-elf-native: $(BUILD_DIR)/test-symbol-elf-native $(BUILD_DIR)/debug-fixture $(BUILD_DIR)/break-fixture-library.so $(BUILD_DIR)/code-fixture-cpp $(BUILD_DIR)/symbol-fixture-dwarf4 $(BUILD_DIR)/symbol-fixture-dwarf5 $(BUILD_DIR)/symbol-fixture-type-units
 	$(BUILD_DIR)/symbol-fixture-dwarf4
 	$(BUILD_DIR)/symbol-fixture-dwarf5
-	$(BUILD_DIR)/test-symbol-elf-native $(abspath $(BUILD_DIR)/test-symbol-elf-native) $(abspath $(BUILD_DIR)/debug-fixture) $(abspath $(BUILD_DIR)/break-fixture-library.so) $(abspath $(BUILD_DIR)/code-fixture-cpp) --relations-dwarf4 $(abspath $(BUILD_DIR)/symbol-fixture-dwarf4) --relations-dwarf5 $(abspath $(BUILD_DIR)/symbol-fixture-dwarf5)
+	$(BUILD_DIR)/symbol-fixture-type-units
+	$(BUILD_DIR)/test-symbol-elf-native $(abspath $(BUILD_DIR)/test-symbol-elf-native) $(abspath $(BUILD_DIR)/debug-fixture) $(abspath $(BUILD_DIR)/break-fixture-library.so) $(abspath $(BUILD_DIR)/code-fixture-cpp) --relations-dwarf4 $(abspath $(BUILD_DIR)/symbol-fixture-dwarf4) --relations-dwarf5 $(abspath $(BUILD_DIR)/symbol-fixture-dwarf5) --type-units-dwarf4 $(abspath $(BUILD_DIR)/symbol-fixture-type-units)
 
 test: test-symbol-elf-native
 
@@ -1279,6 +1280,10 @@ SYMBOL_FIXTURE_SOURCES := tests/fixtures/native/symbols/main.cpp tests/fixtures/
 $(BUILD_DIR)/symbol-fixture-dwarf4: $(SYMBOL_FIXTURE_SOURCES) tests/fixtures/native/symbols/shared.h
 	mkdir -p $(dir $@)
 	$(CXX) -std=c++17 -Wall -Wextra -Wpedantic -Werror -g -gdwarf-4 -O2 -fno-omit-frame-pointer $(SYMBOL_FIXTURE_SOURCES) -o $@
+
+$(BUILD_DIR)/symbol-fixture-type-units: tests/fixtures/native/symbols/type_units.cpp
+	mkdir -p $(dir $@)
+	$(CXX) -std=c++17 -Wall -Wextra -Wpedantic -Werror -g -gdwarf-4 -O2 -fno-inline -fdebug-types-section $< -o $@
 
 $(BUILD_DIR)/symbol-fixture-dwarf5: $(SYMBOL_FIXTURE_SOURCES) tests/fixtures/native/symbols/shared.h
 	mkdir -p $(dir $@)
