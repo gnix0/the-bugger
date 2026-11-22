@@ -239,6 +239,45 @@ the supported signature grammar and its partial cases before acceptance; this
 plan does not claim a complete C++ type renderer. A descriptive signature or
 matching linkage name never proves a GDB expression selects the intended record.
 
+
+### Descriptive type recipes (SE06, partial)
+
+The initial type-recipe profile is a description of selected metadata. Its grammar
+is shown below as notation for the structured recipe, not an expression language
+or a promised textual rendering:
+
+```text
+type := base(name) | alias(name) | record(name) | enumeration(name)
+      | pointer(type) | lvalue_reference(type) | rvalue_reference(type)
+      | const(type) | volatile(type) | restrict(type)
+```
+
+`name` is a complete validated qualified metadata name. Records preserve their
+original class/structure/union tag and physical identity. Named records and
+aliases are opaque leaves: their layouts, members and underlying alias types
+are outside this description. Modifier order is preserved; no source-language
+type normalization or canonical equivalence is inferred.
+
+Complete means complete within this grammar. Arrays, subroutine/member-pointer
+shapes, unspecified types and other unsupported constructors have explicit
+partial terminals. Missing modifier types remain partial; absence does not
+supply a guessed void pointee. Several distinct resolved physical targets remain
+explicit alternatives rather than an arbitrarily selected type. Every supporting
+graph and reference owner remains available with that partial description.
+
+Recognized non-type targets are malformed rather than unsupported constructors.
+Malformed supported facts, dependency failure, unavailable names, exhausted
+resources and unresolvable modifier cycles do not expose a successful recipe
+prefix. Named recursive records terminate at their opaque name without walking
+layout, while modifier-chain cycles fail. Caller-owned capacity and outer-job
+deadlines bound construction; production sizing remains SE10 work.
+
+This does not add a Types search category or prove storage size, scalar encoding,
+a valid C/C++ declarator, ABI correspondence, object footprint, runtime binding
+or access permission. Callable parameter reconciliation, implicit-object and
+method-qualifier rules, return interpretation and final complete/partial
+signature behavior must still be documented and verified before SE06 acceptance.
+
 ## Committed searches and result windows
 
 Opening Symbols and editing controls perform no discovery. Search/Enter commits

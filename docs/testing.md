@@ -3667,3 +3667,28 @@ keeping its 64-slot construction arenas and 4 MiB aggregate allowance. Scratch a
 candidate copies count concurrently until transfer completes. This avoids retaining
 unused arena capacity for every ancestor; it does not change production limits or
 establish production sizing. Native reference targets alone grant no target access.
+
+
+## Bounded type recipes (SE06, partial)
+
+```sh
+make BUILD_DIR=build/symbol-type-recipe CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-type-recipe test-symbol-elf-native
+```
+
+Authored completed-child views exercise a 512-node iterative modifier chain,
+explicit unsupported/missing/alternative terminals, cycle rejection, capacity
+failure and stale child/context rejection. Known non-type targets fail before or
+after a valid prefix; later standard tag assignments are not assumed for DWARF 4
+extensions. Rejected initialization preserves the
+previous completed recipe and arena. These coordinator models complement actual
+encoded DWARF and child-component validation.
+
+Native composition follows actual type references, constructs relationship and
+qualified-name evidence, and checks each completed/partial recipe while all child
+views remain alive. It discards the recipe before releasing borrowed name/scope
+storage. All earlier reference, name, locality, inline and ELF checks remain active
+under the unchanged 4 MiB harness allowance. Complete and partial mean the
+[documented descriptive profile](native-symbol-engine.md#descriptive-type-recipes-se06-partial),
+without proving type equivalence, object layout, complete callable signatures,
+frontend publication or target access.

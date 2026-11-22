@@ -1343,6 +1343,38 @@ authority. Signature construction must separately validate supported type shapes
 formal ownership, artificial flags, parameter-list relationships and method qualifiers.
 
 
+### Bounded metadata type recipes (SE06, partial)
+
+`src/symbol/type_recipe.c` composes the [descriptive type profile](native-symbol-engine.md#descriptive-type-recipes-se06-partial)
+from completed relationship, qualified-name and inherited-reference views.
+Each constructor retains exact physical identity, the captured graph and its
+complete child facts. Child supplies must match the requested physical record,
+including its redundant decoded index, and captured unit/abbreviation/parent
+context. Independently constructed valid captures can support the same subject;
+pointer equality is not used as physical identity.
+
+Complete recipes end at a validated named leaf. Explicit partial terminals retain
+unsupported constructor identity, proved missing type or every alternative target.
+All reference facts are examined before deciding whether targets agree physically.
+The cursor detects a repeated modifier target before requesting another graph.
+Known standard non-type targets fail as malformed; unknown or deferred type
+constructors retain an explicit partial terminal. Wrong child/context supplies
+preserve the pending request. Malformed, resource,
+dependency and cycle failures expose no successful prefix.
+
+Caller-owned state and full-capacity node storage require accounting. Every child
+view and its dependencies remain borrowed, pinned and unchanged through discard.
+There is no allocation, I/O, recursion, discovery or rendering. Each step performs
+at most 256 bounded classification, reference-comparison or cycle actions;
+linear cycle checking can require quadratic total work. The outer job owns
+request/consumer identities, revisions, cancellation and absolute deadlines.
+
+The native composition harness verifies each recipe before releasing any borrowed
+qualified-name or scope evidence, then discards it before child destruction.
+Independent frontend ownership and publication remain later gates. A complete
+descriptive recipe supplies neither full signature semantics nor live authority.
+
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

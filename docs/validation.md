@@ -7694,3 +7694,78 @@ independent gates. The earlier keybinding failures remain unresolved observation
 passing reruns do not establish their cause. Fresh comparable STM32/ARM,
 ESP32/Xtensa and ESP32/RISC-V validation remains required before subsystem merge
 and the planned v0.3.0 release.
+
+
+## Bounded metadata type recipes — 2026-11-22
+
+Implemented the [descriptive type profile](native-symbol-engine.md#descriptive-type-recipes-se06-partial)
+over exact relationship, qualified-name and inherited-reference facts.
+The constructor chain preserves modifier order and physical dependencies, ending
+at a validated opaque name or an explicit partial terminal. Named aliases and
+records do not imply underlying-type or layout validation. No GDB expression,
+canonical type, runtime binding or access permission follows from completeness.
+
+Authored completed-child views exercise 512 iterative nodes, cycle rejection,
+missing/unsupported constructors, alternative physical targets, stale child
+context and exhausted capacity. Wrong context preserves the pending request;
+rejected replacement initialization preserves the completed state and arena.
+Explicit discard ends the borrowed result lifetime without changing caller-owned
+storage. Coordinator models complement actual encoded metadata validation.
+
+Native composition follows actual type references and constructs the required
+relationship and qualified-name evidence. It verifies the recipe while every
+child view remains alive, then discards it before releasing name/scope evidence.
+All earlier native assertions remain active under the unchanged 4 MiB harness
+allowance. GCC preflight reported 8,681 queries, 8,479 complete recipes and 202
+explicit partials, with depth up to four. Clang prototype composition reported
+5,795 queries, 5,107 complete and 688 partial, also with depth up to four. These
+are observations of different self-inspected compiler corpora, not equivalent
+corpus comparisons or production sizing.
+
+The ignored C++17 edge study at `build/se06-signature-edge-study-20261122/`
+retains source, compiler versions, build/run commands and readelf dumps for GCC
+and Clang, DWARF 4/5 and O0/O2. All eight binaries built and ran. Adding them to
+the Clang type-recipe probe passed: 6,157 queries, 5,413 complete and 744 partial
+(`build/se06-type-recipe-draft/native-edge-preflight`, exit 0). Observed GNU
+formal-parameter packs remain a separate callable-signature coverage obligation;
+a direct empty parameter inventory cannot silently describe such a pack as empty.
+These compiler studies are development evidence, not maintained fixture coverage
+or physical qualification. Prototype source/logs remain in the ignored draft.
+
+The initial full source snapshot passed focused checks, sanitizers, static analysis,
+test compilation and the fortified baseline. A subsequent negative regression
+found that a type reference landing on a known non-type DIE was incorrectly
+classified as an unsupported partial constructor (`non-type-target`, exit 1).
+The corrected classifier rejects recognized non-type targets as malformed and
+retains unknown/deferred constructors as partial. Version-5 tag meanings are not
+assumed for version-4 extensions. Tests cover initial and later offending targets,
+exact failure coordinates and no successful prefix. The corrected regression and
+native sanitizer probe passed (`non-type-target-fixed`, `non-type-candidate` and
+`non-type-native`, exit 0). These logs are under the preflight directory. The
+initial complete snapshot/logs remain retained.
+
+The corrected frozen snapshot passed every final check listed below. Evidence is
+under `build/se06-type-recipe-evidence-20261122/final/`: complete logs/statuses,
+environment, input patch, copied compiled inputs and verified SHA-256 hashes for
+337 files. These checks preceded the later formatting-only source changes; they
+are evidence for that recorded snapshot rather than a fresh full run of the
+subsequent tree.
+
+| Check | Command and recorded result |
+|---|---|
+| Focused components/native composition | `make BUILD_DIR=build/se06-type-recipe-verified-focused-20261122 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-symbol-type-recipe test-symbol-elf-native`; `focused`, exit 0. |
+| Fresh fortified host baseline | `TERM=xterm-256color make BUILD_DIR=build/se06-type-recipe-final-ci-20261122 CPPFLAGS=-D_FORTIFY_SOURCE=3 test-ci`; `test-ci`, exit 0. |
+| Sanitizers | `UBSAN_OPTIONS=halt_on_error=1 ASAN_OPTIONS=detect_stack_use_after_return=1 make BUILD_DIR=build/se06-type-recipe-final-sanitize-20261122 CC=clang CPPFLAGS=-D_FORTIFY_SOURCE=3 CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' test-symbol-type-recipe test-symbol-elf-native`; `sanitize`, exit 0. |
+| Static analysis | `make analyze`, 78 production sources; `analysis`, exit 0. |
+| Fortified test compilation | All `tests/unit/*.c`, `tests/integration/*.c` and `tests/support/*.c` object targets with `BUILD_DIR=build/se06-type-recipe-final-static-tests-20261122 CPPFLAGS=-D_FORTIFY_SOURCE=3`; `test-compilation`, exit 0. |
+
+The subsequent source formatting preserved all C tokens, comments and literals;
+normal `make` passed (`build/private-format-20261122/make.log`, exit 0).
+No full baseline or static-analysis rerun was performed for formatting alone.
+Local host results do not establish hosted CI, physical qualification, production
+sizing or SE06/F07 acceptance. Callable parameter reconciliation,
+implicit-object/qualifier rules, return interpretation, bounded concrete-inline
+details and composed acceptance remain SE06 work. Frontend evidence/publication,
+D04, runtime bindings and consumers retain separate gates. Fresh comparable
+STM32/ARM, ESP32/Xtensa and ESP32/RISC-V validation remains required before
+subsystem merge and the planned v0.3.0 release.

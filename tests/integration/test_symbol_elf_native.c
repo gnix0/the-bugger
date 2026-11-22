@@ -8,6 +8,7 @@
 #include "symbol/inherited_text.h"
 #include "symbol/inherited_flag.h"
 #include "symbol/inherited_reference.h"
+#include "symbol/type_recipe.h"
 #include "symbol/context.h"
 #include "symbol/scope_graph.h"
 #include "symbol/constants.h"
@@ -504,9 +505,51 @@ typedef struct {
     TbSymbolUnitsView_t    units;
     TbSymbolDiesView_t     tree;
     StringSections_t      strings;
+    TbSymbolAbbrevView_t   schema;
     uint64_t              unit_index;
     int                   descriptor;
 } InheritedScope_t;
+
+static void check_type_recipe(InheritedScope_t source, TbSymbolReferenceTarget_t selected);
+static TbSymbolTypeRecipe_t *type_receiver;
+static TbSymbolTypeRecipeStatus_e type_completion;
+static uint64_t type_queries;
+static uint64_t type_ready;
+static uint64_t type_partial;
+static uint64_t type_unavailable;
+static size_t type_depth;
+
+static void finish_type_recipe(TbSymbolTypeRecipe_t *recipe)
+{
+    TbSymbolTypeRecipeView_t view;
+    CHECK(tb_symbol_type_recipe_view(recipe, &view) && view.count);
+    CHECK(view.selected.record_offset == view.nodes[0].record.record_offset);
+    for (size_t i = 0; i < view.count; ++i) {
+        const TbSymbolTypeRecipeNode_t *node = &view.nodes[i];
+        CHECK(node->graph.nodes[0].record.record_offset == node->record.record_offset);
+        if (node->name_available) {
+            CHECK(i + 1 == view.count && node->name.selected.record_offset == node->record.record_offset);
+            CHECK(node->name.nodes[0].complete);
+        }
+        if (node->references_available) {
+            CHECK(node->references.name == TB_SYMBOL_INHERIT_TYPE);
+            CHECK(node->references.selected.record_offset == node->record.record_offset);
+            if (i + 1 < view.count) {
+                CHECK(node->references.count);
+                CHECK(node->references.facts[0].target.record_offset == view.nodes[i + 1].record.record_offset);
+            }
+        }
+    }
+    if (view.complete) {
+        CHECK(recipe->status == TB_SYMBOL_TYPE_READY && view.nodes[view.count - 1].name_available);
+        ++type_ready;
+    } else {
+        CHECK(recipe->status == TB_SYMBOL_TYPE_PARTIAL && view.partial != TB_SYMBOL_TYPE_COMPLETE);
+        ++type_partial;
+    }
+    if (view.count > type_depth)
+        type_depth = view.count;
+}
 
 static void check_inherited_text(InheritedScope_t scope, TbSymbolGraphView_t graph,
                                   uint64_t name, uint64_t expected_owners)
@@ -802,6 +845,8 @@ static void check_inherited_references(InheritedScope_t scope, TbSymbolGraphView
                         offset += node->record.unit_offset;
                     }
                     CHECK(offset == fact->target.record_offset);
+                    if (!field)
+                        check_type_recipe(scope, fact->target);
                     if (field) {
                         const TbSymbolDieEntry_t *formal = &scope.tree.entries[fact->target.entry_index];
                         CHECK(formal->tag == 0x05 && formal->parent == node->record.entry_index);
@@ -1164,6 +1209,19 @@ static void check_qualified_context(InheritedScope_t source, TbSymbolAbbrevView_
             ++qualified_unavailable;
         CHECK(!tb_symbol_qualified_view(qualified, &view));
     }
+    if (type_receiver) {
+        TbSymbolReferenceTarget_t selected;
+        CHECK(tb_symbol_type_recipe_need(type_receiver, &selected));
+        type_completion = tb_symbol_type_recipe_name(type_receiver, selected, status,
+            status == TB_SYMBOL_QUALIFIED_READY ? &view : NULL);
+        if (type_completion == TB_SYMBOL_TYPE_READY)
+            finish_type_recipe(type_receiver);
+        else {
+            CHECK(type_completion == TB_SYMBOL_TYPE_UNSUPPORTED);
+            ++type_unavailable;
+        }
+        tb_symbol_type_recipe_discard(type_receiver);
+    }
     tb_symbol_qualified_destroy(qualified);
     for (size_t i = 0; i < scope.node_count; ++i) {
         free(names[i]);
@@ -1327,6 +1385,120 @@ static void check_recursive_context(InheritedScope_t source, TbSymbolAbbrevView_
         native_scope_peak_retained = retained;
     if (input_count > native_scope_peak_inputs)
         native_scope_peak_inputs = input_count;
+    CHECK(tb_symbol_budget_release(&budget, charge) && budget.used == before);
+}
+
+
+typedef struct {
+    NativeScopeInput_t               *input;
+    TbSymbolInheritSlot_t            *slots;
+    TbSymbolInheritedReferenceFact_t *facts;
+    size_t                            reference_charge;
+} TypeInput_t;
+
+static void supply_type_references(InheritedScope_t source, TbSymbolTypeRecipe_t *recipe, TypeInput_t *input)
+{
+    TbSymbolGraphView_t graph = input->input->relationships;
+    TbSymbolInheritedReference_t reference;
+    CHECK(tb_symbol_budget_reserve(&budget, sizeof(reference)));
+    CHECK(!input->slots && graph.count <= 64);
+    input->reference_charge = graph.count * (sizeof(*input->slots) + sizeof(*input->facts));
+    CHECK(tb_symbol_budget_reserve(&budget, input->reference_charge));
+    input->slots = calloc(graph.count, sizeof(*input->slots));
+    input->facts = calloc(graph.count, sizeof(*input->facts));
+    CHECK(input->slots && input->facts);
+    CHECK(tb_symbol_inherited_reference_init(&reference, graph, TB_SYMBOL_INHERIT_TYPE,
+        input->slots, graph.count, input->facts, graph.count, &source.units, NULL, 0) ==
+        TB_SYMBOL_INHERITED_REFERENCE_PENDING);
+    TbSymbolInheritedReferenceStatus_e status = TB_SYMBOL_INHERITED_REFERENCE_PENDING;
+    for (unsigned turn = 0; turn < 100000; ++turn) {
+        TbSymbolInheritedReferenceSource_t need;
+        if (tb_symbol_inherited_reference_source_need(&reference, &need)) {
+            CHECK(need.source.record.unit_offset == source.tree.unit_offset);
+            (void)tb_symbol_inherited_reference_source(&reference, &source.units, &source.tree, source.unit_index);
+        }
+        TbSymbolReferenceNeed_t target;
+        if (tb_symbol_inherited_reference_target_need(&reference, &target))
+            (void)tb_symbol_inherited_reference_target(&reference,
+                target.unit_offset == source.tree.unit_offset ? &source.tree : NULL);
+        status = tb_symbol_inherited_reference_step(&reference, 31);
+        if (status != TB_SYMBOL_INHERITED_REFERENCE_PENDING && status != TB_SYMBOL_INHERITED_REFERENCE_SOURCE &&
+            status != TB_SYMBOL_INHERITED_REFERENCE_TARGET)
+            break;
+    }
+    TbSymbolInheritedReferenceView_t view = {0};
+    bool available = tb_symbol_inherited_reference_view(&reference, &view);
+    CHECK(available || status == TB_SYMBOL_INHERITED_REFERENCE_DEPENDENCY ||
+          status == TB_SYMBOL_INHERITED_REFERENCE_UNSUPPORTED);
+    (void)tb_symbol_type_recipe_references(recipe, graph.nodes[0].record, status, available ? &view : NULL);
+    CHECK(tb_symbol_budget_release(&budget, sizeof(reference)));
+}
+
+
+static void check_type_recipe(InheritedScope_t source, TbSymbolReferenceTarget_t selected)
+{
+    TbSymbolTypeRecipe_t     recipe;
+    TbSymbolTypeRecipeNode_t nodes[64];
+    TypeInput_t              inputs[64] = {0};
+    size_t before = budget.used;
+    size_t charge = sizeof(recipe) + sizeof(nodes) + sizeof(inputs);
+    CHECK(!type_receiver && selected.unit_offset == source.tree.unit_offset);
+    CHECK(tb_symbol_budget_reserve(&budget, charge));
+    size_t count = 1;
+    inputs[0].input = build_scope_input(source.units, source.tree, source.unit_index, selected);
+    CHECK(tb_symbol_type_recipe_init(&recipe, inputs[0].input->relationships, nodes, 64) == TB_SYMBOL_TYPE_PENDING);
+    bool named = false;
+    for (unsigned turn = 0; turn < 100000; ++turn) {
+        TbSymbolReferenceTarget_t need;
+        if (tb_symbol_type_recipe_need(&recipe, &need)) {
+            if (recipe.status == TB_SYMBOL_TYPE_GRAPH) {
+                CHECK(count < 64 && need.unit_offset == source.tree.unit_offset);
+                inputs[count].input = build_scope_input(source.units, source.tree, source.unit_index, need);
+                CHECK(tb_symbol_type_recipe_graph(&recipe, &inputs[count++].input->relationships) ==
+                      TB_SYMBOL_TYPE_PENDING);
+            } else if (recipe.status == TB_SYMBOL_TYPE_REFERENCES) {
+                CHECK(recipe.count && recipe.count == count);
+                supply_type_references(source, &recipe, &inputs[count - 1]);
+            } else {
+                CHECK(recipe.status == TB_SYMBOL_TYPE_NAME);
+                type_receiver = &recipe;
+                type_completion = TB_SYMBOL_TYPE_INVALID;
+                check_recursive_context(source, source.schema, need);
+                type_receiver = NULL;
+                CHECK(!recipe.initialized);
+                named = true;
+                break;
+            }
+        }
+        TbSymbolTypeRecipeStatus_e status = tb_symbol_type_recipe_step(&recipe, 31);
+        if (status != TB_SYMBOL_TYPE_PENDING && status != TB_SYMBOL_TYPE_GRAPH && status != TB_SYMBOL_TYPE_NAME &&
+            status != TB_SYMBOL_TYPE_REFERENCES)
+            break;
+    }
+    if (!named) {
+        if (recipe.status == TB_SYMBOL_TYPE_READY || recipe.status == TB_SYMBOL_TYPE_PARTIAL)
+            finish_type_recipe(&recipe);
+        else {
+            if (recipe.status != TB_SYMBOL_TYPE_UNSUPPORTED && recipe.status != TB_SYMBOL_TYPE_DEPENDENCY)
+                fprintf(stderr, "type recipe unexpected status %u selected=%llu count=%zu used=%zu\n",
+                    recipe.status, (unsigned long long)selected.record_offset, recipe.count, budget.used);
+            CHECK(recipe.status == TB_SYMBOL_TYPE_UNSUPPORTED || recipe.status == TB_SYMBOL_TYPE_DEPENDENCY);
+            ++type_unavailable;
+        }
+        tb_symbol_type_recipe_discard(&recipe);
+    }
+    ++type_queries;
+    for (size_t i = 0; i < count; ++i) {
+        free(inputs[i].facts);
+        free(inputs[i].slots);
+        CHECK(tb_symbol_budget_release(&budget, inputs[i].reference_charge));
+        NativeScopeInput_t *input = inputs[i].input;
+        size_t owned = input->charge;
+        free(input->anchors);
+        free(input->nodes);
+        free(input);
+        CHECK(tb_symbol_budget_release(&budget, owned));
+    }
     CHECK(tb_symbol_budget_release(&budget, charge) && budget.used == before);
 }
 
@@ -1515,6 +1687,7 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                             .units      = view,
                             .tree       = tree,
                             .strings    = string_sections,
+                            .schema     = table,
                             .unit_index = i,
                             .descriptor = selection.descriptor
                         }, completed, inherited_slots, &relations);
@@ -1524,6 +1697,7 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                             .units      = view,
                             .tree       = tree,
                             .strings    = string_sections,
+                            .schema     = table,
                             .unit_index = i,
                             .descriptor = selection.descriptor
                         }, table, completed.nodes[0].record);
@@ -1537,6 +1711,7 @@ static UnitCounts_t check_units(TbSymbolSectionsView_t directory, TbSymbolUnitSe
                             .units      = view,
                             .tree       = tree,
                             .strings    = string_sections,
+                            .schema     = table,
                             .unit_index = i,
                             .descriptor = selection.descriptor
                         };
@@ -1994,6 +2169,10 @@ int main(int argc, char **argv)
            (unsigned long long)flag_parameter_dependencies, (unsigned long long)flag_parameter_unsupported);
     printf("native scope retained peaks: %zu owned bytes, %zu inputs; 4 MiB construction ceiling\n",
            native_scope_peak_retained, native_scope_peak_inputs);
+    CHECK(type_queries && type_ready && type_partial && type_ready + type_partial + type_unavailable == type_queries);
+    printf("PASS native type recipes: %llu queries %llu ready %llu partial %llu unavailable max-depth=%zu\n",
+           (unsigned long long)type_queries, (unsigned long long)type_ready, (unsigned long long)type_partial,
+           (unsigned long long)type_unavailable, type_depth);
     CHECK(reference_queries && reference_found && reference_absent && reference_object_owners);
     printf("PASS native inherited references: %llu queries, %llu found, %llu absent, "
            "%llu dependencies, %llu object owners\n", (unsigned long long)reference_queries,
