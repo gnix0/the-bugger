@@ -67,19 +67,23 @@ TbSymbolSections_t *tb_symbol_sections_create(TbSymbolStorageInfo_t expected, in
         !tb_symbol_budget_reserve(construction, sizeof(TbSymbolSections_t))) {
         return NULL;
     }
+
     TbSymbolSections_t *sections = calloc(1, sizeof(*sections));
     if (!sections) {
         (void)tb_symbol_budget_release(construction, sizeof(TbSymbolSections_t));
         return NULL;
     }
+
     sections->construction = construction;
     sections->expected     = expected;
     sections->index        = UINT64_MAX;
     sections->file = tb_symbol_file_create(expected, descriptor, construction);
+
     if (!sections->file) {
         tb_symbol_sections_destroy(sections);
         return NULL;
     }
+
     return sections;
 }
 
@@ -98,9 +102,11 @@ static bool decoded(TbSymbolSections_t *sections, TbSymbolElfStatus_e status,
 {
     if (status == TB_SYMBOL_ELF_OK)
         return true;
+
     fail(sections, reason, status == TB_SYMBOL_ELF_UNSUPPORTED ? TB_SYMBOL_UNSUPPORTED :
                           status == TB_SYMBOL_ELF_MALFORMED ? TB_SYMBOL_MALFORMED :
                                                              TB_SYMBOL_OPERATIONAL_FAILURE);
+
     return false;
 }
 
@@ -110,7 +116,7 @@ static void request(TbSymbolSections_t *sections, ByteSpan_t span, SectionsPhase
     if (!span.bytes || span.bytes > TB_SYMBOL_FILE_WINDOW_BYTES ||
         !tb_symbol_range(span.offset, span.bytes, sections->expected.bytes)) {
         fail(sections, TB_SYMBOL_SECTIONS_READ, TB_SYMBOL_MALFORMED);
-    } else if (!tb_symbol_file_request(sections->file, (TbSymbolFileRange_t){
+    } else if (!tb_symbol_file_request(sections->file, (TbSymbolFileRange_t) {
         .offset = span.offset,
         .bytes  = (size_t)span.bytes
     })) {
@@ -127,6 +133,7 @@ static TbSymbolFileView_t bytes(TbSymbolSections_t *sections)
     TbSymbolFileView_t view = {0};
     if (!tb_symbol_file_view(sections->file, &view))
         fail(sections, TB_SYMBOL_SECTIONS_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
+
     return view;
 }
 
@@ -135,12 +142,15 @@ static bool overlap(ByteSpan_t left, ByteSpan_t right)
 {
     uint64_t left_end;
     uint64_t right_end;
+
     if (!left.bytes || !right.bytes)
         return false;
+
     if (!tb_symbol_add(left.offset, left.bytes, &left_end) ||
         !tb_symbol_add(right.offset, right.bytes, &right_end)) {
         return true;
     }
+
     return left.offset < right_end && right.offset < left_end;
 }
 
@@ -151,22 +161,27 @@ static bool header_overlap(TbSymbolSections_t *sections, const TbSymbolElfSectio
         .offset = record->offset,
         .bytes  = record->bytes
     };
+
     ByteSpan_t header = {
         .offset = 0,
         .bytes  = sections->header.header_bytes
     };
+
     ByteSpan_t section_table = {
         .offset = sections->layout.sections.offset
     };
+
     ByteSpan_t program_table = {
         .offset = sections->layout.programs.offset
     };
+
     if (!tb_symbol_multiply(sections->layout.sections.count, sections->layout.sections.stride,
                             &section_table.bytes) ||
         !tb_symbol_multiply(sections->layout.programs.count, sections->layout.programs.stride,
                             &program_table.bytes)) {
         return true;
     }
+
     return overlap(data, header) || overlap(data, section_table) || overlap(data, program_table);
 }
 
@@ -182,6 +197,7 @@ static void allocate_entries(TbSymbolSections_t *sections)
         sections->outcome = TB_SYMBOL_SUCCESS;
         return;
     }
+
     if (!tb_symbol_multiply(count, sizeof(*sections->entries), &entry_bytes) ||
         !tb_symbol_multiply(count, sizeof(*sections->order), &order_bytes) ||
         !tb_symbol_add(entry_bytes, order_bytes, &total) || total > SIZE_MAX ||
@@ -189,17 +205,21 @@ static void allocate_entries(TbSymbolSections_t *sections)
         fail(sections, TB_SYMBOL_SECTIONS_RESOURCE, TB_SYMBOL_RESOURCE_FAILURE);
         return;
     }
+
     sections->array_bytes = (size_t)total;
     sections->entries = malloc((size_t)entry_bytes);
     sections->order = malloc((size_t)order_bytes);
+
     if (!sections->entries || !sections->order) {
         sections->failure.system_error = ENOMEM;
         fail(sections, TB_SYMBOL_SECTIONS_RESOURCE, TB_SYMBOL_RESOURCE_FAILURE);
         return;
     }
-    sections->entries[0] = (TbSymbolSectionEntry_t){
+
+    sections->entries[0] = (TbSymbolSectionEntry_t) {
         .header = sections->zero
     };
+
     sections->index = 1;
     sections->phase = SECTIONS_NEXT;
 }
@@ -208,28 +228,34 @@ static void allocate_entries(TbSymbolSections_t *sections)
 static void record(TbSymbolSections_t *sections)
 {
     TbSymbolFileView_t view = bytes(sections);
+
     if (sections->phase == SECTIONS_FAILED)
         return;
+
     TbSymbolElfSection_t entry;
     if (!decoded(sections, tb_symbol_elf_section(&sections->header, view.data, view.bytes, &entry),
                   TB_SYMBOL_SECTIONS_RECORD)) {
         return;
     }
+
     if (entry.type != SHT_NULL && ((entry.flags & SHF_GROUP) ||
         ((entry.flags & SHF_COMPRESSED) && ((entry.flags & SHF_ALLOC) || entry.type == SHT_NOBITS)))) {
         fail(sections, TB_SYMBOL_SECTIONS_RECORD, TB_SYMBOL_MALFORMED);
         return;
     }
+
     if (entry.type != SHT_NULL && entry.type != SHT_NOBITS && entry.bytes) {
         if (header_overlap(sections, &entry)) {
             fail(sections, TB_SYMBOL_SECTIONS_OVERLAP, TB_SYMBOL_MALFORMED);
             return;
         }
+
         sections->order[sections->order_count++] = sections->index;
     }
-    sections->entries[sections->index] = (TbSymbolSectionEntry_t){
+    sections->entries[sections->index] = (TbSymbolSectionEntry_t) {
         .header = entry
     };
+
     ++sections->index;
     sections->phase = SECTIONS_NEXT;
 }
@@ -239,6 +265,7 @@ static bool less(const TbSymbolSections_t *sections, uint64_t left, uint64_t rig
 {
     uint64_t a = sections->entries[left].header.offset;
     uint64_t b = sections->entries[right].header.offset;
+
     return a < b || (a == b && left < right);
 }
 
@@ -246,6 +273,7 @@ static bool less(const TbSymbolSections_t *sections, uint64_t left, uint64_t rig
 static void exchange(TbSymbolSections_t *sections, uint64_t left, uint64_t right)
 {
     uint64_t saved = sections->order[left];
+
     sections->order[left] = sections->order[right];
     sections->order[right] = saved;
 }
@@ -260,11 +288,13 @@ static void sort_step(TbSymbolSections_t *sections)
             sections->sifting = false;
             return;
         }
+
         uint64_t child = sections->root * 2 + 1;
         if (child + 1 < sections->heap &&
             less(sections, sections->order[child], sections->order[child + 1])) {
             ++child;
         }
+
         if (less(sections, sections->order[sections->root], sections->order[child])) {
             exchange(sections, sections->root, child);
             sections->root = child;
@@ -294,9 +324,12 @@ static void name_table(TbSymbolSections_t *sections)
         sections->names = TB_SYMBOL_SECTION_NAMES_ABSENT;
         sections->index = 1;
         sections->phase = SECTIONS_NAME_NEXT;
+
         return;
     }
+
     sections->index = sections->layout.section_names;
+
     const TbSymbolElfSection_t *table = &sections->entries[sections->layout.section_names].header;
     if (table->type != SHT_STRTAB) {
         fail(sections, TB_SYMBOL_SECTIONS_NAMES, TB_SYMBOL_MALFORMED);
@@ -309,7 +342,7 @@ static void name_table(TbSymbolSections_t *sections)
         sections->index = 1;
         sections->phase = SECTIONS_NAME_NEXT;
     } else {
-        request(sections, (ByteSpan_t){
+        request(sections, (ByteSpan_t) {
             .offset = table->offset,
             .bytes  = 1
         }, SECTIONS_NAME_FIRST);
@@ -324,25 +357,31 @@ static void name_next(TbSymbolSections_t *sections)
         sections->outcome = TB_SYMBOL_SUCCESS;
         return;
     }
+
     TbSymbolSectionEntry_t *entry = &sections->entries[sections->index];
     if (entry->header.type == SHT_NULL || !entry->header.name_offset) {
         ++sections->index;
         return;
     }
+
     if (!sections->layout.section_names) {
         fail(sections, TB_SYMBOL_SECTIONS_NAMES, TB_SYMBOL_MALFORMED);
         return;
     }
+
     const TbSymbolElfSection_t *table = &sections->entries[sections->layout.section_names].header;
     if (entry->header.name_offset >= table->bytes) {
         fail(sections, TB_SYMBOL_SECTIONS_NAMES, TB_SYMBOL_MALFORMED);
         return;
     }
+
     entry->name_offset = table->offset + entry->header.name_offset;
     sections->name_cursor = entry->header.name_offset;
+
     uint64_t remaining = table->bytes - sections->name_cursor;
+
     sections->scan_at = 0;
-    request(sections, (ByteSpan_t){
+    request(sections, (ByteSpan_t) {
         .offset = table->offset + sections->name_cursor,
         .bytes  = remaining < TB_SYMBOL_FILE_WINDOW_BYTES ? remaining : TB_SYMBOL_FILE_WINDOW_BYTES
     }, SECTIONS_NAME_SCAN);
@@ -352,34 +391,46 @@ static void name_next(TbSymbolSections_t *sections)
 static void name_scan(TbSymbolSections_t *sections, size_t max_bytes)
 {
     TbSymbolFileView_t view = bytes(sections);
+
     if (sections->phase == SECTIONS_FAILED)
         return;
+
     size_t length = view.bytes - sections->scan_at;
     if (length > max_bytes)
         length = max_bytes;
+
     const unsigned char *start = view.data + sections->scan_at;
     const unsigned char *end = memchr(start, 0, length);
     TbSymbolSectionEntry_t *entry = &sections->entries[sections->index];
+
     if (end) {
         entry->name_bytes += (uint64_t)(end - start);
         entry->has_name = true;
         ++sections->index;
         sections->phase = SECTIONS_NAME_NEXT;
+
         return;
     }
+
     entry->name_bytes += length;
     sections->scan_at += length;
+
     if (sections->scan_at != view.bytes)
         return;
+
     const TbSymbolElfSection_t *table = &sections->entries[sections->layout.section_names].header;
+
     sections->name_cursor += view.bytes;
+
     if (sections->name_cursor == table->bytes) {
         fail(sections, TB_SYMBOL_SECTIONS_NAMES, TB_SYMBOL_MALFORMED);
         return;
     }
+
     uint64_t remaining = table->bytes - sections->name_cursor;
+
     sections->scan_at = 0;
-    request(sections, (ByteSpan_t){
+    request(sections, (ByteSpan_t) {
         .offset = table->offset + sections->name_cursor,
         .bytes  = remaining < TB_SYMBOL_FILE_WINDOW_BYTES ? remaining : TB_SYMBOL_FILE_WINDOW_BYTES
     }, SECTIONS_NAME_SCAN);
@@ -394,7 +445,7 @@ static void advance(TbSymbolSections_t *sections, size_t max_bytes)
             fail(sections, TB_SYMBOL_SECTIONS_HEADER, TB_SYMBOL_MALFORMED);
             break;
         }
-        request(sections, (ByteSpan_t){
+        request(sections, (ByteSpan_t) {
             .offset = 0,
             .bytes  = sections->expected.bytes < 64 ? sections->expected.bytes : 64
         }, SECTIONS_HEADER);
@@ -406,6 +457,7 @@ static void advance(TbSymbolSections_t *sections, size_t max_bytes)
                                                    &sections->header), TB_SYMBOL_SECTIONS_HEADER)) {
             break;
         }
+
         if (sections->header.section_offset) {
             uint64_t stride = sections->header.address_bytes == 4 ? 40 : 64;
             if (sections->header.section_stride != stride) {
@@ -413,7 +465,8 @@ static void advance(TbSymbolSections_t *sections, size_t max_bytes)
                                                             ? TB_SYMBOL_MALFORMED : TB_SYMBOL_UNSUPPORTED);
                 break;
             }
-            request(sections, (ByteSpan_t){
+
+            request(sections, (ByteSpan_t) {
                 .offset = sections->header.section_offset,
                 .bytes  = stride
             }, SECTIONS_ZERO);
@@ -448,7 +501,8 @@ static void advance(TbSymbolSections_t *sections, size_t max_bytes)
                 fail(sections, TB_SYMBOL_SECTIONS_LAYOUT, TB_SYMBOL_MALFORMED);
                 break;
             }
-            request(sections, (ByteSpan_t){
+
+            request(sections, (ByteSpan_t) {
                 .offset = offset,
                 .bytes  = sections->layout.sections.stride
             }, SECTIONS_RECORD);
@@ -471,6 +525,7 @@ static void advance(TbSymbolSections_t *sections, size_t max_bytes)
                 fail(sections, TB_SYMBOL_SECTIONS_OVERLAP, TB_SYMBOL_MALFORMED);
                 break;
             }
+
             sections->previous_end = entry->offset + entry->bytes;
             ++sections->index;
         }
@@ -480,14 +535,18 @@ static void advance(TbSymbolSections_t *sections, size_t max_bytes)
         break;
     case SECTIONS_NAME_FIRST: {
         TbSymbolFileView_t view = bytes(sections);
+
         if (sections->phase == SECTIONS_FAILED)
             break;
+
         if (view.data[0]) {
             fail(sections, TB_SYMBOL_SECTIONS_NAMES, TB_SYMBOL_MALFORMED);
             break;
         }
+
         const TbSymbolElfSection_t *table = &sections->entries[sections->layout.section_names].header;
-        request(sections, (ByteSpan_t){
+
+        request(sections, (ByteSpan_t) {
             .offset = table->offset + table->bytes - 1,
             .bytes  = 1
         }, SECTIONS_NAME_LAST);
@@ -495,8 +554,10 @@ static void advance(TbSymbolSections_t *sections, size_t max_bytes)
     }
     case SECTIONS_NAME_LAST: {
         TbSymbolFileView_t view = bytes(sections);
+
         if (sections->phase == SECTIONS_FAILED)
             break;
+
         if (view.data[0]) {
             fail(sections, TB_SYMBOL_SECTIONS_NAMES, TB_SYMBOL_MALFORMED);
         } else {
@@ -523,17 +584,23 @@ TbSymbolOutcome_e tb_symbol_sections_step(TbSymbolSections_t *sections, size_t m
 {
     if (!sections)
         return TB_SYMBOL_OPERATIONAL_FAILURE;
+
     if (sections->phase == SECTIONS_DONE || sections->phase == SECTIONS_FAILED)
         return sections->outcome;
+
     if (max_bytes < 64 || max_bytes > TB_SYMBOL_FILE_WINDOW_BYTES) {
         fail(sections, TB_SYMBOL_SECTIONS_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
         return sections->outcome;
     }
+
     bool progressed = true;
+
     if (sections->reading) {
         uint64_t before = tb_symbol_file_progress(sections->file);
         TbSymbolOutcome_e outcome = tb_symbol_file_step(sections->file, max_bytes);
+
         progressed = before != tb_symbol_file_progress(sections->file);
+
         if (outcome == TB_SYMBOL_SUCCESS) {
             sections->reading = false;
         } else if (outcome != TB_SYMBOL_PENDING) {
@@ -543,12 +610,14 @@ TbSymbolOutcome_e tb_symbol_sections_step(TbSymbolSections_t *sections, size_t m
     } else {
         advance(sections, max_bytes);
     }
+
     if (progressed) {
         if (sections->progress == UINT64_MAX)
             fail(sections, TB_SYMBOL_SECTIONS_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
         else
             ++sections->progress;
     }
+
     return sections->outcome;
 }
 
@@ -557,7 +626,8 @@ bool tb_symbol_sections_view(const TbSymbolSections_t *sections, TbSymbolSection
 {
     if (!sections || !view || sections->phase != SECTIONS_DONE || sections->outcome != TB_SYMBOL_SUCCESS)
         return false;
-    *view = (TbSymbolSectionsView_t){
+
+    *view = (TbSymbolSectionsView_t) {
         .header  = &sections->header,
         .layout  = &sections->layout,
         .entries = sections->entries,
@@ -565,13 +635,14 @@ bool tb_symbol_sections_view(const TbSymbolSections_t *sections, TbSymbolSection
         .names   = sections->names,
         .backing = sections->expected
     };
+
     return true;
 }
 
 
 TbSymbolSectionsFailure_t tb_symbol_sections_failure(const TbSymbolSections_t *sections)
 {
-    return sections ? sections->failure : (TbSymbolSectionsFailure_t){
+    return sections ? sections->failure : (TbSymbolSectionsFailure_t) {
         .reason        = TB_SYMBOL_SECTIONS_REQUEST,
         .section_index = UINT64_MAX
     };
@@ -588,9 +659,11 @@ void tb_symbol_sections_destroy(TbSymbolSections_t *sections)
 {
     if (!sections)
         return;
+
     tb_symbol_file_destroy(sections->file);
     free(sections->entries);
     free(sections->order);
+
     if (sections->array_bytes)
         (void)tb_symbol_budget_release(sections->construction, sections->array_bytes);
     (void)tb_symbol_budget_release(sections->construction, sizeof(*sections));

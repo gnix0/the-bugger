@@ -5,7 +5,9 @@ TbSymbolConstantStatus_e tb_symbol_constant_init(TbSymbolConstant_t *constant, T
 {
     if (!constant || !tree.entries || die_index >= tree.count)
         return TB_SYMBOL_CONSTANT_INVALID;
+
     const TbSymbolDieEntry_t *entry = &tree.entries[die_index];
+
     if (field == TB_SYMBOL_CONSTANT_LANGUAGE) {
         if (die_index != 0 || entry->parent != UINT64_MAX ||
             (entry->tag != 0x11 && entry->tag != 0x3c && entry->tag != 0x41)) {
@@ -14,14 +16,16 @@ TbSymbolConstantStatus_e tb_symbol_constant_init(TbSymbolConstant_t *constant, T
     } else if (field != TB_SYMBOL_CONSTANT_INLINE || entry->tag != 0x2e) {
         return TB_SYMBOL_CONSTANT_INVALID;
     }
+
     TbSymbolAttributes_t lookup;
-    if (tb_symbol_attributes_init(&lookup, tree, (TbSymbolAttributeSelection_t){
+    if (tb_symbol_attributes_init(&lookup, tree, (TbSymbolAttributeSelection_t) {
         .die_index = die_index,
         .name      = (uint64_t)field
     }) != TB_SYMBOL_ATTRIBUTE_PENDING) {
         return TB_SYMBOL_CONSTANT_INVALID;
     }
-    *constant = (TbSymbolConstant_t){
+
+    *constant = (TbSymbolConstant_t) {
         .lookup      = lookup,
         .attributes  = tree.attributes,
         .entry       = *entry,
@@ -32,6 +36,7 @@ TbSymbolConstantStatus_e tb_symbol_constant_init(TbSymbolConstant_t *constant, T
         .status      = TB_SYMBOL_CONSTANT_PENDING,
         .initialized = true
     };
+
     return constant->status;
 }
 
@@ -40,6 +45,7 @@ static TbSymbolConstantStatus_e interpret(TbSymbolFormView_t value, uint64_t *re
 {
     unsigned width = 64;
     bool signed_form = false;
+
     switch (value.form) {
     case TB_SYMBOL_FORM_DATA1:
         width = 8;
@@ -62,11 +68,14 @@ static TbSymbolConstantStatus_e interpret(TbSymbolFormView_t value, uint64_t *re
     default:
         return TB_SYMBOL_CONSTANT_MALFORMED;
     }
+
     if (!value.numeric || value.is_signed != signed_form ||
         (signed_form && value.bits > INT64_MAX) || (width < 64 && value.bits >> width)) {
         return TB_SYMBOL_CONSTANT_MALFORMED;
     }
+
     *result = value.bits;
+
     return TB_SYMBOL_CONSTANT_FOUND;
 }
 
@@ -76,10 +85,12 @@ TbSymbolConstantStatus_e tb_symbol_constant_schema(TbSymbolConstant_t *constant,
 {
     if (!constant || !constant->initialized || constant->status != TB_SYMBOL_CONSTANT_SCHEMA)
         return TB_SYMBOL_CONSTANT_INVALID;
+
     if (!schema) {
         constant->status = TB_SYMBOL_CONSTANT_DEPENDENCY;
         return constant->status;
     }
+
     TbSymbolStorageInfo_t backing = constant->view.selection.backing;
     const TbSymbolDieAttribute_t *attribute = &constant->view.attribute;
     if (!schema->entries || !schema->count || !schema->attributes ||
@@ -89,6 +100,7 @@ TbSymbolConstantStatus_e tb_symbol_constant_schema(TbSymbolConstant_t *constant,
         schema->backing.bytes != backing.bytes || attribute->schema_attribute >= schema->attribute_count) {
         return TB_SYMBOL_CONSTANT_INVALID;
     }
+
     const TbSymbolAbbrevAttribute_t *field = &schema->attributes[attribute->schema_attribute];
     uint64_t end;
     if (field->name != attribute->name || field->form != TB_SYMBOL_FORM_IMPLICIT_CONST ||
@@ -97,9 +109,11 @@ TbSymbolConstantStatus_e tb_symbol_constant_schema(TbSymbolConstant_t *constant,
         !tb_symbol_add(field->implicit_offset, field->implicit_bytes, &end) || end > schema->end_offset) {
         return TB_SYMBOL_CONSTANT_INVALID;
     }
+
     constant->schema           = *schema;
     constant->schema_available = true;
     constant->status           = TB_SYMBOL_CONSTANT_PENDING;
+
     return constant->status;
 }
 
@@ -112,6 +126,7 @@ static TbSymbolConstantStatus_e implicit(TbSymbolConstant_t *constant, size_t ma
         const TbSymbolAbbrevEntry_t *entry = &constant->schema.entries[index];
         if (entry->code != constant->entry.code)
             continue;
+
         uint64_t expected;
         uint64_t ordinal = constant->view.selection.first_index - constant->entry.first_attribute;
         if (entry->tag != constant->entry.tag || entry->children != constant->entry.children ||
@@ -121,6 +136,7 @@ static TbSymbolConstantStatus_e implicit(TbSymbolConstant_t *constant, size_t ma
             constant->status = TB_SYMBOL_CONSTANT_MALFORMED;
             return constant->status;
         }
+
         const TbSymbolAbbrevAttribute_t *field = &constant->schema.attributes[expected];
         if (!field->implicit_fits) {
             constant->status = TB_SYMBOL_CONSTANT_UNSUPPORTED;
@@ -133,10 +149,13 @@ static TbSymbolConstantStatus_e implicit(TbSymbolConstant_t *constant, size_t ma
             constant->view.from_abbreviation = true;
             constant->status                 = TB_SYMBOL_CONSTANT_FOUND;
         }
+
         return constant->status;
     }
+
     if (constant->schema_cursor == constant->schema.count)
         constant->status = TB_SYMBOL_CONSTANT_MALFORMED;
+
     return constant->status;
 }
 
@@ -145,27 +164,34 @@ TbSymbolConstantStatus_e tb_symbol_constant_step(TbSymbolConstant_t *constant, s
 {
     if (!constant || !constant->initialized || !max_steps || max_steps > 256)
         return TB_SYMBOL_CONSTANT_INVALID;
+
     if (constant->status != TB_SYMBOL_CONSTANT_PENDING)
         return constant->status;
+
     if (constant->schema_available)
         return implicit(constant, max_steps);
+
     TbSymbolAttributeStatus_e status = tb_symbol_attributes_step(&constant->lookup, max_steps);
     if (status == TB_SYMBOL_ATTRIBUTE_PENDING)
         return constant->status;
+
     if (tb_symbol_attributes_result(&constant->lookup, &constant->view.selection) != status) {
         constant->status = TB_SYMBOL_CONSTANT_INVALID;
         return constant->status;
     }
+
     if (status == TB_SYMBOL_ATTRIBUTE_MISSING) {
         constant->status = TB_SYMBOL_CONSTANT_ABSENT;
     } else if (status == TB_SYMBOL_ATTRIBUTE_AMBIGUOUS) {
         constant->status = TB_SYMBOL_CONSTANT_CONFLICT;
     } else if (status == TB_SYMBOL_ATTRIBUTE_UNIQUE) {
         constant->view.attribute = constant->attributes[constant->view.selection.first_index];
+
         const TbSymbolFormView_t *value = &constant->view.attribute.value;
         if (value->form == TB_SYMBOL_FORM_IMPLICIT_CONST && !value->indirect) {
             bool framed = constant->view.attribute.declared_form == TB_SYMBOL_FORM_IMPLICIT_CONST &&
                           !value->bytes && !value->payload_bytes && !value->numeric;
+
             constant->status = framed ? TB_SYMBOL_CONSTANT_SCHEMA : TB_SYMBOL_CONSTANT_MALFORMED;
         } else {
             constant->status = interpret(*value, &constant->view.value);
@@ -173,6 +199,7 @@ TbSymbolConstantStatus_e tb_symbol_constant_step(TbSymbolConstant_t *constant, s
     } else {
         constant->status = TB_SYMBOL_CONSTANT_INVALID;
     }
+
     return constant->status;
 }
 
@@ -181,7 +208,9 @@ bool tb_symbol_constant_view(const TbSymbolConstant_t *constant, TbSymbolConstan
 {
     if (!constant || !constant->initialized || !view || constant->status != TB_SYMBOL_CONSTANT_FOUND)
         return false;
+
     *view = constant->view;
+
     return true;
 }
 
@@ -192,7 +221,9 @@ bool tb_symbol_constant_selection(const TbSymbolConstant_t *constant, TbSymbolAt
         constant->status == TB_SYMBOL_CONSTANT_INVALID) {
         return false;
     }
+
     *selection = constant->view.selection;
+
     return true;
 }
 
@@ -225,6 +256,8 @@ bool tb_symbol_inline_kind(uint64_t value, TbSymbolInlineKind_e *kind)
 {
     if (!kind || value > TB_SYMBOL_INLINE_DECLARED_INLINED)
         return false;
+
     *kind = (TbSymbolInlineKind_e)value;
+
     return true;
 }

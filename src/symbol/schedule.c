@@ -54,8 +54,10 @@ TbSymbolSchedule_t *tb_symbol_schedule_create(size_t max_jobs, size_t max_intere
         max_interests > TB_SYMBOL_MAX_INTERESTS) {
         return NULL;
     }
+
     if (aggregate && !tb_symbol_budget_reserve(aggregate, sizeof(TbSymbolSchedule_t)))
         return NULL;
+
     TbSymbolSchedule_t *schedule = calloc(1, sizeof(*schedule));
     if (schedule) {
         schedule->aggregate     = aggregate;
@@ -64,6 +66,7 @@ TbSymbolSchedule_t *tb_symbol_schedule_create(size_t max_jobs, size_t max_intere
     } else if (aggregate) {
         (void)tb_symbol_budget_release(aggregate, sizeof(TbSymbolSchedule_t));
     }
+
     return schedule;
 }
 
@@ -77,8 +80,11 @@ void tb_symbol_schedule_destroy(TbSymbolSchedule_t *schedule)
         if (schedule->jobs[i].used)
             destroy_work(&schedule->jobs[i]);
     }
+
     TbSymbolBudget_t *aggregate = schedule->aggregate;
+
     free(schedule);
+
     if (aggregate)
         (void)tb_symbol_budget_release(aggregate, sizeof(TbSymbolSchedule_t));
 }
@@ -97,9 +103,11 @@ static Interest_t *free_interest(TbSymbolSchedule_t *schedule, uint64_t consumer
         Interest_t *interest = &schedule->interests[i];
         if (interest->used && !interest->cancelled && interest->identity.consumer == consumer)
             return NULL;
+
         if (!interest->used && !available)
             available = interest;
     }
+
     return available;
 }
 
@@ -107,11 +115,12 @@ static Interest_t *free_interest(TbSymbolSchedule_t *schedule, uint64_t consumer
 static void attach_interest(TbSymbolSchedule_t *schedule, Interest_t *interest, size_t index,
                             TbSymbolWorkIdentity_t identity)
 {
-    *interest = (Interest_t){
+    *interest = (Interest_t) {
         .identity = identity,
         .job      = index,
         .used     = true
     };
+
     ++schedule->jobs[index].active_interests;
     ++schedule->jobs[index].interests;
     ++schedule->interest_count;
@@ -130,21 +139,25 @@ bool tb_symbol_schedule_add(TbSymbolSchedule_t *schedule, const TbSymbolWork_t *
     for (size_t i = 0; i < schedule->max_jobs; ++i) {
         if (schedule->jobs[i].used && schedule->jobs[i].work.identity.request == work->identity.request)
             return false;
+
         if (!schedule->jobs[i].used && index == schedule->max_jobs)
             index = i;
     }
+
     Interest_t *interest = free_interest(schedule, work->identity.consumer);
     if (index == schedule->max_jobs || !interest)
         return false;
 
-    schedule->jobs[index] = (Job_t){
+    schedule->jobs[index] = (Job_t) {
         .work = *work,
         .turn = ++schedule->turn,
         .used = true
     };
+
     attach_interest(schedule, interest, index, work->identity);
     ++schedule->job_count;
     schedule->last_request = work->identity.request;
+
     return true;
 }
 
@@ -158,6 +171,7 @@ bool tb_symbol_schedule_attach(TbSymbolSchedule_t *schedule, uint64_t job_id,
     Interest_t *interest = free_interest(schedule, identity.consumer);
     if (!interest)
         return false;
+
     for (size_t i = 0; i < schedule->max_jobs; ++i) {
         Job_t *job = &schedule->jobs[i];
         if (job->used && !job->done && job->work.identity.request == job_id &&
@@ -169,6 +183,7 @@ bool tb_symbol_schedule_attach(TbSymbolSchedule_t *schedule, uint64_t job_id,
             return true;
         }
     }
+
     return false;
 }
 
@@ -186,16 +201,22 @@ bool tb_symbol_schedule_cancel(TbSymbolSchedule_t *schedule, TbSymbolWorkIdentit
             interest->identity.generation != identity.generation) {
             continue;
         }
+
         interest->cancelled = true;
+
         Job_t *job = &schedule->jobs[interest->job];
+
         --job->active_interests;
+
         if (!job->active_interests && !job->done) {
             job->done           = true;
             job->result.outcome = TB_SYMBOL_CANCELLED;
             destroy_work(job);
         }
+
         return true;
     }
+
     return false;
 }
 
@@ -204,13 +225,18 @@ void tb_symbol_schedule_cancel_all(TbSymbolSchedule_t *schedule)
 {
     if (!schedule)
         return;
+
     for (size_t i = 0; i < schedule->max_interests; ++i) {
         Interest_t *interest = &schedule->interests[i];
         if (!interest->used || interest->cancelled)
             continue;
+
         interest->cancelled = true;
+
         Job_t *job = &schedule->jobs[interest->job];
+
         --job->active_interests;
+
         if (!job->active_interests && !job->done) {
             job->done = true;
             job->result.outcome = TB_SYMBOL_CANCELLED;
@@ -227,14 +253,17 @@ static bool publish(TbSymbolSchedule_t *schedule, tb_symbol_work_emit_fn emit, v
         Interest_t *interest = &schedule->interests[index];
         if (!interest->used)
             continue;
+
         Job_t *job = &schedule->jobs[interest->job];
         if (!job->done && !interest->cancelled)
             continue;
 
         TbSymbolWorkResult_t result = job->result;
+
         if (interest->cancelled)
             result.outcome = TB_SYMBOL_CANCELLED;
         schedule->next_publication = (index + 1) % schedule->max_interests;
+
         if (!emit(context, &interest->identity, result, job->work.context))
             return false;
 
@@ -243,13 +272,16 @@ static bool publish(TbSymbolSchedule_t *schedule, tb_symbol_work_emit_fn emit, v
         interest->used = false;
         --schedule->interest_count;
         --job->interests;
+
         if (!job->interests) {
             destroy_work(job);
-            *job = (Job_t){0};
+            *job = (Job_t) {0};
             --schedule->job_count;
         }
+
         return true;
     }
+
     return false;
 }
 
@@ -259,6 +291,7 @@ bool tb_symbol_schedule_pump(TbSymbolSchedule_t *schedule, uint64_t now_ns, uint
 {
     if (!schedule || !emit || !slice_ns)
         return false;
+
     bool published = publish(schedule, emit, context);
 
     Job_t *interactive  = NULL;
@@ -267,19 +300,23 @@ bool tb_symbol_schedule_pump(TbSymbolSchedule_t *schedule, uint64_t now_ns, uint
         Job_t *job = &schedule->jobs[i];
         if (!job->used || job->done)
             continue;
+
         Job_t **candidate = job->work.priority == TB_SYMBOL_INTERACTIVE ? &interactive : &construction;
         if (!*candidate || job->turn < (*candidate)->turn)
             *candidate = job;
     }
+
     Job_t *job = interactive && (!construction || schedule->interactive_turns < 4)
                ? interactive : construction;
     if (!job)
         return published;
+
     if (schedule->turn == UINT64_MAX) {
         job->result.outcome = TB_SYMBOL_RESOURCE_FAILURE;
         job->done           = true;
         return true;
     }
+
     if (job == construction)
         schedule->interactive_turns = 0;
     else if (schedule->interactive_turns < 4)
@@ -291,14 +328,16 @@ bool tb_symbol_schedule_pump(TbSymbolSchedule_t *schedule, uint64_t now_ns, uint
                                                 TB_SYMBOL_WIRE_IO_BYTES, TB_SYMBOL_WORK_STEPS);
     if (result.outcome < TB_SYMBOL_PENDING || result.outcome > TB_SYMBOL_OPERATIONAL_FAILURE ||
         result.progress < job->result.progress) {
-        result = (TbSymbolWorkResult_t){
+        result = (TbSymbolWorkResult_t) {
             .outcome  = TB_SYMBOL_OPERATIONAL_FAILURE,
             .progress = job->result.progress
         };
     }
     job->result = result;
+
     if (result.outcome != TB_SYMBOL_PENDING)
         job->done = true;
+
     return true;
 }
 

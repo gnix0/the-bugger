@@ -53,11 +53,12 @@ static void frame_clear(TbSymbolWire_t *wire, Frame_t *frame)
     if (frame->payload && !frame->inline_payload) {
         wire->allocated -= frame->message.length;
         free(frame->payload);
+
         if (wire->aggregate)
             (void)tb_symbol_budget_release(wire->aggregate, frame->message.length);
     }
     close_fd(&frame->descriptor);
-    *frame = (Frame_t){
+    *frame = (Frame_t) {
         .descriptor = -1
     };
 }
@@ -69,6 +70,7 @@ static TbSymbolWireStatus_e fail(TbSymbolWire_t *wire, TbSymbolWireStatus_e stat
     frame_clear(wire, &wire->rx);
     close_fd(&wire->socket_fd);
     wire->status = status;
+
     return status;
 }
 
@@ -77,6 +79,7 @@ static bool backing_valid(int descriptor)
 {
     struct stat info;
     int         flags = fcntl(descriptor, F_GETFL);
+
     return flags >= 0 && !((unsigned)flags & (unsigned)O_PATH) &&
            ((unsigned)flags & (unsigned)O_ACCMODE) == O_RDONLY &&
            fstat(descriptor, &info) == 0 && S_ISREG(info.st_mode);
@@ -108,6 +111,7 @@ static uint64_t get_uint(const unsigned char *input, unsigned width)
     uint64_t value = 0;
     for (unsigned i = 0; i < width; ++i)
         value = (value << 8U) | input[i];
+
     return value;
 }
 
@@ -115,6 +119,7 @@ static uint64_t get_uint(const unsigned char *input, unsigned width)
 static void encode_header(Frame_t *frame)
 {
     unsigned char *header = frame->header;
+
     memcpy(header, wire_magic, sizeof(wire_magic));
     put_uint(header + 4, WIRE_VERSION, 2);
     put_uint(header + 6, frame->message.kind, 2);
@@ -133,25 +138,32 @@ static bool reserve_payload(TbSymbolWire_t *wire, Frame_t *frame)
     size_t length = frame->message.length;
     if (!length)
         return true;
+
     if (frame->message.kind != TB_SYMBOL_MESSAGE_REQUEST && length <= sizeof(frame->control)) {
         frame->payload = frame->control;
         frame->message.payload = frame->payload;
         frame->inline_payload = true;
+
         return true;
     }
+
     if (length > wire->max_bytes - wire->allocated)
         return false;
 
     if (wire->aggregate && !tb_symbol_budget_reserve(wire->aggregate, length))
         return false;
+
     frame->payload = malloc(length);
+
     if (!frame->payload) {
         if (wire->aggregate)
             (void)tb_symbol_budget_release(wire->aggregate, length);
         return false;
     }
+
     wire->allocated += length;
     frame->message.payload = frame->payload;
+
     return true;
 }
 
@@ -164,7 +176,7 @@ static bool decode_header(Frame_t *frame)
         return false;
     }
 
-    frame->message = (TbSymbolMessage_t){
+    frame->message = (TbSymbolMessage_t) {
         .kind            = (TbSymbolMessageKind_e)get_uint(header + 6, 2),
         .request         = get_uint(header + 16, 8),
         .consumer        = get_uint(header + 24, 8),
@@ -174,6 +186,7 @@ static bool decode_header(Frame_t *frame)
         .descriptor      = -1,
         .descriptor_role = (TbSymbolDescriptorRole_e)header[13]
     };
+
     return kind_valid(frame->message.kind) && frame->message.length <= TB_SYMBOL_WIRE_MAX_PAYLOAD &&
            (header[12] ? header[13] == TB_SYMBOL_DESCRIPTOR_BACKING
                        : header[13] == TB_SYMBOL_DESCRIPTOR_NONE);
@@ -192,7 +205,9 @@ TbSymbolWire_t *tb_symbol_wire_create(int socket_fd, size_t max_bytes, TbSymbolB
         getsockopt(socket_fd, SOL_SOCKET, SO_TYPE, &type, &length) != 0 || type != SOCK_STREAM) {
         return NULL;
     }
+
     length = sizeof(domain);
+
     if (getsockopt(socket_fd, SOL_SOCKET, SO_DOMAIN, &domain, &length) != 0 || domain != AF_UNIX ||
         max_bytes < sizeof(TbSymbolWire_t)) {
         return NULL;
@@ -200,6 +215,7 @@ TbSymbolWire_t *tb_symbol_wire_create(int socket_fd, size_t max_bytes, TbSymbolB
 
     if (aggregate && !tb_symbol_budget_reserve(aggregate, sizeof(TbSymbolWire_t)))
         return NULL;
+
     TbSymbolWire_t *wire = calloc(1, sizeof(*wire));
     if (!wire) {
         if (aggregate)
@@ -213,6 +229,7 @@ TbSymbolWire_t *tb_symbol_wire_create(int socket_fd, size_t max_bytes, TbSymbolB
     wire->allocated     = sizeof(*wire);
     wire->tx.descriptor = -1;
     wire->rx.descriptor = -1;
+
     return wire;
 }
 
@@ -225,8 +242,11 @@ void tb_symbol_wire_destroy(TbSymbolWire_t *wire)
     frame_clear(wire, &wire->tx);
     frame_clear(wire, &wire->rx);
     close_fd(&wire->socket_fd);
+
     TbSymbolBudget_t *aggregate = wire->aggregate;
+
     free(wire);
+
     if (aggregate)
         (void)tb_symbol_budget_release(aggregate, sizeof(TbSymbolWire_t));
 }
@@ -246,12 +266,16 @@ bool tb_symbol_wire_send(TbSymbolWire_t *wire, const TbSymbolMessage_t *message)
         .message    = *message,
         .active     = true
     };
+
     if (!reserve_payload(wire, &frame))
         return false;
+
     if (message->length)
         memcpy(frame.payload, message->payload, message->length);
+
     if (message->descriptor >= 0) {
         frame.descriptor = fcntl(message->descriptor, F_DUPFD_CLOEXEC, 3);
+
         if (frame.descriptor < 0) {
             frame_clear(wire, &frame);
             return false;
@@ -259,10 +283,12 @@ bool tb_symbol_wire_send(TbSymbolWire_t *wire, const TbSymbolMessage_t *message)
     }
     encode_header(&frame);
     wire->tx = frame;
+
     if (wire->tx.inline_payload) {
         wire->tx.payload = wire->tx.control;
         wire->tx.message.payload = wire->tx.payload;
     }
+
     return true;
 }
 
@@ -284,18 +310,23 @@ static TbSymbolWireStatus_e receive_bytes(TbSymbolWire_t *wire, unsigned char *b
         .iov_base = bytes,
         .iov_len  = length
     };
+
     struct msghdr message = {
         .msg_iov        = &vector,
         .msg_iovlen     = 1,
         .msg_control    = control.bytes,
         .msg_controllen = sizeof(control.bytes)
     };
+
     ssize_t count = recvmsg(wire->socket_fd, &message, MSG_DONTWAIT | MSG_CMSG_CLOEXEC);
+
     *received = 0;
+
     if (count < 0) {
         return errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR ? TB_SYMBOL_WIRE_OK
                                                                      : TB_SYMBOL_WIRE_IO;
     }
+
     bool bad = ((unsigned)message.msg_flags & ((unsigned)MSG_CTRUNC | (unsigned)MSG_TRUNC)) != 0;
     int  descriptor = -1;
     size_t descriptors = 0;
@@ -305,24 +336,30 @@ static TbSymbolWireStatus_e receive_bytes(TbSymbolWire_t *wire, unsigned char *b
             bad = true;
             continue;
         }
+
         size_t offset = (size_t)((unsigned char *)header - control.bytes);
         if (header->cmsg_len > message.msg_controllen - offset) {
             bad = true;
             break;
         }
+
         size_t bytes_count = header->cmsg_len - CMSG_LEN(0);
         if (bytes_count % sizeof(int))
             bad = true;
+
         for (size_t i = 0; i < bytes_count / sizeof(int); ++i) {
             int current;
+
             memcpy(&current, CMSG_DATA(header) + i * sizeof(int), sizeof(current));
             ++descriptors;
+
             if (descriptor >= 0)
                 (void)close(current);
             else
                 descriptor = current;
         }
     }
+
     size_t expected = trailer && count ? wire->rx.header[12] : 0;
     int    fd_flags = descriptor >= 0 ? fcntl(descriptor, F_GETFD) : 0;
     if (bad || descriptors != expected ||
@@ -331,13 +368,16 @@ static TbSymbolWireStatus_e receive_bytes(TbSymbolWire_t *wire, unsigned char *b
         close_fd(&descriptor);
         return TB_SYMBOL_WIRE_PROTOCOL;
     }
+
     if (!count)
         return !wire->rx.offset ? TB_SYMBOL_WIRE_EOF : TB_SYMBOL_WIRE_PROTOCOL;
+
     if (descriptor >= 0) {
         wire->rx.descriptor         = descriptor;
         wire->rx.message.descriptor = descriptor;
     }
     *received = (size_t)count;
+
     return TB_SYMBOL_WIRE_OK;
 }
 
@@ -349,6 +389,7 @@ static ssize_t send_trailer(TbSymbolWire_t *wire)
         .iov_base = &byte,
         .iov_len  = 1
     };
+
     union {
         struct cmsghdr alignment;
         unsigned char  bytes[CMSG_SPACE(sizeof(int))];
@@ -357,15 +398,19 @@ static ssize_t send_trailer(TbSymbolWire_t *wire)
         .msg_iov    = &vector,
         .msg_iovlen = 1
     };
+
     if (wire->tx.descriptor >= 0) {
         message.msg_control    = control.bytes;
         message.msg_controllen = sizeof(control.bytes);
+
         struct cmsghdr *header = CMSG_FIRSTHDR(&message);
+
         header->cmsg_level = SOL_SOCKET;
         header->cmsg_type  = SCM_RIGHTS;
         header->cmsg_len   = CMSG_LEN(sizeof(int));
         memcpy(CMSG_DATA(header), &wire->tx.descriptor, sizeof(int));
     }
+
     return sendmsg(wire->socket_fd, &message, MSG_DONTWAIT | MSG_NOSIGNAL);
 }
 
@@ -374,6 +419,7 @@ TbSymbolWireStatus_e tb_symbol_wire_pump(TbSymbolWire_t *wire)
 {
     if (!wire)
         return TB_SYMBOL_WIRE_IO;
+
     if (wire->status != TB_SYMBOL_WIRE_OK)
         return wire->status;
 
@@ -382,9 +428,11 @@ TbSymbolWireStatus_e tb_symbol_wire_pump(TbSymbolWire_t *wire)
     unsigned steps       = 0;
     for (; steps < TB_SYMBOL_WIRE_IO_STEPS / 2 && send_budget && wire->tx.active;) {
         ++steps;
+
         Frame_t *frame = &wire->tx;
         size_t   end   = TB_SYMBOL_WIRE_HEADER_BYTES + frame->message.length;
         ssize_t  count;
+
         if (frame->offset == end) {
             count = send_trailer(wire);
         } else {
@@ -392,22 +440,29 @@ TbSymbolWireStatus_e tb_symbol_wire_pump(TbSymbolWire_t *wire)
             size_t length = header ? TB_SYMBOL_WIRE_HEADER_BYTES - frame->offset : end - frame->offset;
             if (length > send_budget)
                 length = send_budget;
+
             const unsigned char *bytes = header ? frame->header + frame->offset
                                                : frame->payload + frame->offset - TB_SYMBOL_WIRE_HEADER_BYTES;
+
             count = send(wire->socket_fd, bytes, length, MSG_DONTWAIT | MSG_NOSIGNAL);
         }
+
         if (count < 0) {
             if (errno == EINTR)
                 continue;
+
             if (errno == EAGAIN || errno == EWOULDBLOCK)
                 break;
+
             return fail(wire, TB_SYMBOL_WIRE_IO);
         }
+
         if (!count)
             return fail(wire, TB_SYMBOL_WIRE_IO);
 
         budget      -= (size_t)count;
         send_budget -= (size_t)count;
+
         if (frame->offset == end)
             frame_clear(wire, frame);
         else
@@ -416,6 +471,7 @@ TbSymbolWireStatus_e tb_symbol_wire_pump(TbSymbolWire_t *wire)
 
     for (; steps < TB_SYMBOL_WIRE_IO_STEPS && budget && !wire->rx.complete;) {
         ++steps;
+
         Frame_t *frame = &wire->rx;
         size_t   end   = TB_SYMBOL_WIRE_HEADER_BYTES + frame->message.length;
         bool     header = frame->offset < TB_SYMBOL_WIRE_HEADER_BYTES;
@@ -428,26 +484,34 @@ TbSymbolWireStatus_e tb_symbol_wire_pump(TbSymbolWire_t *wire)
                       : trailer ? 1 : end - frame->offset;
         if (length > budget)
             length = budget;
+
         size_t received;
         TbSymbolWireStatus_e status = receive_bytes(wire, bytes, length, trailer, &received);
         if (status != TB_SYMBOL_WIRE_OK)
             return fail(wire, status);
+
         if (!received)
             break;
+
         frame->offset += received;
         budget        -= received;
+
         if (header && frame->offset == TB_SYMBOL_WIRE_HEADER_BYTES) {
             if (!decode_header(frame))
                 return fail(wire, TB_SYMBOL_WIRE_PROTOCOL);
+
             if (!reserve_payload(wire, frame))
                 return fail(wire, TB_SYMBOL_WIRE_RESOURCE);
         }
+
         if (trailer) {
             if (marker != WIRE_TRAILER)
                 return fail(wire, TB_SYMBOL_WIRE_PROTOCOL);
+
             frame->complete = true;
         }
     }
+
     return wire->rx.complete ? TB_SYMBOL_WIRE_MESSAGE : TB_SYMBOL_WIRE_OK;
 }
 
@@ -464,8 +528,10 @@ int tb_symbol_wire_take_descriptor(TbSymbolWire_t *wire)
         return -1;
 
     int descriptor = wire->rx.descriptor;
+
     wire->rx.descriptor         = -1;
     wire->rx.message.descriptor = -1;
+
     return descriptor;
 }
 
@@ -491,7 +557,7 @@ size_t tb_symbol_wire_allocated(const TbSymbolWire_t *wire)
 
 struct pollfd tb_symbol_wire_pollfd(const TbSymbolWire_t *wire)
 {
-    return (struct pollfd){
+    return (struct pollfd) {
         .fd     = wire ? wire->socket_fd : -1,
         .events = (short)((wire && !wire->rx.complete ? (unsigned)POLLIN : 0U) |
                           (wire && wire->tx.active ? (unsigned)POLLOUT : 0U))

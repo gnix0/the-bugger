@@ -17,10 +17,12 @@ static bool fields(const void *bytes, size_t length, TbSymbolByteOrder_e order,
     TbSymbolReader_t reader;
     if (tb_symbol_reader_init(&reader, bytes, length, order) != TB_SYMBOL_READ_OK)
         return false;
+
     for (size_t i = 0; i < count; ++i) {
         if (tb_symbol_reader_uint(&reader, widths[i], &values[i]) != TB_SYMBOL_READ_OK)
             return false;
     }
+
     return true;
 }
 
@@ -34,6 +36,7 @@ static bool alignment_valid(uint64_t alignment)
 static bool address_range(const TbSymbolElfHeader_t *header, uint64_t address, uint64_t bytes)
 {
     uint64_t maximum = header->address_bytes == 4 ? UINT32_MAX : UINT64_MAX;
+
     return address <= maximum && (!bytes || bytes - 1 <= maximum - address);
 }
 
@@ -43,13 +46,17 @@ TbSymbolElfStatus_e tb_symbol_elf_header(uint64_t file_bytes, const void *bytes,
 {
     if (!bytes || !header)
         return TB_SYMBOL_ELF_INVALID;
+
     const unsigned char *ident = bytes;
     if (length < EI_NIDENT || memcmp(ident, ELFMAG, SELFMAG) != 0)
         return TB_SYMBOL_ELF_MALFORMED;
+
     if (ident[EI_CLASS] != ELFCLASS32 && ident[EI_CLASS] != ELFCLASS64)
         return ident[EI_CLASS] ? TB_SYMBOL_ELF_UNSUPPORTED : TB_SYMBOL_ELF_MALFORMED;
+
     if (ident[EI_DATA] != ELFDATA2LSB && ident[EI_DATA] != ELFDATA2MSB)
         return ident[EI_DATA] ? TB_SYMBOL_ELF_UNSUPPORTED : TB_SYMBOL_ELF_MALFORMED;
+
     if (ident[EI_VERSION] != EV_CURRENT)
         return ident[EI_VERSION] ? TB_SYMBOL_ELF_UNSUPPORTED : TB_SYMBOL_ELF_MALFORMED;
 
@@ -60,22 +67,26 @@ TbSymbolElfStatus_e tb_symbol_elf_header(uint64_t file_bytes, const void *bytes,
     uint64_t values[13];
     if (!fields(ident + EI_NIDENT, length - EI_NIDENT, order, widths, 13, values))
         return TB_SYMBOL_ELF_MALFORMED;
+
     if (values[2] != EV_CURRENT)
         return values[2] ? TB_SYMBOL_ELF_UNSUPPORTED : TB_SYMBOL_ELF_MALFORMED;
+
     if (values[0] != ET_EXEC && values[0] != ET_DYN)
         return TB_SYMBOL_ELF_UNSUPPORTED;
 
     uint64_t minimum = width == 4 ? 52 : 64;
     if (values[7] < minimum || !tb_symbol_range(0, values[7], file_bytes))
         return TB_SYMBOL_ELF_MALFORMED;
+
     if (values[7] != minimum)
         return TB_SYMBOL_ELF_UNSUPPORTED;
+
     if ((values[11] >= SHN_LORESERVE) ||
         (values[12] >= SHN_LORESERVE && values[12] != SHN_XINDEX)) {
         return TB_SYMBOL_ELF_MALFORMED;
     }
 
-    *header = (TbSymbolElfHeader_t){
+    *header = (TbSymbolElfHeader_t) {
         .byte_order     = order,
         .address_bytes  = width,
         .os_abi         = ident[EI_OSABI],
@@ -94,6 +105,7 @@ TbSymbolElfStatus_e tb_symbol_elf_header(uint64_t file_bytes, const void *bytes,
         .section_count  = (uint16_t)values[11],
         .section_names  = (uint16_t)values[12]
     };
+
     return TB_SYMBOL_ELF_OK;
 }
 
@@ -109,13 +121,16 @@ static TbSymbolElfStatus_e table_valid(uint64_t extent, TbSymbolElfTable_t table
 {
     if (!table.count)
         return table.offset ? TB_SYMBOL_ELF_MALFORMED : TB_SYMBOL_ELF_OK;
+
     if (!table.offset || table.stride < expected)
         return TB_SYMBOL_ELF_MALFORMED;
+
     uint64_t bytes;
     if (!tb_symbol_multiply(table.stride, table.count, &bytes) ||
         !tb_symbol_range(table.offset, bytes, extent)) {
         return TB_SYMBOL_ELF_MALFORMED;
     }
+
     return table.stride == expected ? TB_SYMBOL_ELF_OK : TB_SYMBOL_ELF_UNSUPPORTED;
 }
 
@@ -125,12 +140,15 @@ TbSymbolElfStatus_e tb_symbol_elf_layout(const TbSymbolElfHeader_t *header,
 {
     if (!header_valid(header) || !layout)
         return TB_SYMBOL_ELF_INVALID;
+
     if (tb_symbol_elf_needs_zero(header) && (!zero || !header->section_offset))
         return TB_SYMBOL_ELF_MALFORMED;
+
     if (zero && (zero->type != SHT_NULL || zero->name_offset || zero->flags || zero->address ||
                  zero->offset || zero->alignment || zero->entry_bytes)) {
         return TB_SYMBOL_ELF_MALFORMED;
     }
+
     TbSymbolElfLayout_t candidate = {
         .programs = {
             .offset = header->program_offset,
@@ -144,36 +162,47 @@ TbSymbolElfStatus_e tb_symbol_elf_layout(const TbSymbolElfHeader_t *header,
         },
         .section_names = header->section_names
     };
+
     if (header->section_offset && !header->section_count) {
         if (zero->bytes < SHN_LORESERVE)
             return TB_SYMBOL_ELF_MALFORMED;
+
         candidate.sections.count = zero->bytes;
     } else if (zero && zero->bytes) {
         return TB_SYMBOL_ELF_MALFORMED;
     }
+
     if (header->program_count == PN_XNUM) {
         if (zero->info < PN_XNUM)
             return TB_SYMBOL_ELF_MALFORMED;
+
         candidate.programs.count = zero->info;
     } else if (zero && zero->info) {
         return TB_SYMBOL_ELF_MALFORMED;
     }
+
     if (header->section_names == SHN_XINDEX) {
         if (zero->link < SHN_LORESERVE)
             return TB_SYMBOL_ELF_MALFORMED;
+
         candidate.section_names = zero->link;
     } else if (zero && zero->link) {
         return TB_SYMBOL_ELF_MALFORMED;
     }
+
     if (candidate.section_names && candidate.section_names >= candidate.sections.count)
         return TB_SYMBOL_ELF_MALFORMED;
+
     TbSymbolElfStatus_e status = table_valid(header->file_bytes, candidate.sections,
                                             header->address_bytes == 4 ? 40 : 64);
     if (status == TB_SYMBOL_ELF_OK)
         status = table_valid(header->file_bytes, candidate.programs, header->address_bytes == 4 ? 32 : 56);
+
     if (status != TB_SYMBOL_ELF_OK)
         return status;
+
     *layout = candidate;
+
     return TB_SYMBOL_ELF_OK;
 }
 
@@ -187,7 +216,9 @@ bool tb_symbol_elf_entry(const TbSymbolElfTable_t *table, uint64_t index, uint64
         !tb_symbol_add(table->offset, relative, &result)) {
         return false;
     }
+
     *offset = result;
+
     return true;
 }
 
@@ -197,11 +228,13 @@ TbSymbolElfStatus_e tb_symbol_elf_section(const TbSymbolElfHeader_t *header, con
 {
     if (!header_valid(header) || !bytes || !section)
         return TB_SYMBOL_ELF_INVALID;
+
     unsigned width = header->address_bytes;
     unsigned widths[] = {4, 4, width, width, width, width, 4, 4, width, width};
     uint64_t values[10];
     if (!fields(bytes, length, header->byte_order, widths, 10, values))
         return TB_SYMBOL_ELF_MALFORMED;
+
     TbSymbolElfSection_t candidate = {
         .name_offset = (uint32_t)values[0],
         .type        = (uint32_t)values[1],
@@ -214,6 +247,7 @@ TbSymbolElfStatus_e tb_symbol_elf_section(const TbSymbolElfHeader_t *header, con
         .alignment   = values[8],
         .entry_bytes = values[9]
     };
+
     if (candidate.type != SHT_NULL) {
         if (!alignment_valid(candidate.alignment) ||
             (candidate.alignment && candidate.address % candidate.alignment) ||
@@ -224,6 +258,7 @@ TbSymbolElfStatus_e tb_symbol_elf_section(const TbSymbolElfHeader_t *header, con
         }
     }
     *section = candidate;
+
     return TB_SYMBOL_ELF_OK;
 }
 
@@ -233,12 +268,14 @@ TbSymbolElfStatus_e tb_symbol_elf_program(const TbSymbolElfHeader_t *header, con
 {
     if (!header_valid(header) || !bytes || !program)
         return TB_SYMBOL_ELF_INVALID;
+
     unsigned width = header->address_bytes;
     unsigned widths32[] = {4, 4, 4, 4, 4, 4, 4, 4};
     unsigned widths64[] = {4, 4, 8, 8, 8, 8, 8, 8};
     uint64_t values[8];
     if (!fields(bytes, length, header->byte_order, width == 4 ? widths32 : widths64, 8, values))
         return TB_SYMBOL_ELF_MALFORMED;
+
     TbSymbolElfProgram_t candidate = {
         .type             = (uint32_t)values[0],
         .flags            = (uint32_t)values[width == 4 ? 6 : 1],
@@ -249,10 +286,12 @@ TbSymbolElfStatus_e tb_symbol_elf_program(const TbSymbolElfHeader_t *header, con
         .memory_bytes     = values[width == 4 ? 5 : 6],
         .alignment        = values[7]
     };
+
     if (candidate.type != PT_NULL &&
         !tb_symbol_range(candidate.offset, candidate.file_bytes, header->file_bytes)) {
         return TB_SYMBOL_ELF_MALFORMED;
     }
+
     if (candidate.type == PT_LOAD || candidate.type == PT_TLS) {
         if (candidate.file_bytes > candidate.memory_bytes || !alignment_valid(candidate.alignment) ||
             !address_range(header, candidate.virtual_address, candidate.memory_bytes) ||
@@ -262,6 +301,7 @@ TbSymbolElfStatus_e tb_symbol_elf_program(const TbSymbolElfHeader_t *header, con
         }
     }
     *program = candidate;
+
     return TB_SYMBOL_ELF_OK;
 }
 
@@ -271,13 +311,15 @@ TbSymbolElfStatus_e tb_symbol_elf_symbol(const TbSymbolElfHeader_t *header, cons
 {
     if (!header_valid(header) || !bytes || !symbol)
         return TB_SYMBOL_ELF_INVALID;
+
     unsigned width = header->address_bytes;
     unsigned widths32[] = {4, 4, 4, 1, 1, 2};
     unsigned widths64[] = {4, 1, 1, 2, 8, 8};
     uint64_t values[6];
     if (!fields(bytes, length, header->byte_order, width == 4 ? widths32 : widths64, 6, values))
         return TB_SYMBOL_ELF_MALFORMED;
-    *symbol = (TbSymbolElfSymbol_t){
+
+    *symbol = (TbSymbolElfSymbol_t) {
         .name_offset   = (uint32_t)values[0],
         .info          = (uint8_t)values[width == 4 ? 3 : 1],
         .other         = (uint8_t)values[width == 4 ? 4 : 2],
@@ -285,5 +327,6 @@ TbSymbolElfStatus_e tb_symbol_elf_symbol(const TbSymbolElfHeader_t *header, cons
         .value         = values[width == 4 ? 1 : 4],
         .bytes         = values[width == 4 ? 2 : 5]
     };
+
     return TB_SYMBOL_ELF_OK;
 }

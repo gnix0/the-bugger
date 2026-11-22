@@ -16,6 +16,7 @@ static bool room(TbSymbolForm_t *form, uint64_t bytes)
         form->status = TB_SYMBOL_FORM_TRUNCATED;
         return false;
     }
+
     return true;
 }
 
@@ -28,11 +29,13 @@ static void select_form(TbSymbolForm_t *form, uint64_t code, bool indirect)
     form->fixed = 0;
     form->accumulator = 0;
     form->phase = FORM_FIXED;
+
     if ((form->request.version == 4 && code >= TB_SYMBOL_FORM_STRX && code != TB_SYMBOL_FORM_REF_SIG8) ||
         !code || code == 2 || code > TB_SYMBOL_FORM_ADDRX4) {
         form->status = TB_SYMBOL_FORM_UNSUPPORTED;
         return;
     }
+
     switch (code) {
     case TB_SYMBOL_FORM_ADDR:
         form->fixed = form->request.address_bytes;
@@ -106,6 +109,7 @@ static void select_form(TbSymbolForm_t *form, uint64_t code, bool indirect)
         form->view.numeric = true;
         form->view.bits = 1;
         form->status = TB_SYMBOL_FORM_COMPLETE;
+
         return;
     case TB_SYMBOL_FORM_IMPLICIT_CONST:
         if (!indirect) {
@@ -116,11 +120,14 @@ static void select_form(TbSymbolForm_t *form, uint64_t code, bool indirect)
         break;
     default:
         form->status = TB_SYMBOL_FORM_UNSUPPORTED;
+
         return;
     }
+
     form->remaining = form->fixed;
     form->view.is_signed = code == TB_SYMBOL_FORM_SDATA || code == TB_SYMBOL_FORM_IMPLICIT_CONST;
     (void)tb_symbol_leb_init(&form->leb, form->view.is_signed);
+
     if (form->fixed)
         (void)room(form, form->fixed);
 }
@@ -134,12 +141,15 @@ TbSymbolFormStatus_e tb_symbol_form_init(TbSymbolForm_t *form, TbSymbolFormReque
         (request.byte_order != TB_SYMBOL_LITTLE_ENDIAN && request.byte_order != TB_SYMBOL_BIG_ENDIAN)) {
         return TB_SYMBOL_FORM_INVALID;
     }
-    *form = (TbSymbolForm_t){
+
+    *form = (TbSymbolForm_t) {
         .request     = request,
         .status      = TB_SYMBOL_FORM_PENDING,
         .initialized = true
     };
+
     select_form(form, request.form, false);
+
     return form->status;
 }
 
@@ -150,6 +160,7 @@ static void block(TbSymbolForm_t *form, uint64_t bytes)
     form->view.payload_bytes = bytes;
     form->remaining = bytes;
     form->phase = FORM_BLOCK;
+
     if (room(form, bytes) && !bytes)
         form->status = TB_SYMBOL_FORM_COMPLETE;
 }
@@ -162,6 +173,7 @@ static void leb_complete(TbSymbolForm_t *form)
         form->status = TB_SYMBOL_FORM_INVALID;
         return;
     }
+
     if (form->phase == FORM_INDIRECT) {
         if (view.fits)
             select_form(form, view.bits, true);
@@ -186,14 +198,19 @@ TbSymbolFormStatus_e tb_symbol_form_feed(TbSymbolForm_t *form, const void *bytes
 {
     if (!form || !form->initialized || !consumed || (length && !bytes))
         return TB_SYMBOL_FORM_INVALID;
+
     *consumed = 0;
+
     const unsigned char *input = bytes;
     size_t count = length < 256 ? length : 256;
     while (*consumed < count && form->status == TB_SYMBOL_FORM_PENDING) {
         if (!room(form, 1))
             break;
+
         unsigned byte = input[(*consumed)++];
+
         ++form->view.bytes;
+
         if (form->phase == FORM_LEB || form->phase == FORM_LENGTH_LEB || form->phase == FORM_INDIRECT) {
             unsigned char encoded = (unsigned char)byte;
             size_t taken;
@@ -204,6 +221,7 @@ TbSymbolFormStatus_e tb_symbol_form_feed(TbSymbolForm_t *form, const void *bytes
                 form->status = TB_SYMBOL_FORM_INVALID;
         } else if (form->phase == FORM_STRING) {
             ++form->view.payload_bytes;
+
             if (!byte) {
                 --form->view.payload_bytes;
                 form->status = TB_SYMBOL_FORM_COMPLETE;
@@ -213,8 +231,10 @@ TbSymbolFormStatus_e tb_symbol_form_feed(TbSymbolForm_t *form, const void *bytes
                 unsigned shift = form->request.byte_order == TB_SYMBOL_LITTLE_ENDIAN
                                      ? (unsigned)(form->fixed - form->remaining) * 8
                                      : (unsigned)(form->remaining - 1) * 8;
+
                 form->accumulator |= (uint64_t)byte << shift;
             }
+
             if (!--form->remaining) {
                 if (form->phase == FORM_LENGTH_FIXED) {
                     block(form, form->accumulator);
@@ -229,8 +249,10 @@ TbSymbolFormStatus_e tb_symbol_form_feed(TbSymbolForm_t *form, const void *bytes
             }
         }
     }
+
     if (form->status == TB_SYMBOL_FORM_PENDING && form->view.bytes == form->request.available)
         form->status = TB_SYMBOL_FORM_TRUNCATED;
+
     return form->status;
 }
 
@@ -239,6 +261,7 @@ TbSymbolFormStatus_e tb_symbol_form_finish(const TbSymbolForm_t *form)
 {
     if (!form || !form->initialized)
         return TB_SYMBOL_FORM_INVALID;
+
     return form->status == TB_SYMBOL_FORM_PENDING ? TB_SYMBOL_FORM_TRUNCATED : form->status;
 }
 
@@ -247,6 +270,8 @@ bool tb_symbol_form_view(const TbSymbolForm_t *form, TbSymbolFormView_t *view)
 {
     if (!view || tb_symbol_form_finish(form) != TB_SYMBOL_FORM_COMPLETE)
         return false;
+
     *view = form->view;
+
     return true;
 }

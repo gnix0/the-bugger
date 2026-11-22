@@ -41,14 +41,17 @@ TbSymbolFile_t *tb_symbol_file_create(TbSymbolStorageInfo_t expected, int descri
         !tb_symbol_budget_reserve(construction, sizeof(TbSymbolFile_t))) {
         return NULL;
     }
+
     TbSymbolFile_t *file = calloc(1, sizeof(*file));
     if (!file) {
         (void)tb_symbol_budget_release(construction, sizeof(TbSymbolFile_t));
         return NULL;
     }
+
     file->construction = construction;
     file->expected     = expected;
     file->descriptor   = descriptor;
+
     return file;
 }
 
@@ -60,20 +63,23 @@ bool tb_symbol_file_request(TbSymbolFile_t *file, TbSymbolFileRange_t range)
         !tb_symbol_range(range.offset, range.bytes, file->expected.bytes)) {
         return false;
     }
+
     file->range   = range;
     file->filled  = 0;
     file->phase   = FILE_FLAGS;
     file->outcome = TB_SYMBOL_PENDING;
+
     return true;
 }
 
 
 static void fail(TbSymbolFile_t *file, TbSymbolFileFailure_e reason, int error)
 {
-    file->failure = (TbSymbolFileFailure_t){
+    file->failure = (TbSymbolFileFailure_t) {
         .reason       = reason,
         .system_error = error
     };
+
     file->outcome = error == ENOMEM || error == EMFILE || error == ENFILE
                       ? TB_SYMBOL_RESOURCE_FAILURE : TB_SYMBOL_OPERATIONAL_FAILURE;
     file->phase = FILE_FAILED;
@@ -112,6 +118,7 @@ static void inspect(TbSymbolFile_t *file, bool final)
             fail(file, TB_SYMBOL_FILE_IO, errno);
         return;
     }
+
     if (!S_ISREG(info.st_mode) || info.st_size < 0 || (uint64_t)info.st_size != file->expected.bytes ||
         (uint64_t)info.st_dev != file->expected.key.device ||
         (uint64_t)info.st_ino != file->expected.key.inode ||
@@ -136,6 +143,7 @@ static void read_bytes(TbSymbolFile_t *file, size_t max_bytes)
     size_t length = file->range.bytes - file->filled;
     if (length > max_bytes)
         length = max_bytes;
+
     ssize_t count = pread(file->descriptor, file->buffer + file->filled, length,
                           (off_t)(file->range.offset + file->filled));
     if (count < 0) {
@@ -145,6 +153,7 @@ static void read_bytes(TbSymbolFile_t *file, size_t max_bytes)
         fail(file, TB_SYMBOL_FILE_CHANGED, 0);
     } else {
         file->filled += (size_t)count;
+
         if (file->filled == file->range.bytes)
             file->phase = FILE_AFTER;
     }
@@ -155,14 +164,18 @@ TbSymbolOutcome_e tb_symbol_file_step(TbSymbolFile_t *file, size_t max_bytes)
 {
     if (!file)
         return TB_SYMBOL_OPERATIONAL_FAILURE;
+
     if (file->phase == FILE_DONE || file->phase == FILE_FAILED)
         return file->outcome;
+
     if (!max_bytes || max_bytes > TB_SYMBOL_FILE_WINDOW_BYTES || file->phase == FILE_IDLE) {
         fail(file, TB_SYMBOL_FILE_REQUEST, EINVAL);
         return file->outcome;
     }
+
     FilePhase_e before = file->phase;
     size_t filled = file->filled;
+
     switch (file->phase) {
     case FILE_FLAGS:
         flags(file, false);
@@ -184,12 +197,14 @@ TbSymbolOutcome_e tb_symbol_file_step(TbSymbolFile_t *file, size_t max_bytes)
     case FILE_FAILED:
         break;
     }
+
     if (before != file->phase || filled != file->filled) {
         if (file->progress == UINT64_MAX)
             fail(file, TB_SYMBOL_FILE_REQUEST, EOVERFLOW);
         else
             ++file->progress;
     }
+
     return file->outcome;
 }
 
@@ -198,18 +213,20 @@ bool tb_symbol_file_view(const TbSymbolFile_t *file, TbSymbolFileView_t *view)
 {
     if (!file || !view || file->phase != FILE_DONE || file->outcome != TB_SYMBOL_SUCCESS)
         return false;
-    *view = (TbSymbolFileView_t){
+
+    *view = (TbSymbolFileView_t) {
         .data   = file->buffer,
         .offset = file->range.offset,
         .bytes  = file->range.bytes
     };
+
     return true;
 }
 
 
 TbSymbolFileFailure_t tb_symbol_file_failure(const TbSymbolFile_t *file)
 {
-    return file ? file->failure : (TbSymbolFileFailure_t){
+    return file ? file->failure : (TbSymbolFileFailure_t) {
         .reason       = TB_SYMBOL_FILE_REQUEST,
         .system_error = EINVAL
     };
@@ -226,6 +243,7 @@ void tb_symbol_file_destroy(TbSymbolFile_t *file)
 {
     if (!file)
         return;
+
     (void)tb_symbol_budget_release(file->construction, sizeof(*file));
     free(file);
 }

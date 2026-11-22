@@ -49,17 +49,20 @@ TbSymbolEquality_t *tb_symbol_equal_create(int left_fd, int right_fd, uint64_t b
         (construction && !tb_symbol_budget_reserve(construction, sizeof(TbSymbolEquality_t)))) {
         return NULL;
     }
+
     TbSymbolEquality_t *comparison = calloc(1, sizeof(*comparison));
     if (!comparison) {
         if (construction)
             (void)tb_symbol_budget_release(construction, sizeof(TbSymbolEquality_t));
         return NULL;
     }
+
     comparison->construction   = construction;
     comparison->descriptors[0] = left_fd;
     comparison->descriptors[1] = right_fd;
     comparison->bytes          = bytes;
     comparison->equal          = true;
+
     return comparison;
 }
 
@@ -87,14 +90,14 @@ static void flags(TbSymbolEquality_t *comparison, unsigned input)
     int value = fcntl(comparison->descriptors[input], F_GETFL);
     if (value < 0) {
         if (errno != EINTR) {
-            fail(comparison, (TbSymbolEqualityFailure_t){
+            fail(comparison, (TbSymbolEqualityFailure_t) {
                 .input_mask   = 1U << input,
                 .system_error = errno
             }, TB_SYMBOL_OPERATIONAL_FAILURE);
         }
     } else if (((unsigned)value & (unsigned)O_PATH) ||
                ((unsigned)value & (unsigned)O_ACCMODE) != O_RDONLY) {
-        fail(comparison, (TbSymbolEqualityFailure_t){
+        fail(comparison, (TbSymbolEqualityFailure_t) {
             .input_mask   = 1U << input,
             .system_error = 0
         }, TB_SYMBOL_UNSUPPORTED);
@@ -109,19 +112,20 @@ static void inspect(TbSymbolEquality_t *comparison, unsigned input, bool final)
     struct stat info;
     if (fstat(comparison->descriptors[input], &info)) {
         if (errno != EINTR) {
-            fail(comparison, (TbSymbolEqualityFailure_t){
+            fail(comparison, (TbSymbolEqualityFailure_t) {
                 .input_mask   = 1U << input,
                 .system_error = errno
             }, TB_SYMBOL_OPERATIONAL_FAILURE);
         }
     } else if (!S_ISREG(info.st_mode) || info.st_size < 0 || (uint64_t)info.st_size != comparison->bytes ||
                (final && !unchanged(&comparison->initial[input], &info))) {
-        fail(comparison, (TbSymbolEqualityFailure_t){
+        fail(comparison, (TbSymbolEqualityFailure_t) {
             .input_mask   = 1U << input,
             .system_error = 0
         }, TB_SYMBOL_MALFORMED);
     } else if (final) {
         comparison->phase = input ? EQUALITY_DONE : EQUALITY_RIGHT_CHECK;
+
         if (input)
             comparison->outcome = TB_SYMBOL_SUCCESS;
     } else {
@@ -139,31 +143,35 @@ static void read_input(TbSymbolEquality_t *comparison, bool right, size_t max_by
             comparison->phase = EQUALITY_LEFT_CHECK;
             return;
         }
+
         uint64_t remaining = comparison->bytes - comparison->offset;
         size_t chunk = max_bytes / 2;
         if (chunk > EQUALITY_HALF_BYTES)
             chunk = EQUALITY_HALF_BYTES;
         comparison->chunk = remaining < chunk ? (size_t)remaining : chunk;
     }
+
     size_t length = comparison->chunk - comparison->filled;
     if (length > max_bytes)
         length = max_bytes;
+
     ssize_t count = pread(comparison->descriptors[input], comparison->buffers[input] + comparison->filled,
                           length, (off_t)(comparison->offset + comparison->filled));
     if (count < 0) {
         if (errno != EINTR) {
-            fail(comparison, (TbSymbolEqualityFailure_t){
+            fail(comparison, (TbSymbolEqualityFailure_t) {
                 .input_mask   = 1U << input,
                 .system_error = errno
             }, TB_SYMBOL_OPERATIONAL_FAILURE);
         }
     } else if (!count) {
-        fail(comparison, (TbSymbolEqualityFailure_t){
+        fail(comparison, (TbSymbolEqualityFailure_t) {
             .input_mask   = 1U << input,
             .system_error = 0
         }, TB_SYMBOL_MALFORMED);
     } else {
         comparison->filled += (size_t)count;
+
         if (comparison->filled == comparison->chunk) {
             comparison->filled = 0;
             comparison->phase = input ? EQUALITY_COMPARE : EQUALITY_RIGHT_READ;
@@ -176,18 +184,22 @@ TbSymbolOutcome_e tb_symbol_equal_step(TbSymbolEquality_t *comparison, size_t ma
 {
     if (!comparison)
         return TB_SYMBOL_OPERATIONAL_FAILURE;
+
     if (comparison->outcome != TB_SYMBOL_PENDING)
         return comparison->outcome;
+
     if (max_bytes < 2 || max_bytes > (size_t)EQUALITY_HALF_BYTES * 2) {
-        fail(comparison, (TbSymbolEqualityFailure_t){
+        fail(comparison, (TbSymbolEqualityFailure_t) {
             .input_mask   = 3,
             .system_error = EINVAL
         }, TB_SYMBOL_OPERATIONAL_FAILURE);
         return comparison->outcome;
     }
+
     EqualityPhase_e before = comparison->phase;
     size_t filled = comparison->filled;
     size_t compared = comparison->compared;
+
     switch (comparison->phase) {
     case EQUALITY_LEFT_FLAGS:
         flags(comparison, 0);
@@ -211,12 +223,14 @@ TbSymbolOutcome_e tb_symbol_equal_step(TbSymbolEquality_t *comparison, size_t ma
         size_t count = comparison->chunk - comparison->compared;
         if (count > max_bytes / 2)
             count = max_bytes / 2;
+
         if (memcmp(comparison->buffers[0] + comparison->compared,
                    comparison->buffers[1] + comparison->compared, count) != 0) {
             comparison->equal = false;
             comparison->phase = EQUALITY_LEFT_CHECK;
         } else {
             comparison->compared += count;
+
             if (comparison->compared == comparison->chunk) {
                 comparison->offset += comparison->chunk;
                 comparison->compared = 0;
@@ -234,9 +248,10 @@ TbSymbolOutcome_e tb_symbol_equal_step(TbSymbolEquality_t *comparison, size_t ma
     case EQUALITY_DONE:
         break;
     }
+
     if (before != comparison->phase || filled != comparison->filled || compared != comparison->compared) {
         if (comparison->progress == UINT64_MAX) {
-            fail(comparison, (TbSymbolEqualityFailure_t){
+            fail(comparison, (TbSymbolEqualityFailure_t) {
                 .input_mask   = 3,
                 .system_error = EOVERFLOW
             }, TB_SYMBOL_OPERATIONAL_FAILURE);
@@ -244,6 +259,7 @@ TbSymbolOutcome_e tb_symbol_equal_step(TbSymbolEquality_t *comparison, size_t ma
             ++comparison->progress;
         }
     }
+
     return comparison->outcome;
 }
 
@@ -252,14 +268,16 @@ bool tb_symbol_equal_result(const TbSymbolEquality_t *comparison, bool *equal)
 {
     if (!comparison || !equal || comparison->outcome != TB_SYMBOL_SUCCESS)
         return false;
+
     *equal = comparison->equal;
+
     return true;
 }
 
 
 TbSymbolEqualityFailure_t tb_symbol_equal_failure(const TbSymbolEquality_t *comparison)
 {
-    return comparison ? comparison->failure : (TbSymbolEqualityFailure_t){
+    return comparison ? comparison->failure : (TbSymbolEqualityFailure_t) {
         .input_mask   = 3,
         .system_error = EINVAL
     };
@@ -276,8 +294,11 @@ void tb_symbol_equal_destroy(TbSymbolEquality_t *comparison)
 {
     if (!comparison)
         return;
+
     TbSymbolBudget_t *construction = comparison->construction;
+
     free(comparison);
+
     if (construction)
         (void)tb_symbol_budget_release(construction, sizeof(TbSymbolEquality_t));
 }

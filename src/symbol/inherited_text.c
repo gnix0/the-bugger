@@ -69,26 +69,32 @@ TbSymbolInheritedText_t *tb_symbol_inherited_text_create(TbSymbolSectionsView_t 
         !tb_symbol_budget_reserve(construction, sizeof(TbSymbolInheritedText_t))) {
         return NULL;
     }
+
     TbSymbolInheritedText_t *text = calloc(1, sizeof(*text));
     if (!text) {
         (void)tb_symbol_budget_release(construction, sizeof(TbSymbolInheritedText_t));
         return NULL;
     }
+
     text->construction = construction;
     text->directory    = directory;
     text->graph        = graph;
     text->selection    = selection;
+
     if (!tb_symbol_budget_reserve(construction, bytes)) {
         tb_symbol_inherited_text_destroy(text);
         return NULL;
     }
+
     text->slot_bytes = bytes;
     text->slots = malloc((size_t)bytes);
+
     if (!text->slots || tb_symbol_inherit_init(&text->owners, graph, selection.name, text->slots,
                                                graph.count) != TB_SYMBOL_INHERIT_PENDING) {
         tb_symbol_inherited_text_destroy(text);
         return NULL;
     }
+
     return text;
 }
 
@@ -136,12 +142,15 @@ static void fact_storage(TbSymbolInheritedText_t *text)
         finish(text, TB_SYMBOL_INHERITED_TEXT_RESOURCE, TB_SYMBOL_INHERITED_TEXT_ALLOCATION);
         return;
     }
+
     text->fact_bytes = bytes;
     text->facts = malloc((size_t)bytes);
+
     if (!text->facts) {
         finish(text, TB_SYMBOL_INHERITED_TEXT_RESOURCE, TB_SYMBOL_INHERITED_TEXT_ALLOCATION);
         return;
     }
+
     text->phase = INHERITED_NEXT_OWNER;
 }
 
@@ -155,6 +164,7 @@ static void next_owner(TbSymbolInheritedText_t *text)
                                                      : TB_SYMBOL_INHERITED_TEXT_OWNERS);
         return;
     }
+
     if (tb_symbol_inherit_owner(&text->owners, text->scan++, &text->expected)) {
         text->failure.node_index = text->expected.node_index;
         text->phase              = INHERITED_VALUE_SOURCE;
@@ -167,15 +177,19 @@ bool tb_symbol_inherited_text_need(const TbSymbolInheritedText_t *text, TbSymbol
 {
     if (!text || !need || text->status != TB_SYMBOL_INHERITED_TEXT_SOURCE)
         return false;
+
     TbSymbolInheritedTextNeed_t candidate = {0};
+
     if (text->phase == INHERITED_OWNERS) {
         candidate.kind = TB_SYMBOL_INHERITED_TEXT_OWNER_SOURCE;
+
         if (!tb_symbol_inherit_need(&text->owners, &candidate.source))
             return false;
     } else if (text->phase == INHERITED_VALUE_SOURCE) {
         const TbSymbolGraphNode_t *node = &text->graph.nodes[text->expected.node_index];
+
         candidate.kind = TB_SYMBOL_INHERITED_TEXT_VALUE_SOURCE;
-        candidate.source = (TbSymbolInheritNeed_t){
+        candidate.source = (TbSymbolInheritNeed_t) {
             .record     = node->record,
             .context    = node->context,
             .name       = text->selection.name,
@@ -185,6 +199,7 @@ bool tb_symbol_inherited_text_need(const TbSymbolInheritedText_t *text, TbSymbol
         return false;
     }
     *need = candidate;
+
     return true;
 }
 
@@ -215,27 +230,34 @@ TbSymbolInheritedTextStatus_e tb_symbol_inherited_text_source(TbSymbolInheritedT
 {
     if (!text || text->status != TB_SYMBOL_INHERITED_TEXT_SOURCE)
         return TB_SYMBOL_INHERITED_TEXT_INVALID;
+
     if (text->phase == INHERITED_OWNERS) {
         TbSymbolInheritStatus_e status = tb_symbol_inherit_source(&text->owners, units, tree, unit_index);
         if (status == TB_SYMBOL_INHERIT_INVALID)
             return TB_SYMBOL_INHERITED_TEXT_INVALID;
+
         if (status != TB_SYMBOL_INHERIT_PENDING) {
             (void)tb_symbol_inherit_failure(&text->owners, &text->failure.owner);
             finish(text, TB_SYMBOL_INHERITED_TEXT_DEPENDENCY, TB_SYMBOL_INHERITED_TEXT_OWNERS);
         } else {
             text->status = TB_SYMBOL_INHERITED_TEXT_PENDING;
         }
+
         return text->status;
     }
+
     if (text->phase != INHERITED_VALUE_SOURCE)
         return TB_SYMBOL_INHERITED_TEXT_INVALID;
+
     if (!units || !tree) {
         finish(text, TB_SYMBOL_INHERITED_TEXT_DEPENDENCY, TB_SYMBOL_INHERITED_TEXT_VALUE);
         return text->status;
     }
+
     const TbSymbolGraphNode_t *node = &text->graph.nodes[text->expected.node_index];
     if (!tb_symbol_graph_node_matches(node, *units, *tree, unit_index))
         return TB_SYMBOL_INHERITED_TEXT_INVALID;
+
     const TbSymbolDieEntry_t *entry = &tree->entries[node->record.entry_index];
     uint64_t index = text->expected.selection.first_index;
     if (!tree->attributes || index >= tree->attribute_count || index < entry->first_attribute ||
@@ -243,6 +265,7 @@ TbSymbolInheritedTextStatus_e tb_symbol_inherited_text_source(TbSymbolInheritedT
         !same_attribute(tree->attributes[index], text->expected.attribute)) {
         return TB_SYMBOL_INHERITED_TEXT_INVALID;
     }
+
     uint64_t form = text->expected.attribute.value.form;
     if (!string_form(form)) {
         finish(text, form == TB_SYMBOL_FORM_STRP_SUP ? TB_SYMBOL_INHERITED_TEXT_UNSUPPORTED
@@ -250,7 +273,8 @@ TbSymbolInheritedTextStatus_e tb_symbol_inherited_text_source(TbSymbolInheritedT
                TB_SYMBOL_INHERITED_TEXT_FORM);
         return text->status;
     }
-    text->candidate = (TbSymbolInheritedTextFact_t){
+
+    text->candidate = (TbSymbolInheritedTextFact_t) {
         .node_index          = text->expected.node_index,
         .selection           = text->expected.selection,
         .unit                = units->entries[unit_index],
@@ -263,7 +287,8 @@ TbSymbolInheritedTextStatus_e tb_symbol_inherited_text_source(TbSymbolInheritedT
         .root_first_attribute = tree->entries[0].first_attribute,
         .root_attribute_count = tree->entries[0].attribute_count
     };
-    text->value = tb_symbol_text_create(text->directory, *units, *tree, (TbSymbolTextSelection_t){
+
+    text->value = tb_symbol_text_create(text->directory, *units, *tree, (TbSymbolTextSelection_t) {
         .unit_index          = unit_index,
         .die_index           = node->record.entry_index,
         .name                = text->selection.name,
@@ -272,12 +297,14 @@ TbSymbolInheritedTextStatus_e tb_symbol_inherited_text_source(TbSymbolInheritedT
         .offset_section      = text->selection.offset_section,
         .descriptor          = text->selection.descriptor
     }, text->construction);
+
     if (!text->value) {
         finish(text, TB_SYMBOL_INHERITED_TEXT_RESOURCE, TB_SYMBOL_INHERITED_TEXT_ALLOCATION);
     } else {
         text->phase  = INHERITED_VALUE;
         text->status = TB_SYMBOL_INHERITED_TEXT_PENDING;
     }
+
     return text->status;
 }
 
@@ -289,7 +316,9 @@ static void value(TbSymbolInheritedText_t *text, size_t max_bytes)
         text->phase = INHERITED_ADOPT;
     } else if (status != TB_SYMBOL_TEXT_PENDING) {
         text->failure.text = tb_symbol_text_failure(text->value);
+
         TbSymbolInheritedTextStatus_e outcome = TB_SYMBOL_INHERITED_TEXT_OPERATIONAL;
+
         if (status == TB_SYMBOL_TEXT_CONFLICT) {
             outcome = TB_SYMBOL_INHERITED_TEXT_CONFLICT;
         } else if (status == TB_SYMBOL_TEXT_DEPENDENCY) {
@@ -325,6 +354,7 @@ static void adopt(TbSymbolInheritedText_t *text)
         finish(text, TB_SYMBOL_INHERITED_TEXT_OPERATIONAL, TB_SYMBOL_INHERITED_TEXT_ADOPTION);
         return;
     }
+
     /* Adopt the complete scoped claim while all original inputs remain pinned.
      * Reader/decoder scratch is reconstructible; facts own no child pointers. */
     text->facts[text->fact_count++] = text->candidate;
@@ -348,7 +378,9 @@ static void compare_start(TbSymbolInheritedText_t *text)
             .descriptor = text->selection.descriptor
         }
     };
+
     text->comparison = tb_symbol_string_order_create(inputs, text->construction);
+
     if (!text->comparison)
         finish(text, TB_SYMBOL_INHERITED_TEXT_RESOURCE, TB_SYMBOL_INHERITED_TEXT_ALLOCATION);
     else
@@ -384,13 +416,16 @@ TbSymbolInheritedTextStatus_e tb_symbol_inherited_text_step(TbSymbolInheritedTex
 {
     if (!text || max_bytes < 64 || max_bytes > 65536)
         return TB_SYMBOL_INHERITED_TEXT_INVALID;
+
     if (text->status != TB_SYMBOL_INHERITED_TEXT_PENDING)
         return text->status;
+
     InheritedTextPhase_e phase = text->phase;
     size_t scan = text->scan;
     uint64_t owner_progress = tb_symbol_inherit_progress(&text->owners);
     uint64_t value_progress = tb_symbol_text_progress(text->value);
     uint64_t order_progress = tb_symbol_string_order_progress(text->comparison);
+
     switch (text->phase) {
     case INHERITED_OWNERS:
         owners(text);
@@ -417,6 +452,7 @@ TbSymbolInheritedTextStatus_e tb_symbol_inherited_text_step(TbSymbolInheritedTex
         finish(text, TB_SYMBOL_INHERITED_TEXT_OPERATIONAL, TB_SYMBOL_INHERITED_TEXT_REQUEST);
         break;
     }
+
     if (text->phase != phase || text->scan != scan ||
         tb_symbol_inherit_progress(&text->owners) != owner_progress ||
         tb_symbol_text_progress(text->value) != value_progress ||
@@ -426,6 +462,7 @@ TbSymbolInheritedTextStatus_e tb_symbol_inherited_text_step(TbSymbolInheritedTex
         else
             ++text->progress;
     }
+
     return text->status;
 }
 
@@ -434,18 +471,20 @@ bool tb_symbol_inherited_text_view(const TbSymbolInheritedText_t *text, TbSymbol
 {
     if (!text || !view || text->status != TB_SYMBOL_INHERITED_TEXT_FOUND)
         return false;
-    *view = (TbSymbolInheritedTextView_t){
+
+    *view = (TbSymbolInheritedTextView_t) {
         .selected = text->graph.nodes[0].record,
         .facts    = text->facts,
         .count    = text->fact_count
     };
+
     return true;
 }
 
 
 TbSymbolInheritedTextFailure_t tb_symbol_inherited_text_failure(const TbSymbolInheritedText_t *text)
 {
-    return text ? text->failure : (TbSymbolInheritedTextFailure_t){
+    return text ? text->failure : (TbSymbolInheritedTextFailure_t) {
         .reason = TB_SYMBOL_INHERITED_TEXT_REQUEST
     };
 }
@@ -461,6 +500,7 @@ void tb_symbol_inherited_text_destroy(TbSymbolInheritedText_t *text)
 {
     if (!text)
         return;
+
     tb_symbol_string_order_destroy(text->comparison);
     tb_symbol_text_destroy(text->value);
     free(text->facts);

@@ -10,6 +10,7 @@ bool tb_symbol_add(uint64_t left, uint64_t right, uint64_t *result)
         return false;
 
     *result = left + right;
+
     return true;
 }
 
@@ -20,6 +21,7 @@ bool tb_symbol_multiply(uint64_t left, uint64_t right, uint64_t *result)
         return false;
 
     *result = left * right;
+
     return true;
 }
 
@@ -45,12 +47,13 @@ TbSymbolReadStatus_e tb_symbol_reader_init(TbSymbolReader_t *reader, const void 
         return TB_SYMBOL_READ_INVALID;
     }
 
-    *reader = (TbSymbolReader_t){
+    *reader = (TbSymbolReader_t) {
         .data       = data,
         .length     = length,
         .offset     = 0,
         .byte_order = byte_order
     };
+
     return TB_SYMBOL_READ_OK;
 }
 
@@ -60,11 +63,13 @@ TbSymbolReadStatus_e tb_symbol_reader_bytes(TbSymbolReader_t *reader, size_t len
 {
     if (!reader_valid(reader) || !bytes)
         return TB_SYMBOL_READ_INVALID;
+
     if (length > reader->length - reader->offset)
         return TB_SYMBOL_READ_TRUNCATED;
 
     *bytes = reader->data ? reader->data + reader->offset : NULL;
     reader->offset += length;
+
     return TB_SYMBOL_READ_OK;
 }
 
@@ -82,9 +87,12 @@ TbSymbolReadStatus_e tb_symbol_reader_uint(TbSymbolReader_t *reader, unsigned wi
     uint64_t result = 0;
     for (unsigned i = 0; i < width; ++i) {
         unsigned index = reader->byte_order == TB_SYMBOL_BIG_ENDIAN ? i : width - 1 - i;
+
         result = (result << 8U) | bytes[index];
     }
+
     *value = result;
+
     return TB_SYMBOL_READ_OK;
 }
 
@@ -109,6 +117,7 @@ TbSymbolReadStatus_e tb_symbol_reader_sint(TbSymbolReader_t *reader, unsigned wi
     if (count < 64 && (bits & (UINT64_C(1) << (count - 1))))
         bits |= UINT64_MAX << count;
     *value = signed_bits(bits);
+
     return TB_SYMBOL_READ_OK;
 }
 
@@ -133,15 +142,18 @@ static TbSymbolReadStatus_e read_leb(TbSymbolReader_t *reader, bool is_signed, u
         }
 
         bits |= (i == 9 ? payload & 1U : payload) << (i * 7);
+
         if (!(byte & 0x80U)) {
             unsigned count = (i + 1) * 7;
             if (is_signed && count < 64 && (byte & 0x40U))
                 bits |= UINT64_MAX << count;
             *value         = bits;
             reader->offset = cursor.offset;
+
             return TB_SYMBOL_READ_OK;
         }
     }
+
     return TB_SYMBOL_READ_OVERFLOW;
 }
 
@@ -161,6 +173,7 @@ TbSymbolReadStatus_e tb_symbol_reader_sleb(TbSymbolReader_t *reader, int64_t *va
     TbSymbolReadStatus_e status = read_leb(reader, true, &bits);
     if (status == TB_SYMBOL_READ_OK)
         *value = signed_bits(bits);
+
     return status;
 }
 
@@ -178,9 +191,11 @@ TbSymbolReadStatus_e tb_symbol_reader_string(TbSymbolReader_t *reader, size_t ma
             *text           = (const char *)reader->data + reader->offset;
             *length         = i;
             reader->offset += i + 1;
+
             return TB_SYMBOL_READ_OK;
         }
     }
+
     return available < max_bytes ? TB_SYMBOL_READ_TRUNCATED : TB_SYMBOL_READ_LIMIT;
 }
 
@@ -194,12 +209,13 @@ TbSymbolReadStatus_e tb_symbol_reader_slice(TbSymbolReader_t *reader, size_t len
     const unsigned char *bytes;
     TbSymbolReadStatus_e status = tb_symbol_reader_bytes(reader, length, &bytes);
     if (status == TB_SYMBOL_READ_OK) {
-        *slice = (TbSymbolReader_t){
+        *slice = (TbSymbolReader_t) {
             .data       = bytes,
             .length     = length,
             .offset     = 0,
             .byte_order = reader->byte_order
         };
     }
+
     return status;
 }

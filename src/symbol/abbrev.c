@@ -77,11 +77,13 @@ TbSymbolAbbrev_t *tb_symbol_abbrev_create(TbSymbolSectionsView_t directory,
         !tb_symbol_budget_reserve(construction, sizeof(TbSymbolAbbrev_t))) {
         return NULL;
     }
+
     TbSymbolAbbrev_t *abbrev = calloc(1, sizeof(*abbrev));
     if (!abbrev) {
         (void)tb_symbol_budget_release(construction, sizeof(TbSymbolAbbrev_t));
         return NULL;
     }
+
     abbrev->construction = construction;
     abbrev->directory    = directory;
     abbrev->selection    = selection;
@@ -89,10 +91,12 @@ TbSymbolAbbrev_t *tb_symbol_abbrev_create(TbSymbolSectionsView_t directory,
     abbrev->cursor       = selection.table_offset;
     abbrev->field_start  = selection.table_offset;
     abbrev->file = tb_symbol_file_create(directory.backing, selection.descriptor, construction);
+
     if (!abbrev->file) {
         tb_symbol_abbrev_destroy(abbrev);
         return NULL;
     }
+
     return abbrev;
 }
 
@@ -121,17 +125,21 @@ static bool window(TbSymbolAbbrev_t *abbrev)
         fail(abbrev, TB_SYMBOL_ABBREV_TRUNCATED, TB_SYMBOL_MALFORMED);
         return false;
     }
+
     if (abbrev->cursor >= abbrev->window_start &&
         abbrev->cursor - abbrev->window_start < abbrev->window_bytes) {
         return true;
     }
+
     uint64_t offset;
     uint64_t remaining = abbrev->section.bytes - abbrev->cursor;
+
     if (!tb_symbol_add(abbrev->section.offset, abbrev->cursor, &offset)) {
         fail(abbrev, TB_SYMBOL_ABBREV_RANGE, TB_SYMBOL_MALFORMED);
         return false;
     }
-    if (!tb_symbol_file_request(abbrev->file, (TbSymbolFileRange_t){
+
+    if (!tb_symbol_file_request(abbrev->file, (TbSymbolFileRange_t) {
         .offset = offset,
         .bytes  = remaining < TB_SYMBOL_FILE_WINDOW_BYTES ? (size_t)remaining : TB_SYMBOL_FILE_WINDOW_BYTES
     })) {
@@ -141,6 +149,7 @@ static bool window(TbSymbolAbbrev_t *abbrev)
         abbrev->window_bytes = 0;
         abbrev->reading = true;
     }
+
     return false;
 }
 
@@ -161,6 +170,7 @@ static void add_attribute(TbSymbolAbbrev_t *abbrev)
             fail(abbrev, TB_SYMBOL_ABBREV_RECONSTRUCTION, TB_SYMBOL_OPERATIONAL_FAILURE);
             return;
         }
+
         abbrev->attributes[abbrev->attributes_written++] = abbrev->attribute;
     } else if (abbrev->attribute_count == UINT64_MAX) {
         fail(abbrev, TB_SYMBOL_ABBREV_RESOURCE, TB_SYMBOL_RESOURCE_FAILURE);
@@ -175,13 +185,17 @@ static void add_attribute(TbSymbolAbbrev_t *abbrev)
 static void add_entry(TbSymbolAbbrev_t *abbrev)
 {
     abbrev->current.end_offset = abbrev->cursor;
+
     uint64_t attributes = abbrev->populating ? abbrev->attributes_written : abbrev->attribute_count;
+
     abbrev->current.attribute_count = attributes - abbrev->current.first_attribute;
+
     if (abbrev->populating) {
         if (abbrev->written >= abbrev->count) {
             fail(abbrev, TB_SYMBOL_ABBREV_RECONSTRUCTION, TB_SYMBOL_OPERATIONAL_FAILURE);
             return;
         }
+
         abbrev->order[abbrev->written] = abbrev->written;
         abbrev->entries[abbrev->written++] = abbrev->current;
     } else if (abbrev->count == UINT64_MAX) {
@@ -217,31 +231,38 @@ static void value(TbSymbolAbbrev_t *abbrev)
         fail(abbrev, TB_SYMBOL_ABBREV_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
         return;
     }
+
     if (abbrev->field == FIELD_IMPLICIT) {
         abbrev->attribute.implicit_offset = abbrev->field_start;
         abbrev->attribute.implicit_bytes = view.bytes;
         abbrev->attribute.implicit_fits = view.fits;
+
         if (view.fits && !tb_symbol_leb_sint(&abbrev->leb, &abbrev->attribute.implicit_value)) {
             fail(abbrev, TB_SYMBOL_ABBREV_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
             return;
         }
+
         add_attribute(abbrev);
+
         return;
     }
+
     if (!view.fits) {
         fail(abbrev, TB_SYMBOL_ABBREV_IDENTIFIER, TB_SYMBOL_UNSUPPORTED);
         return;
     }
+
     switch (abbrev->field) {
     case FIELD_CODE:
         if (!view.bits) {
             finish_pass(abbrev);
         } else {
-            abbrev->current = (TbSymbolAbbrevEntry_t){
+            abbrev->current = (TbSymbolAbbrevEntry_t) {
                 .code            = view.bits,
                 .offset          = abbrev->field_start,
                 .first_attribute = abbrev->populating ? abbrev->attributes_written : abbrev->attribute_count
             };
+
             field(abbrev, FIELD_TAG);
         }
         break;
@@ -250,10 +271,11 @@ static void value(TbSymbolAbbrev_t *abbrev)
         field(abbrev, FIELD_CHILDREN);
         break;
     case FIELD_NAME:
-        abbrev->attribute = (TbSymbolAbbrevAttribute_t){
+        abbrev->attribute = (TbSymbolAbbrevAttribute_t) {
             .name   = view.bits,
             .offset = abbrev->field_start
         };
+
         field(abbrev, FIELD_FORM);
         break;
     case FIELD_FORM:
@@ -266,6 +288,7 @@ static void value(TbSymbolAbbrev_t *abbrev)
             fail(abbrev, TB_SYMBOL_ABBREV_FORM, TB_SYMBOL_UNSUPPORTED);
         } else {
             abbrev->attribute.form = view.bits;
+
             if (view.bits == TB_SYMBOL_FORM_IMPLICIT_CONST)
                 field(abbrev, FIELD_IMPLICIT);
             else
@@ -284,30 +307,39 @@ static void parse(TbSymbolAbbrev_t *abbrev, size_t max_bytes)
 {
     if (!window(abbrev))
         return;
+
     size_t at = (size_t)(abbrev->cursor - abbrev->window_start);
+
     if (abbrev->field == FIELD_CHILDREN) {
         unsigned children = abbrev->window[at];
+
         ++abbrev->cursor;
+
         if (children > 1) {
             fail(abbrev, TB_SYMBOL_ABBREV_CHILDREN, TB_SYMBOL_MALFORMED);
         } else {
             abbrev->current.children = children != 0;
             field(abbrev, FIELD_NAME);
         }
+
         return;
     }
+
     size_t available = abbrev->window_bytes - at;
     if (available > max_bytes)
         available = max_bytes;
+
     size_t consumed;
     TbSymbolReadStatus_e status = tb_symbol_leb_feed(&abbrev->leb, abbrev->window + at, available, &consumed);
     if (status == TB_SYMBOL_READ_OK || status == TB_SYMBOL_READ_LIMIT) {
         abbrev->cursor += consumed;
+
         if (status == TB_SYMBOL_READ_OK)
             value(abbrev);
     } else {
         TbSymbolOutcome_e outcome = status == TB_SYMBOL_READ_OVERFLOW
                                         ? TB_SYMBOL_RESOURCE_FAILURE : TB_SYMBOL_OPERATIONAL_FAILURE;
+
         fail(abbrev, TB_SYMBOL_ABBREV_RESOURCE, outcome);
     }
 }
@@ -327,18 +359,24 @@ static void allocate(TbSymbolAbbrev_t *abbrev)
         fail(abbrev, TB_SYMBOL_ABBREV_RESOURCE, TB_SYMBOL_RESOURCE_FAILURE);
         return;
     }
+
     abbrev->array_bytes = (size_t)total;
+
     if (entries)
         abbrev->entries = malloc((size_t)entries);
+
     if (attributes)
         abbrev->attributes = malloc((size_t)attributes);
+
     if (order)
         abbrev->order = malloc((size_t)order);
+
     if ((entries && !abbrev->entries) || (attributes && !abbrev->attributes) || (order && !abbrev->order)) {
         abbrev->failure.system_error = ENOMEM;
         fail(abbrev, TB_SYMBOL_ABBREV_RESOURCE, TB_SYMBOL_RESOURCE_FAILURE);
         return;
     }
+
     abbrev->populating = true;
     abbrev->cursor = abbrev->selection.table_offset;
     abbrev->window_bytes = 0;
@@ -351,6 +389,7 @@ static bool less(const TbSymbolAbbrev_t *abbrev, uint64_t left, uint64_t right)
 {
     uint64_t a = abbrev->entries[left].code;
     uint64_t b = abbrev->entries[right].code;
+
     return a < b || (a == b && left < right);
 }
 
@@ -358,6 +397,7 @@ static bool less(const TbSymbolAbbrev_t *abbrev, uint64_t left, uint64_t right)
 static void exchange(TbSymbolAbbrev_t *abbrev, uint64_t left, uint64_t right)
 {
     uint64_t temporary = abbrev->order[left];
+
     abbrev->order[left] = abbrev->order[right];
     abbrev->order[right] = temporary;
 }
@@ -370,9 +410,11 @@ static void sort(TbSymbolAbbrev_t *abbrev)
             abbrev->sifting = false;
             return;
         }
+
         uint64_t child = abbrev->root * 2 + 1;
         if (child + 1 < abbrev->heap && less(abbrev, abbrev->order[child], abbrev->order[child + 1]))
             ++child;
+
         if (less(abbrev, abbrev->order[abbrev->root], abbrev->order[child])) {
             exchange(abbrev, abbrev->root, child);
             abbrev->root = child;
@@ -403,6 +445,7 @@ static void check(TbSymbolAbbrev_t *abbrev)
         abbrev->outcome = TB_SYMBOL_SUCCESS;
         return;
     }
+
     const TbSymbolAbbrevEntry_t *left = &abbrev->entries[abbrev->order[abbrev->check_index - 1]];
     const TbSymbolAbbrevEntry_t *right = &abbrev->entries[abbrev->order[abbrev->check_index++]];
     if (left->code == right->code) {
@@ -417,17 +460,23 @@ TbSymbolOutcome_e tb_symbol_abbrev_step(TbSymbolAbbrev_t *abbrev, size_t max_byt
 {
     if (!abbrev)
         return TB_SYMBOL_OPERATIONAL_FAILURE;
+
     if (abbrev->phase == ABBREV_DONE || abbrev->phase == ABBREV_FAILED)
         return abbrev->outcome;
+
     if (max_bytes < 64 || max_bytes > TB_SYMBOL_FILE_WINDOW_BYTES) {
         fail(abbrev, TB_SYMBOL_ABBREV_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
         return abbrev->outcome;
     }
+
     bool progressed = true;
+
     if (abbrev->reading) {
         uint64_t before = tb_symbol_file_progress(abbrev->file);
         TbSymbolOutcome_e outcome = tb_symbol_file_step(abbrev->file, max_bytes);
+
         progressed = before != tb_symbol_file_progress(abbrev->file);
+
         if (outcome == TB_SYMBOL_SUCCESS) {
             TbSymbolFileView_t view;
             if (!tb_symbol_file_view(abbrev->file, &view)) {
@@ -470,12 +519,14 @@ TbSymbolOutcome_e tb_symbol_abbrev_step(TbSymbolAbbrev_t *abbrev, size_t max_byt
             break;
         }
     }
+
     if (progressed) {
         if (abbrev->progress == UINT64_MAX)
             fail(abbrev, TB_SYMBOL_ABBREV_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
         else
             ++abbrev->progress;
     }
+
     return abbrev->outcome;
 }
 
@@ -484,7 +535,8 @@ bool tb_symbol_abbrev_view(const TbSymbolAbbrev_t *abbrev, TbSymbolAbbrevView_t 
 {
     if (!abbrev || !view || abbrev->phase != ABBREV_DONE || abbrev->outcome != TB_SYMBOL_SUCCESS)
         return false;
-    *view = (TbSymbolAbbrevView_t){
+
+    *view = (TbSymbolAbbrevView_t) {
         .entries         = abbrev->entries,
         .attributes      = abbrev->attributes,
         .count           = abbrev->count,
@@ -495,6 +547,7 @@ bool tb_symbol_abbrev_view(const TbSymbolAbbrev_t *abbrev, TbSymbolAbbrevView_t 
         .version         = abbrev->selection.version,
         .backing         = abbrev->directory.backing
     };
+
     return true;
 }
 
@@ -504,8 +557,10 @@ TbSymbolAbbrevLookup_e tb_symbol_abbrev_find(const TbSymbolAbbrev_t *abbrev, uin
 {
     if (!abbrev || !entry || !code)
         return TB_SYMBOL_ABBREV_INVALID;
+
     if (abbrev->phase != ABBREV_DONE || abbrev->outcome != TB_SYMBOL_SUCCESS)
         return TB_SYMBOL_ABBREV_UNAVAILABLE;
+
     uint64_t begin = 0;
     uint64_t end = abbrev->count;
     while (begin < end) {
@@ -516,16 +571,19 @@ TbSymbolAbbrevLookup_e tb_symbol_abbrev_find(const TbSymbolAbbrev_t *abbrev, uin
         else
             end = middle;
     }
+
     if (begin == abbrev->count || abbrev->entries[abbrev->order[begin]].code != code)
         return TB_SYMBOL_ABBREV_MISSING;
+
     *entry = &abbrev->entries[abbrev->order[begin]];
+
     return TB_SYMBOL_ABBREV_FOUND;
 }
 
 
 TbSymbolAbbrevFailure_t tb_symbol_abbrev_failure(const TbSymbolAbbrev_t *abbrev)
 {
-    return abbrev ? abbrev->failure : (TbSymbolAbbrevFailure_t){
+    return abbrev ? abbrev->failure : (TbSymbolAbbrevFailure_t) {
         .reason         = TB_SYMBOL_ABBREV_REQUEST,
         .offset         = UINT64_MAX,
         .related_offset = UINT64_MAX
@@ -543,10 +601,12 @@ void tb_symbol_abbrev_destroy(TbSymbolAbbrev_t *abbrev)
 {
     if (!abbrev)
         return;
+
     tb_symbol_file_destroy(abbrev->file);
     free(abbrev->entries);
     free(abbrev->attributes);
     free(abbrev->order);
+
     if (abbrev->array_bytes)
         (void)tb_symbol_budget_release(abbrev->construction, abbrev->array_bytes);
     (void)tb_symbol_budget_release(abbrev->construction, sizeof(*abbrev));

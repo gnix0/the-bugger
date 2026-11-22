@@ -17,15 +17,18 @@ TbSymbolLocalityStatus_e tb_symbol_locality_init(TbSymbolLocality_t *locality, T
         scope.edge_count > SIZE_MAX / sizeof(*scope.edges) || capacity > SIZE_MAX / sizeof(*slots)) {
         return TB_SYMBOL_LOCALITY_INVALID;
     }
+
     if (capacity < scope.node_count)
         return TB_SYMBOL_LOCALITY_RESOURCE;
-    *locality = (TbSymbolLocality_t){
+
+    *locality = (TbSymbolLocality_t) {
         .scope       = scope,
         .slots       = slots,
         .status      = TB_SYMBOL_LOCALITY_PENDING,
         .capacity    = capacity,
         .initialized = true
     };
+
     return locality->status;
 }
 
@@ -34,15 +37,17 @@ static void fail(TbSymbolLocality_t *locality, TbSymbolLocalityStatus_e status,
                  TbSymbolLocalityFailure_e reason, size_t anchor, uint64_t tag)
 {
     locality->status  = status;
-    locality->failure = (TbSymbolLocalityFailure_t){
+    locality->failure = (TbSymbolLocalityFailure_t) {
         .reason       = reason,
         .node_index   = locality->active,
         .anchor_index = anchor,
         .first_anchor = SIZE_MAX,
         .parent_tag   = tag
     };
+
     if (locality->active < locality->scope.node_count) {
         locality->failure.record = locality->scope.nodes[locality->active].record;
+
         if (locality->active < locality->initializing)
             locality->failure.first_anchor = locality->slots[locality->active].first_anchor;
     }
@@ -53,7 +58,9 @@ static bool valid_node(TbSymbolLocality_t *locality, size_t index)
 {
     if (index >= locality->scope.node_count)
         return false;
+
     const TbSymbolScopeNode_t *node = &locality->scope.nodes[index];
+
     return node->complete && node->context_available && node->contexts.anchors && node->contexts.count &&
            node->relationships.nodes && node->relationships.count &&
            node->first_edge < locality->scope.edge_count &&
@@ -86,10 +93,12 @@ static void edge(TbSymbolLocality_t *locality)
     const TbSymbolScopeNode_t *node = &locality->scope.nodes[locality->active];
     const TbSymbolScopeEdge_t *parent = &locality->scope.edges[node->first_edge + slot->next_anchor];
     const TbSymbolContextAnchor_t *anchor = &node->contexts.anchors[slot->next_anchor];
+
     if (parent->anchor_index != slot->next_anchor) {
         fail(locality, TB_SYMBOL_LOCALITY_INVALID, TB_SYMBOL_LOCALITY_SCOPE, slot->next_anchor, 0);
         return;
     }
+
     if (anchor->kind == TB_SYMBOL_CONTEXT_UNIT_PARENT || anchor->kind == TB_SYMBOL_CONTEXT_UNIT_ROOT) {
         if (parent->target_node != SIZE_MAX) {
             fail(locality, TB_SYMBOL_LOCALITY_INVALID, TB_SYMBOL_LOCALITY_SCOPE, slot->next_anchor, 0);
@@ -98,21 +107,25 @@ static void edge(TbSymbolLocality_t *locality)
         }
         return;
     }
+
     if (anchor->kind != TB_SYMBOL_CONTEXT_LEXICAL_PARENT || !valid_node(locality, parent->target_node) ||
         !same_record(anchor->parent, locality->scope.nodes[parent->target_node].record)) {
         fail(locality, TB_SYMBOL_LOCALITY_INVALID, TB_SYMBOL_LOCALITY_SCOPE, slot->next_anchor, 0);
         return;
     }
+
     TbSymbolLocalitySlot_t *target = &locality->slots[parent->target_node];
     uint64_t tag = locality->scope.nodes[parent->target_node].context.tag;
     if (tag != anchor->parent_context.tag) {
         fail(locality, TB_SYMBOL_LOCALITY_INVALID, TB_SYMBOL_LOCALITY_SCOPE, slot->next_anchor, tag);
         return;
     }
+
     if (target->visit == TB_SYMBOL_LOCALITY_ACTIVE) {
         fail(locality, TB_SYMBOL_LOCALITY_INVALID, TB_SYMBOL_LOCALITY_CYCLE, slot->next_anchor, tag);
         return;
     }
+
     switch (tag) {
     case 0x2e:
     case 0x1d:
@@ -147,6 +160,7 @@ static void advance(TbSymbolLocality_t *locality)
         fail(locality, TB_SYMBOL_LOCALITY_INVALID, TB_SYMBOL_LOCALITY_SCOPE, SIZE_MAX, 0);
         return;
     }
+
     TbSymbolLocalitySlot_t    *slot = &locality->slots[locality->active];
     const TbSymbolScopeNode_t *node = &locality->scope.nodes[locality->active];
     if (slot->next_anchor < node->contexts.count) {
@@ -155,6 +169,7 @@ static void advance(TbSymbolLocality_t *locality)
         fail(locality, TB_SYMBOL_LOCALITY_INVALID, TB_SYMBOL_LOCALITY_SCOPE, slot->next_anchor, 0);
     } else {
         slot->visit = TB_SYMBOL_LOCALITY_COMPLETE;
+
         if (slot->parent == SIZE_MAX) {
             if (locality->active != 0)
                 fail(locality, TB_SYMBOL_LOCALITY_INVALID, TB_SYMBOL_LOCALITY_SCOPE, SIZE_MAX, 0);
@@ -171,18 +186,22 @@ TbSymbolLocalityStatus_e tb_symbol_locality_step(TbSymbolLocality_t *locality, s
 {
     if (!locality || !locality->initialized || !max_steps || max_steps > 256)
         return TB_SYMBOL_LOCALITY_INVALID;
+
     if (locality->status != TB_SYMBOL_LOCALITY_PENDING)
         return locality->status;
+
     for (size_t step = 0; step < max_steps && locality->status == TB_SYMBOL_LOCALITY_PENDING; ++step) {
         if (locality->progress == UINT64_MAX) {
             fail(locality, TB_SYMBOL_LOCALITY_INVALID, TB_SYMBOL_LOCALITY_PROGRESS, SIZE_MAX, 0);
             break;
         }
+
         if (locality->initializing < locality->scope.node_count) {
-            locality->slots[locality->initializing++] = (TbSymbolLocalitySlot_t){
+            locality->slots[locality->initializing++] = (TbSymbolLocalitySlot_t) {
                 .parent       = SIZE_MAX,
                 .first_anchor = SIZE_MAX
             };
+
             if (locality->initializing == locality->scope.node_count)
                 locality->slots[0].visit = TB_SYMBOL_LOCALITY_ACTIVE;
         } else {
@@ -190,6 +209,7 @@ TbSymbolLocalityStatus_e tb_symbol_locality_step(TbSymbolLocality_t *locality, s
         }
         ++locality->progress;
     }
+
     return locality->status;
 }
 
@@ -198,13 +218,15 @@ bool tb_symbol_locality_view(const TbSymbolLocality_t *locality, TbSymbolLocalit
 {
     if (!locality || !locality->initialized || !view || locality->status != TB_SYMBOL_LOCALITY_READY)
         return false;
-    *view = (TbSymbolLocalityView_t){
+
+    *view = (TbSymbolLocalityView_t) {
         .selected = locality->scope.nodes[0].record,
         .value    = locality->slots[0].value,
         .scope    = locality->scope,
         .slots    = locality->slots,
         .count    = locality->scope.node_count
     };
+
     return true;
 }
 
@@ -215,7 +237,9 @@ bool tb_symbol_locality_failure(const TbSymbolLocality_t *locality, TbSymbolLoca
         locality->status == TB_SYMBOL_LOCALITY_READY) {
         return false;
     }
+
     *failure = locality->failure;
+
     return true;
 }
 

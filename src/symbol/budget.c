@@ -5,9 +5,10 @@ bool tb_symbol_budget_init(TbSymbolBudget_t *budget, size_t limit)
     if (!budget || !limit)
         return false;
 
-    *budget = (TbSymbolBudget_t){
+    *budget = (TbSymbolBudget_t) {
         .limit = limit
     };
+
     return true;
 }
 
@@ -22,10 +23,12 @@ bool tb_symbol_budget_init_child(TbSymbolBudget_t *budget, size_t limit, TbSymbo
         if (account == budget || ++depth > 4)
             return false;
     }
-    *budget = (TbSymbolBudget_t){
+
+    *budget = (TbSymbolBudget_t) {
         .limit  = limit,
         .parent = parent
     };
+
     return true;
 }
 
@@ -40,8 +43,10 @@ bool tb_symbol_budget_reserve(TbSymbolBudget_t *budget, size_t bytes)
         if (++depth > 4 || account->used > account->limit || bytes > account->limit - account->used)
             return false;
     }
+
     for (TbSymbolBudget_t *account = budget; account; account = account->parent)
         account->used += bytes;
+
     return true;
 }
 
@@ -56,7 +61,9 @@ bool tb_symbol_budget_release(TbSymbolBudget_t *budget, size_t bytes)
         if (++depth > 4 || bytes > account->used)
             return false;
     }
+
     for (TbSymbolBudget_t *account = budget; account; account = account->parent)
         account->used -= bytes;
+
     return true;
 }

@@ -7,8 +7,10 @@ bool tb_symbol_record_valid(const TbSymbolRecordId_t *record)
 
     if (record->kind == TB_SYMBOL_RECORD_DIE)
         return record->unit_offset <= record->record_offset;
+
     if (record->kind == TB_SYMBOL_RECORD_SYMTAB || record->kind == TB_SYMBOL_RECORD_DYNSYM)
         return !record->unit_offset;
+
     return false;
 }
 

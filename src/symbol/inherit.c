@@ -31,11 +31,14 @@ TbSymbolInheritStatus_e tb_symbol_inherit_init(TbSymbolInherit_t *inherit, TbSym
 {
     if (!inherit || !graph.nodes || !graph.count || !slots || capacity > SIZE_MAX / sizeof(*slots))
         return TB_SYMBOL_INHERIT_INVALID;
+
     if (!supported_field(name))
         return TB_SYMBOL_INHERIT_UNSUPPORTED;
+
     if (capacity < graph.count)
         return TB_SYMBOL_INHERIT_RESOURCE;
-    *inherit = (TbSymbolInherit_t){
+
+    *inherit = (TbSymbolInherit_t) {
         .graph       = graph,
         .slots       = slots,
         .status      = TB_SYMBOL_INHERIT_PENDING,
@@ -43,6 +46,7 @@ TbSymbolInheritStatus_e tb_symbol_inherit_init(TbSymbolInherit_t *inherit, TbSym
         .phase       = INHERIT_INITIALIZE,
         .initialized = true
     };
+
     return inherit->status;
 }
 
@@ -55,8 +59,10 @@ static void initialize(TbSymbolInherit_t *inherit)
         inherit->status         = TB_SYMBOL_INHERIT_INVALID;
         return;
     }
-    inherit->slots[index] = (TbSymbolInheritSlot_t){0};
+
+    inherit->slots[index] = (TbSymbolInheritSlot_t) {0};
     ++inherit->initializing;
+
     if (inherit->initializing == inherit->graph.count) {
         inherit->slots[0].visit = TB_SYMBOL_INHERIT_QUEUED;
         inherit->phase         = INHERIT_FIND;
@@ -71,6 +77,7 @@ static void find_source(TbSymbolInherit_t *inherit)
                               : inherit->owners == 1 ? TB_SYMBOL_INHERIT_UNIQUE : TB_SYMBOL_INHERIT_MULTIPLE;
         return;
     }
+
     size_t index = inherit->finding++;
     if (inherit->slots[index].visit == TB_SYMBOL_INHERIT_QUEUED) {
         inherit->active = index;
@@ -83,12 +90,14 @@ bool tb_symbol_inherit_need(const TbSymbolInherit_t *inherit, TbSymbolInheritNee
 {
     if (!inherit || !inherit->initialized || !need || inherit->status != TB_SYMBOL_INHERIT_SOURCE)
         return false;
-    *need = (TbSymbolInheritNeed_t){
+
+    *need = (TbSymbolInheritNeed_t) {
         .record     = inherit->graph.nodes[inherit->active].record,
         .context    = inherit->graph.nodes[inherit->active].context,
         .name       = inherit->name,
         .node_index = inherit->active
     };
+
     return true;
 }
 
@@ -99,24 +108,29 @@ TbSymbolInheritStatus_e tb_symbol_inherit_source(TbSymbolInherit_t *inherit,
 {
     if (!inherit || !inherit->initialized || inherit->status != TB_SYMBOL_INHERIT_SOURCE)
         return TB_SYMBOL_INHERIT_INVALID;
+
     const TbSymbolGraphNode_t *node = &inherit->graph.nodes[inherit->active];
+
     if (!units || !tree) {
         inherit->failure.record = node->record;
         inherit->status         = TB_SYMBOL_INHERIT_DEPENDENCY;
         return inherit->status;
     }
+
     TbSymbolAttributes_t lookup;
     if (!tb_symbol_graph_node_matches(node, *units, *tree, unit_index) ||
-        tb_symbol_attributes_init(&lookup, *tree, (TbSymbolAttributeSelection_t){
+        tb_symbol_attributes_init(&lookup, *tree, (TbSymbolAttributeSelection_t) {
             .die_index = node->record.entry_index,
             .name      = inherit->name
         }) != TB_SYMBOL_ATTRIBUTE_PENDING) {
         return TB_SYMBOL_INHERIT_INVALID;
     }
+
     inherit->lookup     = lookup;
     inherit->attributes = tree->attributes;
     inherit->phase      = INHERIT_FIELD;
     inherit->status     = TB_SYMBOL_INHERIT_PENDING;
+
     return inherit->status;
 }
 
@@ -133,13 +147,16 @@ static void field(TbSymbolInherit_t *inherit)
     TbSymbolAttributeStatus_e status = tb_symbol_attributes_step(&inherit->lookup, 1);
     if (status == TB_SYMBOL_ATTRIBUTE_PENDING)
         return;
+
     TbSymbolInheritSlot_t *slot = &inherit->slots[inherit->active];
+
     if (status == TB_SYMBOL_ATTRIBUTE_UNIQUE) {
         uint64_t index;
         if (!tb_symbol_attributes_unique(&inherit->lookup, &index)) {
             inherit->status = TB_SYMBOL_INHERIT_INVALID;
             return;
         }
+
         slot->selection = inherit->lookup.result;
         slot->attribute = inherit->attributes[index];
         slot->visit     = TB_SYMBOL_INHERIT_OWNER;
@@ -152,8 +169,10 @@ static void field(TbSymbolInherit_t *inherit)
         inherit->phase = INHERIT_EDGES;
     } else {
         inherit->failure.record = inherit->graph.nodes[inherit->active].record;
+
         TbSymbolAttributeStatus_e selected = tb_symbol_attributes_result(&inherit->lookup,
                                                                           &inherit->failure.selection);
+
         inherit->failure.selection_available = selected == TB_SYMBOL_ATTRIBUTE_AMBIGUOUS;
         inherit->status = status == TB_SYMBOL_ATTRIBUTE_AMBIGUOUS ? TB_SYMBOL_INHERIT_CONFLICT
                                                                  : TB_SYMBOL_INHERIT_INVALID;
@@ -164,6 +183,7 @@ static void field(TbSymbolInherit_t *inherit)
 static void edges(TbSymbolInherit_t *inherit)
 {
     const TbSymbolGraphNode_t *node = &inherit->graph.nodes[inherit->active];
+
     if (inherit->edge >= TB_SYMBOL_GRAPH_RELATIONS) {
         if (inherit->edge == TB_SYMBOL_GRAPH_RELATIONS) {
             finish_node(inherit);
@@ -173,15 +193,18 @@ static void edges(TbSymbolInherit_t *inherit)
         }
         return;
     }
+
     if (!(node->present & (1u << inherit->edge))) {
         ++inherit->edge;
         return;
     }
+
     if (inherit->scan >= inherit->graph.count) {
         inherit->failure.record = node->record;
         inherit->status         = TB_SYMBOL_INHERIT_INVALID;
         return;
     }
+
     size_t index = inherit->scan++;
     if (same_record(inherit->graph.nodes[index].record, node->edges[inherit->edge].target)) {
         if (inherit->slots[index].visit == TB_SYMBOL_INHERIT_UNVISITED)
@@ -196,9 +219,11 @@ TbSymbolInheritStatus_e tb_symbol_inherit_step(TbSymbolInherit_t *inherit, size_
 {
     if (!inherit || !inherit->initialized || !max_steps || max_steps > 256)
         return TB_SYMBOL_INHERIT_INVALID;
+
     for (size_t i = 0; i < max_steps && inherit->status == TB_SYMBOL_INHERIT_PENDING; ++i) {
         if (inherit->progress != UINT64_MAX)
             ++inherit->progress;
+
         switch (inherit->phase) {
         case INHERIT_INITIALIZE:
             initialize(inherit);
@@ -217,6 +242,7 @@ TbSymbolInheritStatus_e tb_symbol_inherit_step(TbSymbolInherit_t *inherit, size_
             break;
         }
     }
+
     return inherit->status;
 }
 
@@ -228,10 +254,12 @@ bool tb_symbol_inherit_result(const TbSymbolInherit_t *inherit, TbSymbolInheritR
          inherit->status != TB_SYMBOL_INHERIT_MULTIPLE)) {
         return false;
     }
-    *result = (TbSymbolInheritResult_t){
+
+    *result = (TbSymbolInheritResult_t) {
         .name        = inherit->name,
         .owner_count = inherit->owners
     };
+
     return true;
 }
 
@@ -244,11 +272,13 @@ bool tb_symbol_inherit_owner(const TbSymbolInherit_t *inherit, size_t node_index
         inherit->slots[node_index].visit != TB_SYMBOL_INHERIT_OWNER) {
         return false;
     }
-    *owner = (TbSymbolInheritOwner_t){
+
+    *owner = (TbSymbolInheritOwner_t) {
         .node_index = node_index,
         .selection  = inherit->slots[node_index].selection,
         .attribute  = inherit->slots[node_index].attribute
     };
+
     return true;
 }
 
@@ -260,7 +290,9 @@ bool tb_symbol_inherit_failure(const TbSymbolInherit_t *inherit, TbSymbolInherit
          inherit->status != TB_SYMBOL_INHERIT_INVALID)) {
         return false;
     }
+
     *failure = inherit->failure;
+
     return true;
 }
 

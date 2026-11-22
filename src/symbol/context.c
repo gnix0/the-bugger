@@ -5,9 +5,11 @@ TbSymbolContextStatus_e tb_symbol_context_init(TbSymbolContext_t *context, TbSym
 {
     if (!context || !graph.nodes || !graph.count || !anchors || capacity > SIZE_MAX / sizeof(*anchors))
         return TB_SYMBOL_CONTEXT_INVALID;
+
     if (capacity < graph.count)
         return TB_SYMBOL_CONTEXT_RESOURCE;
-    *context = (TbSymbolContext_t){
+
+    *context = (TbSymbolContext_t) {
         .graph       = graph,
         .anchors     = anchors,
         .capacity    = capacity,
@@ -15,6 +17,7 @@ TbSymbolContextStatus_e tb_symbol_context_init(TbSymbolContext_t *context, TbSym
         .validating  = true,
         .initialized = true
     };
+
     return context->status;
 }
 
@@ -23,7 +26,7 @@ static void fail(TbSymbolContext_t *context, TbSymbolContextStatus_e status,
                   TbSymbolContextFailure_e reason)
 {
     context->status  = status;
-    context->failure = (TbSymbolContextFailure_t){
+    context->failure = (TbSymbolContextFailure_t) {
         .reason     = reason,
         .node_index = context->scan,
         .record     = context->graph.nodes[context->scan < context->graph.count ? context->scan : 0].record
@@ -35,11 +38,13 @@ TbSymbolContextStatus_e tb_symbol_context_step(TbSymbolContext_t *context, size_
 {
     if (!context || !context->initialized || !max_steps || max_steps > 256)
         return TB_SYMBOL_CONTEXT_INVALID;
+
     for (size_t step = 0; step < max_steps && context->status == TB_SYMBOL_CONTEXT_PENDING; ++step) {
         if (context->progress == UINT64_MAX) {
             fail(context, TB_SYMBOL_CONTEXT_INVALID, TB_SYMBOL_CONTEXT_PROGRESS);
             break;
         }
+
         if (context->scan >= context->graph.count) {
             if (context->validating && context->scan == context->graph.count) {
                 context->validating = false;
@@ -63,6 +68,7 @@ TbSymbolContextStatus_e tb_symbol_context_step(TbSymbolContext_t *context, size_
         }
         ++context->progress;
     }
+
     return context->status;
 }
 
@@ -72,10 +78,12 @@ bool tb_symbol_context_need(const TbSymbolContext_t *context, TbSymbolGraphNeed_
     if (!context || !context->initialized || !need || context->status != TB_SYMBOL_CONTEXT_SOURCE ||
         context->scan >= context->graph.count)
         return false;
-    *need = (TbSymbolGraphNeed_t){
+
+    *need = (TbSymbolGraphNeed_t) {
         .kind   = TB_SYMBOL_GRAPH_SOURCE,
         .record = context->graph.nodes[context->scan].record
     };
+
     return true;
 }
 
@@ -97,7 +105,7 @@ static uint64_t root_tag(TbSymbolDwarfUnitKind_e kind)
 
 static TbSymbolReferenceTarget_t record(TbSymbolDiesView_t tree, uint64_t index)
 {
-    return (TbSymbolReferenceTarget_t){
+    return (TbSymbolReferenceTarget_t) {
         .backing       = tree.backing,
         .section_index = tree.section_index,
         .unit_offset   = tree.unit_offset,
@@ -111,7 +119,8 @@ static TbSymbolGraphContext_t parent_context(TbSymbolDiesView_t tree, const TbSy
                                             uint64_t index)
 {
     const TbSymbolDieEntry_t *entry = &tree.entries[index];
-    return (TbSymbolGraphContext_t){
+
+    return (TbSymbolGraphContext_t) {
         .tag            = entry->tag,
         .version        = unit->header.version,
         .unit_kind      = tree.kind,
@@ -131,13 +140,16 @@ TbSymbolContextStatus_e tb_symbol_context_source(TbSymbolContext_t *context,
         context->scan >= context->graph.count) {
         return TB_SYMBOL_CONTEXT_INVALID;
     }
+
     if (!units || !tree) {
         fail(context, TB_SYMBOL_CONTEXT_DEPENDENCY, TB_SYMBOL_CONTEXT_SOURCE_MISSING);
         return context->status;
     }
+
     const TbSymbolGraphNode_t *node = &context->graph.nodes[context->scan];
     if (!tb_symbol_graph_node_matches(node, *units, *tree, unit_index))
         return TB_SYMBOL_CONTEXT_INVALID;
+
     const TbSymbolUnitEntry_t *unit = &units->entries[unit_index];
     uint64_t root_offset;
     uint64_t tag = root_tag(tree->kind);
@@ -146,6 +158,7 @@ TbSymbolContextStatus_e tb_symbol_context_source(TbSymbolContext_t *context,
         tree->entries[0].parent != UINT64_MAX || context->count >= context->capacity) {
         return TB_SYMBOL_CONTEXT_INVALID;
     }
+
     const TbSymbolDieEntry_t *entry = &tree->entries[node->record.entry_index];
     TbSymbolContextAnchor_t candidate = {
         .node_index = context->scan,
@@ -155,6 +168,7 @@ TbSymbolContextStatus_e tb_symbol_context_source(TbSymbolContext_t *context,
         .unit_root  = record(*tree, 0),
         .unit       = *unit
     };
+
     if (entry->parent == UINT64_MAX) {
         if (node->record.entry_index != 0)
             return TB_SYMBOL_CONTEXT_INVALID;
@@ -162,19 +176,23 @@ TbSymbolContextStatus_e tb_symbol_context_source(TbSymbolContext_t *context,
         uint64_t parent = entry->parent;
         if (tree->entries[parent].parent != UINT64_MAX && tree->entries[parent].parent >= parent)
             return TB_SYMBOL_CONTEXT_INVALID;
+
         candidate.kind           = parent == 0 ? TB_SYMBOL_CONTEXT_UNIT_PARENT
                                                : TB_SYMBOL_CONTEXT_LEXICAL_PARENT;
         candidate.parent         = record(*tree, parent);
         candidate.parent_context = parent_context(*tree, unit, parent);
     }
+
     if (context->progress == UINT64_MAX) {
         fail(context, TB_SYMBOL_CONTEXT_INVALID, TB_SYMBOL_CONTEXT_PROGRESS);
         return context->status;
     }
+
     context->anchors[context->count++] = candidate;
     ++context->progress;
     ++context->scan;
     context->status = TB_SYMBOL_CONTEXT_PENDING;
+
     return context->status;
 }
 
@@ -183,11 +201,13 @@ bool tb_symbol_context_view(const TbSymbolContext_t *context, TbSymbolContextVie
 {
     if (!context || !context->initialized || !view || context->status != TB_SYMBOL_CONTEXT_READY)
         return false;
-    *view = (TbSymbolContextView_t){
+
+    *view = (TbSymbolContextView_t) {
         .selected = context->graph.nodes[0].record,
         .anchors  = context->anchors,
         .count    = context->count
     };
+
     return true;
 }
 
@@ -198,7 +218,9 @@ bool tb_symbol_context_failure(const TbSymbolContext_t *context, TbSymbolContext
         (context->status != TB_SYMBOL_CONTEXT_DEPENDENCY && context->status != TB_SYMBOL_CONTEXT_INVALID)) {
         return false;
     }
+
     *failure = context->failure;
+
     return true;
 }
 

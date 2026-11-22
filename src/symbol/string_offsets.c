@@ -43,20 +43,24 @@ TbSymbolStringOffsets_t *tb_symbol_string_offsets_create(TbSymbolSectionsView_t 
         !tb_symbol_budget_reserve(construction, sizeof(TbSymbolStringOffsets_t))) {
         return NULL;
     }
+
     TbSymbolStringOffsets_t *offsets = calloc(1, sizeof(*offsets));
     if (!offsets) {
         (void)tb_symbol_budget_release(construction, sizeof(TbSymbolStringOffsets_t));
         return NULL;
     }
+
     offsets->construction = construction;
     offsets->directory    = directory;
     offsets->selection    = selection;
     offsets->section      = directory.entries[selection.section_index].header;
     offsets->file = tb_symbol_file_create(directory.backing, selection.descriptor, construction);
+
     if (!offsets->file) {
         tb_symbol_string_offsets_destroy(offsets);
         return NULL;
     }
+
     return offsets;
 }
 
@@ -75,7 +79,7 @@ static void request(TbSymbolStringOffsets_t *offsets, TbSymbolFileRange_t range,
 {
     uint64_t absolute;
     if (!tb_symbol_add(offsets->section.offset, range.offset, &absolute) ||
-        !tb_symbol_file_request(offsets->file, (TbSymbolFileRange_t){
+        !tb_symbol_file_request(offsets->file, (TbSymbolFileRange_t) {
             .offset = absolute,
             .bytes  = range.bytes
         })) {
@@ -94,7 +98,8 @@ static void length(TbSymbolStringOffsets_t *offsets)
         fail(offsets, TB_SYMBOL_STRING_OFFSETS_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
         return;
     }
-    TbSymbolDwarfStatus_e status = tb_symbol_dwarf_length((TbSymbolDwarfSpan_t){
+
+    TbSymbolDwarfStatus_e status = tb_symbol_dwarf_length((TbSymbolDwarfSpan_t) {
         .section_bytes = offsets->section.bytes,
         .unit_offset   = offsets->cursor,
         .byte_order    = offsets->directory.header->byte_order
@@ -107,7 +112,7 @@ static void length(TbSymbolStringOffsets_t *offsets)
     } else if (offsets->extent.total_bytes < offsets->extent.length_bytes + 4U) {
         fail(offsets, TB_SYMBOL_STRING_OFFSETS_HEADER, TB_SYMBOL_MALFORMED);
     } else {
-        request(offsets, (TbSymbolFileRange_t){
+        request(offsets, (TbSymbolFileRange_t) {
             .offset = offsets->cursor,
             .bytes  = offsets->extent.length_bytes + 4U
         }, OFFSETS_HEADER);
@@ -131,6 +136,7 @@ static void header(TbSymbolStringOffsets_t *offsets)
         fail(offsets, TB_SYMBOL_STRING_OFFSETS_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
         return;
     }
+
     if (version != 5) {
         fail(offsets, TB_SYMBOL_STRING_OFFSETS_VERSION, TB_SYMBOL_UNSUPPORTED);
     } else if (padding) {
@@ -145,11 +151,14 @@ static void header(TbSymbolStringOffsets_t *offsets)
             fail(offsets, TB_SYMBOL_STRING_OFFSETS_HEADER, TB_SYMBOL_MALFORMED);
             return;
         }
+
         offsets->count = payload / offsets->extent.offset_bytes;
+
         if (offsets->selection.base != offsets->base) {
             fail(offsets, TB_SYMBOL_STRING_OFFSETS_BASE, TB_SYMBOL_MALFORMED);
             return;
         }
+
         uint64_t delta;
         if (offsets->selection.index >= offsets->count ||
             !tb_symbol_multiply(offsets->selection.index, offsets->extent.offset_bytes, &delta) ||
@@ -157,7 +166,8 @@ static void header(TbSymbolStringOffsets_t *offsets)
             fail(offsets, TB_SYMBOL_STRING_OFFSETS_INDEX, TB_SYMBOL_MALFORMED);
             return;
         }
-        request(offsets, (TbSymbolFileRange_t){
+
+        request(offsets, (TbSymbolFileRange_t) {
             .offset = offsets->entry_offset,
             .bytes  = offsets->extent.offset_bytes
         }, OFFSETS_ENTRY);
@@ -177,6 +187,7 @@ static void entry(TbSymbolStringOffsets_t *offsets)
         fail(offsets, TB_SYMBOL_STRING_OFFSETS_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
         return;
     }
+
     offsets->phase = OFFSETS_DONE;
     offsets->outcome = TB_SYMBOL_SUCCESS;
 }
@@ -186,17 +197,23 @@ TbSymbolOutcome_e tb_symbol_string_offsets_step(TbSymbolStringOffsets_t *offsets
 {
     if (!offsets)
         return TB_SYMBOL_OPERATIONAL_FAILURE;
+
     if (offsets->phase == OFFSETS_DONE || offsets->phase == OFFSETS_FAILED)
         return offsets->outcome;
+
     if (max_bytes < 64 || max_bytes > TB_SYMBOL_FILE_WINDOW_BYTES) {
         fail(offsets, TB_SYMBOL_STRING_OFFSETS_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
         return offsets->outcome;
     }
+
     bool progressed = true;
+
     if (offsets->reading) {
         uint64_t before = tb_symbol_file_progress(offsets->file);
         TbSymbolOutcome_e outcome = tb_symbol_file_step(offsets->file, max_bytes);
+
         progressed = before != tb_symbol_file_progress(offsets->file);
+
         if (outcome == TB_SYMBOL_SUCCESS) {
             offsets->reading = false;
         } else if (outcome != TB_SYMBOL_PENDING) {
@@ -219,7 +236,8 @@ TbSymbolOutcome_e tb_symbol_string_offsets_step(TbSymbolStringOffsets_t *offsets
                 fail(offsets, TB_SYMBOL_STRING_OFFSETS_BASE, TB_SYMBOL_MALFORMED);
             } else {
                 uint64_t remaining = offsets->section.bytes - offsets->cursor;
-                request(offsets, (TbSymbolFileRange_t){
+
+                request(offsets, (TbSymbolFileRange_t) {
                     .offset = offsets->cursor,
                     .bytes  = remaining < 12 ? (size_t)remaining : 12
                 }, OFFSETS_LENGTH);
@@ -239,12 +257,14 @@ TbSymbolOutcome_e tb_symbol_string_offsets_step(TbSymbolStringOffsets_t *offsets
             break;
         }
     }
+
     if (progressed) {
         if (offsets->progress == UINT64_MAX)
             fail(offsets, TB_SYMBOL_STRING_OFFSETS_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
         else
             ++offsets->progress;
     }
+
     return offsets->outcome;
 }
 
@@ -253,7 +273,8 @@ bool tb_symbol_string_offsets_view(const TbSymbolStringOffsets_t *offsets, TbSym
 {
     if (!offsets || !view || offsets->phase != OFFSETS_DONE || offsets->outcome != TB_SYMBOL_SUCCESS)
         return false;
-    *view = (TbSymbolStringOffsetView_t){
+
+    *view = (TbSymbolStringOffsetView_t) {
         .backing             = offsets->directory.backing,
         .section_index       = offsets->selection.section_index,
         .contribution_offset = offsets->cursor,
@@ -265,13 +286,14 @@ bool tb_symbol_string_offsets_view(const TbSymbolStringOffsets_t *offsets, TbSym
         .string_offset       = offsets->string_offset,
         .offset_bytes        = offsets->extent.offset_bytes
     };
+
     return true;
 }
 
 
 TbSymbolStringOffsetFailure_t tb_symbol_string_offsets_failure(const TbSymbolStringOffsets_t *offsets)
 {
-    return offsets ? offsets->failure : (TbSymbolStringOffsetFailure_t){
+    return offsets ? offsets->failure : (TbSymbolStringOffsetFailure_t) {
         .reason              = TB_SYMBOL_STRING_OFFSETS_REQUEST,
         .contribution_offset = UINT64_MAX
     };
@@ -288,6 +310,7 @@ void tb_symbol_string_offsets_destroy(TbSymbolStringOffsets_t *offsets)
 {
     if (!offsets)
         return;
+
     tb_symbol_file_destroy(offsets->file);
     (void)tb_symbol_budget_release(offsets->construction, sizeof(*offsets));
     free(offsets);

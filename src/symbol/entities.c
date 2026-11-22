@@ -31,14 +31,16 @@ TbSymbolEntityStatus_e tb_symbol_entity_init(TbSymbolEntity_t *entity, TbSymbolD
                                              uint64_t die_index)
 {
     TbSymbolAttributes_t lookup;
-    if (!entity || tb_symbol_attributes_init(&lookup, tree, (TbSymbolAttributeSelection_t){
+    if (!entity || tb_symbol_attributes_init(&lookup, tree, (TbSymbolAttributeSelection_t) {
         .die_index = die_index,
         .name      = field_names[0]
     }) != TB_SYMBOL_ATTRIBUTE_PENDING) {
         return TB_SYMBOL_ENTITY_INVALID;
     }
+
     const TbSymbolDieEntry_t *entry = &tree.entries[die_index];
-    *entity = (TbSymbolEntity_t){
+
+    *entity = (TbSymbolEntity_t) {
         .attributes    = tree.attributes,
         .cursor        = lookup.cursor,
         .end           = lookup.end,
@@ -57,11 +59,14 @@ TbSymbolEntityStatus_e tb_symbol_entity_init(TbSymbolEntity_t *entity, TbSymbolD
         .failure_field = TB_SYMBOL_ENTITY_FIELDS,
         .initialized   = true
     };
+
     for (size_t i = 0; i < TB_SYMBOL_ENTITY_FIELDS; ++i) {
         TbSymbolAttributeResult_t *selection = &entity->view.fields[i].selection;
+
         *selection = lookup.result;
         selection->name = field_names[i];
     }
+
     return entity->status;
 }
 
@@ -72,6 +77,7 @@ static void collect(TbSymbolEntity_t *entity, uint64_t index)
     for (size_t i = 0; i < TB_SYMBOL_ENTITY_FIELDS; ++i) {
         if (attribute->name != field_names[i])
             continue;
+
         TbSymbolEntityField_t *field = &entity->view.fields[i];
         if (!field->selection.matches) {
             field->attribute              = *attribute;
@@ -92,6 +98,7 @@ static bool flag(TbSymbolEntity_t *entity, TbSymbolEntityField_e selected, TbSym
     const TbSymbolEntityField_t *field = &entity->view.fields[selected];
     if (!field->selection.matches)
         return true;
+
     const TbSymbolFormView_t *value = &field->attribute.value;
     if ((value->form != TB_SYMBOL_FORM_FLAG && value->form != TB_SYMBOL_FORM_FLAG_PRESENT) ||
         !value->numeric || value->is_signed ||
@@ -101,8 +108,10 @@ static bool flag(TbSymbolEntity_t *entity, TbSymbolEntityField_e selected, TbSym
         entity->failure_field = selected;
         return false;
     }
+
     result->present = true;
     result->value   = value->bits != 0;
+
     return true;
 }
 
@@ -111,16 +120,21 @@ TbSymbolEntityStatus_e tb_symbol_entity_step(TbSymbolEntity_t *entity, size_t ma
 {
     if (!entity || !entity->initialized)
         return TB_SYMBOL_ENTITY_INVALID;
+
     if (entity->status != TB_SYMBOL_ENTITY_PENDING)
         return entity->status;
+
     if (!max_steps || max_steps > 256) {
         entity->status = TB_SYMBOL_ENTITY_INVALID;
         return entity->status;
     }
+
     for (size_t step = 0; step < max_steps && entity->cursor < entity->end; ++step)
         collect(entity, entity->cursor++);
+
     if (entity->cursor < entity->end)
         return entity->status;
+
     for (size_t i = 0; i < TB_SYMBOL_ENTITY_FIELDS; ++i) {
         if (entity->view.fields[i].selection.matches > 1) {
             entity->status        = TB_SYMBOL_ENTITY_CONFLICT;
@@ -128,11 +142,13 @@ TbSymbolEntityStatus_e tb_symbol_entity_step(TbSymbolEntity_t *entity, size_t ma
             return entity->status;
         }
     }
+
     if (flag(entity, TB_SYMBOL_ENTITY_DECLARATION, &entity->view.declaration) &&
         flag(entity, TB_SYMBOL_ENTITY_EXTERNAL, &entity->view.external) &&
         flag(entity, TB_SYMBOL_ENTITY_ARTIFICIAL, &entity->view.artificial)) {
         entity->status = TB_SYMBOL_ENTITY_READY;
     }
+
     return entity->status;
 }
 
@@ -141,7 +157,9 @@ bool tb_symbol_entity_view(const TbSymbolEntity_t *entity, TbSymbolEntityView_t 
 {
     if (!entity || !entity->initialized || !view || entity->status != TB_SYMBOL_ENTITY_READY)
         return false;
+
     *view = entity->view;
+
     return true;
 }
 
@@ -153,8 +171,10 @@ bool tb_symbol_entity_failure(const TbSymbolEntity_t *entity, TbSymbolEntityFiel
         (entity->status != TB_SYMBOL_ENTITY_CONFLICT && entity->status != TB_SYMBOL_ENTITY_MALFORMED)) {
         return false;
     }
+
     *field = entity->failure_field;
     *selection = entity->view.fields[*field].selection;
+
     return true;
 }
 
@@ -163,6 +183,7 @@ bool tb_symbol_entity_role(const TbSymbolEntity_t *entity, TbSymbolEntityRole_e 
 {
     if (!entity || !entity->initialized || !role || entity->status != TB_SYMBOL_ENTITY_READY)
         return false;
+
     switch (entity->view.kind) {
     case TB_SYMBOL_ENTITY_FUNCTION:
     case TB_SYMBOL_ENTITY_DATA:
@@ -176,5 +197,6 @@ bool tb_symbol_entity_role(const TbSymbolEntity_t *entity, TbSymbolEntityRole_e 
         *role = TB_SYMBOL_ROLE_OTHER;
         break;
     }
+
     return true;
 }

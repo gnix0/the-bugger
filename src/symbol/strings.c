@@ -39,21 +39,25 @@ TbSymbolString_t *tb_symbol_string_create(TbSymbolSectionsView_t directory,
         !tb_symbol_budget_reserve(construction, sizeof(TbSymbolString_t))) {
         return NULL;
     }
+
     TbSymbolString_t *string = calloc(1, sizeof(*string));
     if (!string) {
         (void)tb_symbol_budget_release(construction, sizeof(TbSymbolString_t));
         return NULL;
     }
+
     string->construction = construction;
     string->directory    = directory;
     string->selection    = selection;
     string->section      = directory.entries[selection.section_index].header;
     string->cursor       = selection.offset;
     string->file = tb_symbol_file_create(directory.backing, selection.descriptor, construction);
+
     if (!string->file) {
         tb_symbol_string_destroy(string);
         return NULL;
     }
+
     return string;
 }
 
@@ -73,19 +77,22 @@ static bool window(TbSymbolString_t *string, size_t max_bytes)
         string->cursor - string->window_start < string->window_bytes) {
         return true;
     }
+
     uint64_t remaining = string->selection.end_offset - string->cursor;
     uint64_t offset;
     if (!tb_symbol_add(string->section.offset, string->cursor, &offset) ||
-        !tb_symbol_file_request(string->file, (TbSymbolFileRange_t){
+        !tb_symbol_file_request(string->file, (TbSymbolFileRange_t) {
             .offset = offset,
             .bytes  = remaining < max_bytes ? (size_t)remaining : max_bytes
         })) {
         fail(string, TB_SYMBOL_STRING_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
         return false;
     }
+
     string->window_start = string->cursor;
     string->window_bytes = 0;
     string->reading = true;
+
     return false;
 }
 
@@ -96,15 +103,19 @@ static void scan(TbSymbolString_t *string, size_t max_bytes)
         fail(string, TB_SYMBOL_STRING_UNTERMINATED, TB_SYMBOL_MALFORMED);
         return;
     }
+
     if (!window(string, max_bytes))
         return;
+
     size_t at = (size_t)(string->cursor - string->window_start);
     size_t count = string->window_bytes - at;
     if (count > max_bytes)
         count = max_bytes;
+
     const unsigned char *terminator = memchr(string->window + at, 0, count);
     if (terminator) {
         size_t before = (size_t)(terminator - (string->window + at));
+
         string->bytes = string->cursor - string->selection.offset + before;
         string->phase = STRING_DONE;
         string->outcome = TB_SYMBOL_SUCCESS;
@@ -118,17 +129,23 @@ TbSymbolOutcome_e tb_symbol_string_step(TbSymbolString_t *string, size_t max_byt
 {
     if (!string)
         return TB_SYMBOL_OPERATIONAL_FAILURE;
+
     if (string->phase == STRING_DONE || string->phase == STRING_FAILED)
         return string->outcome;
+
     if (max_bytes < 64 || max_bytes > TB_SYMBOL_FILE_WINDOW_BYTES) {
         fail(string, TB_SYMBOL_STRING_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
         return string->outcome;
     }
+
     bool progressed = true;
+
     if (string->reading) {
         uint64_t before = tb_symbol_file_progress(string->file);
         TbSymbolOutcome_e outcome = tb_symbol_file_step(string->file, max_bytes);
+
         progressed = before != tb_symbol_file_progress(string->file);
+
         if (outcome == TB_SYMBOL_SUCCESS) {
             TbSymbolFileView_t view;
             if (tb_symbol_file_view(string->file, &view)) {
@@ -155,12 +172,14 @@ TbSymbolOutcome_e tb_symbol_string_step(TbSymbolString_t *string, size_t max_byt
     } else {
         scan(string, max_bytes);
     }
+
     if (progressed) {
         if (string->progress == UINT64_MAX)
             fail(string, TB_SYMBOL_STRING_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
         else
             ++string->progress;
     }
+
     return string->outcome;
 }
 
@@ -169,20 +188,22 @@ bool tb_symbol_string_view(const TbSymbolString_t *string, TbSymbolStringView_t 
 {
     if (!string || !view || string->phase != STRING_DONE || string->outcome != TB_SYMBOL_SUCCESS)
         return false;
-    *view = (TbSymbolStringView_t){
+
+    *view = (TbSymbolStringView_t) {
         .backing       = string->directory.backing,
         .section_index = string->selection.section_index,
         .offset        = string->selection.offset,
         .bytes         = string->bytes,
         .end_offset    = string->selection.end_offset
     };
+
     return true;
 }
 
 
 TbSymbolStringFailure_t tb_symbol_string_failure(const TbSymbolString_t *string)
 {
-    return string ? string->failure : (TbSymbolStringFailure_t){
+    return string ? string->failure : (TbSymbolStringFailure_t) {
         .reason = TB_SYMBOL_STRING_REQUEST,
         .offset = UINT64_MAX
     };
@@ -199,6 +220,7 @@ void tb_symbol_string_destroy(TbSymbolString_t *string)
 {
     if (!string)
         return;
+
     tb_symbol_file_destroy(string->file);
     (void)tb_symbol_budget_release(string->construction, sizeof(*string));
     free(string);

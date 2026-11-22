@@ -72,6 +72,7 @@ TbSymbolQualified_t *tb_symbol_qualified_create(TbSymbolSectionsView_t directory
         scope.node_count > SIZE_MAX / (2 * sizeof(TbSymbolStringView_t))) {
         return NULL;
     }
+
     size_t nodes     = scope.node_count * sizeof(TbSymbolQualifiedNode_t);
     size_t languages = scope.edge_count * sizeof(TbSymbolConstantView_t);
     size_t parts     = scope.node_count * sizeof(TbSymbolStringView_t);
@@ -80,14 +81,17 @@ TbSymbolQualified_t *tb_symbol_qualified_create(TbSymbolSectionsView_t directory
         2 * parts > SIZE_MAX - sizeof(TbSymbolQualified_t) - nodes - languages) {
         return NULL;
     }
+
     size_t owned = sizeof(TbSymbolQualified_t) + nodes + languages + 2 * parts;
     if (!tb_symbol_budget_reserve(construction, owned))
         return NULL;
+
     TbSymbolQualified_t *qualified = calloc(1, sizeof(*qualified));
     if (!qualified) {
         (void)tb_symbol_budget_release(construction, owned);
         return NULL;
     }
+
     qualified->construction = construction;
     qualified->directory    = directory;
     qualified->scope        = scope;
@@ -97,10 +101,12 @@ TbSymbolQualified_t *tb_symbol_qualified_create(TbSymbolSectionsView_t directory
     qualified->languages    = malloc(languages);
     qualified->parts[0]    = malloc(parts);
     qualified->parts[1]    = malloc(parts);
+
     if (!qualified->nodes || !qualified->languages || !qualified->parts[0] || !qualified->parts[1]) {
         tb_symbol_qualified_destroy(qualified);
         return NULL;
     }
+
     return qualified;
 }
 
@@ -110,7 +116,7 @@ static void fail(TbSymbolQualified_t *qualified, TbSymbolQualifiedStatus_e statu
 {
     qualified->status  = status;
     qualified->phase   = QUAL_DONE;
-    qualified->failure = (TbSymbolQualifiedFailure_t){
+    qualified->failure = (TbSymbolQualifiedFailure_t) {
         .reason       = reason,
         .node_index   = qualified->node,
         .anchor_index = qualified->anchor,
@@ -126,6 +132,7 @@ static void scope_node(TbSymbolQualified_t *qualified)
         qualified->phase = QUAL_NAME_REQUEST;
         return;
     }
+
     const TbSymbolScopeNode_t *node = &qualified->scope.nodes[qualified->node];
     if (!node->complete || !node->relationships.nodes || !node->relationships.count ||
         !node->contexts.anchors || !node->contexts.count ||
@@ -137,10 +144,12 @@ static void scope_node(TbSymbolQualified_t *qualified)
         fail(qualified, TB_SYMBOL_QUALIFIED_INVALID, TB_SYMBOL_QUALIFIED_SCOPE);
         return;
     }
+
     if (node->context.tag == 0x11 || node->context.tag == 0x3c || node->context.tag == 0x41) {
         fail(qualified, TB_SYMBOL_QUALIFIED_UNSUPPORTED, TB_SYMBOL_QUALIFIED_PARENT_PROFILE);
         return;
     }
+
     qualified->anchor = 0;
     qualified->phase  = QUAL_SCOPE_EDGE;
 }
@@ -154,6 +163,7 @@ static void scope_edge(TbSymbolQualified_t *qualified)
         qualified->phase = QUAL_SCOPE;
         return;
     }
+
     const TbSymbolScopeEdge_t     *edge    = &qualified->scope.edges[node->first_edge + qualified->anchor];
     const TbSymbolContextAnchor_t *anchor  = &node->contexts.anchors[qualified->anchor];
     bool                           lexical = anchor->kind == TB_SYMBOL_CONTEXT_LEXICAL_PARENT;
@@ -169,6 +179,7 @@ static void scope_edge(TbSymbolQualified_t *qualified)
         fail(qualified, TB_SYMBOL_QUALIFIED_INVALID, TB_SYMBOL_QUALIFIED_SCOPE);
         return;
     }
+
     ++qualified->anchor;
 }
 
@@ -179,9 +190,11 @@ bool tb_symbol_qualified_need(const TbSymbolQualified_t *qualified, TbSymbolQual
         qualified->node >= qualified->scope.node_count) {
         return false;
     }
+
     const TbSymbolScopeNode_t *node = &qualified->scope.nodes[qualified->node];
+
     if (qualified->phase == QUAL_NAME_REQUEST) {
-        *need = (TbSymbolQualifiedNeed_t){
+        *need = (TbSymbolQualifiedNeed_t) {
             .kind         = TB_SYMBOL_QUALIFIED_NAME,
             .node_index   = qualified->node,
             .anchor_index = SIZE_MAX,
@@ -191,11 +204,12 @@ bool tb_symbol_qualified_need(const TbSymbolQualified_t *qualified, TbSymbolQual
     } else if (qualified->phase == QUAL_LANGUAGE_REQUEST && qualified->anchor < node->contexts.count) {
         const TbSymbolContextAnchor_t *anchor  = &node->contexts.anchors[qualified->anchor];
         TbSymbolGraphContext_t         context = anchor->context;
+
         context.tag                            = context.unit_kind == TB_SYMBOL_DWARF_COMPILE   ? 0x11
                         : context.unit_kind == TB_SYMBOL_DWARF_PARTIAL ? 0x3c : 0x41;
         context.parent_record                  = UINT64_MAX;
         context.parent_tag                     = 0;
-        *need = (TbSymbolQualifiedNeed_t){
+        *need = (TbSymbolQualifiedNeed_t) {
             .kind         = TB_SYMBOL_QUALIFIED_LANGUAGE,
             .node_index   = qualified->node,
             .anchor_index = qualified->anchor,
@@ -205,6 +219,7 @@ bool tb_symbol_qualified_need(const TbSymbolQualified_t *qualified, TbSymbolQual
     } else {
         return false;
     }
+
     return true;
 }
 
@@ -216,19 +231,24 @@ TbSymbolQualifiedStatus_e tb_symbol_qualified_name(TbSymbolQualified_t          
     TbSymbolQualifiedNeed_t need;
     if (!tb_symbol_qualified_need(qualified, &need) || need.kind != TB_SYMBOL_QUALIFIED_NAME)
         return TB_SYMBOL_QUALIFIED_INVALID;
+
     if (status == TB_SYMBOL_INHERITED_TEXT_FOUND) {
         if (!name || !name->facts || !name->count ||
             name->count > qualified->scope.nodes[qualified->node].relationships.count ||
             !same_record(name->selected, need.record)) {
             return TB_SYMBOL_QUALIFIED_INVALID;
         }
+
         qualified->nodes[qualified->node].name = *name;
         qualified->scan                        = 0;
         qualified->phase                       = QUAL_NAME_VALIDATE;
         qualified->status = TB_SYMBOL_QUALIFIED_PENDING;
+
         return qualified->status;
     }
+
     TbSymbolQualifiedStatus_e result;
+
     switch (status) {
     case TB_SYMBOL_INHERITED_TEXT_ABSENT:
         result = qualified->node == 0 ? TB_SYMBOL_QUALIFIED_UNNAMED : TB_SYMBOL_QUALIFIED_UNSUPPORTED;
@@ -254,7 +274,9 @@ TbSymbolQualifiedStatus_e tb_symbol_qualified_name(TbSymbolQualified_t          
     default:
         return TB_SYMBOL_QUALIFIED_INVALID;
     }
+
     fail(qualified, result, TB_SYMBOL_QUALIFIED_NAME_VALUE);
+
     return qualified->status;
 }
 
@@ -266,13 +288,17 @@ static void name_fact(TbSymbolQualified_t *qualified)
         if (!name->facts[0].text.text.bytes) {
             TbSymbolQualifiedStatus_e status = qualified->node == 0 ? TB_SYMBOL_QUALIFIED_UNNAMED
                                                                       : TB_SYMBOL_QUALIFIED_UNSUPPORTED;
+
             fail(qualified, status, TB_SYMBOL_QUALIFIED_NAME_VALUE);
             return;
         }
+
         ++qualified->node;
         qualified->phase = QUAL_NAME_REQUEST;
+
         return;
     }
+
     const TbSymbolInheritedTextFact_t *fact  = &name->facts[qualified->scan];
     const TbSymbolGraphView_t         *graph = &qualified->scope.nodes[qualified->node].relationships;
     if (fact->node_index >= graph->count ||
@@ -280,6 +306,7 @@ static void name_fact(TbSymbolQualified_t *qualified)
         fail(qualified, TB_SYMBOL_QUALIFIED_INVALID, TB_SYMBOL_QUALIFIED_NAME_VALUE);
         return;
     }
+
     TbSymbolReferenceTarget_t owner = graph->nodes[fact->node_index].record;
     if (!same_backing(fact->selection.backing, owner.backing) || fact->selection.name != 3 ||
         fact->selection.matches != 1 || fact->selection.section_index != owner.section_index ||
@@ -294,12 +321,14 @@ static void name_fact(TbSymbolQualified_t *qualified)
         fail(qualified, TB_SYMBOL_QUALIFIED_INVALID, TB_SYMBOL_QUALIFIED_NAME_VALUE);
         return;
     }
+
     TbSymbolStringView_t string = fact->text.text;
     if (!same_backing(string.backing, qualified->directory.backing) ||
         string.section_index >= qualified->directory.count) {
         fail(qualified, TB_SYMBOL_QUALIFIED_INVALID, TB_SYMBOL_QUALIFIED_NAME_VALUE);
         return;
     }
+
     TbSymbolElfSection_t section = qualified->directory.entries[string.section_index].header;
     uint64_t             end;
     uint64_t             section_end;
@@ -310,6 +339,7 @@ static void name_fact(TbSymbolQualified_t *qualified)
         fail(qualified, TB_SYMBOL_QUALIFIED_INVALID, TB_SYMBOL_QUALIFIED_NAME_VALUE);
         return;
     }
+
     ++qualified->scan;
 }
 
@@ -321,6 +351,7 @@ TbSymbolQualifiedStatus_e tb_symbol_qualified_language(TbSymbolQualified_t      
     TbSymbolQualifiedNeed_t need;
     if (!tb_symbol_qualified_need(qualified, &need) || need.kind != TB_SYMBOL_QUALIFIED_LANGUAGE)
         return TB_SYMBOL_QUALIFIED_INVALID;
+
     if (status == TB_SYMBOL_CONSTANT_FOUND) {
         if (!language || !same_backing(language->selection.backing, need.record.backing) ||
             language->selection.name != TB_SYMBOL_CONSTANT_LANGUAGE || language->selection.matches != 1 ||
@@ -333,6 +364,7 @@ TbSymbolQualifiedStatus_e tb_symbol_qualified_language(TbSymbolQualified_t      
             language->abbrev_offset != need.context.abbrev_offset) {
             return TB_SYMBOL_QUALIFIED_INVALID;
         }
+
         const TbSymbolScopeNode_t *node = &qualified->scope.nodes[qualified->node];
         const TbSymbolScopeEdge_t *edge   = &qualified->scope.edges[node->first_edge + qualified->anchor];
         TbSymbolLanguageFamily_e   family = tb_symbol_language_family(language->value);
@@ -341,6 +373,7 @@ TbSymbolQualifiedStatus_e tb_symbol_qualified_language(TbSymbolQualified_t      
             fail(qualified, TB_SYMBOL_QUALIFIED_UNSUPPORTED, TB_SYMBOL_QUALIFIED_LANGUAGE_VALUE);
             return qualified->status;
         }
+
         if (edge->target_node != SIZE_MAX) {
             uint64_t tag = qualified->scope.nodes[edge->target_node].context.tag;
             if (tag != 0x39 && tag != 0x02 && tag != 0x13 && tag != 0x17) {
@@ -351,9 +384,12 @@ TbSymbolQualifiedStatus_e tb_symbol_qualified_language(TbSymbolQualified_t      
         qualified->languages[node->first_edge + qualified->anchor] = *language;
         ++qualified->anchor;
         qualified->status = TB_SYMBOL_QUALIFIED_PENDING;
+
         return qualified->status;
     }
+
     TbSymbolQualifiedStatus_e result;
+
     switch (status) {
     case TB_SYMBOL_CONSTANT_ABSENT:
     case TB_SYMBOL_CONSTANT_UNSUPPORTED:
@@ -371,7 +407,9 @@ TbSymbolQualifiedStatus_e tb_symbol_qualified_language(TbSymbolQualified_t      
     default:
         return TB_SYMBOL_QUALIFIED_INVALID;
     }
+
     fail(qualified, result, TB_SYMBOL_QUALIFIED_LANGUAGE_VALUE);
+
     return qualified->status;
 }
 
@@ -395,6 +433,7 @@ static void request_language(TbSymbolQualified_t *qualified)
         qualified->phase = QUAL_FIND;
         return;
     }
+
     const TbSymbolScopeNode_t *node = &qualified->scope.nodes[qualified->node];
     if (qualified->anchor == node->contexts.count) {
         ++qualified->node;
@@ -433,8 +472,10 @@ static void check_parents(TbSymbolQualified_t *qualified)
         qualified->anchor = 0;
         qualified->representative = qualified->scope.edges[node->first_edge].target_node;
         qualified->phase          = QUAL_CHOOSE;
+
         return;
     }
+
     size_t parent = qualified->scope.edges[node->first_edge + qualified->anchor].target_node;
     if (parent != SIZE_MAX && !qualified->nodes[parent].complete) {
         ++qualified->node;
@@ -458,6 +499,7 @@ static void finish_node(TbSymbolQualified_t *qualified)
         fail(qualified, TB_SYMBOL_QUALIFIED_RESOURCE, TB_SYMBOL_QUALIFIED_LENGTH);
         return;
     }
+
     node->parent_node = parent;
     node->part_count  = parts + 1;
     node->bytes       = bytes;
@@ -482,6 +524,7 @@ static void choose(TbSymbolQualified_t *qualified)
         finish_node(qualified);
         return;
     }
+
     size_t candidate = qualified->scope.edges[node->first_edge + qualified->anchor].target_node;
     if (candidate == qualified->representative) {
         ++qualified->anchor;
@@ -504,14 +547,18 @@ static void flatten(TbSymbolQualified_t *qualified)
             fail(qualified, TB_SYMBOL_QUALIFIED_INVALID, TB_SYMBOL_QUALIFIED_SCOPE);
             return;
         }
+
         const TbSymbolScopeNode_t *node = &qualified->scope.nodes[qualified->node];
         size_t candidate = qualified->scope.edges[node->first_edge + qualified->anchor].target_node;
+
         if (qualified->flatten_input == 0) {
             qualified->flatten_input  = 1;
             qualified->flatten_node   = candidate;
             qualified->flatten_cursor = qualified->nodes[candidate].part_count;
+
             return;
         }
+
         TbSymbolNameOrderInput_t inputs[2] = {
             {
                 .directory  = qualified->directory,
@@ -526,24 +573,31 @@ static void flatten(TbSymbolQualified_t *qualified)
                 .descriptor = qualified->descriptor
             }
         };
+
         qualified->comparison = tb_symbol_name_order_create(inputs, qualified->construction);
+
         if (!qualified->comparison) {
             fail(qualified, TB_SYMBOL_QUALIFIED_RESOURCE, TB_SYMBOL_QUALIFIED_ALLOCATION);
             return;
         }
+
         qualified->phase = QUAL_COMPARE;
+
         return;
     }
+
     if (qualified->flatten_node >= qualified->scope.node_count || !qualified->flatten_cursor ||
         qualified->flatten_cursor > qualified->scope.node_count || qualified->flatten_input >= 2) {
         fail(qualified, TB_SYMBOL_QUALIFIED_INVALID, TB_SYMBOL_QUALIFIED_SCOPE);
         return;
     }
+
     const TbSymbolQualifiedNode_t *node = &qualified->nodes[qualified->flatten_node];
     if (!node->complete || node->part_count != qualified->flatten_cursor) {
         fail(qualified, TB_SYMBOL_QUALIFIED_INVALID, TB_SYMBOL_QUALIFIED_SCOPE);
         return;
     }
+
     qualified->parts[qualified->flatten_input][--qualified->flatten_cursor] = node->name.facts[0].text.text;
     qualified->flatten_node                                                 = node->parent_node;
 }
@@ -554,9 +608,11 @@ static void compare(TbSymbolQualified_t *qualified, size_t max_bytes)
     TbSymbolOutcome_e outcome = tb_symbol_name_order_step(qualified->comparison, max_bytes);
     if (outcome == TB_SYMBOL_PENDING)
         return;
+
     if (outcome != TB_SYMBOL_SUCCESS) {
         TbSymbolNameOrderFailure_t failure = tb_symbol_name_order_failure(qualified->comparison);
         TbSymbolQualifiedStatus_e status;
+
         switch (outcome) {
         case TB_SYMBOL_RESOURCE_FAILURE:
             status = TB_SYMBOL_QUALIFIED_RESOURCE;
@@ -571,6 +627,7 @@ static void compare(TbSymbolQualified_t *qualified, size_t max_bytes)
             status = TB_SYMBOL_QUALIFIED_OPERATIONAL;
             break;
         }
+
         fail(qualified, status, TB_SYMBOL_QUALIFIED_COMPARISON);
         qualified->failure.comparison = failure;
     } else {
@@ -593,21 +650,25 @@ TbSymbolQualifiedStatus_e tb_symbol_qualified_step(TbSymbolQualified_t *qualifie
 {
     if (!qualified || !max_bytes || max_bytes > 65536)
         return TB_SYMBOL_QUALIFIED_INVALID;
+
     if (qualified->status != TB_SYMBOL_QUALIFIED_PENDING)
         return qualified->status;
+
     if (qualified->progress == UINT64_MAX) {
         fail(qualified, TB_SYMBOL_QUALIFIED_OPERATIONAL, TB_SYMBOL_QUALIFIED_LENGTH);
         return qualified->status;
     }
+
     uint64_t child_before = tb_symbol_name_order_progress(qualified->comparison);
     bool     comparing    = qualified->phase == QUAL_COMPARE;
+
     switch (qualified->phase) {
     case QUAL_INIT:
         if (qualified->scan == qualified->scope.node_count) {
             qualified->node = 0;
             qualified->phase = QUAL_SCOPE;
         } else {
-            qualified->nodes[qualified->scan++] = (TbSymbolQualifiedNode_t){
+            qualified->nodes[qualified->scan++] = (TbSymbolQualifiedNode_t) {
                 .parent_node = SIZE_MAX
             };
         }
@@ -646,10 +707,12 @@ TbSymbolQualifiedStatus_e tb_symbol_qualified_step(TbSymbolQualified_t *qualifie
         fail(qualified, TB_SYMBOL_QUALIFIED_INVALID, TB_SYMBOL_QUALIFIED_REQUEST);
         break;
     }
+
     if (!comparing || qualified->phase != QUAL_COMPARE ||
         child_before != tb_symbol_name_order_progress(qualified->comparison)) {
         ++qualified->progress;
     }
+
     return qualified->status;
 }
 
@@ -658,7 +721,8 @@ bool tb_symbol_qualified_view(const TbSymbolQualified_t *qualified, TbSymbolQual
 {
     if (!qualified || !view || qualified->status != TB_SYMBOL_QUALIFIED_READY)
         return false;
-    *view = (TbSymbolQualifiedView_t){
+
+    *view = (TbSymbolQualifiedView_t) {
         .selected       = qualified->scope.nodes[0].record,
         .scope          = qualified->scope,
         .nodes          = qualified->nodes,
@@ -666,13 +730,14 @@ bool tb_symbol_qualified_view(const TbSymbolQualified_t *qualified, TbSymbolQual
         .languages      = qualified->languages,
         .language_count = qualified->scope.edge_count
     };
+
     return true;
 }
 
 
 TbSymbolQualifiedFailure_t tb_symbol_qualified_failure(const TbSymbolQualified_t *qualified)
 {
-    return qualified ? qualified->failure : (TbSymbolQualifiedFailure_t){
+    return qualified ? qualified->failure : (TbSymbolQualifiedFailure_t) {
         .reason       = TB_SYMBOL_QUALIFIED_REQUEST,
         .node_index   = SIZE_MAX,
         .anchor_index = SIZE_MAX,
@@ -691,13 +756,16 @@ void tb_symbol_qualified_destroy(TbSymbolQualified_t *qualified)
 {
     if (!qualified)
         return;
+
     tb_symbol_name_order_destroy(qualified->comparison);
     free(qualified->parts[1]);
     free(qualified->parts[0]);
     free(qualified->languages);
     free(qualified->nodes);
+
     TbSymbolBudget_t *construction = qualified->construction;
     size_t            owned        = qualified->owned;
+
     free(qualified);
     (void)tb_symbol_budget_release(construction, owned);
 }

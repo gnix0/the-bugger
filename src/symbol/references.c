@@ -18,6 +18,7 @@ TbSymbolReferenceStatus_e tb_symbol_reference_prepare(TbSymbolUnitsView_t units,
         !units.entries[selection.unit_index].header_available) {
         return TB_SYMBOL_REFERENCE_INVALID;
     }
+
     const TbSymbolDieEntry_t *die = &tree.entries[selection.die_index];
     uint64_t index;
     if (selection.attribute_index >= die->attribute_count ||
@@ -25,8 +26,10 @@ TbSymbolReferenceStatus_e tb_symbol_reference_prepare(TbSymbolUnitsView_t units,
         index >= tree.attribute_count) {
         return TB_SYMBOL_REFERENCE_INVALID;
     }
+
     const TbSymbolDieAttribute_t *attribute = &tree.attributes[index];
     TbSymbolReferenceKind_e kind;
+
     switch (attribute->value.form) {
     case TB_SYMBOL_FORM_REF1:
     case TB_SYMBOL_FORM_REF2:
@@ -48,8 +51,10 @@ TbSymbolReferenceStatus_e tb_symbol_reference_prepare(TbSymbolUnitsView_t units,
     default:
         return TB_SYMBOL_REFERENCE_NOT_REFERENCE;
     }
+
     if (!attribute->value.numeric || attribute->value.is_signed)
         return TB_SYMBOL_REFERENCE_RANGE;
+
     TbSymbolReference_t candidate = {
         .backing          = tree.backing,
         .kind             = kind,
@@ -60,6 +65,7 @@ TbSymbolReferenceStatus_e tb_symbol_reference_prepare(TbSymbolUnitsView_t units,
         .source_record    = die->offset,
         .source_attribute = attribute->offset
     };
+
     if (kind == TB_SYMBOL_REFERENCE_UNIT) {
         uint64_t body;
         const TbSymbolUnitEntry_t *unit = &units.entries[selection.unit_index];
@@ -70,6 +76,7 @@ TbSymbolReferenceStatus_e tb_symbol_reference_prepare(TbSymbolUnitsView_t units,
         }
     }
     *reference = candidate;
+
     return TB_SYMBOL_REFERENCE_READY;
 }
 
@@ -79,13 +86,17 @@ TbSymbolReferenceStatus_e tb_symbol_reference_unit(TbSymbolReference_t reference
 {
     if (!target)
         return TB_SYMBOL_REFERENCE_INVALID;
+
     if (reference.kind == TB_SYMBOL_REFERENCE_SUPPLEMENTARY)
         return TB_SYMBOL_REFERENCE_UNSUPPORTED;
+
     if (reference.kind == TB_SYMBOL_REFERENCE_INFO || reference.kind == TB_SYMBOL_REFERENCE_SIGNATURE)
         return TB_SYMBOL_REFERENCE_DEPENDENCY;
+
     if (reference.kind != TB_SYMBOL_REFERENCE_UNIT)
         return TB_SYMBOL_REFERENCE_INVALID;
-    return tb_symbol_reference_target((TbSymbolReferenceNeed_t){
+
+    return tb_symbol_reference_target((TbSymbolReferenceNeed_t) {
         .backing       = reference.backing,
         .section_index = reference.source_section,
         .unit_offset   = reference.source_unit,
@@ -99,10 +110,12 @@ TbSymbolReferenceStatus_e tb_symbol_reference_target(TbSymbolReferenceNeed_t nee
 {
     if (!target)
         return TB_SYMBOL_REFERENCE_INVALID;
+
     if (!tree.entries || !tree.count || !same_backing(need.backing, tree.backing) ||
         need.section_index != tree.section_index || need.unit_offset != tree.unit_offset) {
         return TB_SYMBOL_REFERENCE_DEPENDENCY;
     }
+
     uint64_t begin = 0;
     uint64_t end = tree.count;
     while (begin < end) {
@@ -112,15 +125,18 @@ TbSymbolReferenceStatus_e tb_symbol_reference_target(TbSymbolReferenceNeed_t nee
         else
             end = middle;
     }
+
     if (begin == tree.count || tree.entries[begin].offset != need.record_offset)
         return TB_SYMBOL_REFERENCE_MISSING_DIE;
-    *target = (TbSymbolReferenceTarget_t){
+
+    *target = (TbSymbolReferenceTarget_t) {
         .backing       = tree.backing,
         .section_index = tree.section_index,
         .unit_offset   = tree.unit_offset,
         .record_offset = tree.entries[begin].offset,
         .entry_index   = begin
     };
+
     return TB_SYMBOL_REFERENCE_FOUND;
 }
 
@@ -132,8 +148,10 @@ TbSymbolReferenceStatus_e tb_symbol_reference_info(TbSymbolReference_t reference
         (units.count && !units.entries)) {
         return TB_SYMBOL_REFERENCE_INVALID;
     }
+
     if (!same_backing(reference.backing, units.backing))
         return TB_SYMBOL_REFERENCE_DEPENDENCY;
+
     uint64_t begin = 0;
     uint64_t end = units.count;
     while (begin < end) {
@@ -143,24 +161,30 @@ TbSymbolReferenceStatus_e tb_symbol_reference_info(TbSymbolReference_t reference
         else
             end = middle;
     }
+
     if (!begin)
         return TB_SYMBOL_REFERENCE_RANGE;
+
     uint64_t index = begin - 1;
     const TbSymbolUnitEntry_t *unit = &units.entries[index];
     if (reference.value >= unit->extent.end_offset)
         return TB_SYMBOL_REFERENCE_RANGE;
+
     if (!unit->header_available)
         return TB_SYMBOL_REFERENCE_UNSUPPORTED;
+
     uint64_t body;
     if (!tb_symbol_add(unit->offset, unit->header.header_bytes, &body) || reference.value < body)
         return TB_SYMBOL_REFERENCE_RANGE;
-    *need = (TbSymbolReferenceNeed_t){
+
+    *need = (TbSymbolReferenceNeed_t) {
         .backing       = units.backing,
         .section_index = units.section_index,
         .unit_index    = index,
         .unit_offset   = unit->offset,
         .record_offset = reference.value
     };
+
     return TB_SYMBOL_REFERENCE_READY;
 }
 
@@ -171,13 +195,15 @@ TbSymbolReferenceStatus_e tb_symbol_type_reference_init(TbSymbolTypeReference_t 
 {
     if (!lookup || reference.kind != TB_SYMBOL_REFERENCE_SIGNATURE || (count && !scopes))
         return TB_SYMBOL_REFERENCE_INVALID;
-    *lookup = (TbSymbolTypeReference_t){
+
+    *lookup = (TbSymbolTypeReference_t) {
         .scopes      = scopes,
         .scope_count = count,
         .reference   = reference,
         .status      = TB_SYMBOL_REFERENCE_PENDING,
         .initialized = true
     };
+
     return lookup->status;
 }
 
@@ -193,6 +219,7 @@ static void type_candidate(TbSymbolTypeReference_t *lookup, TbSymbolUnitsView_t 
         lookup->status = TB_SYMBOL_REFERENCE_RANGE;
         return;
     }
+
     TbSymbolReferenceNeed_t candidate = {
         .backing       = units.backing,
         .section_index = units.section_index,
@@ -200,6 +227,7 @@ static void type_candidate(TbSymbolTypeReference_t *lookup, TbSymbolUnitsView_t 
         .unit_offset   = unit->offset,
         .record_offset = offset
     };
+
     if (!lookup->found) {
         lookup->candidate = candidate;
         lookup->found = true;
@@ -215,8 +243,10 @@ TbSymbolReferenceStatus_e tb_symbol_type_reference_step(TbSymbolTypeReference_t 
 {
     if (!lookup || !lookup->initialized)
         return TB_SYMBOL_REFERENCE_INVALID;
+
     if (lookup->status != TB_SYMBOL_REFERENCE_PENDING)
         return lookup->status;
+
     if (lookup->scope_index == lookup->scope_count) {
         lookup->status = lookup->conflict ? TB_SYMBOL_REFERENCE_CONFLICT
                              : lookup->coverage ? TB_SYMBOL_REFERENCE_COVERAGE
@@ -224,6 +254,7 @@ TbSymbolReferenceStatus_e tb_symbol_type_reference_step(TbSymbolTypeReference_t 
                                                   : TB_SYMBOL_REFERENCE_MISSING_TYPE;
         return lookup->status;
     }
+
     TbSymbolUnitsView_t units = lookup->scopes[lookup->scope_index];
     if ((units.count && !units.entries) ||
         (units.kind != TB_SYMBOL_DWARF_INFO && units.kind != TB_SYMBOL_DWARF_TYPES) ||
@@ -231,11 +262,13 @@ TbSymbolReferenceStatus_e tb_symbol_type_reference_step(TbSymbolTypeReference_t 
         lookup->status = TB_SYMBOL_REFERENCE_INVALID;
         return lookup->status;
     }
+
     if (lookup->unit_index == units.count) {
         ++lookup->scope_index;
         lookup->unit_index = 0;
         return lookup->status;
     }
+
     const TbSymbolUnitEntry_t *unit = &units.entries[lookup->unit_index];
     if (!unit->header_available) {
         lookup->coverage = true;
@@ -244,6 +277,7 @@ TbSymbolReferenceStatus_e tb_symbol_type_reference_step(TbSymbolTypeReference_t 
         type_candidate(lookup, units, unit);
     }
     ++lookup->unit_index;
+
     return lookup->status;
 }
 
@@ -252,6 +286,8 @@ bool tb_symbol_type_reference_need(const TbSymbolTypeReference_t *lookup, TbSymb
 {
     if (!lookup || !lookup->initialized || !need || lookup->status != TB_SYMBOL_REFERENCE_READY)
         return false;
+
     *need = lookup->candidate;
+
     return true;
 }

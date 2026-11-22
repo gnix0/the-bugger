@@ -79,6 +79,7 @@ TbSymbolDies_t *tb_symbol_dies_create(TbSymbolSectionsView_t directory, TbSymbol
         !same_backing(directory.backing, schema.backing) || !construction) {
         return NULL;
     }
+
     TbSymbolUnitEntry_t unit = units.entries[selection.unit_index];
     uint64_t body;
     if (!tb_symbol_add(unit.offset, unit.header.header_bytes, &body) ||
@@ -88,11 +89,13 @@ TbSymbolDies_t *tb_symbol_dies_create(TbSymbolSectionsView_t directory, TbSymbol
         !tb_symbol_budget_reserve(construction, sizeof(TbSymbolDies_t))) {
         return NULL;
     }
+
     TbSymbolDies_t *dies = calloc(1, sizeof(*dies));
     if (!dies) {
         (void)tb_symbol_budget_release(construction, sizeof(TbSymbolDies_t));
         return NULL;
     }
+
     dies->construction  = construction;
     dies->directory     = directory;
     dies->section_index = units.section_index;
@@ -106,10 +109,12 @@ TbSymbolDies_t *tb_symbol_dies_create(TbSymbolSectionsView_t directory, TbSymbol
     dies->kind          = unit.header.kind;
     (void)tb_symbol_leb_init(&dies->code, false);
     dies->file = tb_symbol_file_create(directory.backing, selection.descriptor, construction);
+
     if (!dies->file) {
         tb_symbol_dies_destroy(dies);
         return NULL;
     }
+
     return dies;
 }
 
@@ -128,10 +133,11 @@ static bool window(TbSymbolDies_t *dies)
 {
     if (dies->cursor >= dies->window_start && dies->cursor - dies->window_start < dies->window_bytes)
         return true;
+
     uint64_t offset;
     uint64_t remaining = dies->unit.extent.end_offset - dies->cursor;
     if (!remaining || !tb_symbol_add(dies->section.offset, dies->cursor, &offset) ||
-        !tb_symbol_file_request(dies->file, (TbSymbolFileRange_t){
+        !tb_symbol_file_request(dies->file, (TbSymbolFileRange_t) {
             .offset = offset,
             .bytes  = remaining < TB_SYMBOL_FILE_WINDOW_BYTES
                           ? (size_t)remaining : TB_SYMBOL_FILE_WINDOW_BYTES
@@ -139,9 +145,11 @@ static bool window(TbSymbolDies_t *dies)
         fail(dies, TB_SYMBOL_DIES_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
         return false;
     }
+
     dies->window_start = dies->cursor;
     dies->window_bytes = 0;
     dies->reading = true;
+
     return false;
 }
 
@@ -157,6 +165,7 @@ static void next_code(TbSymbolDies_t *dies)
 static bool root(TbSymbolDies_t *dies, uint64_t tag)
 {
     TbSymbolDwarfUnitKind_e kind;
+
     if (tag == 0x11) {
         kind = TB_SYMBOL_DWARF_COMPILE;
     } else if (tag == 0x3c) {
@@ -167,12 +176,15 @@ static bool root(TbSymbolDies_t *dies, uint64_t tag)
         fail(dies, TB_SYMBOL_DIES_ROOT, TB_SYMBOL_UNSUPPORTED);
         return false;
     }
+
     if (dies->unit.header.kind != kind &&
         !(dies->unit.header.kind == TB_SYMBOL_DWARF_COMPILE_OR_PARTIAL && kind != TB_SYMBOL_DWARF_TYPE)) {
         fail(dies, TB_SYMBOL_DIES_ROOT, TB_SYMBOL_MALFORMED);
         return false;
     }
+
     dies->kind = kind;
+
     return true;
 }
 
@@ -182,26 +194,32 @@ static void begin_entry(TbSymbolDies_t *dies, uint64_t code)
     if (!code) {
         if (dies->depth) {
             --dies->depth;
+
             if (!dies->depth)
                 dies->root_closed = true;
         }
         next_code(dies);
         return;
     }
+
     dies->current.code = code;
+
     if (dies->root_closed) {
         fail(dies, TB_SYMBOL_DIES_TREE, TB_SYMBOL_MALFORMED);
         return;
     }
+
     if (tb_symbol_abbrev_find(dies->abbrev, code, &dies->declaration) != TB_SYMBOL_ABBREV_FOUND) {
         dies->current.code = code;
         fail(dies, TB_SYMBOL_DIES_CODE, TB_SYMBOL_MALFORMED);
         return;
     }
+
     if (!dies->root_seen && !root(dies, dies->declaration->tag))
         return;
+
     dies->root_seen = true;
-    dies->current = (TbSymbolDieEntry_t){
+    dies->current = (TbSymbolDieEntry_t) {
         .offset          = dies->field_start,
         .parent          = dies->populating && dies->depth ? dies->parents[dies->depth - 1] : UINT64_MAX,
         .code            = code,
@@ -210,6 +228,7 @@ static void begin_entry(TbSymbolDies_t *dies, uint64_t code)
         .attribute_count = dies->declaration->attribute_count,
         .children        = dies->declaration->children
     };
+
     if (dies->unit.header.has_signature &&
         dies->current.offset - dies->unit.offset == dies->unit.header.type_offset) {
         dies->type_found = true;
@@ -223,14 +242,17 @@ static void code(TbSymbolDies_t *dies, size_t max_bytes)
 {
     if (!window(dies))
         return;
+
     size_t at = (size_t)(dies->cursor - dies->window_start);
     size_t available = dies->window_bytes - at;
     if (available > max_bytes)
         available = max_bytes;
+
     size_t consumed;
     TbSymbolReadStatus_e status = tb_symbol_leb_feed(&dies->code, dies->window + at, available, &consumed);
     if (status == TB_SYMBOL_READ_OK || status == TB_SYMBOL_READ_LIMIT) {
         dies->cursor += consumed;
+
         if (status == TB_SYMBOL_READ_OK) {
             uint64_t value;
             if (tb_symbol_leb_uint(&dies->code, &value))
@@ -252,11 +274,13 @@ static void add_attribute(TbSymbolDies_t *dies)
         fail(dies, TB_SYMBOL_DIES_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
         return;
     }
+
     if (dies->populating) {
         if (dies->attributes_written >= dies->attribute_count) {
             fail(dies, TB_SYMBOL_DIES_RECONSTRUCTION, TB_SYMBOL_OPERATIONAL_FAILURE);
             return;
         }
+
         dies->attributes[dies->attributes_written++] = dies->attribute;
     } else if (dies->attribute_count == UINT64_MAX) {
         fail(dies, TB_SYMBOL_DIES_RESOURCE, TB_SYMBOL_RESOURCE_FAILURE);
@@ -275,9 +299,11 @@ static void form_status(TbSymbolDies_t *dies, TbSymbolFormStatus_e status)
         add_attribute(dies);
     } else if (status != TB_SYMBOL_FORM_PENDING) {
         dies->failure.form = status;
+
         TbSymbolOutcome_e outcome = status == TB_SYMBOL_FORM_UNSUPPORTED ? TB_SYMBOL_UNSUPPORTED
                                        : status == TB_SYMBOL_FORM_TRUNCATED ? TB_SYMBOL_MALFORMED
                                                                           : TB_SYMBOL_OPERATIONAL_FAILURE;
+
         fail(dies, TB_SYMBOL_DIES_FORM, outcome);
     }
 }
@@ -289,16 +315,19 @@ static void attribute(TbSymbolDies_t *dies)
         dies->phase = DIES_ENTRY;
         return;
     }
+
     uint64_t index = dies->declaration->first_attribute + dies->attribute_index;
     const TbSymbolAbbrevAttribute_t *schema = &dies->schema.attributes[index];
+
     dies->field_start = dies->cursor;
-    dies->attribute = (TbSymbolDieAttribute_t){
+    dies->attribute = (TbSymbolDieAttribute_t) {
         .schema_attribute = index,
         .name             = schema->name,
         .declared_form    = schema->form,
         .offset           = dies->cursor
     };
-    TbSymbolFormStatus_e status = tb_symbol_form_init(&dies->form, (TbSymbolFormRequest_t){
+
+    TbSymbolFormStatus_e status = tb_symbol_form_init(&dies->form, (TbSymbolFormRequest_t) {
         .form          = schema->form,
         .available     = dies->unit.extent.end_offset - dies->cursor,
         .version       = dies->unit.header.version,
@@ -306,6 +335,7 @@ static void attribute(TbSymbolDies_t *dies)
         .address_bytes = dies->unit.header.address_bytes,
         .byte_order    = dies->directory.header->byte_order
     });
+
     dies->phase = DIES_VALUE;
     form_status(dies, status);
 }
@@ -317,14 +347,18 @@ static void value(TbSymbolDies_t *dies, size_t max_bytes)
         form_status(dies, tb_symbol_form_finish(&dies->form));
         return;
     }
+
     if (!window(dies))
         return;
+
     size_t at = (size_t)(dies->cursor - dies->window_start);
     size_t available = dies->window_bytes - at;
     if (available > max_bytes)
         available = max_bytes;
+
     size_t consumed;
     TbSymbolFormStatus_e status = tb_symbol_form_feed(&dies->form, dies->window + at, available, &consumed);
+
     dies->cursor += consumed;
     form_status(dies, status);
 }
@@ -333,34 +367,41 @@ static void value(TbSymbolDies_t *dies, size_t max_bytes)
 static void entry(TbSymbolDies_t *dies)
 {
     dies->current.end_offset = dies->cursor;
+
     if (dies->populating) {
         if (dies->written >= dies->count) {
             fail(dies, TB_SYMBOL_DIES_RECONSTRUCTION, TB_SYMBOL_OPERATIONAL_FAILURE);
             return;
         }
+
         dies->entries[dies->written] = dies->current;
     } else if (dies->count == UINT64_MAX) {
         fail(dies, TB_SYMBOL_DIES_RESOURCE, TB_SYMBOL_RESOURCE_FAILURE);
         return;
     }
+
     if (dies->current.children) {
         if (dies->depth == UINT64_MAX) {
             fail(dies, TB_SYMBOL_DIES_RESOURCE, TB_SYMBOL_RESOURCE_FAILURE);
             return;
         }
+
         if (dies->populating) {
             if (dies->depth >= dies->max_depth) {
                 fail(dies, TB_SYMBOL_DIES_RECONSTRUCTION, TB_SYMBOL_OPERATIONAL_FAILURE);
                 return;
             }
+
             dies->parents[dies->depth] = dies->written;
         }
         ++dies->depth;
+
         if (!dies->populating && dies->depth > dies->max_depth)
             dies->max_depth = dies->depth;
     } else if (!dies->depth) {
         dies->root_closed = true;
     }
+
     if (dies->populating)
         ++dies->written;
     else
@@ -401,16 +442,21 @@ static void allocate(TbSymbolDies_t *dies)
         fail(dies, TB_SYMBOL_DIES_RESOURCE, TB_SYMBOL_RESOURCE_FAILURE);
         return;
     }
+
     dies->array_bytes = (size_t)total;
     dies->entries = malloc((size_t)entries);
+
     if (attributes)
         dies->attributes = malloc((size_t)attributes);
+
     if (parents)
         dies->parents = malloc((size_t)parents);
+
     if (!dies->entries || (attributes && !dies->attributes) || (parents && !dies->parents)) {
         fail(dies, TB_SYMBOL_DIES_RESOURCE, TB_SYMBOL_RESOURCE_FAILURE);
         return;
     }
+
     dies->populating = true;
     dies->cursor = dies->unit.offset + dies->unit.header.header_bytes;
     dies->window_bytes = 0;
@@ -425,17 +471,23 @@ TbSymbolOutcome_e tb_symbol_dies_step(TbSymbolDies_t *dies, size_t max_bytes)
 {
     if (!dies)
         return TB_SYMBOL_OPERATIONAL_FAILURE;
+
     if (dies->phase == DIES_DONE || dies->phase == DIES_FAILED)
         return dies->outcome;
+
     if (max_bytes < 64 || max_bytes > TB_SYMBOL_FILE_WINDOW_BYTES) {
         fail(dies, TB_SYMBOL_DIES_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
         return dies->outcome;
     }
+
     bool progressed = true;
+
     if (dies->reading) {
         uint64_t before = tb_symbol_file_progress(dies->file);
         TbSymbolOutcome_e outcome = tb_symbol_file_step(dies->file, max_bytes);
+
         progressed = before != tb_symbol_file_progress(dies->file);
+
         if (outcome == TB_SYMBOL_SUCCESS) {
             TbSymbolFileView_t view;
             if (tb_symbol_file_view(dies->file, &view)) {
@@ -474,12 +526,14 @@ TbSymbolOutcome_e tb_symbol_dies_step(TbSymbolDies_t *dies, size_t max_bytes)
             break;
         }
     }
+
     if (progressed) {
         if (dies->progress == UINT64_MAX)
             fail(dies, TB_SYMBOL_DIES_REQUEST, TB_SYMBOL_OPERATIONAL_FAILURE);
         else
             ++dies->progress;
     }
+
     return dies->outcome;
 }
 
@@ -488,7 +542,8 @@ bool tb_symbol_dies_view(const TbSymbolDies_t *dies, TbSymbolDiesView_t *view)
 {
     if (!dies || !view || dies->phase != DIES_DONE || dies->outcome != TB_SYMBOL_SUCCESS)
         return false;
-    *view = (TbSymbolDiesView_t){
+
+    *view = (TbSymbolDiesView_t) {
         .entries         = dies->entries,
         .attributes      = dies->attributes,
         .count           = dies->count,
@@ -501,13 +556,14 @@ bool tb_symbol_dies_view(const TbSymbolDies_t *dies, TbSymbolDiesView_t *view)
         .kind            = dies->kind,
         .backing         = dies->directory.backing
     };
+
     return true;
 }
 
 
 TbSymbolDiesFailure_t tb_symbol_dies_failure(const TbSymbolDies_t *dies)
 {
-    return dies ? dies->failure : (TbSymbolDiesFailure_t){
+    return dies ? dies->failure : (TbSymbolDiesFailure_t) {
         .reason = TB_SYMBOL_DIES_REQUEST,
         .offset = UINT64_MAX
     };
@@ -524,10 +580,12 @@ void tb_symbol_dies_destroy(TbSymbolDies_t *dies)
 {
     if (!dies)
         return;
+
     tb_symbol_file_destroy(dies->file);
     free(dies->entries);
     free(dies->attributes);
     free(dies->parents);
+
     if (dies->array_bytes)
         (void)tb_symbol_budget_release(dies->construction, dies->array_bytes);
     (void)tb_symbol_budget_release(dies->construction, sizeof(*dies));

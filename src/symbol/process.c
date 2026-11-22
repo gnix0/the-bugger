@@ -23,12 +23,13 @@ bool tb_symbol_process_init(TbSymbolProcess_t *process, uint64_t cancel_grace_ns
     if (!process || !cancel_grace_ns || !term_grace_ns)
         return false;
 
-    *process = (TbSymbolProcess_t){
+    *process = (TbSymbolProcess_t) {
         .pidfd           = -1,
         .state           = TB_SYMBOL_PROCESS_IDLE,
         .cancel_grace_ns = cancel_grace_ns,
         .term_grace_ns   = term_grace_ns
     };
+
     return true;
 }
 
@@ -44,15 +45,20 @@ static void child_exec(const char *path, int socket_fd)
     /* Only async-signal-safe setup occurs between fork and exec. In particular,
      * opening/loading the executable cannot suspend the supervising parent. */
     struct sigaction defaults = {0};
+
     defaults.sa_handler = SIG_DFL;
     (void)sigemptyset(&defaults.sa_mask);
+
     const int signals[] = {SIGPIPE, SIGINT, SIGTERM, SIGHUP, SIGCHLD};
     for (size_t i = 0; i < sizeof(signals) / sizeof(signals[0]); ++i) {
         if (sigaction(signals[i], &defaults, NULL))
             _exit(127);
     }
+
     sigset_t empty;
+
     (void)sigemptyset(&empty);
+
     if (sigprocmask(SIG_SETMASK, &empty, NULL) || setpgid(0, 0))
         _exit(127);
 
@@ -61,19 +67,25 @@ static void child_exec(const char *path, int socket_fd)
     int channel = fcntl(socket_fd, F_DUPFD_CLOEXEC, 4);
     if (channel < 0)
         _exit(127);
+
     int null_fd = open("/dev/null", O_RDWR | O_CLOEXEC);
     if (null_fd < 0)
         _exit(127);
+
     int null_source = fcntl(null_fd, F_DUPFD_CLOEXEC, 4);
     if (null_source < 0)
         _exit(127);
+
     for (int target = 0; target < 3; ++target) {
         if (dup2(null_source, target) < 0)
             _exit(127);
     }
+
     if (dup2(channel, 3) < 0 || syscall(SYS_close_range, 4U, UINT_MAX, 0U) < 0)
         _exit(127);
+
     char *const arguments[] = {(char *)path, "--symbol-worker", NULL};
+
     (void)execve(path, arguments, environ);
     _exit(127);
 }
@@ -91,6 +103,7 @@ bool tb_symbol_process_start(TbSymbolProcess_t *process, const char *path, int s
         process->error = errno;
         return false;
     }
+
     if (disposition.sa_handler != SIG_DFL ||
         ((unsigned)disposition.sa_flags & (unsigned)SA_NOCLDWAIT)) {
         process->error = ENOTSUP;
@@ -105,6 +118,7 @@ bool tb_symbol_process_start(TbSymbolProcess_t *process, const char *path, int s
         process->error = errno;
         return false;
     }
+
     /* No valid descriptor can have UINT_MAX as its signed-int descriptor
      * number. Probe isolation support without changing an existing descriptor. */
     if (syscall(SYS_close_range, UINT_MAX, UINT_MAX, 0U) < 0) {
@@ -112,15 +126,20 @@ bool tb_symbol_process_start(TbSymbolProcess_t *process, const char *path, int s
         (void)close(probe);
         return false;
     }
+
     pid_t child = fork();
     if (!child)
         child_exec(path, socket_fd);
+
     int fork_error = errno;
+
     (void)close(probe);
+
     if (child < 0) {
         process->error = fork_error;
         return false;
     }
+
     process->wait_owned  = true;
     process->pid         = child;
     process->pidfd       = (int)syscall(SYS_pidfd_open, child, 0U);
@@ -128,6 +147,7 @@ bool tb_symbol_process_start(TbSymbolProcess_t *process, const char *path, int s
     process->error       = process->pidfd < 0 ? errno : 0;
     process->wait_status = 0;
     process->deadline_ns = 0;
+
     return process->state == TB_SYMBOL_PROCESS_RUNNING;
 }
 
@@ -156,19 +176,24 @@ void tb_symbol_process_pump(TbSymbolProcess_t *process, uint64_t now_ns)
         process->wait_status = status;
         process->pid         = 0;
         process->wait_owned  = false;
+
         if (process->pidfd >= 0)
             (void)close(process->pidfd);
         process->pidfd = -1;
         process->state = uncertain ? TB_SYMBOL_PROCESS_UNCERTAIN : TB_SYMBOL_PROCESS_REAPED;
+
         return;
     }
+
     if (result < 0) {
         if (errno != EINTR) {
             process->error = errno;
             process->state = TB_SYMBOL_PROCESS_UNCERTAIN;
+
             if (errno == ECHILD) {
                 /* Ownership was lost. Never wait on a possibly recycled PID. */
                 process->wait_owned = false;
+
                 if (process->pidfd >= 0)
                     (void)close(process->pidfd);
                 process->pidfd = -1;
@@ -176,6 +201,7 @@ void tb_symbol_process_pump(TbSymbolProcess_t *process, uint64_t now_ns)
         }
         return;
     }
+
     if ((process->state != TB_SYMBOL_PROCESS_STOPPING && process->state != TB_SYMBOL_PROCESS_TERM) ||
         now_ns < process->deadline_ns) {
         return;

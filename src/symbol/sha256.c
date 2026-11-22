@@ -29,14 +29,17 @@ static void compress(TbSha256_t *context, const unsigned char *block)
     uint32_t schedule[64];
     for (unsigned i = 0; i < 16; ++i) {
         size_t offset = (size_t)i * 4;
+
         schedule[i] = ((uint32_t)block[offset] << 24U) | ((uint32_t)block[offset + 1] << 16U) |
                       ((uint32_t)block[offset + 2] << 8U) | block[offset + 3];
     }
+
     for (unsigned i = 16; i < 64; ++i) {
         uint32_t x      = schedule[i - 15];
         uint32_t y      = schedule[i - 2];
         uint32_t small0 = rotate_right(x, 7) ^ rotate_right(x, 18) ^ (x >> 3U);
         uint32_t small1 = rotate_right(y, 17) ^ rotate_right(y, 19) ^ (y >> 10U);
+
         schedule[i] = schedule[i - 16] + small0 + schedule[i - 7] + small1;
     }
 
@@ -54,6 +57,7 @@ static void compress(TbSha256_t *context, const unsigned char *block)
         uint32_t first  = h + big1 + choose + round_constants[i] + schedule[i];
         uint32_t big0   = rotate_right(a, 2) ^ rotate_right(a, 13) ^ rotate_right(a, 22);
         uint32_t second = big0 + ((a & b) ^ (a & c) ^ (b & c));
+
         h = g;
         g = f;
         f = e;
@@ -63,6 +67,7 @@ static void compress(TbSha256_t *context, const unsigned char *block)
         b = a;
         a = first + second;
     }
+
     context->words[0] += a;
     context->words[1] += b;
     context->words[2] += c;
@@ -79,13 +84,14 @@ bool tb_sha256_init(TbSha256_t *context)
     if (!context)
         return false;
 
-    *context = (TbSha256_t){
+    *context = (TbSha256_t) {
         .words = {
             0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
             0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
         },
         .state = TB_SHA256_ACTIVE
     };
+
     return true;
 }
 
@@ -94,6 +100,7 @@ bool tb_sha256_update(TbSha256_t *context, const void *data, size_t length)
 {
     if (!context || context->state != TB_SHA256_ACTIVE)
         return false;
+
     if ((!data && length) || context->used >= TB_SHA256_BLOCK_BYTES ||
         context->length > UINT64_MAX / 8 || length > UINT64_MAX / 8 - context->length) {
         context->state = TB_SHA256_FAILED;
@@ -101,7 +108,9 @@ bool tb_sha256_update(TbSha256_t *context, const void *data, size_t length)
     }
 
     const unsigned char *bytes = data;
+
     context->length += length;
+
     while (length) {
         size_t count = TB_SHA256_BLOCK_BYTES - context->used;
         if (count > length)
@@ -110,11 +119,13 @@ bool tb_sha256_update(TbSha256_t *context, const void *data, size_t length)
         context->used += count;
         bytes        += count;
         length       -= count;
+
         if (context->used == TB_SHA256_BLOCK_BYTES) {
             compress(context, context->block);
             context->used = 0;
         }
     }
+
     return true;
 }
 
@@ -124,6 +135,7 @@ bool tb_sha256_final(TbSha256_t *context, uint64_t expected_length,
 {
     if (!context || context->state != TB_SHA256_ACTIVE)
         return false;
+
     if (!digest || context->length != expected_length || context->length > UINT64_MAX / 8 ||
         context->used >= TB_SHA256_BLOCK_BYTES) {
         context->state = TB_SHA256_FAILED;
@@ -131,21 +143,27 @@ bool tb_sha256_final(TbSha256_t *context, uint64_t expected_length,
     }
 
     uint64_t bits = context->length * 8;
+
     context->block[context->used++] = 0x80;
+
     if (context->used > 56) {
         memset(context->block + context->used, 0, TB_SHA256_BLOCK_BYTES - context->used);
         compress(context, context->block);
         context->used = 0;
     }
     memset(context->block + context->used, 0, 56 - context->used);
+
     for (unsigned i = 0; i < 8; ++i)
         context->block[56 + i] = (unsigned char)(bits >> ((7 - i) * 8));
+
     compress(context, context->block);
 
     for (unsigned i = 0; i < 8; ++i) {
         for (unsigned j = 0; j < 4; ++j)
             digest[i * 4 + j] = (unsigned char)(context->words[i] >> ((3 - j) * 8));
     }
+
     context->state = TB_SHA256_FINISHED;
+
     return true;
 }

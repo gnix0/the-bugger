@@ -79,12 +79,14 @@ TbSymbolAcquire_t *tb_symbol_acquire_create(const char *origin, TbSymbolStorage_
         (construction && !tb_symbol_budget_reserve(construction, sizeof(TbSymbolAcquire_t)))) {
         return NULL;
     }
+
     TbSymbolAcquire_t *acquisition = calloc(1, sizeof(*acquisition));
     if (!acquisition) {
         if (construction)
             (void)tb_symbol_budget_release(construction, sizeof(TbSymbolAcquire_t));
         return NULL;
     }
+
     acquisition->construction      = construction;
     acquisition->origin            = origin;
     acquisition->storage           = storage;
@@ -95,6 +97,7 @@ TbSymbolAcquire_t *tb_symbol_acquire_create(const char *origin, TbSymbolStorage_
     acquisition->writer_fd         = -1;
     acquisition->readonly_fd       = -1;
     (void)tb_sha256_init(&acquisition->hash);
+
     return acquisition;
 }
 
@@ -104,6 +107,7 @@ static void fail(TbSymbolAcquire_t *acquisition, TbSymbolAcquireFailure_e failur
     acquisition->failure = failure;
     acquisition->system_error = error;
     acquisition->phase = ACQUIRE_FAILED;
+
     if (failure == TB_SYMBOL_ACQUIRE_FILE_LIMIT || error == ENOSPC || error == EDQUOT ||
         error == ENOMEM || error == EMFILE || error == ENFILE || error == EFBIG) {
         acquisition->outcome = TB_SYMBOL_RESOURCE_FAILURE;
@@ -132,9 +136,12 @@ static int reopen(int fd, bool nonblocking)
         errno = EOVERFLOW;
         return -1;
     }
+
     unsigned flags = O_RDONLY | O_CLOEXEC;
+
     if (nonblocking)
         flags |= (unsigned)(O_NONBLOCK | O_NOCTTY);
+
     return open(path, (int)flags);
 }
 
@@ -147,10 +154,12 @@ static void inspect_source(TbSymbolAcquire_t *acquisition, bool reader)
             fail(acquisition, TB_SYMBOL_ACQUIRE_IO, errno);
         return;
     }
+
     if (!S_ISREG(info.st_mode) || info.st_size < 0) {
         fail(acquisition, TB_SYMBOL_ACQUIRE_NOT_REGULAR, 0);
         return;
     }
+
     if (reader) {
         if (!source_matches(&acquisition->source, &info))
             fail(acquisition, TB_SYMBOL_ACQUIRE_CHANGED, 0);
@@ -158,10 +167,12 @@ static void inspect_source(TbSymbolAcquire_t *acquisition, bool reader)
             acquisition->phase = ACQUIRE_STORAGE;
         return;
     }
+
     if ((uint64_t)info.st_size > acquisition->file_limit) {
         fail(acquisition, TB_SYMBOL_ACQUIRE_FILE_LIMIT, 0);
         return;
     }
+
     acquisition->source = info;
     acquisition->bytes = (uint64_t)info.st_size;
     acquisition->phase = ACQUIRE_READER;
@@ -180,6 +191,7 @@ static void clone_bytes(TbSymbolAcquire_t *acquisition)
         .src_length  = acquisition->bytes,
         .dest_offset = 0
     };
+
     if (!ioctl(acquisition->writer_fd, FICLONERANGE, &range)) {
         acquisition->phase = ACQUIRE_CLONE_CHECK;
     } else if (errno == EOPNOTSUPP || errno == ENOTTY || errno == ENOSYS || errno == EXDEV ||
@@ -216,6 +228,7 @@ static void copy_read(TbSymbolAcquire_t *acquisition, size_t max_bytes)
         acquisition->phase = ACQUIRE_SOURCE_CHECK;
         return;
     }
+
     uint64_t remaining = acquisition->bytes - acquisition->copied;
     size_t length = remaining < max_bytes ? (size_t)remaining : max_bytes;
     ssize_t count = pread(acquisition->source_fd, acquisition->buffer, length, (off_t)acquisition->copied);
@@ -237,6 +250,7 @@ static void copy_write(TbSymbolAcquire_t *acquisition, size_t max_bytes)
     size_t length = acquisition->buffered - acquisition->written;
     if (length > max_bytes)
         length = max_bytes;
+
     ssize_t count = pwrite(acquisition->writer_fd, acquisition->buffer + acquisition->written,
                            length, (off_t)acquisition->copied);
     if (count < 0) {
@@ -247,6 +261,7 @@ static void copy_write(TbSymbolAcquire_t *acquisition, size_t max_bytes)
     } else {
         acquisition->written += (size_t)count;
         acquisition->copied += (uint64_t)count;
+
         if (acquisition->written == acquisition->buffered)
             acquisition->phase = ACQUIRE_READ;
     }
@@ -273,7 +288,9 @@ static void close_owned(TbSymbolAcquire_t *acquisition, int *fd, AcquirePhase_e 
     /* Linux releases the descriptor even on close errors; retrying could close
      * an unrelated descriptor. An error still rejects the candidate. */
     int owned = *fd;
+
     *fd = -1;
+
     if (close(owned))
         fail(acquisition, TB_SYMBOL_ACQUIRE_IO, errno);
     else
@@ -309,6 +326,7 @@ static void hash_read(TbSymbolAcquire_t *acquisition, size_t max_bytes)
         }
         return;
     }
+
     uint64_t remaining = acquisition->bytes - acquisition->hashed;
     size_t length = remaining < max_bytes ? (size_t)remaining : max_bytes;
     ssize_t count = pread(acquisition->readonly_fd, acquisition->buffer, length, (off_t)acquisition->hashed);
@@ -327,18 +345,23 @@ TbSymbolOutcome_e tb_symbol_acquire_step(TbSymbolAcquire_t *acquisition, size_t 
 {
     if (!acquisition)
         return TB_SYMBOL_OPERATIONAL_FAILURE;
+
     if (!max_bytes || max_bytes > ACQUIRE_BUFFER_BYTES) {
         fail(acquisition, TB_SYMBOL_ACQUIRE_IO, EINVAL);
         return acquisition->outcome;
     }
+
     if (acquisition->phase == ACQUIRE_DONE || acquisition->phase == ACQUIRE_FAILED)
         return acquisition->outcome;
+
     AcquirePhase_e before = acquisition->phase;
     uint64_t copied = acquisition->copied;
     uint64_t hashed = acquisition->hashed;
+
     switch (acquisition->phase) {
     case ACQUIRE_ORIGIN:
         acquisition->origin_fd = open(acquisition->origin, O_PATH | O_CLOEXEC);
+
         if (acquisition->origin_fd >= 0)
             acquisition->phase = ACQUIRE_INSPECT;
         else if (errno != EINTR)
@@ -349,6 +372,7 @@ TbSymbolOutcome_e tb_symbol_acquire_step(TbSymbolAcquire_t *acquisition, size_t 
         break;
     case ACQUIRE_READER:
         acquisition->source_fd = reopen(acquisition->origin_fd, true);
+
         if (acquisition->source_fd >= 0)
             acquisition->phase = ACQUIRE_READER_INSPECT;
         else if (errno != EINTR)
@@ -361,6 +385,7 @@ TbSymbolOutcome_e tb_symbol_acquire_step(TbSymbolAcquire_t *acquisition, size_t 
         break;
     case ACQUIRE_STORAGE:
         acquisition->writer_fd = tb_symbol_storage_writer(acquisition->storage, acquisition->slot);
+
         if (acquisition->writer_fd >= 0)
             acquisition->phase = ACQUIRE_STORAGE_INSPECT;
         else if (errno != EINTR)
@@ -375,10 +400,11 @@ TbSymbolOutcome_e tb_symbol_acquire_step(TbSymbolAcquire_t *acquisition, size_t 
                    info.st_uid != geteuid()) {
             fail(acquisition, TB_SYMBOL_ACQUIRE_INTEGRITY, 0);
         } else {
-            acquisition->backing_key = (TbSymbolStorageKey_t){
+            acquisition->backing_key = (TbSymbolStorageKey_t) {
                 .device = (uint64_t)info.st_dev,
                 .inode  = (uint64_t)info.st_ino
             };
+
             acquisition->backing_identified = true;
             acquisition->phase = ACQUIRE_OFFER;
         }
@@ -424,6 +450,7 @@ TbSymbolOutcome_e tb_symbol_acquire_step(TbSymbolAcquire_t *acquisition, size_t 
         break;
     case ACQUIRE_READONLY:
         acquisition->readonly_fd = reopen(acquisition->writer_fd, false);
+
         if (acquisition->readonly_fd >= 0)
             acquisition->phase = ACQUIRE_BACKING_CHECK;
         else if (errno != EINTR)
@@ -442,12 +469,14 @@ TbSymbolOutcome_e tb_symbol_acquire_step(TbSymbolAcquire_t *acquisition, size_t 
     case ACQUIRE_FAILED:
         break;
     }
+
     if (before != acquisition->phase || copied != acquisition->copied || hashed != acquisition->hashed) {
         if (acquisition->progress == UINT64_MAX)
             fail(acquisition, TB_SYMBOL_ACQUIRE_INTEGRITY, EOVERFLOW);
         else
             ++acquisition->progress;
     }
+
     return acquisition->outcome;
 }
 
@@ -456,7 +485,9 @@ bool tb_symbol_acquire_offer(const TbSymbolAcquire_t *acquisition, uint64_t *byt
 {
     if (!acquisition || !bytes || acquisition->phase != ACQUIRE_OFFER)
         return false;
+
     *bytes = acquisition->bytes;
+
     return true;
 }
 
@@ -465,8 +496,10 @@ bool tb_symbol_acquire_grant(TbSymbolAcquire_t *acquisition, uint64_t bytes)
 {
     if (!acquisition || acquisition->phase != ACQUIRE_OFFER || bytes != acquisition->bytes)
         return false;
+
     acquisition->phase = bytes && acquisition->copy_policy == TB_SYMBOL_COPY_PREFER_REFLINK
                            ? ACQUIRE_CLONE : ACQUIRE_READ;
+
     return true;
 }
 
@@ -477,7 +510,9 @@ bool tb_symbol_acquire_copy_policy(TbSymbolAcquire_t *acquisition, TbSymbolCopyP
         (policy != TB_SYMBOL_COPY_PREFER_REFLINK && policy != TB_SYMBOL_COPY_STREAM_ONLY)) {
         return false;
     }
+
     acquisition->copy_policy = policy;
+
     return true;
 }
 
@@ -486,6 +521,7 @@ TbSymbolAcquisitionMethod_e tb_symbol_acquire_method(const TbSymbolAcquire_t *ac
 {
     if (!acquisition || acquisition->outcome != TB_SYMBOL_SUCCESS)
         return TB_SYMBOL_ACQUIRED_NONE;
+
     return acquisition->reflinked ? TB_SYMBOL_ACQUIRED_REFLINK : TB_SYMBOL_ACQUIRED_STREAM;
 }
 
@@ -494,7 +530,9 @@ bool tb_symbol_acquire_storage_key(const TbSymbolAcquire_t *acquisition, TbSymbo
 {
     if (!acquisition || !key || !acquisition->backing_identified)
         return false;
+
     *key = acquisition->backing_key;
+
     return true;
 }
 
@@ -509,6 +547,7 @@ TbSymbolAcquireFailure_e tb_symbol_acquire_failure(const TbSymbolAcquire_t *acqu
 {
     if (system_error)
         *system_error = acquisition ? acquisition->system_error : EINVAL;
+
     return acquisition ? acquisition->failure : TB_SYMBOL_ACQUIRE_IO;
 }
 
@@ -517,14 +556,17 @@ bool tb_symbol_acquire_take(TbSymbolAcquire_t *acquisition, TbSymbolAcquiredByte
 {
     if (!acquisition || !bytes || acquisition->phase != ACQUIRE_DONE || acquisition->readonly_fd < 0)
         return false;
+
     TbSymbolAcquiredBytes_t result = {
         .bytes      = acquisition->bytes,
         .descriptor = acquisition->readonly_fd,
         .key        = acquisition->backing_key
     };
+
     memcpy(result.digest, acquisition->digest, sizeof(result.digest));
     *bytes = result;
     acquisition->readonly_fd = -1;
+
     return true;
 }
 
@@ -533,14 +575,18 @@ void tb_symbol_acquire_destroy(TbSymbolAcquire_t *acquisition)
 {
     if (!acquisition)
         return;
+
     int fds[] = {acquisition->origin_fd, acquisition->source_fd,
                  acquisition->writer_fd, acquisition->readonly_fd};
     for (size_t i = 0; i < sizeof(fds) / sizeof(fds[0]); ++i) {
         if (fds[i] >= 0)
             (void)close(fds[i]);
     }
+
     TbSymbolBudget_t *construction = acquisition->construction;
+
     free(acquisition);
+
     if (construction)
         (void)tb_symbol_budget_release(construction, sizeof(TbSymbolAcquire_t));
 }
