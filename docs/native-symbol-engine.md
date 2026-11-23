@@ -34,7 +34,8 @@ are recorded in the [SE06 delivery closeout](validation.md#se06-delivery-closeou
 SE07 includes [line/file decoding](#line-program-foundation-se07-partial),
 [code-range foundations](#code-range-foundation-se07-partial) and
 [direct code attributes](#direct-code-attributes-se07-partial), with
-[indexed-table association](#indexed-table-association-se07-partial); composed Source preparation remains.
+[indexed-table association](#indexed-table-association-se07-partial) and
+[code-location composition](#code-location-composition-se07-partial); composed Source preparation remains.
 Artifact Open workflow, qualified acquisition profiles, complete semantic
 interpretation and consumers remain unfinished. Unknown helper operations return
 Unsupported.
@@ -569,8 +570,10 @@ exact `addr_base`/`rnglists_base` relationships. A plausible interior header or
 list is insufficient. These primitives do not discover sections, inherit missing
 bases or select an address table automatically. The
 [table inventory and binding components](#indexed-table-association-se07-partial)
-establish explicit contribution/base relationships. Complete list-boundary
-inventories and composed Source evidence remain separate work. Direct DIE
+establish explicit contribution/base relationships. The
+[boundary index and location composer](#code-location-composition-se07-partial)
+now provide structural list scopes and resolved metadata; composed Source evidence
+remains separate work. Direct DIE
 attributes have their own [interpretation contract](#direct-code-attributes-se07-partial).
 
 The list machine retains every encoded record in physical order, with exact
@@ -704,6 +707,58 @@ offset must still reach an independently proved list boundary and a completely
 validated list before it supports a code-location claim. Address values remain
 artifact metadata; source correspondence, executable storage, runtime mapping,
 action authorization and frontend evidence ownership remain separate contracts.
+
+### Code-location composition (SE07, partial)
+
+`range_index` frames an explicitly selected range-list scope without interpreting
+addresses. It retains each encoded entry's exact start/end and the terminating
+list end. Every entry boundary can be selected independently, including an empty
+end-entry suffix; starting there never inherits an omitted base-selection entry.
+Operand-interior and scope-end offsets cannot become list starts. DWARF 5
+end-of-list padding remains distinct empty entries. A DWARF 5 scope is exactly one
+proved contribution's list area. A DWARF 4 scope requires an independently
+established start and CU address width; the section has no header establishing a
+single width for unrelated CUs. Neither decoder guesses that missing evidence.
+
+All eight standard DWARF 5 encodings and legacy fixed pairs retain structural
+framing. Terminated LEB values wider than 64 bits, nonstandard nonzero address
+widths and segmented fixed operands can be framed without claiming numeric
+support. Unknown opcodes have no guessed size and make the selected scope
+unsupported. Missing operands/end markers are malformed. The complete scope must
+finish before a boundary view is available; a valid earlier list cannot leak out
+of a later failed scope. Byte inspection, record handling and backward linking
+of terminating offsets each count toward the 256-action service bound. Large
+lists need several slices even after all input bytes have arrived.
+
+`code_locations` composes complete direct code/root views with selected table
+entries. Exact unit/root identity, backing, base-attribute coordinates, table
+selection and entry offsets must agree. It resolves supported indexed PCs,
+checks high-PC endpoint/length arithmetic at the CU address width, and preserves
+low-only locations separately from intervals. Root low-PC absence remains an
+absent CU base; a validated zero remains available. Required missing entries are
+dependencies, incompatible supplied identities are invalid, and impossible
+numeric intervals are malformed. No bare-name or first-table fallback exists.
+
+For range references, the composer combines a resolved direct offset or exact
+`rnglistx` entry with the complete boundary index. Version-5 index bounds must
+match the supplied proved contribution; an indexed reference must select that
+same table. The resulting semantic-decoder request retains the selected offset,
+exact terminating end, CU base availability and validated address-table context.
+The existing range machine then resolves individual indexed operands and checks
+arithmetic and overlap before publishing intervals. Framing alone does not
+validate those semantics. Physical section roles, retained-content leases and
+relocation applicability remain explicit outer-owner obligations.
+
+Both components perform no allocation, I/O, discovery or debugger dispatch.
+Stationary state, arenas, retained input evidence and copied results belong to
+the caller's accounts; no production capacity default is introduced. Output
+publication remains conditional on complete success. These metadata views are
+not independently owned frontend prepared-action facts. Executable-storage
+classification, instruction boundaries, standalone entry points, Source-byte
+correspondence, runtime mapping and access authorization require their separate
+evidence. Source provenance/paths and the composed Source preparation contract
+remain SE07 work; frontend publication, runtime and live actions retain their
+later gates.
 
 ## Committed searches and result windows
 

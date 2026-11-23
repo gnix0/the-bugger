@@ -3977,9 +3977,10 @@ selectors, cancellation and charge restoration. Empty sections still check the
 retained descriptor. Supported short headers remain malformed while safely framed
 unknown versions remain unsupported.
 
-The native target composes the maintained DWARF 5 C++ fixture with production
+The native target composes the maintained ordinary/disjoint DWARF 4 and 5 C++ fixtures with production
 sections, units, abbreviations, DIEs, direct code facts, table inventories, CU
-bindings and selected entry readers. Independent libelf bytes check each numeric
+bindings and selected entry readers, then boundary indexes, code-location composition
+and semantic range decoding. Independent libelf bytes check each numeric
 entry. Default GCC fixtures may use direct offsets without address tables; they
 do not by themselves qualify indexed code references.
 
@@ -3999,6 +4000,35 @@ build/symbol-tables/test-symbol-tables-native \
 `--indexed` requires observed indexed code facts. Clang is optional for this
 additional producer check and is not required by the default test target. Compare
 the recorded tables/entries with `readelf --debug-dump=addr --wide` and
-`readelf --debug-dump=Ranges --wide`. Header/entry results do not establish list
+`readelf --debug-dump=Ranges --wide`. Header/entry results alone do not establish list
 boundaries, complete code locations, source correspondence or runtime authority;
 see the [association contract](native-symbol-engine.md#indexed-table-association-se07-partial).
+
+
+### Range boundaries and composed code locations
+
+```sh
+make BUILD_DIR=build/symbol-locations CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-range-index test-symbol-code-locations test-symbol-tables-native
+```
+
+Boundary cases cover every standard range encoding, legacy fixed pairs, all
+supported numeric address widths, both byte orders, padding, independently
+selected suffixes, operand-interior rejection, arbitrarily wide LEB framing,
+segmented/wider structural framing and 600-entry bounded linking. Truncated
+operands, missing end markers, unknown opcodes, arena exhaustion, invalid
+requests, EOF and cancellation cannot publish a trusted prefix. Numeric semantic
+support remains narrower than structural framing.
+
+Location checks cross address widths, byte order and independent offset formats.
+They require exact code/root/table/entry identity and distinguish dependency,
+invalid context, malformed arithmetic, explicit zero base and absent base.
+Complete boundary scopes feed exact semantic requests, including empty suffixes
+and missing-base failures. The native target interprets every DIE's supported
+PC/range facts in ordinary and disjoint GCC DWARF 4/5 fixtures. Optional Clang
+profiles above additionally require indexed addresses/range references. Decoded
+intervals must fit executable, file-backed ELF segments; compare exact physical
+DIE offsets and intervals against `readelf --debug-dump=info --wide` and
+`readelf --debug-dump=Ranges --wide`. These checks establish metadata behavior,
+not runtime mapping, source correspondence or instruction/standalone entry proof.
+See the [composition contract](native-symbol-engine.md#code-location-composition-se07-partial).

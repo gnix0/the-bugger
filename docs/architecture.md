@@ -1589,6 +1589,17 @@ failed operations expose no usable prefix. The
 keeps binding, list-boundary proof, artifact addresses and runtime authority
 separate. Existing Source and live workflows are unchanged.
 
+`src/symbol/range_index.c` now frames complete selected list scopes, retaining
+entry boundaries and terminating ends independently of address interpretation.
+`src/symbol/code_locations.c` combines direct code/root metadata, exact indexed
+entries and those boundaries into resolved PCs and semantic range requests.
+Caller-owned state/arenas preserve explicit content and scope dependencies;
+failed scopes expose no usable prefix. The maintained native harness composes
+these components with the range decoder and checks file-backed executable ELF
+storage. See the [composition contract](native-symbol-engine.md#code-location-composition-se07-partial).
+Source provenance/paths and Source preparation remain unfinished SE07 work;
+no existing Source or live action changes.
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

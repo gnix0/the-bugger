@@ -8615,3 +8615,86 @@ production sizing, frontend publication and live actions retain their gates.
 
 Normal `make` rebuilt the application successfully. Whitespace/style review and
 279 internal documentation-link checks passed. No Source UI behavior changed.
+
+### Indexed-table host verification
+
+Inspection of `build/se07-tables-owner-20261123-retry/` confirmed successful fresh
+fortified baseline, complete analysis and fortified test-source compilation.
+All 158 individual test commands passed; all 151 C test sources had fortified
+compile-command/object evidence. Analysis processed all 89 production sources
+with no actionable diagnostics. The clean run recorded 435 unchanged inputs.
+Full log/status/input review is retained under
+`build/se07-tables-evidence-20261123/full-review.json`. The original
+`build/se07-tables-owner-20261123/` run was interrupted during compilation and
+has no completed result; it is preserved separately. This closes local host
+verification, not hosted CI, SE07/F07 acceptance or physical qualification.
+
+## Range boundaries and composed code locations — 2026-11-23
+
+Implemented the [boundary/composition contract](native-symbol-engine.md#code-location-composition-se07-partial).
+The pure structural index retains exact encoded entry starts/ends and terminating
+list ends before exposing a complete scope. The location composer validates
+same-unit roots and selected table-entry dependencies, resolves PCs, checks
+interval arithmetic and prepares semantic range requests against exact boundaries.
+State, arenas and copied metadata remain caller-owned/accounted; no new
+production capacity, filesystem discovery or debugger dispatch is introduced.
+
+Focused fortified checks passed (exit 0):
+
+```sh
+make BUILD_DIR=build/se07-range-index-focused-20261123 CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-range-index test-symbol-code-locations test-symbol-tables-native \
+  test-symbol-ranges test-symbol-indexed-tables test-symbol-code-attributes
+```
+
+Authored cases cover all standard DWARF 5 range opcodes, legacy pairs, byte
+orders, address widths, independent offset formats, suffixes, empty lists/padding,
+operand-interior rejection, wide LEB framing and segmented/wider structural
+operands. A 600-entry list requires bounded linking slices after byte consumption.
+Malformed/truncated scopes, unknown opcodes, exhausted arenas, invalid requests,
+EOF and discarded state expose no trusted prefix. Composition checks distinguish
+missing indexed dependencies from wrong identities and malformed intervals;
+validated zero bases remain distinct from absent bases. The semantic decoder
+still rejects missing required bases and checks overlap independently.
+
+The native harness now composes sections, units, abbreviations, DIEs, direct
+facts, exact CU/table entries, complete boundary scopes, location preparation and
+semantic decoding. Ordinary/disjoint GCC 16.2.1 DWARF 4/5 fixtures produced
+14/14/17/17 intervals respectively. The maintained optional Clang 23.1.5 DWARF 5
+profiles produced 13 ordinary and 16 disjoint intervals, with actual indexed
+addresses and range references. Independent GNU binutils 2.47 `readelf` info/range
+dumps matched all 91 intervals by physical DIE offset and both endpoints,
+including empty intervals. Every nonempty interval fit file-backed executable
+ELF storage. These are metadata observations, not instruction-boundary,
+standalone-entry, source-byte or runtime-correspondence proof.
+
+Focused Clang ASan/UBSan checks passed (exit 0), including stack-use-after-return
+detection, for both new unit targets and all four default native profiles:
+
+```sh
+UBSAN_OPTIONS=halt_on_error=1 ASAN_OPTIONS=detect_stack_use_after_return=1 \
+make BUILD_DIR=build/se07-range-index-sanitize-20261123 CC=clang \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' \
+  test-symbol-range-index test-symbol-code-locations test-symbol-tables-native
+```
+
+Both optional Clang-produced profiles also passed the instrumented native
+harness with `--indexed`. Commands, logs/statuses, reference dumps, comparison
+results and input snapshots remain under
+`build/se07-range-index-evidence-20261123/`. The first location unit run exposed
+a test setup retaining a length value when switching the field to an index;
+restoring the intended index fixed that setup without changing assertions or
+production behavior. Its failed log is preserved alongside passing results.
+Full fortified baseline, complete analysis and fortified compilation of all C
+test sources remain pending for this delivery. These results are local Linux
+x86-64 evidence, not hosted CI, remote profiles or physical qualification.
+
+Source provenance/paths, correspondence and composed Source preparation remain
+SE07 work. Production job/publication ownership, sizing, offline UI, runtime
+bindings and live actions retain their separate gates. Existing Source and live
+debugger behavior is unchanged.
+
+Normal `make` rebuilt `build/the-bugger` successfully. Whitespace/style review
+and 285 internal documentation-link checks passed. No Source UI behavior changed.

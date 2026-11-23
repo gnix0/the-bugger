@@ -1,5 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
-#include "symbol/tables.h"
+#include "symbol/code_locations.h"
 #include "../support/check.h"
 
 #include <fcntl.h>
@@ -121,6 +121,157 @@ static TbSymbolCodeView_t code_view(TbSymbolUnitsView_t units, TbSymbolDiesView_
 }
 
 
+static void executable_storage(Elf *elf, uint64_t begin, uint64_t end)
+{
+    if (begin == end)
+        return;
+
+    size_t count;
+    CHECK(elf_getphdrnum(elf, &count) == 0);
+    bool found = false;
+    for (size_t i = 0; i < count; ++i) {
+        GElf_Phdr segment;
+        CHECK(gelf_getphdr(elf, (int)i, &segment));
+        uint64_t limit;
+        if (segment.p_type == PT_LOAD && (segment.p_flags & PF_X) &&
+            tb_symbol_add(segment.p_vaddr, segment.p_filesz, &limit) &&
+            begin >= segment.p_vaddr && end <= limit) {
+            found = true;
+        }
+    }
+    CHECK(found);
+}
+
+
+static size_t check_locations(TbSymbolSectionsView_t directory, TbSymbolCodeView_t code,
+    TbSymbolCodeView_t root, const TbSymbolTableBindingView_t *bindings, const bool *bound,
+    TableScope_t ranges, int descriptor, TbSymbolBudget_t *budget, Elf *elf)
+{
+    TbSymbolTableValueView_t dependencies[4] = {0};
+    TbSymbolCodeLocationsRequest_t selection = {
+        .code       = code,
+        .root       = root,
+        .byte_order = directory.header->byte_order,
+        .addresses  = bound[0] ? &bindings[0] : NULL
+    };
+    const TbSymbolCodeFact_t *facts[] = {
+        &code.fields[TB_SYMBOL_CODE_LOW], &code.fields[TB_SYMBOL_CODE_HIGH],
+        &root.fields[TB_SYMBOL_CODE_LOW], &code.fields[TB_SYMBOL_CODE_RANGES]
+    };
+    const TbSymbolTableValueView_t **destinations[] = {
+        &selection.low, &selection.high, &selection.root_low, &selection.range
+    };
+    for (unsigned i = 0; i < 4; ++i) {
+        if (facts[i]->kind != TB_SYMBOL_CODE_ADDRESS_INDEX && facts[i]->kind != TB_SYMBOL_CODE_LIST_INDEX)
+            continue;
+        unsigned kind = i == 3 ? 1U : 0U;
+        CHECK(bound[kind]);
+        dependencies[i] = entry(directory, bindings[kind], facts[i]->value, descriptor, budget, elf);
+        *destinations[i] = &dependencies[i];
+    }
+
+    TbSymbolCodeLocationsView_t locations;
+    CHECK(tb_symbol_code_locations_prepare(selection, &locations) == TB_SYMBOL_CODE_LOCATIONS_COMPLETE);
+    uint64_t die = code.fields[TB_SYMBOL_CODE_LOW].selection.record_offset;
+    size_t count = 0;
+    if (locations.interval_available) {
+        executable_storage(elf, locations.low, locations.end);
+        printf("LOCATION die=0x%llx begin=0x%llx end=0x%llx\n", (unsigned long long)die,
+               (unsigned long long)locations.low, (unsigned long long)locations.end);
+        ++count;
+    }
+    if (!locations.list_available)
+        return count;
+
+    TbSymbolIndexedTable_t table = {0};
+    TbSymbolRangeIndexRequest_t scope = {
+        .byte_order    = directory.header->byte_order,
+        .version       = code.unit.version,
+        .address_bytes = code.unit.address_bytes
+    };
+    uint64_t section = UINT64_MAX;
+    if (code.unit.version == 5) {
+        bool found = false;
+        for (uint64_t i = 0; i < ranges.view.count; ++i) {
+            const TbSymbolTableContribution_t *contribution = &ranges.view.entries[i];
+            CHECK(contribution->header_available);
+            if (locations.list_offset >= contribution->table.lists_offset &&
+                locations.list_offset < contribution->table.extent.end_offset) {
+                CHECK(!found);
+                table = contribution->table;
+                found = true;
+            }
+        }
+        CHECK(found && table.address_bytes == code.unit.address_bytes && !table.segment_bytes);
+        scope.offset     = table.lists_offset;
+        scope.end_offset = table.extent.end_offset;
+        section          = ranges.view.section_index;
+    } else {
+        section = section_index(elf, ".debug_ranges");
+        CHECK(section != UINT64_MAX);
+        scope.end_offset = directory.entries[section].header.bytes;
+    }
+    Elf_Data *bytes = elf_getdata(elf_getscn(elf, section), NULL);
+    CHECK(bytes && bytes->d_buf && scope.end_offset <= bytes->d_size);
+    size_t capacity = (size_t)(scope.end_offset - scope.offset);
+    TbSymbolRangeBoundary_t *boundaries = calloc(capacity, sizeof(*boundaries));
+    TbSymbolRangeRecord_t *records = calloc(capacity, sizeof(*records));
+    TbSymbolRange_t *intervals = calloc(capacity, sizeof(*intervals));
+    CHECK(boundaries && records && intervals);
+    TbSymbolRangeIndex_t index;
+    CHECK(tb_symbol_range_index_init(&index, scope, boundaries, capacity) == TB_SYMBOL_RANGE_INDEX_PENDING);
+    size_t cursor = (size_t)scope.offset;
+    while (index.status == TB_SYMBOL_RANGE_INDEX_PENDING) {
+        size_t consumed;
+        uint64_t progress = index.progress;
+        (void)tb_symbol_range_index_feed(&index, (const unsigned char *)bytes->d_buf + cursor,
+                                        (size_t)scope.end_offset - cursor, &consumed);
+        CHECK(consumed <= 256 && index.progress > progress);
+        cursor += consumed;
+    }
+    TbSymbolRangeIndexView_t inventory;
+    CHECK(index.status == TB_SYMBOL_RANGE_INDEX_COMPLETE && tb_symbol_range_index_view(&index, &inventory));
+    TbSymbolRangesRequest_t request;
+    CHECK(tb_symbol_code_locations_ranges(locations, inventory, code.unit.version == 5 ? &table : NULL,
+                                           &request) == TB_SYMBOL_CODE_LOCATIONS_COMPLETE);
+    TbSymbolRanges_t decoder;
+    CHECK(tb_symbol_ranges_init(&decoder, request, records, capacity, intervals, capacity) ==
+          TB_SYMBOL_RANGES_PENDING);
+    cursor = (size_t)request.offset;
+    while (decoder.status == TB_SYMBOL_RANGES_PENDING || decoder.status == TB_SYMBOL_RANGES_ADDRESS) {
+        if (decoder.status == TB_SYMBOL_RANGES_ADDRESS) {
+            uint64_t needed;
+            CHECK(bound[0] && tb_symbol_ranges_address_need(&decoder, &needed));
+            TbSymbolTableValueView_t value = entry(directory, bindings[0], needed, descriptor, budget, elf);
+            (void)tb_symbol_ranges_address(&decoder, &value.entry);
+        } else {
+            size_t consumed;
+            uint64_t progress = decoder.progress;
+            (void)tb_symbol_ranges_feed(&decoder, (const unsigned char *)bytes->d_buf + cursor,
+                                        (size_t)request.end_offset - cursor, &consumed);
+            CHECK(consumed <= 256 && decoder.progress > progress);
+            cursor += consumed;
+        }
+    }
+    TbSymbolRangesView_t view;
+    CHECK(decoder.status == TB_SYMBOL_RANGES_COMPLETE && tb_symbol_ranges_view(&decoder, &view));
+    CHECK(view.end_offset == request.end_offset && cursor == request.end_offset);
+    for (size_t i = 0; i < view.range_count; ++i) {
+        executable_storage(elf, view.ranges[i].begin, view.ranges[i].end);
+        printf("LOCATION die=0x%llx begin=0x%llx end=0x%llx\n", (unsigned long long)die,
+               (unsigned long long)view.ranges[i].begin, (unsigned long long)view.ranges[i].end);
+        ++count;
+    }
+    tb_symbol_ranges_discard(&decoder);
+    tb_symbol_range_index_discard(&index);
+    free(intervals);
+    free(records);
+    free(boundaries);
+
+    return count;
+}
+
+
 int main(int argc, char **argv)
 {
     CHECK((argc == 2 || (argc == 3 && !strcmp(argv[2], "--indexed"))) &&
@@ -173,7 +324,7 @@ int main(int argc, char **argv)
                    (unsigned long long)table->count);
         }
     }
-    CHECK(contributions);
+    CHECK(contributions || section_index(elf, ".debug_ranges") != UINT64_MAX);
 
     TbSymbolUnits_t *units = tb_symbol_units_create(directory, (TbSymbolUnitSelection_t) {
         .section_index = section_index(elf, ".debug_info"),
@@ -186,14 +337,15 @@ int main(int argc, char **argv)
         outcome = tb_symbol_units_step(units, 257);
     TbSymbolUnitsView_t inventory;
     CHECK(outcome == TB_SYMBOL_SUCCESS && tb_symbol_units_view(units, &inventory));
+    size_t locations = 0;
     size_t indexed = 0;
     size_t values = 0;
     for (uint64_t i = 0; i < inventory.count; ++i) {
-        CHECK(inventory.entries[i].header_available && inventory.entries[i].header.version == 5);
+        CHECK(inventory.entries[i].header_available);
         TbSymbolAbbrev_t *abbrev = tb_symbol_abbrev_create(directory, (TbSymbolAbbrevSelection_t) {
             .section_index = section_index(elf, ".debug_abbrev"),
             .table_offset  = inventory.entries[i].header.abbrev_offset,
-            .version       = 5,
+            .version       = inventory.entries[i].header.version,
             .descriptor    = descriptor
         }, &budget);
         CHECK(abbrev);
@@ -240,6 +392,8 @@ int main(int argc, char **argv)
                 .unit_index = i,
                 .die_index  = die
             }, abbrev);
+            locations += check_locations(directory, code, root, bindings, bound, scopes[1], descriptor,
+                                         &budget, elf);
             for (unsigned field = TB_SYMBOL_CODE_LOW; field <= TB_SYMBOL_CODE_RANGES; ++field) {
                 const TbSymbolCodeFact_t *fact = &code.fields[field];
                 if (fact->kind != TB_SYMBOL_CODE_ADDRESS_INDEX && fact->kind != TB_SYMBOL_CODE_LIST_INDEX)
@@ -254,7 +408,7 @@ int main(int argc, char **argv)
         tb_symbol_dies_destroy(dies);
         tb_symbol_abbrev_destroy(abbrev);
     }
-    CHECK(argc == 2 || indexed);
+    CHECK(locations && (argc == 2 || indexed));
     tb_symbol_units_destroy(units);
     for (unsigned kind = 0; kind < 2; ++kind)
         tb_symbol_tables_destroy(scopes[kind].owner);
@@ -262,5 +416,6 @@ int main(int argc, char **argv)
     CHECK(budget.used == 0 && elf_end(elf) == 0 && close(descriptor) == 0 && unlink(temporary) == 0);
     printf("PASS native indexed tables: %zu contributions, %zu bound entries, %zu indexed code facts\n",
            contributions, values, indexed);
+    printf("PASS composed code locations: %zu intervals in executable file-backed segments\n", locations);
     return 0;
 }
