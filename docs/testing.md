@@ -3839,3 +3839,34 @@ Line/file/range interpretation, indexed multi-unit discovery, frontend publicati
 production sizing and live actions retain their later gates. Full fortified host
 regression, complete static analysis and maintainer acceptance are separate from
 focused success. Hardware and F07 acceptance remain outstanding.
+
+## Numeric line-program foundation (SE07, partial)
+
+```sh
+make BUILD_DIR=build/symbol-line CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-line test-symbol-line-native
+```
+
+Unit cases cover line versions 2–5, DWARF32/DWARF64, both byte orders and numeric
+address widths 1/2/4/8. Fragmented feeds, exact contribution ends, incomplete
+operands, header boundaries and unknown instructions check framing. Row cases
+cover VLIW operation arithmetic, fixed advances, negative line changes, zero
+lines, flags/reset behavior, distinct rows at equal addresses and lower-address
+restarts in a new sequence. Integer limits include `INT64_MIN`, `UINT64_MAX` and
+a VLIW advance whose intermediate operation total exceeds 64 bits while its
+final address remains representable.
+
+Capacity failures expose no matrix prefix. Dynamic legacy file records retain
+name spans and all three numeric operands without reading source files. Tests
+also cover unsupported version/addressing profiles, malformed opcode arities,
+long framed extension operands, invalid-init state preservation, incomplete EOF,
+suspended-operation discard and a 520-row program crossing multiple feed slices.
+
+The native target decodes the maintained linked C++ fixtures with DWARF 4 and 5.
+It checks uniform address width independently against every CU header, traverses
+all line contributions, verifies final sequence closure and observes exact ELF
+`main` addresses in numeric rows. This limited fixture profile neither validates
+production `DW_AT_stmt_list` association nor establishes source-file names,
+checksums, general producer compatibility, runtime mapping or executable ranges.
+Complete prologue/provenance and range checks remain subsequent SE07 work under
+the [line-program contract](native-symbol-engine.md#line-program-foundation-se07-partial).

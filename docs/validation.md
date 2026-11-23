@@ -8196,3 +8196,57 @@ Hosted CI, broader producer/cross-unit qualification, frontend integration,
 SE10 production sizing and physical/F07 acceptance are not established by these
 local results. SE07 begins the separate native line-table, source-provenance
 and executable-range work.
+
+## Numeric line-program foundation — 2026-11-23
+
+Implemented the [initial SE07 decoder](native-symbol-engine.md#line-program-foundation-se07-partial):
+fixed header/opcode-table framing and numeric line-program execution, with
+independent line version, offset format, byte order and target address width.
+Complete variable prologues, CU/file association, checksums, executable ranges
+and Source preparation remain subsequent SE07 work. The existing Source workflow
+is unchanged.
+
+Focused fortified unit/native checks passed (exit 0):
+
+```sh
+make BUILD_DIR=build/se07-line-focused-20261123 CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-line test-symbol-line-native
+```
+
+The unit matrix covers 64 combinations of versions 2–5, DWARF32/DWARF64, both
+byte orders and address widths 1/2/4/8, each with nine feed sizes. Additional
+cases cover VLIW quotient/remainder arithmetic, line/address limits, zero lines,
+flags, sequence resets, dynamic legacy file records, exact contribution ends,
+long extension operands, unsupported profiles, capacity failure and suspended
+discard. All malformed/unsupported/resource outcomes expose no successful view.
+The largest fixed prefix and a 520-row program exercise boundary and feed limits.
+These authored programs do not qualify every producer or directory/file encoding.
+
+Review against DWARF 5 Section 7.22 caught an overly restrictive initial boolean
+check: any nonzero byte means true. The added `default_is_stmt = 255` case failed
+before correction (`nonzero-boolean-negative`, exit 2) and passed afterward;
+the preceding source and failed log are retained. The fix removes the 0/1-only
+restriction without changing flag interpretation for existing fixture values.
+
+The maintained native DWARF 4 and 5 C++ fixtures each decoded three tables,
+62 rows and three terminated sequences, including exact ELF `main` addresses.
+Every fixture CU header independently agreed on its address width; production
+CU-to-line association is not inferred from that uniform fixture profile.
+A separate GDB observation of completed row arrays matched all 62 address/line/
+sequence-end tuples for each version against GNU
+`readelf --debug-dump=decodedline --wide`. The comparison does not validate unresolved source names or runtime
+addresses. Raw decoder observations and both reference dumps are retained.
+
+Focused Clang ASan/UBSan unit/native checks, including stack-use-after-return
+detection, passed (exit 0). Final unit checks after the zero-width request guard
+also passed with fortification and sanitizers. Native fixtures used GCC 16.2.1;
+the instrumented parser used Clang 23.1.5. GDB 18.1 and binutils 2.47 supplied
+the supplementary row observations/reference. This is local Linux x86-64 evidence,
+not a comprehensive compiler matrix or physical target qualification.
+
+Exact commands, logs/statuses, source snapshots/hashes, comparison script/data and
+tool versions remain under `build/se07-line-evidence-20261123/`. Normal `make`,
+whitespace/style review and internal documentation-link checks passed. The
+complete fortified baseline, full static analysis and fortified compilation of
+all C test sources remain pending for this delivery. SE07 and F07 acceptance,
+production sizing and physical regression remain separate gates.

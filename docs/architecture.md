@@ -1511,6 +1511,31 @@ SE11 supply indexed discovery and explicit frontend details.
 
 
 
+### Line-table prefix and numeric programs (SE07, partial)
+
+`src/symbol/line.c` implements the
+[bounded line-program foundation](native-symbol-engine.md#line-program-foundation-se07-partial).
+The prefix decoder uses the existing checked reader and contribution framing;
+the streaming state machine uses the incremental LEB scanner. Target address
+width, offset format and line-table version remain separate. All work operates
+on explicitly supplied bytes, without filesystem or debugger calls.
+
+The caller owns the state and complete row/dynamic-file arenas. Rows retain
+instruction offsets and sequence ordinals; dynamic legacy file records retain
+name spans in the frozen section, not pointers into input chunks. A complete
+view becomes available only after exact program consumption and sequence closure.
+Duplicate rows are retained, unsupported instructions are explicit, and a late
+malformed operand or capacity failure exposes no successful prefix. Each call
+consumes at most 256 bytes and never reads the next contribution.
+
+The fixed prologue does not validate directory/file tables or the CU's
+`DW_AT_stmt_list`. Numeric rows therefore do not yet resolve source paths,
+checksums, executable ranges or runtime addresses. The native integration harness
+checks a uniform-width fixture profile against every CU header and finds exact
+ELF `main` addresses in decoded rows; that test profile is not a production
+CU-to-line-table association rule. Existing Source still uses its GDB-known-file
+path; native Source preparation and frontend integration retain their own gates.
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

@@ -31,6 +31,7 @@ The supported [callable grammar](#descriptive-callable-recipes-se06) and
 [concrete-inline inventories](#concrete-inline-details-se06) complete the SE06
 implementation scope; composed host verification and maintainer acceptance
 are recorded in the [SE06 delivery closeout](validation.md#se06-delivery-closeout--2026-11-22).
+SE07 begins with [bounded numeric line-program decoding](#line-program-foundation-se07-partial).
 Artifact Open workflow, qualified acquisition profiles, complete semantic
 interpretation and consumers remain unfinished. Unknown helper operations return
 Unsupported.
@@ -434,6 +435,56 @@ consumer interests, cancellation and deadlines. A complete borrowed unit
 inventory is not frontend publication. Multi-unit search coverage, reusable
 indexes, result windows and explicit UI details remain SE09/SE11 work; actual
 production capacities remain subject to SE10.
+
+### Line-program foundation (SE07, partial)
+
+The initial line decoder separates the fixed header/opcode table from the
+variable directory/file prologue and from numeric program execution. Line-table
+versions 2–5, DWARF32/DWARF64 and target byte order are independent dimensions.
+The fixed prefix retains exact contribution, variable-prologue and program
+boundaries; it does not validate file entries or establish a CU association.
+For versions 2–4 the associated CU supplies address width explicitly. Version 5
+carries its own width, which must agree with the execution request. Numeric
+widths of 1, 2, 4 and 8 bytes are supported; segmented and wider addressing are
+explicitly unsupported, with no host-width fallback.
+
+The streaming machine retains addresses, VLIW operation indexes, raw file indexes,
+line/column, statement/basic-block/prologue/epilogue flags, ISA, discriminator,
+sequence identity and instruction provenance. Its file register starts at 1,
+including version 5, as specified in
+[DWARF 5 Table 6.4](https://dwarfstd.org/doc/DWARF5.pdf).
+The [change to initial file 0](https://dwarfstd.org/issues/210713.1.html) belongs
+to DWARF 6; it is not silently applied to older tables. File-table and declaration
+index rules require their own version-specific interpretation later in SE07.
+Any nonzero `default_is_stmt` byte denotes true.
+
+Checked arithmetic rejects address/line underflow or overflow and decreasing
+emitted operation pointers within a sequence. Equal pointers remain distinct
+rows, and separate sequences can restart at lower addresses. Sequence-end rows
+remain explicit exclusive endpoints; their other source fields are not usable
+as ordinary source rows. Line zero remains an unattributed line, not line one.
+No instruction-set meaning or executable/function-entry claim follows from
+numeric row flags alone.
+
+Legacy `define_file` instructions retain bounded raw name spans and numeric
+directory/time/size metadata in a separate event inventory. Events do not invent
+file indexes before the initial file table is validated. Version 5's deprecated
+`define_file`, unknown framed opcodes and unrepresentable numeric operands remain
+explicitly unsupported. Unknown instructions never produce a supposedly complete
+matrix after being silently ignored. Malformed framing, invalid supported
+operands, unterminated sequences and exhausted row/file capacity expose no
+successful view.
+
+Each feed examines at most 256 bytes and stops at the exact contribution end.
+Complete views require the whole supplied program to finish. State and full
+caller-owned array capacities require accounting, with no production defaults,
+allocation, I/O or callbacks in the decoder. Source bytes and all prologue/CU
+evidence remain separately pinned by the caller. Discard affects neither caller
+arrays nor independent frontend publications. Outer jobs own request identity,
+revisions, consumer interests, cancellation and deadlines. Complete prologues,
+string/checksum dependencies, CU linkage, source mapping, executable ranges and
+Source preparation remain SE07 work; sizing and frontend publication retain
+SE10 and SE09/SE11 respectively.
 
 ## Committed searches and result windows
 
