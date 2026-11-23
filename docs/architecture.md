@@ -1566,8 +1566,18 @@ storage and runtime mapping separate. Native tests compose exact root attributes
 sequentially reached contributions/lists, file-backed executable ELF segments and
 line-row coverage, including disjoint function-section fixtures. Those fixture
 observations do not supply a production Source preparation interface or qualify
-all producer profiles. Direct DIE low/high-PC interpretation, source paths and
-composed Source evidence remain subsequent SE07 work; UI/actions retain SE11/15.
+all producer profiles.
+
+`src/symbol/code_attributes.c` now interprets direct low/high PCs, range-list
+references and root table bases over a matching physical unit/DIE context.
+Whole-scope uniqueness, nonnegative high-PC lengths and exact implicit-constant
+abbreviation ownership precede completion. Direct numeric pairs yield checked
+artifact intervals; indexed values and list offsets retain explicit unresolved
+dependencies. Native checks exercise every fixture DIE and compose root facts
+with the range decoder. The
+[direct attribute contract](native-symbol-engine.md#direct-code-attributes-se07-partial)
+defines the boundary. Source paths and composed Source evidence remain subsequent
+SE07 work; UI/actions retain SE11/15.
 
 ### Event loop and text rendering
 

@@ -3,6 +3,7 @@
 #include "symbol/line_reference.h"
 #include "symbol/strings.h"
 #include "symbol/ranges.h"
+#include "symbol/code_attributes.h"
 #include "../support/check.h"
 
 #include <fcntl.h>
@@ -97,6 +98,51 @@ static const TbSymbolDieAttribute_t *root_attribute(TbSymbolDiesView_t tree, uin
 }
 
 
+static void check_range_storage(Elf *elf, TbSymbolRange_t range);
+
+
+static TbSymbolCodeView_t check_code_attributes(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree,
+    uint64_t unit_index, const TbSymbolAbbrev_t *abbrev, Elf *elf)
+{
+    TbSymbolAbbrevView_t schema;
+    CHECK(tb_symbol_abbrev_view(abbrev, &schema));
+    TbSymbolCodeView_t root = {0};
+
+    for (uint64_t i = 0; i < tree.count; ++i) {
+        TbSymbolCode_t code;
+        CHECK(tb_symbol_code_init(&code, units, tree, (TbSymbolCodeSelection_t) {
+            .unit_index = unit_index,
+            .die_index  = i
+        }) == TB_SYMBOL_CODE_PENDING);
+        TbSymbolCodeStatus_e status = TB_SYMBOL_CODE_PENDING;
+        while (status == TB_SYMBOL_CODE_PENDING || status == TB_SYMBOL_CODE_SCHEMA) {
+            status = status == TB_SYMBOL_CODE_SCHEMA ? tb_symbol_code_schema(&code, &schema) :
+                                                      tb_symbol_code_step(&code, 31);
+        }
+        CHECK(status == TB_SYMBOL_CODE_COMPLETE);
+        TbSymbolCodeView_t view;
+        CHECK(tb_symbol_code_view(&code, &view));
+        CHECK(view.die_index == i && view.fields[TB_SYMBOL_CODE_LOW].selection.record_offset ==
+              tree.entries[i].offset);
+        if (!i)
+            root = view;
+
+        if (view.interval_available) {
+            check_range_storage(elf, (TbSymbolRange_t) {
+                .begin = view.begin,
+                .end   = view.end
+            });
+            printf("CODE v%u die=0x%llx begin=0x%llx end=0x%llx\n", view.unit.version,
+                   (unsigned long long)tree.entries[i].offset, (unsigned long long)view.begin,
+                   (unsigned long long)view.end);
+        }
+        tb_symbol_code_discard(&code);
+    }
+
+    return root;
+}
+
+
 static void source_fixture(SourceFixture_t *fixture, Elf *elf, int descriptor)
 {
     struct stat info;
@@ -156,6 +202,7 @@ static void source_fixture(SourceFixture_t *fixture, Elf *elf, int descriptor)
             outcome = tb_symbol_dies_step(dies, 257);
         TbSymbolDiesView_t tree;
         CHECK(outcome == TB_SYMBOL_SUCCESS && tb_symbol_dies_view(dies, &tree));
+        TbSymbolCodeView_t code = check_code_attributes(inventory, tree, i, abbrev, elf);
         TbSymbolLineReference_t reference;
         CHECK(tb_symbol_line_reference_init(&reference, inventory, tree, i) ==
               TB_SYMBOL_LINE_REFERENCE_PENDING);
@@ -169,14 +216,19 @@ static void source_fixture(SourceFixture_t *fixture, Elf *elf, int descriptor)
         if (range) {
             CHECK(fixture->range_count < 16);
             CHECK(range->value.form == TB_SYMBOL_FORM_SEC_OFFSET && range->value.numeric);
+            CHECK(code.fields[TB_SYMBOL_CODE_RANGES].kind == TB_SYMBOL_CODE_LIST_OFFSET);
+            CHECK(code.fields[TB_SYMBOL_CODE_RANGES].value == range->value.bits);
+            CHECK(code.fields[TB_SYMBOL_CODE_RANGES].selection.first_offset == range_scope.first_offset);
             TbSymbolAttributeResult_t base_scope;
             const TbSymbolDieAttribute_t *base = root_attribute(tree, 0x11, &base_scope);
             CHECK(base && base->value.form == TB_SYMBOL_FORM_ADDR && base->value.numeric);
+            CHECK(code.fields[TB_SYMBOL_CODE_LOW].kind == TB_SYMBOL_CODE_ADDRESS);
+            CHECK(code.fields[TB_SYMBOL_CODE_LOW].value == base->value.bits);
             fixture->ranges[fixture->range_count++] = (RangeFixture_t) {
-                .source = range_scope,
+                .source = code.fields[TB_SYMBOL_CODE_RANGES].selection,
                 .request = {
-                    .offset         = range->value.bits,
-                    .base           = base->value.bits,
+                    .offset         = code.fields[TB_SYMBOL_CODE_RANGES].value,
+                    .base           = code.fields[TB_SYMBOL_CODE_LOW].value,
                     .byte_order     = fixture->directory.header->byte_order,
                     .version        = inventory.entries[i].header.version,
                     .address_bytes  = inventory.entries[i].header.address_bytes,

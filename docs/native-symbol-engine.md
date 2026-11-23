@@ -31,8 +31,9 @@ The supported [callable grammar](#descriptive-callable-recipes-se06) and
 [concrete-inline inventories](#concrete-inline-details-se06) complete the SE06
 implementation scope; composed host verification and maintainer acceptance
 are recorded in the [SE06 delivery closeout](validation.md#se06-delivery-closeout--2026-11-22).
-SE07 includes [line/file decoding](#line-program-foundation-se07-partial) and
-[code-range foundations](#code-range-foundation-se07-partial); composed Source preparation remains.
+SE07 includes [line/file decoding](#line-program-foundation-se07-partial),
+[code-range foundations](#code-range-foundation-se07-partial) and
+[direct code attributes](#direct-code-attributes-se07-partial); composed Source preparation remains.
 Artifact Open workflow, qualified acquisition profiles, complete semantic
 interpretation and consumers remain unfinished. Unknown helper operations return
 Unsupported.
@@ -482,8 +483,8 @@ caller-owned array capacities require accounting, with no production defaults,
 allocation, I/O or callbacks in the decoder. Source bytes and all prologue/CU
 evidence remain separately pinned by the caller. Discard affects neither caller
 arrays nor independent frontend publications. Outer jobs own request identity,
-revisions, consumer interests, cancellation and deadlines. Source mapping,
-executable ranges and Source preparation remain SE07 work; sizing and frontend
+revisions, consumer interests, cancellation and deadlines. Source mapping and
+composed executable-range/Source evidence remain SE07 work; sizing and frontend
 publication retain SE10 and SE09/SE11 respectively.
 
 #### Directory and file prologues
@@ -565,8 +566,9 @@ The caller explicitly establishes section roles, frozen-content ownership,
 contribution/list boundaries, CU association, relocation applicability and the
 exact `addr_base`/`rnglists_base` relationships. A plausible interior header or
 list is insufficient. These primitives do not discover sections, inherit missing
-bases or select an address table automatically. Full contribution inventories,
-DIE low/high-PC interpretation and composed Source evidence remain separate work.
+bases or select an address table automatically. Full contribution inventories
+and composed Source evidence remain separate work. Direct DIE attributes have
+their own [interpretation contract](#direct-code-attributes-se07-partial).
 
 The list machine retains every encoded record in physical order, with exact
 record/operand spans, original numeric operands and any supplied indexed-address
@@ -603,6 +605,50 @@ Failure, cancellation or exhaustion exposes no successful prefix. Discard releas
 only decoder state; independent frontend ownership and invalidation remain with
 the publication/evidence layers. Outer jobs retain revisions, interests,
 cancellation checkpoints and absolute deadlines.
+
+### Direct code attributes (SE07, partial)
+
+`code_attributes` interprets the selected physical DIE's direct `low_pc`,
+`high_pc`, `ranges`, `addr_base` and `rnglists_base` attributes. Initialization
+requires a complete matching unit/tree context, including the physical root,
+unit offset, abbreviation offset and retained backing. Unit and DIE indexes
+are named fields in one selection. Each lookup proves uniqueness over the whole
+selected DIE scope; equal duplicate values remain conflicts. Absent attributes
+retain explicit complete-scope evidence. Specification/abstract-origin links
+never supply inherited code addresses or bases.
+
+Address-class values remain distinct from address indexes. High-PC constants
+are nonnegative lengths, not absolute endpoints; supported forms are
+`data1/2/4/8`, `udata`, nonnegative `sdata` and `implicit_const`. A direct implicit
+constant requests the exact retained abbreviation table and validates its
+physical owner and ordinal in bounded steps. Its numeric length and abbreviation
+provenance do not replace the original zero-footprint DIE attribute. Wider
+uninterpreted constants remain unsupported.
+
+Direct numeric low/high pairs produce checked half-open artifact intervals.
+Negative lengths, reversed bounds, target-width/64-bit overflow, a high PC
+without a low PC, or high PC combined with a range-list attribute are malformed.
+Empty intervals remain valid. A low PC alone supplies no extent; low PC combined
+with a range list remains separate metadata, including the CU's explicit default
+base. No first interval or numeric low PC alone authorizes an entry-point action.
+
+Range-list section offsets and version-5 `rnglistx` indexes remain distinct
+unresolved dependencies. Version-5 CU table bases are explicit root attributes;
+selecting a child does not silently fetch or inherit them. Completion of these
+metadata facts does not establish an indexed address, contribution association,
+list boundary, relocation applicability or executable storage. Consumers must
+retain exact root/base, table, section and complete-list evidence independently.
+The existing table/list primitives do not acquire those relationships by receiving
+a plausible numeric offset.
+
+The complete view preserves each field's physical selection, original attribute,
+normalized kind/value and any separate abbreviation provenance. It marks an
+interval available only for a fully direct numeric pair. Each step inspects at
+most 256 attributes or abbreviation entries. State and pinned dependencies are
+caller-owned/accounted; the component introduces no allocations, I/O, production
+capacity defaults or debugger commands. Failure exposes no completed view.
+Source paths/correspondence, composed code-location preparation, publication,
+runtime mapping and action authorization retain their separate gates.
 
 ## Committed searches and result windows
 

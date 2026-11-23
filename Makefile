@@ -21,6 +21,7 @@ PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/tui/editor.c src/tui/terminal.c src/tui/setup_capture.c src/tui/setup_restore.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/paths.c src/session/session.c src/session/openocd.c src/session/profiles.c src/session/setup.c src/model/context.c src/model/code.c src/model/browse.c src/model/monitor.c src/model/mmio.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/stack.c src/model/variables.c
 SOURCES += src/symbol/reader.c src/symbol/identity.c src/symbol/sha256.c src/symbol/wire.c src/symbol/schedule.c src/symbol/budget.c src/symbol/process.c src/symbol/worker.c src/symbol/helper.c src/symbol/admission.c src/symbol/acquire.c src/symbol/equal.c src/symbol/storage.c src/symbol/operation.c src/symbol/artifact.c src/symbol/elf.c src/symbol/file.c src/symbol/sections.c src/symbol/symbols.c src/symbol/dwarf.c src/symbol/units.c src/symbol/leb.c src/symbol/abbrev.c src/symbol/form.c src/symbol/dies.c src/symbol/references.c src/symbol/strings.c src/symbol/string_offsets.c src/symbol/attributes.c src/symbol/text.c src/symbol/entities.c src/symbol/relations.c src/symbol/graph.c src/symbol/inherit.c src/symbol/string_order.c src/symbol/inherited_text.c src/symbol/context.c src/symbol/scope_graph.c src/symbol/constants.c src/symbol/name_order.c src/symbol/qualified.c src/symbol/inline_scope.c src/symbol/locality.c src/symbol/parameters.c src/symbol/inherited_flag.c src/symbol/inherited_reference.c src/symbol/type_recipe.c src/symbol/parameter_links.c src/symbol/parameter_source.c src/symbol/callable.c
 SOURCES += src/symbol/inline_details.c src/symbol/line.c src/symbol/line_files.c src/symbol/line_reference.c src/symbol/indexed_tables.c src/symbol/ranges.c
+SOURCES += src/symbol/code_attributes.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -1541,7 +1542,7 @@ test: test-symbol-line
 
 -include $(BUILD_DIR)/tests/unit/test_symbol_line.d
 
-$(BUILD_DIR)/test-symbol-line-native: $(BUILD_DIR)/tests/integration/test_symbol_line_native.o $(BUILD_DIR)/src/symbol/line.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/line_files.o $(BUILD_DIR)/src/symbol/line_reference.o $(BUILD_DIR)/src/symbol/form.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/strings.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/units.o $(BUILD_DIR)/src/symbol/abbrev.o $(BUILD_DIR)/src/symbol/dies.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/ranges.o $(BUILD_DIR)/src/symbol/indexed_tables.o
+$(BUILD_DIR)/test-symbol-line-native: $(BUILD_DIR)/tests/integration/test_symbol_line_native.o $(BUILD_DIR)/src/symbol/line.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/line_files.o $(BUILD_DIR)/src/symbol/line_reference.o $(BUILD_DIR)/src/symbol/form.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/strings.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/units.o $(BUILD_DIR)/src/symbol/abbrev.o $(BUILD_DIR)/src/symbol/dies.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/ranges.o $(BUILD_DIR)/src/symbol/indexed_tables.o $(BUILD_DIR)/src/symbol/code_attributes.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 .PHONY: test-symbol-line-native
@@ -1609,3 +1610,13 @@ test-symbol-ranges-native: $(BUILD_DIR)/test-symbol-line-native $(BUILD_DIR)/sym
 	$(BUILD_DIR)/test-symbol-line-native $(BUILD_DIR)/symbol-fixture-ranges-dwarf4 $(BUILD_DIR)/symbol-fixture-ranges-dwarf5 --disjoint
 
 test: test-symbol-ranges-native
+
+$(BUILD_DIR)/test-symbol-code-attributes: $(BUILD_DIR)/tests/unit/test_symbol_code_attributes.o $(BUILD_DIR)/src/symbol/code_attributes.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-code-attributes
+test-symbol-code-attributes: $(BUILD_DIR)/test-symbol-code-attributes
+	$(BUILD_DIR)/test-symbol-code-attributes
+
+test: test-symbol-code-attributes
+-include $(BUILD_DIR)/tests/unit/test_symbol_code_attributes.d

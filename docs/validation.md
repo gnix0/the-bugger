@@ -8460,3 +8460,74 @@ The full passing baseline and test-source compilation evidence remains
 applicable to valid decoder behavior; the added regression checks passed in the
 focused run. Complete analysis on the corrected snapshot remains pending.
 SE07/F07 acceptance, hosted CI and physical qualification remain outstanding.
+
+### Range-dispatch analysis closeout
+
+Complete analysis on the corrected snapshot exited 0, processed all 87 production
+sources and emitted no actionable diagnostics. All 428 recorded inputs remained
+unchanged during the run. The passing full baseline/test-source compilation and
+corrected focused checks therefore close this delivery's host verification.
+The original failed run and corrected log/status/input comparison remain under
+`build/se07-ranges-owner-20261123/` and `build/se07-ranges-fix-20261123/`.
+This establishes neither hosted CI nor SE07/F07 or physical acceptance.
+
+## Direct code attributes — 2026-11-23
+
+Implemented the [direct code-attribute interpreter](native-symbol-engine.md#direct-code-attributes-se07-partial)
+over complete physical unit/DIE views. Direct addresses, high-PC lengths,
+address indexes, range-list offsets/indexes and explicit root table bases remain
+distinct. Whole-scope uniqueness precedes interpretation; direct implicit
+constants require exact abbreviation ownership. A complete direct numeric pair
+produces checked artifact bounds. Indexed references remain unresolved metadata,
+not runtime locations or action authority.
+
+Focused fortified checks passed (exit 0):
+
+```sh
+make BUILD_DIR=build/se07-code-focused-20261123 CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-code-attributes test-symbol-line-native test-symbol-ranges-native
+```
+
+Authored cases independently vary versions 4/5, offset formats, address widths
+1/2/4/8 and step allowances 1–256. Checks cover complete absence, late equal
+duplicates, direct/indirect forms, each supported scalar high-PC form,
+`addrx`/`addrx1/2/3/4`, range offsets/indexes, zero indexes, root bases,
+non-root selections and context mismatch rejection. A 520-entry abbreviation
+table exercises bounded implicit-constant ownership checks. Missing/wrong
+dependencies, conflicting ownership, unsupported constants, negative lengths,
+reversed bounds, target-width/64-bit overflow, empty intervals, discard and
+preserved outputs are covered. No existing fixture or assertion was weakened.
+
+The native pipeline now interprets every DIE in both maintained fixture profiles.
+Root facts feed the range decoder and remain cross-checked against independent
+direct attribute selections. Direct intervals lie within file-backed executable
+ELF segments. GNU `readelf --debug-dump=info --wide` independently matched every
+physical DIE offset and both endpoints: 12 intervals per ordinary fixture and
+11 per disjoint fixture, for both DWARF 4 and 5 (46 total). Existing line/range
+observations remain unchanged. Native GCC fixtures use direct PCs and range
+offsets; authored cases exercise indexed metadata separately, without claiming
+resolved indexed addresses.
+
+Focused Clang ASan/UBSan checks of the same three targets passed (exit 0), with
+stack-use-after-return detection enabled:
+
+```sh
+UBSAN_OPTIONS=halt_on_error=1 ASAN_OPTIONS=detect_stack_use_after_return=1 \
+make BUILD_DIR=build/se07-code-sanitize-20261123 CC=clang \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' \
+  test-symbol-code-attributes test-symbol-line-native test-symbol-ranges-native
+```
+
+Logs/statuses, exact commands, input snapshots, tool versions, reference dumps
+and comparison results are retained under `build/se07-code-evidence-20261123/`.
+This remains local Linux x86-64 evidence with GCC 16.2.1 fixtures, Clang 23.1.5
+instrumentation and binutils 2.47. Full fortified baseline, complete analysis and
+fortified compilation of all C test sources remain pending for this delivery.
+Source paths/correspondence and composed Source preparation remain SE07 work;
+production inventories, indexed dependency composition, sizing, frontend/native
+actions and physical qualification retain their separate obligations.
+
+Normal `make` rebuilt the application successfully. Whitespace/style review and
+273 internal documentation-link checks passed. No Source UI behavior changed.

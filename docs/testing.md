@@ -3933,3 +3933,27 @@ These checks do not establish every producer profile, source correspondence,
 instruction boundaries, standalone entry points, runtime mapping or target access.
 The [authoritative range contract](native-symbol-engine.md#code-range-foundation-se07-partial)
 retains the remaining Source/consumer gates.
+
+### Direct code attributes
+
+```sh
+make BUILD_DIR=build/symbol-code-attributes CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-code-attributes test-symbol-line-native test-symbol-ranges-native
+```
+
+Authored checks independently vary unit version, offset format, numeric address
+width and bounded step allowance. They cover complete absence, late duplicate
+attributes, direct/indirect address forms, supported constant high-PC lengths,
+indexed addresses, range offsets/indexes, explicit root table bases and physical
+unit/tree mismatches. Implicit constants require the exact abbreviation context
+and matching physical owner; wrong supplies preserve the request, unavailable
+dependencies fail explicitly, and a 520-entry schema requires multiple steps.
+Negative/reversed/overflowing intervals, incompatible attributes, unsupported
+constants and failed-output preservation remain distinct observations.
+
+Both native profiles interpret every DIE and check direct intervals against
+file-backed executable ELF storage. The range decoder consumes the interpreted
+root facts while independent attribute lookups check their physical coordinates
+and numeric values. These tests establish neither source correspondence nor
+resolved indexed addresses or runtime authority. See the
+[authoritative contract](native-symbol-engine.md#direct-code-attributes-se07-partial).
