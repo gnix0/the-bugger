@@ -8327,3 +8327,27 @@ path mapping/checksum correspondence, executable ranges and Source preparation
 remain SE07 work. Existing Source behavior, production sizing, frontend integration
 and F07 acceptance retain their separate boundaries. Normal `make`, whitespace
 review and all 262 checked internal documentation links passed.
+
+### Full verification and schema-helper correction
+
+Review of `build/se07-line-files-owner-20261123/` confirmed that the fresh
+fortified baseline passed all 152 individual test commands and fortified
+compilation passed for all 146 C test sources. The clean-tree run recorded
+422 unchanged inputs. Complete analysis reached all 85 production sources but
+exited 2 with one actionable diagnostic: the private schema-pairing helper's
+adjacent `uint64_t` content/form parameters were easily interchangeable.
+
+The helper now accepts the existing immutable schema record. The caller has
+already assigned its form before validation, so the same content/form values
+reach the unchanged pairing rules. No diagnostic suppression, test changes,
+format-policy changes or resource-limit changes were introduced.
+
+Focused fortified `test-symbol-line-files` and `test-symbol-line-native` checks
+passed after correction (exit 0), using
+`BUILD_DIR=build/se07-line-files-focused-20261123 CPPFLAGS=-D_FORTIFY_SOURCE=3`.
+The native DWARF 4/5 observations remain three tables, 62 rows and three
+sequences per fixture. Logs and corrected input records are retained under
+`build/se07-line-files-fix-20261123/`. The full passing test/compilation evidence
+remains applicable to this behavior-preserving helper change; complete static
+analysis remains pending on the corrected snapshot. SE07 acceptance and the
+previously recorded integration/physical limitations remain outstanding.

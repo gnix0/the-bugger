@@ -69,9 +69,11 @@ static bool allowed_form(uint64_t form)
 }
 
 
-static bool pairing(uint64_t content, uint64_t form)
+static bool pairing(const TbSymbolLineFormat_t *format)
 {
-    switch (content) {
+    uint64_t form = format->form;
+
+    switch (format->content) {
     case 1:
         return form == TB_SYMBOL_FORM_STRING || form == TB_SYMBOL_FORM_STRP ||
                form == TB_SYMBOL_FORM_LINE_STRP || form == TB_SYMBOL_FORM_STRP_SUP ||
@@ -289,7 +291,7 @@ static void number(TbSymbolLineFiles_t *files, uint64_t value)
         TbSymbolLineFormat_t *format = &files->formats[table][files->format_index];
         format->form = value;
         bool known_form = value >= TB_SYMBOL_FORM_ADDR && value <= TB_SYMBOL_FORM_ADDRX4 && value != 2;
-        if (known_form && !pairing(format->content, value)) {
+        if (known_form && !pairing(format)) {
             fail(files, TB_SYMBOL_LINE_FILES_MALFORMED);
         } else if (!allowed_form(value)) {
             fail(files, TB_SYMBOL_LINE_FILES_UNSUPPORTED);
