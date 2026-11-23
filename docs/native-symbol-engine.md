@@ -35,7 +35,9 @@ SE07 includes [line/file decoding](#line-program-foundation-se07-partial),
 [code-range foundations](#code-range-foundation-se07-partial) and
 [direct code attributes](#direct-code-attributes-se07-partial), with
 [indexed-table association](#indexed-table-association-se07-partial) and
-[code-location composition](#code-location-composition-se07-partial); composed Source preparation remains.
+[code-location composition](#code-location-composition-se07-partial), plus
+[source-file provenance and paths](#source-file-provenance-and-paths-se07-partial).
+Composed Source preparation remains.
 Artifact Open workflow, qualified acquisition profiles, complete semantic
 interpretation and consumers remain unfinished. Unknown helper operations return
 Unsupported.
@@ -759,6 +761,76 @@ correspondence, runtime mapping and access authorization require their separate
 evidence. Source provenance/paths and the composed Source preparation contract
 remain SE07 work; frontend publication, runtime and live actions retain their
 later gates.
+
+### Source-file provenance and paths (SE07, partial)
+
+`source_file` selects an exact file record from complete same-content line
+prologue/program views and the selected unit's explicit line reference. Initial
+indexes start at 1 in versions 2–4 and at 0 in version 5. A row selection retains
+its ordinal and encoded file number; end-sequence rows have no usable source
+file. Declaration and call file zero remain unspecified, including version 5,
+rather than selecting its real file entry zero. Coordinate interpretation follows
+[DWARF 5 Sections 2.14 and 3.3.8](https://dwarfstd.org/doc/DWARF5.pdf).
+Inherited coordinates must use the line reference of their physical source unit,
+not the consumer's unit or a matching basename.
+
+Legacy `define_file` events append after the validated initial files. A row may
+select only an event already defined before that row's instruction. Each selected
+initial/event record retains the line-section identity, physical offset, unit
+reference and raw file index. Directory records remain independently identified.
+Numeric timestamp/size availability records field presence; encoded zero remains
+unknown. A checksum is a recorded 16-byte MD5 span, not a source match.
+
+Selected inline, `strp` and `line_strp` paths become explicit requests to the
+existing bounded string reader over the retained descriptor. Inline coordinates
+are adjusted from field-relative payload offsets exactly once. Missing string
+sections remain dependencies; unsupported framed path forms remain unsupported.
+Unsupported optional numeric fields retain partial metadata; path-reference
+support stays separately reported. Field selection examines at most
+256 fields/transitions per call. No string copying, filesystem discovery, source
+file opening or debugger dispatch occurs in this component.
+
+`source_path` composes fully supplied text in a POSIX byte-path profile. Absolute
+file/directory names do not need unrelated relative bases. Legacy compilation
+context comes from the explicit unit `comp_dir`; version 5's explicit directory
+zero supplies its recorded current compilation directory. Relative compilation
+context requires a captured absolute linked-image directory or an explicit
+reviewed mapping. This follows the [relative-path clarification](https://dwarfstd.org/issues/210628.1.html).
+Private backing paths and the frontend's current directory are never implicit
+bases. A missing file-directory index remains unknown for a relative file; it is
+not silently replaced by zero. Different compilation contexts remain evidence
+to reconcile in Source preparation, not interchangeable strings.
+
+Composition preserves repeated separators, dot/dot-dot components, spaces and
+non-ASCII bytes. It performs no canonicalization, symlink resolution, environment
+or tilde expansion. Embedded NUL/CR/LF are unavailable for a Source argument.
+Other producer path conventions require an explicitly supported profile or
+reviewed mapping; no host/target syntax translation is inferred.
+
+Mappings use case-sensitive byte prefixes ending at component boundaries.
+Multiple matches remain ambiguous even when destinations agree. An explicitly
+selected matching rule resolves the choice; no implicit first/longest selection
+occurs. The complete recorded path remains available independently of a local
+candidate. Unresolved relative paths and ambiguous mappings cannot yield an
+actionable local candidate. Each step examines at most 256 bytes/rules/transitions.
+Caller-supplied capacities include terminators; exhaustion exposes no successful
+truncated path. The existing Source consumer limit still applies at integration.
+
+The project-owned streaming MD5 component implements [RFC 1321](https://www.rfc-editor.org/rfc/rfc1321)
+for DWARF source-digest comparison. Each update accepts at most 64 KiB. Exact
+complete length is required at finalization; input/length failure poisons the
+stream and cannot publish a prefix digest. MD5 is not the artifact fingerprint
+or a security/integrity primitive; admission continues to use SHA-256 and exact
+byte comparison. A matching recorded source digest must be bound to the exact
+retained displayed bytes and their revision before correspondence is claimed.
+A path, timestamp, size or digest alone grants no runtime or action authority.
+
+These components introduce no allocations, I/O, production capacity defaults or
+frontend publications. State, candidate buffers, input text, rules and retained
+metadata belong to their callers' existing accounts and lifetimes. Source
+preparation still needs composed unit/file/line/range evidence, context ambiguity
+handling, and correspondence tied to exact displayed bytes. Offline UI and live
+Source actions retain SE11 and SE15 respectively.
 
 ## Committed searches and result windows
 

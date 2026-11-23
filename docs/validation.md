@@ -8698,3 +8698,92 @@ debugger behavior is unchanged.
 
 Normal `make` rebuilt `build/the-bugger` successfully. Whitespace/style review
 and 285 internal documentation-link checks passed. No Source UI behavior changed.
+
+### Code-location host verification
+
+Inspection of `build/se07-locations-owner-20261123/` confirmed successful fresh
+fortified baseline, complete analysis and fortified test-source compilation.
+All 163 individual test commands passed; all 153 C test sources had fortified
+compile-command/object evidence. Analysis processed all 91 production sources
+with no actionable diagnostics. The clean run recorded 441 unchanged inputs.
+The full review is retained under
+`build/se07-range-index-evidence-20261123/full-review.json`. This closes local
+host verification, not hosted CI, SE07/F07 acceptance or physical qualification.
+
+## Source-file provenance and paths — 2026-11-23
+
+Implemented the [source-file/path contract](native-symbol-engine.md#source-file-provenance-and-paths-se07-partial).
+Exact initial/dynamic selections retain unit, line-section, entry and field
+provenance. String dependencies reuse protected retained-file reads. POSIX path
+composition and explicit mapping selection perform no source-file access.
+Streaming MD5 supports comparison with recorded source digests without changing
+artifact SHA-256 identity or implying displayed-byte correspondence.
+
+Focused fortified checks passed (exit 0):
+
+```sh
+make BUILD_DIR=build/se07-source-focused-20261123 CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-source-file test-symbol-source-path test-symbol-md5 \
+  test-symbol-source-native test-symbol-line-files test-symbol-line-reference
+```
+
+Authored cases cover versions 2–5, row versus declaration/call zero, dynamic
+file visibility, exact metadata spans, missing/unsupported string dependencies,
+partial numeric metadata, malformed indexes and wrong retained contexts. Path
+cases cover explicit compilation/image context, component-prefix rules,
+overlapping/duplicate mappings, exact rule selection, lexical byte preservation,
+invalid bytes, capacity boundaries and cancellation. A 520-rule case requires
+multiple bounded slices. A 4097-byte path fits a sufficient explicit metadata
+buffer and fails a 4096-byte consumer buffer without publishing truncation.
+Neither case changes the existing Source limit.
+
+MD5 checks passed the seven RFC 1321 examples with fragmented updates, ten
+independently calculated binary padding/block-boundary vectors, the million-byte
+`a` vector, repeated-finalization rejection and poisoned input/length failures.
+These observations qualify the supported digest profile, not a security primitive
+or production source-correspondence lifecycle.
+
+The maintained native harness composes retained ELF/DWARF parsing, explicit unit
+references, complete line prologues/programs, selected file metadata, bounded
+strings and path construction. Ordinary/disjoint GCC 16.2.1 DWARF 4/5 fixtures
+each produced 59 non-end rows; optional Clang 23.1.5 DWARF 5 profiles each
+produced 35. GNU binutils 2.47 `readelf` info/raw-line dumps independently matched
+all 306 row-to-path observations against exact CU, line-table and file indexes.
+The two physical `definition.cpp` records retained their distinct directories
+and unit identities. Dot/dot-dot spelling was preserved rather than normalized.
+
+The Clang profiles also produced 70 recorded-MD5 match observations. Each
+comparison used explicitly opened fixture source bytes retained in the harness;
+changing a copied byte produced a mismatch. Python's independent `hashlib` MD5
+and the recorded raw-line metadata agreed. These are repeated observations over
+the fixture files, not 70 distinct files or production displayed-byte guarantees.
+GCC's tested profiles supplied no MD5 fields. Clang remains optional, with no
+new default test or runtime dependency.
+
+Focused Clang ASan/UBSan checks passed (exit 0), including stack-use-after-return
+detection, for all three new unit targets and the four default native profiles:
+
+```sh
+UBSAN_OPTIONS=halt_on_error=1 ASAN_OPTIONS=detect_stack_use_after_return=1 \
+make BUILD_DIR=build/se07-source-sanitize-20261123 CC=clang \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' \
+  test-symbol-source-file test-symbol-source-path test-symbol-md5 \
+  test-symbol-source-native
+```
+
+Both optional Clang-produced profiles also passed the instrumented native harness
+with `--md5`. Commands, logs/statuses, tool versions, reference dumps, comparisons
+and input snapshots remain under `build/se07-source-evidence-20261123/`.
+Full fortified baseline, complete analysis and fortified compilation of all C
+test sources remain pending for this delivery. Results are local Linux x86-64
+evidence; no hosted CI, remote profile or physical result is claimed.
+
+Composed Source preparation, compilation-context reconciliation and correspondence
+bound to exact displayed source bytes remain SE07 work. Production publication,
+sizing, offline UI and live actions retain their separate gates. Existing Source
+and live-debugger behavior is unchanged.
+
+Normal `make` rebuilt `build/the-bugger` successfully. Whitespace/style review
+and 290 internal documentation-link checks passed. No Source UI behavior changed.

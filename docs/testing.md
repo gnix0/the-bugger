@@ -4032,3 +4032,49 @@ DIE offsets and intervals against `readelf --debug-dump=info --wide` and
 `readelf --debug-dump=Ranges --wide`. These checks establish metadata behavior,
 not runtime mapping, source correspondence or instruction/standalone entry proof.
 See the [composition contract](native-symbol-engine.md#code-location-composition-se07-partial).
+
+
+### Source-file provenance, paths and recorded digests
+
+```sh
+make BUILD_DIR=build/symbol-source CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-source-file test-symbol-source-path test-symbol-md5 \
+  test-symbol-source-native
+```
+
+File selection checks versions 2–5, row versus declaration/call zero, exact
+initial/dynamic offsets, event visibility, independent directories, string
+references, missing sections, unsupported forms, partial optional metadata and
+invalid contexts. Path checks preserve lexical bytes, require explicit relative
+context, distinguish component-prefix mappings from basename guesses, and retain
+ambiguity until a matching rule is selected. Capacity and invalid-byte failures
+cannot expose a truncated candidate. Boundary cases include paths longer than
+the existing Source limit, without changing that consumer limit.
+
+MD5 checks use published RFC 1321 vectors, fragmented updates, padding/block
+boundaries, a million-byte vector and poisoned input/length/finalization failures.
+The native target composes retained ELF/DWARF parsing, exact unit references,
+file selection, bounded strings and paths over ordinary/disjoint DWARF 4/5
+fixtures. Distinct `left/definition.cpp` and `right/definition.cpp` retain their
+unit/table/file identities. Compare full paths and indexes against
+`readelf --debug-dump=info --wide` and `readelf --debug-dump=rawline --wide`.
+
+An optional Clang producer profile uses the maintained sources to include actual
+recorded MD5 fields:
+
+```sh
+make BUILD_DIR=build/symbol-source-llvm CXX=clang++ \
+  build/symbol-source-llvm/symbol-fixture-dwarf5 \
+  build/symbol-source-llvm/symbol-fixture-ranges-dwarf5
+build/symbol-source/test-symbol-source-native \
+  build/symbol-source-llvm/symbol-fixture-dwarf5 --md5
+build/symbol-source/test-symbol-source-native \
+  build/symbol-source-llvm/symbol-fixture-ranges-dwarf5 --md5
+```
+
+`--md5` requires observed checksum matches and changed-byte mismatches. Only this
+explicit fixture harness opens the resolved local fixture paths; the production
+components perform no source access. A digest match is evidence about the tested
+bytes, not production displayed-byte correspondence, runtime mapping or access
+authority. Clang remains optional. See the
+[source-file/path contract](native-symbol-engine.md#source-file-provenance-and-paths-se07-partial).

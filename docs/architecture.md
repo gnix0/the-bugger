@@ -1600,6 +1600,16 @@ storage. See the [composition contract](native-symbol-engine.md#code-location-co
 Source provenance/paths and Source preparation remain unfinished SE07 work;
 no existing Source or live action changes.
 
+`src/symbol/source_file.c` now interprets exact initial/dynamic file selections
+and prepares bounded metadata-string dependencies. `src/symbol/source_path.c`
+composes recorded paths and explicit mapping choices without local file access.
+`src/symbol/md5.c` provides streaming comparison with recorded source digests;
+it does not replace artifact identity or bind source correspondence by itself.
+The [source-file/path contract](native-symbol-engine.md#source-file-provenance-and-paths-se07-partial)
+keeps unit provenance, byte paths, local candidates and source correspondence
+separate. Composed Source preparation remains SE07 work; no existing Source or
+live-debugger behavior changes.
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd
