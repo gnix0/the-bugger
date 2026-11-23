@@ -3865,8 +3865,36 @@ suspended-operation discard and a 520-row program crossing multiple feed slices.
 The native target decodes the maintained linked C++ fixtures with DWARF 4 and 5.
 It checks uniform address width independently against every CU header, traverses
 all line contributions, verifies final sequence closure and observes exact ELF
-`main` addresses in numeric rows. This limited fixture profile neither validates
-production `DW_AT_stmt_list` association nor establishes source-file names,
-checksums, general producer compatibility, runtime mapping or executable ranges.
-Complete prologue/provenance and range checks remain subsequent SE07 work under
-the [line-program contract](native-symbol-engine.md#line-program-foundation-se07-partial).
+`main` addresses in numeric rows. It also builds complete native unit/tree
+inventories, resolves every direct CU line reference against sequentially reached
+contribution boundaries, decodes each variable prologue and validates ordinary
+row file indexes. Inline and external path strings are checked using explicitly
+selected sections and the bounded string reader. Private read-only fixture copies
+satisfy the production reader's backing contract; the original build outputs
+remain unchanged. This does not establish source correspondence, runtime mapping,
+executable ranges or general producer compatibility.
+
+Additional focused targets exercise the prologue and direct-reference components:
+
+```sh
+make BUILD_DIR=build/symbol-line-files CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-line-files test-symbol-line-reference test-symbol-line-native
+```
+
+Prologue cases span versions 2–5, both offset formats and byte orders, and
+fragmented feeds. They preserve duplicate basenames, raw 16-byte MD5 spans,
+string dependencies and repeated vendor fields. Unknown safely framed metadata
+reports partial coverage; unknown framing, illegal standard pairings, conflicting
+schemas, truncated operands and resource failure expose no successful view.
+The largest encoded schema, exact/insufficient capacities, oversized counts,
+520 entries, long names, empty inventories, incomplete EOF and suspended discard
+exercise work and ownership boundaries.
+
+Reference cases scan root scopes larger than one service slice, including an
+identical duplicate near the end. Absence, conflict, malformed class/span,
+wrong backing/unit/root/abbreviation context, partial/type roots and indirect
+section-offset encodings remain distinct. These metadata checks perform no
+filesystem discovery, source opening or debugger operations. Composed source
+mapping/correspondence, executable-range and Source-preparation checks remain
+subsequent SE07 work under the
+[line-program contract](native-symbol-engine.md#line-program-foundation-se07-partial).

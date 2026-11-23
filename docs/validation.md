@@ -8250,3 +8250,80 @@ whitespace/style review and internal documentation-link checks passed. The
 complete fortified baseline, full static analysis and fortified compilation of
 all C test sources remain pending for this delivery. SE07 and F07 acceptance,
 production sizing and physical regression remain separate gates.
+
+### Numeric line-program full verification closeout
+
+The maintainer reported a passing run under `build/se07-line-owner-20261123/`.
+Inspection confirmed all three stages exited 0: the fresh fortified host baseline,
+complete static analysis of 83 production sources, and fortified compilation of
+all 144 C test sources. All 150 individual test-command records exited 0. The
+416 recorded inputs remained unchanged throughout the clean-tree run. Compilation
+commands and corresponding test objects were checked; analysis contained no
+unsuppressed actionable diagnostics. This closes the first SE07 delivery's
+pending full host checks, not SE07/F07 acceptance or physical qualification.
+
+## Line file prologues and direct CU references — 2026-11-23
+
+Implemented complete variable-prologue framing and unique direct root line-table
+references under the [SE07 contracts](native-symbol-engine.md#line-program-foundation-se07-partial).
+The prologue component preserves directory/file identity, encoded schema,
+version-specific indexes, raw MD5 spans and unresolved string references. The
+reference component retains exact backing, unit, root, attribute and abbreviation
+provenance. Neither component opens source files or grants runtime authority.
+
+Focused fortified checks passed (exit 0):
+
+```sh
+make BUILD_DIR=build/se07-line-files-focused-20261123 CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-line test-symbol-line-files test-symbol-line-reference test-symbol-line-native
+```
+
+The prologue matrix covers versions 2–5, both offset formats/byte orders and nine
+feed sizes. Authored cases cover duplicate basenames, inline/external strings,
+raw 16-byte checksum spans, unsupported supplementary/indexed paths, repeated
+vendor fields, the 255-field schema bound, exact/insufficient capacities,
+oversized counts, 520 entries, long names, empty inventories, malformed
+pairings, unknown framing, conflicting schemas, incomplete EOF and suspended
+discard. Direct-reference cases examine 520-attribute scopes, including equal
+duplicates separated by service slices, absence, invalid source context,
+malformed values/spans, partial/type roots and indirect section-offset encoding.
+
+The native harness now builds complete unit/abbreviation/tree inventories and
+matches each direct CU line reference to a contribution reached by sequential
+traversal. Each DWARF 4/5 fixture again produced three tables, 62 rows and three
+sequences. Complete file prologues, row file indexes and explicit string-section
+termination/length dependencies passed; ELF `main` addresses remain represented.
+The existing compiled fixtures contain duplicate basenames/CUs. This does not
+establish complete source paths, local-file correspondence or executable ranges.
+Raw MD5 coverage is authored metadata, not a native checksum-verification result.
+
+The first composed native run failed because its build-output descriptor did
+not meet the protected-backing reader contract. The harness now copies each
+fixture into a private file, relinquishes its writer, protects it read-only and
+uses a close-on-exec read descriptor until cleanup. The corrected run passed;
+production reader protections and original fixture files were preserved. The
+failed log remains `native-unprotected-input.log` (exit 2); subsequent focused
+and instrumented runs use the corrected harness.
+
+Focused Clang ASan/UBSan prologue/reference/native checks passed (exit 0), with
+stack-use-after-return detection and immediate undefined-behavior failure:
+
+```sh
+UBSAN_OPTIONS=halt_on_error=1 ASAN_OPTIONS=detect_stack_use_after_return=1 \
+make BUILD_DIR=build/se07-line-files-sanitize-20261123 CC=clang \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' \
+  test-symbol-line-files test-symbol-line-reference test-symbol-line-native
+```
+
+Evidence, command/status records, input snapshots/hashes and tool versions remain
+under `build/se07-line-files-evidence-20261123/`. These are local Linux x86-64
+checks with GCC 16.2.1 C++ fixtures and Clang 23.1.5 instrumentation. They do not
+qualify other producers, compressed/split metadata, remote targets or physical
+hardware. Complete fortified host regression, full analysis and compilation of
+all C test sources remain pending for this delivery. Composed source provenance,
+path mapping/checksum correspondence, executable ranges and Source preparation
+remain SE07 work. Existing Source behavior, production sizing, frontend integration
+and F07 acceptance retain their separate boundaries. Normal `make`, whitespace
+review and all 262 checked internal documentation links passed.

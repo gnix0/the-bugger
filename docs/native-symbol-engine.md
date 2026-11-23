@@ -455,7 +455,7 @@ including version 5, as specified in
 [DWARF 5 Table 6.4](https://dwarfstd.org/doc/DWARF5.pdf).
 The [change to initial file 0](https://dwarfstd.org/issues/210713.1.html) belongs
 to DWARF 6; it is not silently applied to older tables. File-table and declaration
-index rules require their own version-specific interpretation later in SE07.
+index rules remain distinct from the numeric machine and are described below.
 Any nonzero `default_is_stmt` byte denotes true.
 
 Checked arithmetic rejects address/line underflow or overflow and decreasing
@@ -481,10 +481,66 @@ caller-owned array capacities require accounting, with no production defaults,
 allocation, I/O or callbacks in the decoder. Source bytes and all prologue/CU
 evidence remain separately pinned by the caller. Discard affects neither caller
 arrays nor independent frontend publications. Outer jobs own request identity,
-revisions, consumer interests, cancellation and deadlines. Complete prologues,
-string/checksum dependencies, CU linkage, source mapping, executable ranges and
-Source preparation remain SE07 work; sizing and frontend publication retain
-SE10 and SE09/SE11 respectively.
+revisions, consumer interests, cancellation and deadlines. Source mapping,
+executable ranges and Source preparation remain SE07 work; sizing and frontend
+publication retain SE10 and SE09/SE11 respectively.
+
+#### Directory and file prologues
+
+`line_files` decodes the complete variable prologue into caller-owned entry and
+field arenas. Versions 2–4 retain NUL-terminated directory/file inventories and
+the file's directory index, timestamp and size. Version 5 retains the encoded
+content/form schema and counted entries, including raw MD5 spans. Initial
+version 2–4 indexes begin at 1; version 5 indexes begin at 0. The implicit legacy
+compilation directory at index 0 is not fabricated as an encoded entry. Duplicate
+names and identical metadata remain separate physical records.
+
+Each field retains its section-relative start, content code, decoded form and
+raw payload coordinates. The payload offset is relative to the field start;
+DIE attribute views instead contain adjusted section-relative payload offsets.
+Inline strings remain spans. `strp` and `line_strp` remain explicit dependencies
+on the selected same-content string section. Supplementary/indexed path forms
+retain their framing with unsupported coverage; this does not admit split or
+supplementary artifacts. Supported standard content/form pairings follow DWARF 5
+Section 6.2.4.1. Repeated standard content codes are conflicts; repeated vendor
+codes remain distinct schema fields. Safely framed unknown content is preserved
+with partial coverage. Unframeable encodings are unsupported, never guessed.
+
+Each feed performs at most 256 byte, field or schema actions, including bounded
+schema-conflict checks. It can advance internal work without consuming input;
+the progress counter distinguishes this from waiting for bytes. Complete or
+partial views require exact prologue consumption. Malformed data, schema
+conflicts, unsupported framing, incomplete EOF or exhausted entry/field capacity
+expose no successful prefix. The on-wire schema count is bounded by its ubyte
+encoding; it is not a production memory-capacity default. State, schemas, full
+arenas and pinned source/evidence require caller accounting and lifetime control.
+No full path/string copies, allocation, I/O or local source access occur here.
+
+MD5, timestamp and size are recorded metadata. Decoding them neither verifies
+the displayed source bytes nor authorizes local-path resolution. Directory-index
+interpretation, compilation-directory selection, path mapping and source
+correspondence require separate evidence; raw fields cannot become actionable
+paths merely by concatenating them.
+
+#### Explicit unit references
+
+`line_reference` examines the complete direct root `DW_AT_stmt_list` scope of
+one selected, structurally validated unit. It checks matching backing, unit,
+abbreviation context and root coordinates, preserving the attribute's physical
+provenance and the associated CU header. It distinguishes absence, duplicate
+attributes and malformed supported values. Equal duplicates remain conflicts;
+no inherited/name-based fallback supplies a missing reference. Lookup examines
+at most 256 attributes per step and retains no successful candidate before the
+whole root scope has been examined.
+
+A found `sec_offset` is an unresolved section-relative dependency. The consumer
+must explicitly select the same-content uncompressed line section, prove the
+referenced contribution boundary, validate its prologue/program and retain all
+supporting scopes. It must not accept an arbitrary interior offset merely
+because bytes there resemble a header. CU address width remains independent of
+line-table version and offset format. These components grant no executable-range,
+runtime-mapping, source-file correspondence or action authority. Composed Source
+preparation and durable frontend evidence ownership remain subsequent work.
 
 ## Committed searches and result windows
 

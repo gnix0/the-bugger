@@ -1528,13 +1528,26 @@ Duplicate rows are retained, unsupported instructions are explicit, and a late
 malformed operand or capacity failure exposes no successful prefix. Each call
 consumes at most 256 bytes and never reads the next contribution.
 
-The fixed prologue does not validate directory/file tables or the CU's
-`DW_AT_stmt_list`. Numeric rows therefore do not yet resolve source paths,
-checksums, executable ranges or runtime addresses. The native integration harness
-checks a uniform-width fixture profile against every CU header and finds exact
-ELF `main` addresses in decoded rows; that test profile is not a production
-CU-to-line-table association rule. Existing Source still uses its GDB-known-file
-path; native Source preparation and frontend integration retain their own gates.
+`src/symbol/line_files.c` separately decodes the complete variable prologue
+into accounted, caller-owned schema/entry/field storage. It preserves duplicate
+names, version-specific indexes, raw checksum spans and unresolved string
+references. Safely framed unknown fields retain partial coverage; malformed or
+unframeable input and resource failures expose no usable prefix. It performs no
+string-table discovery or local source-file access.
+
+`src/symbol/line_reference.c` uses the existing bounded attribute lookup to
+extract a unique direct root `DW_AT_stmt_list` from the matching complete unit
+and tree. It retains exact source/attribute/abbreviation provenance. The offset
+still requires explicit line-section selection and contribution-boundary proof.
+The native fixture harness composes these components, traverses line tables from
+the section start, checks every CU reference against those boundaries and resolves
+path strings through explicitly selected sections using the bounded string reader.
+This is fixture evidence, not a production Source preparation interface.
+
+The [authoritative line contracts](native-symbol-engine.md#line-program-foundation-se07-partial)
+keep source mapping/checksum correspondence, executable ranges and runtime
+addresses separate. Existing Source still uses its GDB-known-file path; native
+Source preparation and frontend integration retain their own gates.
 
 ### Event loop and text rendering
 
