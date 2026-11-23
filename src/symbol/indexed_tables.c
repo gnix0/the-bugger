@@ -17,27 +17,37 @@ TbSymbolDwarfStatus_e tb_symbol_indexed_table_header(TbSymbolIndexedTableKind_e 
     if (status != TB_SYMBOL_DWARF_OK)
         return status;
 
+    unsigned version_end = extent.length_bytes + 2;
+    if (version_end > extent.total_bytes || version_end > length)
+        return TB_SYMBOL_DWARF_MALFORMED;
+
+    TbSymbolReader_t reader;
+    if (tb_symbol_reader_init(&reader, bytes, length < 20 ? length : 20, span.byte_order) !=
+        TB_SYMBOL_READ_OK) {
+        return TB_SYMBOL_DWARF_INVALID;
+    }
+
+    const unsigned char *initial_length;
+    if (tb_symbol_reader_bytes(&reader, extent.length_bytes, &initial_length) != TB_SYMBOL_READ_OK)
+        return TB_SYMBOL_DWARF_MALFORMED;
+
+    uint64_t version;
+    if (!uint_field(&reader, 2, &version))
+        return TB_SYMBOL_DWARF_MALFORMED;
+    if (version != 5)
+        return TB_SYMBOL_DWARF_UNSUPPORTED;
+
     unsigned prefix = extent.length_bytes + (kind == TB_SYMBOL_TABLE_RANGES ? 8U : 4U);
     if (prefix > extent.total_bytes || prefix > length)
         return TB_SYMBOL_DWARF_MALFORMED;
 
-    TbSymbolReader_t reader;
-    if (tb_symbol_reader_init(&reader, bytes, prefix, span.byte_order) != TB_SYMBOL_READ_OK)
-        return TB_SYMBOL_DWARF_INVALID;
-
-    reader.offset = extent.length_bytes;
-    uint64_t version;
     uint64_t address;
     uint64_t segment;
     uint64_t count = 0;
-    if (!uint_field(&reader, 2, &version) || !uint_field(&reader, 1, &address) ||
-        !uint_field(&reader, 1, &segment) ||
+    if (!uint_field(&reader, 1, &address) || !uint_field(&reader, 1, &segment) ||
         (kind == TB_SYMBOL_TABLE_RANGES && !uint_field(&reader, 4, &count))) {
         return TB_SYMBOL_DWARF_MALFORMED;
     }
-
-    if (version != 5)
-        return TB_SYMBOL_DWARF_UNSUPPORTED;
 
     if (!address)
         return TB_SYMBOL_DWARF_MALFORMED;

@@ -33,7 +33,8 @@ implementation scope; composed host verification and maintainer acceptance
 are recorded in the [SE06 delivery closeout](validation.md#se06-delivery-closeout--2026-11-22).
 SE07 includes [line/file decoding](#line-program-foundation-se07-partial),
 [code-range foundations](#code-range-foundation-se07-partial) and
-[direct code attributes](#direct-code-attributes-se07-partial); composed Source preparation remains.
+[direct code attributes](#direct-code-attributes-se07-partial), with
+[indexed-table association](#indexed-table-association-se07-partial); composed Source preparation remains.
 Artifact Open workflow, qualified acquisition profiles, complete semantic
 interpretation and consumers remain unfinished. Unknown helper operations return
 Unsupported.
@@ -566,9 +567,11 @@ The caller explicitly establishes section roles, frozen-content ownership,
 contribution/list boundaries, CU association, relocation applicability and the
 exact `addr_base`/`rnglists_base` relationships. A plausible interior header or
 list is insufficient. These primitives do not discover sections, inherit missing
-bases or select an address table automatically. Full contribution inventories
-and composed Source evidence remain separate work. Direct DIE attributes have
-their own [interpretation contract](#direct-code-attributes-se07-partial).
+bases or select an address table automatically. The
+[table inventory and binding components](#indexed-table-association-se07-partial)
+establish explicit contribution/base relationships. Complete list-boundary
+inventories and composed Source evidence remain separate work. Direct DIE
+attributes have their own [interpretation contract](#direct-code-attributes-se07-partial).
 
 The list machine retains every encoded record in physical order, with exact
 record/operand spans, original numeric operands and any supplied indexed-address
@@ -649,6 +652,58 @@ caller-owned/accounted; the component introduces no allocations, I/O, production
 capacity defaults or debugger commands. Failure exposes no completed view.
 Source paths/correspondence, composed code-location preparation, publication,
 runtime mapping and action authorization retain their separate gates.
+
+### Indexed-table association (SE07, partial)
+
+`tables` constructs a complete sequential header inventory for one explicitly
+classified, retained `.debug_addr` or `.debug_rnglists` section. Two bounded
+passes count/reserve and populate exact contribution records. Each record retains
+its physical offset and checked extent; supported headers also retain the exact
+entries/list offsets and independent offset/address widths. The constructor
+performs no I/O. State, reader scratch and array capacity use the caller's
+construction account; no production capacity default or full-file buffer is
+introduced.
+
+A safely framed unknown version remains an opaque contribution with explicit
+unsupported coverage. Version decoding precedes version-5 layout requirements:
+an unknown version with only a complete version field is unsupported, whereas
+the same truncated version-5 header is malformed. Unknown bodies are not parsed
+using a guessed layout. Nonzero numeric widths/selectors can retain header
+framing without establishing numeric support. Malformed required framing or
+resource/read failure exposes no completed inventory. Even an empty selected
+section requires exact retained-descriptor checks.
+
+Binding takes a complete direct code-root view and a complete table inventory
+over the same retained backing. It requires the selected `addr_base` or
+`rnglists_base` to equal an actual entries-array start, not an interior address
+or plausible header. Missing bases report dependency; no zero/first-table default
+is supplied. Each step examines at most 256 contributions and exposes no candidate
+before completing its scope. A base within an opaque contribution remains
+unsupported; an unmatched base in the fully examined supported scope is malformed.
+Selected address width must agree with the CU. The table's own offset format
+remains authoritative; it is not inferred from the CU or another contribution.
+
+Empty contributions remain real records. Their entries offset can coincide with
+the next contribution's header, so ordinary containing-range lookup cannot replace
+exact entries-offset comparison. Equal raw attribute values have already retained
+their physical uniqueness/conflict evidence in the direct code interpreter.
+Binding preserves that exact base fact, unit context, table record and physical
+section/contribution selection; it does not merge CUs sharing a table.
+
+The entry reader selects one checked index from a found binding and the same
+retained directory/backing. Construction performs no I/O. Bounded reader steps
+revalidate the exact protected read-only descriptor and return only a complete
+numeric entry with its captured binding. Unsupported widths/selectors remain
+explicitly unavailable. Wrong/out-of-range requests allocate nothing; reservation,
+allocation, integrity and read failures expose no successful prefix. Cancellation
+retires owned state/scratch without closing a borrowed descriptor or granting a
+retry. The outer owner pins all dependencies, revisions, interests and deadlines.
+
+Header inventory does not validate every entry or list body. A decoded range
+offset must still reach an independently proved list boundary and a completely
+validated list before it supports a code-location claim. Address values remain
+artifact metadata; source correspondence, executable storage, runtime mapping,
+action authorization and frontend evidence ownership remain separate contracts.
 
 ## Committed searches and result windows
 

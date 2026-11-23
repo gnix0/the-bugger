@@ -1579,6 +1579,16 @@ with the range decoder. The
 defines the boundary. Source paths and composed Source evidence remain subsequent
 SE07 work; UI/actions retain SE11/15.
 
+`src/symbol/tables.c` now inventories complete sequential address/range-table
+headers, binds explicit CU bases to exact entries-array starts and reads selected
+entries through the existing protected-file reader. Unknown framed versions
+retain coverage limitations; header completion does not validate every entry or
+list body. All owned construction/scratch/array storage remains accounted, and
+failed operations expose no usable prefix. The
+[table association contract](native-symbol-engine.md#indexed-table-association-se07-partial)
+keeps binding, list-boundary proof, artifact addresses and runtime authority
+separate. Existing Source and live workflows are unchanged.
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

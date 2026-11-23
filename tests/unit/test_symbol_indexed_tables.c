@@ -114,6 +114,22 @@ static void check_failures(void)
     CHECK(decode(TB_SYMBOL_TABLE_ADDRESSES, &table) == TB_SYMBOL_DWARF_UNSUPPORTED);
 
     for (unsigned kind = 0; kind < 2; ++kind) {
+        unsigned char minimal[] = {2, 0, 0, 0, 6, 0};
+        TbSymbolIndexedTable_t old = table;
+        CHECK(tb_symbol_indexed_table_header((TbSymbolIndexedTableKind_e)kind, (TbSymbolDwarfSpan_t) {
+            .section_bytes = sizeof(minimal),
+            .byte_order    = TB_SYMBOL_LITTLE_ENDIAN
+        }, minimal, sizeof(minimal), &table) == TB_SYMBOL_DWARF_UNSUPPORTED);
+        CHECK(!memcmp(&old, &table, sizeof(table)));
+        minimal[4] = 5;
+        CHECK(tb_symbol_indexed_table_header((TbSymbolIndexedTableKind_e)kind, (TbSymbolDwarfSpan_t) {
+            .section_bytes = sizeof(minimal),
+            .byte_order    = TB_SYMBOL_LITTLE_ENDIAN
+        }, minimal, sizeof(minimal), &table) == TB_SYMBOL_DWARF_MALFORMED);
+        CHECK(!memcmp(&old, &table, sizeof(table)));
+    }
+
+    for (unsigned kind = 0; kind < 2; ++kind) {
         start(8, 4, 0, (TbSymbolIndexedTableKind_e)kind);
         if (kind) {
             for (unsigned i = 0; i < 3; ++i)

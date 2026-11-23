@@ -3957,3 +3957,48 @@ root facts while independent attribute lookups check their physical coordinates
 and numeric values. These tests establish neither source correspondence nor
 resolved indexed addresses or runtime authority. See the
 [authoritative contract](native-symbol-engine.md#direct-code-attributes-se07-partial).
+
+### Indexed-table inventories and association
+
+```sh
+make BUILD_DIR=build/symbol-tables CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-tables test-symbol-tables-native test-symbol-indexed-tables
+```
+
+Authored retained-file cases vary ELF32/64, byte order, DWARF32/64, address widths
+and table kind. A selected section contains mixed-format contributions, an opaque
+unknown version, an empty contribution and adjacent headers. Checks cover exact
+CU bases, interior-offset rejection, width mismatches, missing bases, unsupported
+coverage, complete entry reads and checked range targets. A 520-contribution case
+requires several bounded binding steps. Failure injection covers late malformed
+headers, allocation/reservation exhaustion, interrupted/short/error/EOF reads,
+descriptor properties/replacement, malformed selected entries, unsupported
+selectors, cancellation and charge restoration. Empty sections still check the
+retained descriptor. Supported short headers remain malformed while safely framed
+unknown versions remain unsupported.
+
+The native target composes the maintained DWARF 5 C++ fixture with production
+sections, units, abbreviations, DIEs, direct code facts, table inventories, CU
+bindings and selected entry readers. Independent libelf bytes check each numeric
+entry. Default GCC fixtures may use direct offsets without address tables; they
+do not by themselves qualify indexed code references.
+
+An optional Clang producer profile exercises actual indexed addresses and range
+offset arrays, using the same maintained sources and native harness:
+
+```sh
+make BUILD_DIR=build/symbol-tables-llvm CXX=clang++ \
+  build/symbol-tables-llvm/symbol-fixture-dwarf5 \
+  build/symbol-tables-llvm/symbol-fixture-ranges-dwarf5
+build/symbol-tables/test-symbol-tables-native \
+  build/symbol-tables-llvm/symbol-fixture-dwarf5 --indexed
+build/symbol-tables/test-symbol-tables-native \
+  build/symbol-tables-llvm/symbol-fixture-ranges-dwarf5 --indexed
+```
+
+`--indexed` requires observed indexed code facts. Clang is optional for this
+additional producer check and is not required by the default test target. Compare
+the recorded tables/entries with `readelf --debug-dump=addr --wide` and
+`readelf --debug-dump=Ranges --wide`. Header/entry results do not establish list
+boundaries, complete code locations, source correspondence or runtime authority;
+see the [association contract](native-symbol-engine.md#indexed-table-association-se07-partial).

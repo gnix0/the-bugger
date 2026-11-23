@@ -8531,3 +8531,87 @@ actions and physical qualification retain their separate obligations.
 
 Normal `make` rebuilt the application successfully. Whitespace/style review and
 273 internal documentation-link checks passed. No Source UI behavior changed.
+
+### Direct code-attribute host verification
+
+Inspection of `build/se07-code-owner-20261123/` confirmed successful fresh
+fortified baseline, complete analysis and fortified test-source compilation.
+All 156 individual test commands passed; all 149 C test sources had fortified
+compile-command/object evidence. Analysis processed all 88 production sources
+with no actionable diagnostics. The clean run recorded 431 unchanged inputs.
+Full log/status/input review is retained alongside the focused evidence under
+`build/se07-code-evidence-20261123/`. This closes the delivery's local host
+verification, not hosted CI, SE07/F07 acceptance or physical qualification.
+
+## Indexed-table association — 2026-11-23
+
+Implemented the [table inventory/binding/entry contract](native-symbol-engine.md#indexed-table-association-se07-partial).
+Complete sequential header inventories retain unknown framed versions and their
+coverage limits. Explicit CU bases bind only to exact entries-array starts;
+selected entries use bounded protected-file reads and preserve binding provenance.
+Version classification now precedes version-5 header-shape requirements, so a
+safely framed unknown version does not inherit a guessed version-5 layout.
+
+Focused fortified checks passed (exit 0):
+
+```sh
+make BUILD_DIR=build/se07-tables-focused-20261123 CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-tables test-symbol-tables-native test-symbol-indexed-tables \
+  test-symbol-ranges test-symbol-line-native test-symbol-ranges-native
+```
+
+Authored retained-file cases cross ELF32/64, both byte orders, DWARF32/64,
+address widths 1/2/4/8 and both table kinds. Each mixed-format scope contains
+supported, opaque unknown-version, empty and adjacent contributions. Checks
+cover exact versus interior bases, width mismatch, missing dependencies, complete
+numeric entries, checked range targets and preserved failure state. A
+520-contribution lookup requires three bounded steps at allowance 256. Injected
+allocation/reservation failures, interrupted/short/error/EOF reads, changed
+descriptor properties/replacement, late malformed headers, malformed selected
+entries, unsupported selectors and cancellation all retained their expected
+failure boundaries and restored owned charges. Empty sections still rejected
+invalid descriptor properties. No existing fixture or assertion was weakened.
+
+The maintained native harness composes sections, units, abbreviations, DIEs,
+direct root/code facts, inventories, bindings and entry reads. The default GCC 16.2.1
+fixture produced two range-table contributions with zero offset entries and no
+indexed code facts. Additional builds of the same maintained sources with
+Clang 23.1.5 produced three address contributions, 17 bound entries and 13 indexed
+code facts. The function-section/sorted-link variant produced five total
+contributions, 19 bound entries and 13 indexed code facts, including two range
+offset entries. Both additional profiles explicitly required indexed observations;
+their compiler/commands and logs are retained. Clang remains optional for these
+additional producer checks, not a new default test/runtime dependency.
+
+Independent libelf bytes matched every selected numeric entry. GNU binutils 2.47
+`readelf --debug-dump=addr --wide`, CU `addr_base` metadata and
+`readelf --debug-dump=Ranges --wide` independently matched exact physical tables,
+indexes and values: 17 addresses per Clang profile and both disjoint-profile
+range offsets, including their offset-array-relative targets (36 values total).
+Those targets remain offsets, not production list-boundary proof.
+
+Focused Clang ASan/UBSan checks passed (exit 0), including stack-use-after-return
+detection, for `test-symbol-tables`, `test-symbol-tables-native` and
+`test-symbol-indexed-tables`, using:
+
+```sh
+UBSAN_OPTIONS=halt_on_error=1 ASAN_OPTIONS=detect_stack_use_after_return=1 \
+make BUILD_DIR=build/se07-tables-sanitize-20261123 CC=clang \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' \
+  test-symbol-tables test-symbol-tables-native test-symbol-indexed-tables
+```
+
+The instrumented native harness also passed both Clang-produced profiles with
+`--indexed`. Logs/statuses, commands, reference dumps, comparison results, tool
+versions and exact input snapshots remain under
+`build/se07-tables-evidence-20261123/`. Full fortified baseline, complete analysis
+and fortified compilation of all C test sources remain pending for this delivery.
+These are local Linux x86-64 metadata observations, not remote or physical
+qualification. Complete list-boundary inventories, composed code-location
+evidence, source provenance/paths and Source preparation remain SE07 work;
+production sizing, frontend publication and live actions retain their gates.
+
+Normal `make` rebuilt the application successfully. Whitespace/style review and
+279 internal documentation-link checks passed. No Source UI behavior changed.
