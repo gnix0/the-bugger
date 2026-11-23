@@ -36,8 +36,9 @@ SE07 includes [line/file decoding](#line-program-foundation-se07-partial),
 [direct code attributes](#direct-code-attributes-se07-partial), with
 [indexed-table association](#indexed-table-association-se07-partial) and
 [code-location composition](#code-location-composition-se07-partial), plus
-[source-file provenance and paths](#source-file-provenance-and-paths-se07-partial).
-Composed Source preparation remains.
+[source-file provenance and paths](#source-file-provenance-and-paths-se07-partial) and
+[composed Source preparation and byte correspondence](#source-preparation-and-byte-correspondence-se07).
+SE07 implementation now awaits final host verification and maintainer acceptance.
 Artifact Open workflow, qualified acquisition profiles, complete semantic
 interpretation and consumers remain unfinished. Unknown helper operations return
 Unsupported.
@@ -487,9 +488,10 @@ caller-owned array capacities require accounting, with no production defaults,
 allocation, I/O or callbacks in the decoder. Source bytes and all prologue/CU
 evidence remain separately pinned by the caller. Discard affects neither caller
 arrays nor independent frontend publications. Outer jobs own request identity,
-revisions, consumer interests, cancellation and deadlines. Source mapping and
-composed executable-range/Source evidence remain SE07 work; sizing and frontend
-publication retain SE10 and SE09/SE11 respectively.
+revisions, consumer interests, cancellation and deadlines. The
+[Source preparation layer](#source-preparation-and-byte-correspondence-se07) composes
+file, line and code metadata; sizing and frontend publication retain SE10 and
+SE09/SE11 respectively.
 
 #### Directory and file prologues
 
@@ -758,9 +760,9 @@ publication remains conditional on complete success. These metadata views are
 not independently owned frontend prepared-action facts. Executable-storage
 classification, instruction boundaries, standalone entry points, Source-byte
 correspondence, runtime mapping and access authorization require their separate
-evidence. Source provenance/paths and the composed Source preparation contract
-remain SE07 work; frontend publication, runtime and live actions retain their
-later gates.
+evidence. The [Source preparation layer](#source-preparation-and-byte-correspondence-se07)
+composes these metadata views; frontend publication, runtime and live actions
+retain their later gates.
 
 ### Source-file provenance and paths (SE07, partial)
 
@@ -827,10 +829,102 @@ A path, timestamp, size or digest alone grants no runtime or action authority.
 
 These components introduce no allocations, I/O, production capacity defaults or
 frontend publications. State, candidate buffers, input text, rules and retained
-metadata belong to their callers' existing accounts and lifetimes. Source
-preparation still needs composed unit/file/line/range evidence, context ambiguity
-handling, and correspondence tied to exact displayed bytes. Offline UI and live
-Source actions retain SE11 and SE15 respectively.
+metadata belong to their callers' existing accounts and lifetimes. The following
+preparation layer composes their evidence. Offline UI and live Source actions
+retain SE11 and SE15 respectively.
+
+### Source preparation and byte correspondence (SE07)
+
+`source_context` reconciles paths built from the exact selected file's compilation
+contexts. The default is line-table directory zero for version 5, otherwise the
+physical unit's `comp_dir`. A separately supplied version-5 alternative retains
+that same unit root's complete `DW_AT_comp_dir` provenance. Both candidates must
+come from the existing path composer over the same file/directory selection;
+all string dependencies and path buffers stay retained. Readiness covers this
+captured candidate inventory, without validating an unexamined root attribute.
+Consumers claiming full context reconciliation must retain that attribute lookup
+outcome and supply every relevant found alternative. A missing or unsupported
+default context does not erase an independently supported explicit unit choice.
+
+Automatic agreement compares complete recorded **and** local path bytes in bounded
+byte-pair steps. Two different recorded contexts remain ambiguous even if mappings
+lead to the same local file. Different lexical spellings are not canonicalized.
+An explicit choice selects exactly one complete candidate and preserves both
+provenances. Missing context remains a dependency; ambiguous mappings remain
+ambiguous. Neither outcome supplies a prepared local Source path.
+
+`constants` now also interprets direct declaration file/line/column fields using
+its existing uniqueness, numeric-class and implicit-constant checks. The
+`source_prepare` coordinate composer retains each original constant and physical
+owner. Already selected inherited owners use their own unit's file numbering;
+this layer neither traverses relationships nor chooses between owners. A mixture
+of different physical units is ambiguous, even when numeric indexes agree.
+Distinct owners in one validated numbering context remain separately identified.
+Declaration/call file zero and line zero are absent, without a file-zero or
+nearest-line fallback. Missing columns remain distinct from encoded zero.
+
+Source preparation combines the accepted path context, complete numeric program,
+exact file selection, row or declaration/call coordinates and optional resolved
+code metadata. A row request selects only that physical row; a declaration/call
+request preserves every matching file/line row in program order. End-sequence
+and unattributed rows never become compiled locations. Legacy dynamic files are
+visible only after their defining instruction. Repeated addresses, operation
+indexes, discriminators and row ordinals remain distinct.
+
+Without code evidence, preparation supports recorded Source browsing and makes
+no compiled-location claim. With code evidence, rows must lie inside an explicit
+nonempty half-open low/high interval or a complete semantic range-list decode.
+A list must match the exact request derived from the selected code's boundary
+index, CU base and address-table dependencies, including its terminating end.
+Disjoint intervals remain separate; low PC alone is insufficient. No first-range
+entry point, instruction-boundary, executable-storage, runtime mapping or action
+permission follows from a matching artifact row. Those claims still require
+their own evidence and consumer gates.
+
+The caller supplies the full output arena and receiving consumer limits. Existing
+Source requires paths shorter than `TB_CODE_PATH` (4096 bytes including the
+terminator) and lines representable by its `int` selection (`INT_MAX`). Preparation
+fails on an oversized path, line or unrepresentable arena capacity; it never
+truncates or narrows an actionable argument. Each service call performs at most
+256 row/range/transition actions. Total matching can require rows × intervals
+work; cancellation and deadlines remain outer-owner obligations. The complete
+selected scope must finish before its view is available. Arena exhaustion or
+cancellation exposes no accepted prefix and does not alter independently owned
+published results.
+
+`source_check` binds recorded MD5 comparison to an explicitly retained immutable
+raw-source snapshot: nonreused identity, revision, byte pointer, complete length
+and completeness state. These are the exact bytes from which displayed text is
+derived, before escaping or line-ending presentation. The owner advances revision
+before changing bytes or selection and retains the old lease until pending work
+detaches. Pathname/stat observations cannot replace that lease. A changed lease
+makes the result unavailable; changes observed during service finalize stale.
+Helper lifetime is not a source-byte revision.
+
+Hashing processes at most 64 KiB per service call and compares only a finalized
+complete digest with the validated recorded 16-byte span. Missing digests and
+incomplete raw snapshots permit explicitly qualified recorded browsing, never a
+verified prefix. Complete snapshots distinguish match from mismatch. A match is
+limited to the recorded MD5 profile and exact retained displayed bytes; it does
+not establish atomic source acquisition, artifact/runtime correspondence or access
+authority. MD5 remains unsuitable as a security primitive.
+
+The existing `src/model/code.c` loader remains GDB-driven. Its renderer output is
+escaped and its source buffer may be partial after read, byte or line limits;
+those states cannot supply complete correspondence evidence. Native Source
+integration in SE11 must retain its own raw-byte lease, honor existing path/line
+limits, mark recorded versus matching/mismatching correspondence, and withdraw
+matches when that lease changes. SE15 consumes exact artifact locations only
+after runtime and action-specific checks; it manages multiple installed locations
+and confirms nearby-line proposals separately. These foundations perform no local
+file access, target request, breakpoint mutation or execution.
+
+All three components use caller-owned/accounted state, inputs and full-capacity
+arenas; they allocate nothing and publish no frontend guarantee. Their borrowed
+views are metadata preparation, not independently retained prepared-action facts
+or a public ABI. SE09/10/11/12 retain publication, sizing, UI and owned-fact work.
+SE07 implementation is complete within this supported envelope; final host
+verification and maintainer acceptance remain explicit gates.
 
 ## Committed searches and result windows
 

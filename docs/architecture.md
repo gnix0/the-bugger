@@ -1576,8 +1576,8 @@ artifact intervals; indexed values and list offsets retain explicit unresolved
 dependencies. Native checks exercise every fixture DIE and compose root facts
 with the range decoder. The
 [direct attribute contract](native-symbol-engine.md#direct-code-attributes-se07-partial)
-defines the boundary. Source paths and composed Source evidence remain subsequent
-SE07 work; UI/actions retain SE11/15.
+defines the boundary. The [Source preparation layer](native-symbol-engine.md#source-preparation-and-byte-correspondence-se07)
+composes file, line and range evidence; UI/actions retain SE11/15.
 
 `src/symbol/tables.c` now inventories complete sequential address/range-table
 headers, binds explicit CU bases to exact entries-array starts and reads selected
@@ -1597,8 +1597,8 @@ Caller-owned state/arenas preserve explicit content and scope dependencies;
 failed scopes expose no usable prefix. The maintained native harness composes
 these components with the range decoder and checks file-backed executable ELF
 storage. See the [composition contract](native-symbol-engine.md#code-location-composition-se07-partial).
-Source provenance/paths and Source preparation remain unfinished SE07 work;
-no existing Source or live action changes.
+The [Source preparation layer](native-symbol-engine.md#source-preparation-and-byte-correspondence-se07)
+consumes those resolved locations; no existing Source or live action changes.
 
 `src/symbol/source_file.c` now interprets exact initial/dynamic file selections
 and prepares bounded metadata-string dependencies. `src/symbol/source_path.c`
@@ -1607,8 +1607,18 @@ composes recorded paths and explicit mapping choices without local file access.
 it does not replace artifact identity or bind source correspondence by itself.
 The [source-file/path contract](native-symbol-engine.md#source-file-provenance-and-paths-se07-partial)
 keeps unit provenance, byte paths, local candidates and source correspondence
-separate. Composed Source preparation remains SE07 work; no existing Source or
-live-debugger behavior changes.
+separate. Existing Source and live-debugger behavior remain unchanged.
+
+`src/symbol/source_context.c` reconciles complete compilation-context paths with
+explicit ambiguity and physical unit-root provenance. `source_prepare.c` combines
+that choice with exact row/declaration/call coordinates and direct or disjoint
+code ranges. `source_check.c` binds checksum comparison to the retained raw bytes
+underlying a Source display and expires the claim when its lease changes. These
+are bounded, allocation-free metadata components. The
+[authoritative preparation/consumer contract](native-symbol-engine.md#source-preparation-and-byte-correspondence-se07)
+defines Source limits, complete-versus-partial bytes and the later UI/action
+boundaries. SE07 implementation awaits final host verification and acceptance;
+production publication, sizing and consumer integration retain their own gates.
 
 ### Event loop and text rendering
 

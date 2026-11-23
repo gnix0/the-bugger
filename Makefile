@@ -23,6 +23,7 @@ SOURCES += src/symbol/reader.c src/symbol/identity.c src/symbol/sha256.c src/sym
 SOURCES += src/symbol/inline_details.c src/symbol/line.c src/symbol/line_files.c src/symbol/line_reference.c src/symbol/indexed_tables.c src/symbol/ranges.c
 SOURCES += src/symbol/code_attributes.c src/symbol/tables.c src/symbol/range_index.c src/symbol/code_locations.c
 SOURCES += src/symbol/source_file.c src/symbol/source_path.c src/symbol/md5.c
+SOURCES += src/symbol/source_context.c src/symbol/source_prepare.c src/symbol/source_check.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -1695,7 +1696,7 @@ test-symbol-source-file: $(BUILD_DIR)/test-symbol-source-file
 test: test-symbol-source-file
 -include $(BUILD_DIR)/tests/unit/test_symbol_source_file.d
 
-$(BUILD_DIR)/test-symbol-source-native: $(BUILD_DIR)/tests/integration/test_symbol_source_native.o $(BUILD_DIR)/src/symbol/source_file.o $(BUILD_DIR)/src/symbol/source_path.o $(BUILD_DIR)/src/symbol/md5.o $(BUILD_DIR)/src/symbol/line.o $(BUILD_DIR)/src/symbol/line_files.o $(BUILD_DIR)/src/symbol/line_reference.o $(BUILD_DIR)/src/symbol/text.o $(BUILD_DIR)/src/symbol/strings.o $(BUILD_DIR)/src/symbol/string_offsets.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/units.o $(BUILD_DIR)/src/symbol/abbrev.o $(BUILD_DIR)/src/symbol/dies.o $(BUILD_DIR)/src/symbol/form.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/reader.o
+$(BUILD_DIR)/test-symbol-source-native: $(BUILD_DIR)/src/symbol/source_context.o $(BUILD_DIR)/src/symbol/source_prepare.o $(BUILD_DIR)/src/symbol/source_check.o $(BUILD_DIR)/src/symbol/constants.o $(BUILD_DIR)/src/symbol/code_attributes.o $(BUILD_DIR)/src/symbol/code_locations.o $(BUILD_DIR)/src/symbol/range_index.o $(BUILD_DIR)/src/symbol/ranges.o $(BUILD_DIR)/src/symbol/indexed_tables.o $(BUILD_DIR)/tests/integration/test_symbol_source_native.o $(BUILD_DIR)/src/symbol/source_file.o $(BUILD_DIR)/src/symbol/source_path.o $(BUILD_DIR)/src/symbol/md5.o $(BUILD_DIR)/src/symbol/line.o $(BUILD_DIR)/src/symbol/line_files.o $(BUILD_DIR)/src/symbol/line_reference.o $(BUILD_DIR)/src/symbol/text.o $(BUILD_DIR)/src/symbol/strings.o $(BUILD_DIR)/src/symbol/string_offsets.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/units.o $(BUILD_DIR)/src/symbol/abbrev.o $(BUILD_DIR)/src/symbol/dies.o $(BUILD_DIR)/src/symbol/form.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/reader.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
 
 .PHONY: test-symbol-source-native
@@ -1707,3 +1708,34 @@ test-symbol-source-native: $(BUILD_DIR)/test-symbol-source-native $(BUILD_DIR)/s
 
 test: test-symbol-source-native
 -include $(BUILD_DIR)/tests/integration/test_symbol_source_native.d
+
+
+$(BUILD_DIR)/test-symbol-source-context: $(BUILD_DIR)/tests/unit/test_symbol_source_context.o $(BUILD_DIR)/src/symbol/source_context.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-source-context
+test-symbol-source-context: $(BUILD_DIR)/test-symbol-source-context
+	$(BUILD_DIR)/test-symbol-source-context
+
+test: test-symbol-source-context
+-include $(BUILD_DIR)/tests/unit/test_symbol_source_context.d
+
+$(BUILD_DIR)/test-symbol-source-check: $(BUILD_DIR)/tests/unit/test_symbol_source_check.o $(BUILD_DIR)/src/symbol/source_check.o $(BUILD_DIR)/src/symbol/md5.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-source-check
+test-symbol-source-check: $(BUILD_DIR)/test-symbol-source-check
+	$(BUILD_DIR)/test-symbol-source-check
+
+test: test-symbol-source-check
+-include $(BUILD_DIR)/tests/unit/test_symbol_source_check.d
+
+$(BUILD_DIR)/test-symbol-source-prepare: $(BUILD_DIR)/tests/unit/test_symbol_source_prepare.o $(BUILD_DIR)/src/symbol/source_prepare.o $(BUILD_DIR)/src/symbol/constants.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/code_locations.o $(BUILD_DIR)/src/symbol/range_index.o $(BUILD_DIR)/src/symbol/ranges.o $(BUILD_DIR)/src/symbol/indexed_tables.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-source-prepare
+test-symbol-source-prepare: $(BUILD_DIR)/test-symbol-source-prepare
+	$(BUILD_DIR)/test-symbol-source-prepare
+
+test: test-symbol-source-prepare
+-include $(BUILD_DIR)/tests/unit/test_symbol_source_prepare.d

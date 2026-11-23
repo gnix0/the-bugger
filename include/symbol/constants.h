@@ -4,6 +4,9 @@
 #include "symbol/attributes.h"
 
 typedef enum {
+    TB_SYMBOL_CONSTANT_DECL_COLUMN = 0x39,
+    TB_SYMBOL_CONSTANT_DECL_FILE   = 0x3a,
+    TB_SYMBOL_CONSTANT_DECL_LINE   = 0x3b,
     TB_SYMBOL_CONSTANT_LANGUAGE    = 0x13,
     TB_SYMBOL_CONSTANT_INLINE      = 0x20,
     TB_SYMBOL_CONSTANT_CALL_COLUMN = 0x57,
@@ -65,8 +68,9 @@ typedef struct {
 } TbSymbolConstant_t;
 
 /* LANGUAGE selects a compile/partial/type unit's physical root; INLINE selects
- * a subprogram; CALL_FILE/LINE/COLUMN select a concrete inline instance's direct
- * call-site metadata. File indexes and zero values remain uninterpreted until
+ * a subprogram; DECL_FILE/LINE/COLUMN select direct declaration coordinates
+ * on a physical DIE (inheritance remains a separate selection). CALL_FILE/LINE/COLUMN
+ * select a concrete inline instance's direct call-site metadata. File indexes and zero values remain uninterpreted until
  * the applicable line-table version/dependencies are validated by SE07.
  * Failed initialization preserves state. No unit-header evidence
  * or language inheritance is created by this direct attribute interpreter. */

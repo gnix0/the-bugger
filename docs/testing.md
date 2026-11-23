@@ -3895,8 +3895,8 @@ identical duplicate near the end. Absence, conflict, malformed class/span,
 wrong backing/unit/root/abbreviation context, partial/type roots and indirect
 section-offset encodings remain distinct. These metadata checks perform no
 filesystem discovery, source opening or debugger operations. Composed source
-mapping/correspondence, executable-range and Source-preparation checks remain
-subsequent SE07 work under the
+mapping/correspondence, executable-range and Source-preparation checks are
+covered by the later focused targets below under the
 [line-program contract](native-symbol-engine.md#line-program-foundation-se07-partial).
 
 ## Code-range foundation (SE07, partial)
@@ -4074,7 +4074,41 @@ build/symbol-source/test-symbol-source-native \
 
 `--md5` requires observed checksum matches and changed-byte mismatches. Only this
 explicit fixture harness opens the resolved local fixture paths; the production
-components perform no source access. A digest match is evidence about the tested
-bytes, not production displayed-byte correspondence, runtime mapping or access
-authority. Clang remains optional. See the
+components perform no source access. A digest alone supplies no displayed-byte
+lifetime, runtime mapping or access authority; the next section covers the
+raw-byte lease binding. Clang remains optional. See the
 [source-file/path contract](native-symbol-engine.md#source-file-provenance-and-paths-se07-partial).
+
+
+### Exact Source preparation and displayed-byte correspondence
+
+```sh
+make BUILD_DIR=build/symbol-source-preparation CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-source-context test-symbol-source-prepare test-symbol-source-check \
+  test-symbol-source-native test-symbol-constants test-symbol-inline-details
+```
+
+Context tests compare full recorded/local paths, preserve differing CU and line
+contexts, reject wrong physical roots and require explicit ambiguous choices.
+Preparation tests compose direct declaration/call constants, exact row selections,
+DWARF 4/5 range decoding in both byte orders and bounded 520-row sets. They cover
+repeated addresses/operation indexes, end/unattributed rows, missing ranges,
+wrong dependencies, consumer limits, capacity failure and cancellation without a
+usable prefix. Source-check tests distinguish recorded, match, mismatch and stale
+states for exact immutable raw-byte leases; incomplete snapshots never match.
+
+The native harness now composes complete Source contexts and browsing preparation
+for every non-end fixture row, plus direct function/row associations where that
+producer profile supplies direct PCs. It preserves the exact physical DIE and
+row, checking half-open membership rather than inferring an entry point. Its
+separate indexed/disjoint native range coverage remains in
+`test-symbol-tables-native`; authored Source-preparation tests compose those list
+interfaces with semantic decoding. The optional Clang MD5 commands above also
+exercise source-revision expiry and a changed-byte mismatch through `source_check`.
+No production component opens a local source file or sends debugger traffic.
+
+Compare `PREPARED` unit/DIE/address records with `readelf --debug-dump=info --wide`,
+and `SOURCE`/`CHECKSUM` records with raw-line metadata and an independent source
+digest. These are host foundation checks. Existing Source UI behavior remains
+unchanged; native UI integration and live actions retain SE11/15. See the
+[preparation contract](native-symbol-engine.md#source-preparation-and-byte-correspondence-se07).

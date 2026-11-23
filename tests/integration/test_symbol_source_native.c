@@ -2,12 +2,14 @@
 #include "symbol/source_file.h"
 #include "symbol/source_path.h"
 #include "symbol/text.h"
-#include "symbol/md5.h"
+#include "symbol/source_check.h"
+#include "symbol/source_prepare.h"
 #include "../support/check.h"
 
 #include <fcntl.h>
 #include <gelf.h>
 #include <libelf.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -101,27 +103,41 @@ static void check_source_digest(Elf *elf, uint64_t line_section, TbSymbolSourceF
     Elf_Data *line = elf_getdata(elf_getscn(elf, line_section), NULL);
     CHECK(line && source.md5_offset <= line->d_size && 16 <= line->d_size - source.md5_offset);
     const unsigned char *expected = (const unsigned char *)line->d_buf + source.md5_offset;
-    TbMd5_t hash;
-    CHECK(tb_md5_init(&hash));
-    for (size_t at = 0; at < count;) {
-        size_t chunk = count - at < 7 ? count - at : 7;
-        CHECK(tb_md5_update(&hash, bytes + at, chunk));
-        at += chunk;
-    }
-    unsigned char digest[16];
-    CHECK(tb_md5_final(&hash, count, digest) && !memcmp(digest, expected, 16));
+    static uint64_t identity;
+    TbSymbolSourceBytes_t snapshot = {
+        .data     = bytes,
+        .bytes    = count,
+        .identity = ++identity,
+        .revision = 1,
+        .complete = true
+    };
+    TbSymbolSourceCheck_t check;
+    TbSymbolSourceCheckStatus_e status = tb_symbol_source_check_init(&check, source, snapshot, expected);
+    while (status == TB_SYMBOL_SOURCE_CHECK_PENDING)
+        status = tb_symbol_source_check_step(&check, snapshot, 7);
+    TbSymbolSourceCheckView_t view;
+    CHECK(status == TB_SYMBOL_SOURCE_CHECK_MATCH && tb_symbol_source_check_view(&check, snapshot, &view));
     printf("CHECKSUM path=%s digest=", path);
     for (unsigned i = 0; i < 16; ++i)
-        printf("%02x", digest[i]);
+        printf("%02x", view.calculated[i]);
     puts(" match=1");
+
+    ++snapshot.revision;
+    CHECK(!tb_symbol_source_check_view(&check, snapshot, &view));
+    CHECK(tb_symbol_source_check_step(&check, snapshot, 7) == TB_SYMBOL_SOURCE_CHECK_STALE);
     bytes[0] ^= 1;
-    CHECK(tb_md5_init(&hash) && tb_md5_update(&hash, bytes, count) && tb_md5_final(&hash, count, digest));
-    CHECK(memcmp(digest, expected, 16));
+    status = tb_symbol_source_check_init(&check, source, snapshot, expected);
+    while (status == TB_SYMBOL_SOURCE_CHECK_PENDING)
+        status = tb_symbol_source_check_step(&check, snapshot, 7);
+    CHECK(status == TB_SYMBOL_SOURCE_CHECK_MISMATCH &&
+          tb_symbol_source_check_view(&check, snapshot, &view));
+    tb_symbol_source_check_discard(&check);
 }
 
 
 static void check_line(TbSymbolSectionsView_t directory, TbSymbolLineReferenceView_t reference,
-    TbSymbolSourcePathText_t comp_dir, TbSymbolSourceSections_t roles, Elf *elf, int descriptor,
+    TbSymbolTextView_t comp_dir, TbSymbolSourceSections_t roles, Elf *elf, int descriptor,
+    const TbSymbolCodeLocationsView_t *locations, size_t location_count,
     TbSymbolBudget_t *budget, size_t *source_count, size_t *checksums)
 {
     Elf_Data *data = elf_getdata(elf_getscn(elf, roles.line), NULL);
@@ -196,7 +212,7 @@ static void check_line(TbSymbolSectionsView_t directory, TbSymbolLineReferenceVi
             .directory         = resolve_text(source.directory, directory, descriptor, budget, elf),
             .compilation       = header.version == 5 ?
                                   resolve_text(source.compilation, directory, descriptor, budget, elf) :
-                                  comp_dir,
+                                  text_bytes(elf, comp_dir.text),
             .selected_rule     = SIZE_MAX,
             .directory_current = source.directory_current,
             .directory_unknown = !source.directory_available
@@ -213,6 +229,74 @@ static void check_line(TbSymbolSectionsView_t directory, TbSymbolLineReferenceVi
         CHECK(view.local_available && !view.mapped && view.recorded_bytes == view.local_bytes);
         CHECK(!memcmp(recorded, local, view.local_bytes));
         CHECK(strstr((const char *)local, "/tests/fixtures/native/symbols/"));
+        unsigned char alternate_recorded[4096];
+        unsigned char alternate_local[4096];
+        TbSymbolSourcePath_t alternate_path;
+        TbSymbolSourceCandidate_t primary = {
+            .path   = view,
+            .status = outcome
+        };
+        TbSymbolSourceCandidate_t alternate = {0};
+        if (header.version == 5) {
+            request.compilation = text_bytes(elf, comp_dir.text);
+            alternate.status = tb_symbol_source_path_init(&alternate_path, request,
+                alternate_recorded, sizeof(alternate_recorded), alternate_local, sizeof(alternate_local));
+            while (alternate.status == TB_SYMBOL_SOURCE_PATH_PENDING)
+                alternate.status = tb_symbol_source_path_step(&alternate_path, 17);
+            CHECK(alternate.status == TB_SYMBOL_SOURCE_PATH_COMPLETE &&
+                  tb_symbol_source_path_view(&alternate_path, &alternate.path));
+        }
+        TbSymbolSourceContext_t context;
+        TbSymbolSourceContextStatus_e context_status = tb_symbol_source_context_init(&context, source,
+            primary, header.version == 5 ? &alternate : NULL, &comp_dir, SIZE_MAX);
+        while (context_status == TB_SYMBOL_SOURCE_CONTEXT_PENDING)
+            context_status = tb_symbol_source_context_step(&context, 17);
+        TbSymbolSourcePrepareRequest_t preparation = {
+            .program       = program,
+            .path_capacity = 4096,
+            .line_limit    = INT_MAX
+        };
+        CHECK(context_status == TB_SYMBOL_SOURCE_CONTEXT_READY &&
+              tb_symbol_source_context_view(&context, &preparation.context));
+        TbSymbolSourcePrepare_t prepared;
+        TbSymbolSourcePrepareStatus_e prepared_status = tb_symbol_source_prepare_init(&prepared,
+            preparation, NULL, 0);
+        if (!program.rows[i].line) {
+            CHECK(prepared_status == TB_SYMBOL_SOURCE_PREPARE_ABSENT);
+        } else {
+            while (prepared_status == TB_SYMBOL_SOURCE_PREPARE_PENDING)
+                prepared_status = tb_symbol_source_prepare_step(&prepared, 7);
+            TbSymbolSourcePrepareView_t prepared_view;
+            CHECK(prepared_status == TB_SYMBOL_SOURCE_PREPARE_READY &&
+                  tb_symbol_source_prepare_view(&prepared, &prepared_view));
+            CHECK(prepared_view.line == program.rows[i].line && !prepared_view.count);
+            tb_symbol_source_prepare_discard(&prepared);
+            for (size_t k = 0; k < location_count; ++k) {
+                preparation.code = &locations[k];
+                TbSymbolSourceLocation_t position;
+                prepared_status = tb_symbol_source_prepare_init(&prepared, preparation, &position, 1);
+                while (prepared_status == TB_SYMBOL_SOURCE_PREPARE_PENDING)
+                    prepared_status = tb_symbol_source_prepare_step(&prepared, 7);
+                CHECK(prepared_status == TB_SYMBOL_SOURCE_PREPARE_READY &&
+                      tb_symbol_source_prepare_view(&prepared, &prepared_view));
+                bool inside = program.rows[i].address >= locations[k].low &&
+                              program.rows[i].address < locations[k].end;
+                CHECK(prepared_view.count == (inside ? 1U : 0U));
+                if (inside) {
+                    const TbSymbolAttributeResult_t *record =
+                        &locations[k].code.fields[TB_SYMBOL_CODE_LOW].selection;
+                    CHECK(position.row == i && position.position.address == program.rows[i].address);
+                    printf("PREPARED unit=0x%llx die=0x%llx row=%zu address=0x%llx\n",
+                           (unsigned long long)reference.source.unit_offset,
+                           (unsigned long long)record->record_offset,
+                           i, (unsigned long long)position.position.address);
+                }
+                tb_symbol_source_prepare_discard(&prepared);
+            }
+        }
+        tb_symbol_source_context_discard(&context);
+        if (header.version == 5)
+            tb_symbol_source_path_discard(&alternate_path);
         printf("SOURCE unit=0x%llx table=0x%llx row=%zu file=%llu entry=0x%llx path=%s\n",
                (unsigned long long)reference.source.unit_offset, (unsigned long long)reference.line_offset,
                i, (unsigned long long)source.file_index, (unsigned long long)source.file_offset, local);
@@ -230,6 +314,30 @@ static void check_line(TbSymbolSectionsView_t directory, TbSymbolLineReferenceVi
     free(rows);
     free(fields);
     free(entries);
+}
+
+
+static TbSymbolCodeView_t direct_code(TbSymbolUnitsView_t units, TbSymbolDiesView_t tree,
+    uint64_t unit_index, uint64_t die_index, const TbSymbolAbbrev_t *abbrev)
+{
+    TbSymbolCode_t code;
+    TbSymbolCodeStatus_e status = tb_symbol_code_init(&code, units, tree, (TbSymbolCodeSelection_t) {
+        .unit_index = unit_index,
+        .die_index  = die_index
+    });
+    while (status == TB_SYMBOL_CODE_PENDING || status == TB_SYMBOL_CODE_SCHEMA) {
+        if (status == TB_SYMBOL_CODE_SCHEMA) {
+            TbSymbolAbbrevView_t schema;
+            CHECK(tb_symbol_abbrev_view(abbrev, &schema));
+            status = tb_symbol_code_schema(&code, &schema);
+        } else {
+            status = tb_symbol_code_step(&code, 17);
+        }
+    }
+    TbSymbolCodeView_t view;
+    CHECK(status == TB_SYMBOL_CODE_COMPLETE && tb_symbol_code_view(&code, &view));
+    tb_symbol_code_discard(&code);
+    return view;
 }
 
 
@@ -322,8 +430,35 @@ int main(int argc, char **argv)
         CHECK(text_status == TB_SYMBOL_TEXT_FOUND && tb_symbol_text_view(directory_text, &comp_dir));
         CHECK(comp_dir.source_unit == selected.source.unit_offset &&
               comp_dir.source_record == tree.entries[0].offset);
-        check_line(directory, selected, text_bytes(elf, comp_dir.text), roles, elf, descriptor, &budget,
-                   &sources, &checksums);
+        TbSymbolCodeView_t root = direct_code(inventory, tree, i, 0, abbrev);
+        CHECK(tree.count <= SIZE_MAX / sizeof(TbSymbolCodeLocationsView_t));
+        TbSymbolCodeLocationsView_t *locations = calloc((size_t)tree.count, sizeof(*locations));
+        CHECK(locations);
+        size_t location_count = 0;
+        for (uint64_t die = 1; die < tree.count; ++die) {
+            if (tree.entries[die].tag != 0x2e)
+                continue;
+
+            TbSymbolCodeView_t function = direct_code(inventory, tree, i, die, abbrev);
+            /* Indexed/disjoint paths have their full separate native harness;
+             * this composition check adds exact direct function-row binding. */
+            if (!function.interval_available || root.fields[TB_SYMBOL_CODE_LOW].kind ==
+                                                TB_SYMBOL_CODE_ADDRESS_INDEX)
+                continue;
+
+            TbSymbolCodeLocationsStatus_e located = tb_symbol_code_locations_prepare(
+                (TbSymbolCodeLocationsRequest_t) {
+                    .code       = function,
+                    .root       = root,
+                    .byte_order = directory.header->byte_order
+                }, &locations[location_count]);
+            CHECK(located == TB_SYMBOL_CODE_LOCATIONS_COMPLETE);
+            CHECK(locations[location_count].interval_available && !locations[location_count].list_available);
+            ++location_count;
+        }
+        check_line(directory, selected, comp_dir, roles, elf, descriptor, locations, location_count,
+                   &budget, &sources, &checksums);
+        free(locations);
         tb_symbol_text_destroy(directory_text);
         tb_symbol_line_reference_discard(&reference);
         tb_symbol_dies_destroy(dies);

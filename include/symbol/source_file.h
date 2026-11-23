@@ -50,6 +50,7 @@ typedef struct {
     uint64_t                      timestamp;
     uint64_t                      bytes;
     uint64_t                      md5_offset;
+    unsigned                      line_version;
     bool                          dynamic;
     bool                          directory_available;
     bool                          directory_current;

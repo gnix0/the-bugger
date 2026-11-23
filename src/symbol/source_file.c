@@ -145,6 +145,7 @@ TbSymbolSourceFileStatus_e tb_symbol_source_file_init(TbSymbolSourceFile_t *file
             .reference    = reference,
             .selection    = selection,
             .line_section = sections.line,
+            .line_version = files.header.version,
             .path         = absent_text(),
             .directory    = absent_text(),
             .compilation  = absent_text(),

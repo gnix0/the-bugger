@@ -8787,3 +8787,107 @@ and live-debugger behavior is unchanged.
 
 Normal `make` rebuilt `build/the-bugger` successfully. Whitespace/style review
 and 290 internal documentation-link checks passed. No Source UI behavior changed.
+
+## Source-provenance host closeout — 2026-11-23
+
+The fresh fortified run in `build/se07-source-owner-20261123/` passed all 170
+individual test commands and fortified compilation of all 157 C test sources.
+All 451 captured input hashes matched. Complete analysis processed 94 production
+sources and failed on one MD5 byte-offset multiplication whose unsigned index
+was implicitly widened to `size_t`. No test failed.
+
+The bounded 16-word index now uses `size_t`, preserving offsets 0–63 and all
+algorithm behavior. Focused MD5 and four-profile native-source checks passed.
+Complete `make -k analyze` then passed all 94 sources without actionable
+diagnostics. The corrected snapshot differed from the passing baseline only in
+`src/symbol/md5.c`; all 451 inputs remained unchanged during analysis. The
+original failure is retained separately from the successful rerun in
+`build/se07-source-fix-20261123/`. Full review records are
+`build/se07-source-evidence-20261123/full-review.json` and the correction's
+`review.json`. This closes the previous delivery's local host checks, without
+claiming hosted CI, physical qualification or SE07/F07 acceptance.
+
+## Composed Source preparation — 2026-11-23
+
+Implemented the [Source preparation and byte-correspondence contract](native-symbol-engine.md#source-preparation-and-byte-correspondence-se07).
+Exact file views now retain their line-table version. Complete paths from line
+and CU compilation contexts retain independent provenance and require agreement
+or an explicit choice. Declaration/call constants keep their physical owners and
+unit numbering. Source rows remain distinct across repeated addresses and
+operation indexes; direct and disjoint range membership never infers an entry
+point or runtime authority.
+
+Focused fortified checks passed (exit 0):
+
+```sh
+make BUILD_DIR=build/se07-final-focused-20261123 CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-source-file test-symbol-source-prepare test-symbol-source-context \
+  test-symbol-source-check test-symbol-source-native test-symbol-constants \
+  test-symbol-inline-details
+```
+
+Authored cases cover context disagreement despite identical mapped local paths,
+explicit alternatives, wrong roots, unavailable context, direct declaration/call
+values, cross-unit ambiguity, zero/absent coordinates and exact row selection.
+Composed range decoding covers DWARF 4/5 with both byte orders, disjoint intervals,
+repeated addresses, operation indexes and excluded endpoints. Consumer path/line
+limits, arena arithmetic/exhaustion, missing or mismatched list dependencies,
+cancellation and progress exhaustion expose no accepted candidate prefix. A
+520-row case requires multiple service calls within the stated step bound.
+
+Raw-source checks distinguish complete match, mismatch, recorded-only browsing
+and stale leases. Identity, revision, pointer/length or completeness changes
+withdraw correspondence. Partial source never produces a verified-prefix digest;
+empty complete source remains hashable. The owner must retain immutable bytes
+and advance the revision before mutation; these checks cannot detect a caller
+violating that ownership contract.
+
+The native harness composes retained parsing, exact file selections, context
+reconciliation and recorded Source preparation. Four GCC 16.2.1 DWARF 4/5
+ordinary/disjoint fixtures each produced 59 direct function/row associations.
+Independent GNU binutils 2.47 `readelf` info dumps matched every physical CU/DIE
+and half-open interval for all 236 associations. Indexed/disjoint native range
+coverage remains in the separately recorded table/range harness; the new composed
+Source list tests are authored inputs, not additional producer configurations.
+
+Across those four GCC and two optional Clang 23.1.5 DWARF 5 profiles, independent
+info/raw-line comparison matched all 306 full-path observations. Both Clang
+profiles also supplied 70 recorded MD5 observations, matching Python `hashlib` and
+raw metadata. The maintained native harness now exercises these through
+`source_check`, including revision expiry and changed-byte mismatch. Counts
+include repeated observations of fixture source files, not distinct files.
+Clang's indexed function-PC profile remains outside this harness's direct-PC
+composition check and retains the separate indexed-table evidence.
+
+Focused Clang ASan/UBSan checks passed, including stack-use-after-return detection:
+
+```sh
+UBSAN_OPTIONS=halt_on_error=1 ASAN_OPTIONS=detect_stack_use_after_return=1 \
+make BUILD_DIR=build/se07-final-sanitize-20261123 CC=clang \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' \
+  test-symbol-source-file test-symbol-source-prepare test-symbol-source-context \
+  test-symbol-source-check test-symbol-source-native
+```
+
+Both optional Clang profiles also passed the instrumented native harness with
+`--md5`. Logs, statuses, commands, tool versions, input snapshots, reference dumps
+and comparisons are retained under `build/se07-final-evidence-20261123/`.
+The only executable-code edit after these focused snapshots wrapped the context
+constructor guard without changing tokens or behavior; that distinction is
+recorded alongside the snapshots. Subsequent documentation changes do not alter
+the tested implementation. A subsequent focused context check also passed for
+an explicit unit choice when the default line context is unsupported; its log is
+`context-alternate.log` in that evidence directory.
+
+SE07 implementation is complete within the agreed envelope. Fresh complete
+fortified baseline, complete analysis, fortified test-source compilation and
+maintainer acceptance remain pending for this batch. Native UI, owned frontend
+facts/publication and live Source actions retain their later gates. Existing
+Source behavior is unchanged. No hosted CI, remote or physical result is claimed.
+
+Normal `make` rebuilt `build/the-bugger` successfully. Review of changed C regions,
+whitespace checks and 293 internal documentation links passed. A final fixture
+output cleanup passed the four-profile native target again; it changes no
+production behavior or emitted selection records.
