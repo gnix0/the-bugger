@@ -8430,3 +8430,33 @@ production sizing, frontend publication and native actions retain their gates.
 
 Normal `make`, whitespace/style review and 267 internal documentation-link checks
 passed. The normal application binary was rebuilt; no Source UI behavior changed.
+
+### Range-dispatch validation correction
+
+Inspection of `build/se07-ranges-owner-20261123/` confirmed that all 155
+individual test commands and fortified compilation of all 148 C test sources
+passed. The run used clean commit `4fe0b38`, with 428 unchanged recorded inputs.
+Complete analysis reached all 87 production sources but exited 2 with one
+null-dereference diagnostic in range-list dispatch: an unrecognized internal
+phase could bypass the byte-phase input checks and reach the fallback byte read,
+including during zero-byte EOF completion.
+
+Byte decoding now dispatches only for the three checked byte phases; an invalid
+phase terminates with `INVALID` and exposes no completed view. Valid decoding,
+indexed dependency requests and bounded zero-byte sorting retain their behavior.
+Regression checks cover invalid phases with both EOF and available bytes,
+including zero consumption and unavailable results. No diagnostic suppression or
+existing assertion was weakened.
+
+Focused fortified `test-symbol-ranges`, `test-symbol-line-native` and
+`test-symbol-ranges-native` checks passed after correction (exit 0), using
+`BUILD_DIR=build/se07-ranges-focused-20261123 CPPFLAGS=-D_FORTIFY_SOURCE=3`.
+The changed source also passed the complete configured analysis checks in a
+focused invocation, and normal `make` passed. Corrected logs, commands and input
+records are retained under `build/se07-ranges-fix-20261123/`; the original failed
+run remains intact.
+
+The full passing baseline and test-source compilation evidence remains
+applicable to valid decoder behavior; the added regression checks passed in the
+focused run. Complete analysis on the corrected snapshot remains pending.
+SE07/F07 acceptance, hosted CI and physical qualification remain outstanding.

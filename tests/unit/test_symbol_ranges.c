@@ -365,6 +365,17 @@ static void check_limits_and_lifetimes(void)
     CHECK(tb_symbol_ranges_init(&ranges, request, records, 4, intervals, 2) == TB_SYMBOL_RANGES_UNSUPPORTED);
     CHECK(!memcmp(&old, &ranges, sizeof(ranges)));
     request.segment_bytes = 0;
+    seal(4, 2);
+    ranges.phase = ~0U;
+    CHECK(tb_symbol_ranges_finish(&ranges) == TB_SYMBOL_RANGES_INVALID);
+    TbSymbolRangesView_t invalid_view;
+    CHECK(!tb_symbol_ranges_view(&ranges, &invalid_view));
+
+    seal(4, 2);
+    ranges.phase = ~0U;
+    CHECK(tb_symbol_ranges_feed(&ranges, image, used, &consumed) == TB_SYMBOL_RANGES_INVALID);
+    CHECK(consumed == 0 && !tb_symbol_ranges_view(&ranges, &invalid_view));
+
     for (size_t boundary = 0; boundary <= used; ++boundary) {
         seal(4, 2);
         (void)tb_symbol_ranges_feed(&ranges, image, boundary, &consumed);

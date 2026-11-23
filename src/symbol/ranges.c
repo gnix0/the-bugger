@@ -388,13 +388,15 @@ TbSymbolRangesStatus_e tb_symbol_ranges_feed(TbSymbolRanges_t *ranges, const voi
             sort_step(ranges);
         } else if (ranges->phase == RANGES_CHECK) {
             check_step(ranges);
-        } else {
+        } else if (byte_phase) {
             unsigned char byte = input[(*consumed)++];
             ++ranges->cursor;
             if (ranges->phase == RANGES_OPCODE)
                 opcode(ranges, byte);
             else
                 operand_byte(ranges, byte);
+        } else {
+            fail(ranges, TB_SYMBOL_RANGES_INVALID);
         }
     }
 
