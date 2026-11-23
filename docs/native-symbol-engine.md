@@ -38,7 +38,8 @@ SE07 includes [line/file decoding](#line-program-foundation-se07-partial),
 [code-location composition](#code-location-composition-se07-partial), plus
 [source-file provenance and paths](#source-file-provenance-and-paths-se07-partial) and
 [composed Source preparation and byte correspondence](#source-preparation-and-byte-correspondence-se07).
-SE07 implementation now awaits final host verification and maintainer acceptance.
+SE07 local verification and maintainer acceptance are recorded in the
+[delivery closeout](validation.md#se07-delivery-closeout--2026-11-23).
 Artifact Open workflow, qualified acquisition profiles, complete semantic
 interpretation and consumers remain unfinished. Unknown helper operations return
 Unsupported.
@@ -923,8 +924,9 @@ All three components use caller-owned/accounted state, inputs and full-capacity
 arenas; they allocate nothing and publish no frontend guarantee. Their borrowed
 views are metadata preparation, not independently retained prepared-action facts
 or a public ABI. SE09/10/11/12 retain publication, sizing, UI and owned-fact work.
-SE07 implementation is complete within this supported envelope; final host
-verification and maintainer acceptance remain explicit gates.
+SE07 is complete within this supported envelope, with local verification and
+maintainer acceptance recorded in the
+[delivery closeout](validation.md#se07-delivery-closeout--2026-11-23).
 
 ## Committed searches and result windows
 

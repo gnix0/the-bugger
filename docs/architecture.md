@@ -1617,8 +1617,9 @@ underlying a Source display and expires the claim when its lease changes. These
 are bounded, allocation-free metadata components. The
 [authoritative preparation/consumer contract](native-symbol-engine.md#source-preparation-and-byte-correspondence-se07)
 defines Source limits, complete-versus-partial bytes and the later UI/action
-boundaries. SE07 implementation awaits final host verification and acceptance;
-production publication, sizing and consumer integration retain their own gates.
+boundaries. SE07 local verification and maintainer acceptance are recorded in
+the [delivery closeout](validation.md#se07-delivery-closeout--2026-11-23). Production
+publication, sizing and consumer integration retain their own gates.
 
 ### Event loop and text rendering
 

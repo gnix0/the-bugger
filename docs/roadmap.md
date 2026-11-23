@@ -219,7 +219,7 @@ independently below; symbol discovery and live native actions remain unavailable
 | SE04 | ELF foundation | In progress: retained-file reads, ELF records and scoped directory/symbol validation integrated with the helper; frontend evidence and production qualification remain |
 | SE05 | DWARF structure | In progress: bounded DWARF 4–5 headers, selected header inventories, abbreviation tables, attribute forms, selected DIE trees, reference targeting, unique attribute selection and composed string dependencies; semantic consumers and shared evidence ownership follow |
 | SE06 | DWARF definitions and names | Complete within the documented metadata profile; [local verification and maintainer acceptance recorded](validation.md#se06-delivery-closeout--2026-11-22) |
-| SE07 | Native line tables and ranges | Implemented: versions 2–5, exact file/path provenance, direct/indexed/disjoint ranges, [Source preparation and byte correspondence](native-symbol-engine.md#source-preparation-and-byte-correspondence-se07). Final host verification and maintainer acceptance pending; UI/live actions remain SE11/15 |
+| SE07 | Native line tables and ranges | Complete within the documented metadata profile; [local verification and maintainer acceptance recorded](validation.md#se07-delivery-closeout--2026-11-23). Native UI/live actions remain SE11/15 |
 | SE08 | Explicit debug companions | Planned |
 | SE09–SE10 | Complete bounded discovery/publication and actual production sizing | Planned |
 | SE11 | Offline artifact/Symbols/Source UI; may be accepted before runtime resolution | Planned |
