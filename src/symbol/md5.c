@@ -26,7 +26,7 @@ static const unsigned shifts[4][4] = {
 static void block(TbMd5_t *context, const unsigned char *bytes)
 {
     uint32_t words[16];
-    for (unsigned i = 0; i < 16; ++i) {
+    for (size_t i = 0; i < 16; ++i) {
         words[i] = (uint32_t)bytes[4 * i] | (uint32_t)bytes[4 * i + 1] << 8U |
                    (uint32_t)bytes[4 * i + 2] << 16U | (uint32_t)bytes[4 * i + 3] << 24U;
     }
