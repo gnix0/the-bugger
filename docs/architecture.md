@@ -1549,6 +1549,26 @@ keep source mapping/checksum correspondence, executable ranges and runtime
 addresses separate. Existing Source still uses its GDB-known-file path; native
 Source preparation and frontend integration retain their own gates.
 
+### Code-range metadata (SE07, partial)
+
+`src/symbol/indexed_tables.c` frames version-5 address/range-table contributions
+and checks selected numeric entries. `src/symbol/ranges.c` interprets legacy
+range pairs and all standard version-5 range records over explicitly supplied
+bytes. It requests indexed addresses against a captured table rather than
+performing discovery or I/O. Caller-owned/accounted records preserve encoded
+order and coordinates; intervals retain physical provenance through bounded
+sorting and overlap checks. Complete views require the end marker, dependencies
+and all interval validation, with no usable prefix on failure.
+
+The [range contract](native-symbol-engine.md#code-range-foundation-se07-partial)
+keeps header framing, CU/base relationships, list-boundary proof, ELF executable
+storage and runtime mapping separate. Native tests compose exact root attributes,
+sequentially reached contributions/lists, file-backed executable ELF segments and
+line-row coverage, including disjoint function-section fixtures. Those fixture
+observations do not supply a production Source preparation interface or qualify
+all producer profiles. Direct DIE low/high-PC interpretation, source paths and
+composed Source evidence remain subsequent SE07 work; UI/actions retain SE11/15.
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

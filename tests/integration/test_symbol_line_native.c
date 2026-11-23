@@ -2,6 +2,7 @@
 #include "symbol/line_files.h"
 #include "symbol/line_reference.h"
 #include "symbol/strings.h"
+#include "symbol/ranges.h"
 #include "../support/check.h"
 
 #include <fcntl.h>
@@ -38,11 +39,21 @@ static Elf_Data *section(Elf *elf, const char *name)
 
 
 typedef struct {
+    TbSymbolAttributeResult_t source;
+    TbSymbolRangesRequest_t   request;
+    TbSymbolRange_t           intervals[16];
+    size_t                    count;
+    uint64_t                  line_offset;
+} RangeFixture_t;
+
+typedef struct {
     TbSymbolBudget_t              budget;
     TbSymbolSections_t           *sections;
     TbSymbolSectionsView_t        directory;
     TbSymbolLineReferenceView_t   references[16];
     size_t                        reference_count;
+    RangeFixture_t                ranges[16];
+    size_t                        range_count;
     uint64_t                      line_section;
     uint64_t                      string_section;
     uint64_t                      line_string_section;
@@ -66,6 +77,23 @@ static uint64_t section_index(Elf *elf, const char *name)
     }
 
     return found;
+}
+
+
+static const TbSymbolDieAttribute_t *root_attribute(TbSymbolDiesView_t tree, uint64_t name,
+                                                    TbSymbolAttributeResult_t *scope)
+{
+    TbSymbolAttributes_t lookup;
+    CHECK(tb_symbol_attributes_init(&lookup, tree, (TbSymbolAttributeSelection_t) {
+        .die_index = 0,
+        .name      = name
+    }) == TB_SYMBOL_ATTRIBUTE_PENDING);
+    TbSymbolAttributeStatus_e status = TB_SYMBOL_ATTRIBUTE_PENDING;
+    while (status == TB_SYMBOL_ATTRIBUTE_PENDING)
+        status = tb_symbol_attributes_step(&lookup, 31);
+    CHECK(status == TB_SYMBOL_ATTRIBUTE_UNIQUE || status == TB_SYMBOL_ATTRIBUTE_MISSING);
+    CHECK(tb_symbol_attributes_result(&lookup, scope) == status);
+    return status == TB_SYMBOL_ATTRIBUTE_UNIQUE ? &tree.attributes[scope->first_index] : NULL;
 }
 
 
@@ -136,12 +164,136 @@ static void source_fixture(SourceFixture_t *fixture, Elf *elf, int descriptor)
             status = tb_symbol_line_reference_step(&reference, 31);
         CHECK(status == TB_SYMBOL_LINE_REFERENCE_FOUND);
         CHECK(tb_symbol_line_reference_view(&reference, &fixture->references[fixture->reference_count++]));
+        TbSymbolAttributeResult_t range_scope;
+        const TbSymbolDieAttribute_t *range = root_attribute(tree, 0x55, &range_scope);
+        if (range) {
+            CHECK(fixture->range_count < 16);
+            CHECK(range->value.form == TB_SYMBOL_FORM_SEC_OFFSET && range->value.numeric);
+            TbSymbolAttributeResult_t base_scope;
+            const TbSymbolDieAttribute_t *base = root_attribute(tree, 0x11, &base_scope);
+            CHECK(base && base->value.form == TB_SYMBOL_FORM_ADDR && base->value.numeric);
+            fixture->ranges[fixture->range_count++] = (RangeFixture_t) {
+                .source = range_scope,
+                .request = {
+                    .offset         = range->value.bits,
+                    .base           = base->value.bits,
+                    .byte_order     = fixture->directory.header->byte_order,
+                    .version        = inventory.entries[i].header.version,
+                    .address_bytes  = inventory.entries[i].header.address_bytes,
+                    .base_available = true
+                },
+                .line_offset = fixture->references[fixture->reference_count - 1].line_offset
+            };
+        }
+
         tb_symbol_line_reference_discard(&reference);
         tb_symbol_dies_destroy(dies);
         tb_symbol_abbrev_destroy(abbrev);
     }
 
     tb_symbol_units_destroy(units);
+}
+
+
+static void check_range_storage(Elf *elf, TbSymbolRange_t range)
+{
+    if (range.begin == range.end)
+        return;
+
+    size_t count;
+    CHECK(elf_getphdrnum(elf, &count) == 0);
+    bool found = false;
+    for (size_t i = 0; i < count; ++i) {
+        GElf_Phdr segment;
+        CHECK(gelf_getphdr(elf, (int)i, &segment));
+        uint64_t end;
+        CHECK(tb_symbol_add(segment.p_vaddr, segment.p_filesz, &end));
+        if (segment.p_type == PT_LOAD && (segment.p_flags & PF_X) &&
+            range.begin >= segment.p_vaddr && range.end <= end) {
+            found = true;
+        }
+    }
+    CHECK(found);
+}
+
+
+static void check_range_lists(SourceFixture_t *fixture, Elf *elf, unsigned version)
+{
+    CHECK(fixture->range_count);
+    Elf_Data *data = section(elf, version == 4 ? ".debug_ranges" : ".debug_rnglists");
+    CHECK(data->d_size < 1024 * 1024);
+    size_t capacity = data->d_size + 1;
+    TbSymbolRangeRecord_t *records = calloc(capacity, sizeof(*records));
+    TbSymbolRange_t *intervals = calloc(capacity, sizeof(*intervals));
+    CHECK(records && intervals);
+    uint64_t offset = 0;
+    size_t lists = 0;
+    size_t count = 0;
+    while (offset < data->d_size) {
+        uint64_t limit = data->d_size;
+        unsigned contribution_width = 0;
+        if (version == 5) {
+            TbSymbolIndexedTable_t table;
+            CHECK(tb_symbol_indexed_table_header(TB_SYMBOL_TABLE_RANGES, (TbSymbolDwarfSpan_t) {
+                .section_bytes = data->d_size,
+                .unit_offset   = offset,
+                .byte_order    = fixture->directory.header->byte_order
+            }, (const unsigned char *)data->d_buf + offset, data->d_size - (size_t)offset, &table) ==
+                  TB_SYMBOL_DWARF_OK);
+            /* This GCC profile uses sec_offset and no offset array. Indexed
+             * address/range forms have separate authored coverage. */
+            CHECK(table.count == 0 && table.segment_bytes == 0);
+            contribution_width = table.address_bytes;
+            offset = table.lists_offset;
+            limit = table.extent.end_offset;
+        }
+        while (offset < limit) {
+            RangeFixture_t *selected = NULL;
+            for (size_t i = 0; i < fixture->range_count; ++i) {
+                if (fixture->ranges[i].request.offset == offset) {
+                    CHECK(!selected);
+                    selected = &fixture->ranges[i];
+                }
+            }
+            CHECK(selected);
+            CHECK(version == 4 || selected->request.address_bytes == contribution_width);
+            selected->request.end_offset = limit;
+            TbSymbolRanges_t ranges;
+            CHECK(tb_symbol_ranges_init(&ranges, selected->request, records, capacity,
+                  intervals, capacity) == TB_SYMBOL_RANGES_PENDING);
+            size_t cursor = (size_t)offset;
+            while (ranges.status == TB_SYMBOL_RANGES_PENDING) {
+                size_t consumed;
+                uint64_t before = ranges.progress;
+                (void)tb_symbol_ranges_feed(&ranges, (const unsigned char *)data->d_buf + cursor,
+                                             (size_t)limit - cursor, &consumed);
+                CHECK(consumed <= 256 && (consumed || ranges.progress > before));
+                cursor += consumed;
+            }
+            TbSymbolRangesView_t view;
+            CHECK(ranges.status == TB_SYMBOL_RANGES_COMPLETE && tb_symbol_ranges_view(&ranges, &view));
+            CHECK(view.end_offset == cursor && view.range_count && view.range_count <= 16);
+            selected->count = view.range_count;
+            for (size_t i = 0; i < view.range_count; ++i) {
+                selected->intervals[i] = view.ranges[i];
+                check_range_storage(elf, view.ranges[i]);
+                printf("RANGE v%u list=0x%llx begin=0x%llx end=0x%llx\n", version,
+                       (unsigned long long)offset, (unsigned long long)view.ranges[i].begin,
+                       (unsigned long long)view.ranges[i].end);
+            }
+            count += view.range_count;
+            ++lists;
+            offset = view.end_offset;
+            tb_symbol_ranges_discard(&ranges);
+            if (version == 4)
+                break;
+        }
+    }
+    CHECK(lists == fixture->range_count);
+    printf("PASS native v%u ranges: %zu CU lists, %zu intervals in executable file-backed segments\n",
+           version, lists, count);
+    free(intervals);
+    free(records);
 }
 
 
@@ -236,7 +388,7 @@ static int frozen_fixture(const char *path, char *temporary)
 }
 
 
-static void check_file(const char *path, unsigned expected_version)
+static void check_file(const char *path, unsigned expected_version, bool require_disjoint)
 {
     char temporary[] = "/tmp/tb-symbol-line-XXXXXX";
     int descriptor = frozen_fixture(path, temporary);
@@ -276,6 +428,15 @@ static void check_file(const char *path, unsigned expected_version)
 
     SourceFixture_t fixture;
     source_fixture(&fixture, elf, descriptor);
+    check_range_lists(&fixture, elf, expected_version);
+    if (require_disjoint) {
+        bool disjoint = false;
+        for (size_t i = 0; i < fixture.range_count; ++i) {
+            if (fixture.ranges[i].count > 1)
+                disjoint = true;
+        }
+        CHECK(disjoint);
+    }
     size_t matched_references = 0;
     size_t capacity = data->d_size + 1;
     TbSymbolLineRow_t *rows = calloc(capacity, sizeof(*rows));
@@ -355,6 +516,19 @@ static void check_file(const char *path, unsigned expected_version)
                         ++available_files;
                 }
                 CHECK(view.rows[i].file - (header.version < 5 ? 1U : 0U) < available_files);
+                for (size_t group = 0; group < fixture.range_count; ++group) {
+                    const RangeFixture_t *selected = &fixture.ranges[group];
+                    if (selected->line_offset != offset)
+                        continue;
+                    bool covered = false;
+                    for (size_t member = 0; member < selected->count; ++member) {
+                        if (view.rows[i].address >= selected->intervals[member].begin &&
+                            view.rows[i].address < selected->intervals[member].end) {
+                            covered = true;
+                        }
+                    }
+                    CHECK(covered);
+                }
             }
             if (!view.rows[i].end_sequence && view.rows[i].address == main_address)
                 main_seen = true;
@@ -381,8 +555,10 @@ static void check_file(const char *path, unsigned expected_version)
 
 int main(int argc, char **argv)
 {
-    CHECK(argc == 3 && elf_version(EV_CURRENT) != EV_NONE);
-    check_file(argv[1], 4);
-    check_file(argv[2], 5);
+    CHECK((argc == 3 || argc == 4) && elf_version(EV_CURRENT) != EV_NONE);
+    if (argc == 4)
+        CHECK(!strcmp(argv[3], "--disjoint"));
+    check_file(argv[1], 4, argc == 4);
+    check_file(argv[2], 5, argc == 4);
     return 0;
 }

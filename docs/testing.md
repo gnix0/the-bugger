@@ -3898,3 +3898,38 @@ filesystem discovery, source opening or debugger operations. Composed source
 mapping/correspondence, executable-range and Source-preparation checks remain
 subsequent SE07 work under the
 [line-program contract](native-symbol-engine.md#line-program-foundation-se07-partial).
+
+## Code-range foundation (SE07, partial)
+
+```sh
+make BUILD_DIR=build/symbol-ranges CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-indexed-tables test-symbol-ranges \
+  test-symbol-line-native test-symbol-ranges-native
+```
+
+The table target checks both offset formats, both byte orders and address widths
+1/2/4/8 at nonzero contribution offsets. Address and range-offset framing remain
+separate. Cases cover index bounds, offsets relative to the offset array,
+truncated headers/entries, unsupported versions/widths/selectors, malformed
+payload lengths and preserved failure outputs.
+
+Range cases cover both versions/byte orders, all numeric widths and fragmented
+feeds. Every standard version-5 kind is exercised, including explicit indexed
+address requests, unavailable dependencies and wrong-context supply rejection.
+Zero bases differ from missing bases. Base/end records, empty intervals and
+physical order remain available after interval sorting. Cases include reversed
+bounds, target-width/64-bit overflow, unknown opcodes, wide LEB operands,
+resource limits, overlap, EOF, adjacent-list bytes, suspended discard and 520
+reverse-ordered intervals requiring multiple bounded sort/finish slices.
+
+The native targets compose line, file and CU metadata from the maintained C++
+fixtures with exact root range/base attributes. The disjoint target builds the
+same sources with `-ffunction-sections -Wl,--sort-section=name` and requires a
+multi-interval CU. All lists are reached by sequential traversal, intervals lie
+within file-backed executable ELF segments, and associated ordinary line rows
+are covered. GCC DWARF 4/5 fixtures currently use direct section offsets without
+indexed address operands; authored cases cover indexed encodings separately.
+These checks do not establish every producer profile, source correspondence,
+instruction boundaries, standalone entry points, runtime mapping or target access.
+The [authoritative range contract](native-symbol-engine.md#code-range-foundation-se07-partial)
+retains the remaining Source/consumer gates.

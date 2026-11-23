@@ -31,7 +31,8 @@ The supported [callable grammar](#descriptive-callable-recipes-se06) and
 [concrete-inline inventories](#concrete-inline-details-se06) complete the SE06
 implementation scope; composed host verification and maintainer acceptance
 are recorded in the [SE06 delivery closeout](validation.md#se06-delivery-closeout--2026-11-22).
-SE07 begins with [bounded numeric line-program decoding](#line-program-foundation-se07-partial).
+SE07 includes [line/file decoding](#line-program-foundation-se07-partial) and
+[code-range foundations](#code-range-foundation-se07-partial); composed Source preparation remains.
 Artifact Open workflow, qualified acquisition profiles, complete semantic
 interpretation and consumers remain unfinished. Unknown helper operations return
 Unsupported.
@@ -541,6 +542,67 @@ because bytes there resemble a header. CU address width remains independent of
 line-table version and offset format. These components grant no executable-range,
 runtime-mapping, source-file correspondence or action authority. Composed Source
 preparation and durable frontend evidence ownership remain subsequent work.
+
+### Code-range foundation (SE07, partial)
+
+The allocation/I/O-free range components decode uncompressed, non-split DWARF 4
+`.debug_ranges` lists and all eight standard DWARF 5 `.debug_rnglists` record
+kinds. Address widths 1/2/4/8 and target byte order remain independent of the
+DWARF32/64 offset representation. Segmented and wider numeric addressing remain
+explicitly unsupported. These are artifact-address metadata, not executable
+instruction boundaries, standalone entries, runtime mappings or access authority.
+
+`indexed_tables` decodes the fixed version-5 `.debug_addr` and `.debug_rnglists`
+contribution prefixes in at most 20 bytes. It validates array framing and checked
+entry offsets without loading an entire table. Address entries and range-offset
+entries retain distinct kinds. Range offsets are relative to the beginning of
+the offset array, not the contribution start. A selected range-offset entry must
+point into the list area, but that check does not prove a physical list boundary.
+Nonzero unsupported address/selector widths can retain header framing without
+numeric interpretation. Entry decoding inspects at most eight bytes.
+
+The caller explicitly establishes section roles, frozen-content ownership,
+contribution/list boundaries, CU association, relocation applicability and the
+exact `addr_base`/`rnglists_base` relationships. A plausible interior header or
+list is insufficient. These primitives do not discover sections, inherit missing
+bases or select an address table automatically. Full contribution inventories,
+DIE low/high-PC interpretation and composed Source evidence remain separate work.
+
+The list machine retains every encoded record in physical order, with exact
+record/operand spans, original numeric operands and any supplied indexed-address
+values. Legacy base-selection and end records retain both encoded operands;
+their normalized kinds do not invent an on-wire opcode. Intervals retain their
+source record ordinal and applicable base provenance. An absent initial CU base
+is distinct from a validated zero base. Relative entries require an established
+applicable base; explicit base records change only their own list. Checked
+arithmetic rejects underflow/reversed bounds, overflow and values outside the
+supported target address width. No reserved-address behavior from DWARF 6 is
+silently applied to older formats.
+
+An indexed address operand pauses with an explicit request against the captured
+address-table header. Supply must match the exact requested index, entry offset
+and unchanged header. An incorrect supply preserves the request; an unavailable
+dependency fails explicitly. Resolution performs no filesystem/debugger work.
+The outer operation retains the corresponding physical section, CU attribute,
+content and context evidence; numeric values alone never establish those links.
+
+End markers delimit lists without consuming adjacent-list bytes. A successful
+view requires complete framing, all necessary dependencies and final interval
+validation. Input ranges may be unordered. Bounded heap steps sort intervals by
+begin/end/physical ordinal, followed by a bounded overlap scan. Nonempty overlap
+is malformed; adjacent and zero-length intervals remain distinct. Raw records
+retain their encoded order. Base and end records are never discarded merely
+because they produce no interval.
+
+Each feed performs at most 256 byte, interpretation, heap or validation actions.
+It may consume no bytes while progressing internal work. Declaring EOF still
+permits bounded sorting/dependency completion; incomplete framing is malformed.
+Caller-owned state and full record/interval arenas require accounting and pinned
+evidence. No production capacities, allocation, I/O or callbacks are introduced.
+Failure, cancellation or exhaustion exposes no successful prefix. Discard releases
+only decoder state; independent frontend ownership and invalidation remain with
+the publication/evidence layers. Outer jobs retain revisions, interests,
+cancellation checkpoints and absolute deadlines.
 
 ## Committed searches and result windows
 

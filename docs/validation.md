@@ -8351,3 +8351,82 @@ sequences per fixture. Logs and corrected input records are retained under
 remains applicable to this behavior-preserving helper change; complete static
 analysis remains pending on the corrected snapshot. SE07 acceptance and the
 previously recorded integration/physical limitations remain outstanding.
+
+### Schema-helper analysis closeout
+
+The complete corrected analysis run exited 0 and processed all 85 production
+sources. Inspection found no actionable diagnostics; 422 recorded inputs remained
+unchanged. The full baseline/test-source compilation evidence above and corrected
+focused checks therefore close this delivery's host verification. The original
+failed analysis remains preserved, and the successful analysis log/status and
+input comparison are under `build/se07-line-files-fix-20261123/`. This does not
+establish hosted CI, SE07/F07 acceptance or physical qualification.
+
+## Range lists and indexed tables — 2026-11-23
+
+Implemented the [bounded range foundation](native-symbol-engine.md#code-range-foundation-se07-partial):
+DWARF 4 range pairs, all standard DWARF 5 range records, and fixed address/range
+contribution headers with checked entry lookup. Exact physical records and
+operand spans remain separate from sorted half-open intervals. Indexed operands
+request explicit captured dependencies; no section discovery or target access
+occurs. Direct DIE low/high-PC interpretation and composed Source preparation
+remain subsequent work.
+
+Focused fortified checks passed (exit 0):
+
+```sh
+make BUILD_DIR=build/se07-ranges-focused-20261123 CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-indexed-tables test-symbol-ranges \
+  test-symbol-line-native test-symbol-ranges-native
+```
+
+The authored matrix covers both versions, both byte orders, numeric widths
+1/2/4/8 and nine feed sizes. Table cases independently vary DWARF32/64 offset
+representation. Checks cover every standard range kind, nonzero contribution
+coordinates, exact index/offset bounds, wrong dependency supplies, missing versus
+zero bases, explicit zero base-selection records, complete physical records,
+unordered intervals, empty/adjacent intervals, overlap, reversed/overflowing
+bounds, resource failure, incomplete EOF, unknown opcodes, wide LEB operands,
+adjacent-list bytes, discard and 520 reverse-ordered intervals. Sorting and EOF
+completion remain bounded across multiple service slices. Failed operations
+expose no successful prefix.
+
+Ordinary native DWARF 4/5 fixtures each produced two CU lists/two intervals and
+retained the existing three line tables, 62 rows and three sequences. New builds
+of the same maintained sources using function sections and sorted linking each
+produced three CU lists/six intervals, three line tables, 65 rows and six
+sequences. The disjoint fixtures exercise native unordered lists. Exact selected
+CU range/base attributes, sequential list/contribution traversal, file-backed
+executable segment containment and associated line-row coverage all passed.
+No existing fixture source or application assertion was weakened.
+
+All decoded begin/end interval multisets matched GNU `readelf
+--debug-dump=Ranges --wide` for both versions and both native profiles: two
+intervals per ordinary profile and six per disjoint profile. Raw observations,
+reference dumps, comparison script and results are retained. This comparison
+checks artifact-address intervals, not standalone entry points, instruction
+boundaries or runtime addresses. Native GCC fixtures use `sec_offset` with no
+address-index dependencies; authored cases separately exercise indexed forms.
+
+Focused Clang ASan/UBSan checks of the table/range targets and disjoint native
+composition passed (exit 0), including stack-use-after-return detection:
+
+```sh
+UBSAN_OPTIONS=halt_on_error=1 ASAN_OPTIONS=detect_stack_use_after_return=1 \
+make BUILD_DIR=build/se07-ranges-sanitize-20261123 CC=clang \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' \
+  test-symbol-indexed-tables test-symbol-ranges test-symbol-ranges-native
+```
+
+Commands, logs/statuses, tool versions and corrected input snapshots/hashes remain
+under `build/se07-ranges-evidence-20261123/`. This is local Linux x86-64 evidence
+with GCC 16.2.1 C++ fixtures, Clang 23.1.5 instrumentation and binutils 2.47, not
+other-producer, remote or physical qualification. Complete fortified baseline,
+full analysis and fortified compilation of all C test sources remain pending
+for this delivery. Source paths/correspondence, complete code-location preparation,
+production sizing, frontend publication and native actions retain their gates.
+
+Normal `make`, whitespace/style review and 267 internal documentation-link checks
+passed. The normal application binary was rebuilt; no Source UI behavior changed.
