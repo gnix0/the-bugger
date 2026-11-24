@@ -178,10 +178,9 @@ static void copy_path(TbSymbolCompanionPaths_t *paths)
     TbSymbolSourcePathText_t part = paths->parts[paths->part];
     if (paths->cursor < part.bytes) {
         /* Join exactly one boundary slash; preserve separators inside each part. */
-        if (!paths->cursor && paths->part && part.data[0] == '/' && paths->output_bytes &&
-            paths->output[paths->output_bytes - 1] == '/') {
-            ++paths->cursor;
-        } else if (append(paths, part.data[paths->cursor])) {
+        bool boundary = !paths->cursor && paths->part && part.data[0] == '/' && paths->output_bytes &&
+                        paths->output[paths->output_bytes - 1] == '/';
+        if (boundary || append(paths, part.data[paths->cursor])) {
             ++paths->cursor;
         }
     } else {
@@ -206,7 +205,7 @@ static void hex_path(TbSymbolCompanionPaths_t *paths)
 
     size_t nibble = paths->cursor < 2 ? paths->cursor : paths->cursor - 1;
     unsigned byte = paths->request.build_id.data[nibble / 2];
-    unsigned value = nibble % 2 ? byte & 15U : byte >> 4;
+    unsigned value = nibble % 2 ? byte & 15U : byte >> 4U;
     if (append(paths, (unsigned char)"0123456789abcdef"[value]))
         ++paths->cursor;
 }

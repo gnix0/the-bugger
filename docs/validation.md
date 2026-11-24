@@ -9123,3 +9123,23 @@ No frontend view now discovers companions automatically. Attachment ownership,
 query capture, broader backend profiles and physical targets remain unverified.
 The fresh full fortified baseline, complete analysis, fortified compilation of all
 C test sources and maintainer acceptance remain pending for this batch.
+
+
+### SE08 discovery baseline and analyzer closeout — 2026-11-24
+
+The fresh fortified run in `build/se08-discovery-owner-20261124/` passed all
+179 recorded test commands and fortified compilation of all 166 C test/support
+sources. No inputs changed during that run. Complete analysis failed on two
+`companion_paths.c` diagnostics: duplicated branch bodies and a signed shift
+count. The correction combines the equivalent branches using short-circuit
+selection and spells the shift count as `4U`; candidate order, path bytes and
+failure behavior are unchanged.
+
+The subsequent `make -k analyze` log,
+`build/se08-discovery-analysis-fixed-20261124.log`, completed all 102 production
+sources with no reported project diagnostic. Input comparison confirmed that
+only the corrected path source differed from the passing baseline snapshot.
+No further tests or builds were run after the correction. The passing baseline
+remains applicable to this equivalent-condition correction; the original failed
+analysis remains preserved. Hosted CI, attachment/lifetime work and physical
+qualification remain separate from these local results.
