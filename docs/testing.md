@@ -4166,3 +4166,39 @@ build/symbol-companions/test-symbol-companion-native \
 
 This inspects ELF32 metadata without running the target and does not qualify a
 physical architecture or remote backend.
+
+
+### Local debug companion candidates and relationship receipts
+
+```sh
+make BUILD_DIR=build/symbol-companion-discovery CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-companion-paths test-symbol-companion-scan \
+  test-symbol-companion-discovery
+```
+
+The path checks cover GNU route order, complete root validation, binary build-ID
+hex, duplicate paths with distinct ordinals, basename rejection and exact
+capacity failure. The scanner fixtures cover ELF32/64 in both byte orders,
+complete section inventories, missing/compressed names, note alignment 4/8,
+conflicts across notes/sections, malformed late data and unavailable capacities.
+Receipt checks reject truncated/extended or inconsistent framing without changing
+the previous output. Allocation failure and destruction at every service boundary
+through completion must restore all construction charges and preserve borrowed
+descriptors.
+
+The discovery harness starts a real supervised helper, freezes independent copies
+of the native `objcopy` pair, grants growth only after logical reservation, and
+compares complete CRC/build-ID receipts. It replaces the origin bytes and tries a
+missing subsequent candidate; retained metadata remains unchanged. Separate
+injections reject decoder receipt allocation, temporary IPC serialization and
+wire publication. Each must return one resource failure with no usable prefix;
+a subsequent small ELF receipt must still succeed. These injections exist only
+in the test executable's private worker entry. Production has no fault switch.
+The harness also checks malformed operation arguments, disabled decoder policy,
+exact backing keys, complete cleanup and process retirement.
+
+Use the [authoritative supported profile](native-symbol-engine.md#companion-discovery-and-relationship-foundation-se08-partial)
+when interpreting these checks. This is explicit local host metadata acquisition,
+not automatic frontend loading, attachment lifetime or target qualification.
+The existing `test-symbol-operation`, `test-symbol-inspect`, `test-symbol-resource`,
+`test-symbol-helper` and `test-symbol-wire` checks cover shared helper behavior.

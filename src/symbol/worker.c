@@ -244,19 +244,51 @@ static bool emit(void *context, const TbSymbolWorkIdentity_t *identity, TbSymbol
         return false;
     }
 
-    unsigned char bytes[TB_SYMBOL_RESULT_BYTES + 56] = {0};
+    unsigned char  inline_bytes[TB_SYMBOL_RESULT_BYTES + 56] = {0};
+    unsigned char *bytes         = inline_bytes;
+    size_t         allocated     = 0;
+    size_t         payload_bytes = result.outcome == TB_SYMBOL_SUCCESS ? facts.length : 0;
+    int            error         = 0;
+
+    if (payload_bytes > TB_SYMBOL_WIRE_MAX_PAYLOAD - TB_SYMBOL_RESULT_BYTES) {
+        error = EFBIG;
+    } else if (payload_bytes > sizeof(inline_bytes) - TB_SYMBOL_RESULT_BYTES) {
+        size_t needed = TB_SYMBOL_RESULT_BYTES + payload_bytes;
+        if (!tb_symbol_budget_reserve(&worker->ipc, needed)) {
+            error = ENOMEM;
+        } else {
+            bytes = malloc(needed);
+            if (!bytes) {
+                (void)tb_symbol_budget_release(&worker->ipc, needed);
+                error = ENOMEM;
+            } else {
+                allocated = needed;
+                memset(bytes, 0, TB_SYMBOL_RESULT_BYTES);
+            }
+        }
+    }
+    if (error) {
+        job->failure = TB_SYMBOL_RESOURCE_FAILURE;
+        job->diagnostic = (TbSymbolOperationResult_t) {
+            .descriptor   = -1,
+            .system_error = error,
+            .detail       = TB_SYMBOL_DETAIL_PUBLICATION |
+                            (facts.detail & (TB_SYMBOL_DETAIL_CREATED | TB_SYMBOL_DETAIL_HAS_KEY)),
+            .key          = facts.key
+        };
+        tb_symbol_operation_destroy(job->state);
+        job->state = NULL;
+        job->diagnosed = false;
+
+        return false;
+    }
 
     tb_symbol_protocol_put(bytes, result.outcome, 4);
     tb_symbol_protocol_put(bytes + 8, job->identity.generation, 8);
 
-    size_t length = TB_SYMBOL_RESULT_BYTES;
-    if (result.outcome == TB_SYMBOL_SUCCESS && facts.length) {
-        if (facts.length > sizeof(bytes) - length)
-            return false;
-
-        memcpy(bytes + length, facts.payload, facts.length);
-        length += facts.length;
-    }
+    size_t length = TB_SYMBOL_RESULT_BYTES + payload_bytes;
+    if (payload_bytes)
+        memcpy(bytes + TB_SYMBOL_RESULT_BYTES, facts.payload, payload_bytes);
 
     TbSymbolMessage_t message = tb_symbol_protocol_message(TB_SYMBOL_MESSAGE_RESULT, job->identity,
                                                            worker->generation, bytes, length);
@@ -267,11 +299,15 @@ static bool emit(void *context, const TbSymbolWorkIdentity_t *identity, TbSymbol
     }
     errno = 0;
 
-    if (!tb_symbol_wire_send(worker->wire, &message)) {
+    bool sent = tb_symbol_wire_send(worker->wire, &message);
+    error = errno;
+    if (allocated) {
+        free(bytes);
+        (void)tb_symbol_budget_release(&worker->ipc, allocated);
+    }
+    if (!sent) {
         /* Reserved inline failure framing must remain possible when candidate
          * serialization or descriptor duplication exhausts resources. */
-        int error = errno;
-
         job->failure = !error || error == ENOMEM || error == EMFILE || error == ENFILE
                          ? TB_SYMBOL_RESOURCE_FAILURE : TB_SYMBOL_OPERATIONAL_FAILURE;
         job->diagnostic = (TbSymbolOperationResult_t) {

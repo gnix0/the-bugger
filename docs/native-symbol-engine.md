@@ -266,10 +266,108 @@ retain those scopes independently and reconcile all selected occurrences.
 Neither matching IDs nor CRCs merge physical records, validate unrelated DWARF,
 establish source/runtime correspondence or authorize any live action.
 
-SE08 remains in progress: bounded candidate paths, explicit supervised discovery,
-companion admission, complete relationship validation and attachment/detachment
-ownership still follow. These metadata components do not activate companion
-loading in the existing frontend or change Search behavior.
+The next foundation composes these selected metadata decoders into bounded
+[local candidate and retained-inventory operations](#companion-discovery-and-relationship-foundation-se08-partial).
+Neither foundation activates companion loading in the existing frontend or changes
+Search behavior.
+
+### Companion discovery and relationship foundation (SE08, partial)
+
+`companion_paths` produces explicit local candidates from a captured absolute
+primary origin, a complete debuglink basename, opaque build-ID bytes and an
+ordered list of absolute debug roots. It validates all path inputs before yielding
+the first candidate. The order is beside the primary, its `.debug/` directory,
+mirrored primary directories under each root, then each root's build-ID location.
+Build-ID hex is lowercase, with the first byte forming the directory. No build-ID
+algorithm or fixed digest length is assumed; a one-byte ID produces an empty
+hex remainder followed by `.debug`.
+
+Candidate ordinals, route and root index remain distinct even for duplicate
+paths. The iterator preserves internal separators, dot components, symlink
+spelling, spaces and non-ASCII bytes; it joins boundary separators without
+canonicalizing paths. Roots select candidate locations, not a filesystem sandbox:
+normal OS path resolution may follow symlinks or dot components. There is no
+recursive scan, environment/tilde expansion, implicit working-directory anchor,
+network fallback or debuginfod request. Resource failure never yields a truncated
+path. Earlier complete candidates do not establish completion after a later
+failure, and no candidate proves that a file exists or is an eligible companion.
+
+The current component/schema bounds are fixed upper representations, not
+startup defaults or preallocated storage:
+
+| Representation | Bound | Enforcement and failure |
+|---|---:|---|
+| Each input/output POSIX path, including terminator | 4,096 bytes | Path iterator; resource failure without an actionable prefix |
+| Complete opaque build ID | 4,096 bytes | Scanner, receipt codec and path request; resource failure/invalid receipt |
+| Configured roots per captured request | 32 | Path iterator admission; resource failure |
+| Candidate ordinals | At most 66 | Derived from two beside-primary routes and two routes per root |
+| Inventory receipt | 96-byte prefix plus complete name and ID, at most 8,287 bytes | Encoder/decoder require exact framing; failure publishes nothing |
+
+Caller capacities can be smaller and fail explicitly. Hex expansion of a valid
+ID can exceed the path bound; it is never shortened or silently skipped. The
+existing configurable helper decoder, IPC, construction and admission accounts
+remain authoritative budgets. Decoder requests require a positive explicit
+allowance; the production decoder/index/cache defaults still await SE10.
+
+Each generated path is submitted explicitly through the existing supervised
+`ACQUIRE` operation. Its full logical reservation precedes growth, independently
+of the primary's retained charge. Missing, inaccessible, unsupported, malformed or
+exhausted candidates are separate reported failures; none closes the primary or
+implicitly tries another origin. The attachment coordinator will own candidate
+selection and any explicit further attempts. The path iterator itself performs
+no I/O, admission or helper scheduling.
+
+`companion_scan` builds a complete native section directory over pinned frozen
+backing, examines every `SHT_NOTE` section, recognizes `.gnu_debuglink` through its
+validated full section name, and computes the complete retained file's CRC32.
+The protected reader checks exact backing identity/extent and descriptor
+properties. It retains the existing acquisition ownership invariant rather than
+claiming descriptor checks prove absence of writers or source coherence.
+Construction, all reader windows, section arrays, metadata buffers and candidate
+receipts are charged before ownership is acquired. Cancellation destroys private
+construction without deleting backing or publishing a partial inventory.
+
+Duplicate debuglink sections or GNU IDs conflict even when equal, including IDs
+in separate note sections. Late malformed metadata, unsupported note alignment,
+compressed notes, read failure or exhausted capacity prevents a receipt. Notes
+use the established 4/8-byte alignment profiles independently of ELF class.
+Absent/compressed section-name coverage leaves debuglink presence unknown.
+Build-ID presence/absence covers the complete section inventory, not unexamined
+program-header-only notes. Missing required evidence remains unavailable; it is
+not supplied by guessed section names or an unrelated digest.
+
+The private `COMPANION_INSPECT` helper operation accepts exact namespace/slot and
+backing keys, extent and explicit basename/ID capacities. It opens only protected
+retained storage; a disabled decoder allowance rejects before filesystem access.
+Its versioned receipt uses explicit big-endian fields and complete raw name/ID
+bytes. Frontend decoding validates exact lengths, encodings and consistent
+presence/coordinates before borrowing spans. Request identity, consumer/context
+revisions, process generation and retirement remain the enclosing caller's
+responsibility; a valid frame alone does not validate its metadata claim.
+
+Result serialization reserves temporary IPC storage independently of the decoder
+receipt and wire-owned copy, including their concurrent peak. Allocation or send
+failure publishes an explicit failure through the existing bounded control path.
+It does not turn an oversized result into an empty success or stall forever.
+Independent valid receipts and the GDB session remain unaffected.
+
+`companion_relation` compares validated inventories without I/O or mutation. The
+initial linked-ELF profile requires equal class, byte order, machine, object type,
+ELF flags, OS ABI and ABI version. A debuglink relationship requires the primary's
+complete link metadata and a matching complete candidate CRC. A build-ID
+relationship requires both nonempty IDs to agree. If both IDs are present, a
+conflict rejects either route even when the CRC matches. Missing ID evidence
+remains acceptable for the legacy CRC route; that does not assert an ID match.
+Header mismatch, unsupported profile, missing evidence and CRC/ID mismatch remain
+separate outcomes. No program-interpreter, unrelated DWARF, source or runtime
+validity follows from this metadata relationship.
+
+Receipts retain independent physical backing/section/note coordinates. Matching
+metadata cannot merge records or bypass full logical admission charges. They are
+inputs to the subsequent attachment owner, not independently published frontend
+relationship guarantees. Context attachment/detachment, revision changes, leases,
+withdrawal and query inventory capture remain the final SE08 round. The existing
+frontend performs no automatic companion discovery or target access.
 
 ## Formats and semantic coverage
 

@@ -36,6 +36,11 @@ typedef struct {
  * DISCARD_EMPTY: u64 slot, root key, path count, path.
  * ELF_VALIDATE: u64 extent, u64 slot, root key, file key, u64 selected section,
  *               path count, path. UINT64_MAX selects the directory only.
+ * COMPANION_INSPECT: u64 extent, u64 slot, root key, file key, u64 basename
+ * capacity (including NUL), u64 ID capacity, path count, path. Both capacities
+ * are positive and bounded by companion_paths schema maxima. Decoder account
+ * required before I/O. Returns companion_receipt's complete inventory/CRC;
+ * no descriptor. All retained bytes and candidate publication are accounted.
  * No origin discovery or admission; the caller retains a backing/content lease
  * until worker retirement. Decoder allocations use the separate required decoder
  * account; NULL disables this operation before filesystem access.

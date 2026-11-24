@@ -25,6 +25,7 @@ SOURCES += src/symbol/code_attributes.c src/symbol/tables.c src/symbol/range_ind
 SOURCES += src/symbol/source_file.c src/symbol/source_path.c src/symbol/md5.c
 SOURCES += src/symbol/source_context.c src/symbol/source_prepare.c src/symbol/source_check.c
 SOURCES += src/symbol/crc32.c src/symbol/companion_metadata.c
+SOURCES += src/symbol/companion_paths.c src/symbol/companion_scan.c src/symbol/companion_receipt.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -949,7 +950,7 @@ test-symbol-process: $(BUILD_DIR)/test-symbol-process
 test: test-symbol-process
 -include $(BUILD_DIR)/tests/unit/test_symbol_process.d
 
-$(BUILD_DIR)/test-symbol-helper: $(BUILD_DIR)/tests/unit/test_symbol_helper.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o
+$(BUILD_DIR)/test-symbol-helper: $(BUILD_DIR)/tests/unit/test_symbol_helper.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o
 	$(CC) $(LDFLAGS) -Wl,--wrap=clock_gettime -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=recvmsg -o $@ $^ $(LDLIBS)
 
 .PHONY: test-symbol-helper
@@ -959,7 +960,7 @@ test-symbol-helper: all $(BUILD_DIR)/test-symbol-helper
 test: test-symbol-helper
 -include $(BUILD_DIR)/tests/unit/test_symbol_helper.d
 
-$(BUILD_DIR)/test-symbol-helper-native: $(BUILD_DIR)/tests/integration/test_symbol_helper_native.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o
+$(BUILD_DIR)/test-symbol-helper-native: $(BUILD_DIR)/tests/integration/test_symbol_helper_native.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 .PHONY: test-symbol-helper-native
@@ -1030,7 +1031,7 @@ test: test-symbol-storage
 -include $(BUILD_DIR)/tests/unit/test_symbol_storage.d
 
 
-$(BUILD_DIR)/test-symbol-operation: $(BUILD_DIR)/tests/unit/test_symbol_operation.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o
+$(BUILD_DIR)/test-symbol-operation: $(BUILD_DIR)/tests/unit/test_symbol_operation.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o
 	$(CC) $(LDFLAGS) -o $@ $^ -Wl,--wrap=calloc,--wrap=fstatfs $(LDLIBS)
 
 .PHONY: test-symbol-operation
@@ -1042,7 +1043,7 @@ test: test-symbol-operation
 -include $(BUILD_DIR)/tests/unit/test_symbol_operation.d
 
 
-$(BUILD_DIR)/test-symbol-resource: $(BUILD_DIR)/tests/unit/test_symbol_resource.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/artifact.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o
+$(BUILD_DIR)/test-symbol-resource: $(BUILD_DIR)/tests/unit/test_symbol_resource.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/artifact.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o
 	$(CC) $(LDFLAGS) -o $@ $^ -Wl,--wrap=malloc $(LDLIBS)
 
 .PHONY: test-symbol-resource
@@ -1129,7 +1130,7 @@ test: test-symbol-symbols
 -include $(BUILD_DIR)/tests/unit/test_symbol_symbols.d
 
 
-$(BUILD_DIR)/test-symbol-inspect: $(BUILD_DIR)/tests/unit/test_symbol_inspect.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/artifact.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o
+$(BUILD_DIR)/test-symbol-inspect: $(BUILD_DIR)/tests/unit/test_symbol_inspect.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/artifact.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 .PHONY: test-symbol-inspect
@@ -1781,3 +1782,33 @@ test-symbol-companion-native: $(BUILD_DIR)/test-symbol-companion-native $(BUILD_
 
 test: test-symbol-companion-native
 -include $(BUILD_DIR)/tests/integration/test_symbol_companion_native.d
+
+$(BUILD_DIR)/test-symbol-companion-paths: $(BUILD_DIR)/tests/unit/test_symbol_companion_paths.o $(BUILD_DIR)/src/symbol/companion_paths.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-companion-paths
+test-symbol-companion-paths: $(BUILD_DIR)/test-symbol-companion-paths
+	$(BUILD_DIR)/test-symbol-companion-paths
+
+test: test-symbol-companion-paths
+-include $(BUILD_DIR)/tests/unit/test_symbol_companion_paths.d
+
+$(BUILD_DIR)/test-symbol-companion-scan: $(BUILD_DIR)/tests/unit/test_symbol_companion_scan.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=malloc,--wrap=calloc -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-companion-scan
+test-symbol-companion-scan: $(BUILD_DIR)/test-symbol-companion-scan
+	$(BUILD_DIR)/test-symbol-companion-scan
+
+test: test-symbol-companion-scan
+-include $(BUILD_DIR)/tests/unit/test_symbol_companion_scan.d
+
+$(BUILD_DIR)/test-symbol-companion-discovery: $(BUILD_DIR)/tests/integration/test_symbol_companion_discovery.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/artifact.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o $(BUILD_DIR)/src/symbol/companion_paths.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=malloc -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-companion-discovery
+test-symbol-companion-discovery: $(BUILD_DIR)/test-symbol-companion-discovery $(BINARY) $(BUILD_DIR)/companion-pair.stamp
+	$(BUILD_DIR)/test-symbol-companion-discovery $(abspath $(BINARY)) "$(abspath $(BUILD_DIR))/companion pair/primary" "$(abspath $(BUILD_DIR))/companion pair/fixture with spaces.debug"
+
+test: test-symbol-companion-discovery
+-include $(BUILD_DIR)/tests/integration/test_symbol_companion_discovery.d

@@ -9024,3 +9024,102 @@ through this rerun; only this validation record was updated. No full suite was
 repeated. Companion discovery, relationship validation and context attachment
 remain subsequent SE08 work; maintainer acceptance and hosted CI for this batch
 remain separate.
+
+
+### SE08 local discovery and relationship receipts — 2026-11-24
+
+Host checks used GCC 16.2.1, Clang 23.1.5 and GNU binutils 2.47 on Linux x86-64.
+Tool and host details are retained in `environment.json` alongside the logs.
+
+The local candidate iterator, complete retained-section inventory/CRC scanner,
+private helper receipt and conservative linked-ELF relationship checks are
+implemented. Attachment and context revision/lifetime management remain pending.
+The [supported profile and bounds](native-symbol-engine.md#companion-discovery-and-relationship-foundation-se08-partial)
+remain separate from runtime correspondence, target access and F07 acceptance.
+
+The focused fortified targets below passed across the recorded invocations
+(exit 0); this combined command reproduces the selection:
+
+```sh
+make BUILD_DIR=build/se08-discovery-focused-20261124 CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-companion-paths test-symbol-companion-scan \
+  test-symbol-companion-discovery test-symbol-operation test-symbol-inspect \
+  test-symbol-resource test-symbol-helper test-symbol-wire
+```
+
+These targets were selected across the implementation checks, not run as one
+combined command. `focused.log`, `final-receipts.log`, `ownership-ipc.log` and
+subsequent focused logs preserve the exact invocations and results under
+`build/se08-discovery-evidence-20261124/`. Shared operation, resource, helper and
+wire checks passed. Later changes added maximum-receipt cases, exact output-byte
+preservation checks and one-byte build-ID filename coverage, with relevant
+fortified and sanitizer checks repeated separately. No assertion in an existing
+test was changed.
+
+Path checks cover all 66 ordinals at the maximum root count, duplicate roots,
+spaces, lowercase binary-ID hex, one-byte IDs, invalid late roots, embedded NUL,
+unsupported basenames and exact output-capacity failure. The scanner cases cover
+linked ELF32/64 in both byte orders, complete-file CRC, 4/8-byte note alignment,
+missing/compressed names, compressed notes, duplicate link sections, duplicate
+IDs within/across sections, unknown notes, empty note sections, zero-length IDs,
+malformed late metadata and exhausted basename/ID buffers. The receipt codec
+passed exact 8,287-byte maximum, one-over, truncated and inconsistent-frame checks.
+Allocation failure and destruction at every service boundary through completion
+restored construction charges while preserving borrowed descriptors.
+
+The first authored scanner run failed because the no-name-table fixture retained
+nonzero name offsets, which the existing directory decoder correctly rejected.
+After correcting that fixture, allocation checks exposed the fixture's width loop
+leaving an invalid width for the next case. The fixture now explicitly restores a
+supported width. Those initial failures remain in `scan-first.log`,
+`scan-diagnostic.log` and `scan-fixed.log`; later checks passed. Production
+protection checks and test expectations were not weakened to accept those inputs.
+
+The native discovery harness started a real supervised helper, acquired two
+independent frozen copies with full logical reservations before growth, and
+validated complete CRC/build-ID receipts. Replacing both origin files did not
+retarget retained bytes. A missing later candidate returned ENOENT; the original
+primary remained inspectable and both independent open charges remained present
+until explicit retirement/cleanup. Invalid request prefixes, disabled decoding,
+insufficient capacity and wrong backing keys returned explicit failure without a
+usable result. Three test-only allocation injections covered decoder receipt,
+temporary IPC serialization and wire-copy publication failure. Each returned a
+resource failure; a subsequent small legacy ELF receipt succeeded on the same
+helper channel. The test completed filesystem cleanup and helper reaping.
+
+The default pair uses linked ELF64 with a 20-byte ID; a supplementary linked ELF32
+pair uses an 8-byte ID in a renamed note section. The ELF32 producer configuration
+is retained in the preceding metadata record and `docs/testing.md`. Both passed
+the new supervised harness. Python `zlib.crc32` agreed with complete debug-file
+CRCs; GNU `readelf --notes --wide` independently agreed with both primary and
+companion IDs. Raw output, commands and `comparison.json` are retained. The known
+ELF64 separate-debug-file interpreter diagnostic remains recorded and scoped as
+in the preceding study; no program-interpreter validity follows from these checks.
+Actual producer evidence is little-endian Linux x86-64 inspection; big-endian
+coverage uses authored fixtures, not physical targets.
+
+Clang ASan/UBSan checks passed for the three new harnesses, with
+`UBSAN_OPTIONS=halt_on_error=1` and
+`ASAN_OPTIONS=detect_stack_use_after_return=1`. The build used:
+
+```sh
+make BUILD_DIR=build/se08-discovery-sanitize-20261124 CC=clang \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' \
+  build/se08-discovery-sanitize-20261124/test-symbol-companion-paths \
+  build/se08-discovery-sanitize-20261124/test-symbol-companion-scan \
+  build/se08-discovery-sanitize-20261124/test-symbol-companion-discovery
+```
+
+Each harness then ran with those sanitizer options. The discovery invocation used
+its own executable as the helper executable, exercising instrumented helper,
+scanner and failure paths without building/running a frontend session. Exact
+commands and statuses are in `sanitize-commands.json`; subsequent boundary checks
+are in `limits-sanitize.log` and `one-byte-id-sanitize.log`. This is focused memory
+and protocol evidence, not a complete sanitized application matrix.
+
+No frontend view now discovers companions automatically. Attachment ownership,
+query capture, broader backend profiles and physical targets remain unverified.
+The fresh full fortified baseline, complete analysis, fortified compilation of all
+C test sources and maintainer acceptance remain pending for this batch.

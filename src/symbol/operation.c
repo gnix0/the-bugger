@@ -1,6 +1,7 @@
 #include "symbol/operation.h"
 #include "symbol/equal.h"
 #include "symbol/symbols.h"
+#include "symbol/companion_receipt.h"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -26,6 +27,7 @@ typedef enum {
     OPERATION_ELF_INIT,
     OPERATION_ELF_SECTIONS,
     OPERATION_ELF_SYMBOLS,
+    OPERATION_COMPANION,
     OPERATION_DONE
 } OperationPhase_e;
 
@@ -54,11 +56,16 @@ struct tb_symbol_operation {
     TbSymbolStorageInfo_t   files[2];
     uint64_t                slots[2];
     uint64_t                bytes;
-    TbSymbolStorage_t      *namespace;
-    TbSymbolAcquire_t      *acquisition;
-    TbSymbolEquality_t     *comparison;
-    TbSymbolSections_t     *sections;
-    TbSymbolSymbols_t      *symbols;
+
+    TbSymbolStorage_t       *namespace;
+    TbSymbolAcquire_t       *acquisition;
+    TbSymbolEquality_t      *comparison;
+    TbSymbolSections_t      *sections;
+    TbSymbolSymbols_t       *symbols;
+    TbSymbolCompanionScan_t *companion;
+
+    unsigned char          *companion_result;
+    size_t                  companion_bytes;
     unsigned char           result[56];
     size_t                  result_length;
     int                     descriptors[2];
@@ -104,6 +111,9 @@ TbSymbolOperation_t *tb_symbol_operation_create(uint32_t operation, const unsign
         break;
     case TB_SYMBOL_OPERATION_REMOVE_STORAGE:
         state->word_count = 2;
+        break;
+    case TB_SYMBOL_OPERATION_COMPANION_INSPECT:
+        state->word_count = 8;
         break;
     case TB_SYMBOL_OPERATION_ELF_VALIDATE:
         state->word_count = 7;
@@ -243,6 +253,7 @@ static void layout(TbSymbolOperation_t *state)
         if (!state->slots[0] || !state->slots[1] || state->bytes > INT64_MAX)
             fail(state, TB_SYMBOL_MALFORMED);
         break;
+    case TB_SYMBOL_OPERATION_COMPANION_INSPECT:
     case TB_SYMBOL_OPERATION_ELF_VALIDATE:
         state->bytes = state->words[0];
         state->slots[0] = state->words[1];
@@ -259,8 +270,12 @@ static void layout(TbSymbolOperation_t *state)
             .bytes = state->bytes
         };
 
-        if (!state->slots[0] || state->bytes > INT64_MAX)
+        if (!state->slots[0] || state->bytes > INT64_MAX ||
+            (state->code == TB_SYMBOL_OPERATION_COMPANION_INSPECT &&
+             (!state->words[6] || state->words[6] > TB_SYMBOL_COMPANION_PATH_BYTES ||
+              !state->words[7] || state->words[7] > TB_SYMBOL_COMPANION_ID_BYTES))) {
             fail(state, TB_SYMBOL_MALFORMED);
+        }
         break;
     case TB_SYMBOL_OPERATION_REMOVE_STORAGE:
         state->namespace_key = (TbSymbolStorageKey_t) {
@@ -347,6 +362,7 @@ static void namespace_step(TbSymbolOperation_t *state)
     case TB_SYMBOL_OPERATION_ACQUIRE:
         state->phase = OPERATION_ACQUIRE_INIT;
         break;
+    case TB_SYMBOL_OPERATION_COMPANION_INSPECT:
     case TB_SYMBOL_OPERATION_ELF_VALIDATE:
         state->phase = OPERATION_ELF_OPEN;
         break;
@@ -454,6 +470,55 @@ static void elf_symbols(TbSymbolOperation_t *state, size_t max_bytes)
 }
 
 
+static void companion_step(TbSymbolOperation_t *state, size_t max_bytes)
+{
+    TbSymbolOutcome_e outcome = tb_symbol_companion_scan_step(state->companion, max_bytes);
+    if (outcome == TB_SYMBOL_SUCCESS) {
+        TbSymbolCompanionInventory_t view;
+        if (!tb_symbol_companion_scan_view(state->companion, &view)) {
+            fail(state, TB_SYMBOL_OPERATIONAL_FAILURE);
+            return;
+        }
+
+        size_t bytes = tb_symbol_companion_receipt_size(&view);
+        if (!bytes || !tb_symbol_budget_reserve(state->decoder, bytes)) {
+            fail(state, TB_SYMBOL_RESOURCE_FAILURE);
+            return;
+        }
+
+        state->companion_result = malloc(bytes);
+        if (!state->companion_result) {
+            (void)tb_symbol_budget_release(state->decoder, bytes);
+            fail(state, TB_SYMBOL_RESOURCE_FAILURE);
+            return;
+        }
+
+        state->companion_bytes = bytes;
+        if (!tb_symbol_companion_receipt_encode(&view, state->companion_result, bytes)) {
+            fail(state, TB_SYMBOL_OPERATIONAL_FAILURE);
+            return;
+        }
+
+        state->result_length = bytes;
+        fail(state, TB_SYMBOL_SUCCESS);
+    } else if (outcome != TB_SYMBOL_PENDING) {
+        TbSymbolCompanionScanFailure_t failure = tb_symbol_companion_scan_failure(state->companion);
+
+        state->detail = failure.directory.reason ?
+            TB_SYMBOL_DETAIL_COMPANION_SECTIONS | (uint32_t)failure.directory.reason :
+            failure.read.reason ? TB_SYMBOL_DETAIL_COMPANION_READ | (uint32_t)failure.read.reason :
+                                  TB_SYMBOL_DETAIL_COMPANION | (uint32_t)failure.metadata;
+        state->record_index = failure.directory.reason ? failure.directory.section_index :
+                                                        failure.section;
+        state->system_error = failure.read.system_error ? failure.read.system_error :
+                              failure.directory.read.system_error ? failure.directory.read.system_error :
+                                                                    failure.directory.system_error;
+
+        fail(state, outcome);
+    }
+}
+
+
 static void acquire_step(TbSymbolOperation_t *state, size_t max_bytes)
 {
     TbSymbolOutcome_e result = tb_symbol_acquire_step(state->acquisition, max_bytes);
@@ -519,7 +584,8 @@ TbSymbolWorkResult_t tb_symbol_operation_step(TbSymbolOperation_t *state, size_t
         validate_string(state, max_bytes);
         break;
     case OPERATION_NAMESPACE_INIT: {
-        if (state->code == TB_SYMBOL_OPERATION_ELF_VALIDATE && !state->decoder) {
+        if ((state->code == TB_SYMBOL_OPERATION_ELF_VALIDATE ||
+             state->code == TB_SYMBOL_OPERATION_COMPANION_INSPECT) && !state->decoder) {
             state->detail = TB_SYMBOL_DETAIL_ELF_DISABLED;
             fail(state, TB_SYMBOL_UNSUPPORTED);
             break;
@@ -611,6 +677,15 @@ TbSymbolWorkResult_t tb_symbol_operation_step(TbSymbolOperation_t *state, size_t
         }
         break;
     case OPERATION_ELF_INIT:
+        if (state->code == TB_SYMBOL_OPERATION_COMPANION_INSPECT) {
+            state->companion = tb_symbol_companion_scan_create(state->files[0], state->descriptors[0],
+                (size_t)state->words[6], (size_t)state->words[7], state->decoder);
+            if (!state->companion)
+                fail(state, TB_SYMBOL_RESOURCE_FAILURE);
+            else
+                state->phase = OPERATION_COMPANION;
+            break;
+        }
         state->sections = tb_symbol_sections_create(state->files[0], state->descriptors[0], state->decoder);
 
         if (!state->sections)
@@ -642,11 +717,15 @@ TbSymbolWorkResult_t tb_symbol_operation_step(TbSymbolOperation_t *state, size_t
         else
             fail(state, TB_SYMBOL_SUCCESS);
         break;
+    case OPERATION_COMPANION:
+        companion_step(state, max_bytes);
+        break;
     case OPERATION_DONE:
         break;
     }
 
-    uint64_t backend = state->symbols ? tb_symbol_symbols_progress(state->symbols) :
+    uint64_t backend = state->companion ? tb_symbol_companion_scan_progress(state->companion) :
+                       state->symbols ? tb_symbol_symbols_progress(state->symbols) :
                        state->sections ? tb_symbol_sections_progress(state->sections) :
                        state->acquisition ? tb_symbol_acquire_progress(state->acquisition) :
                        state->comparison ? tb_symbol_equal_progress(state->comparison) :
@@ -717,7 +796,7 @@ TbSymbolOperationResult_t tb_symbol_operation_result(const TbSymbolOperation_t *
     }
 
     if (state->outcome == TB_SYMBOL_SUCCESS) {
-        result.payload = state->result;
+        result.payload = state->companion_result ? state->companion_result : state->result;
         result.length = state->result_length;
 
         if (state->code == TB_SYMBOL_OPERATION_ACQUIRE)
@@ -733,6 +812,10 @@ void tb_symbol_operation_destroy(TbSymbolOperation_t *state)
     if (!state)
         return;
 
+    tb_symbol_companion_scan_destroy(state->companion);
+    free(state->companion_result);
+    if (state->companion_bytes)
+        (void)tb_symbol_budget_release(state->decoder, state->companion_bytes);
     tb_symbol_symbols_destroy(state->symbols);
     tb_symbol_sections_destroy(state->sections);
     tb_symbol_equal_destroy(state->comparison);

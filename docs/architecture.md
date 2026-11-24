@@ -1633,10 +1633,20 @@ resource outcomes. The
 [authoritative companion metadata contract](native-symbol-engine.md#companion-metadata-foundation-se08-partial)
 defines framing, profiles and failure boundaries.
 
-Explicit candidate discovery, relationship ownership and companion context
-attachment remain SE08 work. Existing artifact admission remains independent;
-a matching CRC or build ID cannot share backing or merge physical records.
-The frontend's GDB-driven behavior and Search remain unchanged.
+`companion_paths` now supplies bounded explicit GNU candidates. The supervised
+`COMPANION_INSPECT` operation composes the native section directory, selected
+metadata and complete-file CRC into a validated receipt. `companion_relation`
+compares compatible linked-ELF inventories through debuglink or build-ID evidence.
+The [discovery and relationship contract](native-symbol-engine.md#companion-discovery-and-relationship-foundation-se08-partial)
+owns route ordering, representation bounds, coverage, resource and failure rules.
+The core scanner remains independent of IPC and uses only pinned frozen backing.
+
+The existing acquisition operation freezes each explicitly selected candidate;
+no path planning or inspection operation implicitly admits another origin.
+Relationship lifetime, companion context attachment and revision ownership remain
+SE08 work. Existing artifact admission remains independent; a matching CRC or
+build ID cannot share backing or merge physical records. The frontend's
+GDB-driven behavior and Search remain unchanged.
 
 ### Event loop and text rendering
 
