@@ -197,7 +197,7 @@ static bool note_header(TbSymbolBuildId_t *id)
 
 static void classify_note(TbSymbolBuildId_t *id)
 {
-    if (id->name_bytes != 4 || id->type != 3 || memcmp(id->owner, "GNU", 4))
+    if (id->name_bytes != 4 || id->type != 3 || memcmp(id->owner, "GNU", 4) != 0)
         return;
 
     if (!id->descriptor_bytes) {

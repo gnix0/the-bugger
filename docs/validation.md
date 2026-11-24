@@ -8997,3 +8997,30 @@ Fresh full fortified baseline, complete analysis, fortified test-source compilat
 and maintainer acceptance remain pending. No hosted CI for this batch, companion
 attachment, runtime mapping or physical result is claimed. Existing frontend
 behavior and runtime dependencies are unchanged.
+
+
+### SE08 metadata baseline and analyzer correction — 2026-11-24
+
+The fresh fortified baseline in `build/se08-metadata-owner-20261124/` passed all
+176 recorded test commands and compilation of all 163 C test/support sources.
+Every command returned 0; input hashes remained unchanged during the run. The
+logs establish local host results, not hosted CI or physical qualification.
+
+Complete analysis examined 99 production sources and failed on one
+`bugprone-suspicious-string-compare` diagnostic in the GNU note owner check.
+The correction makes the existing `memcmp` inequality explicit with `!= 0`;
+it preserves the four-byte comparison, branching and decoder behavior. No test
+expectations or fixtures changed. The original failed analysis log is retained.
+
+After correction, the focused fortified metadata unit and native companion checks
+passed, as did the ordinary application build. The passing full baseline and
+fortified test-source compilation remain applicable to this equivalent-condition
+change. Correction logs, the source diff and input hashes are retained under
+`build/se08-metadata-analysis-fix-20261124/`.
+
+Complete `make -k analyze` then passed all 99 production sources (exit 0), with no
+reported project diagnostic. Production and test input hashes remained unchanged
+through this rerun; only this validation record was updated. No full suite was
+repeated. Companion discovery, relationship validation and context attachment
+remain subsequent SE08 work; maintainer acceptance and hosted CI for this batch
+remain separate.
