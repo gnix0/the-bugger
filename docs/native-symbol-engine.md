@@ -223,6 +223,54 @@ primary and companion inventories by default, with explicit origin narrowing.
 Attachment changes the relevant context revision; existing queries never
 silently acquire the new inventory.
 
+### Companion metadata foundation (SE08, partial)
+
+`crc32` implements the reflected IEEE CRC-32 profile used by GNU debuglink,
+independently of artifact management and IPC. It hashes complete retained file
+bytes in updates of at most 64 KiB. Finalization requires the exact expected
+extent and occurs once; invalid input or length failure poisons the stream and
+cannot publish a prefix checksum. This is neither RSP `qCRC` nor a security or
+artifact-identity primitive. The format follows the
+[GNU separate-debug-file specification](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Separate-Debug-Files.html).
+
+`companion_metadata` interprets a selected complete `.gnu_debuglink` section and
+selected ELF note sections. Each request retains backing and physical section
+coordinates, target byte order and exact scope extent. The caller establishes
+section roles, uncompressed framing and content leases; these pure components
+perform no discovery, allocation, file access or helper dispatch. State and full
+name/ID buffer capacities belong to the caller's existing accounts. No production
+capacity defaults or new runtime dependency are introduced.
+
+Debuglink decoding retains the full basename and the four-byte checksum's exact
+section offset. Padding is opaque, and the checksum uses target byte order.
+Empty names, missing terminators, wrong extent and trailing bytes are malformed.
+Well-framed names outside the initial usable POSIX-basename profile—dot/dot-dot,
+slash, CR or LF—remain explicitly unsupported after complete framing. They are
+never shortened into another name or treated as missing companions. Buffer
+exhaustion reports resource failure with no usable prefix.
+
+Build-ID decoding frames the entire selected note section in slices of at most
+256 bytes. An explicitly established 4- or 8-byte note-alignment profile is
+required; ELF class alone does not choose GNU note layout. Headers and alignment
+arithmetic are checked against the selected extent, with null-terminated owner
+names and opaque descriptor/padding bytes. Exact owner `GNU\0` and type 3 select
+a nonempty opaque ID. No SHA-1/UUID length or algorithm is inferred. Other framed
+note types are skipped; unsupported alignment is never guessed. See
+[ELF note framing](https://gabi.xinuos.com/elf/08-pheader.html#note-sections).
+
+All notes must finish before a result is available. Duplicate GNU IDs conflict
+even when their bytes agree; a malformed later note withdraws the candidate.
+Absence covers only the examined section, not unexamined sections, program
+headers or the whole artifact. Later inventory/relationship construction must
+retain those scopes independently and reconcile all selected occurrences.
+Neither matching IDs nor CRCs merge physical records, validate unrelated DWARF,
+establish source/runtime correspondence or authorize any live action.
+
+SE08 remains in progress: bounded candidate paths, explicit supervised discovery,
+companion admission, complete relationship validation and attachment/detachment
+ownership still follow. These metadata components do not activate companion
+loading in the existing frontend or change Search behavior.
+
 ## Formats and semantic coverage
 
 Initial foundations require linked ELF32/ELF64, independently handled target

@@ -1621,6 +1621,23 @@ boundaries. SE07 local verification and maintainer acceptance are recorded in
 the [delivery closeout](validation.md#se07-delivery-closeout--2026-11-23). Production
 publication, sizing and consumer integration retain their own gates.
 
+### Debug companion metadata (SE08, partial)
+
+`src/symbol/crc32.c` supplies independent complete-file GNU debuglink checksums.
+`src/symbol/companion_metadata.c` decodes exact debuglink and GNU build-ID note
+scopes, preserving physical backing/section coordinates and target byte order.
+Caller-owned buffers and state require accounting; no allocation, filesystem
+access, discovery or admission occurs in either component. Complete selected
+scopes precede results, with separate unsupported, malformed, conflict and
+resource outcomes. The
+[authoritative companion metadata contract](native-symbol-engine.md#companion-metadata-foundation-se08-partial)
+defines framing, profiles and failure boundaries.
+
+Explicit candidate discovery, relationship ownership and companion context
+attachment remain SE08 work. Existing artifact admission remains independent;
+a matching CRC or build ID cannot share backing or merge physical records.
+The frontend's GDB-driven behavior and Search remain unchanged.
+
 ### Event loop and text rendering
 
 The UI uses nonblocking ncurses input and polls terminal/backend/PTY/pidfd

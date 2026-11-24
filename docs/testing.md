@@ -4112,3 +4112,57 @@ and `SOURCE`/`CHECKSUM` records with raw-line metadata and an independent source
 digest. These are host foundation checks. Existing Source UI behavior remains
 unchanged; native UI integration and live actions retain SE11/15. See the
 [preparation contract](native-symbol-engine.md#source-preparation-and-byte-correspondence-se07).
+
+
+### Debug companion metadata and CRC32
+
+GNU `objcopy` is required for the maintained native companion fixture:
+
+```sh
+make BUILD_DIR=build/symbol-companions CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-crc32 test-symbol-companion-metadata test-symbol-companion-native
+```
+
+CRC checks include the IEEE check string, empty and binary inputs, fragmented
+updates, a 64 KiB boundary, a million-byte stream, exact final lengths and
+poisoned failures. Metadata cases cover both byte orders, note alignment 4/8,
+all debuglink padding widths, nonzero opaque padding, invalid/truncated extents,
+unsupported basenames, unknown notes, late malformed data, duplicate IDs,
+caller-capacity failure and IDs larger than a service slice. Invalid API requests
+preserve state. Complete-scope failure cannot expose a usable prefix.
+
+The native fixture uses `objcopy --only-keep-debug` and
+`objcopy --strip-debug --add-gnu-debuglink=...` to create a linked pair with spaces
+in its directory and debug filename. The harness freezes both files independently
+before examining them through the retained-section decoder. It compares complete
+companion CRC bytes, checks matching opaque build IDs across all note sections
+and requires a changed-copy-byte checksum mismatch. Neither fixture is executed.
+All reader allocations and temporary descriptors are released.
+
+Compare the reported ID with `readelf --notes --wide`, the link bytes with
+`readelf --hex-dump=.gnu_debuglink --wide`, and the complete debug-file CRC with
+an independent implementation. Matching metadata is fixture evidence, not
+production discovery, attachment or target access. The authoritative
+[scope/profile contract](native-symbol-engine.md#companion-metadata-foundation-se08-partial)
+keeps those responsibilities separate.
+
+An optional Linux x86-64 check uses an i386-capable compiler/linker, without
+multilib C runtime libraries. It supplies a short opaque ID and renames its note
+section to exercise recognition independently of the conventional section name:
+
+```sh
+mkdir -p build/companion32
+cc -m32 -nostdlib -fno-pie -no-pie -g -O0 -std=c17 -Wall -Wextra -Werror \
+  -Wl,-e,main -Wl,--build-id=0x0123456789abcdef \
+  tests/fixtures/native/companion.c -o build/companion32/fixture
+objcopy --only-keep-debug --rename-section .note.gnu.build-id=.note.custom-id \
+  build/companion32/fixture build/companion32/fixture.debug
+objcopy --strip-debug --rename-section .note.gnu.build-id=.note.custom-id \
+  --add-gnu-debuglink=build/companion32/fixture.debug \
+  build/companion32/fixture build/companion32/primary
+build/symbol-companions/test-symbol-companion-native \
+  build/companion32/primary build/companion32/fixture.debug
+```
+
+This inspects ELF32 metadata without running the target and does not qualify a
+physical architecture or remote backend.

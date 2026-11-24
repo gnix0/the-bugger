@@ -8922,3 +8922,78 @@ UI and live actions retain their later gates; F07 remains unfinished. Remote
 profiles and physical STM32/ARM, ESP32/Xtensa and ESP32/RISC-V qualification remain
 outstanding before the planned v0.3.0 merge/release. Existing Source and debugger
 behavior is unchanged. SE08 local debug-companion discovery and attachment is next.
+
+## SE08 companion metadata foundation — 2026-11-24
+
+The maintainer reported the final SE07 hosted CI checks green after the recorded
+local closeout. SE08 now has the
+[bounded companion metadata foundation](native-symbol-engine.md#companion-metadata-foundation-se08-partial):
+independent streaming GNU CRC32, exact debuglink decoding and complete selected
+GNU build-ID note scopes. Discovery, admission, relationship publication and
+attachment ownership remain unfinished.
+
+Focused fortified checks passed (exit 0):
+
+```sh
+make BUILD_DIR=build/se08-metadata-focused-20261124 CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-crc32 test-symbol-companion-metadata test-symbol-companion-native
+```
+
+CRC vectors cover empty input, `123456789`, `abc`, binary bytes 0–255, a 64 KiB
+binary stream and a million-byte `a` stream. Fragmented updates, exact expected
+lengths, overflow and poisoned failures passed. Python's independent `zlib.crc32`
+confirmed the binary/long vectors and both complete native debug-file CRCs.
+
+Authored metadata checks passed for both byte orders and note alignments 4/8.
+They cover every debuglink padding width, nonzero opaque padding, all truncation
+points of representative records, invalid extents, unsupported basename profiles,
+empty/nonterminated names, duplicate equal IDs, late malformed note framing,
+unknown note types, capacity failure and a 513-byte opaque ID spanning service
+slices. Invalid requests preserve state; discarding pending state exposes no
+usable view. A subsequent focused cancellation check passed in `cancellation.log`.
+
+The default linked ELF64 pair was produced with GCC 16.2.1 and GNU binutils 2.47
+`objcopy`, retaining spaces in both the directory and debug filename. The harness
+froze primary and companion independently, validated their section inventories,
+matched the complete debug-file CRC and preserved their distinct backing keys.
+Both files carried the same 20-byte build ID; a changed copied byte produced a
+CRC mismatch. No fixture program or debugger was executed.
+
+A supplementary linked ELF32 pair used `cc -m32 -nostdlib` with an explicit
+8-byte build ID. Renaming its note section to `.note.custom-id` preserved
+recognition through section type, owner and note type. Both pairs passed the
+native harness and independent `readelf`/Python comparisons. This is Linux x86-64
+inspection of ELF32 metadata, not physical i386 or embedded qualification.
+Native producer evidence here is little-endian; big-endian cases are authored.
+
+GNU `readelf --notes --wide` returns exit 0 but reports `Unable to find program
+interpreter name` for the ELF64 `--only-keep-debug` output: its interpreter bytes
+are absent from the separate debug file. Note records remain available and match.
+The comparison retains that exact diagnostic and accepts it only for this known
+companion/profile; other diagnostics fail the comparison. The initial comparison
+stopped on that diagnostic before this scoped handling was added. No program
+interpreter or runtime-executable validity is inferred from these metadata checks.
+
+Focused Clang 23.1.5 ASan/UBSan checks passed, including stack-use-after-return
+detection (exit 0):
+
+```sh
+UBSAN_OPTIONS=halt_on_error=1 ASAN_OPTIONS=detect_stack_use_after_return=1 \
+make BUILD_DIR=build/se08-metadata-sanitize-20261124 CC=clang \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' \
+  test-crc32 test-symbol-companion-metadata test-symbol-companion-native
+```
+
+The supplementary ELF32 pair also passed the instrumented native harness. Commands,
+input hashes, tool versions, logs/statuses, raw reference dumps and comparisons
+are retained under `build/se08-metadata-evidence-20261124/`. The added cancellation
+cases were checked separately after the complete focused snapshots; they change
+no production code. No broad integration suite or complete analysis was repeated
+during this implementation round.
+
+Fresh full fortified baseline, complete analysis, fortified test-source compilation
+and maintainer acceptance remain pending. No hosted CI for this batch, companion
+attachment, runtime mapping or physical result is claimed. Existing frontend
+behavior and runtime dependencies are unchanged.

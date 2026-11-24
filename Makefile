@@ -24,6 +24,7 @@ SOURCES += src/symbol/inline_details.c src/symbol/line.c src/symbol/line_files.c
 SOURCES += src/symbol/code_attributes.c src/symbol/tables.c src/symbol/range_index.c src/symbol/code_locations.c
 SOURCES += src/symbol/source_file.c src/symbol/source_path.c src/symbol/md5.c
 SOURCES += src/symbol/source_context.c src/symbol/source_prepare.c src/symbol/source_check.c
+SOURCES += src/symbol/crc32.c src/symbol/companion_metadata.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -1739,3 +1740,44 @@ test-symbol-source-prepare: $(BUILD_DIR)/test-symbol-source-prepare
 
 test: test-symbol-source-prepare
 -include $(BUILD_DIR)/tests/unit/test_symbol_source_prepare.d
+
+
+$(BUILD_DIR)/test-crc32: $(BUILD_DIR)/tests/unit/test_crc32.o $(BUILD_DIR)/src/symbol/crc32.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-crc32
+test-crc32: $(BUILD_DIR)/test-crc32
+	$(BUILD_DIR)/test-crc32
+
+test: test-crc32
+-include $(BUILD_DIR)/tests/unit/test_crc32.d
+
+$(BUILD_DIR)/test-symbol-companion-metadata: $(BUILD_DIR)/tests/unit/test_symbol_companion_metadata.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-companion-metadata
+test-symbol-companion-metadata: $(BUILD_DIR)/test-symbol-companion-metadata
+	$(BUILD_DIR)/test-symbol-companion-metadata
+
+test: test-symbol-companion-metadata
+-include $(BUILD_DIR)/tests/unit/test_symbol_companion_metadata.d
+
+$(BUILD_DIR)/companion-fixture: tests/fixtures/native/companion.c
+	mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(PROJECT_CPPFLAGS) -O0 -g $(PROJECT_CFLAGS) -Wl,--build-id=sha1 -o $@ $<
+
+$(BUILD_DIR)/companion-pair.stamp: $(BUILD_DIR)/companion-fixture
+	mkdir -p "$(BUILD_DIR)/companion pair"
+	objcopy --only-keep-debug $< "$(BUILD_DIR)/companion pair/fixture with spaces.debug"
+	objcopy --strip-debug --add-gnu-debuglink="$(BUILD_DIR)/companion pair/fixture with spaces.debug" $< "$(BUILD_DIR)/companion pair/primary"
+	touch $@
+
+$(BUILD_DIR)/test-symbol-companion-native: $(BUILD_DIR)/tests/integration/test_symbol_companion_native.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-symbol-companion-native
+test-symbol-companion-native: $(BUILD_DIR)/test-symbol-companion-native $(BUILD_DIR)/companion-pair.stamp
+	$(BUILD_DIR)/test-symbol-companion-native "$(BUILD_DIR)/companion pair/primary" "$(BUILD_DIR)/companion pair/fixture with spaces.debug"
+
+test: test-symbol-companion-native
+-include $(BUILD_DIR)/tests/integration/test_symbol_companion_native.d

@@ -220,7 +220,7 @@ independently below; symbol discovery and live native actions remain unavailable
 | SE05 | DWARF structure | In progress: bounded DWARF 4–5 headers, selected header inventories, abbreviation tables, attribute forms, selected DIE trees, reference targeting, unique attribute selection and composed string dependencies; semantic consumers and shared evidence ownership follow |
 | SE06 | DWARF definitions and names | Complete within the documented metadata profile; [local verification and maintainer acceptance recorded](validation.md#se06-delivery-closeout--2026-11-22) |
 | SE07 | Native line tables and ranges | Complete within the documented metadata profile; [local verification and maintainer acceptance recorded](validation.md#se07-delivery-closeout--2026-11-23). Native UI/live actions remain SE11/15 |
-| SE08 | Explicit debug companions | Planned |
+| SE08 | Explicit debug companions | In progress: [bounded debuglink/build-ID metadata and complete-file CRC32](native-symbol-engine.md#companion-metadata-foundation-se08-partial); explicit discovery, relationship validation and attachment ownership remain |
 | SE09–SE10 | Complete bounded discovery/publication and actual production sizing | Planned |
 | SE11 | Offline artifact/Symbols/Source UI; may be accepted before runtime resolution | Planned |
 | SE12–SE15 | Runtime preparation, native Watches, Memory drafts, exact Source actions and guarded Console/DSO integration | Planned |
