@@ -19,6 +19,14 @@ PROJECT_CPPFLAGS := -Iinclude -Iinclude/tui -Iinclude/layout -Iinclude/gdb -Iinc
 PROJECT_CFLAGS := -std=c17 -Wall -Wextra -Wpedantic -Werror \
 	-Wformat=2 -Wshadow -Wstrict-prototypes -Wmissing-prototypes
 SOURCES := src/main.c src/tui/app.c src/tui/demo.c src/tui/render.c src/tui/theme.c src/tui/preferences.c src/tui/keybinds.c src/tui/editor.c src/tui/terminal.c src/tui/setup_capture.c src/tui/setup_restore.c src/layout/layout.c src/gdb/mi.c src/gdb/controller.c src/session/native.c src/session/paths.c src/session/session.c src/session/openocd.c src/session/profiles.c src/session/setup.c src/model/context.c src/model/code.c src/model/browse.c src/model/monitor.c src/model/mmio.c src/model/images.c src/model/breakpoints.c src/model/registers.c src/model/memory.c src/model/stack.c src/model/variables.c
+SOURCES += src/symbol/reader.c src/symbol/identity.c src/symbol/sha256.c src/symbol/wire.c src/symbol/schedule.c src/symbol/budget.c src/symbol/process.c src/symbol/worker.c src/symbol/helper.c src/symbol/admission.c src/symbol/acquire.c src/symbol/equal.c src/symbol/storage.c src/symbol/operation.c src/symbol/artifact.c src/symbol/elf.c src/symbol/file.c src/symbol/sections.c src/symbol/symbols.c src/symbol/dwarf.c src/symbol/units.c src/symbol/leb.c src/symbol/abbrev.c src/symbol/form.c src/symbol/dies.c src/symbol/references.c src/symbol/strings.c src/symbol/string_offsets.c src/symbol/attributes.c src/symbol/text.c src/symbol/entities.c src/symbol/relations.c src/symbol/graph.c src/symbol/inherit.c src/symbol/string_order.c src/symbol/inherited_text.c src/symbol/context.c src/symbol/scope_graph.c src/symbol/constants.c src/symbol/name_order.c src/symbol/qualified.c src/symbol/inline_scope.c src/symbol/locality.c src/symbol/parameters.c src/symbol/inherited_flag.c src/symbol/inherited_reference.c src/symbol/type_recipe.c src/symbol/parameter_links.c src/symbol/parameter_source.c src/symbol/callable.c
+SOURCES += src/symbol/inline_details.c src/symbol/line.c src/symbol/line_files.c src/symbol/line_reference.c src/symbol/indexed_tables.c src/symbol/ranges.c
+SOURCES += src/symbol/code_attributes.c src/symbol/tables.c src/symbol/range_index.c src/symbol/code_locations.c
+SOURCES += src/symbol/source_file.c src/symbol/source_path.c src/symbol/md5.c
+SOURCES += src/symbol/source_context.c src/symbol/source_prepare.c src/symbol/source_check.c
+SOURCES += src/symbol/crc32.c src/symbol/companion_metadata.c
+SOURCES += src/symbol/companion_paths.c src/symbol/companion_scan.c src/symbol/companion_receipt.c
+SOURCES += src/symbol/companion.c src/symbol/companion_load.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -896,3 +904,932 @@ test-native: test-popups
 test-tmux: test-popups-tmux
 
 -include $(BUILD_DIR)/tests/integration/test_popups_tui.d
+
+$(BUILD_DIR)/test-symbol-primitives: $(BUILD_DIR)/tests/unit/test_symbol_primitives.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/identity.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+$(BUILD_DIR)/test-sha256: $(BUILD_DIR)/tests/unit/test_sha256.o $(BUILD_DIR)/src/symbol/sha256.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-primitives test-sha256
+test-symbol-primitives: $(BUILD_DIR)/test-symbol-primitives
+	$(BUILD_DIR)/test-symbol-primitives
+
+test-sha256: $(BUILD_DIR)/test-sha256
+	$(BUILD_DIR)/test-sha256
+
+test: test-symbol-primitives test-sha256
+-include $(BUILD_DIR)/tests/unit/test_symbol_primitives.d $(BUILD_DIR)/tests/unit/test_sha256.d
+
+$(BUILD_DIR)/test-symbol-wire: $(BUILD_DIR)/tests/unit/test_symbol_wire.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=malloc,--wrap=calloc,--wrap=recvmsg,--wrap=sendmsg,--wrap=send -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-wire
+test-symbol-wire: $(BUILD_DIR)/test-symbol-wire
+	$(BUILD_DIR)/test-symbol-wire
+
+test: test-symbol-wire
+-include $(BUILD_DIR)/tests/unit/test_symbol_wire.d
+
+$(BUILD_DIR)/test-symbol-schedule: $(BUILD_DIR)/tests/unit/test_symbol_schedule.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-schedule
+test-symbol-schedule: $(BUILD_DIR)/test-symbol-schedule
+	$(BUILD_DIR)/test-symbol-schedule
+
+test: test-symbol-schedule
+-include $(BUILD_DIR)/tests/unit/test_symbol_schedule.d
+
+$(BUILD_DIR)/test-symbol-process: $(BUILD_DIR)/tests/unit/test_symbol_process.o $(BUILD_DIR)/src/symbol/process.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=syscall -Wl,--wrap=waitpid -Wl,--wrap=execve -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-process
+test-symbol-process: $(BUILD_DIR)/test-symbol-process
+	$(BUILD_DIR)/test-symbol-process
+
+test: test-symbol-process
+-include $(BUILD_DIR)/tests/unit/test_symbol_process.d
+
+$(BUILD_DIR)/test-symbol-helper: $(BUILD_DIR)/tests/unit/test_symbol_helper.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=clock_gettime -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=recvmsg -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-helper
+test-symbol-helper: all $(BUILD_DIR)/test-symbol-helper
+	$(BUILD_DIR)/test-symbol-helper $(abspath $(BINARY))
+
+test: test-symbol-helper
+-include $(BUILD_DIR)/tests/unit/test_symbol_helper.d
+
+$(BUILD_DIR)/test-symbol-helper-native: $(BUILD_DIR)/tests/integration/test_symbol_helper_native.o $(BUILD_DIR)/src/gdb/controller.o $(BUILD_DIR)/src/gdb/mi.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-helper-native
+test-symbol-helper-native: all $(BUILD_DIR)/test-symbol-helper-native $(BUILD_DIR)/test-symbol-helper
+	$(BUILD_DIR)/test-symbol-helper-native gdb $(abspath $(BUILD_DIR)/test-symbol-helper)
+
+test-native: test-symbol-helper-native
+-include $(BUILD_DIR)/tests/integration/test_symbol_helper_native.d
+
+
+$(BUILD_DIR)/test-symbol-admission: $(BUILD_DIR)/tests/unit/test_symbol_admission.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-admission
+test-symbol-admission: $(BUILD_DIR)/test-symbol-admission
+	$(BUILD_DIR)/test-symbol-admission
+
+test: test-symbol-admission
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_admission.d
+
+
+$(BUILD_DIR)/test-symbol-acquire: $(BUILD_DIR)/tests/unit/test_symbol_acquire.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=pread,--wrap=pwrite,--wrap=close,--wrap=fstatfs -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-acquire
+test-symbol-acquire: $(BUILD_DIR)/test-symbol-acquire
+	$(BUILD_DIR)/test-symbol-acquire
+
+test: test-symbol-acquire
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_acquire.d
+
+
+$(BUILD_DIR)/test-symbol-reflink: $(BUILD_DIR)/tests/unit/test_symbol_reflink.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=ioctl,--wrap=ftruncate -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-reflink
+test-symbol-reflink: $(BUILD_DIR)/test-symbol-reflink
+	$(BUILD_DIR)/test-symbol-reflink
+
+test: test-symbol-reflink
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_reflink.d
+
+
+$(BUILD_DIR)/test-symbol-equal: $(BUILD_DIR)/tests/unit/test_symbol_equal.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=pread,--wrap=memcmp,--wrap=bcmp -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-equal
+test-symbol-equal: $(BUILD_DIR)/test-symbol-equal
+	$(BUILD_DIR)/test-symbol-equal
+
+test: test-symbol-equal
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_equal.d
+
+
+$(BUILD_DIR)/test-symbol-storage: $(BUILD_DIR)/tests/unit/test_symbol_storage.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-storage
+test-symbol-storage: $(BUILD_DIR)/test-symbol-storage
+	$(BUILD_DIR)/test-symbol-storage
+
+test: test-symbol-storage
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_storage.d
+
+
+$(BUILD_DIR)/test-symbol-operation: $(BUILD_DIR)/tests/unit/test_symbol_operation.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o
+	$(CC) $(LDFLAGS) -o $@ $^ -Wl,--wrap=calloc,--wrap=fstatfs $(LDLIBS)
+
+.PHONY: test-symbol-operation
+test-symbol-operation: $(BUILD_DIR)/test-symbol-operation
+	$(BUILD_DIR)/test-symbol-operation
+
+test: test-symbol-operation
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_operation.d
+
+
+$(BUILD_DIR)/test-symbol-resource: $(BUILD_DIR)/tests/unit/test_symbol_resource.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/artifact.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o
+	$(CC) $(LDFLAGS) -o $@ $^ -Wl,--wrap=malloc $(LDLIBS)
+
+.PHONY: test-symbol-resource
+test-symbol-resource: all $(BUILD_DIR)/test-symbol-resource
+	$(BUILD_DIR)/test-symbol-resource $(abspath $(BINARY))
+
+test: test-symbol-resource
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_resource.d
+
+
+$(BUILD_DIR)/test-symbol-artifact: $(BUILD_DIR)/tests/unit/test_symbol_artifact.o $(BUILD_DIR)/src/symbol/artifact.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/equal.o
+	$(CC) $(LDFLAGS) -o $@ $^ -Wl,--wrap=malloc,--wrap=calloc,--wrap=fstat $(LDLIBS)
+
+.PHONY: test-symbol-artifact
+test-symbol-artifact: $(BUILD_DIR)/test-symbol-artifact
+	$(BUILD_DIR)/test-symbol-artifact
+
+test: test-symbol-artifact
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_artifact.d
+
+
+$(BUILD_DIR)/test-symbol-elf: $(BUILD_DIR)/tests/unit/test_symbol_elf.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-elf
+test-symbol-elf: $(BUILD_DIR)/test-symbol-elf
+	$(BUILD_DIR)/test-symbol-elf
+
+test: test-symbol-elf
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_elf.d
+
+
+$(BUILD_DIR)/test-symbol-elf-native: $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/tests/integration/test_symbol_elf_native.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/units.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/abbrev.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/dies.o $(BUILD_DIR)/src/symbol/form.o $(BUILD_DIR)/src/symbol/references.o $(BUILD_DIR)/src/symbol/strings.o $(BUILD_DIR)/src/symbol/string_offsets.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/text.o $(BUILD_DIR)/src/symbol/entities.o $(BUILD_DIR)/src/symbol/relations.o $(BUILD_DIR)/src/symbol/graph.o $(BUILD_DIR)/src/symbol/inherit.o $(BUILD_DIR)/src/symbol/string_order.o $(BUILD_DIR)/src/symbol/inherited_text.o $(BUILD_DIR)/src/symbol/context.o $(BUILD_DIR)/src/symbol/scope_graph.o $(BUILD_DIR)/src/symbol/constants.o $(BUILD_DIR)/src/symbol/name_order.o $(BUILD_DIR)/src/symbol/qualified.o $(BUILD_DIR)/src/symbol/inline_scope.o $(BUILD_DIR)/src/symbol/locality.o $(BUILD_DIR)/src/symbol/parameters.o $(BUILD_DIR)/src/symbol/inherited_flag.o $(BUILD_DIR)/src/symbol/inherited_reference.o $(BUILD_DIR)/src/symbol/type_recipe.o $(BUILD_DIR)/src/symbol/parameter_links.o $(BUILD_DIR)/src/symbol/parameter_source.o $(BUILD_DIR)/src/symbol/callable.o $(BUILD_DIR)/tests/support/symbol_callable.o $(BUILD_DIR)/tests/support/symbol_inline_details.o $(BUILD_DIR)/src/symbol/inline_details.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-symbol-elf-native
+test-symbol-elf-native: $(BUILD_DIR)/test-symbol-elf-native $(BUILD_DIR)/debug-fixture $(BUILD_DIR)/break-fixture-library.so $(BUILD_DIR)/code-fixture-cpp $(BUILD_DIR)/symbol-fixture-dwarf4 $(BUILD_DIR)/symbol-fixture-dwarf5 $(BUILD_DIR)/symbol-fixture-type-units
+	$(BUILD_DIR)/symbol-fixture-dwarf4
+	$(BUILD_DIR)/symbol-fixture-dwarf5
+	$(BUILD_DIR)/symbol-fixture-type-units
+	$(BUILD_DIR)/test-symbol-elf-native $(abspath $(BUILD_DIR)/test-symbol-elf-native) $(abspath $(BUILD_DIR)/debug-fixture) $(abspath $(BUILD_DIR)/break-fixture-library.so) $(abspath $(BUILD_DIR)/code-fixture-cpp) --relations-dwarf4 $(abspath $(BUILD_DIR)/symbol-fixture-dwarf4) --relations-dwarf5 $(abspath $(BUILD_DIR)/symbol-fixture-dwarf5) --type-units-dwarf4 $(abspath $(BUILD_DIR)/symbol-fixture-type-units)
+
+test: test-symbol-elf-native
+
+-include $(BUILD_DIR)/tests/integration/test_symbol_elf_native.d
+
+
+$(BUILD_DIR)/test-symbol-file: $(BUILD_DIR)/tests/unit/test_symbol_file.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=pread -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-file
+test-symbol-file: $(BUILD_DIR)/test-symbol-file
+	$(BUILD_DIR)/test-symbol-file
+
+test: test-symbol-file
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_file.d
+
+
+$(BUILD_DIR)/test-symbol-sections: $(BUILD_DIR)/tests/unit/test_symbol_sections.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=malloc,--wrap=pread,--wrap=memchr -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-sections
+test-symbol-sections: $(BUILD_DIR)/test-symbol-sections
+	$(BUILD_DIR)/test-symbol-sections
+
+test: test-symbol-sections
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_sections.d
+
+
+$(BUILD_DIR)/test-symbol-symbols: $(BUILD_DIR)/tests/unit/test_symbol_symbols.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=malloc,--wrap=pread,--wrap=memchr -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-symbols
+test-symbol-symbols: $(BUILD_DIR)/test-symbol-symbols
+	$(BUILD_DIR)/test-symbol-symbols
+
+test: test-symbol-symbols
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_symbols.d
+
+
+$(BUILD_DIR)/test-symbol-inspect: $(BUILD_DIR)/tests/unit/test_symbol_inspect.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/artifact.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-inspect
+test-symbol-inspect: all $(BUILD_DIR)/test-symbol-inspect
+	$(BUILD_DIR)/test-symbol-inspect $(abspath $(BINARY))
+
+test: test-symbol-inspect
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_inspect.d
+
+
+$(BUILD_DIR)/test-symbol-dwarf: $(BUILD_DIR)/tests/unit/test_symbol_dwarf.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-dwarf
+test-symbol-dwarf: $(BUILD_DIR)/test-symbol-dwarf
+	$(BUILD_DIR)/test-symbol-dwarf
+
+test: test-symbol-dwarf
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_dwarf.d
+
+
+$(BUILD_DIR)/test-symbol-units: $(BUILD_DIR)/tests/unit/test_symbol_units.o $(BUILD_DIR)/src/symbol/units.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=malloc,--wrap=pread -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-units
+test-symbol-units: $(BUILD_DIR)/test-symbol-units
+	$(BUILD_DIR)/test-symbol-units
+
+test: test-symbol-units
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_units.d
+
+
+$(BUILD_DIR)/test-symbol-leb: $(BUILD_DIR)/tests/unit/test_symbol_leb.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-leb
+test-symbol-leb: $(BUILD_DIR)/test-symbol-leb
+	$(BUILD_DIR)/test-symbol-leb
+
+test: test-symbol-leb
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_leb.d
+
+
+$(BUILD_DIR)/test-symbol-abbrev: $(BUILD_DIR)/tests/unit/test_symbol_abbrev.o $(BUILD_DIR)/src/symbol/abbrev.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=malloc,--wrap=pread -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-abbrev
+test-symbol-abbrev: $(BUILD_DIR)/test-symbol-abbrev
+	$(BUILD_DIR)/test-symbol-abbrev
+
+test: test-symbol-abbrev
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_abbrev.d
+
+$(BUILD_DIR)/test-symbol-form: $(BUILD_DIR)/tests/unit/test_symbol_form.o $(BUILD_DIR)/src/symbol/form.o $(BUILD_DIR)/src/symbol/leb.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-form
+test-symbol-form: $(BUILD_DIR)/test-symbol-form
+	$(BUILD_DIR)/test-symbol-form
+
+test: test-symbol-form
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_form.d
+
+$(BUILD_DIR)/test-symbol-dies: $(BUILD_DIR)/tests/unit/test_symbol_dies.o $(BUILD_DIR)/src/symbol/dies.o $(BUILD_DIR)/src/symbol/form.o $(BUILD_DIR)/src/symbol/abbrev.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/units.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=malloc,--wrap=pread -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-dies
+test-symbol-dies: $(BUILD_DIR)/test-symbol-dies
+	$(BUILD_DIR)/test-symbol-dies
+
+test: test-symbol-dies
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_dies.d
+
+$(BUILD_DIR)/test-symbol-references: $(BUILD_DIR)/tests/unit/test_symbol_references.o $(BUILD_DIR)/src/symbol/references.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-references
+test-symbol-references: $(BUILD_DIR)/test-symbol-references
+	$(BUILD_DIR)/test-symbol-references
+
+test: test-symbol-references
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_references.d
+
+$(BUILD_DIR)/test-symbol-strings: $(BUILD_DIR)/tests/unit/test_symbol_strings.o $(BUILD_DIR)/src/symbol/strings.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=pread -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-strings
+test-symbol-strings: $(BUILD_DIR)/test-symbol-strings
+	$(BUILD_DIR)/test-symbol-strings
+
+test: test-symbol-strings
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_strings.d
+
+$(BUILD_DIR)/test-symbol-string-offsets: $(BUILD_DIR)/tests/unit/test_symbol_string_offsets.o $(BUILD_DIR)/src/symbol/string_offsets.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=pread -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-string-offsets
+test-symbol-string-offsets: $(BUILD_DIR)/test-symbol-string-offsets
+	$(BUILD_DIR)/test-symbol-string-offsets
+
+test: test-symbol-string-offsets
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_string_offsets.d
+
+
+$(BUILD_DIR)/test-symbol-attributes: $(BUILD_DIR)/tests/unit/test_symbol_attributes.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-attributes
+test-symbol-attributes: $(BUILD_DIR)/test-symbol-attributes
+	$(BUILD_DIR)/test-symbol-attributes
+
+test: test-symbol-attributes
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_attributes.d
+
+
+$(BUILD_DIR)/test-symbol-text: $(BUILD_DIR)/tests/unit/test_symbol_text.o $(BUILD_DIR)/src/symbol/text.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/strings.o $(BUILD_DIR)/src/symbol/string_offsets.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=pread -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-text
+test-symbol-text: $(BUILD_DIR)/test-symbol-text
+	$(BUILD_DIR)/test-symbol-text
+
+test: test-symbol-text
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_text.d
+
+
+$(BUILD_DIR)/test-symbol-entities: $(BUILD_DIR)/tests/unit/test_symbol_entities.o $(BUILD_DIR)/src/symbol/entities.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-entities
+test-symbol-entities: $(BUILD_DIR)/test-symbol-entities
+	$(BUILD_DIR)/test-symbol-entities
+
+test: test-symbol-entities
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_entities.d
+
+
+SYMBOL_FIXTURE_SOURCES := tests/fixtures/native/symbols/main.cpp tests/fixtures/native/symbols/left/definition.cpp tests/fixtures/native/symbols/right/definition.cpp
+
+$(BUILD_DIR)/symbol-fixture-dwarf4: $(SYMBOL_FIXTURE_SOURCES) tests/fixtures/native/symbols/shared.h
+	mkdir -p $(dir $@)
+	$(CXX) -std=c++17 -Wall -Wextra -Wpedantic -Werror -g -gdwarf-4 -O2 -fno-omit-frame-pointer $(SYMBOL_FIXTURE_SOURCES) -o $@
+
+$(BUILD_DIR)/symbol-fixture-type-units: tests/fixtures/native/symbols/type_units.cpp
+	mkdir -p $(dir $@)
+	$(CXX) -std=c++17 -Wall -Wextra -Wpedantic -Werror -g -gdwarf-4 -O2 -fno-inline -fdebug-types-section $< -o $@
+
+$(BUILD_DIR)/symbol-fixture-dwarf5: $(SYMBOL_FIXTURE_SOURCES) tests/fixtures/native/symbols/shared.h
+	mkdir -p $(dir $@)
+	$(CXX) -std=c++17 -Wall -Wextra -Wpedantic -Werror -g -gdwarf-5 -O2 -fno-omit-frame-pointer $(SYMBOL_FIXTURE_SOURCES) -o $@
+
+$(BUILD_DIR)/test-symbol-relations: $(BUILD_DIR)/tests/unit/test_symbol_relations.o $(BUILD_DIR)/src/symbol/relations.o $(BUILD_DIR)/src/symbol/references.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-relations
+test-symbol-relations: $(BUILD_DIR)/test-symbol-relations
+	$(BUILD_DIR)/test-symbol-relations
+
+test: test-symbol-relations
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_relations.d
+
+
+$(BUILD_DIR)/test-symbol-graph: $(BUILD_DIR)/tests/unit/test_symbol_graph.o $(BUILD_DIR)/src/symbol/graph.o $(BUILD_DIR)/src/symbol/relations.o $(BUILD_DIR)/src/symbol/references.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-graph
+test-symbol-graph: $(BUILD_DIR)/test-symbol-graph
+	$(BUILD_DIR)/test-symbol-graph
+
+test: test-symbol-graph
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_graph.d
+
+
+$(BUILD_DIR)/test-symbol-inherit: $(BUILD_DIR)/tests/unit/test_symbol_inherit.o $(BUILD_DIR)/src/symbol/inherit.o $(BUILD_DIR)/src/symbol/graph.o $(BUILD_DIR)/src/symbol/relations.o $(BUILD_DIR)/src/symbol/references.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-inherit
+test-symbol-inherit: $(BUILD_DIR)/test-symbol-inherit
+	$(BUILD_DIR)/test-symbol-inherit
+
+test: test-symbol-inherit
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_inherit.d
+
+
+$(BUILD_DIR)/test-symbol-string-order: $(BUILD_DIR)/tests/unit/test_symbol_string_order.o $(BUILD_DIR)/src/symbol/string_order.o $(BUILD_DIR)/src/symbol/strings.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc -Wl,--wrap=memcmp -Wl,--wrap=pread -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-string-order
+test-symbol-string-order: $(BUILD_DIR)/test-symbol-string-order
+	$(BUILD_DIR)/test-symbol-string-order
+
+test: test-symbol-string-order
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_string_order.d
+
+
+$(BUILD_DIR)/test-symbol-inherited-text: $(BUILD_DIR)/tests/unit/test_symbol_inherited_text.o $(BUILD_DIR)/src/symbol/inherited_text.o $(BUILD_DIR)/src/symbol/string_order.o $(BUILD_DIR)/src/symbol/inherit.o $(BUILD_DIR)/src/symbol/graph.o $(BUILD_DIR)/src/symbol/text.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/string_offsets.o $(BUILD_DIR)/src/symbol/strings.o $(BUILD_DIR)/src/symbol/references.o $(BUILD_DIR)/src/symbol/relations.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc -Wl,--wrap=malloc -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-inherited-text
+test-symbol-inherited-text: $(BUILD_DIR)/test-symbol-inherited-text
+	$(BUILD_DIR)/test-symbol-inherited-text
+
+test: test-symbol-inherited-text
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_inherited_text.d
+
+
+$(BUILD_DIR)/test-symbol-context: $(BUILD_DIR)/tests/unit/test_symbol_context.o $(BUILD_DIR)/src/symbol/context.o $(BUILD_DIR)/src/symbol/graph.o $(BUILD_DIR)/src/symbol/inherit.o $(BUILD_DIR)/src/symbol/relations.o $(BUILD_DIR)/src/symbol/references.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-context
+test-symbol-context: $(BUILD_DIR)/test-symbol-context
+	$(BUILD_DIR)/test-symbol-context
+
+test: test-symbol-context
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_context.d
+
+
+$(BUILD_DIR)/test-symbol-scope-graph: $(BUILD_DIR)/tests/unit/test_symbol_scope_graph.o $(BUILD_DIR)/src/symbol/scope_graph.o $(BUILD_DIR)/src/symbol/context.o $(BUILD_DIR)/src/symbol/graph.o $(BUILD_DIR)/src/symbol/relations.o $(BUILD_DIR)/src/symbol/references.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-scope-graph
+test-symbol-scope-graph: $(BUILD_DIR)/test-symbol-scope-graph
+	$(BUILD_DIR)/test-symbol-scope-graph
+
+test: test-symbol-scope-graph
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_scope_graph.d
+
+
+$(BUILD_DIR)/test-symbol-constants: $(BUILD_DIR)/tests/unit/test_symbol_constants.o $(BUILD_DIR)/src/symbol/constants.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/form.o $(BUILD_DIR)/src/symbol/leb.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-constants
+test-symbol-constants: $(BUILD_DIR)/test-symbol-constants
+	$(BUILD_DIR)/test-symbol-constants
+
+test: test-symbol-constants
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_constants.d
+
+
+$(BUILD_DIR)/test-symbol-name-order: $(BUILD_DIR)/tests/unit/test_symbol_name_order.o $(BUILD_DIR)/src/symbol/name_order.o $(BUILD_DIR)/src/symbol/strings.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=memcmp,--wrap=pread -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-name-order
+test-symbol-name-order: $(BUILD_DIR)/test-symbol-name-order
+	$(BUILD_DIR)/test-symbol-name-order
+
+test: test-symbol-name-order
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_name_order.d
+
+
+$(BUILD_DIR)/test-symbol-qualified: $(BUILD_DIR)/tests/unit/test_symbol_qualified.o $(BUILD_DIR)/src/symbol/qualified.o $(BUILD_DIR)/src/symbol/name_order.o $(BUILD_DIR)/src/symbol/constants.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/strings.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=malloc,--wrap=memcmp,--wrap=pread -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-qualified
+test-symbol-qualified: $(BUILD_DIR)/test-symbol-qualified
+	$(BUILD_DIR)/test-symbol-qualified
+
+test: test-symbol-qualified
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_qualified.d
+
+
+$(BUILD_DIR)/test-symbol-inline-scope: $(BUILD_DIR)/tests/unit/test_symbol_inline_scope.o $(BUILD_DIR)/src/symbol/inline_scope.o $(BUILD_DIR)/src/symbol/constants.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-inline-scope
+test-symbol-inline-scope: $(BUILD_DIR)/test-symbol-inline-scope
+	$(BUILD_DIR)/test-symbol-inline-scope
+
+test: test-symbol-inline-scope
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_inline_scope.d
+
+
+$(BUILD_DIR)/test-symbol-locality: $(BUILD_DIR)/tests/unit/test_symbol_locality.o $(BUILD_DIR)/src/symbol/locality.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-symbol-locality
+test-symbol-locality: $(BUILD_DIR)/test-symbol-locality
+	$(BUILD_DIR)/test-symbol-locality
+
+$(BUILD_DIR)/test-symbol-roles: $(BUILD_DIR)/tests/unit/test_symbol_roles.o $(BUILD_DIR)/src/symbol/entities.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-symbol-roles
+test-symbol-roles: $(BUILD_DIR)/test-symbol-roles
+	$(BUILD_DIR)/test-symbol-roles
+
+test: test-symbol-locality test-symbol-roles
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_locality.d $(BUILD_DIR)/tests/unit/test_symbol_roles.d
+
+
+$(BUILD_DIR)/test-symbol-parameters: $(BUILD_DIR)/tests/unit/test_symbol_parameters.o $(BUILD_DIR)/src/symbol/parameters.o $(BUILD_DIR)/src/symbol/entities.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-symbol-parameters
+test-symbol-parameters: $(BUILD_DIR)/test-symbol-parameters
+	$(BUILD_DIR)/test-symbol-parameters
+
+test: test-symbol-parameters
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_parameters.d
+
+
+$(BUILD_DIR)/test-symbol-inherited-flag: $(BUILD_DIR)/tests/unit/test_symbol_inherited_flag.o $(BUILD_DIR)/src/symbol/inherited_flag.o $(BUILD_DIR)/src/symbol/graph.o $(BUILD_DIR)/src/symbol/relations.o $(BUILD_DIR)/src/symbol/references.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-symbol-inherited-flag
+test-symbol-inherited-flag: $(BUILD_DIR)/test-symbol-inherited-flag
+	$(BUILD_DIR)/test-symbol-inherited-flag
+
+test: test-symbol-inherited-flag
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_inherited_flag.d
+
+$(BUILD_DIR)/test-symbol-inherited-reference: $(BUILD_DIR)/tests/unit/test_symbol_inherited_reference.o $(BUILD_DIR)/src/symbol/inherited_reference.o $(BUILD_DIR)/src/symbol/inherit.o $(BUILD_DIR)/src/symbol/graph.o $(BUILD_DIR)/src/symbol/relations.o $(BUILD_DIR)/src/symbol/references.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-inherited-reference
+test-symbol-inherited-reference: $(BUILD_DIR)/test-symbol-inherited-reference
+	$(BUILD_DIR)/test-symbol-inherited-reference
+
+test: test-symbol-inherited-reference
+-include $(BUILD_DIR)/tests/unit/test_symbol_inherited_reference.d
+
+$(BUILD_DIR)/test-symbol-type-recipe: $(BUILD_DIR)/tests/unit/test_symbol_type_recipe.o $(BUILD_DIR)/src/symbol/type_recipe.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-type-recipe
+test-symbol-type-recipe: $(BUILD_DIR)/test-symbol-type-recipe
+	$(BUILD_DIR)/test-symbol-type-recipe
+
+test: test-symbol-type-recipe
+-include $(BUILD_DIR)/tests/unit/test_symbol_type_recipe.d
+
+$(BUILD_DIR)/test-symbol-parameter-links: $(BUILD_DIR)/tests/unit/test_symbol_parameter_links.o $(BUILD_DIR)/src/symbol/parameter_links.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-parameter-links
+test-symbol-parameter-links: $(BUILD_DIR)/test-symbol-parameter-links
+	$(BUILD_DIR)/test-symbol-parameter-links
+
+test: test-symbol-parameter-links
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_parameter_links.d
+
+
+$(BUILD_DIR)/test-symbol-parameter-source: $(BUILD_DIR)/tests/unit/test_symbol_parameter_source.o $(BUILD_DIR)/src/symbol/parameter_source.o $(BUILD_DIR)/src/symbol/parameters.o $(BUILD_DIR)/src/symbol/entities.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/graph.o $(BUILD_DIR)/src/symbol/relations.o $(BUILD_DIR)/src/symbol/references.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-parameter-source
+test-symbol-parameter-source: $(BUILD_DIR)/test-symbol-parameter-source
+	$(BUILD_DIR)/test-symbol-parameter-source
+
+test: test-symbol-parameter-source
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_parameter_source.d
+
+
+$(BUILD_DIR)/test-symbol-callable: $(BUILD_DIR)/tests/unit/test_symbol_callable.o $(BUILD_DIR)/src/symbol/callable.o $(BUILD_DIR)/src/symbol/constants.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-callable
+test-symbol-callable: $(BUILD_DIR)/test-symbol-callable
+	$(BUILD_DIR)/test-symbol-callable
+
+test: test-symbol-callable
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_callable.d
+
+$(BUILD_DIR)/test-symbol-inline-details: $(BUILD_DIR)/tests/unit/test_symbol_inline_details.o $(BUILD_DIR)/src/symbol/inline_details.o $(BUILD_DIR)/src/symbol/graph.o $(BUILD_DIR)/src/symbol/relations.o $(BUILD_DIR)/src/symbol/references.o $(BUILD_DIR)/src/symbol/constants.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-symbol-inline-details
+test-symbol-inline-details: $(BUILD_DIR)/test-symbol-inline-details
+	$(BUILD_DIR)/test-symbol-inline-details
+
+test: test-symbol-inline-details
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_inline_details.d
+
+$(BUILD_DIR)/test-symbol-line: $(BUILD_DIR)/tests/unit/test_symbol_line.o $(BUILD_DIR)/src/symbol/line.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/leb.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-line
+test-symbol-line: $(BUILD_DIR)/test-symbol-line
+	$(BUILD_DIR)/test-symbol-line
+
+test: test-symbol-line
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_line.d
+
+$(BUILD_DIR)/test-symbol-line-native: $(BUILD_DIR)/tests/integration/test_symbol_line_native.o $(BUILD_DIR)/src/symbol/line.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/line_files.o $(BUILD_DIR)/src/symbol/line_reference.o $(BUILD_DIR)/src/symbol/form.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/strings.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/units.o $(BUILD_DIR)/src/symbol/abbrev.o $(BUILD_DIR)/src/symbol/dies.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/ranges.o $(BUILD_DIR)/src/symbol/indexed_tables.o $(BUILD_DIR)/src/symbol/code_attributes.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-symbol-line-native
+test-symbol-line-native: $(BUILD_DIR)/test-symbol-line-native $(BUILD_DIR)/symbol-fixture-dwarf4 $(BUILD_DIR)/symbol-fixture-dwarf5
+	$(BUILD_DIR)/test-symbol-line-native $(BUILD_DIR)/symbol-fixture-dwarf4 $(BUILD_DIR)/symbol-fixture-dwarf5
+
+test: test-symbol-line-native
+
+-include $(BUILD_DIR)/tests/integration/test_symbol_line_native.d
+
+$(BUILD_DIR)/test-symbol-line-files: $(BUILD_DIR)/tests/unit/test_symbol_line_files.o $(BUILD_DIR)/src/symbol/line_files.o $(BUILD_DIR)/src/symbol/line.o $(BUILD_DIR)/src/symbol/form.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/leb.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-line-files
+test-symbol-line-files: $(BUILD_DIR)/test-symbol-line-files
+	$(BUILD_DIR)/test-symbol-line-files
+
+test: test-symbol-line-files
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_line_files.d
+
+$(BUILD_DIR)/test-symbol-line-reference: $(BUILD_DIR)/tests/unit/test_symbol_line_reference.o $(BUILD_DIR)/src/symbol/line_reference.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-line-reference
+test-symbol-line-reference: $(BUILD_DIR)/test-symbol-line-reference
+	$(BUILD_DIR)/test-symbol-line-reference
+
+test: test-symbol-line-reference
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_line_reference.d
+
+$(BUILD_DIR)/test-symbol-indexed-tables: $(BUILD_DIR)/tests/unit/test_symbol_indexed_tables.o $(BUILD_DIR)/src/symbol/indexed_tables.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-indexed-tables
+test-symbol-indexed-tables: $(BUILD_DIR)/test-symbol-indexed-tables
+	$(BUILD_DIR)/test-symbol-indexed-tables
+
+test: test-symbol-indexed-tables
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_indexed_tables.d
+
+$(BUILD_DIR)/test-symbol-ranges: $(BUILD_DIR)/tests/unit/test_symbol_ranges.o $(BUILD_DIR)/src/symbol/ranges.o $(BUILD_DIR)/src/symbol/indexed_tables.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-ranges
+test-symbol-ranges: $(BUILD_DIR)/test-symbol-ranges
+	$(BUILD_DIR)/test-symbol-ranges
+
+test: test-symbol-ranges
+
+-include $(BUILD_DIR)/tests/unit/test_symbol_ranges.d
+
+$(BUILD_DIR)/symbol-fixture-ranges-dwarf4: tests/fixtures/native/symbols/main.cpp tests/fixtures/native/symbols/left/definition.cpp tests/fixtures/native/symbols/right/definition.cpp
+	mkdir -p $(dir $@)
+	$(CXX) -std=c++17 -Wall -Wextra -Wpedantic -Werror -g -gdwarf-4 -O2 -fno-omit-frame-pointer -ffunction-sections -Wl,--sort-section=name $^ -o $@
+
+$(BUILD_DIR)/symbol-fixture-ranges-dwarf5: tests/fixtures/native/symbols/main.cpp tests/fixtures/native/symbols/left/definition.cpp tests/fixtures/native/symbols/right/definition.cpp
+	mkdir -p $(dir $@)
+	$(CXX) -std=c++17 -Wall -Wextra -Wpedantic -Werror -g -gdwarf-5 -O2 -fno-omit-frame-pointer -ffunction-sections -Wl,--sort-section=name $^ -o $@
+
+.PHONY: test-symbol-ranges-native
+test-symbol-ranges-native: $(BUILD_DIR)/test-symbol-line-native $(BUILD_DIR)/symbol-fixture-ranges-dwarf4 $(BUILD_DIR)/symbol-fixture-ranges-dwarf5
+	$(BUILD_DIR)/test-symbol-line-native $(BUILD_DIR)/symbol-fixture-ranges-dwarf4 $(BUILD_DIR)/symbol-fixture-ranges-dwarf5 --disjoint
+
+test: test-symbol-ranges-native
+
+$(BUILD_DIR)/test-symbol-code-attributes: $(BUILD_DIR)/tests/unit/test_symbol_code_attributes.o $(BUILD_DIR)/src/symbol/code_attributes.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-code-attributes
+test-symbol-code-attributes: $(BUILD_DIR)/test-symbol-code-attributes
+	$(BUILD_DIR)/test-symbol-code-attributes
+
+test: test-symbol-code-attributes
+-include $(BUILD_DIR)/tests/unit/test_symbol_code_attributes.d
+
+$(BUILD_DIR)/test-symbol-tables: $(BUILD_DIR)/tests/unit/test_symbol_tables.o $(BUILD_DIR)/src/symbol/tables.o $(BUILD_DIR)/src/symbol/indexed_tables.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS) -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=pread
+
+.PHONY: test-symbol-tables
+test-symbol-tables: $(BUILD_DIR)/test-symbol-tables
+	$(BUILD_DIR)/test-symbol-tables
+
+test: test-symbol-tables
+-include $(BUILD_DIR)/tests/unit/test_symbol_tables.d
+
+$(BUILD_DIR)/test-symbol-tables-native: $(BUILD_DIR)/src/symbol/code_locations.o $(BUILD_DIR)/src/symbol/range_index.o $(BUILD_DIR)/src/symbol/ranges.o $(BUILD_DIR)/tests/integration/test_symbol_tables_native.o $(BUILD_DIR)/src/symbol/tables.o $(BUILD_DIR)/src/symbol/indexed_tables.o $(BUILD_DIR)/src/symbol/code_attributes.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/units.o $(BUILD_DIR)/src/symbol/abbrev.o $(BUILD_DIR)/src/symbol/dies.o $(BUILD_DIR)/src/symbol/form.o $(BUILD_DIR)/src/symbol/leb.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-symbol-tables-native
+test-symbol-tables-native: $(BUILD_DIR)/test-symbol-tables-native $(BUILD_DIR)/symbol-fixture-dwarf4 $(BUILD_DIR)/symbol-fixture-dwarf5 $(BUILD_DIR)/symbol-fixture-ranges-dwarf4 $(BUILD_DIR)/symbol-fixture-ranges-dwarf5
+	$(BUILD_DIR)/test-symbol-tables-native $(BUILD_DIR)/symbol-fixture-dwarf4
+	$(BUILD_DIR)/test-symbol-tables-native $(BUILD_DIR)/symbol-fixture-dwarf5
+	$(BUILD_DIR)/test-symbol-tables-native $(BUILD_DIR)/symbol-fixture-ranges-dwarf4
+	$(BUILD_DIR)/test-symbol-tables-native $(BUILD_DIR)/symbol-fixture-ranges-dwarf5
+
+test: test-symbol-tables-native
+-include $(BUILD_DIR)/tests/integration/test_symbol_tables_native.d
+
+$(BUILD_DIR)/test-symbol-range-index: $(BUILD_DIR)/tests/unit/test_symbol_range_index.o $(BUILD_DIR)/src/symbol/range_index.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-range-index
+test-symbol-range-index: $(BUILD_DIR)/test-symbol-range-index
+	$(BUILD_DIR)/test-symbol-range-index
+
+test: test-symbol-range-index
+-include $(BUILD_DIR)/tests/unit/test_symbol_range_index.d
+
+$(BUILD_DIR)/test-symbol-code-locations: $(BUILD_DIR)/tests/unit/test_symbol_code_locations.o $(BUILD_DIR)/src/symbol/code_locations.o $(BUILD_DIR)/src/symbol/range_index.o $(BUILD_DIR)/src/symbol/ranges.o $(BUILD_DIR)/src/symbol/indexed_tables.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-code-locations
+test-symbol-code-locations: $(BUILD_DIR)/test-symbol-code-locations
+	$(BUILD_DIR)/test-symbol-code-locations
+
+test: test-symbol-code-locations
+-include $(BUILD_DIR)/tests/unit/test_symbol_code_locations.d
+
+$(BUILD_DIR)/test-symbol-source-path: $(BUILD_DIR)/tests/unit/test_symbol_source_path.o $(BUILD_DIR)/src/symbol/source_path.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-source-path
+test-symbol-source-path: $(BUILD_DIR)/test-symbol-source-path
+	$(BUILD_DIR)/test-symbol-source-path
+
+test: test-symbol-source-path
+-include $(BUILD_DIR)/tests/unit/test_symbol_source_path.d
+
+$(BUILD_DIR)/test-symbol-md5: $(BUILD_DIR)/tests/unit/test_symbol_md5.o $(BUILD_DIR)/src/symbol/md5.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-md5
+test-symbol-md5: $(BUILD_DIR)/test-symbol-md5
+	$(BUILD_DIR)/test-symbol-md5
+
+test: test-symbol-md5
+-include $(BUILD_DIR)/tests/unit/test_symbol_md5.d
+
+$(BUILD_DIR)/test-symbol-source-file: $(BUILD_DIR)/tests/unit/test_symbol_source_file.o $(BUILD_DIR)/src/symbol/source_file.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-source-file
+test-symbol-source-file: $(BUILD_DIR)/test-symbol-source-file
+	$(BUILD_DIR)/test-symbol-source-file
+
+test: test-symbol-source-file
+-include $(BUILD_DIR)/tests/unit/test_symbol_source_file.d
+
+$(BUILD_DIR)/test-symbol-source-native: $(BUILD_DIR)/src/symbol/source_context.o $(BUILD_DIR)/src/symbol/source_prepare.o $(BUILD_DIR)/src/symbol/source_check.o $(BUILD_DIR)/src/symbol/constants.o $(BUILD_DIR)/src/symbol/code_attributes.o $(BUILD_DIR)/src/symbol/code_locations.o $(BUILD_DIR)/src/symbol/range_index.o $(BUILD_DIR)/src/symbol/ranges.o $(BUILD_DIR)/src/symbol/indexed_tables.o $(BUILD_DIR)/tests/integration/test_symbol_source_native.o $(BUILD_DIR)/src/symbol/source_file.o $(BUILD_DIR)/src/symbol/source_path.o $(BUILD_DIR)/src/symbol/md5.o $(BUILD_DIR)/src/symbol/line.o $(BUILD_DIR)/src/symbol/line_files.o $(BUILD_DIR)/src/symbol/line_reference.o $(BUILD_DIR)/src/symbol/text.o $(BUILD_DIR)/src/symbol/strings.o $(BUILD_DIR)/src/symbol/string_offsets.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/units.o $(BUILD_DIR)/src/symbol/abbrev.o $(BUILD_DIR)/src/symbol/dies.o $(BUILD_DIR)/src/symbol/form.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-symbol-source-native
+test-symbol-source-native: $(BUILD_DIR)/test-symbol-source-native $(BUILD_DIR)/symbol-fixture-dwarf4 $(BUILD_DIR)/symbol-fixture-dwarf5 $(BUILD_DIR)/symbol-fixture-ranges-dwarf4 $(BUILD_DIR)/symbol-fixture-ranges-dwarf5
+	$(BUILD_DIR)/test-symbol-source-native $(BUILD_DIR)/symbol-fixture-dwarf4
+	$(BUILD_DIR)/test-symbol-source-native $(BUILD_DIR)/symbol-fixture-dwarf5
+	$(BUILD_DIR)/test-symbol-source-native $(BUILD_DIR)/symbol-fixture-ranges-dwarf4
+	$(BUILD_DIR)/test-symbol-source-native $(BUILD_DIR)/symbol-fixture-ranges-dwarf5
+
+test: test-symbol-source-native
+-include $(BUILD_DIR)/tests/integration/test_symbol_source_native.d
+
+
+$(BUILD_DIR)/test-symbol-source-context: $(BUILD_DIR)/tests/unit/test_symbol_source_context.o $(BUILD_DIR)/src/symbol/source_context.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-source-context
+test-symbol-source-context: $(BUILD_DIR)/test-symbol-source-context
+	$(BUILD_DIR)/test-symbol-source-context
+
+test: test-symbol-source-context
+-include $(BUILD_DIR)/tests/unit/test_symbol_source_context.d
+
+$(BUILD_DIR)/test-symbol-source-check: $(BUILD_DIR)/tests/unit/test_symbol_source_check.o $(BUILD_DIR)/src/symbol/source_check.o $(BUILD_DIR)/src/symbol/md5.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-source-check
+test-symbol-source-check: $(BUILD_DIR)/test-symbol-source-check
+	$(BUILD_DIR)/test-symbol-source-check
+
+test: test-symbol-source-check
+-include $(BUILD_DIR)/tests/unit/test_symbol_source_check.d
+
+$(BUILD_DIR)/test-symbol-source-prepare: $(BUILD_DIR)/tests/unit/test_symbol_source_prepare.o $(BUILD_DIR)/src/symbol/source_prepare.o $(BUILD_DIR)/src/symbol/constants.o $(BUILD_DIR)/src/symbol/attributes.o $(BUILD_DIR)/src/symbol/code_locations.o $(BUILD_DIR)/src/symbol/range_index.o $(BUILD_DIR)/src/symbol/ranges.o $(BUILD_DIR)/src/symbol/indexed_tables.o $(BUILD_DIR)/src/symbol/dwarf.o $(BUILD_DIR)/src/symbol/leb.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-source-prepare
+test-symbol-source-prepare: $(BUILD_DIR)/test-symbol-source-prepare
+	$(BUILD_DIR)/test-symbol-source-prepare
+
+test: test-symbol-source-prepare
+-include $(BUILD_DIR)/tests/unit/test_symbol_source_prepare.d
+
+
+$(BUILD_DIR)/test-crc32: $(BUILD_DIR)/tests/unit/test_crc32.o $(BUILD_DIR)/src/symbol/crc32.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-crc32
+test-crc32: $(BUILD_DIR)/test-crc32
+	$(BUILD_DIR)/test-crc32
+
+test: test-crc32
+-include $(BUILD_DIR)/tests/unit/test_crc32.d
+
+$(BUILD_DIR)/test-symbol-companion-metadata: $(BUILD_DIR)/tests/unit/test_symbol_companion_metadata.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/reader.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-companion-metadata
+test-symbol-companion-metadata: $(BUILD_DIR)/test-symbol-companion-metadata
+	$(BUILD_DIR)/test-symbol-companion-metadata
+
+test: test-symbol-companion-metadata
+-include $(BUILD_DIR)/tests/unit/test_symbol_companion_metadata.d
+
+$(BUILD_DIR)/companion-fixture: tests/fixtures/native/companion.c
+	mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(PROJECT_CPPFLAGS) -O0 -g $(PROJECT_CFLAGS) -Wl,--build-id=sha1 -o $@ $<
+
+$(BUILD_DIR)/companion-pair.stamp: $(BUILD_DIR)/companion-fixture
+	mkdir -p "$(BUILD_DIR)/companion pair"
+	objcopy --only-keep-debug $< "$(BUILD_DIR)/companion pair/fixture with spaces.debug"
+	objcopy --strip-debug --add-gnu-debuglink="$(BUILD_DIR)/companion pair/fixture with spaces.debug" $< "$(BUILD_DIR)/companion pair/primary"
+	touch $@
+
+$(BUILD_DIR)/test-symbol-companion-native: $(BUILD_DIR)/tests/integration/test_symbol_companion_native.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(ELF_LIBS) $(LDLIBS)
+
+.PHONY: test-symbol-companion-native
+test-symbol-companion-native: $(BUILD_DIR)/test-symbol-companion-native $(BUILD_DIR)/companion-pair.stamp
+	$(BUILD_DIR)/test-symbol-companion-native "$(BUILD_DIR)/companion pair/primary" "$(BUILD_DIR)/companion pair/fixture with spaces.debug"
+
+test: test-symbol-companion-native
+-include $(BUILD_DIR)/tests/integration/test_symbol_companion_native.d
+
+$(BUILD_DIR)/test-symbol-companion-paths: $(BUILD_DIR)/tests/unit/test_symbol_companion_paths.o $(BUILD_DIR)/src/symbol/companion_paths.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-companion-paths
+test-symbol-companion-paths: $(BUILD_DIR)/test-symbol-companion-paths
+	$(BUILD_DIR)/test-symbol-companion-paths
+
+test: test-symbol-companion-paths
+-include $(BUILD_DIR)/tests/unit/test_symbol_companion_paths.d
+
+$(BUILD_DIR)/test-symbol-companion-scan: $(BUILD_DIR)/tests/unit/test_symbol_companion_scan.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/budget.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=malloc,--wrap=calloc -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-companion-scan
+test-symbol-companion-scan: $(BUILD_DIR)/test-symbol-companion-scan
+	$(BUILD_DIR)/test-symbol-companion-scan
+
+test: test-symbol-companion-scan
+-include $(BUILD_DIR)/tests/unit/test_symbol_companion_scan.d
+
+$(BUILD_DIR)/test-symbol-companion-discovery: $(BUILD_DIR)/tests/integration/test_symbol_companion_discovery.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/artifact.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o $(BUILD_DIR)/src/symbol/companion_paths.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=malloc -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-companion-discovery
+test-symbol-companion-discovery: $(BUILD_DIR)/test-symbol-companion-discovery $(BINARY) $(BUILD_DIR)/companion-pair.stamp
+	$(BUILD_DIR)/test-symbol-companion-discovery $(abspath $(BINARY)) "$(abspath $(BUILD_DIR))/companion pair/primary" "$(abspath $(BUILD_DIR))/companion pair/fixture with spaces.debug"
+
+test: test-symbol-companion-discovery
+-include $(BUILD_DIR)/tests/integration/test_symbol_companion_discovery.d
+
+$(BUILD_DIR)/test-symbol-companion-owner: $(BUILD_DIR)/tests/unit/test_symbol_companion_owner.o $(BUILD_DIR)/src/symbol/companion.o $(BUILD_DIR)/src/symbol/companion_load.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/artifact.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/sha256.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=tb_symbol_artifact_revise -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-companion-owner
+test-symbol-companion-owner: $(BUILD_DIR)/test-symbol-companion-owner
+	$(BUILD_DIR)/test-symbol-companion-owner
+
+test: test-symbol-companion-owner
+-include $(BUILD_DIR)/tests/unit/test_symbol_companion_owner.d
+
+$(BUILD_DIR)/test-symbol-companion-attach: $(BUILD_DIR)/tests/integration/test_symbol_companion_attach.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/artifact.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o $(BUILD_DIR)/src/symbol/companion_paths.o $(BUILD_DIR)/src/symbol/companion.o $(BUILD_DIR)/src/symbol/companion_load.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-companion-attach
+test-symbol-companion-attach: $(BUILD_DIR)/test-symbol-companion-attach $(BINARY) $(BUILD_DIR)/companion-pair.stamp
+	$(BUILD_DIR)/test-symbol-companion-attach $(abspath $(BINARY)) "$(abspath $(BUILD_DIR))/companion pair/primary" "$(abspath $(BUILD_DIR))/companion pair/fixture with spaces.debug"
+
+test: test-symbol-companion-attach
+-include $(BUILD_DIR)/tests/integration/test_symbol_companion_attach.d

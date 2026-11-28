@@ -12,6 +12,8 @@
 #include "tui/setup_capture.h"
 #include "tui/setup_restore.h"
 #include "model/images.h"
+#include "symbol/helper.h"
+#include "symbol/artifact.h"
 
 #include <curses.h>
 #include <errno.h>
@@ -269,6 +271,13 @@ typedef struct {
     bool        toggle;
 } Field_t;
 
+typedef struct {
+    TbSymbolBudget_t      storage;
+    TbSymbolHelper_t     *helper;
+    TbSymbolArtifacts_t  *artifacts;
+    TbSymbolArtifactIds_t identities;
+} SymbolFrontend_t;
+
 // one heap-owned application object; field grouping follows subsystem ownership.
 // NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding)
 typedef struct {
@@ -370,6 +379,8 @@ typedef struct {
     Page_e           paste_page;
     Control_t        paste_control;
     char             status[160];
+    SymbolFrontend_t symbols;
+
     TbSession_t     *debugger;
     bool             demo_mode;
     bool             live;
@@ -11866,6 +11877,39 @@ static void key_event(App_t *app, wint_t key, bool special)
 }
 
 
+static void initialize_symbols(App_t *app)
+{
+    TbSymbolHelperConfig_t   config;
+    TbSymbolArtifactConfig_t artifact_config;
+    tb_symbol_helper_defaults(&config);
+    tb_symbol_artifact_defaults(&artifact_config);
+    if (!tb_symbol_helper_environment(&config) || !tb_symbol_artifact_environment(&artifact_config)) {
+        status(app, "Symbol Engine unavailable: invalid startup resource configuration.");
+        return;
+    }
+    if (tb_symbol_budget_init(&app->symbols.storage, config.frontend_bytes) &&
+        tb_symbol_budget_reserve(&app->symbols.storage, sizeof(app->symbols))) {
+        app->symbols.artifacts = tb_symbol_artifacts_create(artifact_config.file_bytes,
+                                                           artifact_config.aggregate_bytes,
+                                                           &app->symbols.identities, &app->symbols.storage);
+        if (app->symbols.artifacts)
+            app->symbols.helper = tb_symbol_helper_create(&config, &app->symbols.storage);
+    }
+    if (!app->symbols.helper)
+        status(app, "Symbol Engine unavailable: frontend allocation budget exhausted.");
+}
+
+
+static bool discard_symbol_result(void *context, const TbSymbolWorkIdentity_t *identity,
+                                  TbSymbolHelperResult_t result)
+{
+    (void)context;
+    (void)identity;
+    (void)result;
+    return true;
+}
+
+
 static void initialize(App_t *app, bool demo)
 {
     memset(app, 0, sizeof(*app));
@@ -11899,6 +11943,7 @@ static void initialize(App_t *app, bool demo)
         if (!loaded || tb_profiles_read_only(app->profiles))
             status(app, tb_profiles_error(app->profiles));
     }
+    initialize_symbols(app);
 }
 
 
@@ -12002,6 +12047,12 @@ int tb_tui_run(bool demo)
 
         uint64_t revision = app.debugger ? tb_session_revision(app.debugger) : 0;
         while (!app.quit) {
+            TbSymbolHelperState_e symbol_state = tb_symbol_helper_state(app.symbols.helper);
+            tb_symbol_helper_pump(app.symbols.helper, NULL, NULL);
+            if (symbol_state != tb_symbol_helper_state(app.symbols.helper) &&
+                tb_symbol_helper_state(app.symbols.helper) == TB_SYMBOL_HELPER_UNAVAILABLE) {
+                status(&app, tb_symbol_helper_error(app.symbols.helper));
+            }
             if (interrupted != 0) {
                 if (app.debugger)
                     tb_session_close(app.debugger);
@@ -12072,7 +12123,7 @@ int tb_tui_run(bool demo)
                 continue;
             }
 
-            struct pollfd fds[6] = {
+            struct pollfd fds[8] = {
                 {
                     STDIN_FILENO,
                     POLLIN,
@@ -12087,18 +12138,33 @@ int tb_tui_run(bool demo)
                 count   += (nfds_t)tb_session_pollfds(app.debugger, fds + 1);
                 timeout  = tb_session_timeout(app.debugger, 100);
             }
+            count += (nfds_t)tb_symbol_helper_pollfds(app.symbols.helper, fds + count);
+            timeout = tb_symbol_helper_timeout(app.symbols.helper, timeout);
 
             if (poll(fds, count, timeout) < 0 && errno != EINTR)
                 interrupted = SIGTERM;
         }
 
         frame_display_clear(&app);
+        tb_symbol_helper_close(app.symbols.helper);
         if (app.debugger) {
             tb_session_close(app.debugger);
-            while (tb_session_active(app.debugger))
+            while (tb_session_active(app.debugger)) {
                 tb_session_pump(app.debugger, 20);
+                tb_symbol_helper_pump(app.symbols.helper, discard_symbol_result, NULL);
+            }
 
             (void)tb_session_destroy(app.debugger);
+        }
+        while (!tb_symbol_helper_destroy(app.symbols.helper)) {
+            tb_symbol_helper_pump(app.symbols.helper, discard_symbol_result, NULL);
+            struct pollfd fds[2];
+            size_t count = tb_symbol_helper_pollfds(app.symbols.helper, fds);
+            (void)poll(fds, (nfds_t)count, tb_symbol_helper_timeout(app.symbols.helper, 20));
+        }
+        (void)tb_symbol_artifacts_destroy(app.symbols.artifacts);
+        if (app.symbols.storage.limit) {
+            (void)tb_symbol_budget_release(&app.symbols.storage, sizeof(app.symbols));
         }
 
         if (bracketed_paste)

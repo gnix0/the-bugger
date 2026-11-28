@@ -4,6 +4,7 @@
 
 #include "the_bugger/version.h"
 #include "the_bugger/tui.h"
+#include "symbol/worker.h"
 
 static void print_help(void)
 {
@@ -24,6 +25,9 @@ static void print_help(void)
 
 int main(int argc, char *argv[])
 {
+    if (argc == 2 && strcmp(argv[1], "--symbol-worker") == 0)
+        return tb_symbol_worker_main(3);
+
     if (argc == 1)
         return tb_tui_run(false);
 

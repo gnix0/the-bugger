@@ -67,7 +67,15 @@ static void resize_keys(int rows, int cols)
 static void cell(int action, int *x, int *y)
 {
     char label[25]; (void)snprintf(label, sizeof label, "%.24s", tb_keybind_action((size_t)action));
-    int column; CHECK(test_terminal_find(&term, label, &column, y));
+    int column;
+    bool found = test_terminal_find(&term, label, &column, y);
+    if (!found) {
+        fprintf(stderr, "Missing keybind action %d (%s), selected %d, terminal %dx%d\n",
+                action, label, selected, term.rows, term.cols);
+        for (int row = 0; row < term.rows; ++row)
+            fprintf(stderr, "%s\n", term.cells[row]);
+    }
+    CHECK(found);
     for (int row = 0; row < *y; ++row) {
         if (strncmp(term.cells[row] + column, "Action", 6) != 0) { continue; }
         const char *key = strstr(term.cells[row] + column + 6, "Key");
@@ -91,10 +99,12 @@ static void mouse_at(int x, int y)
     (void)snprintf(mouse, sizeof mouse, "\033[<0;%d;%dm", x + 1, y + 1); test_terminal_send(&term, mouse);
     settle();
 }
-static void capture(int action)
+static void captured(int action)
 {
-    int x, y; cell(action, &x, &y); mouse_at(x + 1, y);
     test_terminal_expect(&term, "Press a key | Esc cancels");
+
+    int x, y;
+    cell(action, &x, &y);
     for (int i = 0; i < 400 && (!term.inverse[y - 1][x] || term.cells[y][x] != ' '); ++i) { test_terminal_pump(&term, 5); }
     if (!term.inverse[y - 1][x] || term.cells[y][x] != ' ') {
         fprintf(stderr, "Capture border failure: action=%d x=%d y=%d\n", action, x, y);
@@ -105,6 +115,17 @@ static void capture(int action)
     CHECK(term.cells[y][x] == ' ' && !term.inverse[y][x]);
     CHECK(term.inverse[y - 1][x]); /* Capture emphasis affects the border only. */
 }
+
+
+static void capture(int action)
+{
+    int x, y;
+    cell(action, &x, &y);
+    mouse_at(x + 1, y);
+    captured(action);
+}
+
+
 static void clean_key_borders(void)
 {
     settle();
@@ -163,8 +184,15 @@ static void choose(int action)
     CHECK(found);
     test_terminal_send(&term, "\033OH");
     for (int i = 0; i < action; ++i) { test_terminal_send(&term, "\t"); }
-    settle(); selected = action;
-    int x, y; cell(action, &x, &y);
+    /* Enter follows the navigation burst through the same input stream. Wait
+     * for capture before reading coordinates: tmux can still be painting an
+     * earlier viewport after a fixed settle interval. Check the exact row's
+     * capture border as well, so a wrong navigation target remains a failure. */
+    test_terminal_send(&term, "\r");
+    captured(action);
+    test_terminal_send(&term, "\033");
+    test_terminal_expect(&term, "Capture cancelled.");
+    selected = action;
 }
 static void edit(const char *binding)
 {

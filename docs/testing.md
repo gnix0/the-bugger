@@ -566,6 +566,10 @@ persistence, compatibility and editor interactions. The latter two require GDB,
 ptrace and (for the second) tmux; they exercise remapped Continue/Pause, literal
 Console input and spatial content transfer after loading a connection profile.
 They are included in `test`/`test-native` and therefore `test-ci`.
+After a keyboard-navigation burst, the harness enters capture through the same
+input stream and verifies the requested row's capture border before cancelling
+capture and using its coordinates. This waits for observable navigation completion
+rather than assuming tmux has rendered the destination within a fixed delay.
 
 Use a temporary `XDG_CONFIG_HOME` for this manual check so saved personal
 bindings are preserved and the expected factory keys apply.
@@ -1807,6 +1811,21 @@ for resolution before release acceptance. Tests are not waived because a release
 only changes UI. QEMU test infrastructure does not add simulator support to the
 product. Do not claim unsupported target-specific features or untested boards.
 
+### Native Symbol Engine and v0.3.0
+
+Before the subsystem merge and the planned v0.3.0 release, run the applicable
+matrix above on all three physical architectures: STM32/ARM, ESP32/Xtensa and
+ESP32/RISC-V, alongside native x86-64 regression. Use the same coverage and
+evidence standard for each. Recheck existing functionality as well as the new
+native-symbol consumers; historical feature acceptance does not waive fresh
+execution, inspection, deliberate editing, persistence, UI or lifecycle checks.
+
+Record results per function and architecture, including capability-specific
+exclusions and failures. A passing board cannot stand in for another board, and
+an unsupported capability must be distinguished from a failed supported one.
+Hardware results and merge/release acceptance remain pending until performed
+and reviewed; host tests and prior releases do not satisfy this gate.
+
 ## Post-release embedded validation
 
 Native fixtures remain a required, repeatable regression foundation;
@@ -2472,9 +2491,11 @@ assert the same review containment and explicit acceptance controls.
 
 The [Symbol Engine acceptance matrix](native-symbol-engine.md#acceptance-matrix)
 and [implementation gates](native-symbol-engine.md#implementation-gates-and-dependencies)
-define proposed verification. No Symbol Engine suite, fixture or command is
-introduced by the planning documentation. Existing commands remain those listed
-above and in the [suite catalog](../tests/README.md).
+define verification for the complete subsystem. The original planning delivery
+introduced no suites or commands. SE01 adds primitive checks; SE02 adds
+transport, scheduler, process and helper checks below. SE03–SE04 add the
+implemented acquisition and ELF checks; DWARF and consumer tests remain future work. Existing
+commands remain in the [suite catalog](../tests/README.md).
 
 D04 will extend the existing `test-mi`/allocation and `test-controller` harnesses.
 Consumer gates will extend code, variables, memory, breakpoint, profile/setup
@@ -2505,3 +2526,1721 @@ checks. Actual production sizing and supported remote/physical profiles remain
 future evidence; research timing and MI/RSP envelopes prove no bus transaction
 width/count or MMIO safety. The every-release native/physical matrix remains
 required independently of subsystem acceptance.
+
+
+## Symbol Engine primitives (SE01)
+
+```sh
+make BUILD_DIR=build/se01-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-primitives test-sha256
+```
+
+Both targets are included in `test`, and therefore `test-ci`. The standalone
+binaries link only their C primitives and libc, without GDB, libelf, curses or
+IPC. Reader checks cover integer widths/byte orders, signed boundaries, each
+truncated LEB128 prefix, representable nonminimal encodings, overflow, scan
+allowances, subreader limits and unchanged failure outputs. Identity checks
+separate record kinds, contents, sections, units and record offsets; invalid
+shapes cannot compare equal.
+
+SHA-256 checks include the empty message, `abc`, the standard 56-byte message,
+a million `a` bytes, and binary padding/block boundaries. Each short/binary vector
+runs with chunk sizes 1–129. Boundary expectations were generated independently
+with Python `hashlib.sha256(bytes(range(256))[:length]).hexdigest()`; Python is
+not a test or runtime dependency. Algorithm reference:
+[NIST FIPS 180-4](https://doi.org/10.6028/NIST.FIPS.180-4);
+published example digests: [NIST NSRL test data](https://www.nist.gov/itl/ai/ai-standards-and-guidelines-group/nsrl-test-data).
+Passing these vectors is not cryptographic module certification.
+
+Failure checks inject invalid input and the maximum length counter without
+allocating that input, reject mismatched final lengths and verify that poisoned,
+uninitialized or finalized streams cannot publish a digest. These components
+have no allocation sites to fail. They validate neither artifact coherence nor
+metadata semantics, admission identity, runtime correspondence or target access.
+Fresh fortified host regression remains required for their integration.
+
+
+## Symbol Engine transport and scheduling (SE02, partial)
+
+```sh
+make BUILD_DIR=build/se02-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-wire test-symbol-schedule
+```
+
+Both targets are included in `test` and therefore `test-ci`. These standalone
+component checks require no debugger or helper process. They do not qualify
+startup, blocked-syscall deadlines, cancellation escalation, safe signalling,
+reaping or frontend responsiveness; those require subsequent process integration.
+
+The wire suite fragments transfers down to one byte, checks adjacent
+descriptor-bearing frames, retains completed messages until consumption and
+verifies descriptor ownership/close-on-exec. Rejected cases include malformed
+headers/trailers, oversized payloads, descriptors on the wrong receive boundary,
+missing/extra descriptors, ancillary truncation, writable files, `O_PATH`, pipes
+and nonregular files. Descriptor counts before/after rejection check cleanup.
+Every partial EOF prefix, interrupted calls, allocation failure and local/shared
+budget exhaustion are exercised. Shared accounts include frame
+ownership and roll back failed allocations without changing accepted frames.
+
+The scheduler suite checks independent shared interests, exact cancellation
+identity, stale attachment rejection, nonreused request IDs, completion
+backpressure, once-only destruction, job/interest saturation and control at full
+capacity. Sustained arriving interactive work and retained completions must not
+starve construction. Invalid/regressing progress fails the affected operation.
+Shared allocation tests cover exact ceilings and release; budget arithmetic
+checks the `SIZE_MAX` boundary and rejected underflow.
+
+The wire harness uses GNU linker wrappers for deterministic allocation/transfer
+faults. A caller still validates operation schemas, context generations and
+metadata before publication; frame acceptance grants no runtime authority.
+
+
+## Supervised Symbol Engine helper (SE02)
+
+```sh
+make BUILD_DIR=build/se02-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-process test-symbol-helper test-symbol-helper-native
+```
+
+`test-symbol-process` and `test-symbol-helper` are included in `test`;
+`test-symbol-helper-native` is included in `test-native`. All therefore run under
+`test-ci`. The helper suite builds the application and exercises its actual
+private worker entry, as well as controlled fault peers. The native isolation
+suite starts real GDB without loading an inferior or accessing hardware.
+
+Process checks cover isolated inherited descriptors, close-on-exec, closed
+standard descriptors, asynchronous exec failure, supervision while exec is
+blocked, cooperative shutdown, TERM/KILL and verified reap before restart.
+Injected pidfd/isolation failures and interrupted/external reaping exercise the
+unavailable-owner boundary. Reap-generation checks distinguish cooperative
+shutdown and explicit restart from lost ownership: a controlled SIGCHLD disposition
+change causes automatic child reaping and must leave confirmed-reap evidence
+unchanged, with restart unavailable. The initial supported helper profile requires Linux
+pidfd and `close_range`; no fallback signals a numeric PID after losing ownership.
+
+Helper checks cover independent/shared interests, replacement of a creator's
+query, dispatch order differing from admission order, saturation, deferred
+publication and allocation rollback. Small control frames are tested with no
+remaining allocation capacity. Cleanup notifications retain job capacity until
+accepted, follow result delivery, and cannot be replaced by premature or wrongly
+identified acknowledgements. Missing acknowledgements preserve the completed
+result and require confirmed reap before worker-ownership release. Nested account tests enforce both subsidiary
+and aggregate ceilings before mutation. Backpressure in one consumer must not
+prevent another completed consumer from receiving its result.
+
+Controlled monotonic clocks and fault peers exercise startup, queue, ready/heavy
+absolute deadlines, repeated heartbeat counters, buffered old progress, future
+work timestamps, cancellation escalation, failed/stale identities, helper death,
+retained completed payloads and explicit restart. The clock fixture is a private
+harness file opened after isolated exec, not part of the production protocol.
+A process handshake proves that the parent owns and can terminate a child before
+exec completes. Native isolation then verifies that helper failure leaves the
+same actual GDB process alive and able to answer structured MI.
+
+These checks qualify the execution foundation under the recorded host
+configuration. They do not measure actual artifact acquisition, decoder/index
+latency, production schema ownership, physical access or live-action consumers.
+The current worker supports bounded storage operations; unknown IDs remain
+Unsupported. Startup settings and their supported ranges are in the
+[authoritative resource policy](native-symbol-engine.md#available-startup-configuration).
+A kernel operation that cannot yet be reaped prevents replacement; tests do not
+establish a universal filesystem or kernel scheduling guarantee.
+
+
+## Artifact admission ledger (SE03, partial)
+
+```sh
+make BUILD_DIR=build/se03-ledger-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-admission
+```
+
+Included in `test` and `test-ci`. These deterministic accounting checks perform
+no filesystem acquisition, debugger requests or target access. They cover
+per-file/aggregate exact and one-over boundaries, concurrent reservations,
+independent charges for shared contexts, cache reactivation, pinned backing,
+rejected cross-ledger/size-mismatched sharing and delayed cleanup. Reservations
+and evicted backing remain charged until explicit cleanup confirmation.
+
+Allocation fault injection covers both ticket allocations and ledger creation;
+failed ancestor-budget reservations roll back without mutation. Commit and
+cleanup are tested with allocation disabled. Zero-byte tickets still consume
+bounded metadata ownership and prevent premature destruction. Arithmetic covers
+the full `UINT64_MAX` logical boundary without allocating corresponding storage.
+Unsized ownership cannot commit until the exact offer is assigned, including
+zero. Assignment allocates nothing; quota failure leaves the placeholder unchanged
+and never permits file growth. These checks qualify ledger transitions, not source coherence, byte equality,
+physical cleanup or acquisition behavior; those require the remaining SE03 work.
+
+
+## Artifact byte acquisition (SE03, partial)
+
+```sh
+make BUILD_DIR=build/se03-acquire-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-acquire test-symbol-reflink
+```
+
+Included in `test` and `test-ci`. Controlled local filesystem fixtures exercise
+empty/binary files, short and interrupted transfers, exact grant boundaries,
+source growth/truncation, path replacement, allocation/storage/read failures and
+cancellation at every stage. Per-step instrumentation bounds file data inspected;
+source growth cannot grow staging beyond its reservation. During frozen-byte
+hashing, descriptor inspection verifies that the supported staging writer has
+closed. Returned descriptors are read-only, close-on-exec, linked in owned storage and protected;
+subsequent source writes leave retained bytes unchanged.
+
+Allocation accounts and descriptor counts return to baseline on failure and
+cancellation. Close-error injection includes descriptor-number reuse to detect
+unsafe retries. Unsupported storage filesystems fail explicitly. Hash-read
+failure leaves result storage untouched and never publishes a prefix digest.
+The suite rejects nonregular origins, including FIFOs without waiting for a writer.
+
+The streaming suite explicitly selects streaming so its checkpoint and failure
+assertions also run on reflink-capable hosts. The reflink suite emulates kernel
+outcomes to exercise fixed nonzero grant extents, short output, source growth,
+unsupported fallback/reset, interruptions, resource failures and cancellation.
+Those emulations are fault injection, not filesystem qualification. A separate
+native `ioctl` probe reports whether the local filesystem supplied an actual
+clone; either path verifies complete bytes/hash and isolation from later source
+writes. Unsupported native cloning is reported as unavailable, not a positive
+reflink result. An empty acquisition never issues the clone ioctl.
+
+These are component checks on actual local files, without GDB or target access.
+They do not establish atomic acquisition coherence, qualify other filesystems, validate
+ELF/DWARF, or alone qualify the integrated helper offer/grant and cleanup protocol.
+
+
+## Frozen backing equality (SE03, partial)
+
+```sh
+make BUILD_DIR=build/se03-equal-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-equal
+```
+
+Included in `test` and `test-ci`. Actual unnamed read-only file fixtures cover
+empty/equal backings, first/final-byte differences, buffer boundaries, short and
+interrupted reads, changing service slices, allocation failure and per-input
+read errors. Instrumented reads and comparisons bound inspection of both inputs;
+positive equality requires complete coverage. A controlled length change after
+both byte ranges arrive must fail the final evidence check. Unsupported descriptor
+modes, wrong lengths and cancellation preserve borrowed descriptor ownership and
+release all component allocations. These checks establish a comparison primitive,
+not integrated content deduplication or acquisition coherence.
+
+
+`O_PATH`, writable descriptors, mismatched extents and per-input I/O failures
+cannot produce equality proof. The suite checks input-specific failure masks,
+unchanged output on failure and ancestor-budget exhaustion.
+
+
+## Retained storage namespaces (SE03, partial)
+
+```sh
+make BUILD_DIR=build/se03-storage-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-storage test-symbol-acquire
+```
+
+Included in `test` and `test-ci`. Actual local directories/files verify exclusive
+creation, owner-only protection, read-only/close-on-exec readers, helper-state
+reconstruction from captured namespace identity, and complete file/namespace
+cleanup. Wrong identities or lengths cannot reopen data. Replaced files and
+namespaces survive rejected stale cleanup; nonempty directories cannot be removed.
+A consumed namespace handle cannot remove a new directory at its old pathname.
+
+Allocation failures and cancellation release local metadata without pretending
+that created filesystem objects disappeared. These component checks alone do not
+qualify frontend admission, source coherence or deduplication; registry/resource
+integration is checked separately below.
+
+
+## Artifact operation dispatch (SE03, partial)
+
+```sh
+make BUILD_DIR=build/se03-operation-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-operation
+```
+
+Included in `test` and `test-ci`. Actual local filesystem requests exercise the
+helper-side dispatcher independently of IPC. Truncated headers, truncated paths,
+embedded or missing terminators fail before namespace creation. One-byte request
+slices, paused size offers, exact grants, binary contents, complete digests,
+read-only descriptors, backing equality and identity mismatch are checked.
+Cancellation at 180 acquisition positions releases local allocations and file
+descriptors while retaining explicit slot-cleanup responsibility. Empty-slot
+cleanup refuses nonempty files and handles a missing fresh slot idempotently.
+Injected filesystem-profile rejection preserves creation/identity diagnostics;
+empty-directory cleanup remains possible while wrong-identity cleanup is refused.
+Unrepresentable comparison extents fail as malformed requests before filesystem access.
+These are dispatcher component checks. Supervised offer/grant delivery, frontend
+ownership and sharing have separate integration checks below; component success
+alone does not complete SE03 or F07 acceptance.
+
+
+## Supervised artifact operations (SE03, partial)
+
+```sh
+make BUILD_DIR=build/se03-dispatch-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-resource test-symbol-helper test-symbol-wire test-symbol-helper-native
+```
+
+`test-symbol-resource` is included in `test`/`test-ci` and exercises actual local
+files through the production executable's private helper entry. It reserves the
+exact offer before a grant, validates binary contents/digest and read-only received
+descriptors, and confirms explicit file cleanup before logical charge release.
+Two independent acquisitions retain their full logical charges; sharing follows
+complete helper-side byte equality and confirmed candidate cleanup. Quota refusal
+keeps staging empty; cancellation preserves the offer and cleanup duty. Worker
+restart preserves independently retained bytes, and a killed owned worker leaves
+its staging file for explicit cleanup after confirmed reap. Missing origins return
+typed operational failure with their system error. A separately executed harness
+worker injects result-buffer allocation failure: no partial candidate is returned,
+cleanup identity survives, and the channel remains usable.
+
+The helper fault suite additionally rejects wrong-context/duplicate offers,
+wrong-context/duplicate/inconsistent diagnostics and success following a failure
+diagnostic. Existing descriptor-fragmentation, timing and independent actual-GDB
+checks remain separate. These tests compose components through explicit test
+ownership; they do not implement the frontend artifact registry, qualify atomic
+source coherence, or establish decoder, consumer or physical-target acceptance.
+
+
+## Frontend artifact ownership (SE03, partial)
+
+```sh
+make BUILD_DIR=build/se03-ownership-focused CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-artifact test-symbol-operation test-symbol-resource test-symbol-helper
+```
+
+`test-symbol-artifact` is included in `test` and `test-ci`. Allocation failure at
+constructor/index stages, 1,024 independently identified contexts, arbitrary
+closure order, registry replacement and identifier exhaustion check ownership and
+rollback. Real retained-file fixtures verify descriptor admission, including
+`O_PATH`, writable or non-close-on-exec rejection and an injected inspection error.
+Publication and shared commit allocate nothing. Closed contexts stay unavailable
+while leases preserve their bytes; lease pins prevent eviction. Exact cleanup
+receipts release logical capacity only after file deletion. Aggregate refusal
+preserves existing contexts and leaves new staging empty.
+
+Comparison checks distinguish request identity from artifact context revision,
+retain pins across original-context closure, refuse wrong-scope/process receipts,
+and prevent publication after construction or comparison failure. Sharing follows
+complete byte equality and duplicate cleanup without reactivating old contexts.
+The resource integration suite also composes this registry with the production
+helper, including restart with an open artifact, scoped comparison, cache
+reactivation and final cleanup. These checks establish ownership of raw frozen
+bytes, not ELF/DWARF validation, coherent acquisition, UI discovery or runtime
+access authorization. Content withdrawal invalidates existing lease eligibility
+and late comparison evidence while retaining memory and cleanup charges. Startup
+budget parsing covers units, overflow, invalid syntax and consistent per-file/aggregate ceilings.
+
+
+## Retained-file scratch reads (SE04, partial)
+
+```sh
+make BUILD_DIR=build/se04-file CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-file test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Local-file checks cover exact range boundaries,
+changing per-step allowances, partial/interrupted reads, EOF/error injection,
+allocation failure, unsupported descriptors, backing protection/identity and
+mutation during or between reads. Pending and failed reads expose no prefix;
+invalid requests preserve the previous complete view. Cancellation at each stage
+releases construction accounting while leaving the borrowed descriptor open.
+
+The fixture deliberately retains a writable descriptor for mutation injection;
+this tests detection, not a production ownership profile or proof against all
+external writers. The native ELF suite instead uses admitted private backing
+with its supported staging writer closed, as described below. These component
+checks introduce neither a production helper request nor target access.
+
+
+## ELF records (SE04, partial)
+
+```sh
+make BUILD_DIR=build/se04-records CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-elf test-symbol-elf-native
+```
+
+Both targets are included in `test` and `test-ci`. Fixed-record fixtures cover
+ELF32 and ELF64 in both byte orders, all truncated prefixes, invalid/unsupported
+identification and versions, extended section/program counts, section-name
+indexes, table bounds/overflow, stride changes, NOBITS and NULL sections,
+address-width boundaries and raw special-symbol preservation. Failure leaves
+candidate outputs unchanged. These are authored format fixtures, not physical
+architecture or producer-compatibility qualification.
+
+The native-file suite compares decoded header, section, program and symbol fields
+with the existing libelf library for its own executable, the native debug fixture
+and the breakpoint shared library. Complete section-directory fields and full
+section names, complete selected symbol tables and full symbol names are also
+compared with libelf. Each file first passes the admission ledger's
+explicit size grant and private acquisition, then uses the bounded retained-file
+reader. File/reader/ledger ownership is retired and exact backing cleanup confirmed
+after comparison; construction accounting returns to baseline. This harness
+composition reads local file bytes only; no debugger, inferior or target access
+is involved. Agreement on those generated host files does not establish
+arbitrary-file validity, source coherence or production acceptance. Scoped
+helper integration is tested separately below.
+
+Record decoding is not complete inventory validation. The checks below validate
+section/name and symbol dependencies. Compressed payloads, physical record binding
+and frontend evidence ownership remain separate work. These checks do not complete
+SE04 or F07 acceptance.
+
+
+## ELF section directories (SE04, partial)
+
+```sh
+make BUILD_DIR=build/se04-sections CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-sections test-symbol-file test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored ELF32/64 fixtures in both byte orders cover
+complete-only publication, shuffled physical offsets, overlapping sections/header
+tables, inactive and NOBITS records, duplicate names, substring references,
+empty/missing/malformed name tables and unsupported compressed-name coverage.
+Names longer than 64 KiB cross scratch boundaries without a full-name allocation.
+A 70,000-section fixture exercises extended counts, complete traversal and explicit
+budget refusal. That test's caller budget is not a production cache setting.
+
+Allocation fault injection, cancellation through construction stages, short and
+interrupted reads, EOF and read failure check accounting, borrowed descriptors and
+absence of candidate prefixes. Read/NUL-scan instrumentation checks per-step byte
+allowances. The native ELF suite validates directory records and names against
+libelf after admission/acquisition through protected backing, then explicitly
+retires ownership and confirms cleanup.
+
+These checks qualify the implemented section/name scope only. They do not validate
+all ELF relationships, decompress payloads, establish DWARF absence from missing
+names or complete SE04/F07 acceptance.
+
+
+## ELF symbol dependencies (SE04, partial)
+
+```sh
+make BUILD_DIR=build/se04-symbols CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-symbols test-symbol-sections test-symbol-file test-symbol-elf test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored ELF32/64 fixtures in both byte orders cover
+selected SYMTAB/DYNSYM scopes, exact table/string dependencies, null/local ordering,
+ordinary/special indexes, missing/conflicting/malformed extended-index tables,
+unused index words, unsupported compression and full names across scratch reads.
+A sparse 70,000-section fixture distinguishes an extended ordinary section index
+from the same numeric reserved 16-bit marker. Raw TLS/type/binding/visibility
+fields retain their encoding; their interpretation requires separate validation.
+
+Fault injection covers each allocation, budget refusal, cancellation, short and
+interrupted reads, EOF and operational failure. Instrumented reads and NUL scans
+check service allowances. Failed scopes expose no candidate prefix, accounting
+returns to the directory's retained baseline, and borrowed descriptors remain open.
+The native ELF suite compares complete selected inventories, raw records and full
+name bytes with libelf after admission/acquisition, then confirms exact cleanup.
+
+These checks validate the implemented dependency scope, not language semantics,
+object/code footprints, target mappings, runtime access, arbitrary producer
+compatibility or SE04/F07 acceptance. Scoped helper integration follows below. Test budgets
+do not set production cache limits; SE10 remains the sizing gate.
+
+
+## Supervised ELF validation (SE04, partial)
+
+```sh
+make BUILD_DIR=build/se04-helper CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-inspect test-symbol-operation test-symbol-wire test-symbol-helper test-symbol-resource
+```
+
+Included in `test`/`test-ci`. `test-symbol-inspect` starts the production executable's
+private helper entry and admits authored files through the acquisition handshake
+and logical ledger. ELF32/64 in both byte orders cover directory-only and separate
+SYMTAB/DYNSYM scopes, malformed headers/names, unsupported compressed tables,
+out-of-range selection and exact backing mismatch. Complete summaries and failing
+section/record ordinals cross the versioned wire protocol; no debugger is started.
+
+The harness changes the origin after acquisition, cancels after decoder progress,
+restarts only after confirmed reap and preserves a separately retained descriptor.
+An explicit 80 KiB decoder allowance refuses combined construction, then admits a
+smaller directory-only scope after cleanup. A 512 KiB allowance exercises complete
+selected scopes. These are test configurations, not production defaults. The
+ordinary helper configuration disables decoder operations pending SE10 sizing;
+the disabled path refuses requests before namespace access.
+
+Transport/helper suites retain framing, descriptor, saturation, stale-generation,
+deadline and cleanup-acknowledgement coverage. A controlled clock advance during
+receipt verifies legitimate intervening progress while the existing future-time
+and buffered-progress assertions preserve deadline checks. The breakpoint harness
+also exercises a delayed asynchronous stopped event independently of the preceding
+command reply, retaining the stopped-state assertion. Physical unlink precedes
+logical capacity release. This qualifies scoped helper composition, not frontend
+evidence publication, search/index reconstruction, runtime authority, producer/hardware
+qualification or F07 acceptance.
+
+
+## DWARF unit headers (SE05, partial)
+
+```sh
+make BUILD_DIR=build/se05-units CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-dwarf test-symbol-primitives
+```
+
+Included in `test`/`test-ci`. Authored prefixes cover DWARF32/64 and both byte
+orders, DWARF 4 info/type headers, DWARF 5 compile/partial/type headers, raw address
+sizes independent of offset width and mixed-format contributions in one section.
+Every truncated header prefix fails with unchanged outputs. Reserved initial
+lengths, exact/overflowing section bounds, shortened declared units, absent bodies,
+invalid type offsets, unsupported versions/unit kinds and invalid API arguments
+remain distinct from successful header decoding. A bounded stack prefix with an
+oversized supplied length checks the fixed inspection ceiling under sanitizers.
+
+These checks establish header/framing behavior only. They do not validate DIEs,
+abbreviation dependencies, attributes or cross-unit references, qualify arbitrary
+producers/targets or establish SE05/F07 acceptance.
+
+
+## DWARF header inventories (SE05, partial)
+
+```sh
+make BUILD_DIR=build/se05-inventory CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-units test-symbol-dwarf test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Protected ELF32/64 fixtures in both byte orders cover
+mixed-format headers, a large contribution spanning scratch boundaries, distinct
+physical offsets, unsupported-unit coverage, type units, empty scopes, malformed
+late contributions and unsupported compressed sections. A 5,000-unit scope checks
+complete traversal and exact allocation. Every incomplete/cancelled/failed scope
+keeps its candidate unavailable. Allocation fault injection, budget refusal,
+short/EINTR/EOF/error paths and empty-scope descriptor replacement check ownership
+and accounting. Instrumented reads check each service allowance.
+
+The native ELF harness now also constructs header inventories for `.debug_info`
+and `.debug_types` after admission/acquisition. It checks ordered extents and
+explicit supported/unsupported counts before retiring all borrowed views and
+confirming backing cleanup. This is retained-file composition, not a libdw or
+independent DWARF parser comparison; the existing ELF-field/name comparisons with
+libelf remain separate. Authored prefixes qualify format boundaries, not arbitrary
+producer/architecture compatibility or complete unit/DIE validity. No SE05/F07
+acceptance follows from these tests.
+
+
+## DWARF abbreviation tables (SE05, partial)
+
+```sh
+make BUILD_DIR=build/se05-abbrev CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-leb test-symbol-abbrev test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Streaming LEB tests distinguish framing from signed
+and unsigned numeric fit, including boundaries, arbitrary chunking, long padding,
+wide values, EOF and preservation of the following field. Protected ELF32/64
+fixtures in both byte orders validate selected abbreviation offsets, DWARF 4/5
+form identifiers, implicit constants, empty tables, lookup, physical order and
+513 shuffled declarations. A 70,000-byte signed constant crosses reader windows;
+a wider-than-int64 value retains its span without a fabricated numeric value.
+
+Fault injection covers each allocation, budget refusal, cancellation through
+construction stages, partial/EINTR/EOF/error reads and backing mutation between
+passes. The mutation fixture deliberately retains a writer to violate the backing
+invariant; detection is not proof that every acquisition writer was closed.
+Failed/unfinished views and lookups remain unavailable, accounting returns to its
+prior level and borrowed descriptors survive destruction.
+
+The native retained-file harness selects each supported unit's abbreviation table
+and checks complete lookup/physical-order consistency. This is composition with
+compiler-produced metadata, not an independent libdw grammar oracle. Its existing
+ELF comparisons with libelf remain separate. No DIE payload/reference validity,
+production sizing, general producer/target qualification or SE05/F07 acceptance
+follows. Unknown forms and numeric identifiers beyond the current 64-bit lookup
+profile remain explicit unsupported cases.
+
+
+## DWARF attribute-form framing (SE05, partial)
+
+```sh
+make BUILD_DIR=build/se05-form CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-form test-symbol-leb test-symbol-abbrev
+```
+
+Included in `test`/`test-ci`. The allocation-free scanner's tests cover every
+standard form in its DWARF version, both byte orders, DWARF32/64 offset widths
+and raw address widths 1, 2, 3, 4, 8, 16 and 255. Feed sizes from one byte through
+1,024 bytes verify the 256-byte inspection ceiling and no following-field theft.
+Nonuniform three-byte values check target byte order. Unit bounds, premature EOF,
+unknown forms/selectors and invalid API arguments preserve unavailable views.
+
+Large strings/blocks, 70,000-byte scalar and length encodings, repeated indirect
+selectors, indirect strings/empty blocks/implicit constants and zero-footprint
+forms check framing independently of numeric fit. Raw spans remain authoritative
+when 64-bit bits are unavailable. Direct implicit constants obtain their values
+from abbreviation metadata, not a zero-byte DIE read.
+
+These authored cases validate payload framing, not complete DIE trees, reference
+targets, string/address tables, expression evaluation or semantic type validity.
+Full retained-file composition and cross-unit validation remain separate work;
+passing this target does not establish SE05/F07 acceptance or producer/hardware
+qualification.
+
+
+## Complete DIE trees (SE05, partial)
+
+```sh
+make BUILD_DIR=build/se05-dies CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-dies test-symbol-form test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored retained ELF32/64 files cover both byte
+orders, independent DWARF32/64 formats, DWARF 4/5 compilation/type/partial units,
+parent links and exact physical record/attribute coordinates. Two identical
+units remain separate and independently retained. Deep nesting and broad sibling
+scopes each contain more than 10,000 entries; a 70,000-byte string crosses scratch
+windows. Zero-byte attributes at the unit end retain their abbreviation values
+or present-flag semantics without consuming a following field.
+
+Malformed late records, missing code definitions, unknown root profiles, partial
+payloads, missing child terminators, extra roots and type offsets into attribute
+bytes preserve unavailable candidates. Allocation failure at every construction
+allocation, budget refusal, cancellation, short/EINTR/EOF/error reads and an
+intentionally retained writer mutating between passes check cleanup and bounded
+progress. Mutation detection does not prove acquisition writer closure.
+
+The retained-file harness composes headers, schemas and DIE trees from native
+compiler output, checks exact physical order and parent ranges, then releases
+construction before backing cleanup. Its separate libelf comparisons still test
+ELF fields/names only. These are not an independent DWARF grammar oracle, complete
+reference/type/location validation, general producer/hardware qualification,
+production sizing or SE05/F07 acceptance.
+
+
+## Physical DWARF reference targeting (SE05, partial)
+
+```sh
+make BUILD_DIR=build/se05-references CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-references test-symbol-dies test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Complete-view fixtures check each unit-relative
+reference form, indirect effective forms, exact source/target coordinates,
+non-reference numeric constants and duplicate attribute names without first-name
+selection. Header/end/overflow bounds, offsets inside payloads and changed
+backing/unit/section selections retain distinct range, missing-boundary and
+dependency outcomes with unchanged failure outputs.
+
+Explicit cross-unit info selection checks unit framing and target boundaries.
+Incremental signature lookup checks complete scans, repeated physical views,
+distinct matching units/sections, missing types, unsupported coverage, invalid
+scopes. Large 100,001-entry
+scopes test lookup boundaries and a late signature conflict/coverage limitation;
+no candidate becomes available early. Supplementary references remain unsupported.
+
+The native retained-file harness prepares every reference-form attribute and
+checks exact boundaries for unit-relative references. Other reference kinds are
+counted as dependencies; this harness does not claim their full semantic
+validation. Separate ELF comparisons with libelf remain unchanged. Authored
+complete-view cases are distinct from parser/container fixtures and native
+compiler-output composition. None establishes applicable relocation proof,
+semantic type/specification validity, general producer/hardware qualification,
+production sizing or SE05/F07 acceptance.
+
+
+## Retained DWARF strings and offsets (SE05, partial)
+
+```sh
+make BUILD_DIR=build/se05-strings CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-strings test-symbol-string-offsets test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Protected ELF32/64 fixtures in both byte orders check
+empty/substrings, raw bytes, exact exclusive scan bounds, terminators across
+scratch windows, a 70,000-byte string and unavailable views on failure. Read
+instrumentation checks the selected range and per-step allowance. Constructors
+perform no I/O. Allocation/budget failure, cancellation, short/EINTR/EOF/error
+reads and descriptor replacement check ownership and bounded progress.
+
+Offset-table cases cover mixed DWARF32/64 contributions, exact final entries,
+empty tables, invalid indexes, format mismatches, nonzero padding, unsupported
+versions and truncated headers. A forged base inside entries has preceding bytes
+that resemble a valid header; it is rejected without guessing that header.
+A 1,001-contribution section checks complete framing to the selected base.
+Unknown unrelated earlier versions may be skipped using established extents;
+the selected scope still requires its supported header and complete entry.
+
+Native retained-file composition validates inline, direct and indexed string
+attributes using exact metadata coordinates. Indexed paths require the unique
+root base and the CU's offset format before reading the selected string. GCC and
+Clang fixtures exercise different string forms; recorded coverage distinguishes
+them. This is composition with compiler output, not an independent DWARF parser
+oracle. Raw strings do not prove UTF-8, semantic names or source correspondence.
+Split/headerless tables, broader producer/target qualification, production sizing
+and SE05/F07 acceptance remain separate work.
+
+
+## Selected text attributes (SE05, partial)
+
+```sh
+make BUILD_DIR=build/se05-text CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-attributes test-symbol-text test-symbol-elf-native
+```
+
+The attribute cursor tests use authored complete-tree views, including duplicate
+fields with equal values and a 100,001-attribute scope with a late duplicate.
+They check complete-scope uniqueness, physical diagnostics, bounded steps and
+unchanged outputs before completion. They do not replace DIE parser fixtures.
+
+The text tests combine protected ELF32/64 backing in both byte orders with
+authored unit/tree views. Cases cover DWARF32/64, versions 4–5, inline and empty
+strings, direct/indirect effective forms, line strings and every standard indexed
+string form. Missing/duplicate fields and bases, explicit absent sections,
+unsupported forms, numeric/span errors and malformed dependent strings have
+separate outcomes. Constructor I/O, per-step reads/allowances, every allocation
+site, budget refusal, cancellation, descriptor mismatch and short/EINTR/EOF/error
+paths are instrumented. EINTR without advancement does not count as progress.
+
+Native composition now uses this resolver over actual producer-generated unit,
+abbreviation and DIE views, checking source and dependency provenance. GCC and
+Clang fixture configurations exercise different direct/indexed encodings; neither
+is a universal producer oracle. The inherited 2 MiB harness account remains
+unchanged. Semantic naming/inheritance, frontend evidence ownership, production
+sizing, hardware qualification and SE05/F07 acceptance remain separate work.
+
+
+## Direct DWARF entry facts (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-entities CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-entities test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored complete-tree views check selected-DIE
+isolation, exact field coordinates, missing versus false flags, every possible
+flag byte and effective indirect `flag_present`. These authored views isolate
+selected-DIE lookup scopes; native composition below supplies actual unit-parser
+outputs. Known duplicate fields conflict
+even when their values agree; raw names, inline codes and references receive no
+semantic validation here. Wrong flag classes, unrepresentable/signed values and
+invalid implicit flag values fail without exposing a view. A 100,001-attribute
+scope checks late conflicts, bounded steps and no early candidate. Invalid
+initialization preserves existing state; caller-owned cursors can be discarded
+without allocation or file cleanup.
+
+Native composition checks every DIE's selected source fields and parent/kind
+facts over real unit/abbreviation/form decoding. It includes the existing C++
+code fixture alongside the C executable, DSO and harness itself; this target
+requires a C++ compiler for the debug target only. ELF/libelf,
+physical reference and retained-string comparisons remain separate checks.
+The existing retained-file account remains unchanged. These tests establish
+neither canonical semantic identities nor declaration inheritance, complete
+qualified names/signatures, usable code/storage locations, production sizing,
+SE06/F07 acceptance or physical target qualification.
+
+
+## Scoped DWARF relationship links (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-relations CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-relations test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored scoped views check each unit-relative
+reference form, effective indirect references, exact target boundaries,
+section-relative cross-unit dependencies and unchanged failed outputs. Cases
+separate absent fields, duplicate fields, wrong classes, range errors, missing
+inventories/trees, unsupported headers/tags/reference profiles, mismatched tags
+and self-cycles. The source and target declaration flags can differ in either
+direction. A two-record cycle remains two distinct direct edges; the separate
+[graph traversal](#bounded-dwarf-relationship-traversal-se06-partial) checks
+acyclicity. Direct-link tests do not claim graph acyclicity.
+A 100,001-attribute scope checks late conflicts without early publication.
+
+Version-specific cases validate the DWARF 4 variable-to-member specification
+pair and its required aggregate parent, including a DWARF 5 source referencing
+a DWARF 4 target. Unknown or vendor semantics are unsupported rather than
+interpreted through a standard tag rule. Missing dependencies and unsupported
+coverage remain separate outcomes.
+
+The maintained C++ fixture under `tests/fixtures/native/symbols/` has out-of-line
+methods, static data, inline calls, overloads, duplicate file statics and duplicate
+source basenames. The native target builds/runs it in DWARF 4 and 5, then verifies
+its specification and origin links through actual retained-file decoding. It
+requires all standard links in these fixtures to resolve; unsupported records
+must be the specifically identified older GNU call-site profile. The DWARF 4
+fixture also requires an actual member-tag target. A C++ compiler builds the debug
+targets only; the frontend and harness remain C17.
+
+Namespace extension links have authored-view coverage; these native fixtures do
+not promise that a producer emits such a link. Broader graph/name semantics,
+production sizing, frontend evidence/publication, SE06/F07 acceptance and physical
+qualification remain outstanding. Direct links authorize no target access.
+
+
+## Bounded DWARF relationship traversal (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-graph CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-graph test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored scoped views check shared completed targets,
+cycles in either branch, mixed specification/origin paths, namespace extensions,
+exact storage exhaustion and no successful prefix. A 1,001-record chain uses
+single-action steps without recursion. A 1,001-attribute scope rejects a late
+conflict before requesting a target. Cross-unit cases verify explicit info/tree
+dependencies and reject changed target versions or abbreviation provenance.
+Malformed forms, unsupported vendor semantics and missing DIE boundaries retain
+separate relationship diagnostics and available source/field provenance.
+Invalid initialization, invalid source supplies and unavailable output requests
+preserve existing state or output as documented.
+
+Native composition traverses supported function, data, inline and namespace
+records over actual unit/abbreviation/form decoding. Both maintained C++ fixtures
+require successful graphs with at least one traversed edge and zero graph
+coverage/dependency failures. Other native inputs report incomplete graph scopes
+explicitly. The harness reserves and releases its 64-node workspace from the
+existing retained-file construction account; that capacity is test-specific.
+
+These checks validate only the captured three-kind reachable graph. They do not
+establish attribute inheritance, qualified names/signatures, type-graph
+acyclicity, relocation correspondence, production capacity or latency,
+independent frontend evidence, SE06/F07 acceptance or physical qualification.
+All traversal and dependency transfer here perform zero live debugger access.
+
+
+## Inherited DWARF attribute owners (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-inherit CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-inherit test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored scoped views first construct a completed
+relationship graph, then select owners for each supported descriptive field.
+Cases cover origin/specification chains, namespace extensions, shared owners,
+multiple distinct owners with equal raw values, direct-field precedence,
+absence and equal-value duplicate conflicts. A dependency failure after one
+candidate blocks the whole result. Invalid initialization/capacity and wrong
+source supplies preserve prior state; incomplete graphs expose no candidate.
+A 513-record chain advances in single-action slices without recursion.
+
+Cross-unit declaration-file selection retains the actual owner's unit. DWARF 4
+compilation and partial roots refine their ambiguous info header, while
+incompatible kinds/versions are rejected. Flags, sibling, runtime and other
+fields remain explicitly unsupported. Raw value-class validation is separate
+from owner selection; tests deliberately preserve unvalidated raw attributes.
+
+Native composition selects all six supported fields over each completed graph.
+It checks every owner against actual decoded attribute coordinates and resolves
+selected name/linkage fields through retained text dependencies. Both C++
+fixtures require actual indirect ownership; earlier graph, physical-reference,
+text and ELF/libelf assertions remain. The harness accounts and releases a
+64-slot inherited-field workspace alongside its graph workspace within the
+existing retained-file construction allowance. Those capacities are specific
+to this test, not production defaults.
+
+These checks do not establish agreement between distinct owners, semantic
+flag/location inheritance, qualified names/signatures, native line tables,
+production capacity/latency, independent frontend evidence, SE06/F07 acceptance
+or physical qualification. No debugger operation is introduced.
+
+
+## Inherited DWARF text agreement (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-inherited-text CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-graph test-symbol-inherit test-symbol-string-order \
+  test-symbol-inherited-text test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Byte-order tests use protected read-only retained
+files and complete section/string providers. They cover equal values, different
+lengths, empty strings, unsigned non-UTF-8 bytes and 100,001-byte common prefixes.
+Changing slices, interrupted/short reads, EOF, I/O errors, descriptor rejection
+and allocation/exact-budget failures retain explicit outcomes and ownership.
+The comparison harness checks a maximum of 32 KiB per operand per comparison
+and at most one read syscall per step.
+
+Composed tests cover DWARF 4/5, DWARF32/64 and both byte orders, compilation
+and partial units, distinct owners with equal full values, disagreement, duplicate
+attributes, absent/empty names, malformed value classes and unsupported
+supplementary strings. A DWARF32 definition inherits an indexed name from a
+DWARF64 unit with a different table base; the
+result must retain that owner's root, width, contribution and string offset.
+Wrong source supplies and invalid slices preserve pending state. Destruction at
+every successive interruption point releases all owned storage; a missing source
+or offset-table dependency after an earlier candidate exposes no prefix.
+Allocation faults cover the parent, workspaces, facts and nested providers.
+Rejected descriptors during direct-string and indexed-table reads must report
+operational failure, preserving their nested reader reason and borrowed ownership.
+
+Native composition runs the complete resolver for both name fields over each
+completed graph and compares all retained physical owners with the decoded
+attributes. Earlier raw owner/reference/text and ELF/libelf checks remain. Both
+maintained C++ fixtures require indirect ownership. The native harness's explicit
+construction allowance is now 4 MiB because it also inspects the linked decoder
+implementation's debug metadata. It remains separately bounded and fully
+released; authored exact-budget failure tests are unchanged. This harness limit
+is not a production sizing decision or RSS guarantee.
+
+These checks establish neither qualified-name agreement nor definition/signature
+semantics, independent frontend evidence, production sizing, native line tables,
+SE06/F07 acceptance or physical qualification. No debugger operation is added.
+
+
+## Declaration-context anchors (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-context CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-context test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored graphs cover an out-of-line method whose
+direct name owner differs from its declaration-context anchor, inline callee
+versus caller context, namespace extensions, shared terminals and distinct
+terminals with a common parent. Compilation, partial and type-unit boundaries
+cover DWARF 4/5, including DWARF 4's ambiguous info header. Cross-unit context
+retains a DWARF64 owner's parent/root instead of the DWARF32 selected unit.
+
+Single-action slices traverse a 512-record graph with 256 separate terminal
+anchors. Capacity failures and invalid arguments preserve previous state;
+incomplete graphs, unknown relationship bits and progress exhaustion fail
+explicitly. Wrong source/abbreviation/unit-header supplies preserve the pending
+request. A missing dependency after an earlier anchor exposes no completed
+prefix. A returning lexical parent demonstrates why pure relationship acyclicity
+does not prove recursive qualified-context acyclicity.
+
+Native composition runs the cursor over every completed graph and checks every
+terminal, parent and unit boundary against the actual decoded tree. The harness
+reserves/releases the cursor and its 64-slot stack workspace within its existing
+4 MiB test construction allowance. This does not select a production limit or
+establish RSS bounds. Earlier native inheritance, full text, reference and
+ELF/libelf assertions remain enforced.
+
+Full qualified-name construction/agreement, definition roles, signatures,
+inline interpretation, production sizing and SE06/F07 acceptance remain
+outstanding. Mixed dependency-cycle rejection is covered by the separate
+[recursive context tests](#recursive-declaration-context-graph-se06-partial).
+No debugger request is introduced.
+
+
+## Recursive declaration-context graph (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-scope CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-scope-graph test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored cases combine specification/origin links
+with lexical parents: direct and multi-hop mixed cycles, a cross-unit
+DWARF32/DWARF64 cycle, shared completed parents, inconsistent captures of a
+shared parent, missing dependencies and node/edge exhaustion. A 512-parent chain
+runs in single-action slices without recursion. Invalid initial capacities and
+step arguments preserve state; wrong source captures preserve the pending
+request. Reordered anchors, false unit-boundary claims, changed unit roots,
+missing headers and inconsistent abbreviation context produce no result view.
+Later-anchor rejection reports that exact terminal and anchor ordinal, with
+unavailable diagnostic coordinates explicitly distinguished.
+
+Native composition runs recursive construction for every completed relationship
+graph, then checks every edge against its exact parent or typed unit boundary.
+All retained input workspaces, cursor state and full arena capacities are charged
+and released within the existing 4 MiB harness allowance. Prior reference,
+inheritance, full-text and ELF assertions remain enforced. This test allowance
+is not a production sizing decision or RSS bound.
+
+These checks establish bounded context dependency construction, not complete
+qualified names, semantic equivalence, runtime eligibility or SE06/F07 acceptance.
+
+
+## Language and inline constants (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-constants CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-constants test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Authored cases cover supported numeric forms,
+zero/maximum/one-over boundaries, negative and inconsistent values, wrong
+classes, missing attributes, unknown codes and late equal duplicates. Framing
+composition covers DWARF 4/5, both byte orders, indirect fixed-width constants,
+unsigned/signed LEB operands and DWARF 5 indirect implicit constants.
+
+Direct implicit constants require exact abbreviation provenance. Tests reject
+wrong tables without consuming the request, distinguish explicit dependency
+failure, reject mismatched code/tag/children/attribute ownership and preserve
+unsupported wider spans. A 512-entry table runs in single-action slices. Equal
+zero-footprint attributes sharing a byte offset remain distinct duplicates.
+Raw DIE attributes are preserved alongside the separately adopted schema value.
+Language-family recognition does not grant a complete semantic profile, and the
+four inline codes do not prove emitted locations or definition roles.
+
+Native composition interprets each decoded unit root's language and each
+subprogram's direct inline attribute, comparing selection and raw/schema value
+coordinates with the original decoded records. New cursor state is charged to
+the existing 4 MiB harness construction allowance; retained abbreviation arrays
+are already charged by their decoder. Prior entry/reference/text/context/ELF
+assertions and both DWARF 4/5 C++ fixtures remain enforced. No target or debugger
+operation is introduced, and production sizing/SE06/F07 acceptance remain open.
+
+
+## Name sequence comparison (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-name-order CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-name-order test-keybinds
+```
+
+Included in `test`/`test-ci`. Protected ELF fixtures use the real section/string
+readers to establish retained component spans. Cases compare differently
+segmented equal names, template/conversion spellings containing `::`, empty
+sequences/components, prefixes, case, high bytes and distinct Unicode byte
+spellings. Long names cross the 64 KiB reader boundary. Thirty-two deterministic
+reference cases compare independently assembled strings and flattened equivalents.
+
+Instrumentation bounds each comparison to 32 KiB per operand and each step to
+at most one `pread`. Failure cases cover every constructor allocation, budget
+exhaustion, failed replacement peaks, invalid later components before an early
+byte difference, short reads, EINTR, EOF, I/O/resource errors, O_PATH and missing
+close-on-exec. Repeated interrupted reads preserve the progress counter. Discard
+at every successive construction/read boundary releases owned charges without
+closing borrowed descriptors. Synthetic coordinates check derived-length
+overflow before file access; no enormous backing file is created or decoded.
+
+The existing keybinding TUI assertion now prints the missing action, selection,
+terminal dimensions and screen on failure. Its predicate and input/settling
+sequence are preserved. This improves evidence for the earlier intermittent
+[snapshot failure](validation.md#language-and-inline-constants--2026-11-21);
+it is not a claimed synchronization fix.
+
+These checks establish byte comparison and ownership, not complete qualified
+names, semantic equivalence, runtime correspondence or SE06/F07 acceptance.
+
+
+## Qualified metadata recipes (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-qualified CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-qualified test-symbol-elf-native
+```
+
+Included in `test`/`test-ci`. Protected ELF/string fixtures and authored completed
+scope proofs exercise nested C++ names, complete-prefix agreement despite
+different component boundaries, conflicting prefixes, shared physical parents,
+unnamed selections/ancestors, unsupported languages and local contexts. Every
+inherited name owner remains available. An owner in a different unit requests
+that unit's language; the selected record's context cannot substitute for it.
+
+Fault cases cover all constructor allocations, transient comparison allocations,
+failed replacement peaks, wrong source identities, typed child failures, invalid
+later owner facts, EOF, I/O/resource errors and interrupted reads. Repeated EINTR
+does not advance the progress counter. Discard at every successive step through
+completion returns all owned charges and preserves the borrowed descriptor.
+A 512-level parent chain completes without recursive traversal. Instrumentation
+bounds each step to at most one read and each byte comparison to 32 KiB per operand.
+
+The native ELF harness composes actual graph/context, inherited-text and direct
+language decoders over retained compiler-produced DWARF. It adopts every completed
+name-owner fact before destroying child scratch and retains all original sources.
+It reports ready, unnamed and unavailable-profile counts separately, requires
+successful recipes, checks component counts/lengths/identities, and rejects resource,
+malformed or operational failures. Its existing 4 MiB construction budget remains
+unchanged. These are host metadata checks, not full SE06/F07 acceptance or proof
+of a canonical source expression, runtime address or target-access authority.
+
+
+## Physical inline ancestry (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-inline CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-inline-scope test-symbol-elf-native
+```
+
+Authored completed-unit views cover every standard inline code, absent/zero
+attributes, nested abstract roots, multiple concrete-inline markers, ordinary
+nested subprograms and a sibling abstract-origin reference that must not change
+physical membership. A 512-level chain completes iteratively with every examined
+subprogram's direct selection retained. DWARF 4 compilation/partial unit header
+compatibility remains distinct from the root's validated kind.
+
+Wrong source/schema requests, missing schema, unknown codes, malformed constants,
+duplicates, exhausted fact capacity, invalid parent links and invalid requests
+expose no successful prefix. Failure diagnostics preserve exact physical identity
+and applicable direct selection. Invalid initialization and step arguments preserve
+existing state. The native harness compares the cursor with an independent parent
+walk and raw validated attributes/schema values over compiler-produced DWARF 4/5;
+its original decoder assertions and construction allowance remain in place.
+
+These checks establish physical metadata ancestry, not definition/nonlocal roles,
+source ranges, runtime correspondence, target access or SE06/F07 acceptance.
+
+
+## Direct roles and logical locality (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-locality CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-roles test-symbol-locality test-symbol-entities test-symbol-elf-native
+```
+
+Role cases cover function/data declarations, absent and explicit-false flags,
+specification/origin references, concrete-inline and other tags, malformed flags
+and duplicates. Direct flag provenance remains available independently of role.
+
+Locality fixtures supply completed context graphs with every supported parent
+kind, anonymous transparent scopes, local classes, unsupported outer contexts
+behind local barriers, shared-parent diamonds and conflicting alternatives.
+A 512-level chain completes iteratively. Invalid identities, anchors, parents,
+cycles, capacity/size boundaries and invalid requests expose no successful result.
+Dropping and restarting at each successive step preserves borrowed sources;
+progress exhaustion before arena initialization retains safe diagnostics.
+
+The native harness composes actual relationship/context decoders and compares
+locality with an independent fixed-point calculation over the completed graph.
+It requires both local and nonlocal results, reports unsupported profiles
+separately and retains the existing 4 MiB construction allowance and assertions.
+These are metadata checks, without location, runtime, target-access or F07 claims.
+
+
+## Ordered direct parameters (SE06, partial)
+
+```sh
+make BUILD_DIR=build/se06-parameters CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-parameters test-symbol-elf-native
+```
+
+Authored tree views cover ordered parameters interspersed with types, nested
+parameter exclusion, all supported callable tags, empty scopes, repeated
+unspecified markers, exact raw fields, duplicates and malformed flags. Capacity,
+count arithmetic, invalid requests, invalid parents and progress exhaustion
+expose no completed inventory. A 512-level nested scope scans iteratively;
+discard/restart is exercised at every successive step.
+
+The native harness independently scans complete decoded trees for each callable's
+immediate parameter records, checking order, physical coordinates and raw selected
+fields. It reports formal and unspecified-marker counts separately, preserves
+existing assertions and accounts the full cursor/arena within its unchanged
+4 MiB construction allowance. These tests do not establish inherited signature
+reconciliation, C prototype completeness, method qualifiers, runtime access or
+SE06/F07 acceptance.
+
+
+## Inherited flag presence (SE06, partial)
+
+```sh
+make BUILD_DIR=build/symbol-inherited-flag CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-inherit test-symbol-inherited-flag test-symbol-elf-native
+```
+
+Authored views cover all four supported fields, missing versus physically zero
+flags, zero-to-true inheritance within and across units, multiple physical owners, shared ancestry,
+duplicate attributes and malformed value classes. Wrong source context preserves
+the request; missing dependencies, incomplete graphs and inconsistent edges fail
+explicitly. Capacity and arithmetic boundaries preserve prior state on rejected
+initialization. A 512-node chain and restart at each successive step exercise
+bounded traversal without recursion or early result exposure.
+
+The native composition harness independently follows relationships and scans
+actual decoded attributes to check semantic owners, raw provenance and absence.
+It includes formal-parameter graphs as well as callable/data records, within the
+unchanged 4 MiB construction allowance. Existing physical attribute-owner checks
+remain separate. These tests do not establish complete signatures, method
+qualifiers, runtime authority, production sizing or SE06/F07 acceptance.
+
+
+## Inherited reference targets (SE06, partial)
+
+```sh
+make BUILD_DIR=build/symbol-inherited-reference CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-inherit test-symbol-inherited-reference test-symbol-inherited-flag \
+  test-symbol-elf-native
+```
+
+Authored views cover CU-relative and indirect reference forms, exact foreign-unit
+owners, absolute info references, type signatures, shared/equal and distinct
+targets, absence and typed failures. They distinguish zero operands from absent
+attributes. Wrong context or changed raw source preserves the pending request.
+An ambiguous signature after an earlier resolution exposes no result prefix;
+rejected replacement initialization preserves the previous result and both arenas.
+Capacity/arithmetic boundaries and restart at successive steps remain explicit.
+
+Native composition independently traverses actual decoded relationships and
+checks each selected owner's raw reference and physical target. It includes
+callable/data and formal-parameter graphs. Fixture object-pointer targets are
+checked as children of their exact physical owners; broader implicit-object
+semantics remain signature work. Existing flag, name, context and ELF comparisons
+remain enabled.
+
+The harness retains completed scope records in charged compact buffers while
+keeping its 64-slot construction arenas and 4 MiB aggregate allowance. Scratch and
+candidate copies count concurrently until transfer completes. This avoids retaining
+unused arena capacity for every ancestor; it does not change production limits or
+establish production sizing. Native reference targets alone grant no target access.
+
+
+The native target also builds and runs `symbol-fixture-type-units` from
+`tests/fixtures/native/symbols/type_units.cpp`, using DWARF 4,
+`-fdebug-types-section` and `-fno-inline`. It requires non-split type units,
+three member declarations under a type-signature container and three exact
+specification-linked definitions with their own parameter children. The two
+instance definitions retain object pointers; the static definition does not.
+GCC and Clang can retain different declaration child inventories. The harness
+records reduced empty declarations without requiring every compiler to omit
+those children. These checks preserve both physical inventories; they do not
+select an authoritative callable signature or infer staticness from an empty
+reduced declaration.
+
+
+## Bounded type recipes (SE06, partial)
+
+```sh
+make BUILD_DIR=build/symbol-type-recipe CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-type-recipe test-symbol-elf-native
+```
+
+Authored completed-child views exercise a 512-node iterative modifier chain,
+explicit unsupported/missing/alternative terminals, cycle rejection, capacity
+failure and stale child/context rejection. Known non-type targets fail before or
+after a valid prefix; later standard tag assignments are not assumed for DWARF 4
+extensions. Rejected initialization preserves the
+previous completed recipe and arena. These coordinator models complement actual
+encoded DWARF and child-component validation.
+
+Native composition follows actual type references, constructs relationship and
+qualified-name evidence, and checks each completed/partial recipe while all child
+views remain alive. It discards the recipe before releasing borrowed name/scope
+storage. All earlier reference, name, locality, inline and ELF checks remain active
+under the unchanged 4 MiB harness allowance. Complete and partial mean the
+[documented descriptive profile](native-symbol-engine.md#descriptive-type-recipes-se06-partial),
+without proving type equivalence, object layout, complete callable signatures,
+frontend publication or target access.
+
+
+## Exact parameter correspondence (SE06, partial)
+
+```sh
+make BUILD_DIR=build/symbol-parameter-links CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-parameter-links test-symbol-elf-native
+```
+
+Authored completed-child views cover cross-unit and transitive links, shared
+origins, independent parameter lists, omitted concrete children, empty reduced
+inventories, unspecified markers and 512 physical parameter records. Negative
+cases include an unrelated callable path, unmatched parent context, one-to-many
+and many-to-one correspondence, stale child context, exhausted arenas and
+progress overflow. Rejected initialization preserves the previous state, arenas
+and reachability workspace. These coordinator models complement encoded decoder
+fixtures rather than replacing them.
+
+Native composition constructs all direct inventories and parameter relationship
+graphs for each supported completed callable graph. Exact-size retained storage
+and scratch overlap are accounted under the unchanged 4 MiB harness allowance.
+Every link is checked against its physical parameter graph and target's actual
+parent. Earlier native assertions remain active. Completion establishes the
+[correspondence contract](architecture.md#exact-parameter-correspondence-se06-partial),
+not source-list selection, complete signature semantics or runtime authority.
+
+
+## Callable parameter sources (SE06, partial)
+
+```sh
+make BUILD_DIR=build/symbol-parameter-source CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-parameter-source test-symbol-elf-native
+```
+
+Authored complete child views and direct inventories exercise specification and
+origin chains across separate units, omitted concrete children, potentially
+reduced type-unit declarations with and without retained children, shared versus
+distinct source alternatives and explicit correspondence coverage. Missing links
+in intermediate inventories remain partial even when the concrete root is empty.
+Unknown child constructs and version-specific tags retain coverage limitations.
+An empty physical list does not establish an empty C prototype.
+
+Negative cases cover repeated/misplaced unspecified markers, duplicate or malformed
+class signature attributes, invalid dependency ordering, stale source context,
+missing dependencies, capacity rejection and progress overflow. A 517-formal
+inventory exercises single-action stepping, and discard is checked at every
+suspended prefix of a small selection. Rejected initialization preserves the
+previous state and full arena; unavailable getters preserve outputs.
+
+The native harness composes selection after real decoded callable graphs,
+inventories and parameter links, retaining all borrowed inputs until discard.
+The maintained type-unit fixture covers producer-dependent declaration shapes;
+all earlier native assertions and the 4 MiB construction allowance remain in
+place. The [selection profile](native-symbol-engine.md#callable-parameter-sources-se06-partial)
+does not establish complete signatures, language applicability, implicit objects,
+method qualifiers, returns, frontend publication or runtime actions.
+
+
+## Descriptive callable recipes (SE06)
+
+```sh
+make BUILD_DIR=build/symbol-callable CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-callable test-symbol-elf-native
+```
+
+Unit models exercise ordinary/static/instance descriptions, explicit object
+correspondence through an origin, artificial-argument retention, pointer-object
+versus pointee cv, reference-qualifier conflicts, DWARF 4 partial qualification,
+opaque aliases, physical class mismatches, missing/alternative types, neutral
+return-type absence, C prototypes and variadic markers. A 520-constructor object
+type exercises bounded stepping. Pending-context rejection, late resource failure,
+state/arena preservation and discard at every small-operation prefix check failure
+and lifetime boundaries. Authored completed-child views isolate composition;
+they do not replace encoded metadata validation.
+
+The native target composes recipes from decoded C/C++ fixtures, both DWARF
+versions, non-split type-unit declarations and the native harness itself. It
+retains all child graph/context/name/type dependencies through recipe discard
+using the charged support module. Earlier decoder, identity, ordering and budget
+assertions remain active, including exact release of concurrent captured storage.
+Compiler-dependent and unsupported shapes remain partial or explicitly unavailable
+under the [documented grammar](native-symbol-engine.md#descriptive-callable-recipes-se06).
+Focused sanitizer runs are appropriate for this retained-closure integration.
+Host tests establish neither universal producer compatibility, production sizing,
+concrete-inline acceptance nor live/physical target behavior.
+
+## Concrete-inline details and composed SE06 checks
+
+```sh
+make BUILD_DIR=build/symbol-inline-details CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-inline-details test-symbol-constants test-symbol-elf-native
+```
+
+The unit target checks complete and empty unit inventories, nested physical
+instances sharing origins and coordinates, direct call-site versus declaration
+metadata, zero/full-width constants, safely unsupported fields and DWARF 4/5
+contexts. A 520-instance inventory exercises bounded stepping. Negative cases
+include zero/insufficient capacity, late duplicate coordinates, malformed classes,
+incomplete child graphs, stale/wrong child identities, explicit graph failures,
+implicit-constant schema mismatch/missing dependency, progress overflow and
+discard at every suspended prefix of a small operation. Rejected initialization
+preserves state and storage; unavailable views preserve their outputs.
+
+The native target compares complete inventories and coordinates with the decoded
+trees and abbreviation evidence from real fixtures and self-inspection. Compact
+graph copies remain accounted and pinned until discard. Whole-unit inventories
+that cannot fit the unchanged harness allowance must report resource exhaustion
+and expose no successful prefix. Resource outcomes are counted separately from
+unsupported or unavailable dependencies. All preceding decoder assertions and
+exact final budget balance remain active. The harness's within-unit provider is
+not cross-unit compatibility qualification.
+
+The composed SE06 review uses the existing focused targets together:
+
+| Contract | Maintained checks |
+|---|---|
+| Distinct physical definitions, roles and locality | `test-symbol-entities`, `test-symbol-roles`, `test-symbol-locality`, native duplicate file-static/basename fixtures |
+| Relationship provenance, cycles and inherited agreement | `test-symbol-relations`, `test-symbol-graph`, `test-symbol-inherit`, `test-symbol-inherited-text`, `test-symbol-inherited-flag`, `test-symbol-inherited-reference` |
+| Qualified names and context | `test-symbol-context`, `test-symbol-scope-graph`, `test-symbol-constants`, `test-symbol-name-order`, `test-symbol-qualified` |
+| Supported signatures and explicit partial coverage | `test-symbol-type-recipe`, `test-symbol-parameters`, `test-symbol-parameter-links`, `test-symbol-parameter-source`, `test-symbol-callable` |
+| Inline ancestry, instance identities and direct call sites | `test-symbol-inline-scope`, `test-symbol-inline-details`, native DWARF 4/5 integration |
+
+These checks establish the supported metadata foundation, not a complete C++
+semantic analyzer. Unsupported type constructors, reduced producer metadata and
+missing correspondence remain partial or unavailable under the authoritative
+[callable grammar](native-symbol-engine.md#descriptive-callable-recipes-se06).
+Line/file/range interpretation, indexed multi-unit discovery, frontend publication,
+production sizing and live actions retain their later gates. Full fortified host
+regression, complete static analysis and maintainer acceptance are separate from
+focused success. Hardware and F07 acceptance remain outstanding.
+
+## Numeric line-program foundation (SE07, partial)
+
+```sh
+make BUILD_DIR=build/symbol-line CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-line test-symbol-line-native
+```
+
+Unit cases cover line versions 2–5, DWARF32/DWARF64, both byte orders and numeric
+address widths 1/2/4/8. Fragmented feeds, exact contribution ends, incomplete
+operands, header boundaries and unknown instructions check framing. Row cases
+cover VLIW operation arithmetic, fixed advances, negative line changes, zero
+lines, flags/reset behavior, distinct rows at equal addresses and lower-address
+restarts in a new sequence. Integer limits include `INT64_MIN`, `UINT64_MAX` and
+a VLIW advance whose intermediate operation total exceeds 64 bits while its
+final address remains representable.
+
+Capacity failures expose no matrix prefix. Dynamic legacy file records retain
+name spans and all three numeric operands without reading source files. Tests
+also cover unsupported version/addressing profiles, malformed opcode arities,
+long framed extension operands, invalid-init state preservation, incomplete EOF,
+suspended-operation discard and a 520-row program crossing multiple feed slices.
+
+The native target decodes the maintained linked C++ fixtures with DWARF 4 and 5.
+It checks uniform address width independently against every CU header, traverses
+all line contributions, verifies final sequence closure and observes exact ELF
+`main` addresses in numeric rows. It also builds complete native unit/tree
+inventories, resolves every direct CU line reference against sequentially reached
+contribution boundaries, decodes each variable prologue and validates ordinary
+row file indexes. Inline and external path strings are checked using explicitly
+selected sections and the bounded string reader. Private read-only fixture copies
+satisfy the production reader's backing contract; the original build outputs
+remain unchanged. This does not establish source correspondence, runtime mapping,
+executable ranges or general producer compatibility.
+
+Additional focused targets exercise the prologue and direct-reference components:
+
+```sh
+make BUILD_DIR=build/symbol-line-files CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-line-files test-symbol-line-reference test-symbol-line-native
+```
+
+Prologue cases span versions 2–5, both offset formats and byte orders, and
+fragmented feeds. They preserve duplicate basenames, raw 16-byte MD5 spans,
+string dependencies and repeated vendor fields. Unknown safely framed metadata
+reports partial coverage; unknown framing, illegal standard pairings, conflicting
+schemas, truncated operands and resource failure expose no successful view.
+The largest encoded schema, exact/insufficient capacities, oversized counts,
+520 entries, long names, empty inventories, incomplete EOF and suspended discard
+exercise work and ownership boundaries.
+
+Reference cases scan root scopes larger than one service slice, including an
+identical duplicate near the end. Absence, conflict, malformed class/span,
+wrong backing/unit/root/abbreviation context, partial/type roots and indirect
+section-offset encodings remain distinct. These metadata checks perform no
+filesystem discovery, source opening or debugger operations. Composed source
+mapping/correspondence, executable-range and Source-preparation checks are
+covered by the later focused targets below under the
+[line-program contract](native-symbol-engine.md#line-program-foundation-se07-partial).
+
+## Code-range foundation (SE07, partial)
+
+```sh
+make BUILD_DIR=build/symbol-ranges CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-indexed-tables test-symbol-ranges \
+  test-symbol-line-native test-symbol-ranges-native
+```
+
+The table target checks both offset formats, both byte orders and address widths
+1/2/4/8 at nonzero contribution offsets. Address and range-offset framing remain
+separate. Cases cover index bounds, offsets relative to the offset array,
+truncated headers/entries, unsupported versions/widths/selectors, malformed
+payload lengths and preserved failure outputs.
+
+Range cases cover both versions/byte orders, all numeric widths and fragmented
+feeds. Every standard version-5 kind is exercised, including explicit indexed
+address requests, unavailable dependencies and wrong-context supply rejection.
+Zero bases differ from missing bases. Base/end records, empty intervals and
+physical order remain available after interval sorting. Cases include reversed
+bounds, target-width/64-bit overflow, unknown opcodes, wide LEB operands,
+resource limits, overlap, EOF, adjacent-list bytes, suspended discard and 520
+reverse-ordered intervals requiring multiple bounded sort/finish slices.
+
+The native targets compose line, file and CU metadata from the maintained C++
+fixtures with exact root range/base attributes. The disjoint target builds the
+same sources with `-ffunction-sections -Wl,--sort-section=name` and requires a
+multi-interval CU. All lists are reached by sequential traversal, intervals lie
+within file-backed executable ELF segments, and associated ordinary line rows
+are covered. GCC DWARF 4/5 fixtures currently use direct section offsets without
+indexed address operands; authored cases cover indexed encodings separately.
+These checks do not establish every producer profile, source correspondence,
+instruction boundaries, standalone entry points, runtime mapping or target access.
+The [authoritative range contract](native-symbol-engine.md#code-range-foundation-se07-partial)
+retains the remaining Source/consumer gates.
+
+### Direct code attributes
+
+```sh
+make BUILD_DIR=build/symbol-code-attributes CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-code-attributes test-symbol-line-native test-symbol-ranges-native
+```
+
+Authored checks independently vary unit version, offset format, numeric address
+width and bounded step allowance. They cover complete absence, late duplicate
+attributes, direct/indirect address forms, supported constant high-PC lengths,
+indexed addresses, range offsets/indexes, explicit root table bases and physical
+unit/tree mismatches. Implicit constants require the exact abbreviation context
+and matching physical owner; wrong supplies preserve the request, unavailable
+dependencies fail explicitly, and a 520-entry schema requires multiple steps.
+Negative/reversed/overflowing intervals, incompatible attributes, unsupported
+constants and failed-output preservation remain distinct observations.
+
+Both native profiles interpret every DIE and check direct intervals against
+file-backed executable ELF storage. The range decoder consumes the interpreted
+root facts while independent attribute lookups check their physical coordinates
+and numeric values. These tests establish neither source correspondence nor
+resolved indexed addresses or runtime authority. See the
+[authoritative contract](native-symbol-engine.md#direct-code-attributes-se07-partial).
+
+### Indexed-table inventories and association
+
+```sh
+make BUILD_DIR=build/symbol-tables CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-tables test-symbol-tables-native test-symbol-indexed-tables
+```
+
+Authored retained-file cases vary ELF32/64, byte order, DWARF32/64, address widths
+and table kind. A selected section contains mixed-format contributions, an opaque
+unknown version, an empty contribution and adjacent headers. Checks cover exact
+CU bases, interior-offset rejection, width mismatches, missing bases, unsupported
+coverage, complete entry reads and checked range targets. A 520-contribution case
+requires several bounded binding steps. Failure injection covers late malformed
+headers, allocation/reservation exhaustion, interrupted/short/error/EOF reads,
+descriptor properties/replacement, malformed selected entries, unsupported
+selectors, cancellation and charge restoration. Empty sections still check the
+retained descriptor. Supported short headers remain malformed while safely framed
+unknown versions remain unsupported.
+
+The native target composes the maintained ordinary/disjoint DWARF 4 and 5 C++ fixtures with production
+sections, units, abbreviations, DIEs, direct code facts, table inventories, CU
+bindings and selected entry readers, then boundary indexes, code-location composition
+and semantic range decoding. Independent libelf bytes check each numeric
+entry. Default GCC fixtures may use direct offsets without address tables; they
+do not by themselves qualify indexed code references.
+
+An optional Clang producer profile exercises actual indexed addresses and range
+offset arrays, using the same maintained sources and native harness:
+
+```sh
+make BUILD_DIR=build/symbol-tables-llvm CXX=clang++ \
+  build/symbol-tables-llvm/symbol-fixture-dwarf5 \
+  build/symbol-tables-llvm/symbol-fixture-ranges-dwarf5
+build/symbol-tables/test-symbol-tables-native \
+  build/symbol-tables-llvm/symbol-fixture-dwarf5 --indexed
+build/symbol-tables/test-symbol-tables-native \
+  build/symbol-tables-llvm/symbol-fixture-ranges-dwarf5 --indexed
+```
+
+`--indexed` requires observed indexed code facts. Clang is optional for this
+additional producer check and is not required by the default test target. Compare
+the recorded tables/entries with `readelf --debug-dump=addr --wide` and
+`readelf --debug-dump=Ranges --wide`. Header/entry results alone do not establish list
+boundaries, complete code locations, source correspondence or runtime authority;
+see the [association contract](native-symbol-engine.md#indexed-table-association-se07-partial).
+
+
+### Range boundaries and composed code locations
+
+```sh
+make BUILD_DIR=build/symbol-locations CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-range-index test-symbol-code-locations test-symbol-tables-native
+```
+
+Boundary cases cover every standard range encoding, legacy fixed pairs, all
+supported numeric address widths, both byte orders, padding, independently
+selected suffixes, operand-interior rejection, arbitrarily wide LEB framing,
+segmented/wider structural framing and 600-entry bounded linking. Truncated
+operands, missing end markers, unknown opcodes, arena exhaustion, invalid
+requests, EOF and cancellation cannot publish a trusted prefix. Numeric semantic
+support remains narrower than structural framing.
+
+Location checks cross address widths, byte order and independent offset formats.
+They require exact code/root/table/entry identity and distinguish dependency,
+invalid context, malformed arithmetic, explicit zero base and absent base.
+Complete boundary scopes feed exact semantic requests, including empty suffixes
+and missing-base failures. The native target interprets every DIE's supported
+PC/range facts in ordinary and disjoint GCC DWARF 4/5 fixtures. Optional Clang
+profiles above additionally require indexed addresses/range references. Decoded
+intervals must fit executable, file-backed ELF segments; compare exact physical
+DIE offsets and intervals against `readelf --debug-dump=info --wide` and
+`readelf --debug-dump=Ranges --wide`. These checks establish metadata behavior,
+not runtime mapping, source correspondence or instruction/standalone entry proof.
+See the [composition contract](native-symbol-engine.md#code-location-composition-se07-partial).
+
+
+### Source-file provenance, paths and recorded digests
+
+```sh
+make BUILD_DIR=build/symbol-source CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-source-file test-symbol-source-path test-symbol-md5 \
+  test-symbol-source-native
+```
+
+File selection checks versions 2–5, row versus declaration/call zero, exact
+initial/dynamic offsets, event visibility, independent directories, string
+references, missing sections, unsupported forms, partial optional metadata and
+invalid contexts. Path checks preserve lexical bytes, require explicit relative
+context, distinguish component-prefix mappings from basename guesses, and retain
+ambiguity until a matching rule is selected. Capacity and invalid-byte failures
+cannot expose a truncated candidate. Boundary cases include paths longer than
+the existing Source limit, without changing that consumer limit.
+
+MD5 checks use published RFC 1321 vectors, fragmented updates, padding/block
+boundaries, a million-byte vector and poisoned input/length/finalization failures.
+The native target composes retained ELF/DWARF parsing, exact unit references,
+file selection, bounded strings and paths over ordinary/disjoint DWARF 4/5
+fixtures. Distinct `left/definition.cpp` and `right/definition.cpp` retain their
+unit/table/file identities. Compare full paths and indexes against
+`readelf --debug-dump=info --wide` and `readelf --debug-dump=rawline --wide`.
+
+An optional Clang producer profile uses the maintained sources to include actual
+recorded MD5 fields:
+
+```sh
+make BUILD_DIR=build/symbol-source-llvm CXX=clang++ \
+  build/symbol-source-llvm/symbol-fixture-dwarf5 \
+  build/symbol-source-llvm/symbol-fixture-ranges-dwarf5
+build/symbol-source/test-symbol-source-native \
+  build/symbol-source-llvm/symbol-fixture-dwarf5 --md5
+build/symbol-source/test-symbol-source-native \
+  build/symbol-source-llvm/symbol-fixture-ranges-dwarf5 --md5
+```
+
+`--md5` requires observed checksum matches and changed-byte mismatches. Only this
+explicit fixture harness opens the resolved local fixture paths; the production
+components perform no source access. A digest alone supplies no displayed-byte
+lifetime, runtime mapping or access authority; the next section covers the
+raw-byte lease binding. Clang remains optional. See the
+[source-file/path contract](native-symbol-engine.md#source-file-provenance-and-paths-se07-partial).
+
+
+### Exact Source preparation and displayed-byte correspondence
+
+```sh
+make BUILD_DIR=build/symbol-source-preparation CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-source-context test-symbol-source-prepare test-symbol-source-check \
+  test-symbol-source-native test-symbol-constants test-symbol-inline-details
+```
+
+Context tests compare full recorded/local paths, preserve differing CU and line
+contexts, reject wrong physical roots and require explicit ambiguous choices.
+Preparation tests compose direct declaration/call constants, exact row selections,
+DWARF 4/5 range decoding in both byte orders and bounded 520-row sets. They cover
+repeated addresses/operation indexes, end/unattributed rows, missing ranges,
+wrong dependencies, consumer limits, capacity failure and cancellation without a
+usable prefix. Source-check tests distinguish recorded, match, mismatch and stale
+states for exact immutable raw-byte leases; incomplete snapshots never match.
+
+The native harness now composes complete Source contexts and browsing preparation
+for every non-end fixture row, plus direct function/row associations where that
+producer profile supplies direct PCs. It preserves the exact physical DIE and
+row, checking half-open membership rather than inferring an entry point. Its
+separate indexed/disjoint native range coverage remains in
+`test-symbol-tables-native`; authored Source-preparation tests compose those list
+interfaces with semantic decoding. The optional Clang MD5 commands above also
+exercise source-revision expiry and a changed-byte mismatch through `source_check`.
+No production component opens a local source file or sends debugger traffic.
+
+Compare `PREPARED` unit/DIE/address records with `readelf --debug-dump=info --wide`,
+and `SOURCE`/`CHECKSUM` records with raw-line metadata and an independent source
+digest. These are host foundation checks. Existing Source UI behavior remains
+unchanged; native UI integration and live actions retain SE11/15. See the
+[preparation contract](native-symbol-engine.md#source-preparation-and-byte-correspondence-se07).
+
+
+### Debug companion metadata and CRC32
+
+GNU `objcopy` is required for the maintained native companion fixture:
+
+```sh
+make BUILD_DIR=build/symbol-companions CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-crc32 test-symbol-companion-metadata test-symbol-companion-native
+```
+
+CRC checks include the IEEE check string, empty and binary inputs, fragmented
+updates, a 64 KiB boundary, a million-byte stream, exact final lengths and
+poisoned failures. Metadata cases cover both byte orders, note alignment 4/8,
+all debuglink padding widths, nonzero opaque padding, invalid/truncated extents,
+unsupported basenames, unknown notes, late malformed data, duplicate IDs,
+caller-capacity failure and IDs larger than a service slice. Invalid API requests
+preserve state. Complete-scope failure cannot expose a usable prefix.
+
+The native fixture uses `objcopy --only-keep-debug` and
+`objcopy --strip-debug --add-gnu-debuglink=...` to create a linked pair with spaces
+in its directory and debug filename. The harness freezes both files independently
+before examining them through the retained-section decoder. It compares complete
+companion CRC bytes, checks matching opaque build IDs across all note sections
+and requires a changed-copy-byte checksum mismatch. Neither fixture is executed.
+All reader allocations and temporary descriptors are released.
+
+Compare the reported ID with `readelf --notes --wide`, the link bytes with
+`readelf --hex-dump=.gnu_debuglink --wide`, and the complete debug-file CRC with
+an independent implementation. Matching metadata is fixture evidence, not
+production discovery, attachment or target access. The authoritative
+[scope/profile contract](native-symbol-engine.md#companion-metadata-foundation-se08-partial)
+keeps those responsibilities separate.
+
+An optional Linux x86-64 check uses an i386-capable compiler/linker, without
+multilib C runtime libraries. It supplies a short opaque ID and renames its note
+section to exercise recognition independently of the conventional section name:
+
+```sh
+mkdir -p build/companion32
+cc -m32 -nostdlib -fno-pie -no-pie -g -O0 -std=c17 -Wall -Wextra -Werror \
+  -Wl,-e,main -Wl,--build-id=0x0123456789abcdef \
+  tests/fixtures/native/companion.c -o build/companion32/fixture
+objcopy --only-keep-debug --rename-section .note.gnu.build-id=.note.custom-id \
+  build/companion32/fixture build/companion32/fixture.debug
+objcopy --strip-debug --rename-section .note.gnu.build-id=.note.custom-id \
+  --add-gnu-debuglink=build/companion32/fixture.debug \
+  build/companion32/fixture build/companion32/primary
+build/symbol-companions/test-symbol-companion-native \
+  build/companion32/primary build/companion32/fixture.debug
+```
+
+This inspects ELF32 metadata without running the target and does not qualify a
+physical architecture or remote backend.
+
+
+### Local debug companion candidates and relationship receipts
+
+```sh
+make BUILD_DIR=build/symbol-companion-discovery CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-companion-paths test-symbol-companion-scan \
+  test-symbol-companion-discovery
+```
+
+The path checks cover GNU route order, complete root validation, binary build-ID
+hex, duplicate paths with distinct ordinals, basename rejection and exact
+capacity failure. The scanner fixtures cover ELF32/64 in both byte orders,
+complete section inventories, missing/compressed names, note alignment 4/8,
+conflicts across notes/sections, malformed late data and unavailable capacities.
+Receipt checks reject truncated/extended or inconsistent framing without changing
+the previous output. Allocation failure and destruction at every service boundary
+through completion must restore all construction charges and preserve borrowed
+descriptors.
+
+The discovery harness starts a real supervised helper, freezes independent copies
+of the native `objcopy` pair, grants growth only after logical reservation, and
+compares complete CRC/build-ID receipts. It replaces the origin bytes and tries a
+missing subsequent candidate; retained metadata remains unchanged. Separate
+injections reject decoder receipt allocation, temporary IPC serialization and
+wire publication. Each must return one resource failure with no usable prefix;
+a subsequent small ELF receipt must still succeed. These injections exist only
+in the test executable's private worker entry. Production has no fault switch.
+The harness also checks malformed operation arguments, disabled decoder policy,
+exact backing keys, complete cleanup and process retirement.
+
+Use the [authoritative supported profile](native-symbol-engine.md#companion-discovery-and-relationship-foundation-se08-partial)
+when interpreting these checks. This is explicit local host metadata acquisition,
+not automatic frontend loading, attachment lifetime or target qualification.
+The existing `test-symbol-operation`, `test-symbol-inspect`, `test-symbol-resource`,
+`test-symbol-helper` and `test-symbol-wire` checks cover shared helper behavior.
+
+
+### Companion attachment and lifetime ownership
+
+```sh
+make BUILD_DIR=build/symbol-companion-attachment CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-companion-owner test-symbol-companion-attach test-symbol-artifact
+```
+
+The owner harness uses controlled completion frames to test exact request/process
+scope, receipt rejection, fact publication, revision fences, direct inventory
+captures and origin narrowing. It checks overlapping owners, allocation failure,
+count/admission limits, late offers, cancellation, closure/withdrawal and explicit
+retry after failed cleanup. Those synthetic frames test ownership, not ELF
+validity. The artifact harness also checks that a proven shared backing's actual
+slot differs from the independent context and that content evidence survives a
+membership revision while strict query eligibility does not.
+
+The attachment harness uses the supervised helper and maintained `objcopy`
+primary/debug pair. It exercises independent admission, complete receipt retention,
+both relationship routes, missing and CRC-mismatched candidates, cancellation at
+an acquisition offer, atomic attachment, fixed captured inventory, helper
+replacement, detach, primary closure and exact confirmed backing cleanup. Leases
+delay eviction without releasing charges. No GDB session or target is started.
+
+The same executable accepts an independently generated ELF32 pair from the
+[companion metadata setup](#debug-companion-metadata-and-crc32):
+
+```sh
+build/symbol-companion-attachment/test-symbol-companion-attach \
+  "$PWD/build/symbol-companion-attachment/the-bugger" \
+  "$PWD/build/companion32/primary" "$PWD/build/companion32/fixture.debug"
+```
+
+For focused memory-lifetime checks, build these two harness executables with
+Clang `-fsanitize=address,undefined -fno-omit-frame-pointer` in a separate directory.
+Pass the instrumented attachment harness itself as its helper executable to cover
+both sides of acquisition, inspection and cleanup. Set
+`ASAN_OPTIONS=detect_stack_use_after_return=1` and `UBSAN_OPTIONS=halt_on_error=1`.
+This does not establish a sanitized application matrix or physical qualification.
+The [authoritative ownership profile](native-symbol-engine.md#companion-attachment-and-lifetime-foundation-se08)
+retains the production-sizing and consumer-integration boundaries.
