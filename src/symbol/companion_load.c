@@ -1,4 +1,4 @@
-#define _POSIX_C_SOURCE 200809L
+#define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- POSIX bounded namespace copies. */
 #include "companion_internal.h"
 #include "symbol/protocol.h"
 

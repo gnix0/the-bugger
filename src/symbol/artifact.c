@@ -561,6 +561,7 @@ bool tb_symbol_artifact_lease_capture(const TbSymbolArtifactLease_t *lease,
 }
 
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters) -- Exact context/revision pair.
 uint64_t tb_symbol_artifact_revise(TbSymbolArtifacts_t *owner, uint64_t identity, uint64_t revision)
 {
     ArtifactContext_t *context = owner ? lookup(&owner->contexts, identity) : NULL;

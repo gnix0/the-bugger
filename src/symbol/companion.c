@@ -1,4 +1,4 @@
-#define _POSIX_C_SOURCE 200809L
+#define _POSIX_C_SOURCE 200809L /* NOLINT(bugprone-reserved-identifier) -- POSIX bounded origin copies. */
 #include "companion_internal.h"
 
 #include <stdlib.h>
@@ -297,6 +297,7 @@ static TbSymbolOutcome_e finish_fact(TbSymbolCompanionInspection_t *inspection,
 
 
 TbSymbolOutcome_e tb_symbol_companion_inspect_finish(TbSymbolCompanionInspection_t *inspection,
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters) -- Retirement scope precedes typed outcome.
     TbSymbolWorkIdentity_t request, uint64_t process_generation, TbSymbolOutcome_e outcome,
     const void *payload, size_t length, TbSymbolCompanionFact_t **fact)
 {
@@ -386,6 +387,7 @@ bool tb_symbol_companion_binding_current(const CompanionBinding_t *binding)
 }
 
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters) -- Context identity precedes origin filter.
 TbSymbolOutcome_e tb_symbol_companion_scope_capture(TbSymbolCompanions_t *owner, uint64_t context,
     TbSymbolCompanionOrigin_e origin, TbSymbolCompanionScopeCapture_t **result)
 {

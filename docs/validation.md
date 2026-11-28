@@ -9215,3 +9215,31 @@ maintainer acceptance remain pending. Production sizing is SE10; discovery
 publication and UI integration are SE09/11. Hosted CI, runtime consumers and
 physical STM32/ARM, ESP32/Xtensa and ESP32/RISC-V qualification are unverified by
 this round. No GDB session or target was started by these attachment checks.
+
+
+### SE08 attachment baseline and analyzer closeout — 2026-11-28
+
+The fresh fortified run in `build/se08-attachment-owner-20261128/` passed all
+181 recorded test commands and fortified compilation of all 168 C test/support
+sources. No inputs changed during the run. Complete static analysis failed on
+five diagnostics: two intentional POSIX feature-test macro definitions and three
+internal API signatures whose distinct context, generation, revision or filter
+arguments share integer-compatible types.
+
+The correction adds narrowly scoped analyzer annotations explaining those
+intentional uses. It changes comments only in `artifact.c`, `companion.c` and
+`companion_load.c`; comparison against the passing baseline confirmed unchanged
+non-comment C tokens and no other changed inputs before documentation closeout.
+No runtime behavior, API order, ownership rule or test expectation changed.
+
+The subsequent `make -k analyze` completed all 104 production sources with exit
+status zero and no reported project diagnostic. The full log and status are
+`build/se08-attachment-analysis-fixed-20261128.log` and its matching `.exit` file.
+The normal application build also passed. The passing fortified baseline remains
+applicable to this comment-only correction; no full-suite repeat was needed.
+The original failed analysis log remains retained alongside the passing test
+and test-source compilation evidence.
+
+This completes local verification of the implemented SE08 profile. Maintainer
+acceptance, hosted CI and physical qualification remain separate. SE09 discovery
+publication, SE10 production sizing and SE11 UI integration remain future gates.
