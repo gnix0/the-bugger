@@ -26,6 +26,7 @@ SOURCES += src/symbol/source_file.c src/symbol/source_path.c src/symbol/md5.c
 SOURCES += src/symbol/source_context.c src/symbol/source_prepare.c src/symbol/source_check.c
 SOURCES += src/symbol/crc32.c src/symbol/companion_metadata.c
 SOURCES += src/symbol/companion_paths.c src/symbol/companion_scan.c src/symbol/companion_receipt.c
+SOURCES += src/symbol/companion.c src/symbol/companion_load.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 BINARY := $(BUILD_DIR)/the-bugger
 
@@ -1812,3 +1813,23 @@ test-symbol-companion-discovery: $(BUILD_DIR)/test-symbol-companion-discovery $(
 
 test: test-symbol-companion-discovery
 -include $(BUILD_DIR)/tests/integration/test_symbol_companion_discovery.d
+
+$(BUILD_DIR)/test-symbol-companion-owner: $(BUILD_DIR)/tests/unit/test_symbol_companion_owner.o $(BUILD_DIR)/src/symbol/companion.o $(BUILD_DIR)/src/symbol/companion_load.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/artifact.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/sha256.o
+	$(CC) $(LDFLAGS) -Wl,--wrap=calloc,--wrap=tb_symbol_artifact_revise -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-companion-owner
+test-symbol-companion-owner: $(BUILD_DIR)/test-symbol-companion-owner
+	$(BUILD_DIR)/test-symbol-companion-owner
+
+test: test-symbol-companion-owner
+-include $(BUILD_DIR)/tests/unit/test_symbol_companion_owner.d
+
+$(BUILD_DIR)/test-symbol-companion-attach: $(BUILD_DIR)/tests/integration/test_symbol_companion_attach.o $(BUILD_DIR)/src/symbol/helper.o $(BUILD_DIR)/src/symbol/worker.o $(BUILD_DIR)/src/symbol/process.o $(BUILD_DIR)/src/symbol/schedule.o $(BUILD_DIR)/src/symbol/wire.o $(BUILD_DIR)/src/symbol/budget.o $(BUILD_DIR)/src/symbol/operation.o $(BUILD_DIR)/src/symbol/acquire.o $(BUILD_DIR)/src/symbol/storage.o $(BUILD_DIR)/src/symbol/equal.o $(BUILD_DIR)/src/symbol/sha256.o $(BUILD_DIR)/src/symbol/admission.o $(BUILD_DIR)/src/symbol/artifact.o $(BUILD_DIR)/src/symbol/symbols.o $(BUILD_DIR)/src/symbol/sections.o $(BUILD_DIR)/src/symbol/elf.o $(BUILD_DIR)/src/symbol/file.o $(BUILD_DIR)/src/symbol/reader.o $(BUILD_DIR)/src/symbol/companion_scan.o $(BUILD_DIR)/src/symbol/companion_receipt.o $(BUILD_DIR)/src/symbol/companion_metadata.o $(BUILD_DIR)/src/symbol/crc32.o $(BUILD_DIR)/src/symbol/companion_paths.o $(BUILD_DIR)/src/symbol/companion.o $(BUILD_DIR)/src/symbol/companion_load.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PHONY: test-symbol-companion-attach
+test-symbol-companion-attach: $(BUILD_DIR)/test-symbol-companion-attach $(BINARY) $(BUILD_DIR)/companion-pair.stamp
+	$(BUILD_DIR)/test-symbol-companion-attach $(abspath $(BINARY)) "$(abspath $(BUILD_DIR))/companion pair/primary" "$(abspath $(BUILD_DIR))/companion pair/fixture with spaces.debug"
+
+test: test-symbol-companion-attach
+-include $(BUILD_DIR)/tests/integration/test_symbol_companion_attach.d

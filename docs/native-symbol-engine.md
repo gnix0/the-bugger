@@ -313,8 +313,8 @@ Each generated path is submitted explicitly through the existing supervised
 `ACQUIRE` operation. Its full logical reservation precedes growth, independently
 of the primary's retained charge. Missing, inaccessible, unsupported, malformed or
 exhausted candidates are separate reported failures; none closes the primary or
-implicitly tries another origin. The attachment coordinator will own candidate
-selection and any explicit further attempts. The path iterator itself performs
+implicitly tries another origin. The attachment coordinator owns each explicitly
+selected attempt; selecting another candidate is a separate caller decision. The path iterator itself performs
 no I/O, admission or helper scheduling.
 
 `companion_scan` builds a complete native section directory over pinned frozen
@@ -363,11 +363,112 @@ separate outcomes. No program-interpreter, unrelated DWARF, source or runtime
 validity follows from this metadata relationship.
 
 Receipts retain independent physical backing/section/note coordinates. Matching
-metadata cannot merge records or bypass full logical admission charges. They are
-inputs to the subsequent attachment owner, not independently published frontend
-relationship guarantees. Context attachment/detachment, revision changes, leases,
-withdrawal and query inventory capture remain the final SE08 round. The existing
-frontend performs no automatic companion discovery or target access.
+metadata cannot merge records or bypass full logical admission charges. The
+[attachment owner](#companion-attachment-and-lifetime-foundation-se08) composes
+these scoped receipts into independently retained relationship evidence. The
+existing frontend performs no automatic companion discovery or target access.
+
+### Companion attachment and lifetime foundation (SE08)
+
+`companion` owns frontend inspection tickets, immutable metadata facts,
+relationships and direct inventory captures. `companion_load` coordinates one
+explicitly selected candidate through acquisition, inspection, relationship
+validation and publication. These are internal components driven by the caller;
+they introduce no public SDK, automatic loading, Symbols UI or Search request.
+SE09 consumes inventory captures; SE11 supplies the explicit user workflow.
+
+The initial profile selects one GNU companion per primary context. An installed
+relationship cannot be silently replaced: detach it explicitly before selecting
+another. Other primaries and independently opened artifacts remain independent.
+Inventory is direct, never recursive. Neither an equal pathname nor a matching
+CRC/build ID merges physical definitions, contexts or backing.
+
+Before dispatching inspection, the owner reserves a fact slot and pins exact
+retained content. Its plan captures the complete work identity, helper process
+generation, context/inventory revision, content revision and actual backing
+slot/key/extent. Proven backing sharing can make the slot differ from the open
+context identity. An origin copy survives context closure for cleanup/evidence
+ownership; it is never reopened to reconstruct a fact.
+
+A complete validated helper result and matching worker-release or reap proof are
+both required before finishing a ticket. Confirmed helper nonadmission also
+permits finishing it as a failure. Wrong identities/generations consume nothing.
+A matching final outcome consumes the ticket; a malformed receipt, wrong backing,
+stale revision, allocation failure or cancellation publishes no fact. Successful
+facts retain their own accounted receipt bytes, origins and content lease.
+Helper replacement and disposable-cache eviction cannot revoke independently
+valid evidence. Backing withdrawal, context closure and explicit scoped metadata
+withdrawal make dependent facts unavailable; withdrawal never reactivates them.
+
+Content evidence and membership eligibility are separate. Attaching or detaching
+advances the primary's inventory revision without invalidating its unchanged
+content metadata. Existing strict artifact leases continue to reject a changed
+inventory revision. The weaker content-current predicate grants no query,
+location, runtime-mapping or access permission.
+
+The candidate coordinator allocates its owner, primary lease and relationship
+slot before preparing an independently charged artifact context. It copies the
+complete candidate origin and protected namespace spelling/key. Planning a job
+performs no I/O or helper submission. The caller submits that exact plan and
+records each acquisition offer before authorizing any growth. Failed reservation
+or a late/stale offer requires cancellation and retirement without a grant.
+A successful retained raw copy establishes only artifact ownership; the later
+inspection and relationship check establish their separate claims. The candidate
+context remains private to the coordinator until attachment commits. It is not
+an independently opened artifact for All Open Artifacts scope capture.
+
+Publication is one allocation-free frontend step after rechecking the captured
+primary revision, both facts and the selected relationship route. Only then does
+the primary revision advance and the reserved relationship become installed.
+Until that step, the previous scope remains eligible. Failure leaves the primary
+open, reports the exact failure/relationship reason, and retires only the private
+candidate. There is no implicit fallback, rescan, helper restart or target access.
+
+Cancellation and closure cannot erase an outstanding job. The coordinator exposes
+the need to cancel, retains its exact ownership until worker release/reap, then
+plans bounded helper cleanup. It closes a published candidate and begins cache
+eviction, or abandons unpublished staging. Exact known keys select removal;
+unoffered staging uses the existing empty-slot cleanup operation. Failed cleanup
+blocks destruction, preserves all remaining charges and records cleanup failure
+separately from the original failure. Retry is explicit. Releasing primary leases
+after job retirement does not wait for physical candidate cleanup.
+
+A new inventory capture includes primary and selected companion by default, with
+explicit primary-only or companion-only narrowing. Companion-only without an
+attachment is a valid empty inventory which still captures the primary revision.
+Each member retains exact context, content, backing and provenance; companion
+members also retain relationship identity. Allocation failure publishes no
+partial capture. Invalid attached evidence fails combined/companion capture
+rather than silently shrinking it. Primary-only capture does not depend on an
+unrelated GNU relationship claim; its DWARF validation remains a separate duty.
+
+Captures never acquire later attachments. Attach/detach, relevant context closure,
+backing withdrawal or supporting fact withdrawal makes a dependent capture
+non-advanceable immediately. Its original count does not change; stale captures
+cannot return actionable members. Retaining historical bounded display data is
+the later publication owner's responsibility, not permission to reuse a capture.
+Reopening an origin creates a new context and cannot reactivate old captures.
+
+Detach closes only the relationship-owned companion context and returns exact
+retired context/content/relationship identities to the artifact-cache owner.
+Closing or withdrawing supporting evidence already revokes eligibility; bounded
+collection subsequently visits at most one relationship per call to release
+invalid installed ownership. Pending candidates stay owned by their coordinator.
+Returned cache obligations must be retained until explicit eviction and confirmed
+supervised cleanup. Query leases can delay eviction; deletion and charge release
+never follow merely from detach, cancellation or helper reap.
+
+All ownership is reserved and charged before allocation: persistent metadata facts
+to shared evidence, coordinator/inspection state to temporary construction, and
+relationship maps, scope captures and artifact leases to frontend storage. The
+subsidiary accounts remain within the aggregate frontend account. Simultaneous
+old/candidate facts and captures are charged separately; shared facts are charged
+once. Capacities for facts, inspections, attachments and captures are required
+positive settings, allocated on demand. Inspection capacity cannot exceed the
+existing helper-job ceiling. Lookup/insert/remove use fixed-depth identity maps;
+collection does not scan the entire registry. Exhaustion preserves accepted
+relationships/captures. Production count and decoder-sizing defaults remain the
+SE10 measurement gate; test capacities are not production policy.
 
 ## Formats and semantic coverage
 

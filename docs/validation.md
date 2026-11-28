@@ -9143,3 +9143,75 @@ No further tests or builds were run after the correction. The passing baseline
 remains applicable to this equivalent-condition correction; the original failed
 analysis remains preserved. Hosted CI, attachment/lifetime work and physical
 qualification remain separate from these local results.
+
+
+### SE08 attachment and lifetime foundation — 2026-11-28
+
+The final SE08 implementation round adds frontend-owned inspection facts,
+independent candidate acquisition/attachment, revisioned direct inventory captures,
+detach and bounded invalid-relationship collection. Failure/cancellation cleanup
+retains exact storage obligations and charges. It does not activate frontend
+Symbols/Search loading or establish SE09/F07 acceptance.
+
+Focused checks used Linux x86-64, GCC 16.2.1, Clang 23.1.5 and GNU Binutils 2.47.
+The following fortified targets passed:
+
+```sh
+make BUILD_DIR=build/se08-attachment-focused-20261128 \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-companion-owner test-symbol-companion-attach test-symbol-artifact
+```
+
+The owner harness passed malformed/wrong-backing receipts, wrong work/process
+scope, allocation rollback, stale publication, origin narrowing, overlapping
+primary owners, count limits, admission rejection before grant, late offers,
+cancellation, primary closure/withdrawal, delayed eviction and failed cleanup
+with explicit retry. Controlled receipt frames test ownership; they are not
+format-decoder or real-ELF evidence. Artifact regression checks also passed exact
+backing-slot capture after proven sharing and the distinction between unchanged
+content evidence and stale inventory eligibility.
+
+The actual-helper harness passed complete primary/companion acquisition and
+inspection, debuglink and build-ID attachment, missing and CRC-mismatched
+candidates, cancellation at the offer, atomic publication, fixed old inventories,
+helper replacement, detach, primary closure and confirmed deletion/accounting.
+It used the maintained native `objcopy` pair with spaces in its names. The same
+harness passed the independently produced ELF32 pair retained in
+`build/se08-metadata-elf32-20261124/ELF32 pair/`. ELF32 execution/ABI qualification
+is not claimed. The producer configuration and independent CRC/note comparisons
+remain in the preceding SE08 evidence records; this round did not repeat them.
+
+Clang ASan/UBSan ownership and actual-helper checks passed with:
+
+```sh
+make BUILD_DIR=build/se08-attachment-sanitize-20261128 CC=clang \
+  CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' \
+  build/se08-attachment-sanitize-20261128/test-symbol-companion-owner \
+  build/se08-attachment-sanitize-20261128/test-symbol-companion-attach
+```
+
+Both executables ran with `ASAN_OPTIONS=detect_stack_use_after_return=1` and
+`UBSAN_OPTIONS=halt_on_error=1`. The attachment invocation passed its own
+instrumented executable as helper, followed by the absolute native primary/debug
+pair paths. Added admission/count-boundary tests subsequently passed the focused
+owner target and its rebuilt sanitized executable. Later source changes only
+adjust contextual whitespace; they do not change tested behavior. This is focused
+lifetime evidence, not an application-wide sanitizer matrix.
+
+Logs and statuses are retained under
+`build/se08-attachment-evidence-20261128/`: `native-first.log` and `focused.log`
+cover the real-helper and artifact checks; `owner-boundaries.log` and
+`owner-limits.log` cover the added failure/capacity cases; `elf32.log`,
+`sanitize-native.log` and `sanitize-limits.log` cover the alternate producer and
+sanitized paths. Commands remain in compilation logs; companion input paths and
+source snapshots are retained alongside them. These ignored local artifacts are
+not distributed or a substitute for maintained fixtures.
+
+The normal application build passed. Fresh full fortified verification, complete
+static analysis, fortified compilation of all C test/support sources and
+maintainer acceptance remain pending. Production sizing is SE10; discovery
+publication and UI integration are SE09/11. Hosted CI, runtime consumers and
+physical STM32/ARM, ESP32/Xtensa and ESP32/RISC-V qualification are unverified by
+this round. No GDB session or target was started by these attachment checks.

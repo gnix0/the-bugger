@@ -529,6 +529,50 @@ int tb_symbol_artifact_lease_descriptor(const TbSymbolArtifactLease_t *lease)
 }
 
 
+bool tb_symbol_artifact_lease_content_current(const TbSymbolArtifactLease_t *lease)
+{
+    ArtifactContext_t *context = lease ? lookup(&lease->owner->contexts, lease->context) : NULL;
+
+    return context && context->state == TB_SYMBOL_ARTIFACT_RETAINED &&
+           context->backing == lease->backing && lease->backing->available &&
+           lease->backing->revision == lease->content_revision;
+}
+
+
+bool tb_symbol_artifact_lease_capture(const TbSymbolArtifactLease_t *lease,
+                                     TbSymbolArtifactCapture_t *capture)
+{
+    if (!lease || !capture)
+        return false;
+
+    *capture = (TbSymbolArtifactCapture_t) {
+        .context          = lease->context,
+        .revision         = lease->revision,
+        .content          = lease->backing->identity,
+        .content_revision = lease->content_revision,
+        .slot             = lease->backing->slot,
+        .backing = {
+            .key   = lease->backing->key,
+            .bytes = lease->backing->bytes
+        }
+    };
+
+    return true;
+}
+
+
+uint64_t tb_symbol_artifact_revise(TbSymbolArtifacts_t *owner, uint64_t identity, uint64_t revision)
+{
+    ArtifactContext_t *context = owner ? lookup(&owner->contexts, identity) : NULL;
+    if (!context || context->state != TB_SYMBOL_ARTIFACT_RETAINED || !context->backing->available ||
+        context->revision != revision || revision == UINT64_MAX) {
+        return 0;
+    }
+
+    return ++context->revision;
+}
+
+
 void tb_symbol_artifact_lease_release(TbSymbolArtifactLease_t *lease)
 {
     if (!lease)

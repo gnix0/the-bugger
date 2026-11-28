@@ -44,6 +44,15 @@ typedef struct {
 } TbSymbolArtifactInfo_t;
 
 typedef struct {
+    uint64_t              context;
+    uint64_t              revision;
+    uint64_t              content;
+    uint64_t              content_revision;
+    uint64_t              slot;
+    TbSymbolStorageInfo_t  backing;
+} TbSymbolArtifactCapture_t;
+
+typedef struct {
     uint64_t             content;
     uint64_t             slot;
     uint64_t             bytes;
@@ -125,8 +134,21 @@ bool tb_symbol_artifact_share_cleaned(TbSymbolArtifacts_t *artifacts, uint64_t c
  * and worker interest has retired. Current-context eligibility is separate. */
 TbSymbolArtifactLease_t *tb_symbol_artifact_lease(TbSymbolArtifacts_t *artifacts, uint64_t context);
 bool tb_symbol_artifact_lease_current(const TbSymbolArtifactLease_t *lease);
+/* Content evidence can remain valid after an inventory revision changes. This
+ * weaker predicate still requires the same open context and available backing;
+ * it grants no query/action eligibility. Existing lease_current stays strict. */
+bool tb_symbol_artifact_lease_content_current(const TbSymbolArtifactLease_t *lease);
+/* Immutable captured coordinates, available while the lease pins backing even
+ * after closure/withdrawal. The actual backing slot may differ from context
+ * after proven sharing. No pathname lookup or descriptor inspection occurs. */
+bool tb_symbol_artifact_lease_capture(const TbSymbolArtifactLease_t *lease,
+                                     TbSymbolArtifactCapture_t *capture);
 int tb_symbol_artifact_lease_descriptor(const TbSymbolArtifactLease_t *lease);
 void tb_symbol_artifact_lease_release(TbSymbolArtifactLease_t *lease);
+/* Atomic membership change fence for a retained available context. Exact old
+ * revision required; exhaustion/staleness leaves it unchanged. No allocation,
+ * I/O, content invalidation or ownership change. Returns the new revision or 0. */
+uint64_t tb_symbol_artifact_revise(TbSymbolArtifacts_t *artifacts, uint64_t context, uint64_t revision);
 
 /* Closing revokes context eligibility immediately. Pending acquisition must be
  * cancelled and its worker ownership retired before abandon. No charge is freed

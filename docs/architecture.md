@@ -1621,7 +1621,7 @@ boundaries. SE07 local verification and maintainer acceptance are recorded in
 the [delivery closeout](validation.md#se07-delivery-closeout--2026-11-23). Production
 publication, sizing and consumer integration retain their own gates.
 
-### Debug companion metadata (SE08, partial)
+### Debug companions (SE08)
 
 `src/symbol/crc32.c` supplies independent complete-file GNU debuglink checksums.
 `src/symbol/companion_metadata.c` decodes exact debuglink and GNU build-ID note
@@ -1643,10 +1643,20 @@ The core scanner remains independent of IPC and uses only pinned frozen backing.
 
 The existing acquisition operation freezes each explicitly selected candidate;
 no path planning or inspection operation implicitly admits another origin.
-Relationship lifetime, companion context attachment and revision ownership remain
-SE08 work. Existing artifact admission remains independent; a matching CRC or
-build ID cannot share backing or merge physical records. The frontend's
-GDB-driven behavior and Search remain unchanged.
+`companion` now retains frontend inspection facts and direct primary/companion
+inventory captures. `companion_load` coordinates explicit candidate admission,
+validation, atomic attachment and supervised retirement without calling the
+helper from a result callback. Content evidence survives unrelated membership
+revision changes; query eligibility remains strict. Detach and bounded invalid
+relationship collection return exact cache obligations, whose charges remain
+until cleanup is confirmed. The [attachment/lifetime contract](native-symbol-engine.md#companion-attachment-and-lifetime-foundation-se08)
+owns these state, accounting, cancellation and failure rules.
+
+Existing artifact admission remains independent; a matching CRC or build ID
+cannot share backing or merge physical records. These internal ownership
+components do not activate frontend loading or indexing. The frontend's
+GDB-driven behavior and Search remain unchanged; SE09/11 integrate discovery
+publication and the offline UI.
 
 ### Event loop and text rendering
 

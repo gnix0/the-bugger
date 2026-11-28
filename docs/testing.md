@@ -4202,3 +4202,45 @@ when interpreting these checks. This is explicit local host metadata acquisition
 not automatic frontend loading, attachment lifetime or target qualification.
 The existing `test-symbol-operation`, `test-symbol-inspect`, `test-symbol-resource`,
 `test-symbol-helper` and `test-symbol-wire` checks cover shared helper behavior.
+
+
+### Companion attachment and lifetime ownership
+
+```sh
+make BUILD_DIR=build/symbol-companion-attachment CPPFLAGS=-D_FORTIFY_SOURCE=3 \
+  test-symbol-companion-owner test-symbol-companion-attach test-symbol-artifact
+```
+
+The owner harness uses controlled completion frames to test exact request/process
+scope, receipt rejection, fact publication, revision fences, direct inventory
+captures and origin narrowing. It checks overlapping owners, allocation failure,
+count/admission limits, late offers, cancellation, closure/withdrawal and explicit
+retry after failed cleanup. Those synthetic frames test ownership, not ELF
+validity. The artifact harness also checks that a proven shared backing's actual
+slot differs from the independent context and that content evidence survives a
+membership revision while strict query eligibility does not.
+
+The attachment harness uses the supervised helper and maintained `objcopy`
+primary/debug pair. It exercises independent admission, complete receipt retention,
+both relationship routes, missing and CRC-mismatched candidates, cancellation at
+an acquisition offer, atomic attachment, fixed captured inventory, helper
+replacement, detach, primary closure and exact confirmed backing cleanup. Leases
+delay eviction without releasing charges. No GDB session or target is started.
+
+The same executable accepts an independently generated ELF32 pair from the
+[companion metadata setup](#debug-companion-metadata-and-crc32):
+
+```sh
+build/symbol-companion-attachment/test-symbol-companion-attach \
+  "$PWD/build/symbol-companion-attachment/the-bugger" \
+  "$PWD/build/companion32/primary" "$PWD/build/companion32/fixture.debug"
+```
+
+For focused memory-lifetime checks, build these two harness executables with
+Clang `-fsanitize=address,undefined -fno-omit-frame-pointer` in a separate directory.
+Pass the instrumented attachment harness itself as its helper executable to cover
+both sides of acquisition, inspection and cleanup. Set
+`ASAN_OPTIONS=detect_stack_use_after_return=1` and `UBSAN_OPTIONS=halt_on_error=1`.
+This does not establish a sanitized application matrix or physical qualification.
+The [authoritative ownership profile](native-symbol-engine.md#companion-attachment-and-lifetime-foundation-se08)
+retains the production-sizing and consumer-integration boundaries.

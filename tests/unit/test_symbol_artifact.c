@@ -413,7 +413,15 @@ static void shared(const char *origin, const char *path)
     CHECK(!tb_symbol_artifact_info(owner, first, &info));
     lease = tb_symbol_artifact_lease(owner, second);
     CHECK(lease && tb_symbol_artifact_lease_current(lease));
+    TbSymbolArtifactCapture_t capture;
+    CHECK(tb_symbol_artifact_lease_capture(lease, &capture));
+    CHECK(capture.context == second && capture.slot == first && capture.content == content);
+    CHECK(capture.revision == 1 && capture.content_revision == 1 && capture.backing.bytes == 5);
+    CHECK(tb_symbol_artifact_revise(owner, second, 1) == 2);
+    CHECK(!tb_symbol_artifact_lease_current(lease) && tb_symbol_artifact_lease_content_current(lease));
+    CHECK(!tb_symbol_artifact_revise(owner, second, 1));
     CHECK(tb_symbol_artifact_close(owner, second));
+    CHECK(!tb_symbol_artifact_lease_content_current(lease));
     CHECK(!tb_symbol_artifact_evict(owner, content, &cleanup));
     tb_symbol_artifact_lease_release(lease);
     CHECK(tb_symbol_artifact_evict(owner, content, &cleanup) && cleanup.slot == first);
